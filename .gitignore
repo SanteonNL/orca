@@ -20,6 +20,7 @@
 # Go workspace file
 go.work
 
-
-.DS_Store
+# IntelliJ IDEA files
 .idea
+*.iml
+.DS_Store
