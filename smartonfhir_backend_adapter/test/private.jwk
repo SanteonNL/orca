@@ -1,0 +1,9 @@
+{
+  "alg": "ES384",
+  "crv": "P-384",
+  "d": "binbuIcoNmPThaPnNts_KfLox8KkPWAC33iy2jtQfh3_4QhkYSi5SSIj2yQssX_m",
+  "kid": "7c87bdbc-ef89-41a7-a940-70d7e7b1a828",
+  "kty": "EC",
+  "x": "uZa5GXVH-Zl9xB4TInCfMAoYJVMFEM1jc40Egv29qPNxbzEbtXjprkSy7sONGiOT",
+  "y": "SgdGzSw7DNnQAT5ErnBtSZJjzUhON7KTK7qwDYnaO6lYxXCC2HNlxtoCNOf7gu0T"
+}
