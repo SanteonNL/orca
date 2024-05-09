@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Orca Orchestrator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+        .container {
+            width: 80%;
+            margin: auto;
+            overflow: hidden;
+        }
+        #patient-form {
+            background-color: #fff;
+            margin: 20px auto;
+            padding: 30px;
+            width: 50%;
+            box-shadow: 10px 10px 5px #888888;
+        }
+        #patient-form label {
+            font-weight: bold;
+            display: block;
+            margin-bottom: 8px;
+        }
+        #patient-form input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            border: 1px solid #ddd;
+        }
+        #patient-form button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            border: 0;
+            background-color: #333;
+            color: #fff;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        #patient-form button:hover {
+            background-color: #444;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <form id="patient-form" action="/demo-exchange" method="post">
+            <h1>Orca Data Retrieval Demo</h1>
+            <p>I'm an AI generated page.</p>
+            <label for="system">Coding System:</label>
+            <input type="text" id="system" name="system" required value="urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.14">
+            <label for="value">Value:</label>
+            <input type="text" id="value" name="value" required value="203713">
+            <button type="submit">Retrieve Medical File</button>
+        </form>
+    </div>
+</body>
+</html>
