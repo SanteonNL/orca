@@ -28,7 +28,6 @@ services:
       - "8080"
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
-      - "./nutsnode/data/:/nuts/data"
       - "./nutsnode/devtunnel/:/devtunnel"
       - "../shared_config/policy/:/nuts/config/policy:ro"
     environment:
