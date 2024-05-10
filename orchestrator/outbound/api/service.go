@@ -5,9 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/outbound"
-	"github.com/SanteonNL/orca/orchestrator/rest"
+	"github.com/labstack/echo/v4"
+	"github.com/rs/zerolog/log"
+	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 )
+
+type FHIRBundle = fhir.Bundle
 
 var _ json.Marshaler = APIError{}
 
@@ -27,9 +31,11 @@ type Service struct {
 	ExchangeManager *outbound.ExchangeManager
 }
 
-func (h Service) StartExchange(ctx context.Context, request StartExchangeRequestObject) (StartExchangeResponseObject, error) {
-	exchange, redirectURI, err := h.ExchangeManager.StartExchange(request.Body.Oauth2Scope, request.Body.FhirOperationPath)
+func (h Service) StartExchange(_ context.Context, request StartExchangeRequestObject) (StartExchangeResponseObject, error) {
+	// TODO: initiator and remote party identifiers are still hardcoded here
+	exchange, redirectURI, err := h.ExchangeManager.StartExchange(request.Body.Oauth2Scope, request.Body.FhirOperationPath, "clinic", "hospital")
 	if err != nil {
+		log.Warn().Err(err).Msg("Could not start exchange.")
 		return nil, err
 	}
 	return StartExchange201JSONResponse{
@@ -38,34 +44,23 @@ func (h Service) StartExchange(ctx context.Context, request StartExchangeRequest
 	}, nil
 }
 
-func (h Service) GetExchangeResult(ctx context.Context, request GetExchangeResultRequestObject) (GetExchangeResultResponseObject, error) {
-	result, err := h.ExchangeManager.GetExchangeResult(request.Id)
-	if errors.Is(err, outbound.ErrExchangeNotFound) {
+func (h Service) GetExchangeResult(_ context.Context, request GetExchangeResultRequestObject) (GetExchangeResultResponseObject, error) {
+	result := h.ExchangeManager.Get(request.Id)
+	if result == nil {
 		return GetExchangeResult404Response{}, nil
 	}
-	if errors.Is(err, outbound.ErrExchangeNotReady) {
+	if result.Result == nil {
 		return GetExchangeResult409Response{}, nil
 	}
-	if err != nil {
-		return nil, err
-	}
-	return GetExchangeResult200JSONResponse(result), nil
-}
-
-func (h Service) startExchange(response http.ResponseWriter, httpRequest *http.Request) {
-	var request StartExchangeRequest
-	if err := rest.UnmarshalJSONRequestBody(httpRequest, &request); err != nil {
-		rest.RespondWithAPIError(response, err)
-		return
-	}
-
-	rest.RespondJSON(response, http.StatusOK, StartExchangeResponse{ExchangeID: exchangeID, RedirectURI: redirectURI})
+	return GetExchangeResult200JSONResponse(*result.Result), nil
 }
 
 func (h Service) Start(listenAddress string) error {
-	httpHandler := http.NewServeMux()
-	httpHandler.HandleFunc("POST /exchange", h.startExchange)
-	err := http.ListenAndServe(listenAddress, httpHandler)
+	httpService := echo.New()
+	httpService.HideBanner = true
+	httpService.HidePort = true
+	RegisterHandlers(httpService, NewStrictHandler(h, nil))
+	err := httpService.Start(listenAddress)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}

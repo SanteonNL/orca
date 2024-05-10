@@ -145,7 +145,7 @@ type GetExchangeResultResponseObject interface {
 	VisitGetExchangeResultResponse(w http.ResponseWriter) error
 }
 
-type GetExchangeResult200JSONResponse map[string]interface{}
+type GetExchangeResult200JSONResponse FHIRBundle
 
 func (response GetExchangeResult200JSONResponse) VisitGetExchangeResultResponse(w http.ResponseWriter) error {
 	w.Header().Set("Content-Type", "application/json")

@@ -1,0 +1,39 @@
+services:
+  hospital_proxy:
+    image: nginx:latest
+    depends_on:
+      - hospital_nutsnode
+      - hospital_sof_adapter
+    ports:
+      - "9080:8080"
+    volumes:
+      - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
+  hospital_sof_adapter:
+    build:
+      context: ../../../smartonfhir_backend_adapter
+      dockerfile: Dockerfile
+    environment:
+      - SOF_BACKEND_ADAPTER_FHIR_BASEURL=https://launch.smarthealthit.org/v/r4/sim/WzQsIiIsIiIsIiIsMCwwLDAsIiIsIiIsIiIsIiIsIiIsIiIsIiIsMCwxXQ/fhir
+      - SOF_BACKEND_ADAPTER_LISTEN_ADDRESS=:8080
+      - SOF_BACKEND_ADAPTER_JWK_FILE=/app/jwk.json
+      - SOF_BACKEND_ADAPTER_OAUTH_CLIENT_ID=canbeanything_for_smart_sandbox
+      - SOF_BACKEND_ADAPTER_JWK_KEYID=bff5f550-7e47-45ed-ab13-89ad1f546cf3
+    ports:
+      - "8080"
+    volumes:
+      - ./config/sof_adapter_signingkey.json:/app/jwk.json:ro
+  hospital_nutsnode:
+    image: nutsfoundation/nuts-node:master
+    ports:
+      - "8080"
+      - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
+    volumes:
+      - "./nutsnode/data/:/nuts/data"
+      - "./nutsnode/devtunnel/:/devtunnel"
+      - "../shared_config/policy/:/nuts/config/policy:ro"
+    environment:
+      - NUTS_VERBOSITY=debug
+      - NUTS_STRICTMODE=false
+      - NUTS_HTTP_INTERNAL_ADDRESS=:8081
+      - NUTS_AUTH_CONTRACTVALIDATORS=dummy
+      - NUTS_URL=${NUTS_URL}

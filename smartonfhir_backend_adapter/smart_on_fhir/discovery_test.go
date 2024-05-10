@@ -38,4 +38,11 @@ func TestDiscoverConfiguration(t *testing.T) {
 		require.Equal(t, "http://example.com/token", config.TokenEndpoint)
 		require.Equal(t, "http://example.com/authorize", config.AuthorizationEndpoint)
 	})
+	t.Run("Sandbox", func(t *testing.T) {
+		t.Skip("Uses external resource")
+		fhirBaseURL, _ := url.Parse("https://launch.smarthealthit.org/v/r4/sim/WzQsIiIsIiIsIiIsMCwwLDAsIiIsIiIsIiIsIiIsIiIsIiIsIiIsMCwxXQ/fhir/")
+		configuration, err := DiscoverConfiguration(fhirBaseURL)
+		require.NoError(t, err)
+		require.Equal(t, "https://launch.smarthealthit.org/v/r4/sim/WzQsIiIsIiIsIiIsMCwwLDAsIiIsIiIsIiIsIiIsIiIsIiIsIiIsMCwxXQ/auth/token", configuration.TokenEndpoint)
+	})
 }

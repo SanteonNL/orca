@@ -16,16 +16,14 @@ func main() {
 		apiListenAddress string
 		webListenAddress string
 		baseURL          string
-		ownDID           string
-		remoteDID        string
+		demoConfigFile   string
 	)
 	envVariables := map[string]*string{
 		"ORCHESTRATOR_NUTS_API_ADDRESS":   &nutsAPIAddress,
 		"ORCHESTRATOR_API_LISTEN_ADDRESS": &apiListenAddress,
 		"ORCHESTRATOR_WEB_LISTEN_ADDRESS": &webListenAddress,
 		"ORCHESTRATOR_BASE_URL":           &baseURL,
-		"ORCHESTRATOR_OWN_DID":            &ownDID,
-		"ORCHESTRATOR_REMOTE_DID":         &remoteDID,
+		"ORCHESTRATOR_DEMO_CONFIGFILE":    &demoConfigFile,
 	}
 	for name, ptr := range envVariables {
 		value := os.Getenv(name)
@@ -46,7 +44,7 @@ func main() {
 
 	httpServices := &sync.WaitGroup{}
 	// Internal-facing API service
-	exchangeManager := outbound.NewExchangeManager(parsedBaseURL, nutsAPIAddress, ownDID, remoteDID)
+	exchangeManager := outbound.NewExchangeManager(parsedBaseURL, nutsAPIAddress, outbound.FileDIDResolver{File: demoConfigFile})
 	internalFacingAPI := api.Service{ExchangeManager: exchangeManager}
 	httpServices.Add(1)
 	go func() {

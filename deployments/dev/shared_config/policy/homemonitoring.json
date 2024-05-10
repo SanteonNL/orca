@@ -1,0 +1,10 @@
+{
+  "homemonitoring": {
+    "organization": {
+      "id": "homemonitoring_org",
+      "input_descriptors": [
+
+      ]
+    }
+  }
+}

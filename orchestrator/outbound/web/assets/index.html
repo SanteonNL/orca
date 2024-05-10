@@ -50,14 +50,14 @@
 </head>
 <body>
     <div class="container">
-        <form id="patient-form" action="/demo-exchange" method="post">
+        <form id="patient-form" action="demo-exchange" method="post">
             <h1>Orca Data Retrieval Demo</h1>
-            <p>I'm an AI generated page.</p>
-            <label for="system">Coding System:</label>
-            <input type="text" id="system" name="system" required value="urn:oid:1.2.840.114350.1.13.0.1.7.5.737384.14">
-            <label for="value">Value:</label>
-            <input type="text" id="value" name="value" required value="203713">
-            <button type="submit">Retrieve Medical File</button>
+            <p>
+                This demo retrieves data from the SMART on FHIR Sandbox, loaded with <a href="https://github.com/synthetichealth/synthea">Synthea data</a>.
+            </p>
+            <label for="system">FHIR Operation path:</label>
+            <input type="text" id="system" name="fhirOperationPath" required value="Patient/06895d41-5937-4e83-9f3d-0af09db31c69">
+            <button type="submit">Retrieve data</button>
         </form>
     </div>
 </body>

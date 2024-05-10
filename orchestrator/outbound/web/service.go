@@ -8,8 +8,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/outbound"
 	"github.com/SanteonNL/orca/orchestrator/outbound/api"
 	"github.com/SanteonNL/orca/orchestrator/outbound/web/assets"
-	"github.com/SanteonNL/orca/orchestrator/rest"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
 )
@@ -20,56 +18,86 @@ type Service struct {
 
 func (h Service) Start(listenAddress string, apiListenAddress string) error {
 	httpHandler := http.NewServeMux()
-	httpHandler.HandleFunc("GET /exchange/{exchangeID}/callback", func(response http.ResponseWriter, request *http.Request) {
+	httpHandler.HandleFunc("GET /exchange/{exchangeID}/callback", func(responseWriter http.ResponseWriter, request *http.Request) {
 		// The user lands on this "page" when the data exchange is completed.
 		exchangeID := request.PathValue("exchangeID")
-		result, err := h.ExchangeManager.HandleExchangeCallback(exchangeID)
+		err := h.ExchangeManager.HandleExchangeCallback(exchangeID)
 		// TODO: This now just shows the result (or an error), which should be posted back to the EPD/Viewer (or be retrieved by it).
 		if err != nil {
-			http.Error(response, fmt.Sprintf("error completing data exchange: %v", err), http.StatusBadGateway)
+			http.Error(responseWriter, fmt.Sprintf("error completing data exchange: %v", err), http.StatusBadGateway)
 			return
 		}
-		rest.RespondJSON(response, http.StatusOK, result)
+		data, err := h.retrieveExchangeResult(apiListenAddress, exchangeID)
+		if err != nil {
+			http.Error(responseWriter, "Exchange result retrieval error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		responseWriter.Header().Set("Content-Type", "application/json")
+		responseWriter.WriteHeader(http.StatusOK)
+		_, _ = responseWriter.Write(data)
 	})
 	// Demo-purpose endpoints
 	// TODO: Remove these when not necessary any more
 	httpHandler.Handle("GET /", http.FileServerFS(assets.FS))
-	httpHandler.HandleFunc("POST /demo-exchange", func(writer http.ResponseWriter, request *http.Request) {
-		identifierSystem := request.FormValue("system")
-		identifierValue := request.FormValue("value")
-		if identifierSystem == "" || identifierValue == "" {
-			http.Error(writer, "system and value are required", http.StatusBadRequest)
-			return
-		}
+	httpHandler.HandleFunc("POST /demo-exchange", func(responseWriter http.ResponseWriter, request *http.Request) {
+		fhirOperationPath := request.FormValue("fhirOperationPath")
 		// Call "own" StartExchange() API
-		requestBody, _ := json.Marshal(api.StartExchangeRequest{
-			Patient: fhir.Identifier{
-				System: &identifierSystem,
-				Value:  &identifierValue,
-			},
+		requestBody, _ := json.Marshal(api.StartExchangeJSONRequestBody{
+			FhirOperationPath: fhirOperationPath,
+			Oauth2Scope:       "homemonitoring",
 		})
 		httpRequest, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("http://%s/exchange", apiListenAddress), bytes.NewReader(requestBody))
 		httpRequest.Header.Set("Content-Type", "application/json")
 		httpResponse, err := http.DefaultClient.Do(httpRequest)
 		if err != nil {
-			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			http.Error(responseWriter, "Exchange start error: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
-		if httpResponse.StatusCode != http.StatusOK {
-			data, _ := io.ReadAll(httpResponse.Body)
-			http.Error(writer, fmt.Sprintf("unexpected status code: %d\n%s", httpResponse.StatusCode, string(data)), http.StatusInternalServerError)
-			return
+		data, _ := io.ReadAll(httpResponse.Body)
+		switch httpResponse.StatusCode {
+		case http.StatusOK:
+			// Data already retrieved using cached access tokens
+			var response api.StartExchange200JSONResponse
+			if err = json.Unmarshal(data, &response); err != nil {
+				http.Error(responseWriter, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			// Get result, simply send data back to client
+			data, err := h.retrieveExchangeResult(apiListenAddress, response.ExchangeId)
+			if err != nil {
+				http.Error(responseWriter, "Exchange result retrieval error: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			responseWriter.Header().Set("Content-Type", "application/json")
+			responseWriter.WriteHeader(http.StatusOK)
+			_, _ = responseWriter.Write(data)
+		case http.StatusCreated:
+			// User needs to be authenticated at the remote party(s)
+			var response api.StartExchange201JSONResponse
+			if err = json.Unmarshal(data, &response); err != nil {
+				http.Error(responseWriter, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			http.Redirect(responseWriter, request, response.RedirectUrl, http.StatusFound)
+		default:
+			http.Error(responseWriter, fmt.Sprintf("Failed to start exchange, unexpected status code: %d\nresponse data: %s", httpResponse.StatusCode, string(data)), http.StatusInternalServerError)
 		}
-		var response api.StartExchangeResponse
-		if err = rest.UnmarshalJSONResponseBody(httpResponse.Body, &response); err != nil {
-			http.Error(writer, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		http.Redirect(writer, request, response.RedirectURI, http.StatusFound)
 	})
 	err := http.ListenAndServe(listenAddress, httpHandler)
 	if errors.Is(err, http.ErrServerClosed) {
 		return nil
 	}
 	return err
+}
+
+func (h Service) retrieveExchangeResult(listenAddress string, exchangeID string) ([]byte, error) {
+	httpResponse, err := http.Get(fmt.Sprintf("http://%s/exchange/%s/result", listenAddress, exchangeID))
+	defer httpResponse.Body.Close()
+	if err != nil {
+		return nil, err
+	}
+	if httpResponse.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unable to retrieve exchange result, unexpected status code: %d", httpResponse.StatusCode)
+	}
+	return io.ReadAll(httpResponse.Body)
 }

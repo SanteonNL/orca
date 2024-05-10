@@ -4,7 +4,7 @@ install-tools:
 	go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.0.0
 
 gen-api:
-	oapi-codegen -generate server,types,strict-server -package api \
+	oapi-codegen -generate server,types,strict-server -exclude-schemas FHIRBundle -package api \
 		-o outbound/api/generated.go outbound/api/openapi.yaml
 	oapi-codegen -generate client,types,skip-prune -package nuts \
 		-exclude-schemas VerifiableCredential,VerifiablePresentation,DID,DIDDocument \

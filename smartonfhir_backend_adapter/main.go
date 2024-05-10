@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/smartonfhir_backend_adapter/smart_on_fhir"
 	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/rs/zerolog/log"
+	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"golang.org/x/oauth2"
-	"log"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -41,17 +44,17 @@ func main() {
 		panic(err)
 	}
 
-	log.Println("Listening on", listenAddress)
-	log.Println("Proxying to", fhirBaseURL)
-	log.Println("OAuth2 client ID", clientID)
+	log.Info().Msgf("Listening on: %s", listenAddress)
+	log.Info().Msgf("Proxying to: %s", fhirBaseURL)
+	log.Info().Msgf("OAuth2 client ID: %s", clientID)
 
 	handler, err := create(jwkFile, jwkKeyID, parsedFHIRBaseURL, clientID)
 	if err != nil {
-		log.Fatalln(err)
+		panic(err)
 	}
 	err = http.ListenAndServe(listenAddress, handler)
 	if !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalln(err)
+		panic(err)
 	}
 }
 
@@ -74,8 +77,32 @@ func create(jwkFile string, jwkKeyID string, parsedFHIRBaseURL *url.URL, clientI
 	}))
 	// Spin up proxy
 	reverseProxy := httputil.NewSingleHostReverseProxy(parsedFHIRBaseURL)
+	reverseProxy.Rewrite = func(r *httputil.ProxyRequest) {
+		r.SetURL(target)
+		r.Out.Host = r.In.Host // if desired
+	}
+	reverseProxy.Director = func(request *http.Request) {
+		// We're proxying to an external system, so we don't want this proxy's caller's headers to be forwarded.
+		request.Header.Del("Authorization")
+		request.Header.Del("X-Forwarded-Host")
+	}
 	reverseProxy.Transport = LoggingTransportDecorator{
 		RoundTripper: fhirHTTPClient.Transport,
+	}
+	reverseProxy.ErrorHandler = func(responseWriter http.ResponseWriter, request *http.Request, err error) {
+		log.Error().Err(err).Msgf("Proxy error: %s", sanitizeRequestURL(request.URL).String())
+		responseWriter.Header().Add("Content-Type", "application/fhir+json")
+		responseWriter.WriteHeader(http.StatusBadGateway)
+		diagnostics := "The system tried to proxy the FHIR operation, but an error occurred."
+		data, _ := json.Marshal(fhir.OperationOutcome{
+			Issue: []fhir.OperationOutcomeIssue{
+				{
+					Severity:    fhir.IssueSeverityError,
+					Diagnostics: &diagnostics,
+				},
+			},
+		})
+		_, _ = responseWriter.Write(data)
 	}
 	return reverseProxy, nil
 }
@@ -101,14 +128,26 @@ type LoggingTransportDecorator struct {
 }
 
 func (d LoggingTransportDecorator) RoundTrip(request *http.Request) (*http.Response, error) {
+	// log all request headers here
+	for header, values := range request.Header {
+		for _, value := range values {
+			log.Info().Msgf("Request header: %s: %s", header, value)
+		}
+	}
 	response, err := d.RoundTripper.RoundTrip(request)
-	// Query might contain PII (social security number) in case of FHIR Search, so do not log it.
-	requestURLWithoutQuery := *request.URL
-	requestURLWithoutQuery.RawQuery = ""
 	if err != nil {
-		log.Println("ERR", requestURLWithoutQuery.String())
+		log.Warn().Msgf("Proxy request failed: %s", sanitizeRequestURL(request.URL).String())
 	} else {
-		log.Println(response.StatusCode, requestURLWithoutQuery.String())
+		responseData, _ := io.ReadAll(response.Body)
+		log.Info().Msgf("Proxied request: %s", sanitizeRequestURL(request.URL).String())
+		log.Info().Msgf("Proxied response: %s", string(responseData))
 	}
 	return response, err
+}
+
+func sanitizeRequestURL(requestURL *url.URL) *url.URL {
+	// Query might contain PII (e.g., social security number), so do not log it.
+	requestURLWithoutQuery := *requestURL
+	requestURLWithoutQuery.RawQuery = ""
+	return &requestURLWithoutQuery
 }
