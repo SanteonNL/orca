@@ -1,11 +1,11 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/outbound"
 	"github.com/SanteonNL/orca/orchestrator/rest"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 )
 
@@ -21,17 +21,35 @@ func (e APIError) MarshalJSON() ([]byte, error) {
 	})
 }
 
+var _ StrictServerInterface = (*Service)(nil)
+
 type Service struct {
 	ExchangeManager *outbound.ExchangeManager
 }
 
-type StartExchangeRequest struct {
-	Patient fhir.Identifier `json:"patient"`
+func (h Service) StartExchange(ctx context.Context, request StartExchangeRequestObject) (StartExchangeResponseObject, error) {
+	exchange, redirectURI, err := h.ExchangeManager.StartExchange(request.Body.Oauth2Scope, request.Body.FhirOperationPath)
+	if err != nil {
+		return nil, err
+	}
+	return StartExchange201JSONResponse{
+		ExchangeId:  exchange,
+		RedirectUrl: redirectURI,
+	}, nil
 }
 
-type StartExchangeResponse struct {
-	ExchangeID  string `json:"exchange_id"`
-	RedirectURI string `json:"redirect_uri"`
+func (h Service) GetExchangeResult(ctx context.Context, request GetExchangeResultRequestObject) (GetExchangeResultResponseObject, error) {
+	result, err := h.ExchangeManager.GetExchangeResult(request.Id)
+	if errors.Is(err, outbound.ErrExchangeNotFound) {
+		return GetExchangeResult404Response{}, nil
+	}
+	if errors.Is(err, outbound.ErrExchangeNotReady) {
+		return GetExchangeResult409Response{}, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return GetExchangeResult200JSONResponse(result), nil
 }
 
 func (h Service) startExchange(response http.ResponseWriter, httpRequest *http.Request) {
@@ -40,11 +58,7 @@ func (h Service) startExchange(response http.ResponseWriter, httpRequest *http.R
 		rest.RespondWithAPIError(response, err)
 		return
 	}
-	exchangeID, redirectURI, err := h.ExchangeManager.StartExchange(request.Patient)
-	if err != nil {
-		rest.RespondWithAPIError(response, err)
-		return
-	}
+
 	rest.RespondJSON(response, http.StatusOK, StartExchangeResponse{ExchangeID: exchangeID, RedirectURI: redirectURI})
 }
 

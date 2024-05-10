@@ -4,17 +4,22 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/nuts/iam"
 	"github.com/SanteonNL/orca/orchestrator/nuts/vdr"
 	"github.com/SanteonNL/orca/orchestrator/rest"
+	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 )
+
+const fhirJSONContentType = "application/fhir+json"
 
 func NewExchangeManager(baseURL *url.URL, nutsNodeAddress, ownDID, dataHolderDID string) *ExchangeManager {
 	return &ExchangeManager{
@@ -46,9 +51,9 @@ type ExchangeManager struct {
 type Exchange struct {
 	// DataSource is the data source from which the data is retrieved.
 	// In the future, it could retrieve data from multipe source, but currently there will be only 1
-	DataSource DataSource
-	Result     *fhir.Bundle
-	Patient    fhir.Identifier
+	DataSource        DataSource
+	Result            *fhir.Bundle
+	FHIROperationPath string
 }
 
 type DataSource struct {
@@ -61,11 +66,13 @@ type DataSource struct {
 	DataHolderDID string
 }
 
-func (e *ExchangeManager) StartExchange(patient fhir.Identifier) (string, string, error) {
-	if patient.System == nil || patient.Value == nil {
-		return "", "", errors.New("patient identifier must have system and value")
+func (e *ExchangeManager) StartExchange(oauth2Scope string, fhirOperationPath string) (string, string, error) {
+	if oauth2Scope == "" {
+		return "", "", errors.New("oauth2 scope is required")
 	}
-
+	if fhirOperationPath == "" {
+		return "", "", errors.New("FHIR operation path is required")
+	}
 	// TODO: Maybe Access Tokens could be re-used in future
 	exchangeID := randomID()
 	httpResponse, err := e.iamClient().RequestUserAccessToken(context.Background(), e.OwnDID, iam.RequestUserAccessTokenJSONRequestBody{
@@ -75,8 +82,7 @@ func (e *ExchangeManager) StartExchange(patient fhir.Identifier) (string, string
 			Name: "L. Visser",
 			Role: "Verpleegkundige niveau 4",
 		},
-		// TODO: This should be provided by the caller, or derived from the use case?
-		Scope:       "homemonitoring",
+		Scope:       oauth2Scope,
 		RedirectUri: e.BaseURL.JoinPath("/exchange/" + exchangeID + "/callback").String(),
 		Verifier:    e.DataHolderDID,
 	})
@@ -106,7 +112,7 @@ func (e *ExchangeManager) StartExchange(patient fhir.Identifier) (string, string
 			NutsSessionID: response.JSON200.SessionId,
 			DataHolderDID: e.DataHolderDID,
 		},
-		Patient: patient,
+		FHIROperationPath: fhirOperationPath,
 	})
 	return exchangeID, response.JSON200.RedirectUri, nil
 }
@@ -144,34 +150,34 @@ func (e *ExchangeManager) findFHIRBaseURL(holderDID string) (string, error) {
 
 // HandleExchangeCallback handles the callback from the remote party after the user has completed the exchange.
 // It is the trigger to retrieve the OAuth2 access token and do something with it (read data from external party).
-func (e *ExchangeManager) HandleExchangeCallback(exchangeID string) (*fhir.Bundle, error) {
+func (e *ExchangeManager) HandleExchangeCallback(exchangeID string) error {
 	exchange, err := e.loadExchange(exchangeID)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	httpResponse, err := e.iamClient().RetrieveAccessToken(context.Background(), exchange.DataSource.NutsSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("retrieve access token: %w", err)
+		return fmt.Errorf("retrieve access token: %w", err)
 	}
 	response, err := iam.ParseRetrieveAccessTokenResponse(httpResponse)
 	if err != nil {
-		return nil, fmt.Errorf("parse retrieve access token response: %w", err)
+		return fmt.Errorf("parse retrieve access token response: %w", err)
 	}
 	if response.ApplicationproblemJSONDefault != nil {
-		return nil, rest.RemoteAPIError{
+		return rest.RemoteAPIError{
 			Err:    errors.New("exchange failed"),
 			Result: response.ApplicationproblemJSONDefault,
 		}
 	}
 	if response.JSON200 == nil {
-		return nil, errors.New("RequestAccessToken failed: invalid response")
+		return errors.New("RequestAccessToken failed: invalid response")
 	}
 	if err := e.retrieveData(exchange, *response.JSON200); err != nil {
-		return nil, err
+		return err
 	}
 	// Exchanged finished
-	e.deleteExchange(exchangeID)
-	return exchange.Result, nil
+	e.storeExchange(exchangeID, *exchange)
+	return nil
 }
 
 func (e *ExchangeManager) retrieveData(exchange *Exchange, tokenResponse iam.TokenResponse) error {
@@ -184,20 +190,27 @@ func (e *ExchangeManager) retrieveData(exchange *Exchange, tokenResponse iam.Tok
 	//queryParams := url.Values{}
 	//queryParams.Set("identifier", fmt.Sprintf("%s|%s", *exchange.Patient.System, *exchange.Patient.Value))
 	//resourceURL.RawQuery = queryParams.Encode()
-	resourceURL := baseURL.JoinPath("Patient/erXuFYUfucBZaryVksYEcMg3").String()
-	httpRequest, _ := http.NewRequest("GET", resourceURL, nil)
-	httpRequest.Header.Add("Authorization", tokenResponse.TokenType+" "+tokenResponse.AccessToken)
-	httpRequest.Header.Add("Accept", "application/json")
-	httpResponse, err := http.DefaultClient.Do(httpRequest)
+
+	resourceURL, err := baseURL.Parse(exchange.FHIROperationPath)
 	if err != nil {
-		return fmt.Errorf("retrieve data failed: %w", err)
+		return fmt.Errorf("parse FHIR operation path: %w", err)
 	}
-	if httpResponse.StatusCode != http.StatusOK {
-		return fmt.Errorf("retrieve data failed: unexpected status code %d", httpResponse.StatusCode)
-	}
-	data, err := io.ReadAll(io.LimitReader(httpResponse.Body, 1024*1024*1024)) // 10mb seems about a right limit?
+	resourceURLStr := resourceURL.String()
+	//:= baseURL.JoinPath("Patient/erXuFYUfucBZaryVksYEcMg3").String()
+	data, err := readFHIRResource(resourceURLStr, tokenResponse)
 	if err != nil {
-		return fmt.Errorf("retrieve data failed: %w", err)
+		log.Info().Err(err).Msgf("Failed to read FHIR resource: %s", resourceURLStr)
+		msg := err.Error()
+		data, _ = json.Marshal(fhir.OperationOutcome{
+			Issue: []fhir.OperationOutcomeIssue{
+				{
+					Severity:    fhir.IssueSeverityError,
+					Code:        fhir.IssueTypeException,
+					Diagnostics: &msg,
+					Location:    []string{resourceURLStr},
+				},
+			},
+		})
 	}
 	if exchange.Result == nil {
 		exchange.Result = &fhir.Bundle{
@@ -205,10 +218,29 @@ func (e *ExchangeManager) retrieveData(exchange *Exchange, tokenResponse iam.Tok
 		}
 	}
 	exchange.Result.Entry = append(exchange.Result.Entry, fhir.BundleEntry{
-		FullUrl:  &resourceURL,
+		FullUrl:  &resourceURLStr,
 		Resource: data,
 	})
 	return nil
+}
+
+func readFHIRResource(resourceURL string, token iam.TokenResponse) ([]byte, error) {
+	httpRequest, _ := http.NewRequest("GET", resourceURL, nil)
+	httpRequest.Header.Add("Authorization", token.TokenType+" "+token.AccessToken)
+	httpRequest.Header.Add("Accept", fhirJSONContentType)
+	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	if err != nil {
+		return nil, fmt.Errorf("retrieve data failed: %w", err)
+	}
+	contentType := httpResponse.Header.Get("Content-Type")
+	if !strings.Contains(contentType, fhirJSONContentType) {
+		return nil, fmt.Errorf("retrieve data failed: unexpected content type %s (expected %s)", contentType, fhirJSONContentType)
+	}
+	data, err := io.ReadAll(io.LimitReader(httpResponse.Body, 1024*1024*1024)) // 10mb seems about a right limit?
+	if err != nil {
+		return nil, fmt.Errorf("retrieve data failed: %w", err)
+	}
+	return data, nil
 }
 
 func (e *ExchangeManager) iamClient() *iam.Client {
