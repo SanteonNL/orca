@@ -3,9 +3,6 @@
 source ~/.bashrc
 set -e
 
-# login with github user
-# devtunnel user login -d -g
-
 # create a devtunnel, which stores its data in $1/data/devtunnel for re-usage over restarts
 # It takes a port to forward to the tunnel, and returns the tunnel URL
 # It kills the tunnel when this bash script exits

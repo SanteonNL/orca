@@ -10,7 +10,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"golang.org/x/oauth2"
-	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -76,21 +75,26 @@ func create(jwkFile string, jwkKeyID string, parsedFHIRBaseURL *url.URL, clientI
 		SigningKey:            signingKey,
 	}))
 	// Spin up proxy
-	reverseProxy := httputil.NewSingleHostReverseProxy(parsedFHIRBaseURL)
-	reverseProxy.Rewrite = func(r *httputil.ProxyRequest) {
-		r.SetURL(target)
-		r.Out.Host = r.In.Host // if desired
+	reverseProxy := &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.SetURL(parsedFHIRBaseURL)
+			cleanHeaders(r.Out.Header)
+		},
 	}
-	reverseProxy.Director = func(request *http.Request) {
-		// We're proxying to an external system, so we don't want this proxy's caller's headers to be forwarded.
-		request.Header.Del("Authorization")
-		request.Header.Del("X-Forwarded-Host")
-	}
+	//reverseProxy.Rewrite = func(request *httputil.ProxyRequest) {
+	//	request.SetURL(target)
+	//	request.Out.Host = r.In.Host // if desired
+	//}
+	//reverseProxy.Director = func(request *http.Request) {
+	//	// We're proxying to an external system, so we don't want this proxy's caller's headers to be forwarded.
+	//	//request.Header.Del("Authorization")
+	//	request.Header.Del("X-Forwarded-Host")
+	//}
 	reverseProxy.Transport = LoggingTransportDecorator{
 		RoundTripper: fhirHTTPClient.Transport,
 	}
 	reverseProxy.ErrorHandler = func(responseWriter http.ResponseWriter, request *http.Request, err error) {
-		log.Error().Err(err).Msgf("Proxy error: %s", sanitizeRequestURL(request.URL).String())
+		log.Warn().Err(err).Msgf("Proxy error: %s", sanitizeRequestURL(request.URL).String())
 		responseWriter.Header().Add("Content-Type", "application/fhir+json")
 		responseWriter.WriteHeader(http.StatusBadGateway)
 		diagnostics := "The system tried to proxy the FHIR operation, but an error occurred."
@@ -105,6 +109,26 @@ func create(jwkFile string, jwkKeyID string, parsedFHIRBaseURL *url.URL, clientI
 		_, _ = responseWriter.Write(data)
 	}
 	return reverseProxy, nil
+}
+
+func cleanHeaders(header http.Header) {
+	for name, _ := range header {
+		switch name {
+		case "Content-Type":
+			continue
+		case "Accept":
+			continue
+		case "Accept-Encoding":
+			continue
+		case "User-Agent":
+			continue
+		case "X-Request-Id":
+			// useful for tracing
+			continue
+		default:
+			header.Del(name)
+		}
+	}
 }
 
 func loadJWK(jwkFile string, keyID string) (jwk.Key, error) {
@@ -128,19 +152,11 @@ type LoggingTransportDecorator struct {
 }
 
 func (d LoggingTransportDecorator) RoundTrip(request *http.Request) (*http.Response, error) {
-	// log all request headers here
-	for header, values := range request.Header {
-		for _, value := range values {
-			log.Info().Msgf("Request header: %s: %s", header, value)
-		}
-	}
 	response, err := d.RoundTripper.RoundTrip(request)
 	if err != nil {
 		log.Warn().Msgf("Proxy request failed: %s", sanitizeRequestURL(request.URL).String())
 	} else {
-		responseData, _ := io.ReadAll(response.Body)
 		log.Info().Msgf("Proxied request: %s", sanitizeRequestURL(request.URL).String())
-		log.Info().Msgf("Proxied response: %s", string(responseData))
 	}
 	return response, err
 }
