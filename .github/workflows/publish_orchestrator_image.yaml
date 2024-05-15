@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
+      id-token: write
       contents: read
       packages: write
       attestations: write
@@ -44,7 +45,7 @@ jobs:
         id: push
         uses: docker/build-push-action@v5
         with:
-          context: "{{defaultContext}}:orchestrator"
+          context: ./orchestrator
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
