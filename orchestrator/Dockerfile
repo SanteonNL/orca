@@ -1,3 +1,5 @@
+# syntax=docker/dockerfile:1
+
 FROM golang:1.22.2-alpine AS build
 
 LABEL maintainer="info@reinkrul.nl"
@@ -20,8 +22,6 @@ FROM gcr.io/distroless/base-debian11:debug
 WORKDIR /
 
 COPY --from=build /app /app
-
-WORKDIR /app
 
 
 ENTRYPOINT ["/app"]
