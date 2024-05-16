@@ -39,11 +39,15 @@ resource containerGroup 'Microsoft.ContainerInstance/containerGroups@2023-05-01'
                     environmentVariables: [
                         {
                             name: 'NUTS_URL'
-                            value: 'https://example.com'
+                            value: 'https://orca-test.com'
                         }
                         {
                             name: 'NUTS_CRYPTO_STORAGE'
                             value: 'fs'
+                        }
+                        {
+                            name: 'NUTS_AUTH_CONTRACTVALIDATORS'
+                            value: 'dummy'
                         }
                     ]
                     image: nodeImage
