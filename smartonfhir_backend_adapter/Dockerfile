@@ -15,17 +15,13 @@ COPY . .
 RUN mkdir /app
 RUN go build -o /app/bin .
 
-
-# Run the app binary when we run the container
-
 # ## Deploy
 FROM gcr.io/distroless/base-debian11:debug  
 # Connect to shell via /busybox/sh
 
-WORKDIR /
-
-COPY --from=build /app /app
+COPY --from=build /app/bin /app/bin
 
 WORKDIR /app
 
+# Run the app binary when we run the container
 ENTRYPOINT ["/app/bin"]

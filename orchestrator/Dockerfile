@@ -12,16 +12,16 @@ COPY go.sum .
 RUN go mod download && go mod verify
 COPY . .
 
-RUN go build -o /app .
-
+RUN mkdir /app
+RUN go build -o /app/bin .
 
 # ## Deploy
 FROM gcr.io/distroless/base-debian11:debug  
 # Connect to shell via /busybox/sh
 
-WORKDIR /
+COPY --from=build /app/bin /app/bin
 
-COPY --from=build /app /app
+WORKDIR /app
 
-
-ENTRYPOINT ["/app"]
+# Run the app binary when we run the container
+ENTRYPOINT ["/app/bin"]
