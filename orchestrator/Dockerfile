@@ -1,4 +1,6 @@
-FROM golang:1.22.2-alpine as builder
+# syntax=docker/dockerfile:1
+
+FROM golang:1.22.2-alpine AS build
 
 LABEL maintainer="info@reinkrul.nl"
 
@@ -13,15 +15,13 @@ COPY . .
 RUN mkdir /app
 RUN go build -o /app/bin .
 
-# alpine
-FROM alpine:3.19.1
-RUN apk update \
-  && apk add --no-cache \
-             tzdata \
-             curl \
-  && update-ca-certificates
-COPY --from=builder /app/bin /app/bin
+# ## Deploy
+FROM gcr.io/distroless/base-debian11:debug  
+# Connect to shell via /busybox/sh
+
+COPY --from=build /app/bin /app/bin
 
 WORKDIR /app
 
+# Run the app binary when we run the container
 ENTRYPOINT ["/app/bin"]
