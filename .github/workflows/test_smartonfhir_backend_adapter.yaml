@@ -1,0 +1,17 @@
+name: Tests the SMART on FHIR Backend Adapter service
+on:
+  - pull_request
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          # use go version from go.mod.
+          go-version-file: 'smartonfhir_backend_adapter/go.mod'
+      - name: Go Test
+        working-directory: ./smartonfhir_backend_adapter
+        run: go test ./...
