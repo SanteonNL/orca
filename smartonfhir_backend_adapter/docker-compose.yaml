@@ -8,8 +8,7 @@ services:
     environment:
       - SOF_BACKEND_ADAPTER_FHIR_BASEURL=https://fhir.epic.com/interconnect-fhir-oauth/api/FHIR/R4/
       - SOF_BACKEND_ADAPTER_LISTEN_ADDRESS=:8080
-      - SOF_BACKEND_ADAPTER_JWK_FILE=/app/jwk.json
       - SOF_BACKEND_ADAPTER_OAUTH_CLIENT_ID=${SOF_BACKEND_ADAPTER_OAUTH_CLIENT_ID}
-      - SOF_BACKEND_ADAPTER_JWK_KEYID=${SOF_BACKEND_ADAPTER_JWK_KEYID}
+      - SOF_BACKEND_ADAPTER_SIGNINGKEY_FILE=/app/jwk.json
     volumes:
       - ./.envfiles/private.jwk:/app/jwk.json:ro

@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"github.com/SanteonNL/orca/smartonfhir_backend_adapter/keys"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/stretchr/testify/require"
@@ -19,7 +20,9 @@ func TestBackendTokenSource_createGrant(t *testing.T) {
 	tokenSource := BackendTokenSource{
 		OAuth2ASTokenEndpoint: "https://example.com/as",
 		ClientID:              "123456",
-		SigningKey:            signingKey,
+		SigningKey: keys.JWKSigningKey{
+			JWK: signingKey,
+		},
 	}
 
 	grant, err := tokenSource.createGrant()
