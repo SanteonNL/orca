@@ -18,7 +18,14 @@ paths:
               required:
                 - fhir_operation_path
                 - oauth2_scope
+                - callback_url
               properties:
+                callback_url:
+                  type: string
+                  description: |
+                    The URL to which the user agent should be redirected after the exchange has been completed.
+                    The exchange_id is appended as a query parameter.
+                  example: "https://example.com/callback"
                 oauth2_scope:
                   type: string
                   description: |
@@ -31,13 +38,10 @@ paths:
                   description: |
                     The path and query parameters for the FHIR operation to be executed.
                     For now, the FHIR REST interaction is always a GET request.
-                  example:
-                    - "Patient/1234"
-                    - "Patient?identifier=1234"
-                    - "Observations?patient=1234"
+                  example: "Patient/1234"
       responses:
         "200":
-          description: Data was exchange with (remote) parties, result can be retrieved.s
+          description: Data was exchange with (remote) parties, result can be retrieved.
           content:
             application/json:
               schema:
