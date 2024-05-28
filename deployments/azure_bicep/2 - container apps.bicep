@@ -1,6 +1,3 @@
-@description('Specifies the location for all resources.')
-param location string = resourceGroup().location
-
 param uaiName string = 'uai-${uniqueString(resourceGroup().id)}'
 param uaiResourceGroup string = resourceGroup().name
 param uaiSubscription string = subscription().subscriptionId
@@ -53,207 +50,76 @@ param logLevel string = 'info'
 
 param createNutsNode bool = true
 param createOrchestrator bool = true
-param createSoFbackend bool = false
-= if (createLogAnalytics)
+param createSmartOnFhirBackend bool = false
 
-module nutsnode './modules/logAnalytics-new.bicep' = if (createNutsNode) {
+module nutsnode './modules/apps-nutsnode.bicep' = if (createNutsNode) {
   name: 'DeployNutsNode'
   scope: resourceGroup(containerEnvSubscription, containerEnvResourceGroup)
   params: {
     resourceName: 'nutsnode'
-    location: location
+    uaiName: uaiName
+    uaiResourceGroup: uaiResourceGroup
+    uaiSubscription: uaiSubscription
+
+    containerEnvName: containerEnvName
+
+    keyVaultName: keyVaultName
+    serviceName: serviceName
+    healthWorkspaceName: healthWorkspaceName
+    healthWorkspaceResourceGroup: healthWorkspaceResourceGroup
+    healthWorkspaceSubscription: healthWorkspaceSubscription
+
+    cpuCore: cpuCore
+    memorySize: memorySize
+
+    logLevel: logLevel
   }
 }
 
-resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
-  name: serviceName
-  location: location
-  dependsOn: [uai, environment, fhirService]
+module orchestrator './modules/apps-orchestrator.bicep' = if (createOrchestrator) {
+  name: 'DeployOrchestrator'
+  scope: resourceGroup(containerEnvSubscription, containerEnvResourceGroup)
+  params: {
+    resourceName: 'orchestrator'
+    uaiName: uaiName
+    uaiResourceGroup: uaiResourceGroup
+    uaiSubscription: uaiSubscription
 
-  //tags: tagList
-  identity: {
-    type: 'UserAssigned'
-    userAssignedIdentities: {
-      '${uai.id}': {}
-    }
+    containerEnvName: containerEnvName
+
+    keyVaultName: keyVaultName
+    serviceName: serviceName
+    healthWorkspaceName: healthWorkspaceName
+    healthWorkspaceResourceGroup: healthWorkspaceResourceGroup
+    healthWorkspaceSubscription: healthWorkspaceSubscription
+
+    cpuCore: cpuCore
+    memorySize: memorySize
+
+    logLevel: logLevel
   }
-  properties: {
-    managedEnvironmentId: environment.id
-    configuration: {
-      ingress: {
-        external: true
-        targetPort: 8080
-        transport: 'auto'
-        traffic: [
-          {
-            weight: 100
-            latestRevision: true
-          }
-        ]
-        // additionalPortMappings: [
-        //   {
-        //     external: true
-        //     // For management -- We probably don't want to expose this in production, instead we should
-        //     // serve the management UI from a sidecar, and only expose the sidecar.
-        //     targetPort: 8081
-        //   }
-        // ]
-        allowInsecure: false
-      }
-      // registries: [
-      //   {
-      //     identity: containerIdentity.id
-      //     server: containerRegistry.properties.loginServer
-      //   }
-      // ]
-    }
-    template: {
-      // initContainers: [
-      //   {
-      //     name: initContainer.name
-      //     image: initContainer.image
-      //     resources: {
-      //       #disable-next-line BCP036
-      //       cpu: initContainer.cpu
-      //       memory: initContainer.memory
-      //     }
-      //     volumeMounts: nutsVolumes
-      //   }
-      // ]
-      containers: [
-        {
-          env: [
-            {
-              name: 'AZURE_TENANT_ID'
-              value: subscription().tenantId
-            }
-            {
-              name: 'AZURE_CLIENT_ID'
-              value: uai.properties.clientId
-            }
-            {
-              name: 'KEYVAULT'
-              value: keyVaultName
-            }
-            {
-              name: 'FHIRSERVER_HOST'
-              value: fhirService.properties.authenticationConfiguration.audience
-            }
-            {
-              name: 'HTTP_PORT'
-              value: string(8080)
-            }
-            {
-              name: 'TZ'
-              value: 'Europe/Amsterdam'
-            }
-            {
-              name: 'LOG_LEVEL'
-              value: logLevel
-            }
-          ]
-          // volumeMounts: [
-          //   {
-          //     mountPath: 'dockervolume'
-          //     volumeName: '/mnt'
-          //   }
-          // ]
-          name: 'orca-smartonfhir-backend-adapter'
-          probes: [
-            {
-              failureThreshold: 3
-              httpGet: {
-                path: '/health'
-                port: 5080
-                scheme: 'HTTP'
-              }
-              initialDelaySeconds: 30
-              timeoutSeconds: 5
-              periodSeconds: 10
-              successThreshold: 1
-            }
-          ]
-          image: 'ghcr.io/santeonnl/orca_smartonfhir_backend_adapter:main'
-          resources: {
-            #disable-next-line BCP036
-            cpu: json(cpuCore)
-            memory: '${memorySize}Gi'
-          }
-        }
-        {
-          env: [
-            {
-              name: 'AZURE_TENANT_ID'
-              value: subscription().tenantId
-            }
-            {
-              name: 'AZURE_CLIENT_ID'
-              value: uai.properties.clientId
-            }
-            {
-              name: 'KEYVAULT'
-              value: keyVaultName
-            }
-            {
-              name: 'FHIRSERVER_HOST'
-              value: fhirService.properties.authenticationConfiguration.audience
-            }
-            {
-              name: 'HTTP_PORT'
-              value: string(8080)
-            }
-            {
-              name: 'TZ'
-              value: 'Europe/Amsterdam'
-            }
-            {
-              name: 'LOG_LEVEL'
-              value: logLevel
-            }
-          ]
-          // volumeMounts: [
-          //   {
-          //     mountPath: 'dockervolume'
-          //     volumeName: '/mnt'
-          //   }
-          // ]
-          name: 'orca-orchestrator'
-          probes: [
-            {
-              failureThreshold: 3
-              httpGet: {
-                path: '/status'
-                port: 8081
-                scheme: 'HTTP'
-              }
-              initialDelaySeconds: 30
-              timeoutSeconds: 5
-              periodSeconds: 10
-              successThreshold: 1
-            }
-          ]
-          image: 'ghcr.io/santeonnl/orca_orchestrator:main'
-          resources: {
-            #disable-next-line BCP036
-            cpu: json(cpuCore)
-            memory: '${memorySize}Gi'
-          }
-        }
-      ]
-      // Nuts does not scale. Ebin.
-      scale: {
-        minReplicas: 1
-        maxReplicas: 1
-      }
-      volumes: [
-        {
-          name: 'dockervolume'
-          storageType: 'AzureFile'
-          // Each nuts environment has its own file share configured in the container app
-          // environment level.
-          storageName: 'mnt'
-        }
-      ]
-    }
+}
+
+module smartonfhirbackend './modules/apps-nutsnode.bicep' = if (createSmartOnFhirBackend) {
+  name: 'DeploySmartOnFhirBackend'
+  scope: resourceGroup(containerEnvSubscription, containerEnvResourceGroup)
+  params: {
+    resourceName: 'smartonfhir-backend'
+    uaiName: uaiName
+    uaiResourceGroup: uaiResourceGroup
+    uaiSubscription: uaiSubscription
+
+    containerEnvName: containerEnvName
+
+    keyVaultName: keyVaultName
+    serviceName: serviceName
+    healthWorkspaceName: healthWorkspaceName
+    healthWorkspaceResourceGroup: healthWorkspaceResourceGroup
+    healthWorkspaceSubscription: healthWorkspaceSubscription
+
+    cpuCore: cpuCore
+    memorySize: memorySize
+
+    logLevel: logLevel
   }
 }

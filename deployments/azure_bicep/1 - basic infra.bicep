@@ -145,6 +145,22 @@ module sqlserverDB './modules/sqlserverdatabase-new.bicep' = if (createSqlserver
   }
 }
 
+// module sqlserverDBAutzUai './modules/sqlserverdatabase-authorization.bicep' = {
+//   name: 'DeploysqlserverDBAutzUai'
+//   scope: resourceGroup(sqlserverDBSubscription, sqlserverDBResourceGroup)
+//   dependsOn: [
+//     sqlserverDB
+//   ]
+//   params: {
+//     resourceName: '${sqlserverDBName}'
+//     roleDefinitionName: ''
+//     roleDefinitionId: ''
+//     principalName: uaiName
+//     principalId: uai.outputs.principalId
+//     principalType: 'ServicePrincipal'
+//   }
+// }
+
 module containerEnv './modules/containerEnv-new.bicep' = if (createContainerEnv) {
   name: 'DeployContainerEnv'
   scope: resourceGroup(containerEnvSubscription, containerEnvResourceGroup)

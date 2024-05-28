@@ -2,7 +2,7 @@
 param location string = resourceGroup().location
 
 @description('Name for the resource')
-param resourceName string = 'smartonfhir_backend'
+param resourceName string = 'smartonfhir-backend'
 
 @description('Nuts Node Docker image to deploy')
 param nodeImage string = 'ghcr.io/santeonnl/orca_smartonfhir_backend_adapter:main'
@@ -15,8 +15,6 @@ param uaiResourceGroup string = resourceGroup().name
 param uaiSubscription string = subscription().subscriptionId
 
 param containerEnvName string = 'env-${uniqueString(resourceGroup().id)}'
-param containerEnvResourceGroup string = resourceGroup().name
-param containerEnvSubscription string = subscription().subscriptionId
 
 param keyVaultName string = 'kev-${uniqueString(resourceGroup().id)}'
 
@@ -35,7 +33,6 @@ resource uai 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' exist
 
 resource environment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
   name: containerEnvName
-  scope: resourceGroup(containerEnvSubscription, containerEnvResourceGroup)
 }
 
 resource fhirService 'Microsoft.HealthcareApis/workspaces/fhirservices@2022-12-01' existing = {
