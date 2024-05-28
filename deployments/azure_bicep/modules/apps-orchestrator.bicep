@@ -65,16 +65,6 @@ param cpuCore string = '0.5'
 ])
 param memorySize string = '1'
 
-@description('The level on which of app should log. Default loglevel: "info", Set to "debug" for more verbose logging')
-@allowed([
-  'trace'
-  'debug'
-  'info'
-  'warn'
-  'error'
-])
-param logLevel string = 'info'
-
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: resourceName
   location: location
@@ -142,50 +132,28 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: uai.properties.clientId
             }
             {
-              name: 'KEYVAULT'
-              value: keyVaultName
-            }
-            {
               name: 'ORCHESTRATOR_NUTS_API_ADDRESS'
               value: 'http://nutsnode:8081'
             }
             {
               name: 'ORCHESTRATOR_API_LISTEN_ADDRESS'
-              value: 'dummy'
+              value: ':8081'
             }
             {
               name: 'ORCHESTRATOR_WEB_LISTEN_ADDRESS'
-              value: 'dummy'
+              value: ':8080'
             }
             {
               name: 'ORCHESTRATOR_BASE_URL'
-              value: 'dummy'
+              value: environment.properties.defaultDomain
             }
             {
               name: 'ORCHESTRATOR_DEMO_CONFIGFILE'
               value: 'dummy'
             }
             {
-              name: 'FHIRSERVER_HOST'
-              value: fhirService.properties.authenticationConfiguration.audience
-            }
-            {
               name: 'TZ'
               value: 'Europe/Amsterdam'
-            }
-            {
-              name: 'NUTS_VERBOSITY'
-              value: logLevel
-            }
-            {
-              name: 'NUTS_LOGGERFORMAT'
-              value: 'json'
-            }
-          ]
-          volumeMounts: [
-            {
-              mountPath: '/mnt/${resourceName}-config'
-              volumeName: 'dockervolume'
             }
           ]
           name: '${resourceName}-container'
@@ -193,8 +161,8 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               failureThreshold: 3
               httpGet: {
-                path: '/status'
-                port: 8081
+                path: '/'
+                port: 8080
                 scheme: 'HTTP'
               }
               initialDelaySeconds: 30
@@ -211,20 +179,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
           }
         }
       ]
-      // Nuts does not scale. Ebin.
+      // Probably has in-memory state for now, so do not scale
       scale: {
         minReplicas: 1
         maxReplicas: 1
       }
-      volumes: [
-        {
-          name: 'dockervolume'
-          storageType: 'AzureFile'
-          // Each nuts environment has its own file share configured in the container app
-          // environment level.
-          storageName: 'mnt'
-        }
-      ]
     }
   }
 }
