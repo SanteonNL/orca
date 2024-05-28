@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -44,7 +45,16 @@ func main() {
 
 	httpServices := &sync.WaitGroup{}
 	// Internal-facing API service
-	exchangeManager := outbound.NewExchangeManager(parsedBaseURL, nutsAPIAddress, outbound.FileDIDResolver{File: demoConfigFile})
+	var didResolver outbound.DIDResolver
+	if strings.HasPrefix(demoConfigFile, "{") {
+		didResolver, err = outbound.StaticDIDResolverFromJSON(demoConfigFile)
+		if err != nil {
+			log.Fatal().Err(err).Msg("Failed to parse JSON demo config")
+		}
+	} else {
+		didResolver = outbound.FileDIDResolver{File: demoConfigFile}
+	}
+	exchangeManager := outbound.NewExchangeManager(parsedBaseURL, nutsAPIAddress, didResolver)
 	internalFacingAPI := api.Service{ExchangeManager: exchangeManager}
 	httpServices.Add(1)
 	go func() {
