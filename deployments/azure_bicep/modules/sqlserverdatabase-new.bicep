@@ -17,7 +17,7 @@ resource sqlserver 'Microsoft.Sql/servers@2023-05-01-preview' = {
     administrators: {
       administratorType: 'ActiveDirectory'
       login: adminGroupObjectName
-      azureADOnlyAuthentication: true
+      azureADOnlyAuthentication: false
       principalType: 'Group'
       sid: adminGroupObjectId
       tenantId: tenant().tenantId

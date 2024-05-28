@@ -145,21 +145,21 @@ module sqlserverDB './modules/sqlserverdatabase-new.bicep' = if (createSqlserver
   }
 }
 
-// module sqlserverDBAutzUai './modules/sqlserverdatabase-authorization.bicep' = {
-//   name: 'DeploysqlserverDBAutzUai'
-//   scope: resourceGroup(sqlserverDBSubscription, sqlserverDBResourceGroup)
-//   dependsOn: [
-//     sqlserverDB
-//   ]
-//   params: {
-//     resourceName: '${sqlserverDBName}'
-//     roleDefinitionName: ''
-//     roleDefinitionId: ''
-//     principalName: uaiName
-//     principalId: uai.outputs.principalId
-//     principalType: 'ServicePrincipal'
-//   }
-// }
+module sqlserverDBAutzUai './modules/sqlserverdatabase-authorization.bicep' = {
+  name: 'DeploysqlserverDBAutzUai'
+  scope: resourceGroup(sqlserverDBSubscription, sqlserverDBResourceGroup)
+  dependsOn: [
+    sqlserverDB
+  ]
+  params: {
+    resourceName: sqlserverDBName
+    roleDefinitionName: 'SQL DB Contributor'
+    roleDefinitionId: '9b7fa17d-e63e-47b0-bb0a-15c516ac86ec'
+    principalName: uaiName
+    principalId: uai.outputs.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
 
 module containerEnv './modules/containerEnv-new.bicep' = if (createContainerEnv) {
   name: 'DeployContainerEnv'

@@ -40,6 +40,11 @@ resource fhirService 'Microsoft.HealthcareApis/workspaces/fhirservices@2022-12-0
   scope: resourceGroup(healthWorkspaceSubscription, healthWorkspaceResourceGroup)
 }
 
+param fhirBaseUrl string = ''
+
+//if the fhirBaseUrl is empty, use the default fhirService audience
+var fhirBaseURLOrDefault = fhirBaseUrl == '' ? fhirService.properties.authenticationConfiguration.audience : fhirBaseUrl
+
 @description('Number of CPU cores the container can use. Can be with a maximum of two decimals.')
 @allowed([
   '0.25'
@@ -146,24 +151,24 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: keyVaultName
             }
             {
-              name: 'NUTS_URL'
-              value: 'https://orca-test.com'
-            }
-            {
-              name: 'NUTS_CRYPTO_STORAGE'
-              value: 'fs'
-            }
-            {
-              name: 'NUTS_AUTH_CONTRACTVALIDATORS'
+              name: 'SOF_BACKEND_ADAPTER_OAUTH_CLIENT_ID'
               value: 'dummy'
             }
             {
-              name: 'NUTS_HTTP_INTERNAL_ADDRESS'
-              value: ':8081'
+              name: 'SOF_BACKEND_ADAPTER_FHIR_BASEURL'
+              value: fhirBaseURLOrDefault
             }
             {
-              name: 'FHIRSERVER_HOST'
-              value: fhirService.properties.authenticationConfiguration.audience
+              name: 'SOF_BACKEND_ADAPTER_LISTEN_ADDRESS'
+              value: 'dummy'
+            }
+            {
+              name: 'SOF_BACKEND_ADAPTER_JWK_FILE'
+              value: 'dummy'
+            }
+            {
+              name: 'SOF_BACKEND_ADAPTER_JWK_KEYID'
+              value: 'dummy'
             }
             {
               name: 'TZ'

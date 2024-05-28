@@ -147,23 +147,23 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'ORCHESTRATOR_NUTS_API_ADDRESS'
-              value: 'http://nutsnode'
+              value: 'http://nutsnode:8081'
             }
             {
-              name: 'NUTS_URL'
-              value: 'https://orca-test.com'
-            }
-            {
-              name: 'NUTS_CRYPTO_STORAGE'
-              value: 'fs'
-            }
-            {
-              name: 'NUTS_AUTH_CONTRACTVALIDATORS'
+              name: 'ORCHESTRATOR_API_LISTEN_ADDRESS'
               value: 'dummy'
             }
             {
-              name: 'NUTS_HTTP_INTERNAL_ADDRESS'
-              value: ':8081'
+              name: 'ORCHESTRATOR_WEB_LISTEN_ADDRESS'
+              value: 'dummy'
+            }
+            {
+              name: 'ORCHESTRATOR_BASE_URL'
+              value: 'dummy'
+            }
+            {
+              name: 'ORCHESTRATOR_DEMO_CONFIGFILE'
+              value: 'dummy'
             }
             {
               name: 'FHIRSERVER_HOST'
