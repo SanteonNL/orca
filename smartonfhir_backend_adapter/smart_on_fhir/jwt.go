@@ -1,12 +1,11 @@
 package smart_on_fhir
 
 import (
-	"crypto"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/smartonfhir_backend_adapter/keys"
 	"github.com/google/uuid"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/jws"
@@ -25,7 +24,7 @@ var _ oauth2.TokenSource = &BackendTokenSource{}
 type BackendTokenSource struct {
 	OAuth2ASTokenEndpoint string
 	ClientID              string
-	SigningKey            jwk.Key
+	SigningKey            keys.SigningKey
 }
 
 func (p BackendTokenSource) Token() (*oauth2.Token, error) {
@@ -86,7 +85,7 @@ func (p BackendTokenSource) createGrant() (string, error) {
 	//		return "", fmt.Errorf("invalid JWT claim %s: %w", claimName, err)
 	//	}
 	//}
-	//signedToken, err := jwt.Sign(tokenBuilder, jwt.WithKey(p.SigningKey.Algorithm(), p.SigningKey))
+	//signedToken, err := jwt.Sign(tokenBuilder, jwt.WithKey(p.SigningKey.SigningAlgorithm(), p.SigningKey))
 	//if err != nil {
 	//	return "", fmt.Errorf("failed to sign JWT: %w", err)
 	//}
@@ -94,7 +93,7 @@ func (p BackendTokenSource) createGrant() (string, error) {
 
 	// For SMART on FHIR Sandbox (does not support audience as array):
 	hdr := &jws.Header{
-		Algorithm: p.SigningKey.Algorithm().String(),
+		Algorithm: p.SigningKey.SigningAlgorithm(),
 		Typ:       "JWT",
 		KeyID:     p.SigningKey.KeyID(),
 	}
@@ -109,12 +108,8 @@ func (p BackendTokenSource) createGrant() (string, error) {
 			"nbf": time.Now().Unix(),
 		},
 	}
-	var signer crypto.Signer
-	if err := p.SigningKey.Raw(&signer); err != nil {
-		return "", fmt.Errorf("failed to get private key: %w", err)
-	}
 	return jws.EncodeWithSigner(hdr, claims, func(data []byte) ([]byte, error) {
-		return signer.Sign(rand.Reader, data, nil)
+		return p.SigningKey.Sign(rand.Reader, data, nil)
 	})
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/SanteonNL/orca/smartonfhir_backend_adapter/keys"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,7 +45,10 @@ func Test_create(t *testing.T) {
 	defer fhirServer.Close()
 	fhirBaseURL, _ := url.Parse(fhirServer.URL)
 
-	reverseProxy, err := create("test/private.jwk", "7c87bdbc-ef89-41a7-a940-70d7e7b1a828", fhirBaseURL, "test")
+	signingKey, err := keys.SigningKeyFromJWKFile("test/private.jwk")
+	require.NoError(t, err)
+
+	reverseProxy, err := create(signingKey, fhirBaseURL, "test")
 	require.NoError(t, err)
 
 	proxyServer := httptest.NewServer(reverseProxy)

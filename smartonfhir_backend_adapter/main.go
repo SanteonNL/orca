@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/smartonfhir_backend_adapter/keys"
 	"github.com/SanteonNL/orca/smartonfhir_backend_adapter/smart_on_fhir"
-	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"golang.org/x/oauth2"
@@ -18,18 +18,17 @@ import (
 
 func main() {
 	var (
-		clientID      string
-		listenAddress string
-		fhirBaseURL   string
-		jwkFile       string
-		jwkKeyID      string
+		clientID                   string
+		listenAddress              string
+		fhirBaseURL                string
+		signingKeyFile             string
+		signingKeyAzureKeyVaultURL string
+		signingKeyAzureKeyName     string
 	)
 	envVariables := map[string]*string{
 		"SOF_BACKEND_ADAPTER_OAUTH_CLIENT_ID": &clientID,
 		"SOF_BACKEND_ADAPTER_FHIR_BASEURL":    &fhirBaseURL,
 		"SOF_BACKEND_ADAPTER_LISTEN_ADDRESS":  &listenAddress,
-		"SOF_BACKEND_ADAPTER_JWK_FILE":        &jwkFile,
-		"SOF_BACKEND_ADAPTER_JWK_KEYID":       &jwkKeyID,
 	}
 	for name, ptr := range envVariables {
 		value := os.Getenv(name)
@@ -38,16 +37,40 @@ func main() {
 		}
 		*ptr = value
 	}
+	optionalEnvVariables := map[string]*string{
+		"SOF_BACKEND_ADAPTER_AZURE_KEYVAULT_URL":       &signingKeyAzureKeyVaultURL,
+		"SOF_BACKEND_ADAPTER_SIGNINGKEY_AZURE_KEYNAME": &signingKeyAzureKeyName,
+		"SOF_BACKEND_ADAPTER_SIGNINGKEY_FILE":          &signingKeyFile,
+	}
+	for name, ptr := range optionalEnvVariables {
+		*ptr = os.Getenv(name)
+	}
 	parsedFHIRBaseURL, err := url.Parse(fhirBaseURL)
 	if err != nil {
 		panic(err)
+	}
+
+	// Load Signing Key
+	var signingKey keys.SigningKey
+	if signingKeyAzureKeyVaultURL != "" {
+		signingKey, err = keys.SigningKeyFromAzureKeyVault(signingKeyAzureKeyVaultURL, signingKeyAzureKeyName)
+		if err != nil {
+			panic(err)
+		}
+	} else if signingKeyFile != "" {
+		signingKey, err = keys.SigningKeyFromJWKFile(signingKeyFile)
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		panic("Signing Key properties must be set to load from JWK file or Azure Key Vault.")
 	}
 
 	log.Info().Msgf("Listening on: %s", listenAddress)
 	log.Info().Msgf("Proxying to: %s", fhirBaseURL)
 	log.Info().Msgf("OAuth2 client ID: %s", clientID)
 
-	handler, err := create(jwkFile, jwkKeyID, parsedFHIRBaseURL, clientID)
+	handler, err := create(signingKey, parsedFHIRBaseURL, clientID)
 	if err != nil {
 		panic(err)
 	}
@@ -57,12 +80,7 @@ func main() {
 	}
 }
 
-func create(jwkFile string, jwkKeyID string, parsedFHIRBaseURL *url.URL, clientID string) (*httputil.ReverseProxy, error) {
-	// Load JWK for signing OAuth2 client assertions
-	signingKey, err := loadJWK(jwkFile, jwkKeyID)
-	if err != nil {
-		return nil, err
-	}
+func create(signingKey keys.SigningKey, parsedFHIRBaseURL *url.URL, clientID string) (*httputil.ReverseProxy, error) {
 	// Discovery SMART on FHIR configuration
 	smartConfig, err := smart_on_fhir.DiscoverConfiguration(parsedFHIRBaseURL)
 	if err != nil {
@@ -129,22 +147,6 @@ func cleanHeaders(header http.Header) {
 			header.Del(name)
 		}
 	}
-}
-
-func loadJWK(jwkFile string, keyID string) (jwk.Key, error) {
-	data, err := os.ReadFile(jwkFile)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read JWK file %s: %w", jwkFile, err)
-	}
-	jwkSet, err := jwk.Parse(data)
-	if err != nil {
-		return nil, fmt.Errorf("invalid JWK file %s: %w", jwkFile, err)
-	}
-	result, exists := jwkSet.LookupKeyID(keyID)
-	if !exists {
-		return nil, fmt.Errorf("key with ID %s does not exist in JWK file", keyID)
-	}
-	return result, nil
 }
 
 type LoggingTransportDecorator struct {
