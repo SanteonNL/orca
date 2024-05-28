@@ -35,7 +35,7 @@ func main() {
 
 	parsedBaseURL, err := url.Parse(baseURL)
 	if err != nil {
-		panic(err)
+		log.Fatal().Err(err).Msg("Failed to parse base URL")
 	}
 
 	log.Info().Msgf("Listening on %s", apiListenAddress)

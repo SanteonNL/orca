@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/SanteonNL/orca/smartonfhir_backend_adapter/keys"
 	"github.com/SanteonNL/orca/smartonfhir_backend_adapter/smart_on_fhir"
 	"github.com/rs/zerolog/log"
@@ -33,7 +32,7 @@ func main() {
 	for name, ptr := range envVariables {
 		value := os.Getenv(name)
 		if value == "" {
-			panic(fmt.Sprintf("Missing environment variable: %s", name))
+			log.Fatal().Msgf("Missing environment variable: %s", name)
 		}
 		*ptr = value
 	}
@@ -47,7 +46,7 @@ func main() {
 	}
 	parsedFHIRBaseURL, err := url.Parse(fhirBaseURL)
 	if err != nil {
-		panic(err)
+		log.Fatal().Err(err).Msgf("Failed to parse FHIR base URL: %s", fhirBaseURL)
 	}
 
 	// Load Signing Key
@@ -72,11 +71,11 @@ func main() {
 
 	handler, err := create(signingKey, parsedFHIRBaseURL, clientID)
 	if err != nil {
-		panic(err)
+		log.Fatal().Err(err).Msg("Failed to initialize proxy")
 	}
 	err = http.ListenAndServe(listenAddress, handler)
 	if !errors.Is(err, http.ErrServerClosed) {
-		panic(err)
+		log.Fatal().Err(err).Msg("Failed to start server")
 	}
 }
 

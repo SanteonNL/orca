@@ -304,7 +304,7 @@ func randomID() string {
 	buf := make([]byte, 32)
 	_, err := rand.Read(buf)
 	if err != nil {
-		panic(err)
+		log.Fatal().Err(err).Msg("Failed to generate random ID")
 	}
 	return base64.RawURLEncoding.EncodeToString(buf)
 }
