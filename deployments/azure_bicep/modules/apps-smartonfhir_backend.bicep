@@ -2,10 +2,10 @@
 param location string = resourceGroup().location
 
 @description('Name for the resource')
-param resourceName string = 'nutsnode'
+param resourceName string = 'smartonfhir_backend'
 
 @description('Nuts Node Docker image to deploy')
-param nodeImage string = 'nutsfoundation/nuts-node:master'
+param nodeImage string = 'ghcr.io/santeonnl/orca_smartonfhir_backend_adapter:main'
 
 // @description('Port to open on the container and the public IP address.')
 // param port int = 80

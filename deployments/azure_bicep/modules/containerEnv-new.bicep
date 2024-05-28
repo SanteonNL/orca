@@ -31,11 +31,6 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-09-01' existing 
   scope: resourceGroup(storageAccountSubscription, storageAccountResourceGroup)
 }
 
-resource fileShare 'Microsoft.Storage/storageAccounts/fileServices/shares@2022-09-01' existing = {
-  name: '${storageAccountName}/default/${shareName}'
-  scope: resourceGroup(storageAccountSubscription, storageAccountResourceGroup)
-}
-
 resource law 'Microsoft.OperationalInsights/workspaces@2022-10-01' existing = {
   name: logAnalyticsName
   scope: resourceGroup(logAnalyticsSubscription, logAnalyticsResourceGroup)

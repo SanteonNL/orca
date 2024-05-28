@@ -66,7 +66,7 @@ module logAnalytics './modules/logAnalytics-new.bicep' = if (createLogAnalytics)
   name: 'DeployLogAnalytics'
   scope: resourceGroup(logAnalyticsSubscription, logAnalyticsResourceGroup)
   params: {
-    resourcename: logAnalyticsName
+    resourceName: logAnalyticsName
     location: location
   }
 }

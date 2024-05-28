@@ -1,10 +1,10 @@
 @description('Specifies the location for all resources.')
 param location string = resourceGroup().location
 
-param resourcename string
+param resourceName string
 
 resource logAnalytics 'Microsoft.OperationalInsights/workspaces@2022-10-01' = {
-  name: resourcename
+  name: resourceName
   location: location
   properties: any({
     retentionInDays: 30
