@@ -16,6 +16,10 @@ import (
 
 // StartExchangeJSONBody defines parameters for StartExchange.
 type StartExchangeJSONBody struct {
+	// CallbackUrl The URL to which the user agent should be redirected after the exchange has been completed.
+	// The exchange_id is appended as a query parameter.
+	CallbackUrl string `json:"callback_url"`
+
 	// FhirOperationPath The path and query parameters for the FHIR operation to be executed.
 	// For now, the FHIR REST interaction is always a GET request.
 	FhirOperationPath string `json:"fhir_operation_path"`

@@ -11,7 +11,7 @@ gen-api:
 		-o nuts/generated.go https://nuts-node.readthedocs.io/en/latest/_static/common/ssi_types.yaml
 	oapi-codegen -generate client,types -package iam \
 		-import-mapping='../common/ssi_types.yaml:github.com/SanteonNL/orca/orchestrator/nuts' \
-		-o nuts/iam/generated.go https://nuts-node.readthedocs.io/en/latest/_static/auth/iam.yaml
+		-o nuts/iam/generated.go https://nuts-node.readthedocs.io/en/latest/_static/auth/v2.yaml
 	oapi-codegen -generate client,types -package vdr \
 		-import-mapping='../common/ssi_types.yaml:github.com/SanteonNL/orca/orchestrator/nuts' \
 		-o nuts/vdr/generated.go https://nuts-node.readthedocs.io/en/latest/_static/vdr/v2.yaml
