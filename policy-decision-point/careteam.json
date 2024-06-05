@@ -1,0 +1,40 @@
+{
+  "fullUrl": "http://localhost:8000/fhir/CareTeam/1",
+  "resource": {
+    "resourceType": "CareTeam",
+    "id": "1",
+    "meta": {
+      "versionId": "1",
+      "lastUpdated": "2024-06-05T08:32:53.191+00:00",
+      "source": "#BPA6Ed6O4lDjH8il"
+    },
+    "status": "active",
+    "subject": {
+      "type": "Patient",
+      "identifier": {
+        "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+        "value": "1234567890"
+      }
+    },
+    "participant": [
+      {
+        "member": {
+          "type": "Organization",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "123"
+          }
+        }
+      },
+      {
+        "member": {
+          "type": "Organization",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "456"
+          }
+        }
+      }
+    ]
+  }
+}

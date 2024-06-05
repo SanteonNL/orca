@@ -1,0 +1,36 @@
+## Create FHIR CareTeam
+POST http://localhost:8000/fhir/CareTeam
+Content-Type: application/json
+
+{
+  "resourceType": "CareTeam",
+  "id": "example",
+  "status": "active",
+  "subject": {
+    "type": "Patient",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+      "value": "1234567890"
+    }
+  },
+  "participant": [
+    {
+      "member": {
+        "type": "Organization",
+        "identifier": {
+          "system": "http://fhir.nl/fhir/NamingSystem/ura",
+          "value": "123"
+        }
+      }
+    },
+    {
+      "member": {
+        "type": "Organization",
+        "identifier": {
+          "system": "http://fhir.nl/fhir/NamingSystem/ura",
+          "value": "456"
+        }
+      }
+    }
+  ]
+}
