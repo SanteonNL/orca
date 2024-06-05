@@ -5,7 +5,7 @@ param location string = resourceGroup().location
 param resourceName string = 'nutsnode'
 
 @description('Nuts Node Docker image to deploy')
-param nodeImage string = 'nutsfoundation/nuts-node:master'
+param nodeImage string = 'nutsfoundation/nuts-node:6.0.0-beta.2'
 
 // @description('Port to open on the container and the public IP address.')
 // param port int = 80
@@ -18,14 +18,6 @@ param containerEnvName string = 'env-${uniqueString(resourceGroup().id)}'
 
 param keyVaultName string = 'kev-${uniqueString(resourceGroup().id)}'
 
-@minLength(3)
-param healthWorkspaceName string = 'hdw${uniqueString(resourceGroup().id)}'
-
-param serviceName string = 'orca'
-
-param healthWorkspaceResourceGroup string = resourceGroup().name
-param healthWorkspaceSubscription string = subscription().subscriptionId
-
 resource uai 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' existing = {
   name: uaiName
   scope: resourceGroup(uaiSubscription, uaiResourceGroup)
@@ -35,9 +27,8 @@ resource environment 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
   name: containerEnvName
 }
 
-resource fhirService 'Microsoft.HealthcareApis/workspaces/fhirservices@2022-12-01' existing = {
-  name: '${healthWorkspaceName}/${serviceName}'
-  scope: resourceGroup(healthWorkspaceSubscription, healthWorkspaceResourceGroup)
+resource keyVault 'Microsoft.KeyVault/vaults@2022-11-01' existing = {
+    name: keyVaultName
 }
 
 @description('Number of CPU cores the container can use. Can be with a maximum of two decimals.')
@@ -78,7 +69,7 @@ param logLevel string = 'info'
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: resourceName
   location: location
-  dependsOn: [uai, environment, fhirService]
+  dependsOn: [uai, environment, keyVault]
 
   //tags: tagList
   identity: {
@@ -151,7 +142,11 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             }
             {
               name: 'NUTS_CRYPTO_STORAGE'
-              value: 'fs'
+              value: 'azure-keyvault'
+            }
+            {
+              name: 'NUTS_CRYPTO_AZUREKV_URL'
+              value: keyVault.properties.vaultUri
             }
             {
               name: 'NUTS_AUTH_CONTRACTVALIDATORS'
@@ -160,10 +155,6 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'NUTS_HTTP_INTERNAL_ADDRESS'
               value: ':8081'
-            }
-            {
-              name: 'FHIRSERVER_HOST'
-              value: fhirService.properties.authenticationConfiguration.audience
             }
             {
               name: 'TZ'
