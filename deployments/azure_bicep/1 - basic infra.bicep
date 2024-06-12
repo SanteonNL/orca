@@ -100,7 +100,7 @@ module keyVaultAutzAdmin './modules/keyvault-authorization.bicep' = {
 }
 
 module keyVaultAutzUai './modules/keyvault-authorization.bicep' = {
-  name: 'DeployKeyVaultUai'
+  name: 'DeployKeyVaultAutzSecretsUai'
   scope: resourceGroup(keyVaultSubscription, keyVaultResourceGroup)
   dependsOn: [
     keyVault
@@ -109,6 +109,22 @@ module keyVaultAutzUai './modules/keyvault-authorization.bicep' = {
     resourceName: keyVaultName
     roleDefinitionName: 'Secret User'
     roleDefinitionId: '4633458b-17de-408a-b874-0445c86b69e6'
+    principalName: uaiName
+    principalId: uai.outputs.principalId
+    principalType: 'ServicePrincipal'
+  }
+}
+
+module keyVaultAutzCryptoUai './modules/keyvault-authorization.bicep' = {
+  name: 'DeployKeyVaulAutzCryptotUai'
+  scope: resourceGroup(keyVaultSubscription, keyVaultResourceGroup)
+  dependsOn: [
+    keyVault
+  ]
+  params: {
+    resourceName: keyVaultName
+    roleDefinitionName: 'Crypto Officer'
+    roleDefinitionId: '14b46e9e-c2b7-41b4-b07b-48a6ebf60603'
     principalName: uaiName
     principalId: uai.outputs.principalId
     principalType: 'ServicePrincipal'
@@ -142,22 +158,6 @@ module sqlserverDB './modules/sqlserverdatabase-new.bicep' = if (createSqlserver
     location: location
     adminGroupObjectId: adminGroupObjectId
     adminGroupObjectName: adminGroupObjectName
-  }
-}
-
-module sqlserverDBAutzUai './modules/sqlserverdatabase-authorization.bicep' = {
-  name: 'DeploysqlserverDBAutzUai'
-  scope: resourceGroup(sqlserverDBSubscription, sqlserverDBResourceGroup)
-  dependsOn: [
-    sqlserverDB
-  ]
-  params: {
-    resourceName: sqlserverDBName
-    roleDefinitionName: 'SQL DB Contributor'
-    roleDefinitionId: '9b7fa17d-e63e-47b0-bb0a-15c516ac86ec'
-    principalName: uaiName
-    principalId: uai.outputs.principalId
-    principalType: 'ServicePrincipal'
   }
 }
 
