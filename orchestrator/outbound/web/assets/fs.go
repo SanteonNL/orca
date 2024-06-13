@@ -1,6 +1,6 @@
 package assets
 
-import "embed"
-
-//go:embed *.html
-var FS embed.FS
+//import "embed"
+//
+////go:embed *.html
+//var FS embed.FS
