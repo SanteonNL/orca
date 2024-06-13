@@ -22,7 +22,7 @@ services:
     volumes:
       - ./config/sof_adapter_signingkey.json:/app/jwk.json:ro
   hospital_nutsnode:
-    image: nutsfoundation/nuts-node:master
+    image: nutsfoundation/nuts-node:6.0.0-beta.3
     ports:
       - "8080"
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
