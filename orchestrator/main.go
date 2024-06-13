@@ -17,7 +17,7 @@ func main() {
 	log.Info().Msgf("Using Nuts API on %s", config.Nuts.API.Address)
 
 	httpHandler := http.NewServeMux()
-	didResolver := addressing.StaticDIDResolver(config.URAMap)
+	didResolver := addressing.StaticDIDResolver(config.ParseURAMap())
 	careplanservice.Service{
 		DIDResolver: didResolver,
 	}.RegisterHandlers(httpHandler)
