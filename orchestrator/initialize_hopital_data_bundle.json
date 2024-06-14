@@ -89,9 +89,6 @@
                 "practitioner": {
                     "reference": "urn:uuid:practitioner-1"
                 },
-                "organization": {
-                    "reference": "urn:uuid:zorg-bij-jou-service-center"
-                },
                 "code": [
                     {
                         "coding": [
