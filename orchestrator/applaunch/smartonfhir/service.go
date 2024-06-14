@@ -31,8 +31,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (s *Service) handleSmartAppLaunch(response http.ResponseWriter, request *http.Request) {
-
-	iss := request.URL.Query().Get("iss")
+	iss, err := url.Parse(request.URL.Query().Get("iss"))
+	if err != nil {
+		http.Error(response, "invalid iss parameter", http.StatusBadRequest)
+		return
+	}
 	launch := request.URL.Query().Get("launch")
 
 	authURL, err := s.appLaunchServiceLogic(iss, launch)
@@ -46,19 +49,15 @@ func (s *Service) handleSmartAppLaunch(response http.ResponseWriter, request *ht
 	http.Redirect(response, request, authURL, http.StatusFound)
 }
 
-func (s *Service) appLaunchServiceLogic(iss string, launch string) (string, error) {
-	config, err := GetOpenIDConfiguration(iss, s.config.ClientID)
+func (s *Service) appLaunchServiceLogic(issuer *url.URL, launch string) (string, error) {
+	config, err := DiscoverConfiguration(issuer)
 	if err != nil {
 		return "", err
 	}
-
-	authEndpoint, ok := config["authorization_endpoint"].(string)
-	if !ok {
+	if config.AuthorizationEndpoint == "" {
 		return "", errors.New("authorization endpoint not found in OpenID configuration")
 	}
-
-	tokenEndpoint, ok := config["token_endpoint"].(string)
-	if !ok {
+	if config.TokenEndpoint == "" {
 		return "", errors.New("token endpoint not found in OpenID configuration")
 	}
 
@@ -66,7 +65,7 @@ func (s *Service) appLaunchServiceLogic(iss string, launch string) (string, erro
 	state := uuid.New().String()
 
 	s.mu.Lock()
-	s.stateToTokenUrlMap[state] = tokenEndpoint
+	s.stateToTokenUrlMap[state] = config.TokenEndpoint
 	s.mu.Unlock()
 
 	query := url.Values{}
@@ -75,10 +74,10 @@ func (s *Service) appLaunchServiceLogic(iss string, launch string) (string, erro
 	query.Set("redirect_uri", s.config.RedirectURI)
 	query.Set("scope", s.config.Scope)
 	query.Set("launch", launch)
-	query.Set("aud", iss)
+	query.Set("aud", issuer.String())
 	query.Set("state", state)
 
-	authURL := authEndpoint + "?" + query.Encode()
+	authURL := config.AuthorizationEndpoint + "?" + query.Encode()
 	return authURL, nil
 }
 
@@ -138,37 +137,4 @@ func (s *Service) appLaunchRedirectLogic(state string, code string) (map[string]
 	delete(s.stateToTokenUrlMap, state)
 	s.mu.Unlock()
 	return tokenResponse, nil
-}
-
-func GetOpenIDConfiguration(iss string, clientId string) (map[string]interface{}, error) {
-	configURL := iss + "/.well-known/openid-configuration"
-
-	req, err := http.NewRequest("GET", configURL, nil)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to create OpenID configuration request")
-		return nil, err
-	}
-
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("Epic-Client-ID", clientId)
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to fetch OpenID configuration from " + configURL)
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("failed to fetch OpenID configuration")
-	}
-
-	var config map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
-		log.Error().Err(err).Msg("Failed to fetch OpenID configuration from " + configURL)
-		return nil, err
-	}
-
-	return config, nil
 }
