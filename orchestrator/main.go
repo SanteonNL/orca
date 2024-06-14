@@ -2,10 +2,12 @@ package main
 
 import (
 	"errors"
+	"net/http"
+
 	"github.com/SanteonNL/orca/orchestrator/addressing"
+	"github.com/SanteonNL/orca/orchestrator/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/rs/zerolog/log"
-	"net/http"
 )
 
 func main() {
@@ -24,6 +26,9 @@ func main() {
 	careplanservice.Service{
 		DIDResolver: didResolver,
 	}.RegisterHandlers(httpHandler)
+
+	smartonfhir.New(config.AppLaunchConfig.SmartOnFhir).RegisterHandlers(httpHandler)
+
 	err = http.ListenAndServe(config.Public.Address, httpHandler)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatal().Err(err).Msg("Failed to start HTTP server")
