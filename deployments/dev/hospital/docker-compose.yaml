@@ -1,30 +1,16 @@
 services:
-  hospital_proxy:
+  proxy:
     image: nginx:latest
     depends_on:
-      - hospital_nutsnode
-      - hospital_sof_adapter
+      - nutsnode
+#      - sof_adapter
     ports:
       - "9080:8080"
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
-  hospital_sof_adapter:
-    build:
-      context: ../../../smartonfhir_backend_adapter
-      dockerfile: Dockerfile
-    environment:
-      - SOF_BACKEND_ADAPTER_FHIR_BASEURL=https://launch.smarthealthit.org/v/r4/sim/WzQsIiIsIiIsIiIsMCwwLDAsIiIsIiIsIiIsIiIsIiIsIiIsIiIsMCwxXQ/fhir
-      - SOF_BACKEND_ADAPTER_LISTEN_ADDRESS=:8080
-      - SOF_BACKEND_ADAPTER_OAUTH_CLIENT_ID=canbeanything_for_smart_sandbox
-      - SOF_BACKEND_ADAPTER_SIGNINGKEY_FILE=/app/jwk.json
-    ports:
-      - "8080"
-    volumes:
-      - ./config/sof_adapter_signingkey.json:/app/jwk.json:ro
-  hospital_nutsnode:
+  nutsnode:
     image: nutsfoundation/nuts-node:6.0.0-beta.3
     ports:
-      - "8080"
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
       - "./nutsnode/devtunnel/:/devtunnel"
@@ -35,3 +21,30 @@ services:
       - NUTS_HTTP_INTERNAL_ADDRESS=:8081
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${NUTS_URL}
+  orchestrator:
+    build:
+      context: ../../../orchestrator
+      dockerfile: Dockerfile
+    ports:
+      - "8080"
+    environment:
+      - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
+  fhirstore:
+    image: hapiproject/hapi:v7.2.0
+    ports:
+      - "9090:8080"
+    environment:
+      - hapi.fhir.fhir_version=R4
+#  hospital_sof_adapter:
+#    build:
+#      context: ../../../smartonfhir_backend_adapter
+#      dockerfile: Dockerfile
+#    environment:
+#      - SOF_BACKEND_ADAPTER_FHIR_BASEURL=https://launch.smarthealthit.org/v/r4/sim/WzQsIiIsIiIsIiIsMCwwLDAsIiIsIiIsIiIsIiIsIiIsIiIsIiIsMCwxXQ/fhir
+#      - SOF_BACKEND_ADAPTER_LISTEN_ADDRESS=:8080
+#      - SOF_BACKEND_ADAPTER_OAUTH_CLIENT_ID=canbeanything_for_smart_sandbox
+#      - SOF_BACKEND_ADAPTER_SIGNINGKEY_FILE=/app/jwk.json
+#    ports:
+#      - "8080"
+#    volumes:
+#      - ./config/sof_adapter_signingkey.json:/app/jwk.json:ro

@@ -1,14 +1,14 @@
 services:
-  clinic_proxy:
+  proxy:
     image: nginx:latest
     depends_on:
-      - clinic_nutsnode
-      - clinic_orchestrator
+      - nutsnode
+      - orchestrator
     ports:
       - "7080:8080"
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
-  clinic_nutsnode:
+  nutsnode:
     image: nutsfoundation/nuts-node:6.0.0-beta.3
     ports:
       - "8081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
@@ -20,18 +20,17 @@ services:
       - NUTS_HTTP_INTERNAL_ADDRESS=:8081
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${CLINIC_URL}
-  clinic_orchestrator:
+  orchestrator:
     build:
       context: ../../../orchestrator
       dockerfile: Dockerfile
     ports:
       - "8080"
-      - "8081"
-    volumes:
-      - "./data/orchestrator-demo-config.json:/demo-config.json:ro"
     environment:
-      - ORCHESTRATOR_NUTS_API_ADDRESS=http://clinic_nutsnode:8081
-      - ORCHESTRATOR_API_LISTEN_ADDRESS=:8081
-      - ORCHESTRATOR_WEB_LISTEN_ADDRESS=:8080
-      - ORCHESTRATOR_BASE_URL=${CLINIC_URL}/orchestrator
-      - ORCHESTRATOR_DEMO_CONFIGFILE=/demo-config.json
+      - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
+  fhirstore:
+    image: hapiproject/hapi:v7.2.0
+    ports:
+      - "7090:8080"
+    environment:
+      - hapi.fhir.fhir_version=R4
