@@ -1,10 +1,12 @@
 package main
 
 import (
+	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/nuts"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/v2"
-	"strings"
 )
 
 type Config struct {
@@ -15,7 +17,8 @@ type Config struct {
 	// URAMap holds a hardcoded map of URA identifiers to DIDs. It is later to be replaced with a more dynamic solution.
 	// It's specified as followed:
 	// ura1=did:example.com:bob,ura2=did:example.com:alice (etc)s
-	URAMap string `koanf:"uramap"`
+	URAMap          string           `koanf:"uramap"`
+	AppLaunchConfig applaunch.Config `koanf:"applaunch"`
 }
 
 func (c Config) ParseURAMap() map[string]string {
