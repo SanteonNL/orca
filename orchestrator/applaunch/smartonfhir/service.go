@@ -18,7 +18,7 @@ const fhirLauncherKey = "smartonfhir"
 
 func init() {
 	// Register FHIR client factory that can create FHIR clients when the SMART on FHIR AppLaunch is used
-	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) coolfhir.FHIRClient {
+	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) *coolfhir.DefaultFHIRClient {
 		panic("TODO: create http.Client that adds the access token to the Authorization header")
 	}
 }

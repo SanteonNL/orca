@@ -8,7 +8,7 @@ import (
 	"net/url"
 )
 
-type ClientCreator func(properties map[string]string) FHIRClient
+type ClientCreator func(properties map[string]string) *DefaultFHIRClient
 
 var ClientFactories = map[string]ClientCreator{}
 
@@ -19,16 +19,16 @@ type FHIRClient interface {
 
 func NewClient(fhirBaseURL *url.URL, httpClient *http.Client) *DefaultFHIRClient {
 	return &DefaultFHIRClient{
-		baseURL:    fhirBaseURL,
-		httpClient: httpClient,
+		BaseURL:    fhirBaseURL,
+		HTTPClient: httpClient,
 	}
 }
 
 var _ FHIRClient = &DefaultFHIRClient{}
 
 type DefaultFHIRClient struct {
-	baseURL    *url.URL
-	httpClient *http.Client
+	BaseURL    *url.URL
+	HTTPClient *http.Client
 }
 
 func (d DefaultFHIRClient) Get(path string, target interface{}) error {
@@ -36,7 +36,7 @@ func (d DefaultFHIRClient) Get(path string, target interface{}) error {
 }
 
 func (d DefaultFHIRClient) GetQuery(path string, query url.Values, target interface{}) error {
-	requestURL := d.baseURL.JoinPath(path)
+	requestURL := d.BaseURL.JoinPath(path)
 	if len(query) > 0 {
 		requestURL.RawQuery = query.Encode()
 	}
@@ -47,7 +47,7 @@ func (d DefaultFHIRClient) GetQuery(path string, query url.Values, target interf
 	}
 	httpRequest.Header.Add("Cache-Control", "no-cache")
 	httpRequest.Header.Add("Content-Type", "application/fhir+json")
-	httpResponse, err := d.httpClient.Do(httpRequest)
+	httpResponse, err := d.HTTPClient.Do(httpRequest)
 	if err != nil {
 		return fmt.Errorf("FHIR request failed (url=%s): %w", requestURL.String(), err)
 	}

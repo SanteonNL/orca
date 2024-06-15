@@ -13,7 +13,7 @@ const fhirLauncherKey = "demo"
 
 func init() {
 	// Register FHIR client factory that can create FHIR clients when the Demo AppLaunch is used
-	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) coolfhir.FHIRClient {
+	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) *coolfhir.DefaultFHIRClient {
 		fhirServerURL, _ := url.Parse(properties["iss"])
 		// Demo AppLaunch connects to backing FHIR server without any authentication,
 		// so http.DefaultClient can be used.
