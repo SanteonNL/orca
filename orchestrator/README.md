@@ -9,4 +9,15 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_APPLAUNCH_SOF_CLIENT_SECRET`: The `client_secret` assigned by the EHR
 - `ORCA_APPLAUNCH_SOF_SCOPE`: Any specific scope, for example `launch fhirUser`
 
-## Features
+## App Launch options
+
+### Demo
+
+Redirect the browser to `/demo-app-launch`, and provide the following query parameters:
+
+- `patient`: reference to the FHIR Patient resource.
+- `servieRequest`: reference to the FHIR ServiceRequest resource that is being requested.
+- `practitioner`: reference to the FHIR PractitionerRole resource of the current user.
+- `iss`: FHIR server base URL.
+
+### SMART on FHIR
