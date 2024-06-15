@@ -1,17 +1,12 @@
 package main
 
 import (
-	"errors"
-	"net/http"
-
-	"github.com/SanteonNL/orca/orchestrator/addressing"
-	"github.com/SanteonNL/orca/orchestrator/applaunch/smartonfhir"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	"github.com/SanteonNL/orca/orchestrator/cmd"
 	"github.com/rs/zerolog/log"
 )
 
 func main() {
-	config, err := LoadConfig()
+	config, err := cmd.LoadConfig()
 	if err != nil {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
@@ -20,18 +15,9 @@ func main() {
 	for ura, did := range config.ParseURAMap() {
 		log.Info().Msgf("URA %s maps to DID %s", ura, did)
 	}
-
-	httpHandler := http.NewServeMux()
-	didResolver := addressing.StaticDIDResolver(config.ParseURAMap())
-	careplanservice.Service{
-		DIDResolver: didResolver,
-	}.RegisterHandlers(httpHandler)
-
-	smartonfhir.New(config.AppLaunchConfig.SmartOnFhir).RegisterHandlers(httpHandler)
-
-	err = http.ListenAndServe(config.Public.Address, httpHandler)
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatal().Err(err).Msg("Failed to start HTTP server")
+	log.Info().Msgf("Demo app launch: http://localhost%s/demo-app-launch", config.Public.Address)
+	if err := cmd.Start(*config); err != nil {
+		log.Fatal().Err(err).Msg("Failed to start server")
 	}
 	log.Info().Msg("Goodbye!")
 }

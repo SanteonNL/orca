@@ -3,6 +3,9 @@ package smartonfhir
 import (
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
+	"github.com/SanteonNL/orca/orchestrator/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/url"
 	"sync"
@@ -11,17 +14,28 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+const fhirLauncherKey = "smartonfhir"
+
+func init() {
+	// Register FHIR client factory that can create FHIR clients when the SMART on FHIR AppLaunch is used
+	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) coolfhir.FHIRClient {
+		panic("TODO: create http.Client that adds the access token to the Authorization header")
+	}
+}
+
 type Service struct {
 	config             Config
 	stateToTokenUrlMap map[string]string //TODO: move to redis
 	mu                 *sync.Mutex
+	sessionManager     *user.SessionManager
 }
 
-func New(config Config) *Service {
+func New(config Config, manager *user.SessionManager) *Service {
 	return &Service{
 		config:             config,
 		stateToTokenUrlMap: make(map[string]string),
 		mu:                 &sync.Mutex{},
+		sessionManager:     manager,
 	}
 }
 
@@ -95,10 +109,15 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 
 	log.Info().Msgf("SMART App Launch succeeded, got the following response\n%v", tokenResponse)
 
-	_, _ = response.Write([]byte("Launch succeeded"))
-
 	// 1) Extract the type of launch that is being performed, for example an enrollment, or a data view
 	// 2) switch type - call the apropriate service to handle the request
+	s.sessionManager.Create(response, user.SessionData{
+		FHIRLauncher: fhirLauncherKey,
+		Values: map[string]string{
+			"access_token": tokenResponse["access_token"].(string),
+		},
+	})
+	http.Redirect(response, request, careplancontributor.LandingURL, http.StatusFound)
 }
 
 func (s *Service) appLaunchRedirectLogic(state string, code string) (map[string]interface{}, error) {

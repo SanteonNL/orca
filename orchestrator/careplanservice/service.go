@@ -5,8 +5,14 @@ import (
 	"net/http"
 )
 
+func New(didResolver addressing.DIDResolver) *Service {
+	return &Service{
+		didResolver: didResolver,
+	}
+}
+
 type Service struct {
-	DIDResolver addressing.DIDResolver
+	didResolver addressing.DIDResolver
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
