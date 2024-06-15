@@ -3,7 +3,7 @@ package careplancontributor
 import (
 	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/assets"
-	"github.com/SanteonNL/orca/orchestrator/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"net/http"

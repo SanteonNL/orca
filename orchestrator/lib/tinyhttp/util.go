@@ -1,4 +1,4 @@
-package util
+package tinyhttp
 
 import "net/http"
 

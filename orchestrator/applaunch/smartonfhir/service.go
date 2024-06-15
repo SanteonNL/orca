@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
-	"github.com/SanteonNL/orca/orchestrator/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/url"

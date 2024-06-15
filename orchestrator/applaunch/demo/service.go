@@ -2,9 +2,9 @@ package demo
 
 import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
-	"github.com/SanteonNL/orca/orchestrator/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/tinyhttp"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/SanteonNL/orca/orchestrator/util"
 	"net/http"
 	"net/url"
 )
@@ -33,7 +33,7 @@ type Service struct {
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/demo-app-launch", func(response http.ResponseWriter, request *http.Request) {
-		values, ok := util.GetQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss")
+		values, ok := tinyhttp.GetQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss")
 		if !ok {
 			return
 		}

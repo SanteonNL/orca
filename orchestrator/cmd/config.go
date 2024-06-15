@@ -1,10 +1,10 @@
 package cmd
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/lib/nuts"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/applaunch"
-	"github.com/SanteonNL/orca/orchestrator/nuts"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/v2"
 )
