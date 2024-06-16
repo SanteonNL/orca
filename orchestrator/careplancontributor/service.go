@@ -93,16 +93,18 @@ func (s Service) confirm(localFHIR coolfhir.Client, serviceRequestRef string) (*
 	if err := localFHIR.Read(serviceRequestRef, &serviceRequest); err != nil {
 		return nil, err
 	}
-
-	task := fhir.Task{
-		Status:    fhir.TaskStatusRequested,
-		Intent:    "order",
-		Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"), // TODO: Take URA from config/request
-		Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"), // TODO: Take URA from config/request
-		Input: []fhir.TaskInput{
-			// TODO: Make this inline instead of a reference
+	// Marshalling of Task is incorrect when providing input
+	// See https://github.com/samply/golang-fhir-models/issues/19
+	// So just create a regular map.
+	task := map[string]any{
+		"resourceType": "Task",
+		"status":       "accepted",
+		"intent":       "order",
+		"requester":    coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"), // TODO: Take URA from config/request
+		"owner":        coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"), // TODO: Take URA from config/request
+		"input": []map[string]any{
 			{
-				ValueReference: fhir.Reference{
+				"valueReference": fhir.Reference{
 					Type:      to.Ptr("ServiceRequest"),
 					Reference: to.Ptr(serviceRequestRef),
 				},

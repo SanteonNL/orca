@@ -75,7 +75,7 @@ func (d DefaultClient) doRequest(httpRequest *http.Request, target interface{}) 
 		return fmt.Errorf("FHIR response read failed (url=%s): %w", httpRequest.URL.String(), err)
 	}
 	// TODO: Handle errornous responses (OperationOutcome?)
-	err = json.Unmarshal(data, &target)
+	err = json.Unmarshal(data, target)
 	if err != nil {
 		return fmt.Errorf("FHIR response unmarshal failed (url=%s): %w", httpRequest.URL.String(), err)
 	}

@@ -1,6 +1,8 @@
 package coolfhir
 
-import "github.com/samply/golang-fhir-models/fhir-models/fhir"
+import (
+	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+)
 
 // Workflow that performs the HL7 FHIR Workflow Option H: https://hl7.org/fhir/R4/workflow-management.html#optionh
 // TL;DR:
@@ -12,9 +14,9 @@ type Workflow struct {
 	CarePlanService Client
 }
 
-func (w Workflow) Invoke(task fhir.Task) (*fhir.Task, error) {
+func (w Workflow) Invoke(task any) (*fhir.Task, error) {
 	var result fhir.Task
-	err := w.CarePlanService.Create("Task", task, &task)
+	err := w.CarePlanService.Create("Task", task, &result)
 	if err != nil {
 		return nil, err
 	}
