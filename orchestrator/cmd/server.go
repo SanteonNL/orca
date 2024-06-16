@@ -8,8 +8,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
+	"net/url"
 )
 
 func Start(config Config) error {
@@ -17,11 +19,19 @@ func Start(config Config) error {
 	httpHandler := http.NewServeMux()
 	didResolver := addressing.StaticDIDResolver(config.ParseURAMap())
 	sessionManager := user.NewSessionManager()
+	if config.CarePlanService.URL == "" {
+		return errors.New("careplanservice.url is not configured")
+	}
+	cpsURL, _ := url.Parse(config.CarePlanService.URL)
+	workflow := &coolfhir.Workflow{
+		// TODO: Replace with client doing authentication
+		CarePlanService: coolfhir.NewClient(cpsURL, http.DefaultClient),
+	}
 
 	// Register services
 	services := []Service{
 		careplanservice.New(didResolver),
-		careplancontributor.New(sessionManager),
+		careplancontributor.New(sessionManager, workflow),
 		smartonfhir.New(config.AppLaunchConfig.SmartOnFhir, sessionManager),
 		demo.New(sessionManager),
 	}
