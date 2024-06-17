@@ -1,10 +1,10 @@
-package main
+package cmd
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/lib/nuts"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/applaunch"
-	"github.com/SanteonNL/orca/orchestrator/nuts"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/v2"
 )
@@ -14,6 +14,8 @@ type Config struct {
 	Nuts nuts.Config `koanf:"nuts"`
 	// Public holds the configuration for the public interface.
 	Public InterfaceConfig `koanf:"public"`
+	// CarePlanService holds the configuration for the care plan service.
+	CarePlanService CarePlanService `koanf:"careplanservice"`
 	// URAMap holds a hardcoded map of URA identifiers to DIDs. It is later to be replaced with a more dynamic solution.
 	// It's specified as followed:
 	// ura1=did:example.com:bob,ura2=did:example.com:alice (etc)s
@@ -42,6 +44,11 @@ func (c Config) ParseURAMap() map[string]string {
 type InterfaceConfig struct {
 	// Address holds the address to listen on.
 	Address string `koanf:"address"`
+}
+
+type CarePlanService struct {
+	// URL holds the URL of the care plan service that is used to creates CarePlans.
+	URL string `koanf:"url"`
 }
 
 // LoadConfig loads the configuration from the environment.

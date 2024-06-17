@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Thuismonitoring Onboarding</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f4f4f4;
+        }
+
+        .container {
+            width: 80%;
+            margin: auto;
+            overflow: hidden;
+        }
+
+        #patient-form {
+            background: #f9f9f9;
+            margin: 20px;
+            padding: 20px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div id="patient-form">
+        <h1>Thuismonitoring Onboarding</h1>
+        <div>
+            Patient: <span id="patient-name"></span>
+        </div>
+        <div>
+            Service Request: <span id="service-request"></span>
+        </div>
+        <form id="form" action="confirm" method="POST">
+            <button type="submit">Bevestigen</button>
+            <button type="button" onclick="alert('TOOD')">Annuleren</button>
+        </form>
+    </div>
+</div>
+<script>
+    fetch('/contrib/patient')
+        .then(response => response.json())
+        .then(data => {
+            console.log(data);
+            document.getElementById('patient-name').innerText = data.name[0].given[0] + ' ' + data.name[0].family;
+        });
+    fetch('/contrib/serviceRequest')
+        .then(response => response.json())
+        .then(data => {
+            console.log(data);
+            document.getElementById('service-request').innerText = data.code.coding[0].display;
+        });
+</script>
+</body>
+</html>
