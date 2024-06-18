@@ -1,7 +1,7 @@
 import { Box, Typography } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import DashboardCard from '@/app/(DashboardLayout)/components/shared/DashboardCard';
-import ServiceRequestOverview from '../components/service-requests/service-request-overview';
+import ServiceRequestOverview from '@/app/(DashboardLayout)/components/service-requests/service-request-overview';
 
 const ServiceRequestsPage = () => {
   return (
