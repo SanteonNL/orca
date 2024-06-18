@@ -18,7 +18,7 @@ const ServiceRequestTable: React.FC<Props> = ({ rows }) => {
             patient: row.patientId,
             serviceRequest: `ServiceRequest/${row.id}`,
             practitioner: "PratitionerRole/5",
-            iss: `${process.env.NEXT_PUBLIC_FHIR_BASE_URL}`
+            iss: `${process.env.FHIR_BASE_URL}`
         }).toString()
     }
 
@@ -46,7 +46,7 @@ const ServiceRequestTable: React.FC<Props> = ({ rows }) => {
 
     const columns: GridColDef[] = [
         { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 2 },
-        { field: 'title', headerName: 'Title', flex: 2 },
+        { field: 'title', headerName: 'Title', flex: 3 },
         { field: 'patient', headerName: 'Patient', flex: 2 },
         {
             field: 'status',
