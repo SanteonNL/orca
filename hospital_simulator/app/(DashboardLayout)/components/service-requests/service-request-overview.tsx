@@ -6,7 +6,7 @@ export default async function ServiceRequestOverview() {
 
     if (!process.env.FHIR_BASE_URL) {
         console.error('FHIR_BASE_URL is not defined');
-        return <></>;
+        return <>FHIR_BASE_URL is not defined</>;
     }
 
     let rows = [];
