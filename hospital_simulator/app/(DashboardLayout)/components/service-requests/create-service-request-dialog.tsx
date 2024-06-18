@@ -70,7 +70,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                         )}
                         <Grid item xs={12}>
                             <DialogContentText>
-                                Create a new ServiceRequest for a new Patient. For demo purposes, we can only create <i>Home Monitoring</i> ServiceRequests.
+                                Create a new ServiceRequest for a new Patient. For demo purposes, we can only create <i>Telemonitoring</i> ServiceRequests.
                             </DialogContentText>
                         </Grid>
                         <Grid item xs={12} md={6}>
@@ -98,8 +98,8 @@ const CreateServiceRequestDialog: React.FC = () => {
                             />
                         </Grid>
                         <Grid item xs={12}>
-                            <Select fullWidth value="blood-pressure">
-                                <MenuItem value="blood-pressure">Home Monitoring</MenuItem>
+                            <Select fullWidth value="tele-monitoring">
+                                <MenuItem value="tele-monitoring">Telemonitoring</MenuItem>
                             </Select>
                         </Grid>
                     </Grid>
@@ -246,9 +246,9 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     ],
                     "code": {
                         "coding": [{
-                            "system": "http://loinc.org",
-                            "code": "58410-2",
-                            "display": "Compleet bloedbeeld panel in bloed d.m.v. geautomatiseerde telling"
+                            "system": "http://snomed.info/sct",
+                            "code": "719858009",
+                            "display": "monitoren via telegeneeskunde (regime/therapie)"
                         }]
                     },
                 },
