@@ -61,29 +61,17 @@ function createDID() {
   echo $DID
 }
 
-echo "Creating stack for Hospital..."
-echo "  Creating devtunnel"
-HOSPITAL_URL=$(createTunnel ./hospital 9080)
-echo "  Starting services"
-pushd hospital
-NUTS_URL="${HOSPITAL_URL}" docker compose up --wait --build
-echo "  Creating DID document"
-HOSPITAL_DID=$(createDID $HOSPITAL_URL http://localhost:9081)
-echo "    Hospital DID: $HOSPITAL_DID"
-echo "  Registering FHIR base URL in DID document"
-curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/did/${HOSPITAL_DID}/service
-popd
-
-
 echo "Creating stack for Clinic..."
 echo "  Creating devtunnel"
 CLINIC_URL=$(createTunnel ./clinic 7080)
 echo "  Starting services"
 pushd clinic
 touch data/orchestrator-demo-config.json
+docker compose pull
 CLINIC_URL="${CLINIC_URL}" \
-  docker compose up --wait --build
-
+  docker compose up \
+ --wait --build --remove-orphans
+CAREPLANSERVICE_URL="${CLINIC_URL}/fhir"
 echo "  Creating DID document"
 CLINIC_DID=$(createDID $CLINIC_URL http://localhost:8081)
 echo "    Clinic DID: $CLINIC_DID"
@@ -93,6 +81,25 @@ echo "{
   \"hospital\": \"$HOSPITAL_DID\"
 }" > data/orchestrator-demo-config.json
 popd
+
+echo "Creating stack for Hospital..."
+echo "  Creating devtunnel"
+HOSPITAL_URL=$(createTunnel ./hospital 9080)
+echo "  Starting services"
+pushd hospital
+docker compose pull
+NUTS_URL="${HOSPITAL_URL}" \
+ CAREPLANSERVICE_URL="${CAREPLANSERVICE_URL}" \
+  docker compose up \
+ --wait --build --remove-orphans
+echo "  Creating DID document"
+HOSPITAL_DID=$(createDID $HOSPITAL_URL http://localhost:9081)
+echo "    Hospital DID: $HOSPITAL_DID"
+echo "  Registering FHIR base URL in DID document"
+curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/did/${HOSPITAL_DID}/service
+popd
+
+
 
 # open orchestrator demo app
 open "${CLINIC_URL}/orchestrator/"
