@@ -14,8 +14,9 @@ type ClientCreator func(properties map[string]string) *DefaultClient
 var ClientFactories = map[string]ClientCreator{}
 
 type Client interface {
-	Read(path string, target interface{}, opts ...Option) error
-	Create(path string, resource interface{}, result interface{}) error
+	Read(path string, target any, opts ...Option) error
+	Create(path string, resource any, result any) error
+	Update(path string, resource any, result any) error
 }
 
 func NewClient(fhirBaseURL *url.URL, httpClient *http.Client) *DefaultClient {
@@ -32,7 +33,7 @@ type DefaultClient struct {
 	HTTPClient *http.Client
 }
 
-func (d DefaultClient) Read(path string, target interface{}, opts ...Option) error {
+func (d DefaultClient) Read(path string, target any, opts ...Option) error {
 	httpRequest, err := http.NewRequest(http.MethodGet, d.resourceURL(path).String(), nil)
 	if err != nil {
 		return err
@@ -44,7 +45,7 @@ func (d DefaultClient) Read(path string, target interface{}, opts ...Option) err
 	return d.doRequest(httpRequest, target)
 }
 
-func (d DefaultClient) Create(path string, resource interface{}, result interface{}) error {
+func (d DefaultClient) Create(path string, resource any, result any) error {
 	data, err := json.Marshal(resource)
 	if err != nil {
 		return err
@@ -57,11 +58,24 @@ func (d DefaultClient) Create(path string, resource interface{}, result interfac
 	return d.doRequest(httpRequest, result)
 }
 
+func (d DefaultClient) Update(path string, resource any, result any) error {
+	data, err := json.Marshal(resource)
+	if err != nil {
+		return err
+	}
+	httpRequest, err := http.NewRequest(http.MethodPut, d.resourceURL(path).String(), io.NopCloser(bytes.NewReader(data)))
+	if err != nil {
+		return err
+	}
+	httpRequest.Header.Add("Content-Type", "application/fhir+json")
+	return d.doRequest(httpRequest, result)
+}
+
 func (d DefaultClient) resourceURL(path string) *url.URL {
 	return d.BaseURL.JoinPath(path)
 }
 
-func (d DefaultClient) doRequest(httpRequest *http.Request, target interface{}) error {
+func (d DefaultClient) doRequest(httpRequest *http.Request, target any) error {
 	httpResponse, err := d.HTTPClient.Do(httpRequest)
 	if err != nil {
 		return fmt.Errorf("FHIR request failed (url=%s): %w", httpRequest.URL.String(), err)
