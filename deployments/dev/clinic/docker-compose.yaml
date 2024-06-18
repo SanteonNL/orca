@@ -21,9 +21,10 @@ services:
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${CLINIC_URL}
   orchestrator:
-    build:
-      context: ../../../orchestrator
-      dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_orchestrator:main
+    #build:
+    #  context: ../../../orchestrator
+    #  dockerfile: Dockerfile
     ports:
       - "8080"
     environment:
