@@ -19,7 +19,8 @@
                         "family": "Doe",
                         "given": [
                             "John"
-                        ]
+                        ],
+                        "text": "Doe, John"
                     }
                 ],
                 "gender": "male",
