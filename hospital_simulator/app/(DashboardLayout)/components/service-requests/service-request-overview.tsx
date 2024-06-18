@@ -4,15 +4,15 @@ import ServiceRequestTable from './service-request-table';
 
 export default async function ServiceRequestOverview() {
 
-    if (!process.env.FHIR_BASE_URL) {
-        console.error('FHIR_BASE_URL is not defined');
-        return <>FHIR_BASE_URL is not defined</>;
+    if (!process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER) {
+        console.error('NEXT_PUBLIC_FHIR_BASE_URL_DOCKER is not defined');
+        return <>NEXT_PUBLIC_FHIR_BASE_URL_DOCKER is not defined</>;
     }
 
     let rows = [];
 
     try {
-        const response = await fetch(`${process.env.FHIR_BASE_URL}/ServiceRequest?_include=ServiceRequest:subject&_count=500`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/ServiceRequest?_include=ServiceRequest:subject&_count=500`, {
             cache: 'no-store',
             headers: {
                 "Cache-Control": "no-cache"

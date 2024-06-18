@@ -15,10 +15,10 @@ const ServiceRequestTable: React.FC<Props> = ({ rows }) => {
 
     const getEnrollmentUrl = (row: any) => {
         return `${process.env.NEXT_PUBLIC_ORCA_BASE_URL}/demo-app-launch?` + new URLSearchParams({
-            patient: row.patientId,
+            patient: `Patient/${row.patientId}`,
             serviceRequest: `ServiceRequest/${row.id}`,
             practitioner: "PratitionerRole/5",
-            iss: `${process.env.FHIR_BASE_URL}`
+            iss: `${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}`
         }).toString()
     }
 
