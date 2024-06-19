@@ -11,6 +11,7 @@ RUN npm run build
 FROM node:20-alpine AS production
 WORKDIR /app
 ENV NODE_ENV production
+ENV BASE_PATH /ehr
 
 # Copy the built application from the previous stage
 COPY --from=base /app/.next ./.next
