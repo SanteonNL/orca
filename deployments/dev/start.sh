@@ -99,10 +99,8 @@ echo "  Registering FHIR base URL in DID document"
 curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/did/${HOSPITAL_DID}/service
 popd
 
-
-
 # open orchestrator demo app
-open "${CLINIC_URL}/orchestrator/"
+open "${HOSPITAL_URL}/ehr/"
 
 # stop Docker services if script exits
 trap "docker compose -f clinic/docker-compose.yaml down" EXIT
