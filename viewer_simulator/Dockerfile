@@ -3,7 +3,7 @@ FROM node:20-alpine AS base
 
 WORKDIR /app
 
-ENV BASE_PATH /viewer
+ENV NEXT_PUBLIC_BASE_PATH /viewer
 
 COPY package.json package-lock.json ./
 RUN npm ci
