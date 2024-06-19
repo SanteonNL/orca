@@ -129,8 +129,8 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     "identifier": [
                         {
                             "use": "usual",
-                            "system": "http://hospital.example.org/patients",
-                            "value": "12345"
+                            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+                            "value": "111222333"
                         }
                     ],
                     "name": [
@@ -227,6 +227,81 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 }
             },
             {
+                "fullUrl": "urn:uuid:stantonius",
+                "resource": {
+                    "resourceType": "Organization",
+                    "id": "StAntonius",
+                    "identifier": [
+                        {
+                            "system": "http://example.org/identifiers",
+                            "value": "URA-002"
+                        }
+                    ],
+                    "name": "St. Antonius"
+                },
+                "request": {
+                    "method": "POST",
+                    "url": "Organization",
+                    "ifNoneExist": "identifier=http://example.org/identifiers|URA-002"
+                }
+            },
+            {
+                "fullUrl": "urn:uuid:condition-1",
+                "resource": {
+                    "resourceType": "Condition",
+                    "id": "condition-1",
+                    "clinicalStatus": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                                "code": "active",
+                                "display": "Active"
+                            }
+                        ]
+                    },
+                    "verificationStatus": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+                                "code": "confirmed",
+                                "display": "Confirmed"
+                            }
+                        ]
+                    },
+                    "category": [
+                        {
+                            "coding": [
+                                {
+                                    "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                                    "code": "problem-list-item",
+                                    "display": "Problem List Item"
+                                }
+                            ]
+                        }
+                    ],
+                    "code": {
+                        "coding": [
+                            {
+                                "system": "http://snomed.info/sct",
+                                "code": "13645005",
+                                "display": "Chronic obstructive lung disease (disorder)"
+                            }
+                        ],
+                        "text": "Chronische obstructieve longaandoening (aandoening)"
+                    },
+                    "subject": {
+                        "reference": "Patient/urn:uuid:patient-1"
+                    },
+                    "recorder": {
+                        "reference": "PractitionerRole/urn:uuid:practitionerrole-1"
+                    },
+                },
+                "request": {
+                    "method": "POST",
+                    "url": "Condition"
+                }
+            },
+            {
                 "fullUrl": "urn:uuid:servicerequest-1",
                 "resource": {
                     "resourceType": "ServiceRequest",
@@ -237,7 +312,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                         "reference": "urn:uuid:patient-1"
                     },
                     "requester": {
-                        "reference": "urn:uuid:zorg-bij-jou-service-center"
+                        "reference": "urn:uuid:stantonius"
                     },
                     "performer": [
                         {
@@ -251,6 +326,11 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                             "display": "monitoren via telegeneeskunde (regime/therapie)"
                         }]
                     },
+                    "reasonReference": [
+                        {
+                            "reference": "Condition/urn:uuid:condition-1"
+                        }
+                    ]
                 },
                 "request": {
                     "method": "POST",
