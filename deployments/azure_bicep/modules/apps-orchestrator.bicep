@@ -152,6 +152,10 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: 'dummy'
             }
             {
+              name: 'ORCA_APPLAUNCH_DEMO_ENABLED'
+              value: 'true'
+            }
+            {
               name: 'TZ'
               value: 'Europe/Amsterdam'
             }

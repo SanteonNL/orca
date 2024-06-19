@@ -9,6 +9,7 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_APPLAUNCH_SOF_CLIENTID`:  The `client_id` assigned by the EHR
 - `ORCA_APPLAUNCH_SOF_CLIENT_SECRET`: The `client_secret` assigned by the EHR
 - `ORCA_APPLAUNCH_SOF_SCOPE`: Any specific scope, for example `launch fhirUser`
+- `ORCA_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
 
 ## App Launch options
 

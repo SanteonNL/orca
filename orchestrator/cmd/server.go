@@ -33,8 +33,10 @@ func Start(config Config) error {
 			SessionManager:  sessionManager,
 			CarePlanService: carePlanServiceClient,
 		},
-		smartonfhir.New(config.AppLaunchConfig.SmartOnFhir, sessionManager),
-		demo.New(sessionManager),
+		smartonfhir.New(config.AppLaunch.SmartOnFhir, sessionManager),
+	}
+	if config.AppLaunch.Demo.Enabled {
+		services = append(services, demo.New(sessionManager))
 	}
 	for _, service := range services {
 		service.RegisterHandlers(httpHandler)
