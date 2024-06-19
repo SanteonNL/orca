@@ -23,15 +23,16 @@ func Start(config Config) error {
 		return errors.New("careplanservice.url is not configured")
 	}
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
-	workflow := &coolfhir.Workflow{
-		// TODO: Replace with client doing authentication
-		CarePlanService: coolfhir.NewClient(cpsURL, http.DefaultClient),
-	}
+	// TODO: Replace with client doing authentication
+	carePlanServiceClient := coolfhir.NewClient(cpsURL, http.DefaultClient)
 
 	// Register services
 	services := []Service{
 		careplanservice.New(didResolver),
-		careplancontributor.New(sessionManager, workflow),
+		careplancontributor.Service{
+			SessionManager:  sessionManager,
+			CarePlanService: carePlanServiceClient,
+		},
 		smartonfhir.New(config.AppLaunchConfig.SmartOnFhir, sessionManager),
 		demo.New(sessionManager),
 	}
