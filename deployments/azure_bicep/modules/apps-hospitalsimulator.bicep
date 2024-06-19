@@ -2,10 +2,10 @@
 param location string = resourceGroup().location
 
 @description('Name for the resource')
-param resourceName string = 'orchestrator'
+param resourceName string = 'hospitalsimulator'
 
-@description('Nuts Node Docker image to deploy')
-param nodeImage string = 'ghcr.io/santeonnl/orca_orchestrator:main'
+@description('Hospital Simulator Docker image to deploy')
+param simulatorImage string = 'ghcr.io/santeonnl/orca_hospitalsimulator:main'
 
 // @description('Port to open on the container and the public IP address.')
 // param port int = 80
@@ -51,7 +51,7 @@ resource fhirService 'Microsoft.HealthcareApis/workspaces/fhirservices@2022-12-0
   '1.75'
   '2'
 ])
-param cpuCore string = '0.5'
+param cpuCore string = '0.25'
 
 @description('Amount of memory (in gibibytes, GiB) allocated to the container up to 4GiB. Can be with a maximum of two decimals. Ratio with CPU cores must be equal to 2.')
 @allowed([
@@ -63,7 +63,7 @@ param cpuCore string = '0.5'
   '3.5'
   '4'
 ])
-param memorySize string = '1'
+param memorySize string = '0.5'
 
 resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
   name: resourceName
@@ -82,7 +82,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
     configuration: {
       ingress: {
         external: true
-        targetPort: 8080
+        targetPort: 3000
         transport: 'auto'
         traffic: [
           {
@@ -112,15 +112,15 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               value: uai.properties.clientId
             }
             {
-              name: 'ORCA_NUTS_API_ADDRESS'
-              value: 'http://nutsnode:8081'
+              name: 'NEXT_PUBLIC_ORCA_BASE_URL'
+              value: 'https://orchestrator.icystone-47561fa8.westeurope.azurecontainerapps.io' // TODO: make this configurable
             }
             {
-              name: 'ORCA_PUBLIC_ADDRESS'
-              value: environment.properties.defaultDomain
+                name: 'NEXT_PUBLIC_FHIR_BASE_URL'
+                value: 'https://example.com'
             }
             {
-                name: 'ORCA_CAREPLANSERVICE_URL'
+                name: 'NEXT_PUBLIC_FHIR_BASE_URL_DOCKER'
                 value: 'https://example.com'
             }
             {
@@ -134,7 +134,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               failureThreshold: 3
               httpGet: {
                 path: '/'
-                port: 8080
+                port: 3000
                 scheme: 'HTTP'
               }
               initialDelaySeconds: 30
@@ -143,7 +143,7 @@ resource containerApp 'Microsoft.App/containerApps@2024-03-01' = {
               successThreshold: 1
             }
           ]
-          image: nodeImage
+          image: simulatorImage
           resources: {
             #disable-next-line BCP036
             cpu: json(cpuCore)
