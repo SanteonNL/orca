@@ -23,11 +23,12 @@ services:
       - NUTS_URL=${NUTS_URL}
   orchestrator:
     image: ghcr.io/santeonnl/orca_orchestrator:main
-    #build:
-    #  context: ../../../orchestrator
-    #  dockerfile: Dockerfile
+#    build:
+#      context: ../../../orchestrator
+#      dockerfile: Dockerfile
     environment:
       - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
+      - ORCA_PUBLIC_BASEURL=/orca
       - ORCA_CAREPLANSERVICE_URL=${CAREPLANSERVICE_URL}
       - ORCA_APPLAUNCH_DEMO_ENABLED=true
   fhirstore:

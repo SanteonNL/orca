@@ -36,7 +36,7 @@ func Start(config Config) error {
 		smartonfhir.New(config.AppLaunch.SmartOnFhir, sessionManager),
 	}
 	if config.AppLaunch.Demo.Enabled {
-		services = append(services, demo.New(sessionManager))
+		services = append(services, demo.New(sessionManager, config.AppLaunch.Demo, config.Public.BaseURL))
 	}
 	for _, service := range services {
 		service.RegisterHandlers(httpHandler)
