@@ -12,7 +12,7 @@ export default async function ServiceRequestOverview() {
     let rows = [];
 
     try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/ServiceRequest?_include=ServiceRequest:subject&_count=500`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/ServiceRequest?_count=500`, {
             cache: 'no-store',
             headers: {
                 "Cache-Control": "no-cache"
@@ -31,26 +31,26 @@ export default async function ServiceRequestOverview() {
 
         if (serviceRequestsData.total > 0) {
             const serviceRequests = serviceRequestsData.entry.filter((entry: any) => entry.resource.resourceType === 'ServiceRequest');
-            const idToPatientMap = serviceRequestsData.entry
-                .filter((entry: any) => entry.resource.resourceType === 'Patient')
-                .reduce((acc: any, patient: any) => {
-                    const resource = patient.resource;
-                    const patientName = resource.name && resource.name[0] ? resource.name[0].text : 'Unknown';
-                    acc[resource.id] = patient.resource;
-                    return acc;
-                }, {});
+            // const idToPatientMap = serviceRequestsData.entry
+            //     .filter((entry: any) => entry.resource.resourceType === 'Patient')
+            //     .reduce((acc: any, patient: any) => {
+            //         const resource = patient.resource;
+            //         const patientName = resource.name && resource.name[0] ? resource.name[0].text : 'Unknown';
+            //         acc[resource.id] = patient.resource;
+            //         return acc;
+            //     }, {});
 
             rows = serviceRequests.map((entry: any) => {
                 const serviceRequest = entry.resource;
-                const patientId = serviceRequest.subject.reference.split('/').pop();
-                const patient = idToPatientMap[patientId]
-                const patientName = patient.name && patient.name[0] ? patient.name[0].text : serviceRequest.subject.reference;
+                // const patientId = serviceRequest.subject.reference.split('/').pop();
+                const patient = serviceRequest.subject.identifier.value
+                // const patientName = patient.name && patient.name[0] ? patient.name[0].text : serviceRequest.subject.reference;
 
                 return {
                     id: serviceRequest.id,
                     lastUpdated: new Date(serviceRequest.meta.lastUpdated),
                     title: serviceRequest.code.coding[0].display,
-                    patient: patientName,
+                    patient: patient,
                     status: serviceRequest.status,
                     patientId: patient.id
                 };

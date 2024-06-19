@@ -118,6 +118,9 @@ const CreateServiceRequestDialog: React.FC = () => {
 export default CreateServiceRequestDialog
 
 function createServiceRequestBundle(firstName: string, lastName: string) {
+
+    const patientBsn = Date.now()
+
     return {
         "resourceType": "Bundle",
         "type": "transaction",
@@ -130,7 +133,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                         {
                             "use": "usual",
                             "system": "http://fhir.nl/fhir/NamingSystem/bsn",
-                            "value": "111222333"
+                            "value": patientBsn
                         }
                     ],
                     "name": [
@@ -157,7 +160,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     "id": "zorg-bij-jou-service-center",
                     "identifier": [
                         {
-                            "system": "http://example.org/identifiers",
+                            "system": "http://fhir.nl/fhir/NamingSystem/ura",
                             "value": "URA-001"
                         }
                     ],
@@ -166,7 +169,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": "identifier=http://example.org/identifiers|URA-001"
+                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/ura|URA-001"
                 }
             },
             {
@@ -176,8 +179,8 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     "id": "practitioner-1",
                     "identifier": [
                         {
-                            "system": "http://hospital.example.org/practitioners",
-                            "value": "practitioner-001"
+                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
+                            "value": "uzi-001"
                         }
                     ],
                     "name": [
@@ -192,7 +195,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 "request": {
                     "method": "POST",
                     "url": "Practitioner",
-                    "ifNoneExist": "identifier=http://hospital.example.org/practitioners|practitioner-001"
+                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
                 }
             },
             {
@@ -202,12 +205,16 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     "id": "practitionerrole-1",
                     "identifier": [
                         {
-                            "system": "http://hospital.example.org/practitioners",
+                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
                             "value": "uzi-001"
                         }
                     ],
                     "practitioner": {
-                        "reference": "urn:uuid:practitioner-1"
+                        "type": "Practitioner",
+                        "identifier": {
+                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
+                            "value": "uzi-001"
+                        }
                     },
                     "code": [
                         {
@@ -223,7 +230,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 "request": {
                     "method": "POST",
                     "url": "PractitionerRole",
-                    "ifNoneExist": "identifier=http://hospital.example.org/practitioners|uzi-001"
+                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
                 }
             },
             {
@@ -233,7 +240,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     "id": "StAntonius",
                     "identifier": [
                         {
-                            "system": "http://example.org/identifiers",
+                            "system": "http://fhir.nl/fhir/NamingSystem/ura",
                             "value": "URA-002"
                         }
                     ],
@@ -242,7 +249,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": "identifier=http://example.org/identifiers|URA-002"
+                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/ura|URA-002"
                 }
             },
             {
@@ -250,6 +257,12 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 "resource": {
                     "resourceType": "Condition",
                     "id": "condition-1",
+                    "identifier": [
+                        {
+                            "system": "http://fhir.nl/fhir/NamingSystem/condition-identifier",
+                            "value": "condition-001"
+                        }
+                    ],
                     "clinicalStatus": {
                         "coding": [
                             {
@@ -290,10 +303,18 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                         "text": "Chronische obstructieve longaandoening (aandoening)"
                     },
                     "subject": {
-                        "reference": "Patient/urn:uuid:patient-1"
+                        "type": "Patient",
+                        "identifier": {
+                            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+                            "value": patientBsn
+                        }
                     },
                     "recorder": {
-                        "reference": "PractitionerRole/urn:uuid:practitionerrole-1"
+                        "type": "PractitonerRole",
+                        "identifier": {
+                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
+                            "value": "uzi-001"
+                        }
                     },
                 },
                 "request": {
@@ -309,14 +330,27 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     "status": "draft",
                     "intent": "order",
                     "subject": {
-                        "reference": "urn:uuid:patient-1"
+                        "type": "Patient",
+                        "identifier": {
+                            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+                            "value": patientBsn
+                        }
                     },
                     "requester": {
-                        "reference": "urn:uuid:stantonius"
+                        "type": "Organization",
+                        "identifier": {
+                            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                            "value": "URA-002"
+
+                        }
                     },
                     "performer": [
                         {
-                            "reference": "urn:uuid:zorg-bij-jou-service-center"
+                            "type": "Organization",
+                            "identifier": {
+                                "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                                "value": "URA-001"
+                            }
                         }
                     ],
                     "code": {
@@ -328,7 +362,11 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     },
                     "reasonReference": [
                         {
-                            "reference": "Condition/urn:uuid:condition-1"
+                            "type": "Condition",
+                            "identifier": {
+                                "system": "http://fhir.nl/fhir/NamingSystem/condition-identifier",
+                                "value": "condition-001"
+                            }
                         }
                     ]
                 },
