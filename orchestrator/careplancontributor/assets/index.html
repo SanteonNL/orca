@@ -1,13 +1,15 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Thuismonitoring Onboarding</title>
+    <title>Aanmelden Thuismonitoring</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: Helvetica, Arial, sans-serif;
             margin: 0;
             padding: 0;
             background-color: #f4f4f4;
+            color: rgb(17, 28, 45);
+            text-align: center;
         }
 
         .container {
@@ -22,21 +24,81 @@
             padding: 20px;
             border-radius: 5px;
         }
+
+        .target-organization-name {
+            font-weight: bold;
+        }
+        table {
+            width: 100%;
+            border-radius: 5px;
+            background-color: rgb(237, 243, 248);
+        }
+        th {
+            width: 30%;
+            text-align: left;
+            padding: 5px;
+            font-weight: bolder;
+        }
+        td {
+            background-color: rgb(243, 248, 250);
+            padding: 5px;
+            text-align: left;
+        }
+        tr {
+            border-bottom: 1px solid rgb(237, 243, 248);
+            line-height: 25px;
+        }
+
+        form {
+            margin: 10px;
+            text-align: center;
+        }
+
+        button[type="submit"] {
+            background-color: #4b7cca;
+            color: white;
+            padding: 14px 20px;
+            margin: 8px 0;
+            border: none;
+            cursor: pointer;
+            border-radius: 5px;
+            font-weight: 700;
+        }
+        button[type="button"] {
+            background-color: #afafaf;
+            color: white;
+            padding: 14px 20px;
+            margin: 8px 0;
+            border: none;
+            cursor: pointer;
+            font-weight: 500;
+        }
     </style>
 </head>
 <body>
 <div class="container">
     <div id="patient-form">
-        <h1>Thuismonitoring Onboarding</h1>
-        <div>
-            Patient: <span id="patient-name"></span>
-        </div>
-        <div>
-            Service Request: <span id="service-request"></span>
-        </div>
+        <h1>Aanmelden Thuismonitoring</h1>
+        <p>
+            Wilt u deze pati&euml;nt aanmelden voor Thuismonitoring bij <span class="target-organization-name">Zorg bij jou</span>?
+        </p>
+        <table>
+            <tr>
+                <th>Naam:</th>
+                <td id="patient-name"></td>
+            </tr>
+            <tr>
+                <th>Geboortedatum:</th>
+                <td id="patient-birthdate"></td>
+            </tr>
+            <tr>
+                <th>Geslacht:</th>
+                <td id="patient-gender"></td>
+            </tr>
+        </table>
         <form id="form" action="confirm" method="POST">
-            <button type="submit">Bevestigen</button>
-            <button type="button" onclick="alert('TOOD')">Annuleren</button>
+            <button type="submit">Aanmelden</button>
+            <button type="button" onclick="window.close()">Annuleren</button>
         </form>
     </div>
 </div>
@@ -46,12 +108,9 @@
         .then(data => {
             console.log(data);
             document.getElementById('patient-name').innerText = data.name[0].given[0] + ' ' + data.name[0].family;
-        });
-    fetch('/contrib/serviceRequest')
-        .then(response => response.json())
-        .then(data => {
-            console.log(data);
-            document.getElementById('service-request').innerText = data.code.coding[0].display;
+            document.getElementById('patient-birthdate').innerText = data.birthDate;
+            // map gender: male->man, female->vrouw, other->anders
+            document.getElementById('patient-gender').innerText = data.gender === "male" ? "man" : (data.gender === "female" ? "vrouw" : "anders");
         });
 </script>
 </body>

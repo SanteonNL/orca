@@ -71,13 +71,18 @@ func (s Service) handleGetServiceRequest(response http.ResponseWriter, request *
 // and initiates the workflow.
 func (s Service) handleConfirm(response http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	fhirClient := coolfhir.ClientFactories[session.FHIRLauncher](session.Values)
-	createdTask, err := s.confirm(fhirClient, session.Values["serviceRequest"], session.Values["patient"])
+	_, err := s.confirm(fhirClient, session.Values["serviceRequest"], session.Values["patient"])
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	data, err := assets.FS.ReadFile("completed.html")
+	if err != nil {
+		http.Error(response, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	response.Header().Add("Content-Type", "text/html; charset=utf-8")
 	response.WriteHeader(http.StatusOK)
-	data, _ := json.Marshal(createdTask)
 	_, _ = response.Write(data)
 }
 
