@@ -2,6 +2,7 @@
 Use the following environment variables to configure the orchestrator:
 
 - `ORCA_PUBLIC_ADDRESS`: address the public endpoints bind to (default: `:8080`).
+- `ORCA_PUBLIC_BASEURL`: base URL of the public endpoints (default: `/`). Set in case the orchestrator is exposed on another path than the domain root.
 - `ORCA_NUTS_API_ADDRESS`: address of the Nuts node API to use, e.g. `http://nutsnode:8081`.
 - `ORCA_CAREPLANSERVICE_URL`: FHIR base URL of the CarePlan service.
 - `ORCA_URAMAP`: hardcoded map of URA to DID, e.g. `1234=did:web:example.com:1234,5678=did:web:example.com:5678`.
@@ -10,6 +11,7 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_APPLAUNCH_SOF_CLIENT_SECRET`: The `client_secret` assigned by the EHR
 - `ORCA_APPLAUNCH_SOF_SCOPE`: Any specific scope, for example `launch fhirUser`
 - `ORCA_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
+- `ORCA_APPLAUNCH_DEMO_FHIRPROXYURL`: Enable FHIR proxy for demo purposes on `/demo/fhirproxy`, which proxies requests to this URL. 
 
 ## App Launch options
 

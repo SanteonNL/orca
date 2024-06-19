@@ -44,6 +44,9 @@ func (c Config) ParseURAMap() map[string]string {
 type InterfaceConfig struct {
 	// Address holds the address to listen on.
 	Address string `koanf:"address"`
+	// BaseURL holds the base URL of the interface.
+	// Set it in case the service is behind a reverse proxy that maps it to a different URL than root (/).
+	BaseURL string `koanf:"baseurl"`
 }
 
 type CarePlanService struct {
@@ -73,6 +76,7 @@ func DefaultConfig() Config {
 	return Config{
 		Public: InterfaceConfig{
 			Address: ":8080",
+			BaseURL: "/",
 		},
 	}
 }
