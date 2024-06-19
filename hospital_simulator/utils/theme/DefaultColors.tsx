@@ -13,7 +13,7 @@ const baselightTheme = createTheme({
   direction: "ltr",
   palette: {
     primary: {
-      main: "#0085db",
+      main: "#6F2554",
       light: "#e5f3fb",
       dark: "#0085db",
     },
@@ -135,9 +135,9 @@ const baselightTheme = createTheme({
           boxShadow: "0 9px 17.5px rgb(0,0,0,0.05) !important",
         },
         ".rounded-bars .apexcharts-bar-series.apexcharts-plot-series .apexcharts-series path":
-          {
-            clipPath: "inset(0 0 5% 0 round 20px)",
-          },
+        {
+          clipPath: "inset(0 0 5% 0 round 20px)",
+        },
       },
     },
     MuiCard: {
