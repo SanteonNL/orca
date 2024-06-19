@@ -19,8 +19,8 @@ type Config struct {
 	// URAMap holds a hardcoded map of URA identifiers to DIDs. It is later to be replaced with a more dynamic solution.
 	// It's specified as followed:
 	// ura1=did:example.com:bob,ura2=did:example.com:alice (etc)s
-	URAMap          string           `koanf:"uramap"`
-	AppLaunchConfig applaunch.Config `koanf:"applaunch"`
+	URAMap    string           `koanf:"uramap"`
+	AppLaunch applaunch.Config `koanf:"applaunch"`
 }
 
 func (c Config) ParseURAMap() map[string]string {
