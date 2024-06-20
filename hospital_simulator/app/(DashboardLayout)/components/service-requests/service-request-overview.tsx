@@ -1,6 +1,7 @@
 import React from 'react';
 import CreateServiceRequestDialog from './create-service-request-dialog';
 import ServiceRequestTable from './service-request-table';
+import { Bundle, Identifier, Patient } from 'fhir/r4';
 
 export default async function ServiceRequestOverview() {
 
@@ -10,6 +11,11 @@ export default async function ServiceRequestOverview() {
     }
 
     let rows = [];
+
+    const getBsnIdentifier = (identifiers: Identifier[] | undefined): string | undefined => {
+        const identifier = identifiers?.find(identifier => identifier.system === "http://fhir.nl/fhir/NamingSystem/bsn");
+        return identifier?.value;
+    };
 
     try {
         const response = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/ServiceRequest?_count=500`, {
@@ -26,34 +32,52 @@ export default async function ServiceRequestOverview() {
             throw new Error('Failed to fetch service requests: ' + errorText);
         }
 
+        const patientsResponse = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/Patient?_count=500`, {
+            cache: 'no-store',
+            headers: {
+                "Cache-Control": "no-cache"
+            }
+        });
+
+        console.log(`Fetched Patients, status: ${patientsResponse.status}`);
+        if (!patientsResponse.ok) {
+            const errorText = await patientsResponse.text();
+            console.error('Failed to fetch patients: ', errorText);
+            throw new Error('Failed to fetch patients: ' + errorText);
+        }
+
         const serviceRequestsData = await response.json();
         console.log(`Found [${serviceRequestsData.total}] ServiceRequest resources`);
 
         if (serviceRequestsData.total > 0) {
-            const serviceRequests = serviceRequestsData.entry.filter((entry: any) => entry.resource.resourceType === 'ServiceRequest');
-            // const idToPatientMap = serviceRequestsData.entry
-            //     .filter((entry: any) => entry.resource.resourceType === 'Patient')
-            //     .reduce((acc: any, patient: any) => {
-            //         const resource = patient.resource;
-            //         const patientName = resource.name && resource.name[0] ? resource.name[0].text : 'Unknown';
-            //         acc[resource.id] = patient.resource;
-            //         return acc;
-            //     }, {});
+            const serviceRequests = serviceRequestsData.entry;
+
+            const patientsBundle = await patientsResponse.json() as Bundle<Patient>;
+            const idToPatientMap = (patientsBundle.entry || []).reduce((acc: { [key: string]: Patient }, patientBundleEntry) => {
+                const patient = patientBundleEntry.resource as Patient;
+                if (patient) {
+                    const identifier = getBsnIdentifier(patient.identifier);
+                    if (identifier) {
+                        acc[identifier] = patient;
+                    }
+                }
+                return acc;
+            }, {});
 
             rows = serviceRequests.map((entry: any) => {
                 const serviceRequest = entry.resource;
-                // const patientId = serviceRequest.subject.reference.split('/').pop();
-                const patient = serviceRequest.subject.identifier.value
-                // const patientName = patient.name && patient.name[0] ? patient.name[0].text : serviceRequest.subject.reference;
+                const patient = serviceRequest.subject ? idToPatientMap[serviceRequest.subject.identifier.value] : undefined;
+                const patientIdentifier = serviceRequest.subject ? idToPatientMap[serviceRequest.subject.identifier.value] : ""
+                const patientName = patient?.name && patient.name[0] ? patient.name[0].text : patientIdentifier;
 
                 return {
                     id: serviceRequest.id,
                     lastUpdated: new Date(serviceRequest.meta.lastUpdated),
                     title: serviceRequest.code.coding[0].display,
-                    patient: patient,
+                    patient: patientName,
                     status: serviceRequest.status,
-                    patientId: patient.id
-                };
+                    patientId: patient ? `Patient/${patient.id}` : patientIdentifier
+                }
             });
         }
     } catch (error) {

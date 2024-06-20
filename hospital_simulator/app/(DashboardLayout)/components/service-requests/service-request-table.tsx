@@ -47,7 +47,7 @@ const ServiceRequestTable: React.FC<Props> = ({ rows }) => {
     const columns: GridColDef[] = [
         { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 2 },
         { field: 'title', headerName: 'Title', flex: 3 },
-        { field: 'patient', headerName: 'BSN', flex: 2 },
+        { field: 'patient', headerName: 'Patient', flex: 2 },
         {
             field: 'status',
             headerName: 'Status',
