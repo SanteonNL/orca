@@ -1,0 +1,36 @@
+{
+  "resourceType": "ServiceRequest",
+  "id": "27",
+  "meta": {
+    "versionId": "2",
+    "lastUpdated": "2024-06-19T12:32:59.160+00:00",
+    "source": "#ijLwpimNo6Y2g2j7"
+  },
+  "status": "active",
+  "intent": "order",
+  "code": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "719858009",
+        "display": "monitoren via telegeneeskunde (regime/therapie)"
+      }
+    ]
+  },
+  "subject": {
+    "reference": "Patient/25"
+  },
+  "requester": {
+    "reference": "Organization/9"
+  },
+  "performer": [
+    {
+      "reference": "Organization/3"
+    }
+  ],
+  "reasonReference": [
+    {
+      "reference": "Condition/26"
+    }
+  ]
+}

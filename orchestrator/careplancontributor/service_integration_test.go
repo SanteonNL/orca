@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestService_confirm(t *testing.T) {
+func TestService_Integration_confirm(t *testing.T) {
 	t.Skip()
 	fhirBaseURL, _ := url.Parse("http://localhost:9090/fhir")
 	fhirClient := coolfhir.NewClient(fhirBaseURL, http.DefaultClient)
