@@ -1,6 +1,7 @@
 package demo
 
 import (
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/tinyhttp"
@@ -13,11 +14,11 @@ const fhirLauncherKey = "demo"
 
 func init() {
 	// Register FHIR client factory that can create FHIR clients when the Demo AppLaunch is used
-	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) *coolfhir.DefaultClient {
+	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) fhirclient.Client {
 		fhirServerURL, _ := url.Parse(properties["iss"])
 		// Demo AppLaunch connects to backing FHIR server without any authentication,
 		// so http.DefaultClient can be used.
-		return coolfhir.NewClient(fhirServerURL, http.DefaultClient)
+		return fhirclient.New(fhirServerURL, http.DefaultClient)
 	}
 }
 

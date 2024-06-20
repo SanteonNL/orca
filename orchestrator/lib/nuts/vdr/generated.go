@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"strings"
 
-	externalRef0 "github.com/SanteonNL/orca/orchestrator/nuts"
+	externalRef0 "github.com/SanteonNL/orca/orchestrator/lib/nuts"
 	"github.com/oapi-codegen/runtime"
 )
 

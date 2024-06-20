@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"strings"
 
-	externalRef0 "github.com/SanteonNL/orca/orchestrator/nuts"
+	externalRef0 "github.com/SanteonNL/orca/orchestrator/lib/nuts"
 	"github.com/oapi-codegen/runtime"
 )
 
@@ -82,6 +82,45 @@ type DPoPValidateResponse struct {
 
 	// Valid True if the DPoP Proof header is valid for the access token and HTTP request, false if it is not.
 	Valid bool `json:"valid"`
+}
+
+// ExtendedTokenIntrospectionResponse defines model for ExtendedTokenIntrospectionResponse.
+type ExtendedTokenIntrospectionResponse struct {
+	// Active True if the token is active, false if the token is expired, malformed etc. Required per RFC7662
+	Active bool `json:"active"`
+
+	// Aud RFC7662 - Service-specific string identifier or list of string identifiers representing the intended audience for this token, as defined in JWT [RFC7519].
+	Aud *string `json:"aud,omitempty"`
+
+	// ClientId The client (DID) the access token was issued to
+	ClientId *string `json:"client_id,omitempty"`
+
+	// Cnf The 'confirmation' claim is used in JWTs to proof the possession of a key.
+	Cnf *Cnf `json:"cnf,omitempty"`
+
+	// Exp Expiration date in seconds since UNIX epoch
+	Exp *int `json:"exp,omitempty"`
+
+	// Iat Issuance time in seconds since UNIX epoch
+	Iat *int `json:"iat,omitempty"`
+
+	// Iss Contains the DID of the authorizer. Should be equal to 'sub'
+	Iss *string `json:"iss,omitempty"`
+
+	// PresentationDefinitions Presentation Definitions, as described in Presentation Exchange specification, fulfilled to obtain the access token
+	// The map key is the wallet owner (user/organization)
+	PresentationDefinitions *RequiredPresentationDefinitions `json:"presentation_definitions,omitempty"`
+
+	// PresentationSubmissions Mapping of Presentation Definition IDs that were fulfilled to Presentation Submissions.
+	PresentationSubmissions *map[string]PresentationSubmission `json:"presentation_submissions,omitempty"`
+
+	// Scope granted scopes
+	Scope *string `json:"scope,omitempty"`
+
+	// Sub Contains the DID of the resource owner
+	Sub                  *string                   `json:"sub,omitempty"`
+	Vps                  *[]VerifiablePresentation `json:"vps,omitempty"`
+	AdditionalProperties map[string]interface{}    `json:"-"`
 }
 
 // PresentationDefinition A presentation definition is a JSON object that describes the desired verifiable credentials and presentation formats.
@@ -153,22 +192,12 @@ type TokenIntrospectionResponse struct {
 	// Iss Contains the DID of the authorizer. Should be equal to 'sub'
 	Iss *string `json:"iss,omitempty"`
 
-	// PresentationDefinitions Presentation Definitions, as described in Presentation Exchange specification, fulfilled to obtain the access token
-	// The map key is the wallet owner (user/organization)
-	PresentationDefinitions *RequiredPresentationDefinitions `json:"presentation_definitions,omitempty"`
-
-	// PresentationSubmissions Mapping of Presentation Definition IDs that were fulfilled to Presentation Submissions.
-	PresentationSubmissions *map[string]PresentationSubmission `json:"presentation_submissions,omitempty"`
-
 	// Scope granted scopes
 	Scope *string `json:"scope,omitempty"`
 
 	// Sub Contains the DID of the resource owner
-	Sub *string `json:"sub,omitempty"`
-
-	// Vps The Verifiable Presentations that were used to request the access token using the same encoding as used in the access token request.
-	Vps                  *[]VerifiablePresentation `json:"vps,omitempty"`
-	AdditionalProperties map[string]interface{}    `json:"-"`
+	Sub                  *string                `json:"sub,omitempty"`
+	AdditionalProperties map[string]interface{} `json:"-"`
 }
 
 // TokenResponse Token Responses are made as defined in (RFC6749)[https://datatracker.ietf.org/doc/html/rfc6749#section-5.1]
@@ -229,7 +258,7 @@ type UserDetails struct {
 	Role string `json:"role"`
 }
 
-// VerifiablePresentation Verifiable Presentation
+// VerifiablePresentation defines model for VerifiablePresentation.
 type VerifiablePresentation = externalRef0.VerifiablePresentation
 
 // Cnf The 'confirmation' claim is used in JWTs to proof the possession of a key.
@@ -250,6 +279,9 @@ type RequestOpenid4VCICredentialIssuanceJSONBody struct {
 // IntrospectAccessTokenFormdataRequestBody defines body for IntrospectAccessToken for application/x-www-form-urlencoded ContentType.
 type IntrospectAccessTokenFormdataRequestBody = TokenIntrospectionRequest
 
+// IntrospectAccessTokenExtendedFormdataRequestBody defines body for IntrospectAccessTokenExtended for application/x-www-form-urlencoded ContentType.
+type IntrospectAccessTokenExtendedFormdataRequestBody = TokenIntrospectionRequest
+
 // ValidateDPoPProofJSONRequestBody defines body for ValidateDPoPProof for application/json ContentType.
 type ValidateDPoPProofJSONRequestBody = DPoPValidateRequest
 
@@ -265,25 +297,25 @@ type RequestServiceAccessTokenJSONRequestBody = ServiceAccessTokenRequest
 // RequestUserAccessTokenJSONRequestBody defines body for RequestUserAccessToken for application/json ContentType.
 type RequestUserAccessTokenJSONRequestBody = UserAccessTokenRequest
 
-// Getter for additional properties for TokenIntrospectionResponse. Returns the specified
+// Getter for additional properties for ExtendedTokenIntrospectionResponse. Returns the specified
 // element and whether it was found
-func (a TokenIntrospectionResponse) Get(fieldName string) (value interface{}, found bool) {
+func (a ExtendedTokenIntrospectionResponse) Get(fieldName string) (value interface{}, found bool) {
 	if a.AdditionalProperties != nil {
 		value, found = a.AdditionalProperties[fieldName]
 	}
 	return
 }
 
-// Setter for additional properties for TokenIntrospectionResponse
-func (a *TokenIntrospectionResponse) Set(fieldName string, value interface{}) {
+// Setter for additional properties for ExtendedTokenIntrospectionResponse
+func (a *ExtendedTokenIntrospectionResponse) Set(fieldName string, value interface{}) {
 	if a.AdditionalProperties == nil {
 		a.AdditionalProperties = make(map[string]interface{})
 	}
 	a.AdditionalProperties[fieldName] = value
 }
 
-// Override default JSON handling for TokenIntrospectionResponse to handle AdditionalProperties
-func (a *TokenIntrospectionResponse) UnmarshalJSON(b []byte) error {
+// Override default JSON handling for ExtendedTokenIntrospectionResponse to handle AdditionalProperties
+func (a *ExtendedTokenIntrospectionResponse) UnmarshalJSON(b []byte) error {
 	object := make(map[string]json.RawMessage)
 	err := json.Unmarshal(b, &object)
 	if err != nil {
@@ -400,8 +432,8 @@ func (a *TokenIntrospectionResponse) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// Override default JSON handling for TokenIntrospectionResponse to handle AdditionalProperties
-func (a TokenIntrospectionResponse) MarshalJSON() ([]byte, error) {
+// Override default JSON handling for ExtendedTokenIntrospectionResponse to handle AdditionalProperties
+func (a ExtendedTokenIntrospectionResponse) MarshalJSON() ([]byte, error) {
 	var err error
 	object := make(map[string]json.RawMessage)
 
@@ -496,6 +528,192 @@ func (a TokenIntrospectionResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(object)
 }
 
+// Getter for additional properties for TokenIntrospectionResponse. Returns the specified
+// element and whether it was found
+func (a TokenIntrospectionResponse) Get(fieldName string) (value interface{}, found bool) {
+	if a.AdditionalProperties != nil {
+		value, found = a.AdditionalProperties[fieldName]
+	}
+	return
+}
+
+// Setter for additional properties for TokenIntrospectionResponse
+func (a *TokenIntrospectionResponse) Set(fieldName string, value interface{}) {
+	if a.AdditionalProperties == nil {
+		a.AdditionalProperties = make(map[string]interface{})
+	}
+	a.AdditionalProperties[fieldName] = value
+}
+
+// Override default JSON handling for TokenIntrospectionResponse to handle AdditionalProperties
+func (a *TokenIntrospectionResponse) UnmarshalJSON(b []byte) error {
+	object := make(map[string]json.RawMessage)
+	err := json.Unmarshal(b, &object)
+	if err != nil {
+		return err
+	}
+
+	if raw, found := object["active"]; found {
+		err = json.Unmarshal(raw, &a.Active)
+		if err != nil {
+			return fmt.Errorf("error reading 'active': %w", err)
+		}
+		delete(object, "active")
+	}
+
+	if raw, found := object["aud"]; found {
+		err = json.Unmarshal(raw, &a.Aud)
+		if err != nil {
+			return fmt.Errorf("error reading 'aud': %w", err)
+		}
+		delete(object, "aud")
+	}
+
+	if raw, found := object["client_id"]; found {
+		err = json.Unmarshal(raw, &a.ClientId)
+		if err != nil {
+			return fmt.Errorf("error reading 'client_id': %w", err)
+		}
+		delete(object, "client_id")
+	}
+
+	if raw, found := object["cnf"]; found {
+		err = json.Unmarshal(raw, &a.Cnf)
+		if err != nil {
+			return fmt.Errorf("error reading 'cnf': %w", err)
+		}
+		delete(object, "cnf")
+	}
+
+	if raw, found := object["exp"]; found {
+		err = json.Unmarshal(raw, &a.Exp)
+		if err != nil {
+			return fmt.Errorf("error reading 'exp': %w", err)
+		}
+		delete(object, "exp")
+	}
+
+	if raw, found := object["iat"]; found {
+		err = json.Unmarshal(raw, &a.Iat)
+		if err != nil {
+			return fmt.Errorf("error reading 'iat': %w", err)
+		}
+		delete(object, "iat")
+	}
+
+	if raw, found := object["iss"]; found {
+		err = json.Unmarshal(raw, &a.Iss)
+		if err != nil {
+			return fmt.Errorf("error reading 'iss': %w", err)
+		}
+		delete(object, "iss")
+	}
+
+	if raw, found := object["scope"]; found {
+		err = json.Unmarshal(raw, &a.Scope)
+		if err != nil {
+			return fmt.Errorf("error reading 'scope': %w", err)
+		}
+		delete(object, "scope")
+	}
+
+	if raw, found := object["sub"]; found {
+		err = json.Unmarshal(raw, &a.Sub)
+		if err != nil {
+			return fmt.Errorf("error reading 'sub': %w", err)
+		}
+		delete(object, "sub")
+	}
+
+	if len(object) != 0 {
+		a.AdditionalProperties = make(map[string]interface{})
+		for fieldName, fieldBuf := range object {
+			var fieldVal interface{}
+			err := json.Unmarshal(fieldBuf, &fieldVal)
+			if err != nil {
+				return fmt.Errorf("error unmarshaling field %s: %w", fieldName, err)
+			}
+			a.AdditionalProperties[fieldName] = fieldVal
+		}
+	}
+	return nil
+}
+
+// Override default JSON handling for TokenIntrospectionResponse to handle AdditionalProperties
+func (a TokenIntrospectionResponse) MarshalJSON() ([]byte, error) {
+	var err error
+	object := make(map[string]json.RawMessage)
+
+	object["active"], err = json.Marshal(a.Active)
+	if err != nil {
+		return nil, fmt.Errorf("error marshaling 'active': %w", err)
+	}
+
+	if a.Aud != nil {
+		object["aud"], err = json.Marshal(a.Aud)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'aud': %w", err)
+		}
+	}
+
+	if a.ClientId != nil {
+		object["client_id"], err = json.Marshal(a.ClientId)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'client_id': %w", err)
+		}
+	}
+
+	if a.Cnf != nil {
+		object["cnf"], err = json.Marshal(a.Cnf)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'cnf': %w", err)
+		}
+	}
+
+	if a.Exp != nil {
+		object["exp"], err = json.Marshal(a.Exp)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'exp': %w", err)
+		}
+	}
+
+	if a.Iat != nil {
+		object["iat"], err = json.Marshal(a.Iat)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'iat': %w", err)
+		}
+	}
+
+	if a.Iss != nil {
+		object["iss"], err = json.Marshal(a.Iss)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'iss': %w", err)
+		}
+	}
+
+	if a.Scope != nil {
+		object["scope"], err = json.Marshal(a.Scope)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'scope': %w", err)
+		}
+	}
+
+	if a.Sub != nil {
+		object["sub"], err = json.Marshal(a.Sub)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling 'sub': %w", err)
+		}
+	}
+
+	for fieldName, field := range a.AdditionalProperties {
+		object[fieldName], err = json.Marshal(field)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling '%s': %w", fieldName, err)
+		}
+	}
+	return json.Marshal(object)
+}
+
 // RequestEditorFn  is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
 
@@ -574,6 +792,11 @@ type ClientInterface interface {
 
 	IntrospectAccessTokenWithFormdataBody(ctx context.Context, body IntrospectAccessTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// IntrospectAccessTokenExtendedWithBody request with any body
+	IntrospectAccessTokenExtendedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	IntrospectAccessTokenExtendedWithFormdataBody(ctx context.Context, body IntrospectAccessTokenExtendedFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// RetrieveAccessToken request
 	RetrieveAccessToken(ctx context.Context, sessionID string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -617,6 +840,30 @@ func (c *Client) IntrospectAccessTokenWithBody(ctx context.Context, contentType 
 
 func (c *Client) IntrospectAccessTokenWithFormdataBody(ctx context.Context, body IntrospectAccessTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewIntrospectAccessTokenRequestWithFormdataBody(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) IntrospectAccessTokenExtendedWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewIntrospectAccessTokenExtendedRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) IntrospectAccessTokenExtendedWithFormdataBody(ctx context.Context, body IntrospectAccessTokenExtendedFormdataRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewIntrospectAccessTokenExtendedRequestWithFormdataBody(c.Server, body)
 	if err != nil {
 		return nil, err
 	}
@@ -780,6 +1027,46 @@ func NewIntrospectAccessTokenRequestWithBody(server string, contentType string, 
 	}
 
 	operationPath := fmt.Sprintf("/internal/auth/v2/accesstoken/introspect")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("POST", queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewIntrospectAccessTokenExtendedRequestWithFormdataBody calls the generic IntrospectAccessTokenExtended builder with application/x-www-form-urlencoded body
+func NewIntrospectAccessTokenExtendedRequestWithFormdataBody(server string, body IntrospectAccessTokenExtendedFormdataRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	bodyStr, err := runtime.MarshalForm(body, nil)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = strings.NewReader(bodyStr.Encode())
+	return NewIntrospectAccessTokenExtendedRequestWithBody(server, "application/x-www-form-urlencoded", bodyReader)
+}
+
+// NewIntrospectAccessTokenExtendedRequestWithBody generates requests for IntrospectAccessTokenExtended with any type of body
+func NewIntrospectAccessTokenExtendedRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/internal/auth/v2/accesstoken/introspect_extended")
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -1097,6 +1384,11 @@ type ClientWithResponsesInterface interface {
 
 	IntrospectAccessTokenWithFormdataBodyWithResponse(ctx context.Context, body IntrospectAccessTokenFormdataRequestBody, reqEditors ...RequestEditorFn) (*IntrospectAccessTokenResponse, error)
 
+	// IntrospectAccessTokenExtendedWithBodyWithResponse request with any body
+	IntrospectAccessTokenExtendedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IntrospectAccessTokenExtendedResponse, error)
+
+	IntrospectAccessTokenExtendedWithFormdataBodyWithResponse(ctx context.Context, body IntrospectAccessTokenExtendedFormdataRequestBody, reqEditors ...RequestEditorFn) (*IntrospectAccessTokenExtendedResponse, error)
+
 	// RetrieveAccessTokenWithResponse request
 	RetrieveAccessTokenWithResponse(ctx context.Context, sessionID string, reqEditors ...RequestEditorFn) (*RetrieveAccessTokenResponse, error)
 
@@ -1142,6 +1434,28 @@ func (r IntrospectAccessTokenResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r IntrospectAccessTokenResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type IntrospectAccessTokenExtendedResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	JSON200      *ExtendedTokenIntrospectionResponse
+}
+
+// Status returns HTTPResponse.Status
+func (r IntrospectAccessTokenExtendedResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r IntrospectAccessTokenExtendedResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -1347,6 +1661,23 @@ func (c *ClientWithResponses) IntrospectAccessTokenWithFormdataBodyWithResponse(
 	return ParseIntrospectAccessTokenResponse(rsp)
 }
 
+// IntrospectAccessTokenExtendedWithBodyWithResponse request with arbitrary body returning *IntrospectAccessTokenExtendedResponse
+func (c *ClientWithResponses) IntrospectAccessTokenExtendedWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*IntrospectAccessTokenExtendedResponse, error) {
+	rsp, err := c.IntrospectAccessTokenExtendedWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseIntrospectAccessTokenExtendedResponse(rsp)
+}
+
+func (c *ClientWithResponses) IntrospectAccessTokenExtendedWithFormdataBodyWithResponse(ctx context.Context, body IntrospectAccessTokenExtendedFormdataRequestBody, reqEditors ...RequestEditorFn) (*IntrospectAccessTokenExtendedResponse, error) {
+	rsp, err := c.IntrospectAccessTokenExtendedWithFormdataBody(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseIntrospectAccessTokenExtendedResponse(rsp)
+}
+
 // RetrieveAccessTokenWithResponse request returning *RetrieveAccessTokenResponse
 func (c *ClientWithResponses) RetrieveAccessTokenWithResponse(ctx context.Context, sessionID string, reqEditors ...RequestEditorFn) (*RetrieveAccessTokenResponse, error) {
 	rsp, err := c.RetrieveAccessToken(ctx, sessionID, reqEditors...)
@@ -1457,6 +1788,32 @@ func ParseIntrospectAccessTokenResponse(rsp *http.Response) (*IntrospectAccessTo
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest TokenIntrospectionResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseIntrospectAccessTokenExtendedResponse parses an HTTP response from a IntrospectAccessTokenExtendedWithResponse call
+func ParseIntrospectAccessTokenExtendedResponse(rsp *http.Response) (*IntrospectAccessTokenExtendedResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &IntrospectAccessTokenExtendedResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ExtendedTokenIntrospectionResponse
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
