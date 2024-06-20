@@ -101,6 +101,7 @@ popd
 
 # open orchestrator demo app
 open "${HOSPITAL_URL}/ehr/"
+open "${CLINIC_URL}/viewer/"
 
 # stop Docker services if script exits
 trap "docker compose -f clinic/docker-compose.yaml down" EXIT
