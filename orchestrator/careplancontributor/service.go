@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/assets"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -15,7 +16,7 @@ const LandingURL = "/contrib/"
 
 type Service struct {
 	SessionManager  *user.SessionManager
-	CarePlanService coolfhir.Client
+	CarePlanService fhirclient.Client
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
@@ -86,7 +87,7 @@ func (s Service) handleConfirm(response http.ResponseWriter, request *http.Reque
 	_, _ = response.Write(data)
 }
 
-func (s Service) confirm(localFHIR coolfhir.Client, serviceRequestRef string, patientRef string) (*fhir.Task, error) {
+func (s Service) confirm(localFHIR fhirclient.Client, serviceRequestRef string, patientRef string) (*fhir.Task, error) {
 	serviceRequest, err := s.readServiceRequest(localFHIR, serviceRequestRef)
 	if err != nil {
 		return nil, err
@@ -122,7 +123,7 @@ func (s Service) confirm(localFHIR coolfhir.Client, serviceRequestRef string, pa
 	return task, err
 }
 
-func (s Service) readServiceRequest(localFHIR coolfhir.Client, serviceRequestRef string) (*fhir.ServiceRequest, error) {
+func (s Service) readServiceRequest(localFHIR fhirclient.Client, serviceRequestRef string) (*fhir.ServiceRequest, error) {
 	// TODO: Make this complete, and test this
 	var serviceRequest fhir.ServiceRequest
 	if err := localFHIR.Read(serviceRequestRef, &serviceRequest); err != nil {
@@ -164,7 +165,7 @@ func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {
 		},
 	}
 	var result fhir.CarePlan
-	if err := s.CarePlanService.Create("CarePlan", carePlan, &result); err != nil {
+	if err := s.CarePlanService.Create(carePlan, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
