@@ -29,28 +29,23 @@ export default async function AcceptedTaskOverview() {
 
         if (taskData.total > 0) {
             const tasks = taskData.entry
-            // const idToPatientMap = taskData.entry
-            //     .filter((entry: any) => entry.resource.resourceType === 'Patient')
-            //     .reduce((acc: any, patient: any) => {
-            //         const resource = patient.resource;
-            //         const patientName = resource.name && resource.name[0] ? resource.name[0].text : 'Unknown';
-            //         acc[resource.id] = patient.resource;
-            //         return acc;
-            //     }, {});
 
             rows = tasks.map((entry: any) => {
                 const task = entry.resource;
-                // const patientId = task.subject.reference.split('/').pop();
-                // const patient = idToPatientMap[patientId]
-                // const patientName = patient.name && patient.name[0] ? patient.name[0].text : task.subject.reference;
+                const patientResource = task.contained.find((containedResource: any) => containedResource.id === task.for.reference)
+                const patientIdentifier = patientResource.identifier[0]
+                const patientName = patientResource.name[0]
 
                 return {
                     id: task.id,
-                    lastUpdated: new Date(task.meta.lastUpdated),
-                    title: task.reasonCode.text,
-                    owner: task.owner.display,
-                    patient: task.for.display,
+                    hospitalUra: task.requester.identifier.value,
+                    hospitalName: task.requester.display,
+                    patientBsn: patientIdentifier.value,
+                    patientLastname: patientName.given[0],
+                    patientSurname: patientName.family,
+                    condition: task.reasonCode.coding[0].display,
                     status: task.status,
+                    lastUpdated: new Date(task.meta.lastUpdated),
                 };
             });
         }

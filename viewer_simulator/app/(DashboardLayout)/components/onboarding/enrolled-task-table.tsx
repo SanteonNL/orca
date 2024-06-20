@@ -11,10 +11,13 @@ interface Props {
 const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
 
     const columns: GridColDef[] = [
-        { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 2 },
-        { field: 'title', headerName: 'Title', flex: 3 },
-        { field: 'owner', headerName: 'Owner', flex: 3 },
-        { field: 'patient', headerName: 'Patient', flex: 3 },
+
+        { field: 'hospitalUra', headerName: 'Hospital URA', flex: 1 },
+        { field: 'hospitalName', headerName: 'Hospital Name', flex: 2 },
+        { field: 'patientBsn', headerName: 'Patient BSN', flex: 2 },
+        { field: 'patientLastname', headerName: 'Patient Lastname', flex: 2 },
+        { field: 'patientSurname', headerName: 'Patient Surname', flex: 2 },
+        { field: 'condition', headerName: 'Zorgpad', flex: 2 },
         {
             field: 'status',
             headerName: 'Status',
@@ -29,6 +32,7 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
                 }
             }
         },
+        { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 2 },
     ];
 
     return (
