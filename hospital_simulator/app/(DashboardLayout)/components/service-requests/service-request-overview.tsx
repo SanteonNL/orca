@@ -67,7 +67,7 @@ export default async function ServiceRequestOverview() {
             rows = serviceRequests.map((entry: any) => {
                 const serviceRequest = entry.resource;
                 const patient = serviceRequest.subject ? idToPatientMap[serviceRequest.subject.identifier.value] : undefined;
-                const patientIdentifier = serviceRequest.subject ? idToPatientMap[serviceRequest.subject.identifier.value] : ""
+                const patientIdentifier = serviceRequest.subject ? serviceRequest.subject.identifier.value : ""
                 const patientName = patient?.name && patient.name[0] ? patient.name[0].text : patientIdentifier;
 
                 return {
