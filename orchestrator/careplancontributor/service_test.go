@@ -2,7 +2,7 @@ package careplancontributor
 
 import (
 	"encoding/json"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
@@ -40,7 +40,7 @@ func TestService_confirm(t *testing.T) {
 	require.NotNil(t, task)
 }
 
-func startLocalFHIRServer(t *testing.T) *coolfhir.DefaultClient {
+func startLocalFHIRServer(t *testing.T) fhirclient.Client {
 	mux := http.NewServeMux()
 	var serviceRequestURL string
 	mux.HandleFunc("GET /ServiceRequest", func(w http.ResponseWriter, r *http.Request) {
@@ -58,7 +58,7 @@ func startLocalFHIRServer(t *testing.T) *coolfhir.DefaultClient {
 	println(serviceRequestURL)
 	httpServer := httptest.NewServer(mux)
 	baseURL, _ := url.Parse(httpServer.URL)
-	return coolfhir.NewClient(baseURL, httpServer.Client())
+	return fhirclient.New(baseURL, httpServer.Client())
 }
 
 func Test_unmarshalFromBundle(t *testing.T) {
@@ -70,7 +70,7 @@ func Test_unmarshalFromBundle(t *testing.T) {
 	})
 }
 
-func startCarePlanService(t *testing.T) *coolfhir.DefaultClient {
+func startCarePlanService(t *testing.T) fhirclient.Client {
 	mux := http.NewServeMux()
 	httpServer := httptest.NewServer(mux)
 	mux.HandleFunc("POST /Task", func(writer http.ResponseWriter, request *http.Request) {
@@ -79,5 +79,5 @@ func startCarePlanService(t *testing.T) *coolfhir.DefaultClient {
 		_, _ = writer.Write([]byte(`{"id":"task-1"}`))
 	})
 	baseURL, _ := url.Parse(httpServer.URL)
-	return coolfhir.NewClient(baseURL, httpServer.Client())
+	return fhirclient.New(baseURL, httpServer.Client())
 }

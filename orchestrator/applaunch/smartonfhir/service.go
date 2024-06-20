@@ -3,6 +3,7 @@ package smartonfhir
 import (
 	"encoding/json"
 	"errors"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
@@ -18,7 +19,7 @@ const fhirLauncherKey = "smartonfhir"
 
 func init() {
 	// Register FHIR client factory that can create FHIR clients when the SMART on FHIR AppLaunch is used
-	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) *coolfhir.DefaultClient {
+	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) fhirclient.Client {
 		panic("TODO: create http.Client that adds the access token to the Authorization header")
 	}
 }

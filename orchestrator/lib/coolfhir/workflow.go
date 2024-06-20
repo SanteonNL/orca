@@ -1,6 +1,7 @@
 package coolfhir
 
 import (
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -11,12 +12,12 @@ import (
 //  3. Filler accepts the Task by setting its status to accepted
 //  4. Placer checks the status of the Task
 type Workflow struct {
-	CarePlanService Client
+	CarePlanService fhirclient.Client
 }
 
 func (w Workflow) Invoke(task any) (*fhir.Task, error) {
 	var result fhir.Task
-	err := w.CarePlanService.Create("Task", task, &result)
+	err := w.CarePlanService.Create(task, &result)
 	if err != nil {
 		return nil, err
 	}

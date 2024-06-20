@@ -3,12 +3,12 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/url"
@@ -24,7 +24,7 @@ func Start(config Config) error {
 	}
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 	// TODO: Replace with client doing authentication
-	carePlanServiceClient := coolfhir.NewClient(cpsURL, http.DefaultClient)
+	carePlanServiceClient := fhirclient.New(cpsURL, http.DefaultClient)
 
 	// Register services
 	services := []Service{

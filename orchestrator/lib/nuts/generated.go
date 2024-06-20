@@ -76,6 +76,68 @@ type EmbeddedProof struct {
 	VerificationMethod string `json:"verificationMethod"`
 }
 
+// JSONVerifiableCredential Verifiable Credential in JSON-LD format.
+type JSONVerifiableCredential struct {
+	// Context List of URIs of JSON-LD contexts of the VC.
+	Context interface{} `json:"@context"`
+
+	// CredentialStatus Object enabling the discovery of information related to the status of a verifiable credential, such as whether it is suspended or revoked.
+	// Interpretation of the credentialStatus is defined by its 'type' property.
+	CredentialStatus *CredentialStatus `json:"credentialStatus,omitempty"`
+
+	// CredentialSubject Subject of a Verifiable Credential identifying the holder and expressing claims.
+	CredentialSubject CredentialSubject `json:"credentialSubject"`
+
+	// ExpirationDate rfc3339 time string until when the credential is valid.
+	ExpirationDate *string `json:"expirationDate,omitempty"`
+
+	// Id Credential ID. An URI which uniquely identifies the credential e.g. the issuers DID concatenated with a UUID.
+	Id *string `json:"id,omitempty"`
+
+	// IssuanceDate rfc3339 time string when the credential was issued.
+	IssuanceDate string `json:"issuanceDate"`
+
+	// Issuer DID according to Nuts specification
+	Issuer DID `json:"issuer"`
+
+	// Proof one or multiple cryptographic proofs
+	Proof interface{} `json:"proof"`
+
+	// Type A single string or array of strings. The value(s) indicate the type of credential. It should contain `VerifiableCredential`. Each type should be defined in the @context.
+	Type []string `json:"type"`
+}
+
+// JSONVerifiablePresentation Verifiable Presentation in JSON-LD format.
+type JSONVerifiablePresentation struct {
+	// Context An ordered set where the first item is a URI https://www.w3.org/2018/credentials/v1. It is used to define
+	// terms and help to express specific identifiers in a compact manner.
+	Context interface{} `json:"@context"`
+
+	// Holder URI of the entity that is generating the presentation.
+	Holder *string `json:"holder,omitempty"`
+
+	// Id URI that is used to unambiguously refer to an object, such as a person, product, or organization.
+	Id *string `json:"id,omitempty"`
+
+	// Proof Cryptographic proofs that can be used to detect tampering and verify the authorship of a
+	// credential or presentation. An embedded proof is a mechanism where the proof is included in
+	// the data, such as a Linked Data Signature.
+	Proof *interface{} `json:"proof,omitempty"`
+
+	// Type A single string or array of strings. Values indicate the type of object. It should contain `VerifiablePresentation`. Each type must be defined in the @context.
+	Type interface{} `json:"type"`
+
+	// VerifiableCredential VerifiableCredential is composed of a list containing one or more verifiable credentials, in a
+	// cryptographically verifiable format.
+	VerifiableCredential *interface{} `json:"verifiableCredential,omitempty"`
+}
+
+// JWTCompactVerifiableCredential Verifiable Credential in JWT compact serialization format.
+type JWTCompactVerifiableCredential = string
+
+// JWTCompactVerifiablePresentation Verifiable Presentation in JWT compact serialization format.
+type JWTCompactVerifiablePresentation = string
+
 // Revocation Credential revocation record
 type Revocation struct {
 	// Date date is a rfc3339 formatted datetime.
