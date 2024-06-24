@@ -9,7 +9,7 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-    image: nutsfoundation/nuts-node:6.0.0-beta.3
+    image: nutsfoundation/nuts-node:6.0.0-beta.4
     ports:
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
