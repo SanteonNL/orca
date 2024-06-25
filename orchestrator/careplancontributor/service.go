@@ -3,13 +3,14 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
+	"net/http"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/assets"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
-	"net/http"
 )
 
 const LandingURL = "/contrib/"
@@ -181,26 +182,26 @@ func (s Service) createTask(serviceRequest fhir.ServiceRequest, patient fhir.Pat
 	*patient.Id = "#patient-1"
 	task := map[string]any{
 		"resourceType": "Task",
-		"status":       "accepted",
+		"status":       "requested",
 		"intent":       "order",
 		"requester":    serviceRequest.Requester,
 		"owner":        serviceRequest.Performer,
 		"reasonCode":   serviceRequest.Code,
-		"for": fhir.Reference{
-			Type:      to.Ptr("Patient"),
-			Reference: patient.Id,
-		},
-		"input": []map[string]any{
-			{
-				"valueReference": fhir.Reference{
-					Type:      to.Ptr("ServiceRequest"),
-					Reference: serviceRequest.Id,
-				},
-			},
-		},
-		"contained": []interface{}{
-			serviceRequest, patient,
-		},
+		// "for": fhir.Reference{
+		// 	Type:      to.Ptr("Patient"),
+		// 	Reference: patient.Id,
+		// },
+		// "input": []map[string]any{
+		// 	{
+		// 		"valueReference": fhir.Reference{
+		// 			Type:      to.Ptr("ServiceRequest"),
+		// 			Reference: serviceRequest.Id,
+		// 		},
+		// 	},
+		// },
+		// "contained": []interface{}{
+		// 	serviceRequest, patient,
+		// },
 	}
 	taskJSON, _ := json.MarshalIndent(task, "", "  ")
 	println(string(taskJSON))

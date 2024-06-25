@@ -27,3 +27,6 @@ go.work
 
 *.bicepparam
 !*empty.bicepparam
+
+# VS Code files
+.vscode
