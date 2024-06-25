@@ -3,7 +3,7 @@ import { ReplacePatch } from "fhir-kit-client/types/externals";
 import { BundleEntry, Task } from "fhir/r4";
 import { NextRequest, NextResponse } from "next/server";
 
-const isPolling = false
+let isPolling = false
 
 export async function POST(req: NextRequest) {
 
@@ -14,6 +14,8 @@ export async function POST(req: NextRequest) {
     const baseUrl = body["fhir_base_url"]
     console.log(baseUrl)
     const fhirClient = new Client({ baseUrl })
+
+    isPolling = true
 
     setInterval(async () => {
         console.log('Polling for tasks...')
