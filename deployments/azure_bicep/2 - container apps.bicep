@@ -64,10 +64,6 @@ module nutsnode './modules/apps-nutsnode.bicep' = if (createNutsNode) {
     containerEnvName: containerEnvName
 
     keyVaultName: keyVaultName
-    serviceName: serviceName
-    healthWorkspaceName: healthWorkspaceName
-    healthWorkspaceResourceGroup: healthWorkspaceResourceGroup
-    healthWorkspaceSubscription: healthWorkspaceSubscription
 
     cpuCore: cpuCore
     memorySize: memorySize
@@ -96,11 +92,11 @@ module orchestrator './modules/apps-orchestrator.bicep' = if (createOrchestrator
     cpuCore: cpuCore
     memorySize: memorySize
 
-    logLevel: logLevel
+    //logLevel: logLevel
   }
 }
 
-module smartonfhirbackend './modules/apps-nutsnode.bicep' = if (createSmartOnFhirBackend) {
+module smartonfhirbackend './modules/apps-smartonfhir_backend.bicep' = if (createSmartOnFhirBackend) {
   name: 'DeploySmartOnFhirBackend'
   scope: resourceGroup(containerEnvSubscription, containerEnvResourceGroup)
   params: {
