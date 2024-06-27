@@ -1,64 +1,56 @@
 package coolfhir
 
 import (
+	"context"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azcore/runtime"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"net/http"
+	"golang.org/x/oauth2"
 	"net/url"
+	"time"
 )
 
 // NewAzureClient creates a new FHIR client that communicates with an Azure FHIR API.
 // It uses the Managed Identity of the Azure environment to authenticate.
 func NewAzureClient(fhirBaseURL *url.URL) (fhirclient.Client, error) {
-	options := azcore.ClientOptions{}
-	credential, err := azidentity.NewManagedIdentityCredential(&azidentity.ManagedIdentityCredentialOptions{
-		ClientOptions: options,
-		ID:            nil,
-	})
+	credential, err := azidentity.NewManagedIdentityCredential(nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get credential for Azure FHIR API client: %w", err)
 	}
-	return newAzureClientWithCredential(fhirBaseURL, credential, options)
+	return newAzureClient(fhirBaseURL, credential, []string{fhirBaseURL.Host + "/.default"})
 }
 
-func newAzureClientWithCredential(fhirBaseURL *url.URL, credential azcore.TokenCredential, options azcore.ClientOptions) (fhirclient.Client, error) {
-	azcoreClient, err := azcore.NewClient("github.com/SanteonNL/orca/orchestrator", "v0.0.0", runtime.PipelineOptions{
-		PerRetry: []policy.Policy{newChallengePolicy(credential)},
-		Tracing: runtime.TracingOptions{
-			Namespace: "Microsoft.FHIRAPI", // TODO: Is this right?
-		},
-	}, &options)
+func newAzureClient(fhirBaseURL *url.URL, credential azcore.TokenCredential, scopes []string) (fhirclient.Client, error) {
+	ctx := context.Background()
+	return fhirclient.New(fhirBaseURL, oauth2.NewClient(ctx, azureTokenSource{
+		credential: credential,
+		scopes:     scopes,
+		ctx:        ctx,
+		timeOut:    10 * time.Second,
+	})), nil
+}
+
+var _ oauth2.TokenSource = &azureTokenSource{}
+
+type azureTokenSource struct {
+	credential azcore.TokenCredential
+	scopes     []string
+	timeOut    time.Duration
+	ctx        context.Context
+}
+
+func (a azureTokenSource) Token() (*oauth2.Token, error) {
+	ctx, cancel := context.WithTimeout(a.ctx, a.timeOut)
+	defer cancel()
+	accessToken, err := a.credential.GetToken(ctx, policy.TokenRequestOptions{Scopes: a.scopes})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to get OAuth2 access token using Azure credential: %w", err)
 	}
-	return fhirclient.New(fhirBaseURL, &azureHttpClient{Client: azcoreClient}), nil
-}
-
-// azureHttpClient is a wrapper around an Azure SDK HTTP client that implements the http.Client interface,
-// which is then used by the fhirclient library.
-type azureHttpClient struct {
-	*azcore.Client
-}
-
-func (a azureHttpClient) Do(httpRequest *http.Request) (*http.Response, error) {
-	azRequest, err := runtime.NewRequest(httpRequest.Context(), httpRequest.Method, httpRequest.URL.String())
-	if err != nil {
-		return nil, err
-	}
-	*azRequest.Raw() = *httpRequest
-	return a.Client.Pipeline().Do(azRequest)
-}
-
-func newChallengePolicy(cred azcore.TokenCredential) policy.Policy {
-	return runtime.NewBearerTokenPolicy(cred, nil, &policy.BearerTokenOptions{
-		// TODO: Not sure if we ned this?
-		//AuthorizationHandler: policy.AuthorizationHandler{
-		//	OnRequest:   kv.authorize,
-		//	OnChallenge: kv.authorizeOnChallenge,
-		//},
-	})
+	return &oauth2.Token{
+		AccessToken: accessToken.Token,
+		TokenType:   "Bearer",
+		Expiry:      accessToken.ExpiresOn,
+	}, nil
 }
