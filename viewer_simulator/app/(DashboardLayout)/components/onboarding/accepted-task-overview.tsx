@@ -11,7 +11,7 @@ export default async function AcceptedTaskOverview() {
     let rows = [];
 
     try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/Task`, {
+        const response = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/Task?reasonCode=http%3A%2F%2Fsnomed.info%2Fsct%7C719858009&status=accepted`, {
             cache: 'no-store',
             headers: {
                 "Cache-Control": "no-cache"
@@ -32,17 +32,17 @@ export default async function AcceptedTaskOverview() {
 
             rows = tasks.map((entry: any) => {
                 const task = entry.resource;
-                const patientResource = task.contained.find((containedResource: any) => containedResource.id === task.for.reference)
-                const patientIdentifier = patientResource.identifier[0]
-                const patientName = patientResource.name[0]
+                const patientResource = task.contained && task.contained.find((containedResource: any) => containedResource.id === task.for.reference)
+                const patientIdentifier = patientResource && patientResource.identifier[0]
+                const patientName = patientResource && patientResource.name[0]
 
                 return {
                     id: task.id,
                     hospitalUra: task.requester.identifier.value,
                     hospitalName: task.requester.display,
-                    patientBsn: patientIdentifier.value,
-                    patientLastname: patientName.given[0],
-                    patientSurname: patientName.family,
+                    patientBsn: patientIdentifier?.value || "Unknown",
+                    patientLastname: patientName?.given[0] || "Unknown",
+                    patientSurname: patientName?.family || "Unknown",
                     condition: task.reasonCode.coding[0].display,
                     status: task.status,
                     lastUpdated: new Date(task.meta.lastUpdated),
