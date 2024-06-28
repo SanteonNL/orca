@@ -1,0 +1,16 @@
+{
+  "resourceType" : "Organization",
+  "id" : "minimal-enrollment-Organization-Requester",
+  "meta" : {
+    "profile" : ["http://nictiz.nl/fhir/StructureDefinition/nl-core-HealthcareProvider-Organization"]
+  },
+  "text" : {
+    "status" : "generated",
+    "div" : "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p><b>Generated Narrative: Organization </b><a name=\"minimal-enrollment-Organization-Requester\"> </a><a name=\"hcminimal-enrollment-Organization-Requester\"> </a></p><div style=\"display: inline-block; background-color: #d9e0e7; padding: 6px; margin: 4px; border: 1px solid #8da1b4; border-radius: 5px; line-height: 60%\"><p style=\"margin-bottom: 0px\">ResourceOrganization &quot;minimal-enrollment-Organization-Requester&quot; </p><p style=\"margin-bottom: 0px\">Profile: <a href=\"https://simplifier.net/resolve?scope=nictiz.fhir.nl.r4.nl-core@0.10.0-beta.1&amp;canonical=http://nictiz.nl/fhir/StructureDefinition/nl-core-HealthcareProvider-Organization\">nl core HealthcareProvider Organization</a></p></div><p><b>identifier</b>: Ura/URA-ziekenhuis-1</p><p><b>name</b>: St. Antonius Ziekenhuis</p></div>"
+  },
+  "identifier" : [{
+    "system" : "http://fhir.nl/fhir/NamingSystem/ura",
+    "value" : "URA-ziekenhuis-1"
+  }],
+  "name" : "St. Antonius Ziekenhuis"
+}
