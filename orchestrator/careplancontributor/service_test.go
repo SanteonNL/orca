@@ -2,15 +2,19 @@ package careplancontributor
 
 import (
 	"encoding/json"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
-	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"testing"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	mock_fhirclient "github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/golang/mock/gomock"
+	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var serviceRequestBundleJSON []byte
@@ -80,4 +84,31 @@ func startCarePlanService(t *testing.T) fhirclient.Client {
 	})
 	baseURL, _ := url.Parse(httpServer.URL)
 	return fhirclient.New(baseURL, httpServer.Client())
+}
+
+func Test_shouldStopPollingOnAccepted(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockCarePlanService := mock_fhirclient.NewMockClient(ctrl)
+	service := Service{CarePlanService: mockCarePlanService}
+
+	taskID := "test-task-id"
+
+	// First call returns a task that is not accepted
+	firstTask := fhir.Task{Status: fhir.TaskStatusInProgress}
+	mockCarePlanService.EXPECT().Read("Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, v interface{}, opts ...interface{}) error {
+		*(v.(*fhir.Task)) = firstTask
+		return nil
+	}).Times(1)
+
+	// Second call returns a task that is accepted
+	secondTask := fhir.Task{Status: fhir.TaskStatusAccepted}
+	mockCarePlanService.EXPECT().Read("Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, v interface{}, opts ...interface{}) error {
+		*(v.(*fhir.Task)) = secondTask
+		return nil
+	}).Times(1)
+
+	err := service.pollTaskStatus(taskID)
+	assert.NoError(t, err)
 }

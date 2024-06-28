@@ -1,3 +1,4 @@
+//go:generate mockgen -destination=./mock/fhirclient_mock.go -package=mock github.com/SanteonNL/go-fhir-client Client
 package careplancontributor
 
 import (
