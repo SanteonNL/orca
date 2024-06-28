@@ -1,0 +1,40 @@
+{
+  "resourceType" : "ServiceRequest",
+  "id" : "minimal-enrollment-ServiceRequest",
+  "text" : {
+    "status" : "generated",
+    "div" : "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p><b>Generated Narrative: ServiceRequest </b><a name=\"minimal-enrollment-ServiceRequest\"> </a><a name=\"hcminimal-enrollment-ServiceRequest\"> </a></p><div style=\"display: inline-block; background-color: #d9e0e7; padding: 6px; margin: 4px; border: 1px solid #8da1b4; border-radius: 5px; line-height: 60%\"><p style=\"margin-bottom: 0px\">ResourceServiceRequest &quot;minimal-enrollment-ServiceRequest&quot; </p></div><p><b>status</b>: draft</p><p><b>intent</b>: order</p><p><b>code</b>: monitoren via telegeneeskunde (regime/therapie) <span style=\"background: LightGoldenRodYellow; margin: 4px; border: 1px solid khaki\"> (<a href=\"https://browser.ihtsdotools.org/\">SNOMED CT</a>#719858009)</span></p><p><b>orderDetail</b>: COPD Thuismonitoring pakket Light <span style=\"background: LightGoldenRodYellow; margin: 4px; border: 1px solid khaki\"> ()</span></p><p><b>subject</b>: <a href=\"Patient-minimal-enrollment-Patient.html\">Patient/minimal-enrollment-Patient: Patient, Jean Jacques van Putten-van der Giessen</a> &quot; VAN PUTTEN-VAN DER GIESSEN&quot;</p><p><b>requester</b>: <a href=\"Organization-minimal-enrollment-Organization-Requester.html\">Organization/minimal-enrollment-Organization-Requester: Requester Organization St. Antonius Ziekenhuis</a> &quot;St. Antonius Ziekenhuis&quot;</p><p><b>performer</b>: <a href=\"Organization-minimal-enrollment-Organization-Performer.html\">Organization/minimal-enrollment-Organization-Performer: Performer Organization Zorg bij jou</a> &quot;Zorg bij jou&quot;</p><p><b>reasonReference</b>: <a href=\"Condition-minimal-enrollment-Condition.html\">Condition/minimal-enrollment-Condition: Diagnose Hartfalen</a></p><p><b>patientInstruction</b>: # streefwaarden\n- 30 kg\n- 180 cm\n# aantekeningen\n- Grote hond\n-grote mond\n</p></div>"
+  },
+  "status" : "draft",
+  "intent" : "order",
+  "code" : {
+    "coding" : [{
+      "system" : "http://snomed.info/sct",
+      "code" : "719858009",
+      "display" : "monitoren via telegeneeskunde (regime/therapie)"
+    }]
+  },
+  "orderDetail" : [{
+    "text" : "COPD Thuismonitoring pakket Light"
+  }],
+  "subject" : {
+    "reference" : "Patient/minimal-enrollment-Patient",
+    "type" : "Patient",
+    "display" : "Patient, Jean Jacques van Putten-van der Giessen"
+  },
+  "requester" : {
+    "reference" : "Organization/minimal-enrollment-Organization-Requester",
+    "type" : "Organization",
+    "display" : "Requester Organization St. Antonius Ziekenhuis"
+  },
+  "performer" : [{
+    "reference" : "Organization/minimal-enrollment-Organization-Performer",
+    "type" : "Organization",
+    "display" : "Performer Organization Zorg bij jou"
+  }],
+  "reasonReference" : [{
+    "reference" : "Condition/minimal-enrollment-Condition",
+    "display" : "Diagnose Hartfalen"
+  }],
+  "patientInstruction" : "# streefwaarden\n- 30 kg\n- 180 cm\n# aantekeningen\n- Grote hond\n-grote mond\n"
+}
