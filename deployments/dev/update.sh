@@ -16,12 +16,12 @@ CLINIC_URL="${CLINIC_URL}" \
  --wait --build --remove-orphans
  popd
 
-CAREPLANSERVICE_URL="${CLINIC_URL}/fhir"
+CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/fhir"
 HOSPITAL_URL=$(readTunnelURL ./hospital)
 pushd hospital
 docker compose pull
 NUTS_URL="${HOSPITAL_URL}" \
- CAREPLANSERVICE_URL="${CAREPLANSERVICE_URL}" \
+ CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" \
   docker compose up \
  --wait --build --remove-orphans
 popd

@@ -15,7 +15,6 @@ func main() {
 	for ura, did := range config.ParseURAMap() {
 		log.Info().Msgf("URA %s maps to DID %s", ura, did)
 	}
-	log.Info().Msgf("Demo app launch: http://localhost%s/demo-app-launch", config.Public.Address)
 	if err := cmd.Start(*config); err != nil {
 		log.Fatal().Err(err).Msg("Failed to start server")
 	}

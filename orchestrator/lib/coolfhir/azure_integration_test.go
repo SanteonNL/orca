@@ -18,7 +18,7 @@ func TestAzure_Integration(t *testing.T) {
 
 	credential, err := azidentity.NewDefaultAzureCredential(nil)
 	require.NoError(t, err)
-	fhirClient, err := newAzureClient(fhirBaseURL, credential, []string{fhirBaseURL.JoinPath(".default").String()})
+	fhirClient := NewAzureFHIRClient(fhirBaseURL, credential)
 
 	require.NoError(t, err)
 

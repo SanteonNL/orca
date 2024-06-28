@@ -71,7 +71,7 @@ docker compose pull
 CLINIC_URL="${CLINIC_URL}" \
   docker compose up \
  --wait --build --remove-orphans
-CAREPLANSERVICE_URL="${CLINIC_URL}/fhir"
+CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/fhir"
 echo "  Creating DID document"
 CLINIC_DID=$(createDID $CLINIC_URL http://localhost:8081)
 echo "    Clinic DID: $CLINIC_DID"
@@ -93,7 +93,7 @@ echo "  Starting services"
 pushd hospital
 docker compose pull
 NUTS_URL="${HOSPITAL_URL}" \
- CAREPLANSERVICE_URL="${CAREPLANSERVICE_URL}" \
+ CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" \
   docker compose up \
  --wait --build --remove-orphans
 echo "  Creating DID document"

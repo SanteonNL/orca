@@ -52,12 +52,11 @@ func Test_azureHttpClient_Do(t *testing.T) {
 	http.DefaultClient = testFHIRServer.Client()
 
 	// Create client
-	fhirClient, err := newAzureClient(fhirBaseURL, &fake.TokenCredential{}, []string{"https://healthcareapis.com/.default"})
-	require.NoError(t, err)
+	fhirClient := NewAzureFHIRClient(fhirBaseURL, &fake.TokenCredential{})
 
 	t.Run("Read resource", func(t *testing.T) {
 		var actual fhir.Patient
-		err = fhirClient.Read("Patient/123", &actual, fhirclient.QueryParam("foo", "bar"))
+		err := fhirClient.Read("Patient/123", &actual, fhirclient.QueryParam("foo", "bar"))
 		require.NoError(t, err)
 		require.Equal(t, expected, actual)
 		require.Len(t, capturedReadQueryParams, 1)
@@ -66,7 +65,7 @@ func Test_azureHttpClient_Do(t *testing.T) {
 	})
 	t.Run("Create resource", func(t *testing.T) {
 		var actual fhir.Patient
-		err = fhirClient.Create(expected, &actual)
+		err := fhirClient.Create(expected, &actual)
 		require.NoError(t, err)
 
 		require.Equal(t, expected, actual)

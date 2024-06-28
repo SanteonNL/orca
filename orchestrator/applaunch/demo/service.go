@@ -6,6 +6,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/tinyhttp"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 )
@@ -23,6 +24,7 @@ func init() {
 }
 
 func New(sessionManager *user.SessionManager, config Config, baseURL string) *Service {
+	log.Info().Msgf("Demo app launch: http://localhost%s/demo-app-launch", baseURL)
 	return &Service{
 		sessionManager: sessionManager,
 		config:         config,

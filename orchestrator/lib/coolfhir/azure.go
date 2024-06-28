@@ -5,31 +5,31 @@ import (
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"golang.org/x/oauth2"
+	"net/http"
 	"net/url"
 	"time"
 )
 
-// NewAzureClient creates a new FHIR client that communicates with an Azure FHIR API.
+// NewAzureFHIRClient creates a new FHIR client that communicates with an Azure FHIR API.
 // It uses the Managed Identity of the Azure environment to authenticate.
-func NewAzureClient(fhirBaseURL *url.URL) (fhirclient.Client, error) {
-	credential, err := azidentity.NewManagedIdentityCredential(nil)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get credential for Azure FHIR API client: %w", err)
-	}
-	return newAzureClient(fhirBaseURL, credential, []string{fhirBaseURL.Host + "/.default"})
+func NewAzureFHIRClient(fhirBaseURL *url.URL, credential azcore.TokenCredential) fhirclient.Client {
+	return fhirclient.New(fhirBaseURL, NewAzureHTTPClient(credential, DefaultAzureScope(fhirBaseURL)))
 }
 
-func newAzureClient(fhirBaseURL *url.URL, credential azcore.TokenCredential, scopes []string) (fhirclient.Client, error) {
+func DefaultAzureScope(fhirBaseURL *url.URL) []string {
+	return []string{fhirBaseURL.Host + "/.default"}
+}
+
+func NewAzureHTTPClient(credential azcore.TokenCredential, scopes []string) *http.Client {
 	ctx := context.Background()
-	return fhirclient.New(fhirBaseURL, oauth2.NewClient(ctx, azureTokenSource{
+	return oauth2.NewClient(ctx, azureTokenSource{
 		credential: credential,
 		scopes:     scopes,
 		ctx:        ctx,
 		timeOut:    10 * time.Second,
-	})), nil
+	})
 }
 
 var _ oauth2.TokenSource = &azureTokenSource{}
