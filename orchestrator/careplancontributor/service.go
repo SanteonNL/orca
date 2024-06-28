@@ -111,57 +111,44 @@ func (s Service) confirm(localFHIR fhirclient.Client, serviceRequestRef string, 
 		return nil, fmt.Errorf("failed to create Task: %w", err)
 	}
 
-	// Create channels for polling the task, 1 channel for the result and 1 for an error
-	resultChan := make(chan *fhir.Task)
-	errorChan := make(chan error)
-
 	// Start polling in a new goroutine so that the code continues to the select below
-	go s.pollTaskStatus(*task.Id, resultChan, errorChan)
+	err = s.pollTaskStatus(*task.Id)
 
-	// Block until either the task is accepted or an error occurs (error after 10 attempts)
-	select {
-	case result := <-resultChan:
-		log.Info().Msgf("Task/%s accepted: %+v\n", *result.Id, result)
-		enrichedTask, err := s.handleAcceptedTask(task, serviceRequest, &patient)
-		return enrichedTask, err
-	case err := <-errorChan:
+	if err != nil {
 		fmt.Printf("error while polling task %s: %v\n", *task.Id, err)
 		return nil, err
 	}
+
+	enrichedTask, err := s.handleAcceptedTask(task, serviceRequest, &patient)
+	return enrichedTask, err
 }
 
 // pollTaskStatus polls the task status until it is accepted, an error occurs or reaches a max poll amount.
-func (s Service) pollTaskStatus(taskID string, resultChan chan<- *fhir.Task, errorChan chan<- error) {
-	ticker := time.NewTicker(2 * time.Second) // Poll every 2 seconds
-	defer ticker.Stop()
+func (s Service) pollTaskStatus(taskID string) error {
+	pollInterval := 2 * time.Second
+	maxPollingDuration := 20 * time.Second
+	startTime := time.Now()
 
-	maxAttempts := 10
-	attempts := 0
-
-	for range ticker.C {
-
-		if attempts >= maxAttempts {
-			err := fmt.Errorf("maximum number of attempts reached for Task/%s", taskID)
-			log.Error().Msgf("polling Task/%s failed - error: [%s]", taskID, err)
-			errorChan <- err
-			return
+	for {
+		if time.Since(startTime) >= maxPollingDuration {
+			return fmt.Errorf("maximum polling duration of %d seconds reached for Task/%s", maxPollingDuration, taskID)
 		}
 
-		attempts++
 		var task fhir.Task
 
+		//TODO: Add timeout to the read when the lib supports it
 		if err := s.CarePlanService.Read("Task/"+taskID, &task); err != nil {
-			errorChan <- err
 			log.Error().Msgf("polling Task/%s failed - error: [%s]", taskID, err)
-			return
+			return err
 		}
 
 		log.Info().Msgf("polling Task/%s - got status [%s]", taskID, &task.Status)
 
 		if task.Status == fhir.TaskStatusAccepted {
-			resultChan <- &task
-			return
+			return nil
 		}
+
+		time.Sleep(pollInterval)
 	}
 }
 
@@ -203,7 +190,7 @@ func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {
 	carePlan := fhir.CarePlan{
 		Subject: fhir.Reference{
 			Type:      to.Ptr("Patient"),
-			Reference: to.Ptr(*patient.Id),
+			Reference: patient.Id,
 		},
 	}
 	var result fhir.CarePlan
@@ -237,13 +224,13 @@ func (s Service) createTask(serviceRequest fhir.ServiceRequest) (*fhir.Task, err
 // When an application accepts the Task, we enrich the Task with more detailed information like the actual Patient and the ServiceRequest
 func (s Service) handleAcceptedTask(task *fhir.Task, serviceRequest *fhir.ServiceRequest, patient *fhir.Patient) (*fhir.Task, error) {
 
-	taskJSON, err := s.enrichTask(task, serviceRequest, patient)
+	taskMap, err := s.enrichTask(task, serviceRequest, patient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enrich task: %w", err)
 	}
 
 	var enrichedTask fhir.Task
-	if err := s.CarePlanService.Update("Task/"+*task.Id, json.RawMessage(*taskJSON), &enrichedTask); err != nil {
+	if err := s.CarePlanService.Update("Task/"+*task.Id, *taskMap, &enrichedTask); err != nil {
 		return nil, fmt.Errorf("failed to update Task: %w", err)
 	}
 
@@ -263,7 +250,7 @@ func (s Service) handleAcceptedTask(task *fhir.Task, serviceRequest *fhir.Servic
 	return &enrichedTask, nil
 }
 
-func (s Service) enrichTask(task *fhir.Task, serviceRequest *fhir.ServiceRequest, patient *fhir.Patient) (*[]byte, error) {
+func (s Service) enrichTask(task *fhir.Task, serviceRequest *fhir.ServiceRequest, patient *fhir.Patient) (*map[string]interface{}, error) {
 
 	//FIXME: fhir.Task.Contained does not exist for some reason - converting the task to a map for easy manipulation instead
 	taskMap := make(map[string]interface{})
@@ -291,9 +278,7 @@ func (s Service) enrichTask(task *fhir.Task, serviceRequest *fhir.ServiceRequest
 		*patient,
 	}
 
-	taskJSON, _ = json.Marshal(taskMap)
-
-	return &taskJSON, nil
+	return &taskMap, nil
 }
 
 func unmarshalFromBundle(bundle fhir.Bundle, resourceType string, target any) error {
