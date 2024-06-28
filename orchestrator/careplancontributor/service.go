@@ -115,12 +115,10 @@ func (s Service) confirm(localFHIR fhirclient.Client, serviceRequestRef string, 
 	err = s.pollTaskStatus(*task.Id)
 
 	if err != nil {
-		fmt.Printf("error while polling task %s: %v\n", *task.Id, err)
-		return nil, err
+		return nil, fmt.Errorf("error while polling task %s: %v\n", *task.Id, err)
 	}
 
-	enrichedTask, err := s.handleAcceptedTask(task, serviceRequest, &patient)
-	return enrichedTask, err
+	return s.handleAcceptedTask(task, serviceRequest, &patient)
 }
 
 // pollTaskStatus polls the task status until it is accepted, an error occurs or reaches a max poll amount.
