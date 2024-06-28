@@ -5,9 +5,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 )
 
 func New(config Config, didResolver addressing.DIDResolver) (*Service, error) {
@@ -42,7 +44,18 @@ type Service struct {
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
-	proxy := httputil.NewSingleHostReverseProxy(s.fhirURL)
-	proxy.Transport = s.httpClient.Transport
-	mux.HandleFunc("/cps", proxy.ServeHTTP)
+	proxy := &httputil.ReverseProxy{
+		Rewrite: func(r *httputil.ProxyRequest) {
+			r.Out.URL = s.fhirURL.JoinPath(strings.TrimPrefix(r.In.URL.Path, "/cps"))
+		},
+		Transport: s.httpClient.Transport,
+		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
+			log.Warn().Err(err).Msgf("FHIR request failed (url=%s)", request.URL.String())
+			http.Error(writer, "FHIR request failed: "+err.Error(), http.StatusBadGateway)
+		},
+	}
+	mux.HandleFunc("/cps/*", func(writer http.ResponseWriter, request *http.Request) {
+		// TODO: Authorize request here
+		proxy.ServeHTTP(writer, request)
+	})
 }

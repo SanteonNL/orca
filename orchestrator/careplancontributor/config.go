@@ -2,6 +2,7 @@ package careplancontributor
 
 type Config struct {
 	CarePlanService CarePlanServiceConfig `koanf:"careplanservice"`
+	Enabled         bool                  `koanf:"enabled"`
 }
 
 type CarePlanServiceConfig struct {
