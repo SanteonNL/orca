@@ -3,27 +3,33 @@ package main
 import (
 	"e2e-tests/to"
 	"encoding/json"
+	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"strings"
+	"testing"
 )
 
-func main() {
+func Test_Main(t *testing.T) {
 	fhirBaseURL, _ := url.Parse("http://localhost:9090/fhir")
 	fhirClient := fhirclient.New(fhirBaseURL, http.DefaultClient)
 
+	println("Loading test data...")
 	patient, serviceRequest, err := loadTestData(fhirClient)
-	if err != nil {
-		panic(err)
-	}
+	require.NoError(t, err)
+
+	existingTaskIDs, err := listTaskIDs(fhirClient)
+	require.NoError(t, err)
 
 	// Demo AppLaunch
+	println("Demo AppLaunch...")
 	cookieJar, _ := cookiejar.New(nil)
 	userAgent := &http.Client{
 		Jar: cookieJar,
@@ -36,10 +42,20 @@ func main() {
 	httpResponse, err := userAgent.Get("http://localhost:8080/hospital/orca/demo-app-launch?" + query.Encode())
 	testHTTPResponse(err, httpResponse, http.StatusOK)
 	// Click "confirm"
+	println("Clicking 'confirm'...")
 	httpResponse, err = userAgent.PostForm(httpResponse.Request.URL.JoinPath("confirm").String(), nil)
 	testHTTPResponse(err, httpResponse, http.StatusOK)
 	// Check that the Task arrived at the CarePlanService
+	println("Checking that the Task arrived at the CarePlanService...")
+	task, err := findNewTask(fhirClient, existingTaskIDs)
+	require.NoError(t, err)
+	require.Equal(t, fhir.TaskStatusRequested, task.Status, "unexpected Task status")
+	// Set accepted
+	println("Setting Task status to 'accepted'...")
+	task.Status = fhir.TaskStatusAccepted
+	require.NoError(t, fhirClient.Update("Task/"+*task.Id, task, &task))
 
+	println("Test succeeded!")
 }
 
 func testHTTPResponse(err error, httpResponse *http.Response, expectedStatus int) {
@@ -119,6 +135,44 @@ func loadTestData(fhirClient *fhirclient.BaseClient) (*fhir.Patient, *fhir.Servi
 		return nil, nil, err
 	}
 	return &patient, &serviceRequest, nil
+}
+
+func findNewTask(fhirClient *fhirclient.BaseClient, existingTaskIDs []string) (*fhir.Task, error) {
+	var taskBundle fhir.Bundle
+	if err := fhirClient.Read("Task", &taskBundle); err != nil {
+		return nil, err
+	}
+outer:
+	for _, entry := range taskBundle.Entry {
+		var task fhir.Task
+		if err := json.Unmarshal(entry.Resource, &task); err != nil {
+			return nil, err
+		}
+		for _, existingTaskID := range existingTaskIDs {
+			if *task.Id == existingTaskID {
+				continue outer
+			}
+		}
+		return &task, nil
+	}
+	return nil, errors.New("no new Task found")
+}
+
+func listTaskIDs(fhirClient *fhirclient.BaseClient) ([]string, error) {
+	var taskBundle fhir.Bundle
+	if err := fhirClient.Read("Task", &taskBundle); err != nil {
+		return nil, err
+	}
+	var taskIDs []string
+	for _, entry := range taskBundle.Entry {
+		var task fhir.Task
+		if err := json.Unmarshal(entry.Resource, &task); err != nil {
+			return nil, err
+		}
+		taskIDs = append(taskIDs, *task.Id)
+	}
+	return taskIDs, nil
+
 }
 
 func createResource(fhirClient *fhirclient.BaseClient, resource interface{}) error {
