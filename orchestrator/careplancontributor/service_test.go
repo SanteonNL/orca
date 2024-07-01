@@ -38,7 +38,7 @@ func TestService_confirm(t *testing.T) {
 	}
 	localFHIR := startLocalFHIRServer(t)
 
-	task, err := service.confirm(localFHIR, "ServiceRequest/sr-1", "Patient/p-1")
+	task, err := service.confirm(localFHIR, "ServiceRequest/1", "Patient/1")
 
 	require.NoError(t, err)
 	require.NotNil(t, task)
@@ -54,6 +54,12 @@ func startLocalFHIRServer(t *testing.T) fhirclient.Client {
 		_, _ = w.Write(serviceRequestBundleJSON)
 	})
 	mux.HandleFunc("GET /ServiceRequest/1", func(w http.ResponseWriter, r *http.Request) {
+		serviceRequestURL = r.URL.String()
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(serviceRequestBundleJSON)
+	})
+	mux.HandleFunc("GET /Patient/1", func(w http.ResponseWriter, r *http.Request) {
 		serviceRequestURL = r.URL.String()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

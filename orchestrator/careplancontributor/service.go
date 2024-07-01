@@ -3,9 +3,13 @@ package careplancontributor
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/addressing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/assets"
@@ -17,6 +21,19 @@ import (
 )
 
 const LandingURL = "/contrib/"
+
+func New(config Config, sessionManager *user.SessionManager, didResolver addressing.StaticDIDResolver) (*Service, error) {
+	if config.CarePlanService.URL == "" {
+		return nil, errors.New("careplancontributor.careplanservice.url is not configured")
+	}
+	cpsURL, _ := url.Parse(config.CarePlanService.URL)
+	// TODO: Replace with client doing authentication
+	carePlanServiceClient := fhirclient.New(cpsURL, http.DefaultClient)
+	return &Service{
+		SessionManager:  sessionManager,
+		CarePlanService: carePlanServiceClient,
+	}, nil
+}
 
 type Service struct {
 	SessionManager  *user.SessionManager
