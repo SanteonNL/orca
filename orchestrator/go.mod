@@ -9,7 +9,11 @@ require (
 	github.com/rs/zerolog v1.32.0
 	github.com/samply/golang-fhir-models/fhir-models v0.3.2
 	github.com/stretchr/testify v1.9.0
+	github.com/golang/mock v1.6.0
+	go.uber.org/mock v0.4.0
 )
+
+replace github.com/golang/mock => go.uber.org/mock v0.4.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.12.0 // indirect
@@ -23,7 +27,6 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.0.0 // indirect
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
-	github.com/golang/mock v1.6.0
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/knadh/koanf/maps v0.1.1 // indirect
 	github.com/knadh/koanf/providers/env v0.1.0 // indirect
@@ -53,11 +56,12 @@ require (
 	github.com/shengdoushi/base58 v1.0.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	go.uber.org/mock v0.4.0 // indirect
 	golang.org/x/crypto v0.24.0 // indirect
+	golang.org/x/mod v0.17.0 // indirect
 	golang.org/x/net v0.26.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/text v0.16.0 // indirect
+	golang.org/x/tools v0.21.1-0.20240508182429-e35e4ccd0d2d // indirect
 	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
