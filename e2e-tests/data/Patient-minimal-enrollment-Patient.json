@@ -1,0 +1,47 @@
+{
+  "resourceType" : "Patient",
+  "id" : "minimal-enrollment-Patient",
+  "meta" : {
+    "profile" : ["http://nictiz.nl/fhir/StructureDefinition/nl-core-Patient"]
+  },
+  "text" : {
+    "status" : "generated",
+    "div" : "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p style=\"border: 1px #661aff solid; background-color: #e6e6ff; padding: 10px;\"><b>Jean Jacques van Putten-van der Giessen(Official)</b> (no stated gender), DoB: 1974-01-01 ( <code>http://fhir.nl/fhir/NamingSystem/bsn</code>/111222333)</p><hr/><table class=\"grid\"><tr><td style=\"background-color: #f3f5da\" title=\"Patient contact\">Contact:</td><td colspan=\"3\"><ul><li><a href=\"tel:+31612345678\">+31612345678</a></li></ul></td></tr></table></div>"
+  },
+  "identifier" : [{
+    "system" : "http://fhir.nl/fhir/NamingSystem/bsn",
+    "value" : "111222333"
+  }],
+  "name" : [{
+    "use" : "official",
+    "text" : "Jean Jacques van Putten-van der Giessen",
+    "family" : "van Putten-van der Giessen",
+    "_family" : {
+      "extension" : [{
+        "url" : "http://hl7.org/fhir/StructureDefinition/humanname-own-prefix",
+        "valueString" : "van"
+      },
+        {
+          "url" : "http://hl7.org/fhir/StructureDefinition/humanname-own-name",
+          "valueString" : "Putten"
+        },
+        {
+          "url" : "http://hl7.org/fhir/StructureDefinition/humanname-partner-prefix",
+          "valueString" : "van der"
+        },
+        {
+          "url" : "http://hl7.org/fhir/StructureDefinition/humanname-partner-name",
+          "valueString" : "Giessen"
+        }]
+    },
+    "given" : ["Jean",
+      "Jacques"]
+  }],
+  "birthDate" : "1974-01-01",
+  "contact" : [{
+    "telecom" : [{
+      "system" : "phone",
+      "value" : "+31612345678"
+    }]
+  }]
+}
