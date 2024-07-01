@@ -32,7 +32,13 @@ export default async function AcceptedTaskOverview() {
 
             rows = tasks.map((entry: any) => {
                 const task = entry.resource;
-                const patientResource = task.contained && task.contained.find((containedResource: any) => containedResource.id === task.for.reference)
+                console.log(JSON.stringify(task, undefined, 2))
+                let forRef = task.for.reference
+                if (forRef.indexOf('#') === 0) { //local reference
+                    forRef = forRef.substring(1, forRef.length)
+                }
+
+                const patientResource = task.contained && task.contained.find((containedResource: any) => containedResource.id === forRef)
                 const patientIdentifier = patientResource && patientResource.identifier[0]
                 const patientName = patientResource && patientResource.name[0]
 

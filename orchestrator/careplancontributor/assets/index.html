@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Aanmelden Thuismonitoring</title>
     <style>
@@ -10,6 +11,7 @@
             background-color: #f4f4f4;
             color: rgb(17, 28, 45);
             text-align: center;
+            position: relative;
         }
 
         .container {
@@ -28,22 +30,26 @@
         .target-organization-name {
             font-weight: bold;
         }
+
         table {
             width: 100%;
             border-radius: 5px;
             background-color: rgb(237, 243, 248);
         }
+
         th {
             width: 30%;
             text-align: left;
             padding: 5px;
             font-weight: bolder;
         }
+
         td {
             background-color: rgb(243, 248, 250);
             padding: 5px;
             text-align: left;
         }
+
         tr {
             border-bottom: 1px solid rgb(237, 243, 248);
             line-height: 25px;
@@ -63,7 +69,9 @@
             cursor: pointer;
             border-radius: 5px;
             font-weight: 700;
+            position: relative;
         }
+
         button[type="button"] {
             background-color: #afafaf;
             color: white;
@@ -73,45 +81,100 @@
             cursor: pointer;
             font-weight: 500;
         }
+
+        button.disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+
+        .overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.8);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .overlay .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
     </style>
 </head>
+
 <body>
-<div class="container">
-    <div id="patient-form">
-        <h1>Aanmelden Thuismonitoring</h1>
-        <p>
-            Wilt u deze pati&euml;nt aanmelden voor Thuismonitoring bij <span class="target-organization-name">Zorg bij jou</span>?
-        </p>
-        <table>
-            <tr>
-                <th>Naam:</th>
-                <td id="patient-name"></td>
-            </tr>
-            <tr>
-                <th>Geboortedatum:</th>
-                <td id="patient-birthdate"></td>
-            </tr>
-            <tr>
-                <th>Geslacht:</th>
-                <td id="patient-gender"></td>
-            </tr>
-        </table>
-        <form id="form" action="confirm" method="POST">
-            <button type="submit">Aanmelden</button>
-            <button type="button" onclick="window.close()">Annuleren</button>
-        </form>
+    <div class="overlay" id="overlay">
+        <div class="spinner"></div>
     </div>
-</div>
-<script>
-    fetch('patient')
-        .then(response => response.json())
-        .then(data => {
-            console.log(data);
-            document.getElementById('patient-name').innerText = data.name[0].given[0] + ' ' + data.name[0].family;
-            document.getElementById('patient-birthdate').innerText = data.birthDate;
-            // map gender: male->man, female->vrouw, other->anders
-            document.getElementById('patient-gender').innerText = data.gender === "male" ? "man" : (data.gender === "female" ? "vrouw" : "anders");
+
+    <div class="container">
+        <div id="patient-form">
+            <h1>Aanmelden Thuismonitoring</h1>
+            <p>
+                Wilt u deze pati&euml;nt aanmelden voor Thuismonitoring bij <span class="target-organization-name">Zorg
+                    bij jou</span>?
+            </p>
+            <table>
+                <tr>
+                    <th>Naam:</th>
+                    <td id="patient-name"></td>
+                </tr>
+                <tr>
+                    <th>Geboortedatum:</th>
+                    <td id="patient-birthdate"></td>
+                </tr>
+                <tr>
+                    <th>Geslacht:</th>
+                    <td id="patient-gender"></td>
+                </tr>
+            </table>
+            <form id="form" action="confirm" method="POST">
+                <button id="submitButton" type="submit">
+                    Aanmelden
+                </button>
+                <button type="button" onclick="window.close()">Annuleren</button>
+            </form>
+        </div>
+    </div>
+    <script>
+        fetch('patient')
+            .then(response => response.json())
+            .then(data => {
+                console.log(data);
+                document.getElementById('patient-name').innerText = data.name[0].given[0] + ' ' + data.name[0].family;
+                document.getElementById('patient-birthdate').innerText = data.birthDate;
+                // map gender: male->man, female->vrouw, other->anders
+                document.getElementById('patient-gender').innerText = data.gender === "male" ? "man" : (data.gender === "female" ? "vrouw" : "anders");
+            });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var form = document.getElementById('form');
+            var overlay = document.getElementById('overlay');
+
+            form.addEventListener('submit', function (event) {
+                overlay.style.display = 'flex';
+            });
         });
-</script>
+    </script>
 </body>
+
 </html>

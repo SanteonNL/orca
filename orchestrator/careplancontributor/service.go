@@ -1,18 +1,22 @@
+//go:generate mockgen -destination=./mock/fhirclient_mock.go -package=mock github.com/SanteonNL/go-fhir-client Client
 package careplancontributor
 
 import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"net/http"
 	"net/url"
+	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/addressing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/assets"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -120,24 +124,47 @@ func (s Service) confirm(localFHIR fhirclient.Client, serviceRequestRef string, 
 	//if err != nil {
 	//	return nil, fmt.Errorf("failed to create CarePlan: %w", err)
 	//}
-	task, err := s.createTask(*serviceRequest, patient)
+	task, err := s.createTask(*serviceRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Task: %w", err)
 	}
-	// Add Task to CarePlan
-	// Note: since we created the Task with status=accepted, we can do this immediately.
-	// Otherwise, we have to poll/wait from the UI.
-	//carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
-	//	Reference: &fhir.Reference{
-	//		Type:      to.Ptr("Task"),
-	//		Reference: to.Ptr("Task/" + *task.Id), // TODO: This seems a fiddly way to reference stuff
-	//	},
-	//})
-	//// TODO: Add "If" headers to make sure we're not overwriting someone else's changes
-	//if err := s.CarePlanService.Update("CarePlan/"+*carePlan.Id, carePlan, &carePlan); err != nil {
-	//	return nil, fmt.Errorf("failed to add Task to CarePlan: %w", err)
-	//}
-	return task, err
+
+	// Start polling in a new goroutine so that the code continues to the select below
+	err = s.pollTaskStatus(*task.Id)
+
+	if err != nil {
+		return nil, fmt.Errorf("error while polling task %s: %w", *task.Id, err)
+	}
+
+	return s.handleAcceptedTask(task, serviceRequest, &patient)
+}
+
+// pollTaskStatus polls the task status until it is accepted, an error occurs or reaches a max poll amount.
+func (s Service) pollTaskStatus(taskID string) error {
+	pollInterval := 2 * time.Second
+	maxPollingDuration := 20 * time.Second
+	startTime := time.Now()
+
+	for {
+		if time.Since(startTime) >= maxPollingDuration {
+			return fmt.Errorf("maximum polling duration of %s reached for Task/%s", maxPollingDuration, taskID)
+		}
+
+		var task fhir.Task
+
+		//TODO: Add timeout to the read when the lib supports it
+		if err := s.CarePlanService.Read("Task/"+taskID, &task); err != nil {
+			return fmt.Errorf("polling Task/%s failed - error: [%w]", taskID, err)
+		}
+
+		log.Info().Msgf("polling Task/%s - got status [%s]", taskID, &task.Status)
+
+		if task.Status == fhir.TaskStatusAccepted {
+			return nil
+		}
+
+		time.Sleep(pollInterval)
+	}
 }
 
 func (s Service) readServiceRequest(localFHIR fhirclient.Client, serviceRequestRef string) (*fhir.ServiceRequest, error) {
@@ -177,8 +204,8 @@ func (s Service) readServiceRequest(localFHIR fhirclient.Client, serviceRequestR
 func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {
 	carePlan := fhir.CarePlan{
 		Subject: fhir.Reference{
-			Type:       to.Ptr("Patient"),
-			Identifier: &patient.Identifier[0], // TODO: is this the right way/one?
+			Type:      to.Ptr("Patient"),
+			Reference: patient.Id,
 		},
 	}
 	var result fhir.CarePlan
@@ -188,14 +215,13 @@ func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {
 	return &result, nil
 }
 
-func (s Service) createTask(serviceRequest fhir.ServiceRequest, patient fhir.Patient) (*fhir.Task, error) {
+func (s Service) createTask(serviceRequest fhir.ServiceRequest) (*fhir.Task, error) {
 	// Marshalling of Task is incorrect when providing input
 	// See https://github.com/samply/golang-fhir-models/issues/19
 	// So just create a regular map.
 
 	// TODO: Should we make new cross references here for requester, owner, service request and patient?
-	*serviceRequest.Id = "#serviceRequest-1"
-	*patient.Id = "#patient-1"
+
 	task := map[string]any{
 		"resourceType": "Task",
 		"status":       "requested",
@@ -203,26 +229,71 @@ func (s Service) createTask(serviceRequest fhir.ServiceRequest, patient fhir.Pat
 		"requester":    serviceRequest.Requester,
 		"owner":        serviceRequest.Performer,
 		"reasonCode":   serviceRequest.Code,
-		// "for": fhir.Reference{
-		// 	Type:      to.Ptr("Patient"),
-		// 	Reference: patient.Id,
-		// },
-		// "input": []map[string]any{
-		// 	{
-		// 		"valueReference": fhir.Reference{
-		// 			Type:      to.Ptr("ServiceRequest"),
-		// 			Reference: serviceRequest.Id,
-		// 		},
-		// 	},
-		// },
-		// "contained": []interface{}{
-		// 	serviceRequest, patient,
-		// },
 	}
 	taskJSON, _ := json.MarshalIndent(task, "", "  ")
 	println(string(taskJSON))
 	createdTask, err := coolfhir.Workflow{CarePlanService: s.CarePlanService}.Invoke(task)
 	return createdTask, err
+}
+
+// When an application accepts the Task, we enrich the Task with more detailed information like the actual Patient and the ServiceRequest
+func (s Service) handleAcceptedTask(task *fhir.Task, serviceRequest *fhir.ServiceRequest, patient *fhir.Patient) (*fhir.Task, error) {
+
+	taskMap, err := s.enrichTask(task, serviceRequest, patient)
+	if err != nil {
+		return nil, fmt.Errorf("failed to enrich task: %w", err)
+	}
+
+	var enrichedTask fhir.Task
+	if err := s.CarePlanService.Update("Task/"+*task.Id, *taskMap, &enrichedTask); err != nil {
+		return nil, fmt.Errorf("failed to update Task: %w", err)
+	}
+
+	// s.updateCarePlanWithTask(result)
+
+	//carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
+	//	Reference: &fhir.Reference{
+	//		Type:      to.Ptr("Task"),
+	//		Reference: to.Ptr("Task/" + *task.Id), // TODO: This seems a fiddly way to reference stuff
+	//	},
+	//})
+	//// TODO: Add "If" headers to make sure we're not overwriting someone else's changes
+	//if err := s.CarePlanService.Update("CarePlan/"+*carePlan.Id, carePlan, &carePlan); err != nil {
+	//	return nil, fmt.Errorf("failed to add Task to CarePlan: %w", err)
+	//}
+
+	return &enrichedTask, nil
+}
+
+func (s Service) enrichTask(task *fhir.Task, serviceRequest *fhir.ServiceRequest, patient *fhir.Patient) (*map[string]interface{}, error) {
+
+	//FIXME: fhir.Task.Contained does not exist for some reason - converting the task to a map for easy manipulation instead
+	taskMap := make(map[string]interface{})
+	taskJSON, _ := json.Marshal(task)
+	if err := json.Unmarshal(taskJSON, &taskMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal task: %w", err)
+	}
+
+	taskMap["for"] = fhir.Reference{
+		Type:      to.Ptr("Patient"),
+		Reference: to.Ptr("#" + *patient.Id), //convert to local reference
+	}
+
+	taskMap["input"] = []map[string]interface{}{
+		{
+			"valueReference": fhir.Reference{
+				Type:      to.Ptr("ServiceRequest"),
+				Reference: to.Ptr("#" + *serviceRequest.Id), //convert to local reference
+			},
+		},
+	}
+
+	taskMap["contained"] = []interface{}{
+		*serviceRequest,
+		*patient,
+	}
+
+	return &taskMap, nil
 }
 
 func unmarshalFromBundle(bundle fhir.Bundle, resourceType string, target any) error {
