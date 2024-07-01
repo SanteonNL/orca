@@ -130,7 +130,7 @@ func (s Service) pollTaskStatus(taskID string) error {
 
 	for {
 		if time.Since(startTime) >= maxPollingDuration {
-			return fmt.Errorf("maximum polling duration of %d seconds reached for Task/%s", maxPollingDuration, taskID)
+			return fmt.Errorf("maximum polling duration of %s reached for Task/%s", maxPollingDuration, taskID)
 		}
 
 		var task fhir.Task
