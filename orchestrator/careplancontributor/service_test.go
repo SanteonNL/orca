@@ -11,10 +11,10 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	mock_fhirclient "github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/golang/mock/gomock"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/mock/gomock"
 )
 
 var serviceRequestBundleJSON []byte
@@ -97,15 +97,15 @@ func Test_shouldStopPollingOnAccepted(t *testing.T) {
 
 	// First call returns a task that is not accepted
 	firstTask := fhir.Task{Status: fhir.TaskStatusInProgress}
-	mockCarePlanService.EXPECT().Read("Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, v interface{}, opts ...interface{}) error {
-		*(v.(*fhir.Task)) = firstTask
+	mockCarePlanService.EXPECT().Read("Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, v *fhir.Task, opts ...interface{}) error {
+		*v = firstTask
 		return nil
 	}).Times(1)
 
 	// Second call returns a task that is accepted
 	secondTask := fhir.Task{Status: fhir.TaskStatusAccepted}
-	mockCarePlanService.EXPECT().Read("Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, v interface{}, opts ...interface{}) error {
-		*(v.(*fhir.Task)) = secondTask
+	mockCarePlanService.EXPECT().Read("Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, v *fhir.Task, opts ...interface{}) error {
+		*v = secondTask
 		return nil
 	}).Times(1)
 
