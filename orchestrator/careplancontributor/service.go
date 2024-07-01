@@ -116,7 +116,7 @@ func (s Service) confirm(localFHIR fhirclient.Client, serviceRequestRef string, 
 	err = s.pollTaskStatus(*task.Id)
 
 	if err != nil {
-		return nil, fmt.Errorf("error while polling task %s: %v\n", *task.Id, err)
+		return nil, fmt.Errorf("error while polling task %s: %w", *task.Id, err)
 	}
 
 	return s.handleAcceptedTask(task, serviceRequest, &patient)
@@ -137,8 +137,7 @@ func (s Service) pollTaskStatus(taskID string) error {
 
 		//TODO: Add timeout to the read when the lib supports it
 		if err := s.CarePlanService.Read("Task/"+taskID, &task); err != nil {
-			log.Error().Msgf("polling Task/%s failed - error: [%s]", taskID, err)
-			return err
+			return fmt.Errorf("polling Task/%s failed - error: [%w]", taskID, err)
 		}
 
 		log.Info().Msgf("polling Task/%s - got status [%s]", taskID, &task.Status)
