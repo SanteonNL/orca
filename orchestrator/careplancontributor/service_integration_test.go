@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,7 +14,7 @@ import (
 func TestService_Integration_confirm(t *testing.T) {
 	t.Skip()
 	fhirBaseURL, _ := url.Parse("http://localhost:9090/fhir")
-	fhirClient := fhirclient.New(fhirBaseURL, http.DefaultClient)
+	fhirClient := fhirclient.New(fhirBaseURL, http.DefaultClient, coolfhir.Config())
 	service := Service{
 		CarePlanService: fhirClient,
 	}

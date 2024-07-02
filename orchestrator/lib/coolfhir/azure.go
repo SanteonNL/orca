@@ -15,7 +15,7 @@ import (
 // NewAzureFHIRClient creates a new FHIR client that communicates with an Azure FHIR API.
 // It uses the Managed Identity of the Azure environment to authenticate.
 func NewAzureFHIRClient(fhirBaseURL *url.URL, credential azcore.TokenCredential) fhirclient.Client {
-	return fhirclient.New(fhirBaseURL, NewAzureHTTPClient(credential, DefaultAzureScope(fhirBaseURL)))
+	return fhirclient.New(fhirBaseURL, NewAzureHTTPClient(credential, DefaultAzureScope(fhirBaseURL)), Config())
 }
 
 func DefaultAzureScope(fhirBaseURL *url.URL) []string {

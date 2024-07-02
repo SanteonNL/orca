@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	"encoding/json"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -68,7 +69,7 @@ func startLocalFHIRServer(t *testing.T) fhirclient.Client {
 	println(serviceRequestURL)
 	httpServer := httptest.NewServer(mux)
 	baseURL, _ := url.Parse(httpServer.URL)
-	return fhirclient.New(baseURL, httpServer.Client())
+	return fhirclient.New(baseURL, httpServer.Client(), coolfhir.Config())
 }
 
 func Test_unmarshalFromBundle(t *testing.T) {
@@ -89,7 +90,7 @@ func startCarePlanService(t *testing.T) fhirclient.Client {
 		_, _ = writer.Write([]byte(`{"id":"task-1"}`))
 	})
 	baseURL, _ := url.Parse(httpServer.URL)
-	return fhirclient.New(baseURL, httpServer.Client())
+	return fhirclient.New(baseURL, httpServer.Client(), coolfhir.Config())
 }
 
 func Test_shouldStopPollingOnAccepted(t *testing.T) {

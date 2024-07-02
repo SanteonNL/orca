@@ -19,7 +19,7 @@ func init() {
 		fhirServerURL, _ := url.Parse(properties["iss"])
 		// Demo AppLaunch connects to backing FHIR server without any authentication,
 		// so http.DefaultClient can be used.
-		return fhirclient.New(fhirServerURL, http.DefaultClient)
+		return fhirclient.New(fhirServerURL, http.DefaultClient, coolfhir.Config())
 	}
 }
 

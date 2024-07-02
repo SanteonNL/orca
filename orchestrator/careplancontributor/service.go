@@ -28,7 +28,7 @@ func New(config Config, sessionManager *user.SessionManager, didResolver address
 	}
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 	// TODO: Replace with client doing authentication
-	carePlanServiceClient := fhirclient.New(cpsURL, http.DefaultClient)
+	carePlanServiceClient := fhirclient.New(cpsURL, http.DefaultClient, coolfhir.Config())
 	return &Service{
 		SessionManager:  sessionManager,
 		CarePlanService: carePlanServiceClient,

@@ -5,7 +5,7 @@ go 1.22.2
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
-	github.com/SanteonNL/go-fhir-client v0.0.1
+	github.com/SanteonNL/go-fhir-client v0.2.0
 	github.com/google/uuid v1.6.0
 	github.com/knadh/koanf/providers/env v0.1.0
 	github.com/knadh/koanf/v2 v2.1.1
@@ -14,8 +14,8 @@ require (
 	github.com/rs/zerolog v1.32.0
 	github.com/samply/golang-fhir-models/fhir-models v0.3.2
 	github.com/stretchr/testify v1.9.0
-	golang.org/x/oauth2 v0.21.0
 	go.uber.org/mock v0.4.0
+	golang.org/x/oauth2 v0.21.0
 )
 
 require (
@@ -28,8 +28,8 @@ require (
 	github.com/goccy/go-json v0.10.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
 	github.com/knadh/koanf/maps v0.1.1 // indirect
-	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
+	github.com/kylelemons/godebug v1.1.0 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.2 // indirect
 	github.com/lestrrat-go/httpcc v1.0.1 // indirect
 	github.com/lestrrat-go/httprc v1.0.5 // indirect
