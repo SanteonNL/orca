@@ -5,6 +5,9 @@ services:
       - "8080:8080"
     volumes:
       - "./nginx-proxy.conf:/etc/nginx/conf.d/default.conf:ro"
+    depends_on:
+      - hospital_orchestrator
+      - clinic_orchestrator
   hospital_orchestrator:
     image: "${ORCHESTRATOR_IMAGE:-ghcr.io/santeonnl/orca_orchestrator:main}"
     environment:
@@ -18,17 +21,20 @@ services:
     environment:
       - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
       - ORCA_CAREPLANSERVICE_ENABLED=true
-      - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
+      - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir/clinic
     depends_on:
       - fhirstore
     healthcheck:
       interval: 3s
       timeout: 3s
       retries: 30
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://fhirstore:8080/fhir/Task"]
+      # HAPI FHIR runs on distroless Java, so we can't use curl/wget on that container to check the health.
+      # So instead, we change the health check of this container to check the health of the FHIR store.
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://fhirstore:8080/fhir/DEFAULT/Account"]
   fhirstore:
     image: hapiproject/hapi:v7.2.0
     ports:
       - "9090:8080"
     environment:
       - hapi.fhir.fhir_version=R4
+      - hapi.fhir.partitioning.allow_references_across_partitions=false

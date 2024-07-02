@@ -3,7 +3,7 @@ module e2e-tests
 go 1.22.2
 
 require (
-	github.com/SanteonNL/go-fhir-client v0.0.1
+	github.com/SanteonNL/go-fhir-client v0.1.0
 	github.com/samply/golang-fhir-models/fhir-models v0.3.2
 	github.com/stretchr/testify v1.9.0
 )
