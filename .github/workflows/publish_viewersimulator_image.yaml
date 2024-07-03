@@ -1,5 +1,5 @@
 #
-name: Create and publish a Docker image of the Viewer Simulator
+name: Viewer Simulator Docker Image
 
 # Configures this workflow to run every time a change is pushed to the branch called `main`.
 on:
