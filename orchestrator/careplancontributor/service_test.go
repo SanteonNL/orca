@@ -53,7 +53,6 @@ func TestService_confirm(t *testing.T) {
 	require.NotNil(t, carePlanServiceTask.For)
 	assert.Equal(t, "Patient", *carePlanServiceTask.For.Type)
 	assert.True(t, strings.HasPrefix(*carePlanServiceTask.For.Reference, "#"))
-
 }
 
 func startLocalFHIRServer(t *testing.T) fhirclient.Client {
