@@ -1,5 +1,5 @@
 #
-name: Hospital Simulator Docker Image
+name: Hospital Simulator
 
 # Configures this workflow to run every time a change is pushed to the branch called `main`.
 on:

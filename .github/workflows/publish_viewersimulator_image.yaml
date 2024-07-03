@@ -1,5 +1,5 @@
 #
-name: Viewer Simulator Docker Image
+name: Viewer Simulator
 
 # Configures this workflow to run every time a change is pushed to the branch called `main`.
 on:
