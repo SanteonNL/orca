@@ -111,12 +111,12 @@ func (s Service) handleConfirm(response http.ResponseWriter, request *http.Reque
 func (s Service) confirm(localFHIR fhirclient.Client, serviceRequestRef string, patientRef string) (*fhir.Task, error) {
 	serviceRequest, err := s.readServiceRequest(localFHIR, serviceRequestRef)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not resolve ServiceRequest: %w", err)
 	}
 
 	var patient fhir.Patient
 	if err := localFHIR.Read(patientRef, &patient); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not resolve Patient: %w", err)
 	}
 
 	// TODO: Should we do this in a Bundle?
@@ -126,7 +126,7 @@ func (s Service) confirm(localFHIR fhirclient.Client, serviceRequestRef string, 
 	//}
 	task, err := s.createTask(*serviceRequest)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Task: %w", err)
+		return nil, fmt.Errorf("failed to create Task at CarePlanService: %w", err)
 	}
 
 	// Start polling in a new goroutine so that the code continues to the select below

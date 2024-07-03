@@ -10,6 +10,7 @@
 package mock
 
 import (
+	url "net/url"
 	reflect "reflect"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -56,6 +57,24 @@ func (mr *MockClientMockRecorder) Create(arg0, arg1 any, arg2 ...any) *gomock.Ca
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]any{arg0, arg1}, arg2...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Create", reflect.TypeOf((*MockClient)(nil).Create), varargs...)
+}
+
+// Path mocks base method.
+func (m *MockClient) Path(arg0 ...string) *url.URL {
+	m.ctrl.T.Helper()
+	varargs := []any{}
+	for _, a := range arg0 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Path", varargs...)
+	ret0, _ := ret[0].(*url.URL)
+	return ret0
+}
+
+// Path indicates an expected call of Path.
+func (mr *MockClientMockRecorder) Path(arg0 ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Path", reflect.TypeOf((*MockClient)(nil).Path), arg0...)
 }
 
 // Read mocks base method.

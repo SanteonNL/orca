@@ -11,6 +11,8 @@ github.com/SanteonNL/go-fhir-client v0.0.1 h1:53ZqwDqLPAsM18nxyj7aBjZiQlIaAAtHV+
 github.com/SanteonNL/go-fhir-client v0.0.1/go.mod h1:cV518A1u+ODVOYb/fOzuTpkjHN/8tC+xIWerf7nXOxY=
 github.com/SanteonNL/go-fhir-client v0.2.0 h1:9og97FyoSofgoCzIKioVaPXaXCRDWqtDk1Zda7UuW/k=
 github.com/SanteonNL/go-fhir-client v0.2.0/go.mod h1:cV518A1u+ODVOYb/fOzuTpkjHN/8tC+xIWerf7nXOxY=
+github.com/SanteonNL/go-fhir-client v0.2.1 h1:bQGfIm4yMJotO8LDn8FRcjYZX5xJ+SElernTYu1VcjY=
+github.com/SanteonNL/go-fhir-client v0.2.1/go.mod h1:TMRgSomJbGGO3tBi0UkLZsyDUq7Kx5uXjVppeDcNd5o=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=

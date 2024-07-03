@@ -3,10 +3,13 @@ package careplancontributor
 import (
 	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -32,7 +35,7 @@ func init() {
 }
 
 func TestService_confirm(t *testing.T) {
-	carePlanService := startCarePlanService(t)
+	carePlanService, carePlanServiceTask := startCarePlanService(t)
 	service := Service{
 		SessionManager:  user.NewSessionManager(),
 		CarePlanService: carePlanService,
@@ -43,30 +46,33 @@ func TestService_confirm(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, task)
+	assert.Equal(t, fhir.TaskStatusAccepted, carePlanServiceTask.Status)
+	// Task.input[0]
+	require.Len(t, carePlanServiceTask.Input, 1)
+	// Task.for must contain a reference to a contained Patient resource
+	require.NotNil(t, carePlanServiceTask.For)
+	assert.Equal(t, "Patient", *carePlanServiceTask.For.Type)
+	assert.True(t, strings.HasPrefix(*carePlanServiceTask.For.Reference, "#"))
+
 }
 
 func startLocalFHIRServer(t *testing.T) fhirclient.Client {
 	mux := http.NewServeMux()
-	var serviceRequestURL string
 	mux.HandleFunc("GET /ServiceRequest", func(w http.ResponseWriter, r *http.Request) {
-		serviceRequestURL = r.URL.String()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(serviceRequestBundleJSON)
 	})
 	mux.HandleFunc("GET /ServiceRequest/1", func(w http.ResponseWriter, r *http.Request) {
-		serviceRequestURL = r.URL.String()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(serviceRequestBundleJSON)
 	})
 	mux.HandleFunc("GET /Patient/1", func(w http.ResponseWriter, r *http.Request) {
-		serviceRequestURL = r.URL.String()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(serviceRequestBundleJSON)
 	})
-	println(serviceRequestURL)
 	httpServer := httptest.NewServer(mux)
 	baseURL, _ := url.Parse(httpServer.URL)
 	return fhirclient.New(baseURL, httpServer.Client(), coolfhir.Config())
@@ -81,16 +87,43 @@ func Test_unmarshalFromBundle(t *testing.T) {
 	})
 }
 
-func startCarePlanService(t *testing.T) fhirclient.Client {
+func startCarePlanService(t *testing.T) (fhirclient.Client, *fhir.Task) {
 	mux := http.NewServeMux()
 	httpServer := httptest.NewServer(mux)
+	var task = new(fhir.Task)
 	mux.HandleFunc("POST /Task", func(writer http.ResponseWriter, request *http.Request) {
+		var newTask fhir.Task
+		data, _ := io.ReadAll(request.Body)
+		if err := json.Unmarshal(data, &newTask); err != nil {
+			http.Error(writer, err.Error(), http.StatusBadRequest)
+			return
+		}
+		newTask.Id = to.Ptr("task-1")
+		newTask.Status = fhir.TaskStatusAccepted // make test simpler by setting status to accepted
+		*task = newTask
 		writer.Header().Set("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write([]byte(`{"id":"task-1"}`))
+		data, _ = json.Marshal(*task)
+		_, _ = writer.Write(data)
+	})
+	mux.HandleFunc("GET /Task/task-1", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusOK)
+		data, _ := json.Marshal(*task)
+		_, _ = writer.Write(data)
+	})
+	mux.HandleFunc("PUT /Task/task-1", func(writer http.ResponseWriter, request *http.Request) {
+		data, _ := io.ReadAll(request.Body)
+		if err := json.Unmarshal(data, task); err != nil {
+			http.Error(writer, err.Error(), http.StatusBadRequest)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(data)
 	})
 	baseURL, _ := url.Parse(httpServer.URL)
-	return fhirclient.New(baseURL, httpServer.Client(), coolfhir.Config())
+	return fhirclient.New(baseURL, httpServer.Client(), coolfhir.Config()), task
 }
 
 func Test_shouldStopPollingOnAccepted(t *testing.T) {
