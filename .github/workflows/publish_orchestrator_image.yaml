@@ -1,10 +1,11 @@
 #
-name: Create and publish a Docker image of Orchestrator service
+name: Orchestrator
 
 # Configures this workflow to run every time a change is pushed to the branch called `main`.
 on:
   push:
-    #branches: ['main']
+    paths:
+      - orchestrator/**
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -12,7 +13,20 @@ env:
 
 # There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      - name: Test
+        working-directory: ./orchestrator
+        run: go test -v ./...
   build-and-push-image:
+    needs:
+      - test
     runs-on: ubuntu-latest
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
