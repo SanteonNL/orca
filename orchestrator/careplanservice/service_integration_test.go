@@ -62,13 +62,13 @@ func TestService_CreateTask(t *testing.T) {
 			require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
 		})
 		t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
-			data, _ := json.MarshalIndent(carePlan, "", "  ")
-			println(string(data))
 			err = carePlanContributor.Read("CarePlan/"+*carePlan.Id, &carePlan)
 			require.NoError(t, err)
 			require.Len(t, carePlan.Activity, 1)
 			require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
 			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
+			data, _ := json.MarshalIndent(carePlan, "", "  ")
+			println(string(data))
 		})
 	})
 }
