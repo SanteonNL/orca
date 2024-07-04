@@ -1,11 +1,11 @@
 #
-name: SMART on FHIR Backend Adapter
+name: Orchestrator
 
 # Configures this workflow to run every time a change is pushed to the branch called `main`.
 on:
   push:
     paths:
-      - smartonfhir_backend_adapter/**
+      - orchestrator/**
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -13,7 +13,20 @@ env:
 
 # There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
 jobs:
-  build-and-push-image:
+  unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      - name: Test
+        working-directory: ./orchestrator
+        run: go test -v ./...
+  docker-image:
+    needs:
+      - unit-test
     runs-on: ubuntu-latest
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
@@ -21,7 +34,8 @@ jobs:
       contents: read
       packages: write
       attestations: write
-      # 
+    outputs:
+      fully_qualified: ${{ steps.meta.outputs.tags }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -29,7 +43,7 @@ jobs:
       # This step sets the IMAGE_NAME and lowercases the Github username (organizationname) and reponame. This avoids errors (could not find image) in the artifact attestation step 
       - name: set IMAGE_NAME (and lowercase GITHUB_REPOSITORY)
         run: |
-          echo "IMAGE_NAME=${GITHUB_REPOSITORY@L}_smartonfhir_backend_adapter" >> "${GITHUB_ENV}"
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY@L}_orchestrator" >> "${GITHUB_ENV}"
       
       # Uses the `docker/login-action` action to log in to the Container registry registry using the account and password that will publish the packages. Once published, the packages are scoped to the account defined here.
       - name: Log in to the Container registry
@@ -53,7 +67,7 @@ jobs:
         id: push
         uses: docker/build-push-action@v5
         with:
-          context: ./smartonfhir_backend_adapter
+          context: ./orchestrator
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -65,4 +79,22 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
-      
+
+  e2e-test:
+    needs:
+      - docker-image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      - name: Run E2E tests
+        run: |
+          cd e2e-tests && \
+          ORCHESTRATOR_IMAGE=${{needs.docker-image.outputs.fully_qualified}} docker compose pull && \
+          ORCHESTRATOR_IMAGE=${{needs.docker-image.outputs.fully_qualified}} docker compose up --wait && \
+          ./run.sh
+
