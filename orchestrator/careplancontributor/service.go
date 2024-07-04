@@ -170,12 +170,7 @@ func (s Service) pollTaskStatus(taskID string) error {
 func (s Service) readServiceRequest(localFHIR fhirclient.Client, serviceRequestRef string) (*fhir.ServiceRequest, error) {
 	// TODO: Make this complete, and test this
 	var serviceRequest fhir.ServiceRequest
-	var requesterOrganization fhir.Organization
-	var performerOrganization []fhir.Organization
-	if err := localFHIR.Read(serviceRequestRef, &serviceRequest,
-		fhirclient.ResolveRef("requester", &requesterOrganization),
-		fhirclient.ResolveRef("performer", &performerOrganization),
-	); err != nil {
+	if err := localFHIR.Read(serviceRequestRef, &serviceRequest); err != nil {
 		return nil, err
 	}
 
