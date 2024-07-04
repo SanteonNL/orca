@@ -243,30 +243,14 @@ func (s Service) createTask(serviceRequest fhir.ServiceRequest, carePlanID strin
 
 // When an application accepts the Task, we enrich the Task with more detailed information like the actual Patient and the ServiceRequest
 func (s Service) handleAcceptedTask(task *fhir.Task, serviceRequest *fhir.ServiceRequest, patient *fhir.Patient) (*fhir.Task, error) {
-
 	taskMap, err := s.enrichTask(task, serviceRequest, patient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to enrich task: %w", err)
 	}
-
 	var enrichedTask fhir.Task
 	if err := s.CarePlanService.Update("Task/"+*task.Id, *taskMap, &enrichedTask); err != nil {
 		return nil, fmt.Errorf("failed to update Task: %w", err)
 	}
-
-	// s.updateCarePlanWithTask(result)
-
-	//carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
-	//	Reference: &fhir.Reference{
-	//		Type:      to.Ptr("Task"),
-	//		Reference: to.Ptr("Task/" + *task.Id), // TODO: This seems a fiddly way to reference stuff
-	//	},
-	//})
-	//// TODO: Add "If" headers to make sure we're not overwriting someone else's changes
-	//if err := s.CarePlanService.Update("CarePlan/"+*carePlan.Id, carePlan, &carePlan); err != nil {
-	//	return nil, fmt.Errorf("failed to add Task to CarePlan: %w", err)
-	//}
-
 	return &enrichedTask, nil
 }
 
