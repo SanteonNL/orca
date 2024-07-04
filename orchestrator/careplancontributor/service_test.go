@@ -43,6 +43,15 @@ func TestService_confirm(t *testing.T) {
 	require.NoError(t, err)
 	t.Run("CarePlan has been created", func(t *testing.T) {
 		require.NotNil(t, carePlan)
+		t.Run("CarePlan.subject refers to Patient using BSN", func(t *testing.T) {
+			require.NotNil(t, carePlan.Subject)
+			assert.Equal(t, "Patient", *carePlan.Subject.Type)
+			require.NotNil(t, carePlan.Subject.Identifier)
+			assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/bsn", *carePlan.Subject.Identifier.System)
+			require.NotNil(t, carePlan.Subject.Identifier.System)
+			assert.Equal(t, "111222333", *carePlan.Subject.Identifier.Value)
+			require.NotNil(t, carePlan.Subject.Identifier.Value)
+		})
 	})
 	t.Run("Task has been created", func(t *testing.T) {
 		require.NotNil(t, task)
