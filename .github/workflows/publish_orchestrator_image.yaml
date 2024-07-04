@@ -13,7 +13,7 @@ env:
 
 # There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
 jobs:
-  test:
+  unit-test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
       - name: Test
         working-directory: ./orchestrator
         run: go test -v ./...
-  build-and-push-image:
+  docker-image:
     needs:
       - test
     runs-on: ubuntu-latest
@@ -78,4 +78,19 @@ jobs:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
           subject-digest: ${{ steps.push.outputs.digest }}
           push-to-registry: true
-      
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.22'
+      - name: Run E2E tests
+        run: |
+          cd e2e-tests && \
+          ORCHESTRATOR_IMAGE=ghcr.io/santeonnl/orca_orchestrator:sha256-${{env.GITHUB_SHA}} docker compose up --wait \
+          ./run.sh
+
