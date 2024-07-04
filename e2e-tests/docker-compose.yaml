@@ -16,21 +16,6 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=http://proxy:8080/clinic/orca/cps
       - ORCA_APPLAUNCH_DEMO_ENABLED=true
-  hospital_nutsnode:
-    image: "nutsfoundation/nuts-node:6.0.0-beta.4"
-    environment:
-      - NUTS_CRYPTO_STORAGE=fs
-      - NUTS_HTTP_INTERNAL_ADDRESS=:8081
-      - NUTS_URL=https://hospital
-    expose:
-      - "8080"
-      - "8081"
-  hospital_nutsadmin:
-    image: "nutsfoundation/nuts-admin:main"
-    environment:
-      - NUTS_NODE_ADDRESS=http://hospital_nutsnode:8081
-    ports:
-      - "1305:1305"
   clinic_orchestrator:
     image: "${ORCHESTRATOR_IMAGE:-ghcr.io/santeonnl/orca_orchestrator:main}"
     environment:
