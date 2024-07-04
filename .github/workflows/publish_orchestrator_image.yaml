@@ -26,7 +26,7 @@ jobs:
         run: go test -v ./...
   docker-image:
     needs:
-      - test
+      - unit-test
     runs-on: ubuntu-latest
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
@@ -34,7 +34,8 @@ jobs:
       contents: read
       packages: write
       attestations: write
-      # 
+    outputs:
+      fully_qualified: ${{ steps.meta.outputs.tags }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -80,6 +81,8 @@ jobs:
           push-to-registry: true
 
   e2e-test:
+    needs:
+      - docker-image
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -91,6 +94,7 @@ jobs:
       - name: Run E2E tests
         run: |
           cd e2e-tests && \
-          ORCHESTRATOR_IMAGE=ghcr.io/santeonnl/orca_orchestrator:sha256-${{env.GITHUB_SHA}} docker compose up --wait \
+          ORCHESTRATOR_IMAGE=${{needs.docker-image.outputs.fully_qualified}} docker compose pull && \
+          ORCHESTRATOR_IMAGE=${{needs.docker-image.outputs.fully_qualified}} docker compose up --wait && \
           ./run.sh
 
