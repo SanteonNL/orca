@@ -93,7 +93,7 @@ func (s Service) handleGetServiceRequest(response http.ResponseWriter, request *
 // and initiates the workflow.
 func (s Service) handleConfirm(response http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	fhirClient := coolfhir.ClientFactories[session.FHIRLauncher](session.Values)
-	_, err := s.confirm(fhirClient, session.Values["serviceRequest"], session.Values["patient"])
+	err := s.confirm(fhirClient, session.Values["serviceRequest"], session.Values["patient"])
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
@@ -108,35 +108,36 @@ func (s Service) handleConfirm(response http.ResponseWriter, request *http.Reque
 	_, _ = response.Write(data)
 }
 
-func (s Service) confirm(localFHIR fhirclient.Client, serviceRequestRef string, patientRef string) (*fhir.Task, error) {
+func (s Service) confirm(localFHIR fhirclient.Client, serviceRequestRef string, patientRef string) error {
 	serviceRequest, err := s.readServiceRequest(localFHIR, serviceRequestRef)
 	if err != nil {
-		return nil, fmt.Errorf("could not resolve ServiceRequest: %w", err)
+		return fmt.Errorf("could not resolve ServiceRequest: %w", err)
 	}
 
 	var patient fhir.Patient
 	if err := localFHIR.Read(patientRef, &patient); err != nil {
-		return nil, fmt.Errorf("could not resolve Patient: %w", err)
+		return fmt.Errorf("could not resolve Patient: %w", err)
 	}
 
 	// TODO: Should we do this in a Bundle?
-	//carePlan, err := s.createCarePlan(patient)
-	//if err != nil {
-	//	return nil, fmt.Errorf("failed to create CarePlan: %w", err)
-	//}
-	task, err := s.createTask(*serviceRequest)
+	carePlan, err := s.createCarePlan(patient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Task at CarePlanService: %w", err)
+		return fmt.Errorf("failed to create CarePlan: %w", err)
+	}
+	task, err := s.createTask(*serviceRequest, *carePlan.Id)
+	if err != nil {
+		return fmt.Errorf("failed to create Task at CarePlanService: %w", err)
 	}
 
 	// Start polling in a new goroutine so that the code continues to the select below
 	err = s.pollTaskStatus(*task.Id)
 
 	if err != nil {
-		return nil, fmt.Errorf("error while polling task %s: %w", *task.Id, err)
+		return fmt.Errorf("error while polling task %s: %w", *task.Id, err)
 	}
 
-	return s.handleAcceptedTask(task, serviceRequest, &patient)
+	_, err = s.handleAcceptedTask(task, serviceRequest, &patient)
+	return err
 }
 
 // pollTaskStatus polls the task status until it is accepted, an error occurs or reaches a max poll amount.
@@ -215,7 +216,7 @@ func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {
 	return &result, nil
 }
 
-func (s Service) createTask(serviceRequest fhir.ServiceRequest) (*fhir.Task, error) {
+func (s Service) createTask(serviceRequest fhir.ServiceRequest, carePlanID string) (*fhir.Task, error) {
 	// Marshalling of Task is incorrect when providing input
 	// See https://github.com/samply/golang-fhir-models/issues/19
 	// So just create a regular map.
@@ -229,6 +230,12 @@ func (s Service) createTask(serviceRequest fhir.ServiceRequest) (*fhir.Task, err
 		"requester":    serviceRequest.Requester,
 		"owner":        serviceRequest.Performer,
 		"reasonCode":   serviceRequest.Code,
+		"basedOn": []fhir.Reference{
+			{
+				Type:      to.Ptr("CarePlan"),
+				Reference: to.Ptr("CarePlan/" + carePlanID),
+			},
+		},
 	}
 	createdTask, err := coolfhir.Workflow{CarePlanService: s.CarePlanService}.Invoke(task)
 	return createdTask, err
@@ -292,24 +299,4 @@ func (s Service) enrichTask(task *fhir.Task, serviceRequest *fhir.ServiceRequest
 	}
 
 	return &taskMap, nil
-}
-
-func unmarshalFromBundle(bundle fhir.Bundle, resourceType string, target any) error {
-	type Base struct {
-		ResourceType string `json:"resourceType"`
-	}
-	for _, entry := range bundle.Entry {
-		entryJSON, _ := entry.Resource.MarshalJSON()
-		var base Base
-		if err := json.Unmarshal(entryJSON, &base); err != nil {
-			return fmt.Errorf("unable to unmarshal base resource: %w", err)
-		}
-		if base.ResourceType == resourceType {
-			if err := json.Unmarshal(entryJSON, target); err != nil {
-				return fmt.Errorf("unable to unmarshal bundle entry (resourceType=%s) into %T: %w", resourceType, target, err)
-			}
-			return nil
-		}
-	}
-	return fmt.Errorf("entry not found in bundle (resourceType=%s)", resourceType)
 }
