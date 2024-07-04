@@ -2,6 +2,8 @@ github.com/SanteonNL/go-fhir-client v0.0.1 h1:53ZqwDqLPAsM18nxyj7aBjZiQlIaAAtHV+
 github.com/SanteonNL/go-fhir-client v0.0.1/go.mod h1:cV518A1u+ODVOYb/fOzuTpkjHN/8tC+xIWerf7nXOxY=
 github.com/SanteonNL/go-fhir-client v0.1.0 h1:I+eCUEy27WuqIJTdDT/a+94Ti/keBbddH5k/kcnb674=
 github.com/SanteonNL/go-fhir-client v0.1.0/go.mod h1:cV518A1u+ODVOYb/fOzuTpkjHN/8tC+xIWerf7nXOxY=
+github.com/SanteonNL/go-fhir-client v0.2.1 h1:bQGfIm4yMJotO8LDn8FRcjYZX5xJ+SElernTYu1VcjY=
+github.com/SanteonNL/go-fhir-client v0.2.1/go.mod h1:TMRgSomJbGGO3tBi0UkLZsyDUq7Kx5uXjVppeDcNd5o=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=

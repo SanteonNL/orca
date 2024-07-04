@@ -19,9 +19,11 @@ import (
 
 func Test_Main(t *testing.T) {
 	rootFHIRBaseURL, _ := url.Parse("http://localhost:9090/fhir")
-	rootFHIRClient := fhirclient.New(rootFHIRBaseURL, http.DefaultClient)
+	rootFHIRClient := fhirclient.New(rootFHIRBaseURL, http.DefaultClient, nil)
 	hospitalFHIRBaseURL, _ := url.Parse("http://localhost:9090/fhir/hospital")
-	hospitalFHIRClient := fhirclient.New(hospitalFHIRBaseURL, http.DefaultClient)
+	hospitalFHIRClient := fhirclient.New(hospitalFHIRBaseURL, http.DefaultClient, nil)
+	clinicFHIRBaseURL, _ := url.Parse("http://localhost:9090/fhir/clinic")
+	clinicFHIRClient := fhirclient.New(clinicFHIRBaseURL, http.DefaultClient, nil)
 
 	println("Creating HAPI FHIR tenants...")
 	tenants := []string{"clinic", "hospital"}
@@ -33,7 +35,7 @@ func Test_Main(t *testing.T) {
 	patient, serviceRequest, err := loadTestData(hospitalFHIRClient)
 	require.NoError(t, err)
 
-	existingTaskIDs, err := listTaskIDs(hospitalFHIRClient)
+	existingTaskIDs, err := listTaskIDs(clinicFHIRClient)
 	require.NoError(t, err)
 
 	// Demo AppLaunch
@@ -63,7 +65,7 @@ func Test_Main(t *testing.T) {
 	println("Waiting for the new Task to arrive at the CarePlanService...")
 	var task *fhir.Task
 	waitFor(t, 10*time.Second, func() (bool, error) {
-		task, err = findNewTask(hospitalFHIRClient, existingTaskIDs)
+		task, err = findNewTask(clinicFHIRClient, existingTaskIDs)
 		return task != nil, err
 	}, "Task arrived at the CarePlanService")
 	require.Equal(t, fhir.TaskStatusRequested, task.Status, "unexpected Task status")
@@ -72,14 +74,14 @@ func Test_Main(t *testing.T) {
 	//
 	println("Setting Task status to 'accepted'...")
 	task.Status = fhir.TaskStatusAccepted
-	require.NoError(t, hospitalFHIRClient.Update("Task/"+*task.Id, task, &task))
+	require.NoError(t, clinicFHIRClient.Update("Task/"+*task.Id, task, &task)) // TODO: Change this to the CPS client
 	//
 	// Wait for the Task to updated
 	//
 	println("Waiting for the Task to be updated...")
 	var updatedTask map[string]interface{}
 	waitFor(t, 10*time.Second, func() (bool, error) {
-		if err := hospitalFHIRClient.Read("Task/"+*task.Id, &updatedTask); err != nil {
+		if err := clinicFHIRClient.Read("Task/"+*task.Id, &updatedTask); err != nil {
 			return false, err
 		}
 		contained, ok := updatedTask["contained"].([]interface{})
@@ -88,8 +90,6 @@ func Test_Main(t *testing.T) {
 	containedResources := updatedTask["contained"].([]interface{})
 	require.Equal(t, containedResources[0].(map[string]interface{})["resourceType"], "ServiceRequest")
 	require.Equal(t, containedResources[1].(map[string]interface{})["resourceType"], "Patient")
-	data, _ := json.MarshalIndent(updatedTask, "", "  ")
-	println(string(data))
 	println("Test succeeded!")
 }
 
@@ -126,22 +126,6 @@ func testHTTPResponse(err error, httpResponse *http.Response, expectedStatus int
 }
 
 func loadTestData(fhirClient *fhirclient.BaseClient) (*fhir.Patient, *fhir.ServiceRequest, error) {
-	// Requester
-	var requester fhir.Organization
-	if err := loadResource("data/Organization-minimal-enrollment-Organization-Requester.json", &requester); err != nil {
-		return nil, nil, err
-	}
-	if err := createResource(fhirClient, &requester); err != nil {
-		return nil, nil, err
-	}
-	// Performer
-	var performer fhir.Organization
-	if err := loadResource("data/Organization-minimal-enrollment-Organization-Performer.json", &performer); err != nil {
-		return nil, nil, err
-	}
-	if err := createResource(fhirClient, &performer); err != nil {
-		return nil, nil, err
-	}
 	// Patient
 	var patient fhir.Patient
 	if err := loadResource("data/Patient-minimal-enrollment-Patient.json", &patient); err != nil {
@@ -170,16 +154,6 @@ func loadTestData(fhirClient *fhirclient.BaseClient) (*fhir.Patient, *fhir.Servi
 	serviceRequest.Subject = fhir.Reference{
 		Reference: to.Ptr("Patient/" + *patient.Id),
 		Type:      to.Ptr("Patient"),
-	}
-	serviceRequest.Performer = []fhir.Reference{
-		{
-			Reference: to.Ptr("Organization/" + *performer.Id),
-			Type:      to.Ptr("Organization"),
-		},
-	}
-	serviceRequest.Requester = &fhir.Reference{
-		Reference: to.Ptr("Organization/" + *requester.Id),
-		Type:      to.Ptr("Organization"),
 	}
 	serviceRequest.ReasonReference = []fhir.Reference{
 		{
