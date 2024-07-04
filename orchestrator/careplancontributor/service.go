@@ -173,6 +173,37 @@ func (s Service) readServiceRequest(localFHIR fhirclient.Client, serviceRequestR
 	if err := localFHIR.Read(serviceRequestRef, &serviceRequest); err != nil {
 		return nil, err
 	}
+	var requesterOrganization fhir.Organization
+	var performerOrganization []fhir.Organization
+	if err := localFHIR.Read(serviceRequestRef, &serviceRequest,
+		fhirclient.ResolveRef("requester", &requesterOrganization),
+		fhirclient.ResolveRef("performer", &performerOrganization),
+	); err != nil {
+		return nil, err
+	}
+	// ServiceRequest.requester MUST be a Logical Identifier
+	if r := coolfhir.FirstIdentifier(coolfhir.IsNamingSystem(coolfhir.URANamingSystem), serviceRequest.Requester); r == nil {
+		if organizationID := coolfhir.FirstIdentifier(requesterOrganization.Identifier, coolfhir.IsNamingSystem(coolfhir.URANamingSystem)); organizationID == nil {
+			return nil, errors.New("could not resolve ServiceRequest.requester organization: no URA identifier")
+		} else {
+			serviceRequest.Requester = &fhir.Reference{
+				Type:       to.Ptr("Organization"),
+				Identifier: organizationID,
+			}
+		}
+	}
+
+	// ServiceRequest.owner Logical Identifier
+	if organizationID := coolfhir.FirstIdentifier(performerOrganization[0].Identifier, coolfhir.IsNamingSystem(coolfhir.URANamingSystem)); organizationID == nil {
+		return nil, errors.New("could not resolve ServiceRequest.performer organization: no URA identifier")
+	} else {
+		serviceRequest.Performer = []fhir.Reference{
+			{
+				Type:       to.Ptr("Organization"),
+				Identifier: organizationID,
+			},
+		}
+	}
 
 	serviceRequest.ReasonReference = nil
 	var serviceRequestReasons []map[string]interface{}

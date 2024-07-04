@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"io"
@@ -53,7 +54,10 @@ func TestService_confirm(t *testing.T) {
 	require.NotNil(t, carePlanServiceTask.For)
 	assert.Equal(t, "Patient", *carePlanServiceTask.For.Type)
 	assert.True(t, strings.HasPrefix(*carePlanServiceTask.For.Reference, "#"))
-
+	t.Run("it specifies organizations as logical identifiers", func(t *testing.T) {
+		assertLogicalReference(t, carePlanServiceTask.Requester, "http://fhir.nl/fhir/NamingSystem/ura", "URA-zorgbijjou", "requester")
+		assertLogicalReference(t, carePlanServiceTask.Owner, "http://fhir.nl/fhir/NamingSystem/ura", "URA-ziekenhuis", "owner")
+	})
 }
 
 func startLocalFHIRServer(t *testing.T) fhirclient.Client {
@@ -66,12 +70,25 @@ func startLocalFHIRServer(t *testing.T) fhirclient.Client {
 	mux.HandleFunc("GET /ServiceRequest/1", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(serviceRequestBundleJSON)
+		data, _ := os.ReadFile("test/servicerequest-1.json")
+		_, _ = w.Write(data)
 	})
 	mux.HandleFunc("GET /Patient/1", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(serviceRequestBundleJSON)
+	})
+	mux.HandleFunc("GET /Organization/3", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		data, _ := os.ReadFile("test/organization-3.json")
+		_, _ = w.Write(data)
+	})
+	mux.HandleFunc("GET /Organization/9", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		data, _ := os.ReadFile("test/organization-9.json")
+		_, _ = w.Write(data)
 	})
 	httpServer := httptest.NewServer(mux)
 	baseURL, _ := url.Parse(httpServer.URL)
@@ -151,4 +168,14 @@ func Test_shouldStopPollingOnAccepted(t *testing.T) {
 
 	err := service.pollTaskStatus(taskID)
 	assert.NoError(t, err)
+}
+
+func assertLogicalReference(t *testing.T, ref *fhir.Reference, system, value, msg string) {
+	failureMsg := fmt.Sprintf("expected %s to be a logical reference with system %s and value %s", msg, system, value)
+	require.NotNil(t, ref, failureMsg)
+	require.NotNil(t, ref.Identifier, failureMsg)
+	require.NotNil(t, ref.Identifier.System, failureMsg)
+	require.NotNil(t, ref.Identifier.Value, failureMsg)
+	assert.Equal(t, system, *ref.Identifier.System, failureMsg)
+	assert.Equal(t, value, *ref.Identifier.Value, failureMsg)
 }

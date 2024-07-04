@@ -14,3 +14,20 @@ func LogicalReference(refType, system, identifier string) *fhir.Reference {
 		},
 	}
 }
+
+type IdentifierPredicate func(identifier fhir.Identifier) bool
+
+func FirstIdentifier(predicate IdentifierPredicate, identifiers ...fhir.Identifier) *fhir.Identifier {
+	for _, identifier := range identifiers {
+		if predicate(identifier) {
+			return &identifier
+		}
+	}
+	return nil
+}
+
+func IsNamingSystem(system string) IdentifierPredicate {
+	return func(identifier fhir.Identifier) bool {
+		return identifier.System != nil && *identifier.System == system
+	}
+}
