@@ -230,8 +230,6 @@ func (s Service) createTask(serviceRequest fhir.ServiceRequest) (*fhir.Task, err
 		"owner":        serviceRequest.Performer,
 		"reasonCode":   serviceRequest.Code,
 	}
-	taskJSON, _ := json.MarshalIndent(task, "", "  ")
-	println(string(taskJSON))
 	createdTask, err := coolfhir.Workflow{CarePlanService: s.CarePlanService}.Invoke(task)
 	return createdTask, err
 }
