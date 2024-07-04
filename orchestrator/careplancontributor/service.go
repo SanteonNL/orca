@@ -203,10 +203,15 @@ func (s Service) readServiceRequest(localFHIR fhirclient.Client, serviceRequestR
 }
 
 func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {
+	patientBSN := coolfhir.FirstIdentifier(patient.Identifier, coolfhir.IsNamingSystem(coolfhir.BSNNamingSystem))
+	if patientBSN == nil {
+		return nil, errors.New("patient is missing identifier of type " + coolfhir.BSNNamingSystem)
+	}
+
 	carePlan := fhir.CarePlan{
 		Subject: fhir.Reference{
-			Type:      to.Ptr("Patient"),
-			Reference: patient.Id,
+			Type:       to.Ptr("Patient"),
+			Identifier: patientBSN,
 		},
 	}
 	var result fhir.CarePlan

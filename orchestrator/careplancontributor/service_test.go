@@ -76,7 +76,8 @@ func startLocalFHIRServer(t *testing.T) fhirclient.Client {
 	mux.HandleFunc("GET /Patient/1", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_, _ = w.Write(serviceRequestBundleJSON)
+		data, _ := os.ReadFile("test/patient.json")
+		_, _ = w.Write(data)
 	})
 	httpServer := httptest.NewServer(mux)
 	baseURL, _ := url.Parse(httpServer.URL)
