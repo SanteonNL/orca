@@ -75,9 +75,9 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	}
 	mux.HandleFunc("POST /cps/Task", func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateTask(writer, request)
-		log.Info().Msgf("CarePlanService/CreateTask failed: %v", err)
 		if err != nil {
 			// TODO: proper OperationOutcome
+			log.Info().Msgf("CarePlanService/CreateTask failed: %v", err)
 			http.Error(writer, "Create Task at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
 			return
 		}
