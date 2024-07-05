@@ -8,10 +8,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -77,95 +74,13 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		},
 	}
 	mux.HandleFunc("POST /cps/Task", func(writer http.ResponseWriter, request *http.Request) {
-		// TODO: Authorize request here
-		// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
-		log.Info().Msg("Creating Task")
-		// Resolve CarePlan for Task
-		var task map[string]interface{}
-		if err := s.readRequest(request, &task); err != nil {
+		err := s.handleCreateTask(writer, request)
+		log.Info().Msgf("CarePlanService/CreateTask failed: %v", err)
+		if err != nil {
 			// TODO: proper OperationOutcome
-			http.Error(writer, "Failed to read Task from HTTP request: "+err.Error(), http.StatusBadRequest)
+			http.Error(writer, "Create Task at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-
-		var taskBasedOn []fhir.Reference
-		if err := convertInto(task["basedOn"], &taskBasedOn); err != nil {
-			// TODO: proper OperationOutcome
-			http.Error(writer, "Failed to convert Task.basedOn: "+err.Error(), http.StatusBadRequest)
-			return
-		} else if len(taskBasedOn) != 1 {
-			// TODO: proper OperationOutcome
-			http.Error(writer, "Task.basedOn must have exactly one reference", http.StatusBadRequest)
-			return
-		} else if taskBasedOn[0].Type == nil || *taskBasedOn[0].Type != "CarePlan" || taskBasedOn[0].Reference == nil {
-			// TODO: proper OperationOutcome
-			http.Error(writer, "Task.basedOn must reference a CarePlan", http.StatusBadRequest)
-			return
-		}
-		// TODO: Manage time-outs properly
-		var carePlan fhir.CarePlan
-		if err := s.fhirClient.Read(*taskBasedOn[0].Reference, &carePlan); err != nil {
-			// TODO: proper OperationOutcome
-			http.Error(writer, "Failed to read CarePlan: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-		// Add Task to CarePlan.activities
-		taskFullURL := "urn:uuid:" + uuid.NewString()
-		carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
-			Reference: &fhir.Reference{
-				Reference: to.Ptr(taskFullURL),
-				Type:      to.Ptr("Task"),
-			},
-		})
-		carePlanData, _ := json.Marshal(carePlan)
-		// Create Task and update CarePlan.activities in a single transaction
-		// TODO: Only if not updated
-		taskData, _ := json.Marshal(task)
-		bundle := fhir.Bundle{
-			Type: fhir.BundleTypeTransaction,
-			Entry: []fhir.BundleEntry{
-				// Create Task
-				{
-					FullUrl:  to.Ptr(taskFullURL),
-					Resource: taskData,
-					Request: &fhir.BundleEntryRequest{
-						Method: fhir.HTTPVerbPOST,
-						Url:    "Task",
-					},
-				},
-				// Update CarePlan
-				{
-					Resource: carePlanData,
-					Request: &fhir.BundleEntryRequest{
-						Method: fhir.HTTPVerbPUT,
-						Url:    *taskBasedOn[0].Reference,
-					},
-				},
-			},
-		}
-		if err := s.fhirClient.Create(bundle, &bundle, fhirclient.AtPath("/")); err != nil {
-			// TODO: proper OperationOutcome
-			http.Error(writer, "Failed to create Task and update CarePlan: "+err.Error(), http.StatusBadGateway)
-			return
-		}
-
-		// Return Task
-		for _, entry := range bundle.Entry {
-			if entry.Response != nil && entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/") {
-				if err := s.fhirClient.Read(*entry.Response.Location, &task); err != nil {
-					http.Error(writer, "Failed to read created Task from FHIR server: "+err.Error(), http.StatusInternalServerError)
-					return
-				}
-				// TODO: Get headers from FHIRClient.Read(), and pass them onto the response
-				writer.WriteHeader(http.StatusCreated)
-				writer.Header().Set("Content-Type", "application/json+fhir")
-				_ = json.NewEncoder(writer).Encode(task)
-				return
-			}
-		}
-
-		// TODO: proper OperationOutcome
-		http.Error(writer, "Could not find Task in FHIR Bundle", http.StatusInternalServerError)
 	})
 	mux.HandleFunc("/cps/*", func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Authorize request here

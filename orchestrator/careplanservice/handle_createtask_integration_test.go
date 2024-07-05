@@ -15,7 +15,7 @@ import (
 	"testing"
 )
 
-func TestService_CreateTask(t *testing.T) {
+func Test_Integration_Service_handleCreateTask(t *testing.T) {
 	fhirBaseURL := setupHAPI(t)
 
 	config := DefaultConfig()
