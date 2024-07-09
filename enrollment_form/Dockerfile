@@ -14,6 +14,7 @@ RUN \
   fi
 
 COPY . .
+RUN pnpm run build
 
 FROM node:20-alpine AS production
 WORKDIR /app
