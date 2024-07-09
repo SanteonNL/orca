@@ -101,6 +101,9 @@ HOSPITAL_DID=$(createDID $HOSPITAL_URL http://localhost:9081)
 echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Registering FHIR base URL in DID document"
 curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/did/${HOSPITAL_DID}/service
+# TODO: Remove this init when we can simply load the Questionnaire from Nictiz
+echo "  Creating Questionnaire"
+./config/init-fhir-resources.sh $HOSPITAL_URL
 popd
 
 # open orchestrator demo app
