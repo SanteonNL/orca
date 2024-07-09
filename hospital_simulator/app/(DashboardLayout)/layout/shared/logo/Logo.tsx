@@ -13,7 +13,7 @@ const LinkStyled = styled(Link)(() => ({
 const Logo = () => {
   return (
     <LinkStyled href="/">
-      <Image src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/images/logos/logo.png`} alt="logo" height={97} width={213} priority />
+      <Image src={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/images/logos/logo.svg`} alt="logo" height={97} width={213} priority />
     </LinkStyled>
   );
 };
