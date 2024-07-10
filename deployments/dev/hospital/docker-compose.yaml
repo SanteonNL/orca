@@ -34,8 +34,6 @@ services:
      dockerfile: Dockerfile
     ports:
       - "3003:3000"
-    volumes:
-      - "./config/enrollment.config.env:/app/.env.production:ro"
   orchestrator:
     # image: ghcr.io/santeonnl/orca_orchestrator:main
     ports:
