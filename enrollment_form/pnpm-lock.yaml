@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@aehrc/sdc-populate':
+        specifier: ^2.2.7
+        version: 2.2.7(@types/hapi@18.0.14)(@types/node@20.14.10)(expo@51.0.18(@babel/core@7.24.7)(@babel/preset-env@7.24.7(@babel/core@7.24.7)))(react-native@0.74.3(@babel/core@7.24.7)(@babel/preset-env@7.24.7(@babel/core@7.24.7))(@types/react@18.3.3)(react@18.3.1))
       '@aehrc/smart-forms-renderer':
         specifier: ^0.35.8
         version: 0.35.8(kwgplgm677ezqkr733ounypnk4)

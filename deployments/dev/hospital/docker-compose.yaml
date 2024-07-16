@@ -55,10 +55,10 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
   ehr:
-    image: ghcr.io/santeonnl/orca_hospitalsimulator:main
-#    build:
-#      context: ../../../hospital_simulator
-#      dockerfile: Dockerfile
+    # image: ghcr.io/santeonnl/orca_hospitalsimulator:main
+    build:
+     context: ../../../hospital_simulator
+     dockerfile: Dockerfile
     volumes:
       - "./config/simulator.config.env:/app/.env.production:ro"
     ports:

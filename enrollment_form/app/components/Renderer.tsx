@@ -1,5 +1,5 @@
 'use client'
-import { SmartFormsRenderer, getResponse, useQuestionnaireResponseStore } from '@aehrc/smart-forms-renderer';
+import { getResponse, SmartFormsRenderer, useQuestionnaireResponseStore, useQuestionnaireStore } from '@aehrc/smart-forms-renderer';
 import type { Questionnaire, QuestionnaireResponse } from 'fhir/r4';
 import { useEffect, useState } from 'react';
 import useEnrollmentStore from '../store/enrollmentStore';
@@ -7,6 +7,7 @@ import SelectedPatientView from './SelectedPatientView';
 import SelectedServiceRequestView from './SelectedServiceRequestView';
 import { Button } from '@/components/ui/button';
 import { ReloadIcon } from "@radix-ui/react-icons";
+import PrePopButton from './PrePopButton';
 
 interface RendererPageProps {
   questionnaire: Questionnaire;
@@ -25,8 +26,9 @@ const LoadingOverlay = () => (
 function Renderer(props: RendererPageProps) {
   const { questionnaire } = props;
   const [questionnaireResponse, setQuestionnaireResponse] = useState<QuestionnaireResponse | null>(null);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { patient, fetchPatient } = useEnrollmentStore();
+  const { patient, fetchPatient, practitioner, fetchPractitioner } = useEnrollmentStore();
 
   useEffect(() => {
     if (!patient) fetchPatient();
@@ -35,11 +37,6 @@ function Renderer(props: RendererPageProps) {
   const isValid = useQuestionnaireResponseStore.use.responseIsValid();
   const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
   const invalidItems = useQuestionnaireResponseStore.use.invalidItems();
-
-  useEffect(() => {
-    console.log(`resp changed: ${JSON.stringify(updatableResponse, undefined, 2)} - isValid: ${isValid}`);
-    console.log(`invalid items: ${JSON.stringify(invalidItems, undefined, 2)} - isValid: ${isValid}`);
-  }, [updatableResponse, isValid, invalidItems]);
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     // if (!isValid) {
@@ -57,6 +54,9 @@ function Renderer(props: RendererPageProps) {
       {isSubmitting && <LoadingOverlay />}
       <SelectedPatientView />
       <SelectedServiceRequestView />
+      <PrePopButton
+        questionnaire={questionnaire}
+      />
       <SmartFormsRenderer
         questionnaire={questionnaire}
         questionnaireResponse={questionnaireResponse ?? undefined}

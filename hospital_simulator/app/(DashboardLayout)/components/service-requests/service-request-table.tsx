@@ -17,7 +17,7 @@ const ServiceRequestTable: React.FC<Props> = ({ rows }) => {
         return `${process.env.NEXT_PUBLIC_ORCA_BASE_URL}/demo-app-launch?` + new URLSearchParams({
             patient: row.patientId,
             serviceRequest: `ServiceRequest/${row.id}`,
-            practitioner: "PratitionerRole/5",
+            practitioner: "Practitioner/7",
             iss: `${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}`
         }).toString()
     }
