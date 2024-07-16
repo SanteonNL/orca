@@ -283,7 +283,7 @@ curl --silent -X PUT "$1/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26
                   "text": "Aandoening",
                   "type": "open-choice",
                   "required": true,
-                  "answerValueSet": "'$1/fhir/ValueSet/2.16.840.1.113883.2.4.3.11.60.40.2.5.1.3--20200901000000'"
+                  "answerValueSet": "http://decor.nictiz.nl/fhir/ValueSet/2.16.840.1.113883.2.4.3.11.60.40.2.5.1.1--20171231000000"
                 },
                 {
                   "linkId": "protocol",
@@ -398,107 +398,4 @@ curl --silent -X PUT "$1/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26
       ]
     }
   ]
-}'
-
-curl -X PUT "$1/fhir/ValueSet/2.16.840.1.113883.2.4.3.11.60.40.2.5.1.3--20200901000000" \
-    -H "Content-Type: application/fhir+json" \
-    -d '{
-    "resourceType": "ValueSet",
-    "id": "2.16.840.1.113883.2.4.3.11.60.40.2.5.1.3--20200901000000",
-    "meta": {
-        "profile": [
-            "http://hl7.org/fhir/StructureDefinition/shareablevalueset"
-        ]
-    },
-    "extension": [
-        {
-            "url": "http://hl7.org/fhir/StructureDefinition/resource-effectivePeriod",
-            "valuePeriod": {
-                "start": "2020-09-01T00:00:00Z"
-            }
-        }
-    ],
-    "url": "'$1/fhir/ValueSet/2.16.840.1.113883.2.4.3.11.60.40.2.5.1.3--20200901000000'",
-    "identifier": [
-        {
-            "use": "official",
-            "system": "urn:ietf:rfc:3986",
-            "value": "urn:oid:2.16.840.1.113883.2.4.3.11.60.40.2.5.1.3"
-        }
-    ],
-    "version": "2020-09-01T00:00:00",
-    "name": "ProbleemNaamCodelijst",
-    "title": "ProbleemNaamCodelijst",
-    "status": "active",
-    "experimental": false,
-    "publisher": "Registratie aan de bron",
-    "contact": [
-        {
-            "name": "Registratie aan de bron",
-            "telecom": [
-                {
-                    "system": "url",
-                    "value": "https://www.registratieaandebron.nl"
-                },
-                {
-                    "system": "url",
-                    "value": "https://www.zibs.nl"
-                }
-            ]
-        }
-    ],
-    "description": "* OMAHA [DEPRECATED] - Alle waarden [DEPRECATED]\n* G-Standaard Contra Indicaties (Tabel 40) [DEPRECATED] - Alle waarden [DEPRECATED]\n* SNOMED CT - SNOMED CT: ^31000147101 | DHD Diagnosethesaurus-referentieset (was: DHD Diagnosetheauruscodes met OID 2.16.840.1.113883.2.4.3.120.5.1. Deze set is echter niet direct bedoeld voor uitwisseling. Zie onder andere [ZIB-1233](https://bits.nictiz.nl/browse/ZIB-1233)\n* ICD-10, dutch translation - Alle waarden\n* SNOMED CT - SNOMED CT: ^11721000146100 | RefSet Patiëntproblemen V&VN\n* NANDA-I - Alle waarden [DEPRECATED]\n* ICF - Alle waarden\n* ICPC-1 NL - Alle waarden\n* DSM-IV - Alle waarden\n* DSM-5 - Alle waarden\n* GGZ Diagnoselijst - Alle waarden\n\n                 \n* 2021-08-18 [ZIB-1477](https://bits.nictiz.nl/browse/ZIB-1477): Probleem-v4.4. Aanpassing codelijst ProbleemNaamCodelijst. Bij het concept ProbleemNaam bevat de ProbleemNaamCodelijst een een entry voor NANDA-I als een toegestaan codesysteem om een probleem te coderen. Deze keuzemogelijkheid is vervallen.",
-    "immutable": false,
-    "copyright": "This artefact includes content from SNOMED Clinical Terms® (SNOMED CT®) which is copyright of the International Health Terminology Standards Development Organisation (IHTSDO). Implementers of these artefacts must have the appropriate SNOMED CT Affiliate license - for more information contact http://www.snomed.org/snomed-ct/getsnomed-ct or info@snomed.org.",
-    "compose": {
-        "include": [
-            {
-                "system": "urn:oid:2.16.840.1.113883.6.98"
-            },
-            {
-                "system": "urn:oid:2.16.840.1.113883.2.4.4.1.902.40"
-            },
-            {
-                "system": "http://hl7.org/fhir/sid/icd-10-nl"
-            },
-            {
-                "system": "http://www.nanda.org/"
-            },
-            {
-                "system": "http://hl7.org/fhir/sid/icf-nl"
-            },
-            {
-                "system": "http://hl7.org/fhir/sid/icpc-1-nl"
-            },
-            {
-                "system": "urn:oid:2.16.840.1.113883.6.126"
-            },
-            {
-                "system": "http://hl7.org/fhir/sid/dsm5"
-            },
-            {
-                "system": "urn:oid:2.16.840.1.113883.3.3210.14.2.2.35"
-            },
-            {
-                "system": "http://snomed.info/sct",
-                "filter": [
-                    {
-                        "property": "concept",
-                        "op": "in",
-                        "value": "31000147101"
-                    }
-                ]
-            },
-            {
-                "system": "http://snomed.info/sct",
-                "filter": [
-                    {
-                        "property": "concept",
-                        "op": "in",
-                        "value": "11721000146100"
-                    }
-                ]
-            }
-        ]
-    }
 }'

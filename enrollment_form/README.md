@@ -1,30 +1,45 @@
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
 ## Getting Started
+### 1. Install dependencies
 
-First, run the development server:
+```
+pnpm install
+```
 
-```bash
-pnpm dev
+### 2. Configure your local environment
+
+Copy the .env.local.example file in this directory to .env.local (which will be ignored by Git):
+
+```
+cp .env.local.example .env.local
+cp .env.secrets.example .env.secrets
+```
+
+Add details to the `.env.local` if they need to change. The defaults in the example are set to the local orchestrator and the nuts-node from the [dev deployment docker-compose](/deployments/dev/hospital/docker-compose.yaml).
+
+Modify the [`./.env.secrets`](./.env.secrets), make sure the `USERNAME_NTS` and `PASSWORD_NTS` point to valid credentials for the Dutch national terminology server. 
+See [this](https://nictiz.nl/publicaties/nationale-terminologie-server-handleiding-voor-nieuwe-gebruikers/) manual on how to connect.
+
+### 3. Start the application
+#### Dev mode
+To run your site locally, use:
+
+```
+pnpm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/basic-features/font-optimization) to automatically optimize and load Inter, a custom Google Font.
+#### Production mode
 
-## Learn More
+> :warning: **Use the dev deployment**: You *can* build this locally, but ideally you run the project from the [dev deployment](/deployments/dev/start.sh)
 
-To learn more about Next.js, take a look at the following resources:
+Otherwise, use:
+```
+pnpm run build
+pnpm run start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js/) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/deployment) for more details.

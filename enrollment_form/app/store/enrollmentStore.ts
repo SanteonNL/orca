@@ -41,7 +41,7 @@ const useEnrollmentStore = create<StoreState>((set) => ({
         set({ loading: true, error: undefined });
         try {
             const response = await fetch('/orca/contrib/practitioner');
-            // const response = await fetch(`http://localhost:9090/fhir/Practitioner/7`);
+            // const response = await fetch(`http://localhost:9090/fhir/Practitioner/6`);
 
             if (!response.ok) {
                 set({ practitioner: undefined, error: response.statusText, loading: false });

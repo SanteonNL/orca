@@ -32,11 +32,12 @@ function Renderer(props: RendererPageProps) {
 
   useEffect(() => {
     if (!patient) fetchPatient();
-  }, [patient, fetchPatient]);
+    if (!practitioner) fetchPractitioner();
+  }, [patient, fetchPatient, practitioner, fetchPractitioner]);
 
   const isValid = useQuestionnaireResponseStore.use.responseIsValid();
-  const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
-  const invalidItems = useQuestionnaireResponseStore.use.invalidItems();
+  // const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
+  // const invalidItems = useQuestionnaireResponseStore.use.invalidItems();
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     // if (!isValid) {
@@ -58,6 +59,7 @@ function Renderer(props: RendererPageProps) {
         questionnaire={questionnaire}
       />
       <SmartFormsRenderer
+        terminologyServerUrl={`${window.location.origin}${process.env.NEXT_PUBLIC_BASE_PATH ?? "/" + process.env.NEXT_PUBLIC_BASE_PATH}/api/terminology`}
         questionnaire={questionnaire}
         questionnaireResponse={questionnaireResponse ?? undefined}
       />

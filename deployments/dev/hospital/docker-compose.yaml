@@ -32,6 +32,9 @@ services:
     build:
      context: ../../../enrollment_form
      dockerfile: Dockerfile
+     # Make sure to copy the .env.secrets.example and fill in the terminology server credentials for the tx server to work
+    env_file:
+      - ../../../enrollment_form/.env.secrets
     ports:
       - "3003:3000"
   orchestrator:
