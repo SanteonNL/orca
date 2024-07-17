@@ -57,10 +57,10 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.
 func (s *Service) newTaskInCarePlan(task map[string]interface{}, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
-	taskFullURL := "urn:uuid:" + uuid.NewString()
+	taskRef := "urn:uuid:" + uuid.NewString()
 	carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
 		Reference: &fhir.Reference{
-			Reference: to.Ptr(taskFullURL),
+			Reference: to.Ptr(taskRef),
 			Type:      to.Ptr("Task"),
 		},
 	})
@@ -73,7 +73,7 @@ func (s *Service) newTaskInCarePlan(task map[string]interface{}, carePlan *fhir.
 		Entry: []fhir.BundleEntry{
 			// Create Task
 			{
-				FullUrl:  to.Ptr(taskFullURL),
+				FullUrl:  to.Ptr(taskRef),
 				Resource: taskData,
 				Request: &fhir.BundleEntryRequest{
 					Method: fhir.HTTPVerbPOST,
