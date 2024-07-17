@@ -1,6 +1,5 @@
 #!/bin/bash
 
-source ~/.bashrc
 set -e
 
 pushd clinic

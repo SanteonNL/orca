@@ -26,7 +26,7 @@ services:
     environment:
       - NUTS_NODE_ADDRESS=http://nutsnode:8081
     ports:
-      - "1305:1305"
+      - "1405:1305"
   orchestrator:
     image: ghcr.io/santeonnl/orca_orchestrator:main
 #    build:
