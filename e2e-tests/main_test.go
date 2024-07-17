@@ -4,9 +4,6 @@ import (
 	"e2e-tests/to"
 	"encoding/json"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -15,6 +12,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_Main(t *testing.T) {
@@ -50,7 +51,7 @@ func Test_Main(t *testing.T) {
 	query.Add("serviceRequest", "ServiceRequest/"+*serviceRequest.Id)
 	query.Add("practitioner", "the-doctor")
 	httpResponse, err := userAgent.Get("http://localhost:8080/hospital/orca/demo-app-launch?" + query.Encode())
-	testHTTPResponse(err, httpResponse, http.StatusOK)
+	testHTTPResponse(err, httpResponse, http.StatusFound)
 	//
 	// Click "confirm"
 	//
