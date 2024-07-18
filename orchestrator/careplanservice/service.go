@@ -117,5 +117,25 @@ type loggingRoundTripper struct {
 
 func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	log.Info().Msgf("Proxying FHIR request: %s %s", request.Method, request.URL.String())
-	return l.next.RoundTrip(request)
+	if log.Debug().Enabled() {
+		var headers []string
+		for key, values := range request.Header {
+			headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
+		}
+		log.Debug().Msgf("Proxy request headers: %s", strings.Join(headers, ", "))
+	}
+	response, err := l.next.RoundTrip(request)
+	if err != nil {
+		log.Warn().Err(err).Msgf("Proxied FHIR request failed (url=%s)", request.URL.String())
+	} else {
+		if log.Debug().Enabled() {
+			log.Debug().Msgf("Proxied FHIR request response: %s", response.Status)
+			var headers []string
+			for key, values := range response.Header {
+				headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
+			}
+			log.Debug().Msgf("Proxy response headers: %s", strings.Join(headers, ", "))
+		}
+	}
+	return response, err
 }
