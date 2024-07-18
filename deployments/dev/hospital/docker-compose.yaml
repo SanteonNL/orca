@@ -13,14 +13,15 @@ services:
     ports:
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
-      - "./nutsnode/devtunnel/:/devtunnel"
       - "../shared_config/policy/:/nuts/config/policy:ro"
+      - "../shared_config/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
     environment:
       - NUTS_VERBOSITY=debug
       - NUTS_STRICTMODE=false
       - NUTS_HTTP_INTERNAL_ADDRESS=:8081
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${NUTS_URL}
+      - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
     environment:

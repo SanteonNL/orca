@@ -60,9 +60,50 @@ function createDID() {
   echo $DID
 }
 
+# Self-issue a NutsUraCredential. It takes:
+# - The DID of the entity to issue the credential to
+# - The URA number of the entity
+# - The name of the entity
+# - The city of the entity
+function issueUraCredential() {
+  DID=$1
+  URA=$2
+  NAME=$3
+  CITY=$4
+
+  REQUEST=$(
+  cat << EOF
+  {
+    "@context": [
+      "https://www.w3.org/2018/credentials/v1",
+      "https://nuts.nl/credentials/2024"
+    ],
+    "type": "NutsUraCredential",
+    "issuer": "${DID}",
+    "credentialSubject": {
+      "id": "${DID}",
+      "organization": {
+        "ura": "${URA}",
+        "name": "${NAME}",
+        "city": "${CITY}"
+      }
+    },
+    "withStatusList2021Revocation": false
+  }
+  EOF
+  )
+
+  # Issue VC, read it from the response, load it into own wallet.
+   RESPONSE=$(docker compose exec nutsnode curl -s -X POST -d "$REQUEST" -H "Content-Type: application/json" http://localhost:8081/internal/vcr/v2/issuer/vc)
+   docker compose exec nutsnode curl -s -X POST -d "$RESPONSE" -H "Content-Type: application/json" "http://localhost:8081/internal/vcr/v2/holder/${DID}/vc"
+}
+
 echo "Creating stack for Clinic..."
 echo "  Creating devtunnel"
 CLINIC_URL=$(createTunnel ./clinic 7080)
+echo "  Creating Discovery Service definition"
+CLINIC_URL_ESCAPED=$(sed 's/[&/\]/\\&/g' <<<"${CLINIC_URL}")
+sed "s/DiscoveryServerURL/${CLINIC_URL_ESCAPED}/" shared_config/discovery_input/homemonitoring.json > shared_config/discovery/homemonitoring.json
 echo "  Starting services"
 pushd clinic
 touch data/orchestrator-demo-config.json
@@ -74,6 +115,8 @@ CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/fhir"
 echo "  Creating DID document"
 CLINIC_DID=$(createDID $CLINIC_URL http://localhost:8081)
 echo "    Clinic DID: $CLINIC_DID"
+echo "  Self-issuing an NutsUraCredential"
+issueUraCredential "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
 echo "  Writing hardcoded orchestrator demo config"
 echo "{
   \"clinic\": \"$CLINIC_DID\",
@@ -98,6 +141,8 @@ NUTS_URL="${HOSPITAL_URL}" \
 echo "  Creating DID document"
 HOSPITAL_DID=$(createDID $HOSPITAL_URL http://localhost:9081)
 echo "    Hospital DID: $HOSPITAL_DID"
+echo "  Self-issuing an NutsUraCredential"
+issueUraCredential "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
 echo "  Registering FHIR base URL in DID document"
 curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/did/${HOSPITAL_DID}/service
 popd
