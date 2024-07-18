@@ -40,7 +40,7 @@ services:
     environment:
       - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
       - ORCA_CAREPLANSERVICE_ENABLED=true
-      - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080
+      - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
   fhirstore:
     image: hapiproject/hapi:v7.2.0
     ports:

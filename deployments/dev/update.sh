@@ -16,7 +16,7 @@ NUTS_URL="${CLINIC_URL}" \
  --wait --build --remove-orphans
  popd
 
-CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/fhir"
+CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/orca/cps"
 HOSPITAL_URL=$(readTunnelURL ./hospital)
 pushd hospital
 docker compose pull

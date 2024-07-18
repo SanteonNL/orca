@@ -111,7 +111,7 @@ docker compose pull
 NUTS_URL="${CLINIC_URL}" \
   docker compose up \
  --wait --build --remove-orphans
-CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/fhir"
+CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/orca/cps"
 echo "  Creating DID document"
 CLINIC_DID=$(createDID $CLINIC_URL http://localhost:8081)
 echo "    Clinic DID: $CLINIC_DID"
