@@ -1,0 +1,27 @@
+{
+  "resourceType": "CareTeam",
+  "participant": [
+    {
+      "member": {
+        "onBehalfOf": {
+          "type": "Organization",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "URA-001"
+          }
+        }
+      }
+    },
+    {
+      "member": {
+        "onBehalfOf": {
+          "type": "Organization",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "URA-002"
+          }
+        }
+      }
+    }
+  ]
+}

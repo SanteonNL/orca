@@ -1,0 +1,63 @@
+{
+  "resourceType": "Bundle",
+  "entry": [
+    {
+      "fullUrl": "http://localhost:7090/fhir/CarePlan/1",
+      "resource": {
+        "resourceType": "CarePlan",
+        "id": "1",
+        "status": "draft",
+        "intent": "proposal",
+        "subject": {
+          "type": "Patient",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+            "value": "1721289917041"
+          }
+        },
+        "activity": [
+          {
+            "reference": {
+              "reference": "Task/3",
+              "type": "Task"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "fullUrl": "http://localhost:7090/fhir/Task/3",
+      "resource": {
+        "resourceType": "Task",
+        "id": "3",
+        "status": "accepted",
+        "intent": "order",
+        "requester": {
+          "type": "Organization",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "URA-002"
+          },
+          "display": "St. Antonius"
+        },
+        "owner": {
+          "type": "Organization",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "URA-001"
+          },
+          "display": "Zorg Bij Jou - Medisch Service Center"
+        },
+        "reasonCode": {
+          "coding": [
+            {
+              "system": "http://snomed.info/sct",
+              "code": "719858009",
+              "display": "monitoren via telegeneeskunde (regime/therapie)"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}
