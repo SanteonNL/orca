@@ -82,8 +82,18 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
+	mux.HandleFunc("POST /cps/CarePlan", func(writer http.ResponseWriter, request *http.Request) {
+		err := s.handleCreateCarePlan(writer, request)
+		if err != nil {
+			// TODO: proper OperationOutcome
+			log.Info().Msgf("CarePlanService/CarePlan failed: %v", err)
+			http.Error(writer, "Create CarePlan at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	})
 	mux.HandleFunc("/cps/*", func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Authorize request here
+		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
 		proxy.ServeHTTP(writer, request)
 	})
 }

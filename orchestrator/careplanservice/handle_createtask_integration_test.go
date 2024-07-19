@@ -2,8 +2,8 @@ package careplanservice
 
 import (
 	"context"
-	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
@@ -16,6 +16,58 @@ import (
 )
 
 func Test_Integration_Service_handleCreateTask(t *testing.T) {
+	carePlanContributor := setupIntegrationTest(t)
+
+	t.Run("New CarePlan, New Task", func(t *testing.T) {
+		var carePlan fhir.CarePlan
+		t.Run("Create CarePlan", func(t *testing.T) {
+			carePlan.Subject = fhir.Reference{
+				Type: to.Ptr("Patient"),
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(coolfhir.BSNNamingSystem),
+					Value:  to.Ptr("123456789"),
+				},
+			}
+			err := carePlanContributor.Create(carePlan, &carePlan)
+			require.NoError(t, err)
+
+			// Check the CarePlan and CareTeam exist
+			var createdCarePlan fhir.CarePlan
+			var createdCareTeams []fhir.CareTeam
+			err = carePlanContributor.Read("CarePlan/"+*carePlan.Id, &createdCarePlan, fhirclient.ResolveRef("careTeam", &createdCareTeams))
+			require.NoError(t, err)
+			require.NotNil(t, createdCarePlan.Id)
+			require.Len(t, createdCareTeams, 1, "expected 1 CareTeam")
+			require.NotNil(t, createdCareTeams[0].Id)
+		})
+		t.Run("Create Task", func(t *testing.T) {
+			task := fhir.Task{
+				BasedOn: []fhir.Reference{
+					{
+						Type:      to.Ptr("CarePlan"),
+						Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+					},
+				},
+			}
+			err := carePlanContributor.Create(task, &task)
+			require.NoError(t, err)
+
+			t.Run("Check Task properties", func(t *testing.T) {
+				require.NotNil(t, task.Id)
+				require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
+			})
+			t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
+				err = carePlanContributor.Read("CarePlan/"+*carePlan.Id, &carePlan)
+				require.NoError(t, err)
+				require.Len(t, carePlan.Activity, 1)
+				require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
+				require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
+			})
+		})
+	})
+}
+
+func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
 	fhirBaseURL := setupHAPI(t)
 
 	config := DefaultConfig()
@@ -30,47 +82,7 @@ func Test_Integration_Service_handleCreateTask(t *testing.T) {
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
 	carePlanContributor := fhirclient.New(carePlanServiceURL, httpService.Client(), nil)
-
-	t.Run("New CarePlan, New Task", func(t *testing.T) {
-		var carePlan fhir.CarePlan
-		t.Run("Create CarePlan", func(t *testing.T) {
-			carePlan.Subject = fhir.Reference{
-				Type: to.Ptr("Patient"),
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("bsn"), // TODO: proper URA system
-					Value:  to.Ptr("123456789"),
-				},
-			}
-			err := carePlanContributor.Create(carePlan, &carePlan)
-			require.NoError(t, err)
-		})
-		task := fhir.Task{
-			BasedOn: []fhir.Reference{
-				{
-					Type:      to.Ptr("CarePlan"),
-					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
-				},
-			},
-		}
-		err := carePlanContributor.Create(task, &task)
-		require.NoError(t, err)
-
-		t.Run("Check Task properties", func(t *testing.T) {
-			data, _ := json.MarshalIndent(task, "", "  ")
-			println(string(data))
-			require.NotNil(t, task.Id)
-			require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
-		})
-		t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
-			err = carePlanContributor.Read("CarePlan/"+*carePlan.Id, &carePlan)
-			require.NoError(t, err)
-			require.Len(t, carePlan.Activity, 1)
-			require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
-			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
-			data, _ := json.MarshalIndent(carePlan, "", "  ")
-			println(string(data))
-		})
-	})
+	return carePlanContributor
 }
 
 func setupHAPI(t *testing.T) *url.URL {
