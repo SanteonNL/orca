@@ -11,6 +11,8 @@ import (
 	"time"
 )
 
+func Update2(client fhirclient.Client, carePlanId string,) ([]fhir.BundleEntry, error) {
+
 // Update updates the CareTeam for a CarePlan based on its activities.
 // It implements the business rules specified by https://santeonnl.github.io/shared-care-planning/overview.html#creating-and-responding-to-a-task
 func Update(client fhirclient.Client, carePlanId string) ([]fhir.BundleEntry, error) {
@@ -27,7 +29,7 @@ func Update(client fhirclient.Client, carePlanId string) ([]fhir.BundleEntry, er
 	if err != nil {
 		return nil, err
 	}
-	careTeam, err := coolfhir.EntryInBundle(bundle, carePlan., &activity); err != nil {
+	careTeam, err := coolfhir.ResourceInBundle(bundle, carePlan., &activity); err != nil {
 		return nil, fmt.Errorf("unable to resolve CarePlan.Activity.Reference (ref=%s): %w", ref, err)
 	}
 	tasks, err := resolveTasks(bundle, carePlan)
@@ -40,14 +42,14 @@ func Update(client fhirclient.Client, carePlanId string) ([]fhir.BundleEntry, er
 	return nil, nil
 }
 
-func updateCareTeam(bundle fhir.Bundle, activities []fhir.Task) (bool, error) {
+func updateCareTeam(careTeam *fhir.CareTeam, activities []fhir.Task) (bool, error) {
 
 	// Add new/changed memberships
 	var changed bool
 	targetMembers := collectMemberships(activities)
 outer:
 	for member, details := range targetMembers {
-		for i, curr := range team.Participant {
+		for i, curr := range careTeam.Participant {
 			if !coolfhir.IsLogicalReference(curr.Member) {
 				continue
 			}
@@ -58,14 +60,15 @@ outer:
 					curr.Period = &fhir.Period{
 						End: to.Ptr(now()),
 					}
-					team.Participant[i] = curr
+					careTeam.Participant[i] = curr
+					changed = true
 				}
 				// TODO: Might have to set DateEnded
 				continue outer
 			}
 		}
 		// Not yet in CareTeam, add member
-		team.Participant = append(team.Participant, fhir.CareTeamParticipant{
+		careTeam.Participant = append(careTeam.Participant, fhir.CareTeamParticipant{
 			Member: &fhir.Reference{
 				Type: to.Ptr(coolfhir.TypeOrganization),
 				Identifier: &fhir.Identifier{
@@ -84,7 +87,7 @@ outer:
 
 func resolveCarePlan(bundle fhir.Bundle, carePlanId string) (*fhir.CarePlan, error) {
 	var carePlan fhir.CarePlan
-	if err := coolfhir.EntryInBundle(bundle, carePlanId, &carePlan); err != nil {
+	if err := coolfhir.ResourceInBundle(bundle, carePlanId, &carePlan); err != nil {
 		return nil, fmt.Errorf("CarePlan not found (id=%s): %w", carePlanId, err)
 	}
 
@@ -99,7 +102,7 @@ func resolveCarePlan(bundle fhir.Bundle, carePlanId string) (*fhir.CarePlan, err
 			return nil, errors.New("CarePlan.CareTeam.Id is required")
 		}
 		// Should be resolvable in Bundle
-		if err := coolfhir.EntryInBundle(bundle, *carePlan.CareTeam[0].Id, &currentCareTeam); err != nil {
+		if err := coolfhir.ResourceInBundle(bundle, *carePlan.CareTeam[0].Id, &currentCareTeam); err != nil {
 			return nil, fmt.Errorf("unable to resolve CarePlan.CareTeam: %w", err)
 		}
 	}
@@ -117,7 +120,7 @@ func resolveCareTeam(bundle fhir.Bundle, carePlan *fhir.CarePlan) (*fhir.CareTea
 			return nil, errors.New("CarePlan.CareTeam.Id is required")
 		}
 		// Should be resolvable in Bundle
-		if err := coolfhir.EntryInBundle(bundle, *carePlan.CareTeam[0].Id, &currentCareTeam); err != nil {
+		if err := coolfhir.ResourceInBundle(bundle, *carePlan.CareTeam[0].Id, &currentCareTeam); err != nil {
 			return nil, fmt.Errorf("unable to resolve CarePlan.CareTeam: %w", err)
 		}
 	}
@@ -136,7 +139,7 @@ func resolveTasks(bundle fhir.Bundle, carePlan *fhir.CarePlan) ([]fhir.Task, err
 		}
 		var activity fhir.Task
 		ref := *activityRef.Reference.Reference
-		if err := coolfhir.EntryInBundle(bundle, ref, &activity); err != nil {
+		if err := coolfhir.ResourceInBundle(bundle, ref, &activity); err != nil {
 			return nil, fmt.Errorf("unable to resolve CarePlan.Activity.Reference (ref=%s): %w", ref, err)
 		}
 		activities = append(activities, activity)

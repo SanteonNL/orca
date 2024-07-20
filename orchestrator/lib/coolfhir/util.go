@@ -3,12 +3,10 @@
 package coolfhir
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
-	"strings"
 )
 
 var ErrEntryNotFound = errors.New("entry not found in FHIR Bundle")
@@ -56,34 +54,4 @@ func ValidateLogicalReference(reference *fhir.Reference, expectedType string, ex
 
 func IsLogicalReference(reference *fhir.Reference) bool {
 	return reference != nil && reference.Type != nil && reference.Identifier != nil && reference.Identifier.System != nil && reference.Identifier.Value != nil
-}
-
-// EntryInBundle unmarshals the entry in the bundle that matches the given id into the result.
-// If the entry is not found, ErrEntryNotFound is returned.
-func EntryInBundle(bundle fhir.Bundle, idOrRef string, result interface{}) error {
-	resourceType := ResourceType(result)
-	if resourceType == "" {
-		return fmt.Errorf("can't infer resouce type from %T", result)
-	}
-	var id = idOrRef
-	if strings.HasPrefix(idOrRef, resourceType+"/") {
-		id = strings.TrimPrefix(idOrRef, resourceType+"/")
-	}
-	for _, entry := range bundle.Entry {
-		type TypedResource struct {
-			fhir.Resource
-			ResourceType string `json:"resourceType"`
-		}
-		var resource TypedResource
-		if json.Unmarshal(entry.Resource, &resource) != nil {
-			continue
-		}
-		if resource.ResourceType == resourceType && resource.Id != nil && *resource.Id == id {
-			if err := json.Unmarshal(entry.Resource, result); err != nil {
-				return fmt.Errorf("unmarshal Bundle entry (id=%s,target=%T): %w", id, result, err)
-			}
-			return nil
-		}
-	}
-	return ErrEntryNotFound
 }
