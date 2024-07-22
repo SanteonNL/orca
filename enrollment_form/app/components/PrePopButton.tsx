@@ -25,19 +25,26 @@ import { useQuestionnaireResponseStore } from '@aehrc/smart-forms-renderer';
 
 interface PrePopButtonProps {
   questionnaire: Questionnaire;
+  autoPopulate?: boolean
 }
 
 function PrePopButton(props: PrePopButtonProps) {
-  const { questionnaire } =
+  const { questionnaire, autoPopulate } =
     props;
 
   const [isPopulating, setIsPopulating] = useState(false);
+  const [autoPrePopulated, setAutoPrePopulated] = useState(false)
   const { patient, fetchPatient, practitioner, fetchPractitioner } = useEnrollmentStore()
 
   useEffect(() => {
     if (!patient) fetchPatient()
     if (!practitioner) fetchPractitioner()
-  }, [patient, fetchPatient, practitioner, fetchPractitioner])
+
+    if (patient && practitioner && autoPopulate && !autoPrePopulated) {
+      handlePrepopulate()
+      setAutoPrePopulated(true)
+    }
+  }, [patient, fetchPatient, practitioner, fetchPractitioner, autoPopulate, autoPrePopulated])
 
 
 
@@ -62,12 +69,14 @@ function PrePopButton(props: PrePopButtonProps) {
     return <Button className="ml-[24px] mb-3" disabled>Pre-populate</Button>
   }
 
+  if (autoPopulate) return <></>
+
   return (
     <Button
-      className="ml-[24px]"
+      className="ml-[24px] mb-5"
       onClick={handlePrepopulate}
       disabled={isPopulating}>
-      {isPopulating ? <><ReloadIcon className="mr-2 mb-3 h-4 w-4 animate-spin" /> Pre-populating</> : <>Pre-populate</>}
+      {isPopulating ? <><ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> Pre-populating</> : <>Pre-populate</>}
     </Button>
   );
 }

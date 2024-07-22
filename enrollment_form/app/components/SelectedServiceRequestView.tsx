@@ -16,11 +16,15 @@ export default function SelectedServiceRequestView() {
     return (
         <Card className='m-5'>
             <CardHeader>
-                <CardTitle>ServicieRequest</CardTitle>
-                <CardDescription>Selected request</CardDescription>
+                <CardTitle>Order informatie</CardTitle>
             </CardHeader>
             <CardContent>
-                Condition: {serviceRequest?.reasonReference?.[0]?.display || "unknown"}
+                <div className='grid grid-cols-4 gap-4'>
+                    <div><b>Order type: </b></div>
+                    <div className='col-span-3'>{serviceRequest?.code?.coding?.[0].display || "unknown"}</div>
+                    <div><b>Executed by: </b></div>
+                    <div className='col-span-3'>{serviceRequest?.performer?.[0].display || "unknown"}</div>
+                </div>
             </CardContent>
         </Card>
     )

@@ -11,7 +11,7 @@ interface Props {
     callback?(): void
 }
 
-const EnrollmentPopup: React.FC<Props> = ({ url, title = "Enrollment Process", width = 1200, height = 600, callback }) => {
+const EnrollmentPopup: React.FC<Props> = ({ url, title = "Enrollment Process", width = 1200, height = 900, callback }) => {
     const openPopup = () => {
         const left = (window.screen.width / 2) - (width / 2);
         const top = (window.screen.height / 2) - (height / 2);

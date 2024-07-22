@@ -56,6 +56,7 @@ function Renderer(props: RendererPageProps) {
       <SelectedPatientView />
       <SelectedServiceRequestView />
       <PrePopButton
+        autoPopulate
         questionnaire={questionnaire}
       />
       <SmartFormsRenderer
@@ -65,7 +66,7 @@ function Renderer(props: RendererPageProps) {
       />
       <form action="/orca/contrib/confirm" method="post" onSubmit={handleSubmit}>
         <Button disabled={isSubmitting} type="submit" className="ml-[24px]">
-          {isSubmitting ? <ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> : 'Submit'}
+          {isSubmitting ? <ReloadIcon className="mr-2 h-4 w-4 animate-spin" /> : 'Next'}
         </Button>
       </form>
     </div>
