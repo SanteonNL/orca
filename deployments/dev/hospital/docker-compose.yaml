@@ -28,23 +28,22 @@ services:
     ports:
       - "1305:1305"
   enrollment:
-    # image: ghcr.io/santeonnl/enrollment_form:main
-    build:
-     context: ../../../enrollment_form
-     dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/enrollment_form:main
+    # build:
+    #  context: ../../../enrollment_form
+    #  dockerfile: Dockerfile
      # Make sure to copy the .env.secrets.example and fill in the terminology server credentials for the tx server to work
     env_file:
       - ../../../enrollment_form/.env.secrets
     ports:
       - "3003:3000"
   orchestrator:
-    # TODO: Change back to image before merging PR
-    # image: ghcr.io/santeonnl/orca_orchestrator:main
+    image: ghcr.io/santeonnl/orca_orchestrator:main
+    # build:
+    #  context: ../../../orchestrator
+    #  dockerfile: Dockerfile
     ports:
       - "8090:8080"
-    build:
-     context: ../../../orchestrator
-     dockerfile: Dockerfile
     environment:
       - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
       - ORCA_PUBLIC_BASEURL=/orca
@@ -59,10 +58,10 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
   ehr:
-    # image: ghcr.io/santeonnl/orca_hospitalsimulator:main
-    build:
-     context: ../../../hospital_simulator
-     dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_hospitalsimulator:main
+    # build:
+    #  context: ../../../hospital_simulator
+    #  dockerfile: Dockerfile
     volumes:
       - "./config/simulator.config.env:/app/.env.production:ro"
     ports:
