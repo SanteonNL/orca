@@ -4,16 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/addressing"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"strings"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/addressing"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/rs/zerolog/log"
 )
 
 func New(config Config, didResolver addressing.DIDResolver) (*Service, error) {
@@ -82,8 +83,18 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
+	mux.HandleFunc("POST /cps/CarePlan", func(writer http.ResponseWriter, request *http.Request) {
+		err := s.handleCreateCarePlan(writer, request)
+		if err != nil {
+			// TODO: proper OperationOutcome
+			log.Info().Msgf("CarePlanService/CarePlan failed: %v", err)
+			http.Error(writer, "Create CarePlan at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	})
 	mux.HandleFunc("/cps/*", func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Authorize request here
+		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
 		proxy.ServeHTTP(writer, request)
 	})
 }
@@ -117,5 +128,25 @@ type loggingRoundTripper struct {
 
 func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	log.Info().Msgf("Proxying FHIR request: %s %s", request.Method, request.URL.String())
-	return l.next.RoundTrip(request)
+	if log.Debug().Enabled() {
+		var headers []string
+		for key, values := range request.Header {
+			headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
+		}
+		log.Debug().Msgf("Proxy request headers: %s", strings.Join(headers, ", "))
+	}
+	response, err := l.next.RoundTrip(request)
+	if err != nil {
+		log.Warn().Err(err).Msgf("Proxied FHIR request failed (url=%s)", request.URL.String())
+	} else {
+		if log.Debug().Enabled() {
+			log.Debug().Msgf("Proxied FHIR request response: %s", response.Status)
+			var headers []string
+			for key, values := range response.Header {
+				headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
+			}
+			log.Debug().Msgf("Proxy response headers: %s", strings.Join(headers, ", "))
+		}
+	}
+	return response, err
 }

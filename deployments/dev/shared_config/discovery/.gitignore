@@ -1,0 +1,2 @@
+# Don't commit files, they're generated when starting the stack (since they contain an environment-specific URL)
+*

@@ -11,12 +11,12 @@ function readTunnelURL() {
 CLINIC_URL=$(readTunnelURL ./clinic)
 pushd clinic
 docker compose pull
-CLINIC_URL="${CLINIC_URL}" \
+NUTS_URL="${CLINIC_URL}" \
   docker compose up \
  --wait --build --remove-orphans
  popd
 
-CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/fhir"
+CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/orca/cps"
 HOSPITAL_URL=$(readTunnelURL ./hospital)
 pushd hospital
 docker compose pull

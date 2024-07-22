@@ -8,5 +8,6 @@ Pre-requisites:
 - Docker Compose
 - Bash
 - Microsoft DevTunnel (e.g. log in with GitHub using `devtunnel user login -d -g`)
+- jq (`brew install jq`)
 
 Use `start.sh` inside the directory to start the stack. It will open the orchestrator demo page when it has been started.

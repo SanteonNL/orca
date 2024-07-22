@@ -30,3 +30,6 @@ go.work
 
 # VS Code files
 .vscode
+
+# draw.io backup files
+*.bkp

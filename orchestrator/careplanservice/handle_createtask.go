@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
-	"net/http"
 )
 
 func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest *http.Request) error {
@@ -36,16 +38,7 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 		return fmt.Errorf("failed to create Task: %w", err)
 	}
 	// Find right result to return
-	taskEntry := filterBundleEntry(bundle, func(entry fhir.BundleEntry) bool {
-		type Resource struct {
-			Type string `json:"resourceType"`
-		}
-		var res Resource
-		if err := json.Unmarshal(entry.Resource, &res); err != nil {
-			return false
-		}
-		return res.Type == "Task"
-	})
+	taskEntry := coolfhir.FirstBundleEntry(bundle, coolfhir.EntryIsOfType("Task"))
 	if taskEntry == nil {
 		// TODO: Might have to do cleanup here?
 		return errors.New("could not find Task in FHIR Bundle")
@@ -54,10 +47,10 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	if err := s.fhirClient.Read(*taskEntry.Response.Location, &task, fhirclient.ResponseHeaders(&headers)); err != nil {
 		return fmt.Errorf("failed to read created Task from FHIR server: %w", err)
 	}
-	httpResponse.WriteHeader(http.StatusCreated)
 	for key, value := range headers.Header {
 		httpResponse.Header()[key] = value
 	}
+	httpResponse.WriteHeader(http.StatusCreated)
 	return json.NewEncoder(httpResponse).Encode(task)
 }
 
@@ -113,13 +106,4 @@ func basedOn(task map[string]interface{}) (*string, error) {
 		return nil, errors.New("Task.basedOn must reference a CarePlan")
 	}
 	return taskBasedOn[0].Reference, nil
-}
-
-func filterBundleEntry(bundle *fhir.Bundle, filter func(entry fhir.BundleEntry) bool) *fhir.BundleEntry {
-	for _, entry := range bundle.Entry {
-		if filter(entry) {
-			return &entry
-		}
-	}
-	return nil
 }

@@ -9,24 +9,25 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-    image: nutsfoundation/nuts-node:6.0.0-beta.4
+    image: nutsfoundation/nuts-node:6.0.0-beta.8
     ports:
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
-      - "./nutsnode/devtunnel/:/devtunnel"
       - "../shared_config/policy/:/nuts/config/policy:ro"
+      - "../shared_config/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
     environment:
       - NUTS_VERBOSITY=debug
       - NUTS_STRICTMODE=false
       - NUTS_HTTP_INTERNAL_ADDRESS=:8081
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${NUTS_URL}
+      - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
     environment:
       - NUTS_NODE_ADDRESS=http://nutsnode:8081
     ports:
-      - "1305:1305"
+      - "1405:1305"
   enrollment:
     image: ghcr.io/santeonnl/enrollment_form:main
     # build:
