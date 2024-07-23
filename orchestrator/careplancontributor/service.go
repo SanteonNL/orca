@@ -43,7 +43,6 @@ type Service struct {
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
-	// mux.Handle("GET /contrib/", http.StripPrefix("/contrib", http.FileServerFS(assets.FS)))
 	mux.HandleFunc("/contrib/", func(response http.ResponseWriter, request *http.Request) {
 		log.Info().Msgf("Redirecting to %s", s.enrollmentFormUrl)
 		http.Redirect(response, request, s.enrollmentFormUrl, http.StatusFound)
