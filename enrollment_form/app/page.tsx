@@ -6,6 +6,8 @@ export default async function Home() {
   //switching to dynamic rendering https://nextjs.org/docs/app/building-your-application/rendering/server-components#switching-to-dynamic-rendering
   const headersList = headers()
 
+  if (!process.env.FHIR_BASE_URL) return <>FHIR Server not configured</>
+
   const resp = await fetch(`${process.env.FHIR_BASE_URL}/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.18--20240704100750`);
 
   if (!resp.ok) {

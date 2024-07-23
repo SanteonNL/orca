@@ -8,9 +8,15 @@ services:
     depends_on:
       - hospital_orchestrator
       - clinic_orchestrator
+      - enrollment
   hospital_orchestrator:
     image: "${ORCHESTRATOR_IMAGE:-ghcr.io/santeonnl/orca_orchestrator:main}"
+    # build:
+    #  context: ../orchestrator
+    #  dockerfile: Dockerfile
     environment:
+      # Simply point to the health endpoint so we don't have to integrate enrollment yet, as it will change quite a bit in the future
+      - ORCA_CAREPLANCONTRIBUTOR_ENROLLMENTFORM_URL=http://localhost:8080/enrollment/api/health
       - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
       - ORCA_PUBLIC_BASEURL=/hospital/orca
       - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true
@@ -18,6 +24,9 @@ services:
       - ORCA_APPLAUNCH_DEMO_ENABLED=true
   clinic_orchestrator:
     image: "${ORCHESTRATOR_IMAGE:-ghcr.io/santeonnl/orca_orchestrator:main}"
+    # build:
+    #  context: ../orchestrator
+    #  dockerfile: Dockerfile
     environment:
       - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
       - ORCA_CAREPLANSERVICE_ENABLED=true
@@ -38,3 +47,11 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
       - hapi.fhir.partitioning.allow_references_across_partitions=false
+  enrollment:
+    # building the image now as enrollment is not yet merged, as well, it needs to test the latest changes
+    # image: ${ENROLLMENT_IMAGE:-ghcr.io/santeonnl/enrollment_form:main}
+    build:
+     context: ../enrollment_form
+     dockerfile: Dockerfile
+    ports:
+      - "3000"

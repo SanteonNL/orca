@@ -51,13 +51,13 @@ func Test_Main(t *testing.T) {
 	query.Add("serviceRequest", "ServiceRequest/"+*serviceRequest.Id)
 	query.Add("practitioner", "the-doctor")
 	httpResponse, err := userAgent.Get("http://localhost:8080/hospital/orca/demo-app-launch?" + query.Encode())
-	testHTTPResponse(err, httpResponse, http.StatusFound)
+	testHTTPResponse(err, httpResponse, http.StatusOK)
 	//
 	// Click "confirm"
 	//
 	println("Clicking 'confirm'...")
 	go func() {
-		httpResponse, err = userAgent.PostForm(httpResponse.Request.URL.JoinPath("confirm").String(), nil)
+		httpResponse, err = userAgent.PostForm("http://localhost:8080/hospital/orca/contrib/confirm", nil)
 		testHTTPResponse(err, httpResponse, http.StatusOK)
 	}()
 	//
