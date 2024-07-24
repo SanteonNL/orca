@@ -4,9 +4,6 @@ import (
 	"e2e-tests/to"
 	"encoding/json"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -15,6 +12,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_Main(t *testing.T) {
@@ -56,7 +57,7 @@ func Test_Main(t *testing.T) {
 	//
 	println("Clicking 'confirm'...")
 	go func() {
-		httpResponse, err = userAgent.PostForm(httpResponse.Request.URL.JoinPath("confirm").String(), nil)
+		httpResponse, err = userAgent.PostForm("http://localhost:8080/hospital/orca/contrib/confirm", nil)
 		testHTTPResponse(err, httpResponse, http.StatusOK)
 	}()
 	//

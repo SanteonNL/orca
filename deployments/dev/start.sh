@@ -145,6 +145,9 @@ echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
 echo "  Registering FHIR base URL in DID document"
 curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/did/${HOSPITAL_DID}/service
+# TODO: Remove this init when the Questionnaire is provided by the sub-Task.input
+echo "  Creating Questionnaire"
+./config/init-fhir-resources.sh $HOSPITAL_URL
 popd
 
 # open orchestrator demo app

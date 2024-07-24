@@ -119,7 +119,7 @@ export default CreateServiceRequestDialog
 
 function createServiceRequestBundle(firstName: string, lastName: string) {
 
-    const patientBsn = Date.now()
+    const patientBsn = Date.now();
 
     return {
         "resourceType": "Bundle",
@@ -140,13 +140,37 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                         {
                             "family": lastName,
                             "given": [
-                                firstName
+                                firstName,
+                                "MiddleName"
                             ],
                             "text": `${lastName}, ${firstName}`
                         }
                     ],
                     "gender": "male",
-                    "birthDate": "1980-01-01"
+                    "birthDate": "1980-01-01",
+                    "address": [
+                        {
+                            "use": "home",
+                            "type": "postal",
+                            "line": ["123 Main Street"],
+                            "city": "Hometown",
+                            "state": "State",
+                            "postalCode": "12345",
+                            "country": "Country"
+                        }
+                    ],
+                    "telecom": [
+                        {
+                            "system": "phone",
+                            "value": "123-456-7890",
+                            "use": "home"
+                        },
+                        {
+                            "system": "email",
+                            "value": "patient@example.com",
+                            "use": "home"
+                        }
+                    ]
                 },
                 "request": {
                     "method": "POST",
@@ -187,8 +211,31 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                         {
                             "family": "Smith",
                             "given": [
-                                "Jane"
+                                "Jane",
+                                "John"
                             ]
+                        }
+                    ],
+                    "telecom": [
+                        {
+                            "system": "phone",
+                            "value": "987-654-3210",
+                            "use": "work"
+                        },
+                        {
+                            "system": "email",
+                            "value": "practitioner@example.com",
+                            "use": "work"
+                        }
+                    ],
+                    "address": [
+                        {
+                            "use": "work",
+                            "line": ["456 Main Street"],
+                            "city": "Worktown",
+                            "state": "State",
+                            "postalCode": "54321",
+                            "country": "Country"
                         }
                     ]
                 },
@@ -310,12 +357,12 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                         }
                     },
                     "recorder": {
-                        "type": "PractitonerRole",
+                        "type": "PractitionerRole",
                         "identifier": {
                             "system": "http://fhir.nl/fhir/NamingSystem/uzi",
                             "value": "uzi-001"
                         }
-                    },
+                    }
                 },
                 "request": {
                     "method": "POST",
@@ -342,7 +389,6 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                         "identifier": {
                             "system": "http://fhir.nl/fhir/NamingSystem/ura",
                             "value": "URA-002"
-
                         }
                     },
                     "performer": [
@@ -379,5 +425,5 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 }
             }
         ]
-    }
+    };
 }
