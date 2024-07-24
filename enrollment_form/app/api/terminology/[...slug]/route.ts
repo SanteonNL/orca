@@ -3,8 +3,8 @@ import { Mutex } from 'async-mutex';
 
 let terminologyToken = '';
 let terminologyTokenExpiration = new Date(0);
-const USERNAME_NTS = process.env.USERNAME_NTS || '';
-const PASSWORD_NTS = process.env.PASSWORD_NTS || '';
+const TERMINOLOGY_SERVER_USERNAME = process.env.TERMINOLOGY_SERVER_USERNAME || '';
+const TERMINOLOGY_SERVER_PASSWORD = process.env.TERMINOLOGY_SERVER_PASSWORD || '';
 const tokenMutex = new Mutex();
 
 const cache = new Map<string, { body: any, expiration: Date }>();
@@ -20,7 +20,8 @@ export async function GET(req: NextRequest) {
     const slug = req.nextUrl.pathname.replace("/api/terminology/", "")
     const searchParams = req.nextUrl.searchParams;
     const token = await getToken();
-    const url = `https://terminologieserver.nl/fhir/${slug}?${searchParams}`;
+    //TODO: Add a default / fallback
+    const url = `${process.env.TERMINOLOGY_SERVER_BASE_URL}/${slug}?${searchParams}`;
     const headers = { Authorization: `Bearer ${token}` };
 
     try {
@@ -66,8 +67,8 @@ const getToken = async () => {
             body: new URLSearchParams({
                 grant_type: 'password',
                 client_id: 'cli_client',
-                username: USERNAME_NTS,
-                password: PASSWORD_NTS
+                username: TERMINOLOGY_SERVER_USERNAME,
+                password: TERMINOLOGY_SERVER_PASSWORD
             }).toString()
         });
 
