@@ -4,7 +4,7 @@ This project serves as the front-end of the orchestrator. Next.js has a back-end
 This project visualizes steps like:
 1. Selecting a `CarePlan` when the enrollment flow is initialized
 2. Providing more information from the placer to the filler by rendering Questionnaires. 
-3. Pre-populating Questionnaires as much a possible as per [SDC specification]()
+3. Pre-populating Questionnaires as much a possible as per [SDC specification](https://hl7.org/fhir/uv/sdc/index.html)
 
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
