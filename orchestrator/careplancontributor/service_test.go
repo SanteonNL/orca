@@ -1,6 +1,7 @@
 package careplancontributor
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -53,7 +54,7 @@ func TestService_ProxyToEHR(t *testing.T) {
 	}
 	sessionManager, sessionID := createTestSession()
 
-	service := New(Config{}, sessionManager, nil)
+	service := New(Config{}, sessionManager, nil, nil)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -83,19 +84,13 @@ func TestService_ProxyToCPS(t *testing.T) {
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
 	carePlanServiceURL.Path = "/fhir"
 
-	clients.Factories["test"] = func(properties map[string]string) clients.ClientProperties {
-		return clients.ClientProperties{
-			Client:  carePlanService.Client().Transport,
-			BaseURL: carePlanServiceURL,
-		}
-	}
 	sessionManager, sessionID := createTestSession()
 
 	service := New(Config{
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, sessionManager, nil)
+	}, sessionManager, carePlanService.Client(), nil)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -116,7 +111,7 @@ func TestService_confirm(t *testing.T) {
 	carePlanService, task, carePlan := startCarePlanService(t)
 	service := Service{
 		SessionManager:  user.NewSessionManager(),
-		CarePlanService: carePlanService,
+		carePlanService: carePlanService,
 	}
 	localFHIR := startLocalFHIRServer(t)
 
@@ -262,20 +257,20 @@ func Test_shouldStopPollingOnAccepted(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockCarePlanService := mock_fhirclient.NewMockClient(ctrl)
-	service := Service{CarePlanService: mockCarePlanService}
+	service := Service{carePlanService: mockCarePlanService}
 
 	taskID := "test-task-id"
 
 	// First call returns a task that is not accepted
 	firstTask := fhir.Task{Status: fhir.TaskStatusInProgress}
-	mockCarePlanService.EXPECT().Read("Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, v *fhir.Task, opts ...interface{}) error {
+	mockCarePlanService.EXPECT().ReadWithContext(gomock.Any(), "Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, v *fhir.Task, opts ...interface{}) error {
 		*v = firstTask
 		return nil
 	}).Times(1)
 
 	// Second call returns a task that is accepted
 	secondTask := fhir.Task{Status: fhir.TaskStatusAccepted}
-	mockCarePlanService.EXPECT().Read("Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, v *fhir.Task, opts ...interface{}) error {
+	mockCarePlanService.EXPECT().ReadWithContext(gomock.Any(), "Task/"+taskID, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, v *fhir.Task, opts ...interface{}) error {
 		*v = secondTask
 		return nil
 	}).Times(1)

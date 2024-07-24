@@ -1,9 +1,10 @@
 package cmd
 
 import (
+	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
-	"github.com/SanteonNL/orca/orchestrator/lib/nuts"
+	"net/url"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/applaunch"
@@ -13,7 +14,7 @@ import (
 
 type Config struct {
 	// Nuts holds the configuration for communicating with the Nuts API.
-	Nuts nuts.Config `koanf:"nuts"`
+	Nuts NutsConfig `koanf:"nuts"`
 	// Public holds the configuration for the public interface.
 	Public InterfaceConfig `koanf:"public"`
 	// CarePlanContributor holds the configuration for the CarePlanContributor.
@@ -24,7 +25,24 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
+	_, err := url.Parse(c.Nuts.API.URL)
+	if c.Nuts.OwnDID == "" {
+		return errors.New("invalid/empty Nuts DID")
+	}
+	if err != nil || c.Nuts.API.URL == "" {
+		return errors.New("invalid Nuts API URL")
+	}
+	if c.Nuts.Public.URL == "" {
+		return errors.New("invalid/empty Nuts public URL")
+	}
+	_, err = url.Parse(c.Public.URL)
+	if err != nil || c.Public.URL == "" {
+		return errors.New("invalid public base URL")
+	}
 	if err := c.CarePlanContributor.Validate(); err != nil {
+		return err
+	}
+	if err := c.CarePlanService.Validate(); err != nil {
 		return err
 	}
 	return nil
@@ -34,9 +52,38 @@ func (c Config) Validate() error {
 type InterfaceConfig struct {
 	// Address holds the address to listen on.
 	Address string `koanf:"address"`
-	// BaseURL holds the base URL of the interface.
+	// URL holds the base URL of the interface.
 	// Set it in case the service is behind a reverse proxy that maps it to a different URL than root (/).
-	BaseURL string `koanf:"baseurl"`
+	URL string `koanf:"url"`
+}
+
+func (i InterfaceConfig) ParseURL() *url.URL {
+	u, _ := url.Parse(i.URL)
+	return u
+}
+
+type NutsConfig struct {
+	API    NutsAPIConfig    `koanf:"api"`
+	Public NutsPublicConfig `koanf:"public"`
+	OwnDID string           `koanf:"did"`
+}
+
+type NutsPublicConfig struct {
+	URL string `koanf:"url"`
+}
+
+func (c NutsPublicConfig) Parse() *url.URL {
+	u, _ := url.Parse(c.URL)
+	return u
+}
+
+type NutsAPIConfig struct {
+	URL string `koanf:"url"`
+}
+
+func (n NutsAPIConfig) Parse() *url.URL {
+	u, _ := url.Parse(n.URL)
+	return u
 }
 
 // LoadConfig loads the configuration from the environment.
@@ -61,7 +108,7 @@ func DefaultConfig() Config {
 	return Config{
 		Public: InterfaceConfig{
 			Address: ":8080",
-			BaseURL: "/",
+			URL:     "/",
 		},
 	}
 }

@@ -1,6 +1,7 @@
 package coolfhir
 
 import (
+	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
@@ -15,18 +16,18 @@ type Workflow struct {
 	CarePlanService fhirclient.Client
 }
 
-func (w Workflow) Invoke(task any) (*fhir.Task, error) {
+func (w Workflow) Invoke(ctx context.Context, task any) (*fhir.Task, error) {
 	var result fhir.Task
-	err := w.CarePlanService.Create(task, &result)
+	err := w.CarePlanService.CreateWithContext(ctx, task, &result)
 	if err != nil {
 		return nil, err
 	}
 	return &result, nil
 }
 
-func (w Workflow) TaskStatus(taskId string) (fhir.TaskStatus, error) {
+func (w Workflow) TaskStatus(ctx context.Context, taskId string) (fhir.TaskStatus, error) {
 	var task fhir.Task
-	err := w.CarePlanService.Read("Task/"+taskId, &task)
+	err := w.CarePlanService.ReadWithContext(ctx, "Task/"+taskId, &task)
 	if err != nil {
 		return -1, err
 	}

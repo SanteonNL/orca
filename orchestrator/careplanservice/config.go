@@ -1,5 +1,7 @@
 package careplanservice
 
+import "errors"
+
 func DefaultConfig() Config {
 	return Config{}
 }
@@ -7,6 +9,16 @@ func DefaultConfig() Config {
 type Config struct {
 	FHIR    FHIRConfig `koanf:"fhir"`
 	Enabled bool       `koanf:"enabled"`
+}
+
+func (c Config) Validate() error {
+	if !c.Enabled {
+		return nil
+	}
+	if c.FHIR.BaseURL == "" {
+		return errors.New("careplanservice.fhir.url is not configured")
+	}
+	return nil
 }
 
 type FHIRConfig struct {
