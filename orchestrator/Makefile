@@ -1,7 +1,7 @@
 .PHONY: gen-api gen-mocks
 
 install-tools:
-	go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.0.0
+	go install github.com/deepmap/oapi-codegen/v2/cmd/oapi-codegen@v2.3.0
 	go install go.uber.org/mock/mockgen@v0.4.0
 	go install github.com/vektra/mockery/v2@v2.43.2
 
