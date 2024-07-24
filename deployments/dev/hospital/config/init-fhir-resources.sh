@@ -7,6 +7,7 @@ until $(curl --output /dev/null --silent --fail $1/fhir/metadata); do
   sleep 5
 done
 
+#TODO: Remove Questionnaire creation @ INT-211
 echo "    Creating enrollment Questionnaire"
 curl --silent -X PUT "$1/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.18--20240704100750" \
     -H "Content-Type: application/fhir+json" \

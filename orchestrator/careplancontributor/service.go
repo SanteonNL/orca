@@ -30,22 +30,22 @@ func New(config Config, sessionManager *user.SessionManager, didResolver address
 	// TODO: Replace with client doing authentication
 	carePlanServiceClient := fhirclient.New(cpsURL, http.DefaultClient, coolfhir.Config())
 	return &Service{
-		SessionManager:    sessionManager,
-		CarePlanService:   carePlanServiceClient,
-		enrollmentFormUrl: config.EnrollmentFromConfig.URL,
+		SessionManager:  sessionManager,
+		CarePlanService: carePlanServiceClient,
+		frontendUrl:     config.FrontendConfig.URL,
 	}, nil
 }
 
 type Service struct {
-	SessionManager    *user.SessionManager
-	CarePlanService   fhirclient.Client
-	enrollmentFormUrl string
+	SessionManager  *user.SessionManager
+	CarePlanService fhirclient.Client
+	frontendUrl     string
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/contrib/", func(response http.ResponseWriter, request *http.Request) {
-		log.Info().Msgf("Redirecting to %s", s.enrollmentFormUrl)
-		http.Redirect(response, request, s.enrollmentFormUrl, http.StatusFound)
+		log.Info().Msgf("Redirecting to %s", s.frontendUrl)
+		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
 	})
 	mux.HandleFunc("GET /contrib/patient", s.withSession(s.handleGetPatient))
 	mux.HandleFunc("GET /contrib/practitioner", s.withSession(s.handleGetPractitioner))

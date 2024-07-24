@@ -28,14 +28,14 @@ services:
       - NUTS_NODE_ADDRESS=http://nutsnode:8081
     ports:
       - "1405:1305"
-  enrollment:
-    image: ghcr.io/santeonnl/enrollment_form:main
+  frontend:
+    image: ghcr.io/santeonnl/frontend:main
     # build:
-    #  context: ../../../enrollment_form
+    #  context: ../../../frontend
     #  dockerfile: Dockerfile
      # Make sure to copy the .env.secrets.example and fill in the terminology server credentials for the tx server to work
     env_file:
-      - ../../../enrollment_form/.env.secrets
+      - ../../../frontend/.env.secrets
     ports:
       - "3003:3000"
   orchestrator:
@@ -50,7 +50,7 @@ services:
       - ORCA_PUBLIC_BASEURL=/orca
       - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
-      - ORCA_CAREPLANCONTRIBUTOR_ENROLLMENTFORM_URL=${HOSPITAL_URL}/enrollment
+      - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=${HOSPITAL_URL}/frontend
       - ORCA_APPLAUNCH_DEMO_ENABLED=true
   fhirstore:
     image: hapiproject/hapi:v7.2.0

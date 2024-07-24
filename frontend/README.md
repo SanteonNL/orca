@@ -1,3 +1,11 @@
+# Frontend project for ORCA
+This project serves as the front-end of the orchestrator. Next.js has a back-end, but we mainly use the Golang [orchestrator](../orchestrator) project for that. 
+
+This project visualizes steps like:
+1. Selecting a `CarePlan` when the enrollment flow is initialized
+2. Providing more information from the placer to the filler by rendering Questionnaires. 
+3. Pre-populating Questionnaires as much a possible as per [SDC specification]()
+
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
 ## Getting Started

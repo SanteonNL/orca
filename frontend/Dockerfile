@@ -3,7 +3,7 @@ FROM node:20-alpine AS base
 
 WORKDIR /app
 
-ENV NEXT_PUBLIC_BASE_PATH /enrollment
+ENV NEXT_PUBLIC_BASE_PATH /frontend
 
 COPY package.json yarn.lock* package-lock.json* pnpm-lock.yaml* ./
 RUN \
@@ -19,7 +19,7 @@ RUN yarn build
 FROM node:20-alpine AS production
 WORKDIR /app
 ENV NODE_ENV production
-ENV NEXT_PUBLIC_BASE_PATH /enrollment
+ENV NEXT_PUBLIC_BASE_PATH /frontend
 
 # Copy the built application from the previous stage
 COPY --from=base /app/.next ./.next
