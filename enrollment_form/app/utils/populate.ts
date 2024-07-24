@@ -14,6 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+// TODO: Try and replace this with the "advised" util, or see if we eventually require our own logic here. Ideally we "copy" as little
+// files as possible to prevent keeping it in sync with another remote. See https://smartforms.csiro.au/docs/api/sdc-populate/functions/populate
 import type {
   Coding,
   Expression,
