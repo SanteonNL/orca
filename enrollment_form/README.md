@@ -18,6 +18,8 @@ cp .env.secrets.example .env.secrets
 
 Add details to the `.env.local` if they need to change. The defaults in the example are set to the local orchestrator and the nuts-node from the [dev deployment docker-compose](/deployments/dev/hospital/docker-compose.yaml).
 
+> ⓘ **Optional Step**: If you do not configure the secrets step below and the terminology server does require auth, the Questionnaire renderer will simply show a "Unable to fetch" message in the form. The application will still function without this step.
+
 Modify the [`./.env.secrets`](./.env.secrets), make sure the `USERNAME_NTS` and `PASSWORD_NTS` point to valid credentials for the Dutch national terminology server. 
 See [this](https://nictiz.nl/publicaties/nationale-terminologie-server-handleiding-voor-nieuwe-gebruikers/) manual on how to connect.
 
