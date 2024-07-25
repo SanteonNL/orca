@@ -20,28 +20,7 @@ type Config struct {
 	CarePlanContributor careplancontributor.Config `koanf:"careplancontributor"`
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
-	// URAMap holds a hardcoded map of URA identifiers to DIDs. It is later to be replaced with a more dynamic solution.
-	// It's specified as followed:
-	// ura1=did:example.com:bob,ura2=did:example.com:alice (etc)s
-	URAMap    string           `koanf:"uramap"`
-	AppLaunch applaunch.Config `koanf:"applaunch"`
-}
-
-func (c Config) ParseURAMap() map[string]string {
-	result := make(map[string]string)
-	for _, entry := range strings.Split(c.URAMap, ",") {
-		if !strings.Contains(entry, "=") {
-			// invalid entry
-			continue
-		}
-		parts := strings.Split(entry, "=")
-		if len(parts) != 2 {
-			// invalid entry
-			continue
-		}
-		result[strings.TrimSpace(parts[0])] = strings.TrimSpace(parts[1])
-	}
-	return result
+	AppLaunch       applaunch.Config       `koanf:"applaunch"`
 }
 
 // InterfaceConfig holds the configuration for an HTTP interface.

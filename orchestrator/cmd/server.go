@@ -15,7 +15,7 @@ import (
 func Start(config Config) error {
 	// Set up dependencies
 	httpHandler := http.NewServeMux()
-	didResolver := addressing.StaticDIDResolver(config.ParseURAMap())
+	didResolver := addressing.StaticDIDResolver(map[string]string{})
 	sessionManager := user.NewSessionManager()
 
 	// Register services
