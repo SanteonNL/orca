@@ -43,6 +43,7 @@ type Service struct {
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
+	mux.HandleFunc("GET /contrib/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc("GET /contrib/patient", s.withSession(s.handleGetPatient))
 	mux.HandleFunc("GET /contrib/practitioner", s.withSession(s.handleGetPractitioner))
 	mux.HandleFunc("GET /contrib/serviceRequest", s.withSession(s.handleGetServiceRequest))
@@ -240,6 +241,21 @@ func (s Service) readServiceRequest(localFHIR fhirclient.Client, serviceRequestR
 		})
 	}
 	return &serviceRequest, nil
+}
+
+func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
+	contextData := struct {
+		Patient        string `json:"patient"`
+		ServiceRequest string `json:"serviceRequest"`
+		Practitioner   string `json:"practitioner"`
+	}{
+		Patient:        session.Values["patient"],
+		ServiceRequest: session.Values["serviceRequest"],
+		Practitioner:   session.Values["practitioner"],
+	}
+	response.Header().Add("Content-Type", "application/json")
+	response.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(response).Encode(contextData)
 }
 
 func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {

@@ -152,6 +152,24 @@ func TestService_confirm(t *testing.T) {
 	})
 }
 
+func TestService_handleGetContext(t *testing.T) {
+	httpResponse := httptest.NewRecorder()
+	Service{}.handleGetContext(httpResponse, nil, &user.SessionData{
+		Values: map[string]string{
+			"test":           "value",
+			"practitioner":   "the-doctor",
+			"serviceRequest": "ServiceRequest/1",
+			"patient":        "Patient/1",
+		},
+	})
+	assert.Equal(t, http.StatusOK, httpResponse.Code)
+	assert.JSONEq(t, `{
+		"practitioner": "the-doctor",
+		"serviceRequest": "ServiceRequest/1",	
+		"patient": "Patient/1"
+	}`, httpResponse.Body.String())
+}
+
 func startLocalFHIRServer(t *testing.T) fhirclient.Client {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ServiceRequest", func(w http.ResponseWriter, r *http.Request) {

@@ -114,6 +114,7 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 
 	// 1) Extract the type of launch that is being performed, for example an enrollment, or a data view
 	// 2) switch type - call the apropriate service to handle the request
+	// TODO: Need to provide "patient", "serviceRequest", "practitioner" in the "values" map
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: fhirLauncherKey,
 		Values: map[string]string{
