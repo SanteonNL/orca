@@ -3,7 +3,6 @@ package demo
 import (
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
-	"github.com/SanteonNL/orca/orchestrator/lib/tinyhttp"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"net/http"
@@ -70,7 +69,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
-	values, ok := tinyhttp.GetQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss")
+	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss")
 	if !ok {
 		return
 	}
