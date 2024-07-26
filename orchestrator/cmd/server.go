@@ -13,6 +13,10 @@ import (
 )
 
 func Start(config Config) error {
+	if config.Validate() != nil {
+		return fmt.Errorf("invalid configuration: %w", config.Validate())
+	}
+
 	// Set up dependencies
 	httpHandler := http.NewServeMux()
 	didResolver := addressing.StaticDIDResolver(map[string]string{})
@@ -21,10 +25,7 @@ func Start(config Config) error {
 	// Register services
 	var services []Service
 	if config.CarePlanContributor.Enabled {
-		carePlanContributor, err := careplancontributor.New(config.CarePlanContributor, sessionManager, didResolver)
-		if err != nil {
-			return fmt.Errorf("failed to create CarePlanContributor: %w", err)
-		}
+		carePlanContributor := careplancontributor.New(config.CarePlanContributor, sessionManager, didResolver)
 		services = append(services, carePlanContributor)
 		// App Launches
 		services = append(services, smartonfhir.New(config.AppLaunch.SmartOnFhir, sessionManager))

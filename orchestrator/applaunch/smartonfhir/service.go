@@ -3,9 +3,8 @@ package smartonfhir
 import (
 	"encoding/json"
 	"errors"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/url"
@@ -19,8 +18,11 @@ const fhirLauncherKey = "smartonfhir"
 
 func init() {
 	// Register FHIR client factory that can create FHIR clients when the SMART on FHIR AppLaunch is used
-	coolfhir.ClientFactories[fhirLauncherKey] = func(properties map[string]string) fhirclient.Client {
-		panic("TODO: create http.Client that adds the access token to the Authorization header")
+	clients.Factories[fhirLauncherKey] = func(properties map[string]string) clients.ClientProperties {
+		// TODO: create http.Client that adds the access token to the Authorization header
+		return clients.ClientProperties{
+			Client: http.DefaultTransport,
+		}
 	}
 }
 
@@ -112,6 +114,7 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 
 	// 1) Extract the type of launch that is being performed, for example an enrollment, or a data view
 	// 2) switch type - call the apropriate service to handle the request
+	// TODO: Need to provide "patient", "serviceRequest", "practitioner" in the "values" map
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: fhirLauncherKey,
 		Values: map[string]string{

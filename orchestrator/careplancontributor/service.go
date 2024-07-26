@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
 	"net/http"
 	"net/url"
 	"time"
@@ -22,35 +23,40 @@ import (
 
 const LandingURL = "/contrib/"
 
-func New(config Config, sessionManager *user.SessionManager, didResolver addressing.StaticDIDResolver) (*Service, error) {
-	if config.CarePlanService.URL == "" {
-		return nil, errors.New("careplancontributor.careplanservice.url is not configured")
-	}
+func New(config Config, sessionManager *user.SessionManager, didResolver addressing.StaticDIDResolver) *Service {
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 	// TODO: Replace with client doing authentication
 	carePlanServiceClient := fhirclient.New(cpsURL, http.DefaultClient, coolfhir.Config())
 	return &Service{
-		SessionManager:  sessionManager,
-		CarePlanService: carePlanServiceClient,
-		frontendUrl:     config.FrontendConfig.URL,
-	}, nil
+		carePlanServiceURL: cpsURL,
+		SessionManager:     sessionManager,
+		CarePlanService:    carePlanServiceClient,
+		frontendUrl:        config.FrontendConfig.URL,
+	}
 }
 
 type Service struct {
-	SessionManager  *user.SessionManager
-	CarePlanService fhirclient.Client
-	frontendUrl     string
+	SessionManager     *user.SessionManager
+	CarePlanService    fhirclient.Client
+	frontendUrl        string
+	carePlanServiceURL *url.URL
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("/contrib/", func(response http.ResponseWriter, request *http.Request) {
-		log.Info().Msgf("Redirecting to %s", s.frontendUrl)
-		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
-	})
+	mux.HandleFunc("GET /contrib/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc("GET /contrib/patient", s.withSession(s.handleGetPatient))
 	mux.HandleFunc("GET /contrib/practitioner", s.withSession(s.handleGetPractitioner))
 	mux.HandleFunc("GET /contrib/serviceRequest", s.withSession(s.handleGetServiceRequest))
 	mux.HandleFunc("POST /contrib/confirm", s.withSession(s.handleConfirm))
+	mux.HandleFunc("/contrib/ehr/fhir/*", s.withSession(s.handleProxyToEPD))
+	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, "/contrib/cps/fhir", http.DefaultTransport)
+	mux.HandleFunc("/contrib/cps/fhir/*", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *user.SessionData) {
+		carePlanServiceProxy.ServeHTTP(writer, request)
+	}))
+	mux.HandleFunc("/contrib/", func(response http.ResponseWriter, request *http.Request) {
+		log.Info().Msgf("Redirecting to %s", s.frontendUrl)
+		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
+	})
 }
 
 // withSession is a middleware that retrieves the session for the given request.
@@ -67,9 +73,18 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 	}
 }
 
+func (s Service) handleProxyToEPD(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+	clientFactory := clients.Factories[session.FHIRLauncher](session.Values)
+	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, "/contrib/ehr/fhir", clientFactory.Client)
+	proxy.ServeHTTP(writer, request)
+}
+
 // handleGetPatient is the REST API handler that returns the FHIR Patient.
 func (s Service) handleGetPatient(response http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	fhirClient := coolfhir.ClientFactories[session.FHIRLauncher](session.Values)
+	// TODO: Remove this when frontend works on the proxy endpoint
+	clientProperties := clients.Factories[session.FHIRLauncher](session.Values)
+	fhirClient := fhirclient.New(clientProperties.BaseURL, &http.Client{Transport: clientProperties.Client}, coolfhir.Config())
+
 	var patient fhir.Patient
 	if err := fhirClient.Read(session.Values["patient"], &patient); err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
@@ -83,7 +98,9 @@ func (s Service) handleGetPatient(response http.ResponseWriter, request *http.Re
 
 // handleGetPractitioner is the REST API handler that returns the FHIR Practitioner.
 func (s Service) handleGetPractitioner(response http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	fhirClient := coolfhir.ClientFactories[session.FHIRLauncher](session.Values)
+	// TODO: Remove this when frontend works on the proxy endpoint
+	clientProperties := clients.Factories[session.FHIRLauncher](session.Values)
+	fhirClient := fhirclient.New(clientProperties.BaseURL, &http.Client{Transport: clientProperties.Client}, coolfhir.Config())
 	var practitioner fhir.Practitioner
 	if err := fhirClient.Read(session.Values["practitioner"], &practitioner); err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
@@ -97,7 +114,9 @@ func (s Service) handleGetPractitioner(response http.ResponseWriter, request *ht
 
 // handleGetServiceRequest is the REST API handler that returns the FHIR ServiceRequest.
 func (s Service) handleGetServiceRequest(response http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	fhirClient := coolfhir.ClientFactories[session.FHIRLauncher](session.Values)
+	// TODO: Remove this when frontend works on the proxy endpoint
+	clientProperties := clients.Factories[session.FHIRLauncher](session.Values)
+	fhirClient := fhirclient.New(clientProperties.BaseURL, &http.Client{Transport: clientProperties.Client}, coolfhir.Config())
 	var serviceRequest fhir.ServiceRequest
 	if err := fhirClient.Read(session.Values["serviceRequest"], &serviceRequest); err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
@@ -112,7 +131,9 @@ func (s Service) handleGetServiceRequest(response http.ResponseWriter, request *
 // handleConfirm is the REST API handler that handles workflow invocation confirmation,
 // and initiates the workflow.
 func (s Service) handleConfirm(response http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	fhirClient := coolfhir.ClientFactories[session.FHIRLauncher](session.Values)
+	// TODO: Remove this when frontend works on the proxy endpoint
+	clientProperties := clients.Factories[session.FHIRLauncher](session.Values)
+	fhirClient := fhirclient.New(clientProperties.BaseURL, &http.Client{Transport: clientProperties.Client}, coolfhir.Config())
 	err := s.confirm(fhirClient, session.Values["serviceRequest"], session.Values["patient"])
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
@@ -220,6 +241,21 @@ func (s Service) readServiceRequest(localFHIR fhirclient.Client, serviceRequestR
 		})
 	}
 	return &serviceRequest, nil
+}
+
+func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
+	contextData := struct {
+		Patient        string `json:"patient"`
+		ServiceRequest string `json:"serviceRequest"`
+		Practitioner   string `json:"practitioner"`
+	}{
+		Patient:        session.Values["patient"],
+		ServiceRequest: session.Values["serviceRequest"],
+		Practitioner:   session.Values["practitioner"],
+	}
+	response.Header().Add("Content-Type", "application/json")
+	response.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(response).Encode(contextData)
 }
 
 func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {

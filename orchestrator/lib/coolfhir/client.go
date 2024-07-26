@@ -6,10 +6,6 @@ import (
 	"net/http"
 )
 
-type ClientCreator func(properties map[string]string) fhirclient.Client
-
-var ClientFactories = map[string]ClientCreator{}
-
 func Config() *fhirclient.Config {
 	config := fhirclient.DefaultConfig()
 	config.Non2xxStatusHandler = func(response *http.Response, responseBody []byte) {

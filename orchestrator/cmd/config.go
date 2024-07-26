@@ -23,6 +23,13 @@ type Config struct {
 	AppLaunch       applaunch.Config       `koanf:"applaunch"`
 }
 
+func (c Config) Validate() error {
+	if err := c.CarePlanContributor.Validate(); err != nil {
+		return err
+	}
+	return nil
+}
+
 // InterfaceConfig holds the configuration for an HTTP interface.
 type InterfaceConfig struct {
 	// Address holds the address to listen on.
