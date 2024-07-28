@@ -9,7 +9,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/knadh/koanf/providers/env v0.1.0
 	github.com/knadh/koanf/v2 v2.1.1
-	github.com/nuts-foundation/go-nuts-client v0.0.0-20240726072922-cbd8fcbcb009
+	github.com/nuts-foundation/go-nuts-client v0.0.0-20240728064907-fa313e596f92
 	github.com/rs/zerolog v1.32.0
 	github.com/samply/golang-fhir-models/fhir-models v0.3.2
 	github.com/stretchr/testify v1.9.0

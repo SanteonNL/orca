@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
-	oauth22 "github.com/SanteonNL/orca/orchestrator/lib/oauth2"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
@@ -190,7 +189,7 @@ func (s Service) pollTaskStatus(taskID string) error {
 	maxPollingDuration := 20 * time.Second
 	startTime := time.Now()
 	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
-	ctx = oauth22.WithResourceURIContext(ctx, s.carePlanServiceURL.String())
+	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
 	for {
 		if time.Since(startTime) >= maxPollingDuration {
 			return fmt.Errorf("maximum polling duration of %s reached for Task/%s", maxPollingDuration, taskID)
@@ -276,7 +275,7 @@ func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {
 	}
 	var result fhir.CarePlan
 	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
-	ctx = oauth22.WithResourceURIContext(ctx, s.carePlanServiceURL.String())
+	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
 	if err := s.carePlanService.CreateWithContext(ctx, carePlan, &result); err != nil {
 		return nil, err
 	}
@@ -305,7 +304,7 @@ func (s Service) createTask(serviceRequest fhir.ServiceRequest, carePlanID strin
 		},
 	}
 	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
-	ctx = oauth22.WithResourceURIContext(ctx, s.carePlanServiceURL.String())
+	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
 	createdTask, err := coolfhir.Workflow{CarePlanService: s.carePlanService}.Invoke(ctx, task)
 	return createdTask, err
 }
@@ -318,7 +317,7 @@ func (s Service) handleAcceptedTask(task *fhir.Task, serviceRequest *fhir.Servic
 	}
 	var enrichedTask fhir.Task
 	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
-	ctx = oauth22.WithResourceURIContext(ctx, s.carePlanServiceURL.String())
+	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
 	if err := s.carePlanService.UpdateWithContext(ctx, "Task/"+*task.Id, *taskMap, &enrichedTask); err != nil {
 		return nil, fmt.Errorf("failed to update Task: %w", err)
 	}

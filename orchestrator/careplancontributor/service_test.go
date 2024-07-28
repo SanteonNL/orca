@@ -108,10 +108,11 @@ func TestService_ProxyToCPS(t *testing.T) {
 }
 
 func TestService_confirm(t *testing.T) {
-	carePlanService, task, carePlan := startCarePlanService(t)
+	carePlanServiceURL, carePlanService, task, carePlan := startCarePlanService(t)
 	service := Service{
-		SessionManager:  user.NewSessionManager(),
-		carePlanService: carePlanService,
+		SessionManager:     user.NewSessionManager(),
+		carePlanService:    carePlanService,
+		carePlanServiceURL: carePlanServiceURL,
 	}
 	localFHIR := startLocalFHIRServer(t)
 
@@ -188,7 +189,7 @@ func startLocalFHIRServer(t *testing.T) fhirclient.Client {
 	return fhirclient.New(baseURL, httpServer.Client(), coolfhir.Config())
 }
 
-func startCarePlanService(t *testing.T) (fhirclient.Client, *fhir.Task, *fhir.CarePlan) {
+func startCarePlanService(t *testing.T) (*url.URL, fhirclient.Client, *fhir.Task, *fhir.CarePlan) {
 	mux := http.NewServeMux()
 	httpServer := httptest.NewServer(mux)
 	var task = new(fhir.Task)
@@ -249,7 +250,7 @@ func startCarePlanService(t *testing.T) (fhirclient.Client, *fhir.Task, *fhir.Ca
 	})
 
 	baseURL, _ := url.Parse(httpServer.URL)
-	return fhirclient.New(baseURL, httpServer.Client(), coolfhir.Config()), task, carePlan
+	return baseURL, fhirclient.New(baseURL, httpServer.Client(), coolfhir.Config()), task, carePlan
 }
 
 func Test_shouldStopPollingOnAccepted(t *testing.T) {
@@ -257,7 +258,11 @@ func Test_shouldStopPollingOnAccepted(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockCarePlanService := mock_fhirclient.NewMockClient(ctrl)
-	service := Service{carePlanService: mockCarePlanService}
+	cpsURL, _ := url.Parse("http://example.com")
+	service := Service{
+		carePlanService:    mockCarePlanService,
+		carePlanServiceURL: cpsURL,
+	}
 
 	taskID := "test-task-id"
 

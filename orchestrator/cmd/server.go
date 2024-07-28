@@ -8,7 +8,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
-	oauth22 "github.com/SanteonNL/orca/orchestrator/lib/oauth2"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/nuts-foundation/go-nuts-client/nuts"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
@@ -37,7 +36,6 @@ func Start(config Config) error {
 			MetadataLoader: &oauth2.MetadataLoader{},
 			AuthzServerLocators: []oauth2.AuthorizationServerLocator{
 				oauth2.ProtectedResourceMetadataLocator,
-				oauth22.WellKnownProtectedResourceMetadataLocator,
 			},
 		},
 	}
