@@ -6,6 +6,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/user"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -16,7 +17,6 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	mock_fhirclient "github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
-	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

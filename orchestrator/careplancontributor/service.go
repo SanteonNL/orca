@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
@@ -18,7 +19,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/assets"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )

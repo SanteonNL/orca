@@ -6,6 +6,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/addressing"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"github.com/rs/zerolog/log"
@@ -59,24 +60,9 @@ type Service struct {
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	proxy := coolfhir.NewProxy(log.Logger, s.fhirURL, "/cps", s.transport)
-	mux.HandleFunc("POST /cps/Task", func(writer http.ResponseWriter, request *http.Request) {
-		err := s.handleCreateTask(writer, request)
-		if err != nil {
-			// TODO: proper OperationOutcome
-			log.Info().Msgf("CarePlanService/CreateTask failed: %v", err)
-			http.Error(writer, "Create Task at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-	})
-	mux.HandleFunc("POST /cps/CarePlan", func(writer http.ResponseWriter, request *http.Request) {
-		err := s.handleCreateCarePlan(writer, request)
-		if err != nil {
-			// TODO: proper OperationOutcome
-			log.Info().Msgf("CarePlanService/CarePlan failed: %v", err)
-			http.Error(writer, "Create CarePlan at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-	})
+	//
+	// Unauthorized endpoints
+	//
 	mux.HandleFunc("/cps/.well-known/oauth-protected-resource", func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Add("Content-Type", "application/json")
 		writer.WriteHeader(http.StatusOK)
@@ -87,11 +73,32 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		_ = json.NewEncoder(writer).Encode(md)
 	})
-	mux.HandleFunc("/cps/*", func(writer http.ResponseWriter, request *http.Request) {
+	//
+	// Authorized endpoints
+	//
+	mux.HandleFunc("POST /cps/Task", auth.Middleware(func(writer http.ResponseWriter, request *http.Request) {
+		err := s.handleCreateTask(writer, request)
+		if err != nil {
+			// TODO: proper OperationOutcome
+			log.Info().Msgf("CarePlanService/CreateTask failed: %v", err)
+			http.Error(writer, "Create Task at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}))
+	mux.HandleFunc("POST /cps/CarePlan", auth.Middleware(func(writer http.ResponseWriter, request *http.Request) {
+		err := s.handleCreateCarePlan(writer, request)
+		if err != nil {
+			// TODO: proper OperationOutcome
+			log.Info().Msgf("CarePlanService/CarePlan failed: %v", err)
+			http.Error(writer, "Create CarePlan at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}))
+	mux.HandleFunc("/cps/*", auth.Middleware(func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Authorize request here
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
 		proxy.ServeHTTP(writer, request)
-	})
+	}))
 }
 
 func (s Service) readRequest(httpRequest *http.Request, target interface{}) error {

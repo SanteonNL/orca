@@ -48,7 +48,7 @@ func main() {
 	for i, tenantName := range tenants {
 		err := createFHIRTenant(tenantName, i+1, rootFHIRClient)
 		if err != nil {
-			panic(fmt.Sprintf("Failed to create tenant: %s", tenantName))
+			panic(fmt.Sprintf("Failed to create tenant: %s: %v", tenantName, err))
 		}
 	}
 }

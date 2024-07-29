@@ -43,13 +43,6 @@ services:
       - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir/clinic
     depends_on:
       - fhirstore
-    healthcheck:
-      interval: 3s
-      timeout: 3s
-      retries: 30
-      # HAPI FHIR runs on distroless Java, so we can't use curl/wget on that container to check the health.
-      # So instead, we change the health check of this container to check the health of the FHIR store.
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://fhirstore:8080/fhir/DEFAULT/Account"]
     volumes:
       # Proxy uses a self-signed certificate, so load it the CA cert into the OS truststore.
       - "./config/proxy/truststore.pem:/etc/ssl/certs/SelfSigned_RootCA.pem:ro"
@@ -73,6 +66,13 @@ services:
       - NUTS_POLICY_DIRECTORY=/nuts/policy/
       - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
       - NUTS_DISCOVERY_SERVER_IDS=dev:HomeMonitoring2024
+    healthcheck:
+      interval: 3s
+      timeout: 3s
+      retries: 30
+      # HAPI FHIR runs on distroless Java, so we can't use curl/wget on that container to check the health.
+      # So instead, we change the health check of this container to check the health of the FHIR store.
+      test: [ "CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://fhirstore:8080/fhir/DEFAULT/Account" ]
   fhirstore:
     image: hapiproject/hapi:v7.2.0
     ports:
