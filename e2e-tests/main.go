@@ -4,6 +4,7 @@ import (
 	"crypto/tls"
 	"e2e-tests/to"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/nuts-foundation/go-did/did"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -71,7 +72,17 @@ func setupDID(nutsURL *url.URL, organizationName string, organizationCity string
 	if err := json.NewDecoder(httpResponse.Body).Decode(&responseBody); err != nil {
 		return "", err
 	}
-	createdDID := responseBody.Documents[1].ID.String()
+	// Nuts node does not return it in stable order
+	var createdDID string
+	for _, didDocument := range responseBody.Documents {
+		if didDocument.ID.Method == "web" {
+			createdDID = didDocument.ID.String()
+			break
+		}
+	}
+	if createdDID == "" {
+		return "", errors.New("no web DID created")
+	}
 	println(organizationName, "DID:", createdDID)
 	// Issue NutsUraCredential
 	requestBody = `
