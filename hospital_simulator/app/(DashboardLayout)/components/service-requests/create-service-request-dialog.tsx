@@ -258,6 +258,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     ],
                     "practitioner": {
                         "type": "Practitioner",
+                        "reference": "urn:uuid:practitioner-1",
                         "identifier": {
                             "system": "http://fhir.nl/fhir/NamingSystem/uzi",
                             "value": "uzi-001"
@@ -351,6 +352,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     },
                     "subject": {
                         "type": "Patient",
+                        "reference": "urn:uuid:patient-1",
                         "identifier": {
                             "system": "http://fhir.nl/fhir/NamingSystem/bsn",
                             "value": patientBsn
@@ -358,6 +360,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     },
                     "recorder": {
                         "type": "PractitionerRole",
+                        "reference": "urn:uuid:practitionerrole-1",
                         "identifier": {
                             "system": "http://fhir.nl/fhir/NamingSystem/uzi",
                             "value": "uzi-001"
@@ -378,6 +381,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     "intent": "order",
                     "subject": {
                         "type": "Patient",
+                        "reference": "urn:uuid:patient-1",
                         "identifier": {
                             "system": "http://fhir.nl/fhir/NamingSystem/bsn",
                             "value": patientBsn
@@ -386,6 +390,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     "requester": {
                         "type": "Organization",
                         "display": "St. Antonius",
+                        "reference": "urn:uuid:stantonius",
                         "identifier": {
                             "system": "http://fhir.nl/fhir/NamingSystem/ura",
                             "value": "URA-002"
@@ -395,6 +400,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                         {
                             "type": "Organization",
                             "display": "Zorg Bij Jou - Medisch Service Center",
+                            "reference": "urn:uuid:zorg-bij-jou-service-center",
                             "identifier": {
                                 "system": "http://fhir.nl/fhir/NamingSystem/ura",
                                 "value": "URA-001"
@@ -412,6 +418,7 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                         {
                             "type": "Condition",
                             "display": "Chronische obstructieve longaandoening (aandoening)",
+                            "reference": "urn:uuid:condition-1",
                             "identifier": {
                                 "system": "http://fhir.nl/fhir/NamingSystem/condition-identifier",
                                 "value": "condition-001"
