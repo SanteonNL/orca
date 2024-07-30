@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -102,8 +103,8 @@ func basedOn(task map[string]interface{}) (*string, error) {
 		return nil, fmt.Errorf("failed to convert Task.basedOn: %w", err)
 	} else if len(taskBasedOn) != 1 {
 		return nil, errors.New("Task.basedOn must have exactly one reference")
-	} else if taskBasedOn[0].Type == nil || *taskBasedOn[0].Type != "CarePlan" || taskBasedOn[0].Reference == nil {
-		return nil, errors.New("Task.basedOn must reference a CarePlan")
+	} else if taskBasedOn[0].Reference == nil || !strings.HasPrefix(*taskBasedOn[0].Reference, "CarePlan/") {
+		return nil, errors.New("Task.basedOn must contain a relative reference to a CarePlan")
 	}
 	return taskBasedOn[0].Reference, nil
 }

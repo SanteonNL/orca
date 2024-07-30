@@ -15,8 +15,7 @@ services:
     #  context: ../orchestrator
     #  dockerfile: Dockerfile
     environment:
-      # TODO: Fix in INT-218: Simply point to the health endpoint so we don't have to integrate enrollment yet, as it will change quite a bit in the future
-      - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=http://localhost:8080/frontend/api/health
+      - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=http://localhost:8080/frontend/enrollment/new
       - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
       - ORCA_PUBLIC_BASEURL=/hospital/orca
       - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true

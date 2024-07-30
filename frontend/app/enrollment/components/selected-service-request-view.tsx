@@ -1,17 +1,10 @@
-"use client"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import React, { useEffect, useState } from 'react'
-import useEnrollmentStore from '../store/enrollmentStore'
+import React from 'react'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import useEnrollmentStore from '@/lib/store/enrollment-store'
 
 export default function SelectedServiceRequestView() {
 
-    const { serviceRequest, fetchServiceRequest } = useEnrollmentStore()
-
-
-    useEffect(() => {
-        if (!serviceRequest) fetchServiceRequest()
-    }, [serviceRequest, fetchServiceRequest])
-
+    const { serviceRequest } = useEnrollmentStore()
 
     return (
         <Card className='m-5'>

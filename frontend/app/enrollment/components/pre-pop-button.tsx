@@ -15,10 +15,10 @@
  * limitations under the License.
  */
 'use client'
-import { populateQuestionnaire } from '../utils/populate';
+import { populateQuestionnaire } from '../../utils/populate';
 import type { Questionnaire, QuestionnaireResponse } from 'fhir/r4';
 import { useEffect, useState } from 'react';
-import useEnrollmentStore from '../store/enrollmentStore';
+import useEnrollmentStore from '../../../lib/store/enrollment-store';
 import { Button } from '@/components/ui/button';
 import { ReloadIcon } from '@radix-ui/react-icons';
 import { useQuestionnaireResponseStore } from '@aehrc/smart-forms-renderer';
@@ -34,17 +34,15 @@ function PrePopButton(props: PrePopButtonProps) {
 
   const [isPopulating, setIsPopulating] = useState(false);
   const [autoPrePopulated, setAutoPrePopulated] = useState(false)
-  const { patient, fetchPatient, practitioner, fetchPractitioner } = useEnrollmentStore()
+  const { patient, practitioner } = useEnrollmentStore()
 
   useEffect(() => {
-    if (!patient) fetchPatient()
-    if (!practitioner) fetchPractitioner()
 
     if (patient && practitioner && autoPopulate && !autoPrePopulated) {
       handlePrepopulate()
       setAutoPrePopulated(true)
     }
-  }, [patient, fetchPatient, practitioner, fetchPractitioner, autoPopulate, autoPrePopulated])
+  }, [patient, practitioner, autoPopulate, autoPrePopulated])
 
 
 
