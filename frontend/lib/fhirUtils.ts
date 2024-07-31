@@ -4,6 +4,8 @@ import { Bundle, CarePlan, CarePlanActivity, Condition, Patient, Resource, Servi
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
 
+const BSN_SYSTEM = "http://fhir.nl/fhir/NamingSystem/bsn"
+
 const fetchAllBundlePages = async <T extends Resource>(
     client: FhirClient,
     initialBundle: FhirBundle<T>
@@ -31,7 +33,7 @@ const fetchAllBundlePages = async <T extends Resource>(
 }
 
 const getBsn = (patient?: Patient) => {
-    return patient?.identifier?.find((identifier) => identifier.system === "http://fhir.nl/fhir/NamingSystem/bsn")?.value;
+    return patient?.identifier?.find((identifier) => identifier.system === BSN_SYSTEM)?.value;
 }
 
 const getCarePlan = (patient: Patient, primaryCondition: Condition, relevantConditions?: Condition[]): CarePlan => {
@@ -41,7 +43,7 @@ const getCarePlan = (patient: Patient, primaryCondition: Condition, relevantCond
         intent: 'plan',
         subject: {
             identifier: {
-                system: 'http://fhir.nl/fhir/NamingSystem/bsn',
+                system: BSN_SYSTEM,
                 value: getBsn(patient)
             }
         },
@@ -112,4 +114,4 @@ const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCond
     }
 }
 
-export { fetchAllBundlePages, getBsn, getCarePlan, getTask }
+export { fetchAllBundlePages, getBsn, getCarePlan, getTask, BSN_SYSTEM }

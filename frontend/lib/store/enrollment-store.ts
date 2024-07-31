@@ -153,9 +153,7 @@ const fetchCarePlans = async (
     const initialBundle = await client.search({
         resourceType: 'CarePlan',
         searchParams: {
-            //TODO: FIXME, cannot search on CarePlan.patient.identifier and the Patient is not stored on the CPS
-            //Follow discission @ https://chat.fhir.org/#narrow/stream/179166-implementers/topic/Searching.20by.20CarePlan.2Epatient.2Eidentifier
-            // 'patient.identifier': `http://fhir.nl/fhir/NamingSystem/bsn|${bsn}`,
+            'subject-identifier': `${BSN_SYSTEM}|${bsn}`,
             '_count': 100
         }
     }) as Bundle<CarePlan>;
