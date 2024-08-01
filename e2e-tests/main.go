@@ -63,9 +63,6 @@ func setupDID(nutsURL *url.URL, organizationName string, organizationCity string
 	httpTransport := http.DefaultTransport.(*http.Transport)
 	httpTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	requestBody := `{}`
-	// v6.0.0-beta.8
-	//httpResponse, err := http.Post(nutsURL.JoinPath("internal/vdr/v2/did").String(), jsonType, strings.NewReader(requestBody))
-	// master
 	httpResponse, err := http.Post(nutsURL.JoinPath("internal/vdr/v2/subject").String(), jsonType, strings.NewReader(requestBody))
 	testHTTPResponse(err, httpResponse, http.StatusOK)
 	var responseBody createDIDResponse
