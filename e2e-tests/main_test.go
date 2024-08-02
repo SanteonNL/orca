@@ -1,15 +1,13 @@
 package main
 
 import (
+	"crypto/tls"
 	"e2e-tests/to"
 	"encoding/json"
-	"fmt"
-	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -19,19 +17,6 @@ import (
 )
 
 func Test_Main(t *testing.T) {
-	rootFHIRBaseURL, _ := url.Parse("http://localhost:9090/fhir")
-	rootFHIRClient := fhirclient.New(rootFHIRBaseURL, http.DefaultClient, nil)
-	hospitalFHIRBaseURL, _ := url.Parse("http://localhost:9090/fhir/hospital")
-	hospitalFHIRClient := fhirclient.New(hospitalFHIRBaseURL, http.DefaultClient, nil)
-	clinicFHIRBaseURL, _ := url.Parse("http://localhost:9090/fhir/clinic")
-	clinicFHIRClient := fhirclient.New(clinicFHIRBaseURL, http.DefaultClient, nil)
-
-	println("Creating HAPI FHIR tenants...")
-	tenants := []string{"clinic", "hospital"}
-	for i, tenantName := range tenants {
-		err := createTenant(tenantName, i+1, rootFHIRClient)
-		require.NoError(t, err, fmt.Sprintf("Failed to create tenant: %s", tenantName))
-	}
 	println("Loading test data...")
 	patient, serviceRequest, err := loadTestData(hospitalFHIRClient)
 	require.NoError(t, err)
@@ -41,23 +26,29 @@ func Test_Main(t *testing.T) {
 
 	// Demo AppLaunch
 	println("Demo AppLaunch...")
+	httpTransport := http.DefaultTransport.(*http.Transport)
+	httpTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	cookieJar, _ := cookiejar.New(nil)
 	userAgent := &http.Client{
-		Jar: cookieJar,
+		Jar:       cookieJar,
+		Transport: httpTransport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
 	}
 	query := url.Values{}
 	query.Add("iss", "http://fhirstore:8080/fhir/hospital")
 	query.Add("patient", "Patient/"+*patient.Id)
 	query.Add("serviceRequest", "ServiceRequest/"+*serviceRequest.Id)
 	query.Add("practitioner", "the-doctor")
-	httpResponse, err := userAgent.Get("http://localhost:8080/hospital/orca/demo-app-launch?" + query.Encode())
-	testHTTPResponse(err, httpResponse, http.StatusOK)
+	httpResponse, err := userAgent.Get(appURL + "/demo-app-launch?" + query.Encode())
+	testHTTPResponse(err, httpResponse, http.StatusFound)
 	//
 	// Click "confirm"
 	//
 	println("Clicking 'confirm'...")
 	go func() {
-		httpResponse, err = userAgent.PostForm("http://localhost:8080/hospital/orca/contrib/confirm", nil)
+		httpResponse, err = userAgent.PostForm(appURL+"/contrib/confirm", nil)
 		testHTTPResponse(err, httpResponse, http.StatusOK)
 	}()
 	//
@@ -92,38 +83,6 @@ func Test_Main(t *testing.T) {
 	require.Equal(t, containedResources[0].(map[string]interface{})["resourceType"], "ServiceRequest")
 	require.Equal(t, containedResources[1].(map[string]interface{})["resourceType"], "Patient")
 	println("Test succeeded!")
-}
-
-func createTenant(name string, id int, fhirClient *fhirclient.BaseClient) error {
-	println("Creating tenant: " + name)
-	var tenant fhir.Parameters
-	tenant.Parameter = []fhir.ParametersParameter{
-		{
-			Name:         "id",
-			ValueInteger: to.Ptr(id),
-		},
-		{
-			Name:        "name",
-			ValueString: to.Ptr(name),
-		},
-	}
-	err := fhirClient.Create(tenant, &tenant, fhirclient.AtPath("DEFAULT/$partition-management-create-partition"))
-	if err != nil && strings.Contains(err.Error(), "status=400") {
-		// assume it's OK (maybe it already exists)
-		return nil
-	}
-	return err
-}
-
-func testHTTPResponse(err error, httpResponse *http.Response, expectedStatus int) {
-	if err != nil {
-		panic(err)
-	}
-	if httpResponse.StatusCode != expectedStatus {
-		responseData, _ := io.ReadAll(httpResponse.Body)
-		println("Response data:\n----------------\n", strings.TrimSpace(string(responseData)), "\n----------------")
-		panic(fmt.Sprintf("unexpected status code (status=%s, expected=%d, url=%s)", httpResponse.Status, expectedStatus, httpResponse.Request.URL))
-	}
 }
 
 func loadTestData(fhirClient *fhirclient.BaseClient) (*fhir.Patient, *fhir.ServiceRequest, error) {
