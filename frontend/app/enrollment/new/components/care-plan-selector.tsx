@@ -4,7 +4,7 @@ import Combobox from '@/components/ui/combobox'
 import useEnrollment from '@/lib/store/enrollment-store'
 import { CheckIcon, PlusIcon } from '@radix-ui/react-icons'
 import React from 'react'
-import CarePlanConditionSelector from './care-plan-conditions-selector'
+import NewCarePlanInformation from './new-care-plan-information'
 
 export default function CarePlanSelector() {
 
@@ -30,13 +30,13 @@ export default function CarePlanSelector() {
                         <CheckIcon className="mr-2 h-4 w-4" /> Creating new CarePlan
                     </Button>
                 ) : (
-                        <Button variant="outline" onClick={() => setShouldCreateNewCarePlan(true)}>
+                    <Button variant="outline" onClick={() => setShouldCreateNewCarePlan(true)}>
                         <PlusIcon className="mr-2 h-4 w-4" /> New CarePlan
                     </Button>
                 )}
             </CardContent>
             {shouldCreateNewCarePlan && (
-                <CarePlanConditionSelector />
+                <NewCarePlanInformation />
             )}
         </Card>
     )

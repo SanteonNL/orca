@@ -1,4 +1,4 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import MultipleSelector from '@/components/ui/multipleselect'
 import useEnrollment from '@/lib/store/enrollment-store'
 import React from 'react'
@@ -17,30 +17,24 @@ export default function CarePlanConditionSelector() {
     if (!records) <>No Conditions selected</>
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>CarePlan Conditions</CardTitle>
-                <CardDescription>Select all relevant conditions to this CarePlan</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className='flex flex-col gap-3'>
-                    <MultipleSelector
-                        placeholder='Select one or more relevant conditions'
-                        defaultOptions={records}
-                        options={records}
-                        onChange={(selectedOptions) => {
-                            const selectedConditions = selectedOptions
-                                .map(option => patientConditions?.find(filterCondition => filterCondition.id === option.value))
-                                .filter(condition => condition !== undefined)
 
-                            if (selectedConditions) {
-                                setCarePlanConditions(selectedConditions)
-                            }
-                        }}
-                        emptyIndicator={<>No Conditions found for Patient</>}
-                    />
-                </div>
-            </CardContent>
-        </Card>
+        <div>
+            <Label>Conditions</Label>
+            <MultipleSelector
+                placeholder='Select one or more relevant conditions'
+                defaultOptions={records}
+                options={records}
+                onChange={(selectedOptions) => {
+                    const selectedConditions = selectedOptions
+                        .map(option => patientConditions?.find(filterCondition => filterCondition.id === option.value))
+                        .filter(condition => condition !== undefined)
+
+                    if (selectedConditions) {
+                        setCarePlanConditions(selectedConditions)
+                    }
+                }}
+                emptyIndicator={<>No Conditions found for Patient</>}
+            />
+        </div>
     )
 }

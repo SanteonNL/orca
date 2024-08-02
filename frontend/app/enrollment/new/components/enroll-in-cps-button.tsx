@@ -20,15 +20,15 @@ import 'react18-json-view/src/style.css';
  */
 export default function EnrollInCpsButton() {
 
-    const { patient, selectedCarePlan, shouldCreateNewCarePlan, taskCondition, carePlanConditions, serviceRequest } = useEnrollment()
+    const { patient, selectedCarePlan, shouldCreateNewCarePlan, taskCondition, carePlanConditions, serviceRequest, newCarePlanName } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
     const [submitted, isSubmitted] = useState(false)
 
     const cpsClient = useCpsClient()
 
     useEffect(() => {
-        setDisabled(!taskCondition || (!selectedCarePlan && !shouldCreateNewCarePlan))
-    }, [taskCondition, selectedCarePlan, shouldCreateNewCarePlan])
+        setDisabled(!taskCondition || (!selectedCarePlan && !shouldCreateNewCarePlan) || (shouldCreateNewCarePlan && (!newCarePlanName || !carePlanConditions)))
+    }, [taskCondition, selectedCarePlan, shouldCreateNewCarePlan, newCarePlanName, carePlanConditions])
 
     const informCps = async () => {
         let carePlan = selectedCarePlan
@@ -91,12 +91,12 @@ export default function EnrollInCpsButton() {
             toast.error("Error: CarePlanService not found")
             throw new Error("No CPS client found")
         }
-        if (!patient || !taskCondition || !serviceRequest) {
+        if (!patient || !taskCondition || !serviceRequest || !carePlanConditions) {
             toast.error("Error: Missing required items for CarePlan creation")
             throw new Error("Missing required items for CarePlan creation")
         }
 
-        const carePlan = getCarePlan(patient, taskCondition, carePlanConditions);
+        const carePlan = getCarePlan(patient, carePlanConditions, newCarePlanName);
 
         return await cpsClient.create({ resourceType: 'CarePlan', body: carePlan });
     }
@@ -116,7 +116,7 @@ export default function EnrollInCpsButton() {
     }
 
     return (
-        <Button disabled={disabled} onClick={informCps} > Proceed</Button >
+        <Button disabled={disabled} onClick={informCps}>Proceed</Button >
     )
 
 

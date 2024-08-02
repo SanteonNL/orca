@@ -1,12 +1,11 @@
 'use client'
 import { useMemo } from 'react';
-import Client from 'fhir-kit-client';
+import { createCpsClient } from '@/lib/fhirUtils';
 
 const useCpsClient = () => {
     const client = useMemo(() => {
         if (typeof window !== 'undefined') {
-            return new Client({ baseUrl: `${window.location.origin}/orca/contrib/cps/fhir` });
-            // return new Client({ baseUrl: `http://localhost:7090/fhir` });
+            return createCpsClient();
         }
         return null;
     }, []);

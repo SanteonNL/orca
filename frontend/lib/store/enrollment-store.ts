@@ -2,7 +2,8 @@ import Client from 'fhir-kit-client';
 import { Bundle, CarePlan, Condition, Patient, Practitioner, ServiceRequest } from 'fhir/r4';
 import { useEffect } from 'react';
 import { create } from 'zustand';
-import { BSN_SYSTEM, cpsClient, ehrClient, fetchAllBundlePages, getBsn } from '../fhirUtils';
+import { BSN_SYSTEM, createCpsClient, createEhrClient, fetchAllBundlePages, getBsn } from '../fhirUtils';
+import useEhrFhirClient from '@/hooks/use-ehr-fhir-client';
 
 interface LaunchContext {
     patient: string
@@ -18,6 +19,7 @@ interface StoreState {
     serviceRequest?: ServiceRequest
     carePlans?: CarePlan[]
     selectedCarePlan?: CarePlan | null
+    newCarePlanName: string
     taskCondition?: Condition
     patientConditions?: Condition[]
     carePlanConditions?: Condition[]
@@ -25,6 +27,7 @@ interface StoreState {
     loading: boolean
     error?: string
     setSelectedCarePlan: (carePlan?: CarePlan) => void
+    setNewCarePlanName: (name: string) => void
     setTaskCondition: (condition?: Condition) => void
     setPatientConditions: (conditions: Condition[]) => void
     setCarePlanConditions: (conditions: Condition[]) => void
@@ -41,6 +44,7 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     serviceRequest: undefined,
     carePlans: undefined,
     selectedCarePlan: undefined,
+    newCarePlanName: "",
     taskCondition: undefined,
     patientConditions: undefined,
     shouldCreateNewCarePlan: false,
@@ -63,6 +67,9 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
 
             set({ carePlanConditions, taskCondition: undefined })
         }
+    },
+    setNewCarePlanName: (name: string) => {
+        set({ newCarePlanName: name });
     },
     setTaskCondition: (condition?: Condition) => {
         set({ taskCondition: condition });
@@ -95,15 +102,22 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
 }));
 
 const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: boolean | undefined) => void) => {
-    // const launchContextRes = await fetch(`/orca/contrib/context`);
-    // if (!launchContextRes.ok) throw new Error(`Failed to fetch patient: ${launchContextRes.statusText}`);
 
-    // const launchContext = await launchContextRes.json();
-    // Use below for quick localhost testing
-    const launchContext = {
-        "patient": "Patient/2",
-        "serviceRequest": "ServiceRequest/4",
-        "practitioner": "Practitioner/6"
+    let launchContext: LaunchContext;
+
+    if (process.env.NODE_ENV === "production") {
+        const launchContextRes = await fetch(`/orca/contrib/context`);
+        if (!launchContextRes.ok) throw new Error(`Failed to fetch patient: ${launchContextRes.statusText}`);
+
+        launchContext = await launchContextRes.json();
+    } else {
+        //TODO: We can remove this when going live, this is useful during development
+        launchContext = {
+            "patient": "Patient/2",
+            "serviceRequest": "ServiceRequest/4",
+            "practitioner": "Practitioner/6"
+        }
+
     }
 
     set({ launchContext });
@@ -117,6 +131,8 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
     if (!launchContext) throw new Error("Unable to fetch EHR resources without LaunchContext")
 
     if (typeof window === "undefined") return //skip during build
+
+    const ehrClient = createEhrClient()
 
     const [patient, practitioner, serviceRequest, conditions] = await Promise.all([
         ehrClient.read({ resourceType: 'Patient', id: launchContext.patient.replace("Patient/", "") }),
@@ -149,6 +165,8 @@ const fetchCarePlans = async (
     const bsn = getBsn(patient)
     if (!bsn) throw new Error(`No BSN identifier found for Patient/${patient?.id}`);
 
+    const cpsClient = createCpsClient()
+
     const initialBundle = await cpsClient.search({
         resourceType: 'CarePlan',
         searchParams: {
@@ -157,7 +175,7 @@ const fetchCarePlans = async (
         }
     }) as Bundle<CarePlan>;
 
-    const carePlans = await fetchAllBundlePages(ehrClient, initialBundle);
+    const carePlans = await fetchAllBundlePages(cpsClient, initialBundle);
     set({ carePlans, initialized: true, loading: false });
 };
 

@@ -1,11 +1,11 @@
 'use client'
 import { useMemo } from 'react';
-import Client from 'fhir-kit-client';
+import { createEhrClient } from '@/lib/fhirUtils';
 
 const useEhrFhirClient = () => {
     const client = useMemo(() => {
         if (typeof window !== 'undefined') {
-            return new Client({ baseUrl: `${window.location.origin}/orca/contrib/ehr/fhir` });
+            return createEhrClient()
         }
         return null;
     }, []);

@@ -4,18 +4,25 @@ import { Bundle, CarePlan, CarePlanActivity, Condition, Patient, Resource, Servi
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
 
-const BSN_SYSTEM = "http://fhir.nl/fhir/NamingSystem/bsn"
+export const BSN_SYSTEM = "http://fhir.nl/fhir/NamingSystem/bsn"
 
-const ehrClient = new Client({
-    baseUrl: process.env.NODE_ENV === "production" ? `${window && window.location.origin}/orca/contrib/ehr/fhir` : "http://localhost:9090/fhir"
-});
+export const createEhrClient = () => {
+    const baseUrl = process.env.NODE_ENV === "production"
+        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/contrib/ehr/fhir`
+        : "http://localhost:9090/fhir";
 
-const cpsClient = new Client({
-    baseUrl: process.env.NODE_ENV === "production" ? `${window.location.origin}/orca/contrib/cps/fhir` : "http://localhost:7090/fhir"
-});
+    return new Client({ baseUrl });
+};
 
+export const createCpsClient = () => {
+    const baseUrl = process.env.NODE_ENV === "production"
+        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/contrib/cps/fhir`
+        : "http://localhost:7090/fhir";
 
-const fetchAllBundlePages = async <T extends Resource>(
+    return new Client({ baseUrl });
+};
+
+export const fetchAllBundlePages = async <T extends Resource>(
     client: FhirClient,
     initialBundle: FhirBundle<T>
 ): Promise<T[]> => {
@@ -41,11 +48,11 @@ const fetchAllBundlePages = async <T extends Resource>(
     return allResources;
 }
 
-const getBsn = (patient?: Patient) => {
+export const getBsn = (patient?: Patient) => {
     return patient?.identifier?.find((identifier) => identifier.system === BSN_SYSTEM)?.value;
 }
 
-const getCarePlan = (patient: Patient, primaryCondition: Condition, relevantConditions?: Condition[]): CarePlan => {
+export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanName: string): CarePlan => {
     return {
         resourceType: 'CarePlan',
         status: 'active',
@@ -56,28 +63,21 @@ const getCarePlan = (patient: Patient, primaryCondition: Condition, relevantCond
                 value: getBsn(patient)
             }
         },
-        addresses: [
-            ...(primaryCondition ? [{
-                identifier: {
-                    system: primaryCondition?.code?.coding?.[0].system,
-                    value: primaryCondition?.code?.coding?.[0].code,
-                },
-                display: primaryCondition?.code?.coding?.[0].display
-            }] : []),
-            ...(relevantConditions ? relevantConditions.map(condition => ({
+        addresses: conditions.map(condition => {
+            return {
                 identifier: {
                     system: condition?.code?.coding?.[0].system,
                     value: condition?.code?.coding?.[0].code,
                 },
                 display: condition?.code?.coding?.[0].display
-            })) : [])
-        ],
-        title: `Care Plan [${primaryCondition?.code?.text || ""}]`,
+            }
+        }),
+        title: carePlanName,
         description: "Care plan description here"
     }
 }
 
-const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCondition: Condition): Task => {
+export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCondition: Condition): Task => {
 
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task")
@@ -122,7 +122,3 @@ const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCond
         ]
     }
 }
-
-
-
-export { fetchAllBundlePages, getBsn, getCarePlan, getTask, ehrClient, cpsClient, BSN_SYSTEM }
