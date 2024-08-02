@@ -75,9 +75,11 @@ func TestService_ProxyToCPS(t *testing.T) {
 	// Setup: configure CarePlanService to which the service proxies
 	carePlanServiceMux := http.NewServeMux()
 	capturedHost := ""
+	var capturedQueryParams url.Values
 	carePlanServiceMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
@@ -101,7 +103,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/cps/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/cps/fhir/Patient?_search=foo:bar", nil)
 	httpRequest.AddCookie(&http.Cookie{
 		Name:  "sid",
 		Value: sessionID,
@@ -110,6 +112,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, carePlanServiceURL.Host, capturedHost)
+	require.Equal(t, "foo:bar", capturedQueryParams.Get("_search"))
 }
 
 func TestService_confirm(t *testing.T) {
