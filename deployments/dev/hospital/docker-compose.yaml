@@ -35,7 +35,8 @@ services:
     #  dockerfile: Dockerfile
      # Make sure to copy the .env.secrets.example and fill in the terminology server credentials for the tx server to work
     env_file:
-      - ../../../frontend/.env.secrets
+      - path: ../../../frontend/.env.secrets
+        required: false
     ports:
       - "3003:3000"
   orchestrator:
