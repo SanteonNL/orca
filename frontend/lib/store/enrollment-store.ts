@@ -87,13 +87,17 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     fetchAllResources: async () => {
 
         try {
-            set({ loading: true, error: undefined })
+            const { loading } = get()
 
-            await fetchLaunchContext(set);
-            await fetchEhrResources(get, set);
-            await fetchCarePlans(get, set);
+            if (!loading) {
+                set({ loading: true, error: undefined })
 
-            set({ initialized: true, loading: false, })
+                await fetchLaunchContext(set);
+                await fetchEhrResources(get, set);
+                await fetchCarePlans(get, set);
+
+                set({ initialized: true, loading: false, })
+            }
 
         } catch (error: any) {
             set({ error: `Something went wrong while fetching all resources: ${error?.message || error}`, loading: false })
