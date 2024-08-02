@@ -3,6 +3,7 @@ package careplanservice
 import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -82,30 +83,10 @@ func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
 	httpClient := httpService.Client()
-	httpClient.Transport = headerDecoratorRoundTripper{
-		inner: httpClient.Transport,
-		header: map[string]string{
-			"X-Userinfo": ,
-		}
-	}
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(httpService.Client().Transport)
+
 	carePlanContributor := fhirclient.New(carePlanServiceURL, httpClient, nil)
 	return carePlanContributor
-}
-
-var _ http.RoundTripper = headerDecoratorRoundTripper{}
-
-type headerDecoratorRoundTripper struct {
-	inner  http.RoundTripper
-	header map[string]string
-}
-
-func (h headerDecoratorRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	for name, value := range request.Header {
-		if _, ok := h.header[name]; !ok {
-			request.Header.Set(name, value[0])
-		}
-	}
-	return h.inner.RoundTrip(request)
 }
 
 func setupHAPI(t *testing.T) *url.URL {

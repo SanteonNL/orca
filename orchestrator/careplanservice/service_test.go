@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/stretchr/testify/require"
 	"net/http"
 	"net/http/httptest"
@@ -34,7 +35,10 @@ func TestService_Proxy(t *testing.T) {
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
-	httpResponse, err := frontServer.Client().Get(frontServer.URL + "/cps/Patient")
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport)
+
+	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)
