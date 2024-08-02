@@ -6,8 +6,9 @@ import useEnrollment from '@/lib/store/enrollment-store'
 import { CarePlan, Condition } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
-import JsonView from 'react18-json-view';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useRouter } from 'next/navigation'
+import JsonView from 'react18-json-view';
 import 'react18-json-view/src/style.css';
 
 /**
@@ -22,8 +23,8 @@ export default function EnrollInCpsButton() {
 
     const { patient, selectedCarePlan, shouldCreateNewCarePlan, taskCondition, carePlanConditions, serviceRequest, newCarePlanName } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
-    const [submitted, isSubmitted] = useState(false)
 
+    const router = useRouter()
     const cpsClient = useCpsClient()
 
     useEffect(() => {
@@ -84,6 +85,8 @@ export default function EnrollInCpsButton() {
                 </Dialog>
             )
         })
+
+        router.push(`/enrollment/task/${task.id}`)
     }
 
     const createNewCarePlan = async () => {
