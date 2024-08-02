@@ -95,6 +95,6 @@ jobs:
         run: |
           cd e2e-tests && \
           ORCHESTRATOR_IMAGE=${{needs.docker-image.outputs.fully_qualified}} docker compose pull && \
-          ORCHESTRATOR_IMAGE=${{needs.docker-image.outputs.fully_qualified}} docker compose up --wait && \
-          ./run.sh
+          ORCHESTRATOR_IMAGE=${{needs.docker-image.outputs.fully_qualified}} ./run.sh
+          
 

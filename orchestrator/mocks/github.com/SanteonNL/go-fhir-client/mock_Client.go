@@ -3,6 +3,8 @@
 package fhirclient
 
 import (
+	context "context"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	mock "github.com/stretchr/testify/mock"
 
@@ -80,6 +82,69 @@ func (_c *MockClient_Create_Call) Return(_a0 error) *MockClient_Create_Call {
 }
 
 func (_c *MockClient_Create_Call) RunAndReturn(run func(interface{}, interface{}, ...fhirclient.Option) error) *MockClient_Create_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CreateWithContext provides a mock function with given fields: ctx, resource, result, opts
+func (_m *MockClient) CreateWithContext(ctx context.Context, resource interface{}, result interface{}, opts ...fhirclient.Option) error {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, resource, result)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CreateWithContext")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, interface{}, interface{}, ...fhirclient.Option) error); ok {
+		r0 = rf(ctx, resource, result, opts...)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockClient_CreateWithContext_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CreateWithContext'
+type MockClient_CreateWithContext_Call struct {
+	*mock.Call
+}
+
+// CreateWithContext is a helper method to define mock.On call
+//   - ctx context.Context
+//   - resource interface{}
+//   - result interface{}
+//   - opts ...fhirclient.Option
+func (_e *MockClient_Expecter) CreateWithContext(ctx interface{}, resource interface{}, result interface{}, opts ...interface{}) *MockClient_CreateWithContext_Call {
+	return &MockClient_CreateWithContext_Call{Call: _e.mock.On("CreateWithContext",
+		append([]interface{}{ctx, resource, result}, opts...)...)}
+}
+
+func (_c *MockClient_CreateWithContext_Call) Run(run func(ctx context.Context, resource interface{}, result interface{}, opts ...fhirclient.Option)) *MockClient_CreateWithContext_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]fhirclient.Option, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(fhirclient.Option)
+			}
+		}
+		run(args[0].(context.Context), args[1].(interface{}), args[2].(interface{}), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockClient_CreateWithContext_Call) Return(_a0 error) *MockClient_CreateWithContext_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockClient_CreateWithContext_Call) RunAndReturn(run func(context.Context, interface{}, interface{}, ...fhirclient.Option) error) *MockClient_CreateWithContext_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -207,6 +272,69 @@ func (_c *MockClient_Read_Call) RunAndReturn(run func(string, interface{}, ...fh
 	return _c
 }
 
+// ReadWithContext provides a mock function with given fields: ctx, path, target, opts
+func (_m *MockClient) ReadWithContext(ctx context.Context, path string, target interface{}, opts ...fhirclient.Option) error {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, path, target)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ReadWithContext")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, interface{}, ...fhirclient.Option) error); ok {
+		r0 = rf(ctx, path, target, opts...)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockClient_ReadWithContext_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ReadWithContext'
+type MockClient_ReadWithContext_Call struct {
+	*mock.Call
+}
+
+// ReadWithContext is a helper method to define mock.On call
+//   - ctx context.Context
+//   - path string
+//   - target interface{}
+//   - opts ...fhirclient.Option
+func (_e *MockClient_Expecter) ReadWithContext(ctx interface{}, path interface{}, target interface{}, opts ...interface{}) *MockClient_ReadWithContext_Call {
+	return &MockClient_ReadWithContext_Call{Call: _e.mock.On("ReadWithContext",
+		append([]interface{}{ctx, path, target}, opts...)...)}
+}
+
+func (_c *MockClient_ReadWithContext_Call) Run(run func(ctx context.Context, path string, target interface{}, opts ...fhirclient.Option)) *MockClient_ReadWithContext_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]fhirclient.Option, len(args)-3)
+		for i, a := range args[3:] {
+			if a != nil {
+				variadicArgs[i] = a.(fhirclient.Option)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), args[2].(interface{}), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockClient_ReadWithContext_Call) Return(_a0 error) *MockClient_ReadWithContext_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockClient_ReadWithContext_Call) RunAndReturn(run func(context.Context, string, interface{}, ...fhirclient.Option) error) *MockClient_ReadWithContext_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Update provides a mock function with given fields: path, resource, result, opts
 func (_m *MockClient) Update(path string, resource interface{}, result interface{}, opts ...fhirclient.Option) error {
 	_va := make([]interface{}, len(opts))
@@ -266,6 +394,70 @@ func (_c *MockClient_Update_Call) Return(_a0 error) *MockClient_Update_Call {
 }
 
 func (_c *MockClient_Update_Call) RunAndReturn(run func(string, interface{}, interface{}, ...fhirclient.Option) error) *MockClient_Update_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateWithContext provides a mock function with given fields: ctx, path, resource, result, opts
+func (_m *MockClient) UpdateWithContext(ctx context.Context, path string, resource interface{}, result interface{}, opts ...fhirclient.Option) error {
+	_va := make([]interface{}, len(opts))
+	for _i := range opts {
+		_va[_i] = opts[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, ctx, path, resource, result)
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateWithContext")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, string, interface{}, interface{}, ...fhirclient.Option) error); ok {
+		r0 = rf(ctx, path, resource, result, opts...)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockClient_UpdateWithContext_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateWithContext'
+type MockClient_UpdateWithContext_Call struct {
+	*mock.Call
+}
+
+// UpdateWithContext is a helper method to define mock.On call
+//   - ctx context.Context
+//   - path string
+//   - resource interface{}
+//   - result interface{}
+//   - opts ...fhirclient.Option
+func (_e *MockClient_Expecter) UpdateWithContext(ctx interface{}, path interface{}, resource interface{}, result interface{}, opts ...interface{}) *MockClient_UpdateWithContext_Call {
+	return &MockClient_UpdateWithContext_Call{Call: _e.mock.On("UpdateWithContext",
+		append([]interface{}{ctx, path, resource, result}, opts...)...)}
+}
+
+func (_c *MockClient_UpdateWithContext_Call) Run(run func(ctx context.Context, path string, resource interface{}, result interface{}, opts ...fhirclient.Option)) *MockClient_UpdateWithContext_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]fhirclient.Option, len(args)-4)
+		for i, a := range args[4:] {
+			if a != nil {
+				variadicArgs[i] = a.(fhirclient.Option)
+			}
+		}
+		run(args[0].(context.Context), args[1].(string), args[2].(interface{}), args[3].(interface{}), variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockClient_UpdateWithContext_Call) Return(_a0 error) *MockClient_UpdateWithContext_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockClient_UpdateWithContext_Call) RunAndReturn(run func(context.Context, string, interface{}, interface{}, ...fhirclient.Option) error) *MockClient_UpdateWithContext_Call {
 	_c.Call.Return(run)
 	return _c
 }

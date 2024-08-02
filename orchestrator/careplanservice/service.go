@@ -2,26 +2,21 @@ package careplanservice
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/addressing"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"net/url"
 )
 
-func New(config Config, didResolver addressing.DIDResolver) (*Service, error) {
-	if config.FHIR.BaseURL == "" {
-		return nil, errors.New("careplanservice.fhir.url is not configured")
-	}
-	fhirURL, err := url.Parse(config.FHIR.BaseURL)
-	if err != nil {
-		return nil, err
-	}
+func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, ownDID string, didResolver addressing.DIDResolver) (*Service, error) {
+	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	var transport http.RoundTripper
 	var fhirClient fhirclient.Client
 	fhirClientConfig := coolfhir.Config()
@@ -42,6 +37,9 @@ func New(config Config, didResolver addressing.DIDResolver) (*Service, error) {
 	}
 	return &Service{
 		fhirURL:         fhirURL,
+		orcaPublicURL:   orcaPublicURL,
+		nutsPublicURL:   nutsPublicURL,
+		ownDID:          ownDID,
 		didResolver:     didResolver,
 		transport:       transport,
 		fhirClient:      fhirClient,
@@ -50,6 +48,9 @@ func New(config Config, didResolver addressing.DIDResolver) (*Service, error) {
 }
 
 type Service struct {
+	orcaPublicURL   *url.URL
+	nutsPublicURL   *url.URL
+	ownDID          string
 	didResolver     addressing.DIDResolver
 	fhirURL         *url.URL
 	transport       http.RoundTripper
@@ -59,7 +60,23 @@ type Service struct {
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	proxy := coolfhir.NewProxy(log.Logger, s.fhirURL, "/cps", s.transport)
-	mux.HandleFunc("POST /cps/Task", func(writer http.ResponseWriter, request *http.Request) {
+	//
+	// Unauthorized endpoints
+	//
+	mux.HandleFunc("/cps/.well-known/oauth-protected-resource", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Add("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusOK)
+		md := oauth2.ProtectedResourceMetadata{
+			Resource:               s.orcaPublicURL.JoinPath("cps").String(),
+			AuthorizationServers:   []string{s.nutsPublicURL.JoinPath("oauth2", s.ownDID).String()},
+			BearerMethodsSupported: []string{"header"},
+		}
+		_ = json.NewEncoder(writer).Encode(md)
+	})
+	//
+	// Authorized endpoints
+	//
+	mux.HandleFunc("POST /cps/Task", auth.Middleware(func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateTask(writer, request)
 		if err != nil {
 			// TODO: proper OperationOutcome
@@ -67,8 +84,8 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			http.Error(writer, "Create Task at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-	})
-	mux.HandleFunc("POST /cps/CarePlan", func(writer http.ResponseWriter, request *http.Request) {
+	}))
+	mux.HandleFunc("POST /cps/CarePlan", auth.Middleware(func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateCarePlan(writer, request)
 		if err != nil {
 			// TODO: proper OperationOutcome
@@ -76,12 +93,12 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			http.Error(writer, "Create CarePlan at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-	})
-	mux.HandleFunc("/cps/*", func(writer http.ResponseWriter, request *http.Request) {
+	}))
+	mux.HandleFunc("/cps/*", auth.Middleware(func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Authorize request here
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
 		proxy.ServeHTTP(writer, request)
-	})
+	}))
 }
 
 func (s Service) readRequest(httpRequest *http.Request, target interface{}) error {

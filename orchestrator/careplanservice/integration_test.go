@@ -3,6 +3,7 @@ package careplanservice
 import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -73,7 +74,7 @@ func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	service, err := New(config, nil)
+	service, err := New(config, nutsPublicURL, orcaPublicURL, "did:web:example.com/careplanservice", nil)
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
@@ -81,7 +82,10 @@ func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
 	service.RegisterHandlers(serverMux)
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
-	carePlanContributor := fhirclient.New(carePlanServiceURL, httpService.Client(), nil)
+	httpClient := httpService.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(httpService.Client().Transport)
+
+	carePlanContributor := fhirclient.New(carePlanServiceURL, httpClient, nil)
 	return carePlanContributor
 }
 

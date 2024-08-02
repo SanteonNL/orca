@@ -1,0 +1,76 @@
+routes:
+  # CarePlanContributors need to be able to resolve the CarePlanService metadata,
+  # e.g. /.well-known/oauth-protected-resource to discover where to request an OAuth2 access token.
+  - id: careplanservice_metadata
+    uri: /clinic/orca/cps/.well-known/*
+    upstream:
+      nodes:
+        "clinic_orchestrator:8080": 1
+      type: roundrobin
+    plugins:
+      proxy-rewrite:
+        regex_uri: [ "^/clinic/orca/cps/.well-known/(.*)", "/cps/.well-known/$1" ]
+  # CarePlanContributors need to access CarePlanService services, but only if they're authenticated using OAuth2.
+  - id: careplanservice
+    uri: /clinic/orca/cps/*
+    upstream:
+      nodes:
+        "clinic_orchestrator:8080": 1
+      type: roundrobin
+    plugins:
+      openid-connect:
+        client_id: "client_id_todo"
+        client_secret: "client_secret_todo"
+        discovery: "discovery_todo"
+        introspection_endpoint: "http://nutsnode:8081/internal/auth/v2/accesstoken/introspect"
+        bearer_only: true
+        realm: "master"
+        introspection_endpoint_auth_method: none
+      proxy-rewrite:
+        regex_uri: ["^/clinic/orca/cps/(.*)", "/cps/$1"]
+  - id: hospital_orca
+    uri: /hospital/orca/*
+    upstream:
+      nodes:
+        "hospital_orchestrator:8080": 1
+      type: roundrobin
+    plugins:
+      proxy-rewrite:
+        regex_uri: [ "^/hospital/orca/(.*)", "/$1" ]
+  - id: nutsnode
+    uris:
+      - /.well-known/*
+      - /nuts/iam/*
+      - /nuts/oauth2/*
+    upstream:
+      nodes:
+        "nutsnode:8080": 1
+      type: roundrobin
+    plugins:
+      proxy-rewrite:
+        regex_uri: [
+          "^/.well-known/([a-zA-Z_-]+)/nuts/(.*)", "/.well-known/$1/$2",
+          "^/nuts/(.*)", "/$1"
+        ]
+ssls:
+  -
+    id: tls
+    sni: proxy
+    cert: |
+      -----BEGIN CERTIFICATE-----
+      MIIBdzCCAR6gAwIBAgIUKQXhajhnP9JglQsLksYurYeJoI4wCgYIKoZIzj0EAwIw
+      EjEQMA4GA1UEAwwHUm9vdCBDQTAeFw0yNDA3MjMwNDQ4MjRaFw00NTEyMjUwNDQ4
+      MjRaMBAxDjAMBgNVBAMMBXByb3h5MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE
+      pDNLiPymD7idaE850iHxq3mngNAWzaDsP7WYP5+iWWDKqAanr6y7pJiqhpCX5Q30
+      eqep05EqJYeQUJqBW5OVf6NUMFIwEAYDVR0RBAkwB4IFcHJveHkwHQYDVR0OBBYE
+      FBY0HEIaFu03iF8dzUM1ol/lJn9RMB8GA1UdIwQYMBaAFIoHw6A6RLtLME60nZhM
+      ucAX8HneMAoGCCqGSM49BAMCA0cAMEQCIGZW1GGyYd4D4H7EOpSYQhvm8QShtFfI
+      R7C+KxKjTI3NAiAj0IX4dvbZb63kHdqfd/n1OFS7pgyaqQUlQL6BUxSF0w==
+      -----END CERTIFICATE-----
+    key: |
+      -----BEGIN EC PRIVATE KEY-----
+      MHcCAQEEIAY+Aj1Ud4wAvdT7l2YV0KWGXBtgc9Q6r0P/DMBzKgpHoAoGCCqGSM49
+      AwEHoUQDQgAEpDNLiPymD7idaE850iHxq3mngNAWzaDsP7WYP5+iWWDKqAanr6y7
+      pJiqhpCX5Q30eqep05EqJYeQUJqBW5OVfw==
+      -----END EC PRIVATE KEY-----
+#END

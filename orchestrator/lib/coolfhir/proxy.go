@@ -13,16 +13,42 @@ func NewProxy(logger zerolog.Logger, targetFHIRBaseURL *url.URL, proxyBasePath s
 	return &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.Out.URL = targetFHIRBaseURL.JoinPath("/", strings.TrimPrefix(r.In.URL.Path, proxyBasePath))
+			r.Out.URL.RawQuery = r.In.URL.RawQuery
 			r.Out.Host = targetFHIRBaseURL.Host
 		},
-		Transport: loggingRoundTripper{
-			next: transport,
+		Transport: sanitizingRoundTripper{
+			next: loggingRoundTripper{
+				next: transport,
+			},
 		},
 		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
 			logger.Warn().Err(err).Msgf("FHIR request failed (url=%s)", request.URL.String())
 			http.Error(writer, "FHIR request failed: "+err.Error(), http.StatusBadGateway)
 		},
 	}
+}
+
+var _ http.RoundTripper = &sanitizingRoundTripper{}
+
+type sanitizingRoundTripper struct {
+	next http.RoundTripper
+}
+
+func (s sanitizingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	// Header sanitizing is loosely inspired by:
+	// - https://www.rfc-editor.org/rfc/rfc7231
+	// - https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/header_sanitizing
+	for name, _ := range request.Header {
+		nameLC := strings.ToLower(name)
+		if strings.HasPrefix(nameLC, "x-") ||
+			nameLC == "referer" ||
+			nameLC == "cookie" ||
+			nameLC == "user-agent" ||
+			nameLC == "authorization" {
+			request.Header.Del(name)
+		}
+	}
+	return s.next.RoundTrip(request)
 }
 
 var _ http.RoundTripper = &loggingRoundTripper{}

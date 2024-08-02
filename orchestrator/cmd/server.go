@@ -9,6 +9,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/nuts-foundation/go-nuts-client/nuts"
+	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 )
 
@@ -22,19 +24,36 @@ func Start(config Config) error {
 	didResolver := addressing.StaticDIDResolver(map[string]string{})
 	sessionManager := user.NewSessionManager()
 
+	if err := config.Validate(); err != nil {
+		return err
+	}
+	nutsOAuth2HttpClient := &http.Client{
+		Transport: &oauth2.Transport{
+			TokenSource: nuts.OAuth2TokenSource{
+				OwnDID:     config.Nuts.OwnDID,
+				NutsAPIURL: config.Nuts.API.URL,
+			},
+			MetadataLoader: &oauth2.MetadataLoader{},
+			AuthzServerLocators: []oauth2.AuthorizationServerLocator{
+				oauth2.ProtectedResourceMetadataLocator,
+			},
+		},
+	}
+
 	// Register services
 	var services []Service
 	if config.CarePlanContributor.Enabled {
-		carePlanContributor := careplancontributor.New(config.CarePlanContributor, sessionManager, didResolver)
+		carePlanContributor := careplancontributor.New(config.CarePlanContributor, sessionManager, nutsOAuth2HttpClient, didResolver)
 		services = append(services, carePlanContributor)
 		// App Launches
 		services = append(services, smartonfhir.New(config.AppLaunch.SmartOnFhir, sessionManager))
 		if config.AppLaunch.Demo.Enabled {
-			services = append(services, demo.New(sessionManager, config.AppLaunch.Demo, config.Public.BaseURL))
+			services = append(services, demo.New(sessionManager, config.AppLaunch.Demo, config.Public.URL))
 		}
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, didResolver)
+		carePlanService, err := careplanservice.New(config.CarePlanService, config.Nuts.Public.Parse(),
+			config.Public.ParseURL(), config.Nuts.OwnDID, didResolver)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

@@ -2,10 +2,13 @@
 package careplancontributor
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
 	"time"
@@ -16,29 +19,28 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/assets"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
 const LandingURL = "/contrib/"
+const CarePlanServiceOAuth2Scope = "careplanservice"
 
-func New(config Config, sessionManager *user.SessionManager, didResolver addressing.StaticDIDResolver) *Service {
+func New(config Config, sessionManager *user.SessionManager, carePlanServiceHttpClient *http.Client, didResolver addressing.StaticDIDResolver) *Service {
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
-	// TODO: Replace with client doing authentication
-	carePlanServiceClient := fhirclient.New(cpsURL, http.DefaultClient, coolfhir.Config())
+	carePlanServiceClient := fhirclient.New(cpsURL, carePlanServiceHttpClient, coolfhir.Config())
 	return &Service{
 		carePlanServiceURL: cpsURL,
 		SessionManager:     sessionManager,
-		CarePlanService:    carePlanServiceClient,
+		carePlanService:    carePlanServiceClient,
 		frontendUrl:        config.FrontendConfig.URL,
 	}
 }
 
 type Service struct {
 	SessionManager     *user.SessionManager
-	CarePlanService    fhirclient.Client
 	frontendUrl        string
+	carePlanService    fhirclient.Client
 	carePlanServiceURL *url.URL
 }
 
@@ -186,7 +188,8 @@ func (s Service) pollTaskStatus(taskID string) error {
 	pollInterval := 2 * time.Second
 	maxPollingDuration := 20 * time.Second
 	startTime := time.Now()
-
+	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
+	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
 	for {
 		if time.Since(startTime) >= maxPollingDuration {
 			return fmt.Errorf("maximum polling duration of %s reached for Task/%s", maxPollingDuration, taskID)
@@ -195,7 +198,7 @@ func (s Service) pollTaskStatus(taskID string) error {
 		var task fhir.Task
 
 		//TODO: Add timeout to the read when the lib supports it
-		if err := s.CarePlanService.Read("Task/"+taskID, &task); err != nil {
+		if err := s.carePlanService.ReadWithContext(ctx, "Task/"+taskID, &task); err != nil {
 			return fmt.Errorf("polling Task/%s failed - error: [%w]", taskID, err)
 		}
 
@@ -271,7 +274,9 @@ func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {
 		},
 	}
 	var result fhir.CarePlan
-	if err := s.CarePlanService.Create(carePlan, &result); err != nil {
+	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
+	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
+	if err := s.carePlanService.CreateWithContext(ctx, carePlan, &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
@@ -298,7 +303,9 @@ func (s Service) createTask(serviceRequest fhir.ServiceRequest, carePlanID strin
 			},
 		},
 	}
-	createdTask, err := coolfhir.Workflow{CarePlanService: s.CarePlanService}.Invoke(task)
+	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
+	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
+	createdTask, err := coolfhir.Workflow{CarePlanService: s.carePlanService}.Invoke(ctx, task)
 	return createdTask, err
 }
 
@@ -309,7 +316,9 @@ func (s Service) handleAcceptedTask(task *fhir.Task, serviceRequest *fhir.Servic
 		return nil, fmt.Errorf("failed to enrich task: %w", err)
 	}
 	var enrichedTask fhir.Task
-	if err := s.CarePlanService.Update("Task/"+*task.Id, *taskMap, &enrichedTask); err != nil {
+	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
+	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
+	if err := s.carePlanService.UpdateWithContext(ctx, "Task/"+*task.Id, *taskMap, &enrichedTask); err != nil {
 		return nil, fmt.Errorf("failed to update Task: %w", err)
 	}
 	return &enrichedTask, nil
