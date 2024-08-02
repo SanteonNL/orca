@@ -7,11 +7,14 @@ services:
     expose:
       - "80"
       - "443"
-    environment:
-      APISIX_STAND_ALONE: true
+    # Although APISIX runs in standalone mode, if we set it, it will try to alter config.yaml, requiring a writeable filesystem.
+    # This is not possible in GH Actions, so then the e2e test would fail. So, we don't set the standalone variable, which doesn't seem to impact
+    # the functionality of APISIX.
+    #environment:
+    #  APISIX_STAND_ALONE: true
     volumes:
       - './config/proxy/apisix_route_config.yaml:/usr/local/apisix/conf/apisix.yaml:ro'
-      - './config/proxy/apisix_config.yaml:/usr/local/apisix/conf/config.yaml:rw'
+      - './config/proxy/apisix_config.yaml:/usr/local/apisix/conf/config.yaml:ro'
   hospital_orchestrator:
     image: "${ORCHESTRATOR_IMAGE:-ghcr.io/santeonnl/orca_orchestrator:main}"
     # build:
