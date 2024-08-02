@@ -81,8 +81,31 @@ func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
 	service.RegisterHandlers(serverMux)
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
-	carePlanContributor := fhirclient.New(carePlanServiceURL, httpService.Client(), nil)
+	httpClient := httpService.Client()
+	httpClient.Transport = headerDecoratorRoundTripper{
+		inner: httpClient.Transport,
+		header: map[string]string{
+			"X-Userinfo": ,
+		}
+	}
+	carePlanContributor := fhirclient.New(carePlanServiceURL, httpClient, nil)
 	return carePlanContributor
+}
+
+var _ http.RoundTripper = headerDecoratorRoundTripper{}
+
+type headerDecoratorRoundTripper struct {
+	inner  http.RoundTripper
+	header map[string]string
+}
+
+func (h headerDecoratorRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	for name, value := range request.Header {
+		if _, ok := h.header[name]; !ok {
+			request.Header.Set(name, value[0])
+		}
+	}
+	return h.inner.RoundTrip(request)
 }
 
 func setupHAPI(t *testing.T) *url.URL {
