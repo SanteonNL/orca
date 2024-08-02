@@ -30,7 +30,16 @@ func TestProxy(t *testing.T) {
 
 	// Configure proxy server
 	proxyServerMux := http.NewServeMux()
-	proxy := NewProxy(log.Logger, upstreamServerURL, "/localfhir", http.DefaultTransport)
+	proxyTransportRequestHeaders := make(http.Header)
+	proxy := NewProxy(log.Logger, upstreamServerURL, "/localfhir", decoratingRoundTripper{
+		inner: http.DefaultTransport,
+		decorator: func(request *http.Request) *http.Request {
+			for name, value := range proxyTransportRequestHeaders {
+				request.Header[name] = value
+			}
+			return request
+		},
+	})
 	proxyServer := httptest.NewServer(proxyServerMux)
 	proxyServerMux.HandleFunc("/localfhir/*", proxy.ServeHTTP)
 
@@ -96,4 +105,30 @@ func TestProxy(t *testing.T) {
 		assert.Empty(t, capturedHeaders.Get("Referer"))
 		assert.Empty(t, capturedHeaders.Get("Authorization"))
 	})
+	t.Run("authorization header from passed http.Client is proxied", func(t *testing.T) {
+		// Authorization header from the proxied request should not be proxied,
+		// but if the http.Client used for proxying sets it, the latter one should be proxied
+		// (used for authentication).
+		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient", nil)
+		httpRequest.Header.Set("Authorization", "Bearer test")
+		defer func() {
+			proxyTransportRequestHeaders = make(http.Header)
+		}()
+		proxyTransportRequestHeaders.Set("Authorization", "Bearer set-by-proxy-client")
+		httpResponse, err := proxyServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		assert.Equal(t, "Bearer set-by-proxy-client", capturedHeaders.Get("Authorization"))
+	})
+}
+
+var _ http.RoundTripper = &decoratingRoundTripper{}
+
+type decoratingRoundTripper struct {
+	inner     http.RoundTripper
+	decorator func(request *http.Request) *http.Request
+}
+
+func (d decoratingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+	return d.inner.RoundTrip(d.decorator(request))
 }
