@@ -1,21 +1,37 @@
 import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import useEnrollmentStore from '@/lib/store/enrollment-store'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { InfoCircledIcon } from '@radix-ui/react-icons'
 
 export default function SelectedServiceRequestView() {
 
     const { serviceRequest } = useEnrollmentStore()
 
     return (
-        <Card className='m-5'>
+        <Card className='mt-5 bg-primary text-gray-100'>
             <CardHeader>
-                <CardTitle>Order informatie</CardTitle>
+                <CardTitle>
+                    <div className='flex items-center'>
+                        <TooltipProvider>
+                            <Tooltip>
+                                <TooltipTrigger asChild>
+                                    <InfoCircledIcon className='h-6 w-6 cursor-help' />
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                    <p>A Task refers to the outgoing order</p>
+                                </TooltipContent>
+                            </Tooltip>
+                        </TooltipProvider>
+                        <p>&nbsp;Task information</p>
+                    </div>
+                </CardTitle>
             </CardHeader>
             <CardContent>
                 <div className='grid grid-cols-4 gap-4'>
-                    <div><b>Order type: </b></div>
+                    <div><b>Task: </b></div>
                     <div className='col-span-3'>{serviceRequest?.code?.coding?.[0].display || "unknown"}</div>
-                    <div><b>Executed by: </b></div>
+                    <div><b>Sent to: </b></div>
                     <div className='col-span-3'>{serviceRequest?.performer?.[0].display || "unknown"}</div>
                 </div>
             </CardContent>

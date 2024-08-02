@@ -6,6 +6,15 @@ type FhirBundle<T extends Resource> = Bundle<T>;
 
 const BSN_SYSTEM = "http://fhir.nl/fhir/NamingSystem/bsn"
 
+const ehrClient = new Client({
+    baseUrl: process.env.NODE_ENV === "production" ? `${window && window.location.origin}/orca/contrib/ehr/fhir` : "http://localhost:9090/fhir"
+});
+
+const cpsClient = new Client({
+    baseUrl: process.env.NODE_ENV === "production" ? `${window.location.origin}/orca/contrib/cps/fhir` : "http://localhost:7090/fhir"
+});
+
+
 const fetchAllBundlePages = async <T extends Resource>(
     client: FhirClient,
     initialBundle: FhirBundle<T>
@@ -114,4 +123,6 @@ const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCond
     }
 }
 
-export { fetchAllBundlePages, getBsn, getCarePlan, getTask, BSN_SYSTEM }
+
+
+export { fetchAllBundlePages, getBsn, getCarePlan, getTask, ehrClient, cpsClient, BSN_SYSTEM }

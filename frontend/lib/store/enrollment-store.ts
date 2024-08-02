@@ -2,7 +2,7 @@ import Client from 'fhir-kit-client';
 import { Bundle, CarePlan, Condition, Patient, Practitioner, ServiceRequest } from 'fhir/r4';
 import { useEffect } from 'react';
 import { create } from 'zustand';
-import { fetchAllBundlePages, getBsn } from '../fhirUtils';
+import { BSN_SYSTEM, cpsClient, ehrClient, fetchAllBundlePages, getBsn } from '../fhirUtils';
 
 interface LaunchContext {
     patient: string
@@ -18,17 +18,16 @@ interface StoreState {
     serviceRequest?: ServiceRequest
     carePlans?: CarePlan[]
     selectedCarePlan?: CarePlan | null
-    conditions?: Condition[]
-    primaryCondition?: Condition
-    relevantConditions?: Condition[]
+    taskCondition?: Condition
+    patientConditions?: Condition[]
+    carePlanConditions?: Condition[]
     shouldCreateNewCarePlan: boolean
     loading: boolean
     error?: string
-    setSelectedCarePlan: (carePlan: CarePlan) => void
-    setPrimaryCondition: (condition?: Condition) => void
-    addRelevantCondition: (condition: Condition) => void
-    removeRelevantCondition: (condition: Condition) => void
-    setRelevantConditions: (conditions: Condition[]) => void
+    setSelectedCarePlan: (carePlan?: CarePlan) => void
+    setTaskCondition: (condition?: Condition) => void
+    setPatientConditions: (conditions: Condition[]) => void
+    setCarePlanConditions: (conditions: Condition[]) => void
     setShouldCreateNewCarePlan: (createNewCarePlan: boolean) => void
     fetchAllResources: () => Promise<void>
 }
@@ -42,35 +41,41 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     serviceRequest: undefined,
     carePlans: undefined,
     selectedCarePlan: undefined,
-    conditions: undefined,
-    primaryCondition: undefined,
-    relevantConditions: undefined,
+    taskCondition: undefined,
+    patientConditions: undefined,
     shouldCreateNewCarePlan: false,
     loading: false,
     error: undefined,
-    setSelectedCarePlan: (carePlan: CarePlan) => {
+    setSelectedCarePlan: (carePlan?: CarePlan) => {
         set({ selectedCarePlan: carePlan });
+
+        if (!carePlan) {
+            set({ carePlanConditions: undefined, taskCondition: undefined })
+        } else {
+
+            const { patientConditions } = get();
+            const carePlanConditions = carePlan.addresses?.map(conditionCode =>
+                patientConditions?.find(patientCondition => patientCondition.code?.coding?.find(coding =>
+                    coding.system === conditionCode.identifier?.system &&
+                    coding.code === conditionCode.identifier?.value
+                ))
+            ).filter(condition => condition !== undefined)
+
+            set({ carePlanConditions, taskCondition: undefined })
+        }
     },
-    setPrimaryCondition: (condition?: Condition) => {
-        set({ primaryCondition: condition });
+    setTaskCondition: (condition?: Condition) => {
+        set({ taskCondition: condition });
     },
-    addRelevantCondition: (condition: Condition) => {
-        set((state) => ({
-            relevantConditions: [...state.relevantConditions || [], condition]
-        }))
+    setPatientConditions: (conditions: Condition[]) => {
+        set({ patientConditions: conditions })
     },
-    removeRelevantCondition: (condition: Condition) => {
-        set((state) => ({
-            relevantConditions: state.relevantConditions?.filter(filterCondition => filterCondition.id !== condition.id)
-        }))
-    },
-    setRelevantConditions: (conditions: Condition[]) => {
-        set({
-            relevantConditions: conditions
-        })
+    setCarePlanConditions: (conditions: Condition[]) => {
+        set({ carePlanConditions: conditions })
     },
     setShouldCreateNewCarePlan: (createNewCarePlan: boolean) => {
         set({ shouldCreateNewCarePlan: createNewCarePlan })
+        if (createNewCarePlan) set({ selectedCarePlan: undefined })
     },
     fetchAllResources: async () => {
 
@@ -90,16 +95,16 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
 }));
 
 const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: boolean | undefined) => void) => {
-    const launchContextRes = await fetch(`/orca/contrib/context`);
-    if (!launchContextRes.ok) throw new Error(`Failed to fetch patient: ${launchContextRes.statusText}`);
+    // const launchContextRes = await fetch(`/orca/contrib/context`);
+    // if (!launchContextRes.ok) throw new Error(`Failed to fetch patient: ${launchContextRes.statusText}`);
 
-    const launchContext = await launchContextRes.json();
+    // const launchContext = await launchContextRes.json();
     // Use below for quick localhost testing
-    // const launchContext = {
-    //     "patient": "Patient/2",
-    //     "serviceRequest": "ServiceRequest/4",
-    //     "practitioner": "Practitioner/6"
-    // }
+    const launchContext = {
+        "patient": "Patient/2",
+        "serviceRequest": "ServiceRequest/4",
+        "practitioner": "Practitioner/6"
+    }
 
     set({ launchContext });
 
@@ -113,23 +118,20 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
 
     if (typeof window === "undefined") return //skip during build
 
-    const client = new Client({ baseUrl: `${window && window.location.origin}/orca/contrib/ehr/fhir` });
-    // const client = new Client({ baseUrl: `http://localhost:9090/fhir` });
-
     const [patient, practitioner, serviceRequest, conditions] = await Promise.all([
-        client.read({ resourceType: 'Patient', id: launchContext.patient.replace("Patient/", "") }),
-        client.read({ resourceType: 'Practitioner', id: launchContext.practitioner.replace("Practitioner/", "") }),
-        client.read({ resourceType: 'ServiceRequest', id: launchContext.serviceRequest.replace("ServiceRequest/", "") }),
-        client.search({ resourceType: 'Condition', searchParams: { patient: launchContext.patient, "_count": 100 } }),
+        ehrClient.read({ resourceType: 'Patient', id: launchContext.patient.replace("Patient/", "") }),
+        ehrClient.read({ resourceType: 'Practitioner', id: launchContext.practitioner.replace("Practitioner/", "") }),
+        ehrClient.read({ resourceType: 'ServiceRequest', id: launchContext.serviceRequest.replace("ServiceRequest/", "") }),
+        ehrClient.search({ resourceType: 'Condition', searchParams: { patient: launchContext.patient, "_count": 100 } }),
     ]);
 
-    const allConditions = await fetchAllBundlePages(client, conditions as Bundle<Condition>); //paginate in case there are more than 100 conditions or the server doesn't allow for a large pagination size
+    const allConditions = await fetchAllBundlePages(ehrClient, conditions as Bundle<Condition>); //paginate in case there are more than 100 conditions or the server doesn't allow for a large pagination size
 
     set({
         patient: patient as Patient,
         practitioner: practitioner as Practitioner,
         serviceRequest: serviceRequest as ServiceRequest,
-        conditions: allConditions
+        patientConditions: allConditions
     });
 
     return patient;
@@ -147,10 +149,7 @@ const fetchCarePlans = async (
     const bsn = getBsn(patient)
     if (!bsn) throw new Error(`No BSN identifier found for Patient/${patient?.id}`);
 
-    const client = new Client({ baseUrl: `${window.location.origin}/orca/contrib/cps/fhir` });
-    // const client = new Client({ baseUrl: `http://localhost:7090/fhir` });
-
-    const initialBundle = await client.search({
+    const initialBundle = await cpsClient.search({
         resourceType: 'CarePlan',
         searchParams: {
             'subject-identifier': `${BSN_SYSTEM}|${bsn}`,
@@ -158,7 +157,7 @@ const fetchCarePlans = async (
         }
     }) as Bundle<CarePlan>;
 
-    const carePlans = await fetchAllBundlePages(client, initialBundle);
+    const carePlans = await fetchAllBundlePages(ehrClient, initialBundle);
     set({ carePlans, initialized: true, loading: false });
 };
 

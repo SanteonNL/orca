@@ -1,9 +1,9 @@
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import useCpsClient from '@/hooks/use-cps-client'
-import { getCarePlan, getBsn, getTask } from '@/lib/fhirUtils'
+import { getCarePlan, getTask } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { CarePlan, CarePlanActivity, Condition, Task } from 'fhir/r4'
+import { CarePlan, Condition } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
 import JsonView from 'react18-json-view';
@@ -20,15 +20,15 @@ import 'react18-json-view/src/style.css';
  */
 export default function EnrollInCpsButton() {
 
-    const { patient, selectedCarePlan, shouldCreateNewCarePlan, primaryCondition, relevantConditions, serviceRequest } = useEnrollment()
+    const { patient, selectedCarePlan, shouldCreateNewCarePlan, taskCondition, carePlanConditions, serviceRequest } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
     const [submitted, isSubmitted] = useState(false)
 
     const cpsClient = useCpsClient()
 
     useEffect(() => {
-        setDisabled(!primaryCondition || (!selectedCarePlan && !shouldCreateNewCarePlan))
-    }, [primaryCondition, selectedCarePlan, shouldCreateNewCarePlan])
+        setDisabled(!taskCondition || (!selectedCarePlan && !shouldCreateNewCarePlan))
+    }, [taskCondition, selectedCarePlan, shouldCreateNewCarePlan])
 
     const informCps = async () => {
         let carePlan = selectedCarePlan
@@ -37,12 +37,12 @@ export default function EnrollInCpsButton() {
             carePlan = await createNewCarePlan() as CarePlan
         }
 
-        if (!carePlan || !primaryCondition) {
+        if (!carePlan || !taskCondition) {
             toast.error("Error: Something went wrong with CarePlan creation")
             throw new Error("Something went wrong with CarePlan creation")
         }
 
-        const task = await createTask(carePlan, primaryCondition)
+        const task = await createTask(carePlan, taskCondition)
 
         toast.success("Enrollment succeeded", {
             closeButton: true,
@@ -91,27 +91,27 @@ export default function EnrollInCpsButton() {
             toast.error("Error: CarePlanService not found")
             throw new Error("No CPS client found")
         }
-        if (!patient || !primaryCondition || !serviceRequest) {
+        if (!patient || !taskCondition || !serviceRequest) {
             toast.error("Error: Missing required items for CarePlan creation")
             throw new Error("Missing required items for CarePlan creation")
         }
 
-        const carePlan = getCarePlan(patient, primaryCondition, relevantConditions);
+        const carePlan = getCarePlan(patient, taskCondition, carePlanConditions);
 
         return await cpsClient.create({ resourceType: 'CarePlan', body: carePlan });
     }
 
-    const createTask = async (carePlan: CarePlan, primaryCondition: Condition) => {
+    const createTask = async (carePlan: CarePlan, taskCondition: Condition) => {
         if (!cpsClient) {
             toast.error("Error: CarePlanService not found")
             throw new Error("No CPS client found")
         }
-        if (!patient || !primaryCondition || !serviceRequest || !carePlan) {
+        if (!patient || !taskCondition || !serviceRequest || !carePlan) {
             toast.error("Error: Missing required items for Task creation")
             throw new Error("Missing required items for Task creation")
         }
 
-        const task = getTask(carePlan, serviceRequest, primaryCondition)
+        const task = getTask(carePlan, serviceRequest, taskCondition)
         return await cpsClient.create({ resourceType: 'Task', body: task });
     }
 

@@ -17,6 +17,7 @@ import {
     PopoverContent,
     PopoverTrigger,
 } from "@/components/ui/popover"
+import { useEffect } from "react"
 
 interface Record {
     value: string,
@@ -24,18 +25,24 @@ interface Record {
 }
 interface Props {
     records?: Record[]
+    selectedValue?: string
     onChange(value: string): void
     className?: string
     disabled?: boolean
 }
 
-const Combobox: React.FC<Props> = ({ records, onChange, className, disabled }) => {
+const Combobox: React.FC<Props> = ({ records, selectedValue, onChange, className, disabled }) => {
     const [open, setOpen] = React.useState(false)
-    const [value, setValue] = React.useState("")
+    const [value, setValue] = React.useState(selectedValue || "")
 
-    React.useEffect(() => {
+    useEffect(() => {
         if (onChange) onChange(value)
     }, [value])
+
+    // Effect to update internal value when selectedValue changes
+    useEffect(() => {
+        setValue(selectedValue || "")
+    }, [selectedValue])
 
     return (
         <Popover open={open} onOpenChange={setOpen}>
