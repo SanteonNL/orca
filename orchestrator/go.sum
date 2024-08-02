@@ -17,8 +17,6 @@ github.com/Microsoft/go-winio v0.6.1/go.mod h1:LRdKpFKfdobln8UmuiYcKPot9D2v6svN5
 github.com/Microsoft/hcsshim v0.11.4 h1:68vKo2VN8DE9AdN4tnkWnmdhqdbpUFM8OF3Airm7fz8=
 github.com/Microsoft/hcsshim v0.11.4/go.mod h1:smjE4dvqPX9Zldna+t5FG3rnoHhaB7QYxPRqGcpAD9w=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
-github.com/SanteonNL/go-fhir-client v0.2.3 h1:ErL5/jP0pOSK6EHAB1CPR9VC2ZgSbJh2Sznt438qWu0=
-github.com/SanteonNL/go-fhir-client v0.2.3/go.mod h1:TMRgSomJbGGO3tBi0UkLZsyDUq7Kx5uXjVppeDcNd5o=
 github.com/SanteonNL/go-fhir-client v0.2.4 h1:852VrdwxCj52pnILejM2qzA/hdT5b+3QjJklWTJHo64=
 github.com/SanteonNL/go-fhir-client v0.2.4/go.mod h1:TMRgSomJbGGO3tBi0UkLZsyDUq7Kx5uXjVppeDcNd5o=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
@@ -155,8 +153,6 @@ github.com/multiformats/go-multibase v0.2.0 h1:isdYCVLvksgWlMW9OZRYJEa9pZETFivnc
 github.com/multiformats/go-multibase v0.2.0/go.mod h1:bFBZX4lKCA/2lyOFSAoKH5SS6oPyjtnzK/XTFDPkNuk=
 github.com/nuts-foundation/go-did v0.14.0 h1:Y1tuQCC2xmDX1bdXQS9iquwzJgcT1zcJxbZkqC5Dfac=
 github.com/nuts-foundation/go-did v0.14.0/go.mod h1:dQm9b2dYUnhgVW1FmpAi5nNe0mfIrnxM3EaQx4GsDhI=
-github.com/nuts-foundation/go-nuts-client v0.0.0-20240726072922-cbd8fcbcb009 h1:2LTLShdGJDp3Uzu5OWhzncgvUm0SJDNLFrk7/vk5E7Q=
-github.com/nuts-foundation/go-nuts-client v0.0.0-20240726072922-cbd8fcbcb009/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
 github.com/nuts-foundation/go-nuts-client v0.0.0-20240728064907-fa313e596f92 h1:/MzZpMAdgc7gZgHZdKtT5PGZ3zDyDn/dZVL1vvQMCew=
 github.com/nuts-foundation/go-nuts-client v0.0.0-20240728064907-fa313e596f92/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
 github.com/oapi-codegen/oapi-codegen/v2 v2.3.0 h1:rICjNsHbPP1LttefanBPnwsSwl09SqhCO7Ee623qR84=
