@@ -1,13 +1,12 @@
 'use client'
 import { getResponse, SmartFormsRenderer, useQuestionnaireResponseStore, useQuestionnaireStore } from '@aehrc/smart-forms-renderer';
 import type { Questionnaire, QuestionnaireResponse } from 'fhir/r4';
-import { useEffect, useState } from 'react';
-import useEnrollmentStore from '../store/enrollmentStore';
-import SelectedPatientView from './SelectedPatientView';
-import SelectedServiceRequestView from './SelectedServiceRequestView';
+import { useState } from 'react';
+import SelectedPatientView from './selected-patient-view';
+import SelectedServiceRequestView from './selected-service-request-view';
 import { Button } from '@/components/ui/button';
 import { ReloadIcon } from "@radix-ui/react-icons";
-import PrePopButton from './PrePopButton';
+import PrePopButton from './pre-pop-button';
 
 interface RendererPageProps {
   questionnaire: Questionnaire;
@@ -28,12 +27,6 @@ function Renderer(props: RendererPageProps) {
   const [questionnaireResponse, setQuestionnaireResponse] = useState<QuestionnaireResponse | null>(null);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const { patient, fetchPatient, practitioner, fetchPractitioner } = useEnrollmentStore();
-
-  useEffect(() => {
-    if (!patient) fetchPatient();
-    if (!practitioner) fetchPractitioner();
-  }, [patient, fetchPatient, practitioner, fetchPractitioner]);
 
   const isValid = useQuestionnaireResponseStore.use.responseIsValid();
   // const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();

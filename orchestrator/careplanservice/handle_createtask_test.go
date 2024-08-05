@@ -2,10 +2,11 @@ package careplanservice
 
 import (
 	"errors"
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func Test_basedOn(t *testing.T) {
@@ -24,7 +25,6 @@ func Test_basedOn(t *testing.T) {
 				task: map[string]interface{}{
 					"basedOn": []fhir.Reference{
 						{
-							Type:      to.Ptr("CarePlan"),
 							Reference: to.Ptr("CarePlan/123"),
 						},
 					},
@@ -60,16 +60,16 @@ func Test_basedOn(t *testing.T) {
 				task: map[string]interface{}{
 					"basedOn": []fhir.Reference{
 						{
-							Type: to.Ptr("Patient"),
+							Reference: to.Ptr("Patient/2"),
 						},
 					},
 				},
 			},
 			want:    nil,
-			wantErr: errors.New("Task.basedOn must reference a CarePlan"),
+			wantErr: errors.New("Task.basedOn must contain a relative reference to a CarePlan"),
 		},
 		{
-			name: "basedOn is not a local reference",
+			name: "basedOn is not a relative reference",
 			args: args{
 				task: map[string]interface{}{
 					"basedOn": []fhir.Reference{
@@ -81,7 +81,7 @@ func Test_basedOn(t *testing.T) {
 				},
 			},
 			want:    nil,
-			wantErr: errors.New("Task.basedOn must reference a CarePlan"),
+			wantErr: errors.New("Task.basedOn must contain a relative reference to a CarePlan"),
 		},
 	}
 	for _, tt := range tests {

@@ -7,6 +7,24 @@ until $(curl --output /dev/null --silent --fail $1/fhir/metadata); do
   sleep 5
 done
 
+echo "    Creating Careplan-subject-identifier SearchParameter"
+curl --silent -X PUT "$1/fhir/SearchParameter/CarePlan-subject-identifier" \
+    -H "Content-Type: application/fhir+json" \
+    -d '{
+  "resourceType": "SearchParameter",
+  "id": "CarePlan-subject-identifier",
+  "url": "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
+  "name": "subject-identifier",
+  "status": "active",
+  "description": "Search CarePlans by subject identifier",
+  "code": "subject-identifier",
+  "base": ["CarePlan"],
+  "type": "token",
+  "expression": "CarePlan.subject.identifier",
+  "xpathUsage": "normal",
+  "xpath": "f:CarePlan/f:subject/f:identifier"
+}'
+
 echo "    Creating SearchParameter for Task.reasonCode"
 curl --silent -X PUT "$1/fhir/SearchParameter/task-reasonCode" \
     -H "Content-Type: application/fhir+json" \
