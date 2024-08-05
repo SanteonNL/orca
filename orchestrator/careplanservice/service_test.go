@@ -13,6 +13,8 @@ var orcaPublicURL, _ = url.Parse("https://example.com/orca")
 var nutsPublicURL, _ = url.Parse("https://example.com/nuts")
 
 func TestService_Proxy(t *testing.T) {
+	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
+
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -28,7 +30,7 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: FHIRConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, nutsPublicURL, orcaPublicURL, "", nil)
+	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "", nil)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -46,12 +48,13 @@ func TestService_Proxy(t *testing.T) {
 
 func Test_HandleProtectedResourceMetadata(t *testing.T) {
 	// Test that the service handles the protected resource metadata URL
+	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
 	// Setup: configure the service
 	service, err := New(Config{
 		FHIR: FHIRConfig{
 			BaseURL: "http://example.com",
 		},
-	}, nutsPublicURL, orcaPublicURL, "did:web:example.com", nil)
+	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com", nil)
 	require.NoError(t, err)
 	// Setup: configure the service to handle the protected resource metadata URL
 	serverMux := http.NewServeMux()
@@ -71,7 +74,7 @@ func TestNew(t *testing.T) {
 				BaseURL: "http://example.com",
 				Auth:    FHIRAuthConfig{Type: "foo"},
 			},
-		}, nutsPublicURL, orcaPublicURL, "", nil)
+		}, nutsPublicURL, orcaPublicURL, nil, "", nil)
 		require.EqualError(t, err, "invalid FHIR authentication type: foo")
 	})
 }

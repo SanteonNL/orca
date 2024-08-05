@@ -37,6 +37,7 @@ func Start(config Config) error {
 			AuthzServerLocators: []oauth2.AuthorizationServerLocator{
 				oauth2.ProtectedResourceMetadataLocator,
 			},
+			Scope: careplancontributor.CarePlanServiceOAuth2Scope,
 		},
 	}
 
@@ -53,7 +54,7 @@ func Start(config Config) error {
 	}
 	if config.CarePlanService.Enabled {
 		carePlanService, err := careplanservice.New(config.CarePlanService, config.Nuts.Public.Parse(),
-			config.Public.ParseURL(), config.Nuts.OwnDID, didResolver)
+			config.Public.ParseURL(), config.Nuts.API.Parse(), config.Nuts.OwnDID, didResolver)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

@@ -30,18 +30,20 @@ func New(config Config, sessionManager *user.SessionManager, carePlanServiceHttp
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 	carePlanServiceClient := fhirclient.New(cpsURL, carePlanServiceHttpClient, coolfhir.Config())
 	return &Service{
-		carePlanServiceURL: cpsURL,
-		SessionManager:     sessionManager,
-		carePlanService:    carePlanServiceClient,
-		frontendUrl:        config.FrontendConfig.URL,
+		carePlanServiceURL:        cpsURL,
+		SessionManager:            sessionManager,
+		carePlanService:           carePlanServiceClient,
+		carePlanServiceHttpClient: carePlanServiceHttpClient,
+		frontendUrl:               config.FrontendConfig.URL,
 	}
 }
 
 type Service struct {
-	SessionManager     *user.SessionManager
-	frontendUrl        string
-	carePlanService    fhirclient.Client
-	carePlanServiceURL *url.URL
+	SessionManager            *user.SessionManager
+	frontendUrl               string
+	carePlanService           fhirclient.Client
+	carePlanServiceURL        *url.URL
+	carePlanServiceHttpClient *http.Client
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
@@ -51,7 +53,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /contrib/serviceRequest", s.withSession(s.handleGetServiceRequest))
 	mux.HandleFunc("POST /contrib/confirm", s.withSession(s.handleConfirm))
 	mux.HandleFunc("/contrib/ehr/fhir/*", s.withSession(s.handleProxyToEPD))
-	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, "/contrib/cps/fhir", http.DefaultTransport)
+	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, "/contrib/cps/fhir", s.carePlanServiceHttpClient.Transport)
 	mux.HandleFunc("/contrib/cps/fhir/*", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *user.SessionData) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))

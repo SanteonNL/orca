@@ -42,6 +42,7 @@ services:
       - ORCA_NUTS_API_URL=http://nutsnode:8081
       - ORCA_NUTS_PUBLIC_URL=${NUTS_URL}
       - ORCA_NUTS_DID=${CLINIC_DID}
+      - ORCA_PUBLIC_URL=/orca
       - ORCA_CAREPLANSERVICE_ENABLED=true
       - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
   fhirstore:

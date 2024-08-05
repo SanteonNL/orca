@@ -54,7 +54,7 @@ func TestService_ProxyToEHR(t *testing.T) {
 	}
 	sessionManager, sessionID := createTestSession()
 
-	service := New(Config{}, sessionManager, nil, nil)
+	service := New(Config{}, sessionManager, http.DefaultClient, nil)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)

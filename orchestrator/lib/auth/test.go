@@ -1,8 +1,6 @@
 package auth
 
 import (
-	"encoding/base64"
-	"encoding/json"
 	"net/http"
 )
 
@@ -12,15 +10,10 @@ func AuthenticatedTestRoundTripper(underlying http.RoundTripper) http.RoundTripp
 	if underlying == nil {
 		underlying = http.DefaultTransport
 	}
-	userInfo, _ := json.Marshal(map[string]interface{}{
-		"organization_ura":  "1234",
-		"organization_name": "Test Organization",
-		"organization_city": "Test City",
-	})
 	return headerDecoratorRoundTripper{
 		inner: underlying,
 		header: map[string]string{
-			"X-Userinfo": base64.StdEncoding.EncodeToString(userInfo),
+			"Authorization": "Bearer valid",
 		},
 	}
 }

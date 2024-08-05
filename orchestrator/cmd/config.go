@@ -4,12 +4,12 @@ import (
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	koanf "github.com/knadh/koanf/v2"
 	"net/url"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/applaunch"
 	"github.com/knadh/koanf/providers/env"
-	"github.com/knadh/koanf/v2"
 )
 
 type Config struct {

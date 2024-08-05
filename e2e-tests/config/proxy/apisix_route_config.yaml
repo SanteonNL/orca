@@ -18,14 +18,15 @@ routes:
         "clinic_orchestrator:8080": 1
       type: roundrobin
     plugins:
-      openid-connect:
-        client_id: "client_id_todo"
-        client_secret: "client_secret_todo"
-        discovery: "discovery_todo"
-        introspection_endpoint: "http://nutsnode:8081/internal/auth/v2/accesstoken/introspect"
-        bearer_only: true
-        realm: "master"
-        introspection_endpoint_auth_method: none
+#      To have APISIX perform Token Introspection:
+#      openid-connect:
+#        client_id: "client_id_todo"
+#        client_secret: "client_secret_todo"
+#        discovery: "discovery_todo"
+#        introspection_endpoint: "http://nutsnode:8081/internal/auth/v2/accesstoken/introspect"
+#        bearer_only: true
+#        realm: "master"
+#        introspection_endpoint_auth_method: none
       proxy-rewrite:
         regex_uri: ["^/clinic/orca/cps/(.*)", "/cps/$1"]
   - id: hospital_orca

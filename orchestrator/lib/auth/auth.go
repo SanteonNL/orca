@@ -2,10 +2,9 @@ package auth
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
@@ -13,63 +12,50 @@ import (
 	"net/http"
 )
 
-type userInfoContextKeyType struct{}
+type principalContextKeyType struct{}
 
-var userInfoContextKey = userInfoContextKeyType{}
+var principalContextKey = principalContextKeyType{}
 
 // Middleware returns a http.HandlerFunc that retrieves the user info from the request header.
 // The user info is to be provided by an API Gateway/reverse proxy that validated the authentication token in the request.
 // It sets the decoded user info in the request context.
-func Middleware(fn http.HandlerFunc) func(writer http.ResponseWriter, request *http.Request) {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		userInfo, err := parseUserInfo(request)
-		if err != nil {
-			log.Info().Msgf("Auth middleware: %v", err)
-			http.Error(writer, "Unauthorized", http.StatusUnauthorized)
+func Middleware(authConfig middleware.Config, fn http.HandlerFunc) func(writer http.ResponseWriter, request *http.Request) {
+	return middleware.Secure(authConfig, func(response http.ResponseWriter, request *http.Request) {
+		userInfo := middleware.UserInfo(request.Context())
+		if userInfo == nil {
+			// would be weird, should've been handled by middleware.Secure()
+			log.Error().Msg("User info not found in context")
+			http.Error(response, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
-		log.Info().Msgf("Authenticated user: %v", userInfo)
-		newCtx := context.WithValue(request.Context(), userInfoContextKey, userInfo)
-		request = request.WithContext(newCtx)
-		fn(writer, request)
-	}
-}
 
-func parseUserInfo(request *http.Request) (*UserInfo, error) {
-	header := request.Header.Get("X-Userinfo")
-	if len(header) == 0 {
-		return nil, errors.New("missing X-Userinfo request header")
-	}
-	userinfoJSON, err := base64.StdEncoding.DecodeString(header)
-	if err != nil {
-		return nil, fmt.Errorf("failed to base64 decode X-Userinfo header: %w", err)
-	}
-	claims := make(map[string]interface{})
-	if err := json.Unmarshal(userinfoJSON, &claims); err != nil {
-		return nil, fmt.Errorf("failed to JSON unmarshal X-Userinfo header: %w", err)
-	}
-
-	organization, err := claimsToOrganization(claims)
-	if err != nil {
-		return nil, err
-	}
-	return &UserInfo{
-		Organization: *organization,
-	}, nil
+		organization, err := claimsToOrganization(userInfo)
+		if err != nil {
+			log.Error().Err(err).Msg("Invalid user info in context")
+			http.Error(response, "Unauthorized", http.StatusUnauthorized)
+			return
+		}
+		principal := Principal{
+			Organization: *organization,
+		}
+		log.Info().Msgf("Authenticated user: %v", principal)
+		newCtx := context.WithValue(request.Context(), principalContextKey, principal)
+		fn(response, request.WithContext(newCtx))
+	})
 }
 
 func claimsToOrganization(claims map[string]interface{}) (*fhir.Organization, error) {
 	ura, ok := claims["organization_ura"].(string)
 	if !ok || ura == "" {
-		return nil, errors.New("missing organization_ura claim in X-Userinfo header")
+		return nil, errors.New("missing organization_ura claim in user info")
 	}
 	name, ok := claims["organization_name"].(string)
 	if !ok || ura == "" {
-		return nil, errors.New("missing organization_name claim in X-Userinfo header")
+		return nil, errors.New("missing organization_name claim in user info")
 	}
 	city, ok := claims["organization_city"].(string)
 	if !ok || ura == "" {
-		return nil, errors.New("missing organization_city claim in X-Userinfo header")
+		return nil, errors.New("missing organization_city claim in user info")
 	}
 
 	return &fhir.Organization{
@@ -88,13 +74,13 @@ func claimsToOrganization(claims map[string]interface{}) (*fhir.Organization, er
 	}, nil
 }
 
-var _ fmt.Stringer = UserInfo{}
+var _ fmt.Stringer = Principal{}
 
-type UserInfo struct {
+type Principal struct {
 	Organization fhir.Organization
 }
 
-func (u UserInfo) String() string {
+func (u Principal) String() string {
 	return fmt.Sprintf("Organization (%s=%s, name=%s, city=%s)",
 		*u.Organization.Identifier[0].System,
 		*u.Organization.Identifier[0].Value,

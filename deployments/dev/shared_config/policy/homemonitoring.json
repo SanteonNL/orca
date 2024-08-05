@@ -1,9 +1,77 @@
 {
-  "homemonitoring": {
+  "careplanservice": {
     "organization": {
-      "id": "homemonitoring_org",
+      "format": {
+        "ldp_vc": {
+          "proof_type": [
+            "JsonWebSignature2020"
+          ]
+        },
+        "jwt_vc": {
+          "alg": [
+            "ES256"
+          ]
+        },
+        "ldp_vp": {
+          "proof_type": [
+            "JsonWebSignature2020"
+          ]
+        },
+        "jwt_vp": {
+          "alg": [
+            "ES256"
+          ]
+        }
+      },
+      "id": "pd_any_care_organization_with_employee",
+      "name": "Care organization with employee",
+      "purpose": "Finding a care organization with logged in user for authorizing access to medical metadata",
       "input_descriptors": [
-
+        {
+          "id": "id_nuts_ura_credential",
+          "name": "Care organization",
+          "purpose": "Finding a care organization for authorizing access to medical metadata.",
+          "constraints": {
+            "fields": [
+              {
+                "path": [
+                  "$.type"
+                ],
+                "filter": {
+                  "type": "string",
+                  "const": "NutsUraCredential"
+                }
+              },
+              {
+                "id": "organization_name",
+                "path": [
+                  "$.credentialSubject.organization.name"
+                ],
+                "filter": {
+                  "type": "string"
+                }
+              },
+              {
+                "id": "organization_ura",
+                "path": [
+                  "$.credentialSubject.organization.ura"
+                ],
+                "filter": {
+                  "type": "string"
+                }
+              },
+              {
+                "id": "organization_city",
+                "path": [
+                  "$.credentialSubject.organization.city"
+                ],
+                "filter": {
+                  "type": "string"
+                }
+              }
+            ]
+          }
+        }
       ]
     }
   }

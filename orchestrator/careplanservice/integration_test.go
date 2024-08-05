@@ -2,14 +2,16 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
-	"github.com/testcontainers/testcontainers-go"
+	testcontainers "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -70,11 +72,12 @@ func Test_Integration_Service_handleCreateTask(t *testing.T) {
 
 func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
 	fhirBaseURL := setupHAPI(t)
+	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
 
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	service, err := New(config, nutsPublicURL, orcaPublicURL, "did:web:example.com/careplanservice", nil)
+	service, err := New(config, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com/careplanservice", nil)
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
@@ -87,6 +90,31 @@ func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
 
 	carePlanContributor := fhirclient.New(carePlanServiceURL, httpClient, nil)
 	return carePlanContributor
+}
+
+// setupAuthorizationServer starts a test OAuth2 authorization server and returns its OAuth2 Token Introspection URL.
+func setupAuthorizationServer(t *testing.T) *url.URL {
+	authorizationServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		requestData, _ := io.ReadAll(request.Body)
+		if string(requestData) != "token=valid" {
+			writer.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		responseData, _ := json.Marshal(map[string]interface{}{
+			"active":            true,
+			"organization_ura":  "1234",
+			"organization_name": "Hospital",
+			"organization_city": "CareTown",
+		})
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(responseData)
+	}))
+	t.Cleanup(func() {
+		authorizationServer.Close()
+	})
+	u, _ := url.Parse(authorizationServer.URL)
+	return u
 }
 
 func setupHAPI(t *testing.T) *url.URL {
