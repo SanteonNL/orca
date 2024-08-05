@@ -22,6 +22,7 @@ services:
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${NUTS_URL}
       - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
+      - NUTS_VDR_DIDMETHODS=web
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
     environment:
@@ -29,7 +30,7 @@ services:
     ports:
       - "1405:1305"
   frontend:
-    image: ghcr.io/santeonnl/frontend:main
+    image: ghcr.io/santeonnl/orca_frontend:main
     # build:
     #  context: ../../../frontend
     #  dockerfile: Dockerfile
@@ -47,7 +48,9 @@ services:
     ports:
       - "8090:8080"
     environment:
-      - ORCA_NUTS_API_ADDRESS=http://nutsnode:8081
+      - ORCA_NUTS_API_URL=http://nutsnode:8081
+      - ORCA_NUTS_PUBLIC_URL=${NUTS_URL}
+      - ORCA_NUTS_DID=${HOSPITAL_DID}
       - ORCA_PUBLIC_BASEURL=/orca
       - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}

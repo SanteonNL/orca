@@ -49,14 +49,14 @@ function createTunnel() {
   echo $TUNNEL_URL
 }
 
-# Create a root did:web DID. It takes the Nuts node URL and Nuts internal API.
+# Create a root did:web DID. It takes the party name, Nuts node URL and Nuts internal API.
 # It then converts the Nuts node URL to a rooted did:web DID, e.g. https://something -> did:web:something
 # It then creates the DID at the Nuts node and returns the DID.
 function createDID() {
-  NUTS_URL=$1
+  NAME=$1
   NUTS_INTERNAL_API=$2
-  DIDDOC=$(curl -s -X POST -H "Content-Type:application/json" -d "{\"did\": \"did:web:$(echo $NUTS_URL | sed 's/https:\/\///')\"}" $NUTS_INTERNAL_API/internal/vdr/v2/did)
-  DID=$(echo $DIDDOC | jq -r .id)
+  DIDDOC=$(curl -s -X POST -H "Content-Type:application/json" -d "{\"subject\": \"${NAME}\"}" $NUTS_INTERNAL_API/internal/vdr/v2/subject)
+  DID=$(echo $DIDDOC | jq -r .documents[0].id)
   echo $DID
 }
 
@@ -106,22 +106,20 @@ CLINIC_URL_ESCAPED=$(sed 's/[&/\]/\\&/g' <<<"${CLINIC_URL}")
 sed "s/DiscoveryServerURL/${CLINIC_URL_ESCAPED}/" shared_config/discovery_input/homemonitoring.json > shared_config/discovery/homemonitoring.json
 echo "  Starting services"
 pushd clinic
-touch data/orchestrator-demo-config.json
 docker compose pull
 NUTS_URL="${CLINIC_URL}" \
-  docker compose up \
- --wait --build --remove-orphans
+  docker compose up nutsnode --wait
 CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/orca/cps"
 echo "  Creating DID document"
-CLINIC_DID=$(createDID $CLINIC_URL http://localhost:8081)
+CLINIC_DID=$(createDID "clinic" http://localhost:8081)
 echo "    Clinic DID: $CLINIC_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
-echo "  Writing hardcoded orchestrator demo config"
-echo "{
-  \"clinic\": \"$CLINIC_DID\",
-  \"hospital\": \"$HOSPITAL_DID\"
-}" > data/orchestrator-demo-config.json
+
+NUTS_URL="${CLINIC_URL}" CLINIC_DID="${CLINIC_DID}" \
+  docker compose up \
+ --wait --build --remove-orphans
+
 echo "  Creating SearchParameter"
 ./config/init-fhir-resources.sh $CLINIC_URL
 echo "\n  Enable polling in viewer"
@@ -135,17 +133,19 @@ echo "  Starting services"
 pushd hospital
 docker compose pull
 NUTS_URL="${HOSPITAL_URL}" \
- CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" \
-  docker compose up \
- --wait --build --remove-orphans
+  docker compose up nutsnode --wait
 echo "  Creating DID document"
-HOSPITAL_DID=$(createDID $HOSPITAL_URL http://localhost:9081)
+HOSPITAL_DID=$(createDID "hospital" http://localhost:9081)
 echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
 echo "  Registering FHIR base URL in DID document"
 curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/did/${HOSPITAL_DID}/service
 # TODO: Remove this init when the Questionnaire is provided by the sub-Task.input
+NUTS_URL="${HOSPITAL_URL}" HOSPITAL_DID="${HOSPITAL_DID}" \
+ CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" \
+  docker compose up \
+ --wait --build --remove-orphans
 echo "  Creating Questionnaire"
 ./config/init-fhir-resources.sh $HOSPITAL_URL
 popd
