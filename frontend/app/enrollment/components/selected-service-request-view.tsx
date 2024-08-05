@@ -23,15 +23,15 @@ export default function SelectedServiceRequestView() {
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
-                        <p>&nbsp;Task information</p>
+                        <p className='ml-2'>Task information</p>
                     </div>
                 </CardTitle>
             </CardHeader>
             <CardContent>
                 <div className='grid grid-cols-4 gap-4'>
-                    <div><b>Task: </b></div>
+                    <div className='font-bold'>Task:</div>
                     <div className='col-span-3'>{serviceRequest?.code?.coding?.[0].display || "unknown"}</div>
-                    <div><b>Sent to: </b></div>
+                    <div className='font-bold'>Sent to:</div>
                     <div className='col-span-3'>{serviceRequest?.performer?.[0].display || "unknown"}</div>
                 </div>
             </CardContent>
