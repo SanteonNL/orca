@@ -39,7 +39,7 @@ export default function EnrollInCpsButton() {
         }
 
         if (!carePlan || !taskCondition) {
-            toast.error("Error: Something went wrong with CarePlan creation")
+            toast.error("Error: Something went wrong with CarePlan creation", { richColors: true })
             throw new Error("Something went wrong with CarePlan creation")
         }
 
@@ -91,31 +91,40 @@ export default function EnrollInCpsButton() {
 
     const createNewCarePlan = async () => {
         if (!cpsClient) {
-            toast.error("Error: CarePlanService not found")
+            toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
         if (!patient || !taskCondition || !serviceRequest || !carePlanConditions) {
-            toast.error("Error: Missing required items for CarePlan creation")
+            toast.error("Error: Missing required items for CarePlan creation", { richColors: true })
             throw new Error("Missing required items for CarePlan creation")
         }
 
         const carePlan = getCarePlan(patient, carePlanConditions, newCarePlanName);
 
-        return await cpsClient.create({ resourceType: 'CarePlan', body: carePlan });
+        try {
+            await cpsClient.create({ resourceType: 'CarePlan', body: carePlan })
+        } catch (error) {
+            toast.error(`Failed to create CarePlan. Error message: ${error ?? "Not error message found"}`, { richColors: true })
+        }
     }
 
     const createTask = async (carePlan: CarePlan, taskCondition: Condition) => {
         if (!cpsClient) {
-            toast.error("Error: CarePlanService not found")
+            toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
         if (!patient || !taskCondition || !serviceRequest || !carePlan) {
-            toast.error("Error: Missing required items for Task creation")
+            toast.error("Error: Missing required items for Task creation", { richColors: true })
             throw new Error("Missing required items for Task creation")
         }
 
         const task = getTask(carePlan, serviceRequest, taskCondition)
-        return await cpsClient.create({ resourceType: 'Task', body: task });
+
+        try {
+            return await cpsClient.create({ resourceType: 'Task', body: task });
+        } catch (error) {
+            toast.error(`Failed to create Task. Error message: ${error ?? "Not error message found"}`, { richColors: true })
+        }
     }
 
     return (
