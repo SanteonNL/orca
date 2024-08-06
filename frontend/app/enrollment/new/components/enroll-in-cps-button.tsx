@@ -102,7 +102,7 @@ export default function EnrollInCpsButton() {
         const carePlan = getCarePlan(patient, carePlanConditions, newCarePlanName);
 
         try {
-            await cpsClient.create({ resourceType: 'CarePlan', body: carePlan })
+            return await cpsClient.create({ resourceType: 'CarePlan', body: carePlan })
         } catch (error) {
             toast.error(`Failed to create CarePlan. Error message: ${error ?? "Not error message found"}`, { richColors: true })
         }
