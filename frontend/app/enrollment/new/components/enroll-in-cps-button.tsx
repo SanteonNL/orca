@@ -104,7 +104,9 @@ export default function EnrollInCpsButton() {
         try {
             return await cpsClient.create({ resourceType: 'CarePlan', body: carePlan })
         } catch (error) {
-            toast.error(`Failed to create CarePlan. Error message: ${error ?? "Not error message found"}`, { richColors: true })
+            const msg = `Failed to create CarePlan. Error message: ${error ?? "Not error message found"}`
+            toast.error(msg, { richColors: true })
+            throw new Error(msg)
         }
     }
 
@@ -123,7 +125,9 @@ export default function EnrollInCpsButton() {
         try {
             return await cpsClient.create({ resourceType: 'Task', body: task });
         } catch (error) {
-            toast.error(`Failed to create Task. Error message: ${error ?? "Not error message found"}`, { richColors: true })
+            const msg = `Failed to create Task. Error message: ${error ?? "Not error message found"}`
+            toast.error(msg, { richColors: true })
+            throw new Error(msg)
         }
     }
 
