@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { Button, Tooltip } from '@mui/material';
-import { IconCloudDataConnection, IconProgress, IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
+import { IconCloudDataConnection, IconEye, IconProgress, IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
+import ViewTaskOutput from './view-task-output';
 
 interface Props {
     rows: any[]
@@ -15,9 +16,7 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
         { field: 'hospitalUra', headerName: 'Hospital URA', flex: 1 },
         { field: 'hospitalName', headerName: 'Hospital Name', flex: 2 },
         { field: 'patientBsn', headerName: 'Patient BSN', flex: 2 },
-        { field: 'patientLastname', headerName: 'Patient Lastname', flex: 2 },
-        { field: 'patientSurname', headerName: 'Patient Surname', flex: 2 },
-        { field: 'condition', headerName: 'Zorgpad', flex: 2 },
+        { field: 'careplan', headerName: 'Careplan', flex: 2 },
         {
             field: 'status',
             headerName: 'Status',
@@ -33,6 +32,14 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
             }
         },
         { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 2 },
+        {
+            field: 'taskOutput',
+            headerName: 'Task Output',
+            flex: 1,
+            renderCell: (params) => {
+                return <ViewTaskOutput task={params.row.task} />
+            }
+        }
     ];
 
     return (
