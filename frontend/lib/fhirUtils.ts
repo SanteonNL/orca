@@ -1,5 +1,5 @@
 import Client from 'fhir-kit-client';
-import { Bundle, CarePlan, CarePlanActivity, Condition, Patient, Resource, ServiceRequest, Task } from 'fhir/r4';
+import { Bundle, CarePlan, CarePlanActivity, Condition, Patient, Questionnaire, QuestionnaireResponse, Resource, ServiceRequest, Task } from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -77,7 +77,7 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
     }
 }
 
-export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCondition: Condition): Task => {
+export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCondition: Condition, questionnaire: Questionnaire): Task => {
 
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task")
@@ -87,9 +87,11 @@ export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, prim
         "basedOn": [
             {
                 "reference": `CarePlan/${carePlan.id}`,
-                type: "CarePlan"
+                type: "CarePlan",
+                display: carePlan.title
             }
         ],
+        for: carePlan.subject,
         "status": "requested",
         "intent": "order",
         focus: {
@@ -97,6 +99,7 @@ export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, prim
                 "system": conditionCode.system,
                 "value": conditionCode.code
             },
+            display: conditionCode.display,
             type: 'Condition'
         },
         input: [
@@ -112,13 +115,63 @@ export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, prim
                     type: "ServiceRequest",
                     reference: '#contained-sr'
                 }
-            }
+            },
+            {
+                type: {
+                    coding: [{
+                        system: "http://terminology.hl7.org/CodeSystem/task-input-type",
+                        code: "Reference",
+                        display: "Reference"
+                    }]
+                },
+                valueReference: {
+                    type: "Questionnaire",
+                    reference: '#questionnaire'
+                }
+            },
         ],
         contained: [
             {
                 ...serviceRequest,
                 id: 'contained-sr'
+            },
+            {
+                ...questionnaire,
+                id: 'questionnaire'
             }
         ]
     }
+}
+
+export const getTaskPerformer = (task?: Task) => {
+
+    if (!task) return undefined
+
+    const serviceRequestFromInput = task.contained?.find((contained) => {
+        return contained.resourceType === "ServiceRequest"
+    })
+
+    return serviceRequestFromInput?.performer?.[0]
+}
+
+export const getQuestionnaireResponseId = (questionnaire?: Questionnaire) => {
+    if (!questionnaire) throw new Error("Tried to generate a questionnaire response id but the Questionnaire is not defined")
+    return `#questionnaire-response-${questionnaire.id}`
+}
+
+export const findQuestionnaire = (task?: Task) => {
+    if (!task || !task.contained) return
+
+    const questionnaires = task.contained.filter((contained) => contained.resourceType === "Questionnaire") as Questionnaire[]
+
+    if (questionnaires.length < 1) console.warn("Found more than one Questionnaire for Task/" + task.id)
+
+    return questionnaires.length ? questionnaires[0] : undefined
+}
+
+export const findQuestionnaireResponse = (task?: Task, questionnaire?: Questionnaire) => {
+    if (!task || !task.contained || !questionnaire) return
+
+    const expectedQuestionnaireId = getQuestionnaireResponseId(questionnaire)
+    return task.contained.find((contained) => contained.id === expectedQuestionnaireId) as QuestionnaireResponse | undefined
 }

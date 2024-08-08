@@ -119,7 +119,7 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
         launchContext = {
             "patient": "Patient/2",
             "serviceRequest": "ServiceRequest/4",
-            "practitioner": "Practitioner/6"
+            "practitioner": "Practitioner/7"
         }
 
     }
@@ -180,15 +180,17 @@ const fetchCarePlans = async (
     }) as Bundle<CarePlan>;
 
     const carePlans = await fetchAllBundlePages(cpsClient, initialBundle);
-    set({ carePlans, initialized: true, loading: false });
+    set({ carePlans });
 };
 
 const useEnrollment = () => {
     const store = useEnrollmentStore();
+    const initialized = useEnrollmentStore(state => state.initialized);
+    const fetchAllResources = useEnrollmentStore(state => state.fetchAllResources);
 
     useEffect(() => {
-        if (!store.initialized) {
-            store.fetchAllResources();
+        if (!initialized) {
+            fetchAllResources();
         }
     }, []);
 

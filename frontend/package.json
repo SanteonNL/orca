@@ -11,6 +11,7 @@
   "dependencies": {
     "@aehrc/sdc-populate": "^2.2.7",
     "@aehrc/smart-forms-renderer": "^0.35.8",
+    "@radix-ui/react-collapsible": "^1.1.0",
     "@radix-ui/react-dialog": "^1.1.1",
     "@radix-ui/react-icons": "^1.3.0",
     "@radix-ui/react-label": "^2.1.0",

@@ -1,15 +1,17 @@
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import useCpsClient from '@/hooks/use-cps-client'
+import useEhrClient from '@/hooks/use-ehr-fhir-client'
 import { getCarePlan, getTask } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { CarePlan, Condition } from 'fhir/r4'
+import { CarePlan, Condition, Questionnaire } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from 'next/navigation'
 import JsonView from 'react18-json-view';
 import 'react18-json-view/src/style.css';
+import { Spinner } from '@/components/spinner'
 
 /**
  * This button informs the CarePlanService of the new enrollment.
@@ -23,15 +25,18 @@ export default function EnrollInCpsButton() {
 
     const { patient, selectedCarePlan, shouldCreateNewCarePlan, taskCondition, carePlanConditions, serviceRequest, newCarePlanName } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
+    const [submitted, setSubmitted] = useState(false)
 
     const router = useRouter()
     const cpsClient = useCpsClient()
+    const ehrClient = useEhrClient()
 
     useEffect(() => {
-        setDisabled(!taskCondition || (!selectedCarePlan && !shouldCreateNewCarePlan) || (shouldCreateNewCarePlan && (!newCarePlanName || !carePlanConditions)))
-    }, [taskCondition, selectedCarePlan, shouldCreateNewCarePlan, newCarePlanName, carePlanConditions])
+        setDisabled(submitted || !taskCondition || (!selectedCarePlan && !shouldCreateNewCarePlan) || (shouldCreateNewCarePlan && (!newCarePlanName || !carePlanConditions)))
+    }, [taskCondition, selectedCarePlan, shouldCreateNewCarePlan, newCarePlanName, carePlanConditions, submitted])
 
     const informCps = async () => {
+        setSubmitted(true)
         let carePlan = selectedCarePlan
 
         if (shouldCreateNewCarePlan) {
@@ -45,7 +50,7 @@ export default function EnrollInCpsButton() {
 
         const task = await createTask(carePlan, taskCondition)
 
-        toast.success("Enrollment succeeded", {
+        toast.success("Enrollment successfully sent to filler", {
             closeButton: true,
             important: true,
             description: new Date().toLocaleDateString(undefined, {
@@ -111,7 +116,7 @@ export default function EnrollInCpsButton() {
     }
 
     const createTask = async (carePlan: CarePlan, taskCondition: Condition) => {
-        if (!cpsClient) {
+        if (!cpsClient || !ehrClient) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
@@ -120,7 +125,12 @@ export default function EnrollInCpsButton() {
             throw new Error("Missing required items for Task creation")
         }
 
-        const task = getTask(carePlan, serviceRequest, taskCondition)
+        const questionnaire = await ehrClient.read({
+            resourceType: "Questionnaire",
+            id: "2.16.840.1.113883.2.4.3.11.60.909.26.18--20240704100750"
+        }) as Questionnaire
+
+        const task = getTask(carePlan, serviceRequest, taskCondition, questionnaire)
 
         try {
             return await cpsClient.create({ resourceType: 'Task', body: task });
@@ -132,7 +142,7 @@ export default function EnrollInCpsButton() {
     }
 
     return (
-        <Button disabled={disabled} onClick={informCps}>Proceed</Button >
+        <Button disabled={disabled} onClick={informCps}>{submitted && <Spinner className='mr-5 text-white' />}Proceed</Button >
     )
 
 

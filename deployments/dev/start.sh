@@ -122,8 +122,6 @@ NUTS_URL="${CLINIC_URL}" CLINIC_DID="${CLINIC_DID}" \
 
 echo "  Creating SearchParameter"
 ./config/init-fhir-resources.sh $CLINIC_URL
-echo "\n  Enable polling in viewer"
-curl -s -X POST -H "Content-Type:application/json" -d '{"fhir_base_url": "'$CLINIC_URL/fhir'"}' $CLINIC_URL/viewer/api/task/polling/start
 popd
 
 echo "Creating stack for Hospital..."
