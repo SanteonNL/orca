@@ -33,6 +33,14 @@ func LogicalReference(refType, system, identifier string) *fhir.Reference {
 	}
 }
 
+// LogicalReferenceEquals checks if two references are contain the same logical identifier, given their system and value.
+// It does not compare identifier type.
+func LogicalReferenceEquals(ref, other fhir.Reference) bool {
+	return ref.Identifier != nil && other.Identifier != nil &&
+		ref.Identifier.System != nil && other.Identifier.System != nil && *ref.Identifier.System == *other.Identifier.System &&
+		ref.Identifier.Value != nil && other.Identifier.Value != nil && *ref.Identifier.Value == *other.Identifier.Value
+}
+
 func FirstIdentifier(identifiers []fhir.Identifier, predicate func(fhir.Identifier) bool) *fhir.Identifier {
 	for _, identifier := range identifiers {
 		if predicate(identifier) {
