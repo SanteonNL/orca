@@ -1,10 +1,32 @@
 package careplanservice
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"net/http"
 )
 
-// TODO: Implement UpdateTask handler
+func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest *http.Request) error {
+	// TODO: Implement UpdateTask handler
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		return err
+	}
+	var task fhir.Task
+	var isOwner bool
+	if task.Owner != nil {
+		for _, identifier := range principal.Organization.Identifier {
+			if coolfhir.LogicalReferenceEquals(*task.Owner, fhir.Reference{Identifier: &identifier}) {
+				isOwner = true
+				break
+			}
+		}
+	}
+	println("isOwner: ", isOwner)
+	// (same for requester)
+	return nil
+}
 
 func isValidTransition(from fhir.TaskStatus, to fhir.TaskStatus, isOwner bool, isRequester bool) bool {
 	if isOwner == false && isRequester == false {

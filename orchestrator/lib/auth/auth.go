@@ -12,6 +12,8 @@ import (
 	"net/http"
 )
 
+var ErrNotAuthenticated = errors.New("not authenticated")
+
 type principalContextKeyType struct{}
 
 var principalContextKey = principalContextKeyType{}
@@ -42,6 +44,15 @@ func Middleware(authConfig middleware.Config, fn http.HandlerFunc) func(writer h
 		newCtx := context.WithValue(request.Context(), principalContextKey, principal)
 		fn(response, request.WithContext(newCtx))
 	})
+}
+
+// PrincipalFromContext returns the principal from the request context.
+func PrincipalFromContext(ctx context.Context) (Principal, error) {
+	principal, ok := ctx.Value(principalContextKey).(Principal)
+	if !ok {
+		return Principal{}, ErrNotAuthenticated
+	}
+	return principal, nil
 }
 
 func claimsToOrganization(claims map[string]interface{}) (*fhir.Organization, error) {
