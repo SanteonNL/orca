@@ -95,6 +95,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	}))
+	// TODO: PUT /cps/Task update path
 	mux.HandleFunc("POST /cps/CarePlan", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateCarePlan(writer, request)
 		if err != nil {
