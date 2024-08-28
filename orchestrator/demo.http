@@ -1,0 +1,128 @@
+### Create CarePlan (Task Requester)
+POST http://127.0.0.1:60437/cps/CarePlan
+Content-Type: application/json
+
+{
+  "status": "draft",
+  "intent": "proposal",
+  "subject": {
+    "type": "Patient",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+      "value": "123456789"
+    }
+  },
+  "resourceType": "CarePlan"
+}
+
+> {%
+    client.global.set("carePlanId", response.body.id);
+    client.global.set("careTeamRef", response.body.careTeam[0].reference);
+%}
+
+
+### Create Task (Task Requester)
+POST http://127.0.0.1:60437/cps/Task
+Content-Type: application/json
+
+{
+  "resourceType": "Task",
+  "status": "draft",
+  "intent": "order",
+  "requester": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "1"
+    }
+  },
+  "owner": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "2"
+    }
+  },
+  "basedOn": [
+    {
+      "reference": "CarePlan/{{carePlanId}}",
+      "type": "CarePlan"
+    }
+  ]
+}
+
+
+> {%
+   client.global.set("taskId", response.body.id);
+%}
+
+### Get CareTeam
+GET http://127.0.0.1:60437/cps/{{careTeamRef}}
+
+### Accept Task (Task Owner)
+PUT http://127.0.0.1:60437/cps/Task/{{taskId}}
+Content-Type: application/json
+
+{
+  "status": "accepted",
+
+  "basedOn": [
+    {
+      "reference": "CarePlan/{{carePlanId}}",
+      "type": "CarePlan"
+    }
+  ],
+  "intent": "order",
+  "requester": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "1"
+    }
+  },
+  "owner": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "2"
+    }
+  },
+  "resourceType": "Task"
+}
+
+### Get CareTeam
+GET http://127.0.0.1:60437/cps/{{careTeamRef}}
+
+### Set Task completed (Task Owner)
+PUT http://127.0.0.1:60437/cps/Task/{{taskId}}
+Content-Type: application/json
+
+{
+  "status": "completed",
+
+  "basedOn": [
+    {
+      "reference": "CarePlan/1",
+      "type": "CarePlan"
+    }
+  ],
+  "intent": "order",
+  "requester": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "1"
+    }
+  },
+  "owner": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "2"
+    }
+  },
+  "resourceType": "Task"
+}
+
+### Get CareTeam
+GET http://127.0.0.1:60437/cps/{{careTeamRef}}

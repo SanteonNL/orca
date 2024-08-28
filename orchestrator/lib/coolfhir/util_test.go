@@ -109,6 +109,15 @@ func TestValidateLogicalReference(t *testing.T) {
 			},
 			wantErr: "reference.Identifier.System must be http://example.com",
 		},
+		{
+			name: "nil reference",
+			args: args{
+				reference:      nil,
+				expectedSystem: "http://example.com",
+				expectedType:   "Patient",
+			},
+			wantErr: "reference cannot be nil",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

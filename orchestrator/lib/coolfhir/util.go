@@ -50,7 +50,7 @@ func FilterNamingSystem(system string) func(fhir.Identifier) bool {
 
 func ValidateLogicalReference(reference *fhir.Reference, expectedType string, expectedSystem string) error {
 	if reference == nil {
-		return errors.New("not a reference")
+		return errors.New("reference cannot be nil")
 	}
 	if reference.Type == nil || *reference.Type != expectedType {
 		return fmt.Errorf("reference.Type must be %s", expectedType)
