@@ -26,6 +26,22 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("This test requires creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
 	carePlanContributor := setupIntegrationTest(t)
 
+	participant1 := fhir.CareTeamParticipant{
+		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+		Period:     &fhir.Period{Start: to.Ptr("2021-01-01T00:00:00Z")},
+	}
+	participant2 := fhir.CareTeamParticipant{
+		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+		Period:     &fhir.Period{Start: to.Ptr("2021-01-01T00:00:00Z")},
+	}
+	participant2WithEndDate := fhir.CareTeamParticipant{
+		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+		Period: &fhir.Period{
+			Start: to.Ptr("2021-01-01T00:00:00Z"),
+			End:   to.Ptr("2021-01-02T00:00:00Z"),
+		},
+	}
+
 	var carePlan fhir.CarePlan
 	var task fhir.Task
 	t.Log("Creating CarePlan...")
@@ -77,6 +93,9 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
 			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
 		})
+		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
+			assertCareTeam(t, carePlanContributor, *carePlan.CareTeam[0].Reference, participant1)
+		})
 	}
 
 	t.Log("Accepting Task")
@@ -92,16 +111,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, fhir.TaskStatusAccepted, updatedTask.Status)
 		})
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
-			var careTeam fhir.CareTeam
-			err = carePlanContributor.Read(*carePlan.CareTeam[0].Reference, &careTeam)
-			require.NoError(t, err)
-			require.Len(t, careTeam.Participant, 2)
-			for _, participant := range careTeam.Participant {
-				require.NoError(t, coolfhir.ValidateLogicalReference(participant.OnBehalfOf, "Organization", coolfhir.URANamingSystem))
-			}
-			// Should be sorted according to the order they're added, so we can index them
-			assert.Equal(t, "1", *careTeam.Participant[0].OnBehalfOf.Identifier.Value)
-			assert.Equal(t, "2", *careTeam.Participant[1].OnBehalfOf.Identifier.Value)
+			assertCareTeam(t, carePlanContributor, *carePlan.CareTeam[0].Reference, participant1, participant2)
 		})
 	}
 
@@ -118,20 +128,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, fhir.TaskStatusCompleted, updatedTask.Status)
 		})
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
-			var careTeam fhir.CareTeam
-			err = carePlanContributor.Read(*carePlan.CareTeam[0].Reference, &careTeam)
-			require.NoError(t, err)
-			require.Len(t, careTeam.Participant, 2)
-			for _, participant := range careTeam.Participant {
-				require.NoError(t, coolfhir.ValidateLogicalReference(participant.OnBehalfOf, "Organization", coolfhir.URANamingSystem))
-			}
-			// Should be sorted according to the order they're added, so we can index them
-			assert.Equal(t, "1", *careTeam.Participant[0].OnBehalfOf.Identifier.Value)
-			assert.NotNil(t, careTeam.Participant[0].Period.Start)
-			assert.Nil(t, careTeam.Participant[0].Period.End)
-			assert.Equal(t, "2", *careTeam.Participant[1].OnBehalfOf.Identifier.Value)
-			assert.NotNil(t, careTeam.Participant[1].Period.Start)
-			assert.NotNil(t, careTeam.Participant[1].Period.End)
+			assertCareTeam(t, carePlanContributor, *carePlan.CareTeam[0].Reference, participant1, participant2WithEndDate)
 		})
 	}
 }
@@ -153,9 +150,41 @@ func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
 	httpClient := httpService.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(httpService.Client().Transport)
 
-	println("CarePlanService running at: ", carePlanServiceURL.String())
 	carePlanContributor := fhirclient.New(carePlanServiceURL, httpClient, nil)
 	return carePlanContributor
+}
+
+func assertCareTeam(t *testing.T, fhirClient fhirclient.Client, careTeamRef string, expectedMembers ...fhir.CareTeamParticipant) {
+	t.Helper()
+
+	var careTeam fhir.CareTeam
+	err := fhirClient.Read(careTeamRef, &careTeam)
+	require.NoError(t, err)
+	require.Lenf(t, careTeam.Participant, len(expectedMembers), "expected %d participants, got %d", len(expectedMembers), len(careTeam.Participant))
+	for _, participant := range careTeam.Participant {
+		require.NoError(t, coolfhir.ValidateLogicalReference(participant.OnBehalfOf, "Organization", coolfhir.URANamingSystem))
+	}
+
+outer:
+	for _, expectedMember := range expectedMembers {
+		for _, participant := range careTeam.Participant {
+			if *participant.OnBehalfOf.Identifier.Value == *expectedMember.OnBehalfOf.Identifier.Value {
+				// assert Period
+				if expectedMember.Period != nil && expectedMember.Period.Start != nil {
+					assert.NotNil(t, participant.Period.Start)
+				} else {
+					assert.Nil(t, participant.Period.Start)
+				}
+				if expectedMember.Period != nil && expectedMember.Period.End != nil {
+					assert.NotNil(t, participant.Period.End)
+				} else {
+					assert.Nil(t, participant.Period.End)
+				}
+				continue outer
+			}
+		}
+		t.Errorf("expected participant not found: %s", *expectedMember.OnBehalfOf.Identifier.Value)
+	}
 }
 
 // setupAuthorizationServer starts a test OAuth2 authorization server and returns its OAuth2 Token Introspection URL.

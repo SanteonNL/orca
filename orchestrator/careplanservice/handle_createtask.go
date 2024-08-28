@@ -1,13 +1,12 @@
 package careplanservice
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"net/http"
 	"strings"
 
-	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
@@ -38,25 +37,13 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	if err != nil {
 		return fmt.Errorf("failed to create Task: %w", err)
 	}
-	// Find right result to return
-	taskEntry := coolfhir.FirstBundleEntry(bundle, coolfhir.EntryIsOfType("Task"))
-	if taskEntry == nil {
-		// TODO: Might have to do cleanup here?
-		return errors.New("could not find Task in FHIR Bundle")
-	}
-	var headers fhirclient.Headers
-	if err := s.fhirClient.Read(*taskEntry.Response.Location, &task, fhirclient.ResponseHeaders(&headers)); err != nil {
-		return fmt.Errorf("failed to read created Task from FHIR server: %w", err)
-	}
-	for key, value := range headers.Header {
-		httpResponse.Header()[key] = value
-	}
-	httpResponse.WriteHeader(http.StatusCreated)
-	return json.NewEncoder(httpResponse).Encode(task)
+	return coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
+		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
+	}, httpResponse)
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.
-func (s *Service) newTaskInCarePlan(task map[string]interface{}, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
+func (s *Service) newTaskInCarePlan(task coolfhir.Task, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
 	taskRef := "urn:uuid:" + uuid.NewString()
 	carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
 		Reference: &fhir.Reference{
@@ -65,35 +52,20 @@ func (s *Service) newTaskInCarePlan(task map[string]interface{}, carePlan *fhir.
 		},
 	})
 
-	carePlanData, _ := json.Marshal(*carePlan)
 	// TODO: Only if not updated
-	taskData, _ := json.Marshal(task)
-	bundle := fhir.Bundle{
-		Type: fhir.BundleTypeTransaction,
-		Entry: []fhir.BundleEntry{
-			// Create Task
-			{
-				FullUrl:  to.Ptr(taskRef),
-				Resource: taskData,
-				Request: &fhir.BundleEntryRequest{
-					Method: fhir.HTTPVerbPOST,
-					Url:    "Task",
-				},
-			},
-			// Update CarePlan
-			{
-				Resource: carePlanData,
-				Request: &fhir.BundleEntryRequest{
-					Method: fhir.HTTPVerbPUT,
-					Url:    "CarePlan/" + *carePlan.Id,
-				},
-			},
-		},
+	tx := coolfhir.Transaction().
+		Create(task, coolfhir.WithFullUrl(taskRef)).
+		Update(*carePlan, "CarePlan/"+*carePlan.Id)
+
+	r4Task, err := task.ToFHIR()
+	if err != nil {
+		return nil, err
 	}
-	if err := s.fhirClient.Create(bundle, &bundle, fhirclient.AtPath("/")); err != nil {
-		return nil, fmt.Errorf("failed to create Task and update CarePlan: %w", err)
+	if _, err = careteamservice.Update(s.fhirClient, *carePlan.Id, *r4Task, tx); err != nil {
+		return nil, fmt.Errorf("failed to update CarePlan: %w", err)
 	}
-	return &bundle, nil
+	result := tx.Bundle()
+	return &result, nil
 }
 
 // basedOn returns the CarePlan reference the Task is based on, e.g. CarePlan/123.
