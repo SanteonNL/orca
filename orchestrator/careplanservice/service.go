@@ -95,7 +95,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	}))
-	mux.HandleFunc("PUT /cps/Task/:id", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT /cps/Task/{id}", func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleUpdateTask(writer, request)
 		if err != nil {
 			// TODO: proper OperationOutcome

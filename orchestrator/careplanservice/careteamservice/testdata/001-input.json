@@ -7,8 +7,8 @@
         "id": "1",
         "careTeam": [
           {
-            "id": "10",
-            "type": "CareTeam"
+            "type": "CareTeam",
+            "reference": "CareTeam/10"
           }
         ]
       }

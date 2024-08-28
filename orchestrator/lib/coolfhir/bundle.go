@@ -2,9 +2,13 @@ package coolfhir
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -124,6 +128,37 @@ func ResourceInBundle(bundle *fhir.Bundle, filter func(entry fhir.BundleEntry) b
 			}
 			return nil
 		}
+	}
+	return ErrEntryNotFound
+}
+
+// ExecuteTransactionAndRespondWithEntry executes a transaction (Bundle) on the FHIR server and responds with the entry that matches the filter.
+func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter) error {
+	var resultBundle fhir.Bundle
+	if err := fhirClient.Create(bundle, &resultBundle, fhirclient.AtPath("/")); err != nil {
+		return err
+	}
+	for _, entry := range resultBundle.Entry {
+		if !filter(entry) {
+			continue
+		}
+		statusParts := strings.Split(entry.Response.Status, " ")
+		status, _ := strconv.Atoi(statusParts[0])
+		if status == 0 {
+			status = http.StatusOK
+		}
+
+		// Read the resource from the FHIR server, to return it to the client.
+		result := make(map[string]interface{})
+		headers := new(fhirclient.Headers)
+		if err := fhirClient.Read(*entry.Response.Location, &result, fhirclient.ResponseHeaders(headers)); err != nil {
+			return errors.Join(ErrEntryNotFound, fmt.Errorf("failed to re-retrieve result Bundle entry (resource=%s): %w", *entry.Response.Location, err))
+		}
+		for key, value := range headers.Header {
+			httpResponse.Header()[key] = value
+		}
+		httpResponse.WriteHeader(status)
+		return json.NewEncoder(httpResponse).Encode(result)
 	}
 	return ErrEntryNotFound
 }

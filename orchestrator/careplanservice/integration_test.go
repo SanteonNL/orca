@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
@@ -23,6 +24,7 @@ func Test_Integration_Service_handleCreateTask(t *testing.T) {
 
 	t.Run("New CarePlan, New Task", func(t *testing.T) {
 		var carePlan fhir.CarePlan
+		var task fhir.Task
 		t.Run("Create CarePlan", func(t *testing.T) {
 			carePlan.Subject = fhir.Reference{
 				Type: to.Ptr("Patient"),
@@ -42,29 +44,58 @@ func Test_Integration_Service_handleCreateTask(t *testing.T) {
 			require.NotNil(t, createdCarePlan.Id)
 			require.Len(t, createdCareTeams, 1, "expected 1 CareTeam")
 			require.NotNil(t, createdCareTeams[0].Id)
-		})
-		t.Run("Create Task", func(t *testing.T) {
-			task := fhir.Task{
-				BasedOn: []fhir.Reference{
-					{
-						Type:      to.Ptr("CarePlan"),
-						Reference: to.Ptr("CarePlan/" + *carePlan.Id),
-					},
-				},
-			}
-			err := carePlanContributor.Create(task, &task)
-			require.NoError(t, err)
 
-			t.Run("Check Task properties", func(t *testing.T) {
-				require.NotNil(t, task.Id)
-				require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
-			})
-			t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
-				err = carePlanContributor.Read("CarePlan/"+*carePlan.Id, &carePlan)
+			t.Run("Create Task", func(t *testing.T) {
+				task = fhir.Task{
+					BasedOn: []fhir.Reference{
+						{
+							Type:      to.Ptr("CarePlan"),
+							Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+						},
+					},
+					Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+					Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				}
+
+				err := carePlanContributor.Create(task, &task)
 				require.NoError(t, err)
-				require.Len(t, carePlan.Activity, 1)
-				require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
-				require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
+
+				t.Run("Check Task properties", func(t *testing.T) {
+					require.NotNil(t, task.Id)
+					require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
+				})
+				t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
+					err = carePlanContributor.Read("CarePlan/"+*carePlan.Id, &carePlan)
+					require.NoError(t, err)
+					require.Len(t, carePlan.Activity, 1)
+					require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
+					require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
+				})
+
+				t.Run("Accept Task", func(t *testing.T) {
+					task.Status = fhir.TaskStatusAccepted
+					var updatedTask fhir.Task
+					err := carePlanContributor.Update("Task/"+*task.Id, task, &updatedTask)
+					require.NoError(t, err)
+					task = updatedTask
+
+					t.Run("Check Task properties", func(t *testing.T) {
+						require.NotNil(t, updatedTask.Id)
+						require.Equal(t, fhir.TaskStatusAccepted, updatedTask.Status)
+					})
+					t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
+						var careTeam fhir.CareTeam
+						err = carePlanContributor.Read(*carePlan.CareTeam[0].Reference, &careTeam)
+						require.NoError(t, err)
+						require.Len(t, careTeam.Participant, 2)
+						for _, participant := range careTeam.Participant {
+							require.NoError(t, coolfhir.ValidateLogicalReference(participant.OnBehalfOf, "Organization", coolfhir.URANamingSystem))
+						}
+						// Should be sorted according to the order they're added, so we can index them
+						assert.Equal(t, "1", *careTeam.Participant[0].OnBehalfOf.Identifier.Value)
+						assert.Equal(t, "2", *careTeam.Participant[1].OnBehalfOf.Identifier.Value)
+					})
+				})
 			})
 		})
 	})

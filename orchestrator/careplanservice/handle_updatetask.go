@@ -1,9 +1,10 @@
 package careplanservice
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -19,7 +20,7 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 	log.Info().Msgf("Updating Task: %s", taskID)
 	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
-	task := make(map[string]interface{})
+	var task coolfhir.Task
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return fmt.Errorf("invalid Task: %w", err)
 	}
@@ -29,36 +30,30 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 	if err != nil {
 		return fmt.Errorf("invalid Task.basedOn: %w", err)
 	}
-	// TODO: Manage time-outs properly
 
-	bundle := new(fhir.Bundle)
-	if err := s.fhirClient.Read("CarePlan",
-		bundle,
-		fhirclient.QueryParam("_id", strings.TrimPrefix(*carePlanRef, "CarePlan/")),
-		fhirclient.QueryParam("_include", "CarePlan:care-team"),
-		fhirclient.QueryParam("_include", "CarePlan:activity-reference")); err != nil {
-		return fmt.Errorf("unable to resolve CarePlan and related resources: %w", err)
-	}
-	var carePlan fhir.CarePlan
-	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(*carePlanRef), &carePlan); err != nil {
-		return fmt.Errorf("CarePlan not in Bundle (ref=%s): %w", *carePlanRef, err)
-	}
-	if len(carePlan.CareTeam) != 1 || carePlan.CareTeam[0].Reference == nil {
-		return errors.New("expected CarePlan to have exactly one CareTeam, with a reference")
-	}
-	var careTeam fhir.CareTeam
-	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(*carePlan.CareTeam[0].Reference), &careTeam); err != nil {
-		return fmt.Errorf("CareTeam not in Bundle (ref=%s): %w", *carePlan.CareTeam[0].Reference, err)
-	}
-	var activities []fhir.Task
-	if err := coolfhir.ResourcesInBundle(bundle, coolfhir.EntryIsOfType("Task"), &activities); err != nil {
+	tx := coolfhir.Transaction()
+	tx = tx.Update(task, "Task/"+taskID)
+	r4Task, err := task.ToFHIR()
+	if err != nil {
 		return err
+	}
+	// Update care team
+	careTeamUpdated, err := careteamservice.Update(s.fhirClient, *carePlanRef, *r4Task, tx)
+	if err != nil {
+		return fmt.Errorf("update CareTeam: %w", err)
+	}
+
+	// Perform update
+	if err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
+		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/"+taskID)
+	}, httpResponse); err != nil {
+		if errors.Is(err, coolfhir.ErrEntryNotFound) {
+			// Bundle execution succeeded, but could not read result entry.
+			// Just respond with the original Task that was sent.
+			httpResponse.WriteHeader(http.StatusOK)
+			return json.NewEncoder(httpResponse).Encode(task)
+		}
+		return fmt.Errorf("failed to update Task (CareTeam updated=%v): %w", careTeamUpdated, err)
 	}
 	return nil
 }
-
-//func (s *Service) updateTaskStatus(taskID string, newStatus fhir.TaskStatus) (*fhir.Bundle, error) {
-//	if newStatus == fhir.TaskStatusAccepted {
-//
-//	}
-//}

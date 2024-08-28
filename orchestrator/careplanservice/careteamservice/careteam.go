@@ -114,11 +114,12 @@ func resolveCareTeam(bundle *fhir.Bundle, carePlan *fhir.CarePlan) (*fhir.CareTe
 	var currentCareTeam fhir.CareTeam
 	if len(carePlan.CareTeam) == 1 {
 		// prevent nil deref
-		if carePlan.CareTeam[0].Id == nil {
-			return nil, errors.New("CarePlan.CareTeam.Id is required")
+		ref := carePlan.CareTeam[0].Reference
+		if ref == nil {
+			return nil, errors.New("CarePlan.CareTeam.Reference is required")
 		}
 		// Should be resolvable in Bundle
-		if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryIsOfType("CareTeam"), &currentCareTeam); err != nil {
+		if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(*ref), &currentCareTeam); err != nil {
 			return nil, fmt.Errorf("unable to resolve CarePlan.CareTeam: %w", err)
 		}
 	}
