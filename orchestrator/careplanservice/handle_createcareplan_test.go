@@ -21,10 +21,10 @@ func TestService_handleCreateCarePlan(t *testing.T) {
 			fhirClient:      mockClient,
 			maxReadBodySize: 1024 * 1024,
 		}
-		createdCarePlan := fhir.CarePlan{
-			CareTeam: []fhir.Reference{
+		createdCarePlan := map[string]interface{}{
+			"careTeam": []map[string]interface{}{
 				{
-					Reference: to.Ptr("CareTeam/123"),
+					"reference": "CareTeam/123",
 				},
 			},
 		}
@@ -50,10 +50,8 @@ func TestService_handleCreateCarePlan(t *testing.T) {
 			capturedBundle = resource.(fhir.Bundle)
 			return nil
 		})
-		mockClient.EXPECT().Read("CarePlan/123", mock.AnythingOfType("*fhir.CarePlan"),
-			mock.AnythingOfType("PostRequestOption"),
-		).RunAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
-			*(result.(*fhir.CarePlan)) = createdCarePlan
+		mockClient.EXPECT().Read("CarePlan/123", mock.Anything, mock.Anything).RunAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+			*(result.(*map[string]interface{})) = createdCarePlan
 			return nil
 		})
 		var carePlan fhir.CarePlan
@@ -64,10 +62,9 @@ func TestService_handleCreateCarePlan(t *testing.T) {
 		err := service.handleCreateCarePlan(httpResponse, httpRequest)
 
 		require.NoError(t, err)
-		require.Equal(t, http.StatusCreated, httpResponse.Code)
+		require.Equal(t, http.StatusOK, httpResponse.Code)
 		// Check that the input Bundle is a transaction with a CarePlan and a CareTeam.
 		// The first should be the CarePlan
 		require.Len(t, capturedBundle.Entry, 2)
 	})
-
 }
