@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -23,6 +24,48 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 	var task coolfhir.Task
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return fmt.Errorf("invalid Task: %w", err)
+	}
+
+	// the task prior to updates, we need this to validate the state transition
+	var taskExisting coolfhir.Task
+	if err := s.fhirClient.Read("Task/"+taskID, &taskExisting); err != nil {
+		return fmt.Errorf("failed to read Task: %w", err)
+	}
+
+	// Validate state transition
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		return err
+	}
+
+	taskFHIR, err := task.ToFHIR()
+	if err != nil {
+		return err
+	}
+	taskExistingFHIR, err := taskExisting.ToFHIR()
+	if err != nil {
+		return err
+	}
+	var isOwner bool
+	if taskFHIR.Owner != nil {
+		for _, identifier := range principal.Organization.Identifier {
+			if coolfhir.LogicalReferenceEquals(*taskFHIR.Owner, fhir.Reference{Identifier: &identifier}) {
+				isOwner = true
+				break
+			}
+		}
+	}
+	var isRequester bool
+	if taskFHIR.Requester != nil {
+		for _, identifier := range principal.Organization.Identifier {
+			if coolfhir.LogicalReferenceEquals(*taskFHIR.Requester, fhir.Reference{Identifier: &identifier}) {
+				isRequester = true
+				break
+			}
+		}
+	}
+	if !isValidTransition(taskExistingFHIR.Status, taskFHIR.Status, isOwner, isRequester) {
+		return errors.New(fmt.Sprintf("invalid state transition from %s to %s", taskExistingFHIR.Status.String(), taskFHIR.Status.String()))
 	}
 
 	// Resolve the CarePlan
@@ -52,7 +95,13 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 			// Just respond with the original Task that was sent.
 			httpResponse.WriteHeader(http.StatusOK)
 			return json.NewEncoder(httpResponse).Encode(task)
-// TODO: Implement UpdateTask handler
+
+			return fmt.Errorf("failed to update Task (CareTeam updated=%v): %w", careTeamUpdated, err)
+		}
+		return nil
+	}
+	return nil
+}
 
 func isValidTransition(from fhir.TaskStatus, to fhir.TaskStatus, isOwner bool, isRequester bool) bool {
 	if isOwner == false && isRequester == false {
@@ -87,9 +136,6 @@ func isValidTransition(from fhir.TaskStatus, to fhir.TaskStatus, isOwner bool, i
 		if from == fhir.TaskStatusReady && to == fhir.TaskStatusCompleted {
 			return true
 		}
-		return fmt.Errorf("failed to update Task (CareTeam updated=%v): %w", careTeamUpdated, err)
-	}
-	return nil
 		if from == fhir.TaskStatusReady && to == fhir.TaskStatusFailed {
 			return true
 		}

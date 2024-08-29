@@ -1,6 +1,10 @@
 package auth
 
 import (
+	"context"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 )
 
@@ -30,4 +34,17 @@ func (h headerDecoratorRoundTripper) RoundTrip(request *http.Request) (*http.Res
 		request.Header.Set(name, value)
 	}
 	return h.inner.RoundTrip(request)
+}
+
+func TestPrincipal(ctx context.Context) context.Context {
+	return context.WithValue(ctx, principalContextKey, Principal{
+		Organization: fhir.Organization{
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
+			},
+		},
+	})
 }
