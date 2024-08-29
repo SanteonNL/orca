@@ -25,6 +25,26 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 		return fmt.Errorf("invalid Task: %w", err)
 	}
 
+	// the task prior to updates, we need this to validate the state transition
+	var taskExisting coolfhir.Task
+	if err := s.fhirClient.Read("Task/"+taskID, &taskExisting); err != nil {
+		return fmt.Errorf("failed to read Task: %w", err)
+	}
+
+	// Validate state transition
+	taskFHIR, err := task.ToFHIR()
+	if err != nil {
+		return err
+	}
+	taskExistingFHIR, err := taskExisting.ToFHIR()
+	if err != nil {
+		return err
+	}
+	// TODO: Get owner and requester from principal and use for validation. For now, set owner and requester to true to use existing validation logic
+	if !isValidTransition(taskExistingFHIR.Status, taskFHIR.Status, true, true) {
+		return errors.New(fmt.Sprintf("invalid state transition from %s to %s", taskExistingFHIR.Status.String(), taskFHIR.Status.String()))
+	}
+
 	// Resolve the CarePlan
 	carePlanRef, err := basedOn(task)
 	if err != nil {
@@ -56,4 +76,62 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 		return fmt.Errorf("failed to update Task (CareTeam updated=%v): %w", careTeamUpdated, err)
 	}
 	return nil
+}
+
+func isValidTransition(from fhir.TaskStatus, to fhir.TaskStatus, isOwner bool, isRequester bool) bool {
+	if isOwner == false && isRequester == false {
+		return false
+	}
+	// Transitions valid for owner only
+	if isOwner {
+		if from == fhir.TaskStatusRequested && to == fhir.TaskStatusReceived {
+			return true
+		}
+		if from == fhir.TaskStatusRequested && to == fhir.TaskStatusAccepted {
+			return true
+		}
+		if from == fhir.TaskStatusRequested && to == fhir.TaskStatusRejected {
+			return true
+		}
+		if from == fhir.TaskStatusReceived && to == fhir.TaskStatusAccepted {
+			return true
+		}
+		if from == fhir.TaskStatusReceived && to == fhir.TaskStatusRejected {
+			return true
+		}
+		if from == fhir.TaskStatusAccepted && to == fhir.TaskStatusInProgress {
+			return true
+		}
+		if from == fhir.TaskStatusInProgress && to == fhir.TaskStatusCompleted {
+			return true
+		}
+		if from == fhir.TaskStatusInProgress && to == fhir.TaskStatusFailed {
+			return true
+		}
+		if from == fhir.TaskStatusReady && to == fhir.TaskStatusCompleted {
+			return true
+		}
+		if from == fhir.TaskStatusReady && to == fhir.TaskStatusFailed {
+			return true
+		}
+	}
+	// Transitions valid for owner or requester
+	if isOwner || isRequester {
+		if from == fhir.TaskStatusRequested && to == fhir.TaskStatusCancelled {
+			return true
+		}
+		if from == fhir.TaskStatusReceived && to == fhir.TaskStatusCancelled {
+			return true
+		}
+		if from == fhir.TaskStatusAccepted && to == fhir.TaskStatusCancelled {
+			return true
+		}
+		if from == fhir.TaskStatusInProgress && to == fhir.TaskStatusOnHold {
+			return true
+		}
+		if from == fhir.TaskStatusOnHold && to == fhir.TaskStatusInProgress {
+			return true
+		}
+	}
+	return false
 }

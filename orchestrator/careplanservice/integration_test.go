@@ -66,6 +66,24 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.NotNil(t, createdCareTeams[0].Id)
 	}
 
+	t.Log("Creating Task - Invalid status")
+	{
+		task = fhir.Task{
+			BasedOn: []fhir.Reference{
+				{
+					Type:      to.Ptr("CarePlan"),
+					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+				},
+			},
+			Status:    fhir.TaskStatusAccepted,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+		}
+
+		err := carePlanContributor.Create(task, &task)
+		require.Error(t, err)
+	}
+
 	t.Log("Creating Task")
 	{
 		task = fhir.Task{
@@ -75,6 +93,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
 				},
 			},
+			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
@@ -111,6 +130,31 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, fhir.TaskStatusAccepted, updatedTask.Status)
 		})
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
+			assertCareTeam(t, carePlanContributor, *carePlan.CareTeam[0].Reference, participant1, participant2)
+		})
+	}
+
+	t.Log("Invalid state transition - Accepted -> Completed")
+	{
+		task.Status = fhir.TaskStatusCompleted
+		var updatedTask fhir.Task
+		err := carePlanContributor.Update("Task/"+*task.Id, task, &updatedTask)
+		require.Error(t, err)
+	}
+
+	t.Log("Valid state transition - Accepted -> In-progress")
+	{
+		task.Status = fhir.TaskStatusInProgress
+		var updatedTask fhir.Task
+		err := carePlanContributor.Update("Task/"+*task.Id, task, &updatedTask)
+		require.NoError(t, err)
+		task = updatedTask
+
+		t.Run("Check Task properties", func(t *testing.T) {
+			require.NotNil(t, updatedTask.Id)
+			require.Equal(t, fhir.TaskStatusInProgress, updatedTask.Status)
+		})
+		t.Run("Check that CareTeam still contains the 2 parties", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor, *carePlan.CareTeam[0].Reference, participant1, participant2)
 		})
 	}
