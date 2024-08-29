@@ -6,7 +6,6 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"slices"
 	"strings"
@@ -42,22 +41,20 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	if err != nil {
 		return false, err
 	}
-	// Make sure the CareTeam is updated given the new Task state
-	var taskUpdated bool
-	for i, task := range activities {
-		if task.Id != nil && updateTriggerTask.Id != nil && *task.Id == *updateTriggerTask.Id {
-			activities[i] = updateTriggerTask
-			taskUpdated = true
-			break
-		}
-	}
-	if !taskUpdated {
-		// New task, add to activities
-		activities = append(activities, updateTriggerTask)
-	}
 
 	// TODO: ETag on CareTeam
-	changed, err := updateCareTeam(careTeam, activities)
+	var otherActivities []fhir.Task
+	for _, activity := range activities {
+		if updateTriggerTask.Id == nil || *activity.Id != *updateTriggerTask.Id {
+			otherActivities = append(otherActivities, activity)
+		}
+	}
+	// Make sure Task.requester is always in the CareTeam
+	// TODO: But are they always active, regardless of Task status?
+	changed := activateMembership(careTeam, updateTriggerTask.Requester)
+	if updateCareTeam(careTeam, otherActivities, updateTriggerTask) {
+		changed = true
+	}
 	if changed {
 		sortParticipants(careTeam.Participant)
 		tx.Update(*careTeam, "CareTeam/"+*careTeam.Id)
@@ -66,45 +63,61 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	return false, nil
 }
 
-func updateCareTeam(careTeam *fhir.CareTeam, activities []fhir.Task) (bool, error) {
-	// Add new/changed memberships
-	var changed bool
-	targetParticipants := collectParticipants(activities)
-outer:
-	for targetParticipant, details := range targetParticipants {
-		for i, curr := range careTeam.Participant {
-			if !coolfhir.IsLogicalReference(curr.OnBehalfOf) {
-				continue
-			}
-			if *curr.OnBehalfOf.Identifier.System == targetParticipant.System && *curr.OnBehalfOf.Identifier.Value == targetParticipant.Value {
-				// Already in CareTeam
-				if details.Ended {
-					// Set DateEnded
-					curr.Period.End = to.Ptr(now())
-					careTeam.Participant[i] = curr
-					changed = true
-				}
-				// TODO: Might have to set DateEnded
-				continue outer
+func updateCareTeam(careTeam *fhir.CareTeam, otherActivities []fhir.Task, updatedActivity fhir.Task) bool {
+	if updatedActivity.Status == fhir.TaskStatusAccepted {
+		// Task.owner should be an active member
+		return activateMembership(careTeam, updatedActivity.Owner)
+	}
+	if updatedActivity.Status == fhir.TaskStatusCompleted ||
+		updatedActivity.Status == fhir.TaskStatusFailed ||
+		updatedActivity.Status == fhir.TaskStatusCancelled {
+		// Task.owner should not be an active member, or should have an end date set if it was an active member.
+		// If there's still other Tasks that are active (status accepted, in-progress or on-hold), the member should remain in the CareTeam.
+		return deactivateMembership(careTeam, updatedActivity.Owner, otherActivities)
+	}
+	return false
+}
+
+func activateMembership(careTeam *fhir.CareTeam, party *fhir.Reference) bool {
+	for _, participant := range careTeam.Participant {
+		if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, party.Identifier) {
+			// Already in CareTeam
+			return false
+		}
+	}
+	// Not yet in CareTeam, add member
+	careTeam.Participant = append(careTeam.Participant, fhir.CareTeamParticipant{
+		OnBehalfOf: party,
+		Period: &fhir.Period{
+			Start: to.Ptr(now()),
+		},
+	})
+	return true
+}
+
+func deactivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference, otherActivities []fhir.Task) bool {
+	// If the party has another Task that gives active membership, don't deactivate
+	for _, activity := range otherActivities {
+		if coolfhir.IdentifierEquals(activity.Owner.Identifier, party.Identifier) {
+			// Still active
+			return false
+		}
+	}
+
+	var result bool
+	for i, participant := range careTeam.Participant {
+		if !coolfhir.IsLogicalReference(participant.OnBehalfOf) {
+			continue
+		}
+		if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, party.Identifier) {
+			// Update end date
+			if participant.Period.End == nil {
+				careTeam.Participant[i].Period.End = to.Ptr(now())
+				result = true
 			}
 		}
-		// Not yet in CareTeam, add member
-		careTeam.Participant = append(careTeam.Participant, fhir.CareTeamParticipant{
-			OnBehalfOf: &fhir.Reference{
-				Type: to.Ptr(coolfhir.TypeOrganization),
-				Identifier: &fhir.Identifier{
-					System: &targetParticipant.System,
-					Value:  &targetParticipant.Value,
-				},
-			},
-			Period: &fhir.Period{
-				Start: to.Ptr(now()),
-			},
-		})
-		changed = true
 	}
-	// TODO: Remove members that don't have a Task? E.g., someone added to CareTeam manually?
-	return changed, nil
+	return result
 }
 
 func resolveCareTeam(bundle *fhir.Bundle, carePlan *fhir.CarePlan) (*fhir.CareTeam, error) {
@@ -146,69 +159,6 @@ func resolveActivities(bundle *fhir.Bundle, carePlan *fhir.CarePlan) ([]fhir.Tas
 		}
 	}
 	return tasks, nil
-}
-
-type participantID struct {
-	System string
-	Value  string
-}
-
-func (m participantID) String() string {
-	return fmt.Sprintf("%s|%s", m.System, m.Value)
-}
-
-type participantDetails struct {
-	// Ended indicates the participant's membership has ended, causing endDate to be set
-	Ended bool
-}
-
-func collectParticipants(activities []fhir.Task) map[participantID]participantDetails {
-	result := make(map[participantID]participantDetails)
-	for _, activity := range activities {
-		// Add Task.requester to CareTeam
-		if err := coolfhir.ValidateLogicalReference(activity.Requester, coolfhir.TypeOrganization, coolfhir.URANamingSystem); err != nil {
-			log.Warn().Msgf("Task.requester is invalid, skipping (id=%s): %v", to.Value(activity.Id), err)
-			continue
-		}
-		result[participantID{System: *activity.Requester.Identifier.System, Value: *activity.Requester.Identifier.Value}] = participantDetails{}
-		// Add Task.owner to CareTeam
-		if err := coolfhir.ValidateLogicalReference(activity.Owner, coolfhir.TypeOrganization, coolfhir.URANamingSystem); err != nil {
-			log.Warn().Msgf("Task.owner is invalid, skipping (id=%s): %v", to.Value(activity.Id), err)
-			continue
-		}
-		if taskOwnerIsMember(activity.Status) {
-			p := participantID{System: *activity.Owner.Identifier.System, Value: *activity.Owner.Identifier.Value}
-			// Check existence, otherwise we could accidentally override ended==false with true,
-			// while an active Task always give membership (over any cancelled Tasks).
-			if _, exists := result[p]; !exists {
-				result[p] = participantDetails{
-					// If Task.status=failed||completed, set end date
-					Ended: activity.Status == fhir.TaskStatusFailed ||
-						activity.Status == fhir.TaskStatusCompleted,
-				}
-			}
-		}
-	}
-	return result
-}
-
-// taskOwnerIsMember returns true if the Task's owner is a member of the CareTeam.
-// It implements the table as specified in https://build.fhir.org/ig/santeonnl/shared-care-planning/branches/main/overview.html#updating-careplan-and-careteam
-func taskOwnerIsMember(status fhir.TaskStatus) bool {
-	switch status {
-	case fhir.TaskStatusAccepted:
-		fallthrough
-	case fhir.TaskStatusInProgress:
-		fallthrough
-	case fhir.TaskStatusOnHold:
-		fallthrough
-	case fhir.TaskStatusCompleted:
-		fallthrough
-	case fhir.TaskStatusFailed:
-		return true
-	default:
-		return false
-	}
 }
 
 func now() string {

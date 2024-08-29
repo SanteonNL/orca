@@ -5,26 +5,12 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"os"
 	"testing"
 	"time"
 )
-
-func Test_taskOwnerIsMember(t *testing.T) {
-	assert.False(t, taskOwnerIsMember(fhir.TaskStatusRequested))
-	assert.False(t, taskOwnerIsMember(fhir.TaskStatusReady))
-	assert.False(t, taskOwnerIsMember(fhir.TaskStatusReceived))
-	assert.False(t, taskOwnerIsMember(fhir.TaskStatusRejected))
-	assert.False(t, taskOwnerIsMember(fhir.TaskStatusCancelled))
-	assert.True(t, taskOwnerIsMember(fhir.TaskStatusAccepted))
-	assert.True(t, taskOwnerIsMember(fhir.TaskStatusInProgress))
-	assert.True(t, taskOwnerIsMember(fhir.TaskStatusOnHold))
-	assert.True(t, taskOwnerIsMember(fhir.TaskStatusCompleted))
-	assert.True(t, taskOwnerIsMember(fhir.TaskStatusFailed))
-}
 
 type testCase struct {
 	Key         string

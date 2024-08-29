@@ -67,3 +67,19 @@ func ValidateLogicalReference(reference *fhir.Reference, expectedType string, ex
 func IsLogicalReference(reference *fhir.Reference) bool {
 	return reference != nil && reference.Type != nil && reference.Identifier != nil && reference.Identifier.System != nil && reference.Identifier.Value != nil
 }
+
+// IdentifierEquals compares two logical identifiers based on their system and value.
+// If any of the identifiers is nil or any of the system or value fields is nil, it returns false.
+// If the system and value fields of both identifiers are equal, it returns true.
+func IdentifierEquals(one *fhir.Identifier, other *fhir.Identifier) bool {
+	if one == nil || other == nil {
+		return false
+	}
+	if one.System == nil || other.System == nil {
+		return false
+	}
+	if one.Value == nil || other.Value == nil {
+		return false
+	}
+	return *one.System == *other.System && *one.Value == *other.Value
+}

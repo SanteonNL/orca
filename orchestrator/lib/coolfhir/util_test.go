@@ -130,3 +130,135 @@ func TestValidateLogicalReference(t *testing.T) {
 		})
 	}
 }
+
+func TestIdentifierEquals(t *testing.T) {
+	type args struct {
+		one   *fhir.Identifier
+		other *fhir.Identifier
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "equal",
+			args: args{
+				one: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+				other: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+			},
+			want: true,
+		},
+		{
+			name: "different system",
+			args: args{
+				one: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+				other: &fhir.Identifier{
+					System: to.Ptr("http://example.org"),
+					Value:  to.Ptr("123"),
+				},
+			},
+			want: false,
+		},
+		{
+			name: "different value",
+			args: args{
+				one: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+				other: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("456"),
+				},
+			},
+			want: false,
+		},
+		{
+			name: "nil one",
+			args: args{
+				one:   nil,
+				other: &fhir.Identifier{},
+			},
+			want: false,
+		},
+		{
+			name: "nil other",
+			args: args{
+				one:   &fhir.Identifier{},
+				other: nil,
+			},
+			want: false,
+		},
+		{
+			name: "nil both",
+			args: args{
+				one:   nil,
+				other: nil,
+			},
+		},
+		{
+			name: "nil system one",
+			args: args{
+				one: &fhir.Identifier{
+					Value: to.Ptr("123"),
+				},
+				other: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+			},
+			want: false,
+		},
+		{
+			name: "nil system other",
+			args: args{
+				one: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+			},
+			want: false,
+		},
+		{
+			name: "nil value one",
+			args: args{
+				one: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+				},
+				other: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+			},
+			want: false,
+		},
+		{
+			name: "nil value other",
+			args: args{
+				one: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+				other: &fhir.Identifier{
+					System: to.Ptr("http://example.com"),
+				},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, IdentifierEquals(tt.args.one, tt.args.other), "IdentifierEquals(%v, %v)", tt.args.one, tt.args.other)
+		})
+	}
+}
