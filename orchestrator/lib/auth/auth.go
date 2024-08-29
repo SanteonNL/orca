@@ -20,9 +20,6 @@ var principalContextKey = principalContextKeyType{}
 // The user info is to be provided by an API Gateway/reverse proxy that validated the authentication token in the request.
 // It sets the decoded user info in the request context.
 func Middleware(authConfig middleware.Config, fn http.HandlerFunc) func(writer http.ResponseWriter, request *http.Request) {
-	return func(writer http.ResponseWriter, request *http.Request) {
-		fn(writer, request)
-	}
 	return middleware.Secure(authConfig, func(response http.ResponseWriter, request *http.Request) {
 		userInfo := middleware.UserInfo(request.Context())
 		if userInfo == nil {
