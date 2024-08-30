@@ -164,7 +164,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	{
 		task.Status = fhir.TaskStatusCompleted
 		var updatedTask fhir.Task
-		err := carePlanContributor1.Update("Task/"+*task.Id, task, &updatedTask)
+		err := carePlanContributor2.Update("Task/"+*task.Id, task, &updatedTask)
 		require.NoError(t, err)
 		task = updatedTask
 
@@ -193,14 +193,11 @@ func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.Bas
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
 
-	httpClient1 := httpService.Client()
-	httpClient1.Transport = auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, "1")
+	transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, "1")
+	transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, "2")
 
-	httpClient2 := httpService.Client()
-	httpClient2.Transport = auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, "2")
-
-	carePlanContributor1 := fhirclient.New(carePlanServiceURL, httpClient1, nil)
-	carePlanContributor2 := fhirclient.New(carePlanServiceURL, httpClient2, nil)
+	carePlanContributor1 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport1}, nil)
+	carePlanContributor2 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport2}, nil)
 	return carePlanContributor1, carePlanContributor2
 }
 
