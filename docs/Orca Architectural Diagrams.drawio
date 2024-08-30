@@ -1,4 +1,4 @@
-<mxfile host="Electron" modified="2024-08-30T13:25:09.324Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.6.4 Chrome/124.0.6367.207 Electron/30.0.6 Safari/537.36" etag="hQnPINA9dr4URAm1tgzR" version="24.6.4" type="device" pages="4">
+<mxfile host="Electron" modified="2024-08-30T14:29:54.776Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.6.4 Chrome/124.0.6367.207 Electron/30.0.6 Safari/537.36" etag="esOLBXrZoaoAaxL8FWw_" version="24.6.4" type="device" pages="3">
   <diagram name="Orca Architecture" id="ngfdinvVWNWGsdYMm05e">
     <mxGraphModel dx="-420" dy="1214" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
@@ -529,103 +529,6 @@
             </mxGeometry>
           </mxCell>
         </object>
-      </root>
-    </mxGraphModel>
-  </diagram>
-  <diagram id="cWibzVKQcWNUL_Crc8ra" name="Page-4">
-    <mxGraphModel dx="1332" dy="913" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
-      <root>
-        <mxCell id="0" />
-        <mxCell id="1" parent="0" />
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-6" value="Read FHIR Resource" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-1" target="cWBXnM_qJADrxbbtXRJB-2">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="480" y="210" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-10" value="get access token&lt;div&gt;(scope, requester, authorizer)&lt;/div&gt;" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-1" target="cWBXnM_qJADrxbbtXRJB-4">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-1" value="Orchestrator" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="280" y="180" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-11" value="introspect access token" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-2" target="cWBXnM_qJADrxbbtXRJB-3">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-22" value="forward FHIR request" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-2" target="cWBXnM_qJADrxbbtXRJB-20">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-2" value="Orchestrator" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="584" y="180" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-3" value="Nuts Node" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="584" y="300" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-4" value="Nuts Node" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="280" y="300" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-7" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-4" target="cWBXnM_qJADrxbbtXRJB-3">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="410" y="350" as="sourcePoint" />
-            <mxPoint x="594" y="350" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-9" value="Negotiate OAuth2&lt;div&gt;Access Token&lt;/div&gt;" style="edgeLabel;html=1;align=center;verticalAlign=middle;resizable=0;points=[];" vertex="1" connectable="0" parent="cWBXnM_qJADrxbbtXRJB-7">
-          <mxGeometry x="-0.0435" y="-3" relative="1" as="geometry">
-            <mxPoint as="offset" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-13" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-12" target="cWBXnM_qJADrxbbtXRJB-14">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="280" y="210" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-12" value="eNurse" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;" vertex="1" parent="1">
-          <mxGeometry x="30" y="180" width="30" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-15" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-14" target="cWBXnM_qJADrxbbtXRJB-1">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-14" value="MSC Platform&lt;div&gt;(Zbj portal)&lt;/div&gt;" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="110" y="180" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-16" value="Auth Care Organization, Care Giver" style="text;html=1;align=left;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="584" y="150" width="230" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-18" value="grant_type=vp_bearer" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
-          <mxGeometry x="380" y="360" width="210" height="30" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-20" value="FHIR" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="835" y="180" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-21" value="CareTeam" style="shape=card;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="850" y="310" width="80" height="100" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-24" value="careTeam" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=1;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-23" target="cWBXnM_qJADrxbbtXRJB-21">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-27" value="activities" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=0.5;exitY=1;exitDx=0;exitDy=0;exitPerimeter=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-23" target="cWBXnM_qJADrxbbtXRJB-26">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="735" y="460" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-23" value="CarePlan" style="shape=card;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="1035" y="310" width="80" height="100" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-26" value="Task" style="shape=card;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="1035" y="460" width="80" height="100" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-28" value="authorize resource access&lt;div&gt;based on CareTeam membership&lt;/div&gt;" style="rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;entryPerimeter=0;exitX=1;exitY=0.75;exitDx=0;exitDy=0;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-2" target="cWBXnM_qJADrxbbtXRJB-21">
-          <mxGeometry relative="1" as="geometry">
-            <mxPoint x="714" y="220" as="sourcePoint" />
-            <mxPoint x="830" y="220" as="targetPoint" />
-          </mxGeometry>
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-31" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" edge="1" parent="1" source="cWBXnM_qJADrxbbtXRJB-30" target="cWBXnM_qJADrxbbtXRJB-20">
-          <mxGeometry relative="1" as="geometry" />
-        </mxCell>
-        <mxCell id="cWBXnM_qJADrxbbtXRJB-30" value="Frontend" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="1">
-          <mxGeometry x="835" y="50" width="120" height="60" as="geometry" />
-        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>
