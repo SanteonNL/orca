@@ -19,7 +19,6 @@ import (
 	"testing"
 )
 
-// TODO: Set up 2 FHIR clients
 func Test_Integration_TaskLifecycle(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
@@ -143,7 +142,15 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	t.Log("Valid state transition - Accepted -> In-progress")
+	t.Log("Invalid state transition - Accepted -> In-progress, Requester")
+	{
+		task.Status = fhir.TaskStatusInProgress
+		var updatedTask fhir.Task
+		err := carePlanContributor1.Update("Task/"+*task.Id, task, &updatedTask)
+		require.Error(t, err)
+	}
+
+	t.Log("Valid state transition - Accepted -> In-progress, Owner")
 	{
 		task.Status = fhir.TaskStatusInProgress
 		var updatedTask fhir.Task
@@ -238,8 +245,6 @@ outer:
 func setupAuthorizationServer(t *testing.T) *url.URL {
 	authorizationServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		requestData, _ := io.ReadAll(request.Body)
-		// TODO: Switch on orgs to set owner/requester (maybe use token as URA)
-		t.Log("REQUEST DATA: " + string(requestData))
 		switch string(requestData) {
 		case "token=valid":
 			fallthrough
@@ -267,7 +272,6 @@ func setupAuthorizationServer(t *testing.T) *url.URL {
 			writer.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		// TODO: Hardcode 2 organisations, return depending on the token passed in
 	}))
 	t.Cleanup(func() {
 		authorizationServer.Close()

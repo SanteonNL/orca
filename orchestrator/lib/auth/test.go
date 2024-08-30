@@ -13,11 +13,13 @@ func AuthenticatedTestRoundTripper(underlying http.RoundTripper, bearerToken str
 
 	if bearerToken == "" {
 		bearerToken = "Bearer valid"
+	} else {
+		bearerToken = "Bearer " + bearerToken
 	}
 	return headerDecoratorRoundTripper{
 		inner: underlying,
 		header: map[string]string{
-			"Authorization": "Bearer " + bearerToken,
+			"Authorization": bearerToken,
 		},
 	}
 }
