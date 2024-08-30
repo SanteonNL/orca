@@ -68,6 +68,14 @@ func IsLogicalReference(reference *fhir.Reference) bool {
 	return reference != nil && reference.Type != nil && reference.Identifier != nil && reference.Identifier.System != nil && reference.Identifier.Value != nil
 }
 
+// LogicalReferenceEquals checks if two references are contain the same logical identifier, given their system and value.
+// It does not compare identifier type.
+func LogicalReferenceEquals(ref, other fhir.Reference) bool {
+	return ref.Identifier != nil && other.Identifier != nil &&
+		ref.Identifier.System != nil && other.Identifier.System != nil && *ref.Identifier.System == *other.Identifier.System &&
+		ref.Identifier.Value != nil && other.Identifier.Value != nil && *ref.Identifier.Value == *other.Identifier.Value
+}
+
 // IdentifierEquals compares two logical identifiers based on their system and value.
 // If any of the identifiers is nil or any of the system or value fields is nil, it returns false.
 // If the system and value fields of both identifiers are equal, it returns true.

@@ -6,14 +6,18 @@ import (
 
 // AuthenticatedTestRoundTripper returns a RoundTripper that adds a X-Userinfo header to the request
 // with static user information. This is useful for testing purposes.
-func AuthenticatedTestRoundTripper(underlying http.RoundTripper) http.RoundTripper {
+func AuthenticatedTestRoundTripper(underlying http.RoundTripper, bearerToken string) http.RoundTripper {
 	if underlying == nil {
 		underlying = http.DefaultTransport
+	}
+
+	if bearerToken == "" {
+		bearerToken = "Bearer valid"
 	}
 	return headerDecoratorRoundTripper{
 		inner: underlying,
 		header: map[string]string{
-			"Authorization": "Bearer valid",
+			"Authorization": "Bearer " + bearerToken,
 		},
 	}
 }

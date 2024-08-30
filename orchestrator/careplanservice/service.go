@@ -95,7 +95,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	}))
-	mux.HandleFunc("PUT /cps/Task/{id}", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT /cps/Task/{id}", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleUpdateTask(writer, request)
 		if err != nil {
 			// TODO: proper OperationOutcome
@@ -103,7 +103,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			http.Error(writer, "Update Task at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-	})
+	}))
 	mux.HandleFunc("POST /cps/CarePlan", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateCarePlan(writer, request)
 		if err != nil {

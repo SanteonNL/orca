@@ -19,12 +19,13 @@ import (
 	"testing"
 )
 
+// TODO: Set up 2 FHIR clients
 func Test_Integration_TaskLifecycle(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
 	t.Log("This test requires creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
-	carePlanContributor := setupIntegrationTest(t)
+	carePlanContributor1, carePlanContributor2 := setupIntegrationTest(t)
 
 	participant1 := fhir.CareTeamParticipant{
 		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
@@ -53,13 +54,13 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 				Value:  to.Ptr("123456789"),
 			},
 		}
-		err := carePlanContributor.Create(carePlan, &carePlan)
+		err := carePlanContributor1.Create(carePlan, &carePlan)
 		require.NoError(t, err)
 
 		// Check the CarePlan and CareTeam exist
 		var createdCarePlan fhir.CarePlan
 		var createdCareTeams []fhir.CareTeam
-		err = carePlanContributor.Read("CarePlan/"+*carePlan.Id, &createdCarePlan, fhirclient.ResolveRef("careTeam", &createdCareTeams))
+		err = carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &createdCarePlan, fhirclient.ResolveRef("careTeam", &createdCareTeams))
 		require.NoError(t, err)
 		require.NotNil(t, createdCarePlan.Id)
 		require.Len(t, createdCareTeams, 1, "expected 1 CareTeam")
@@ -80,7 +81,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
 
-		err := carePlanContributor.Create(task, &task)
+		err := carePlanContributor1.Create(task, &task)
 		require.Error(t, err)
 	}
 
@@ -98,9 +99,9 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
 
-		err := carePlanContributor.Create(task, &task)
+		err := carePlanContributor1.Create(task, &task)
 		require.NoError(t, err)
-		err = carePlanContributor.Read("CarePlan/"+*carePlan.Id, &carePlan)
+		err = carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan)
 		require.NoError(t, err)
 
 		t.Run("Check Task properties", func(t *testing.T) {
@@ -113,7 +114,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
 		})
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor, *carePlan.CareTeam[0].Reference, participant1)
+			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 		})
 	}
 
@@ -121,7 +122,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	{
 		task.Status = fhir.TaskStatusAccepted
 		var updatedTask fhir.Task
-		err := carePlanContributor.Update("Task/"+*task.Id, task, &updatedTask)
+		err := carePlanContributor2.Update("Task/"+*task.Id, task, &updatedTask)
 		require.NoError(t, err)
 		task = updatedTask
 
@@ -130,7 +131,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, fhir.TaskStatusAccepted, updatedTask.Status)
 		})
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor, *carePlan.CareTeam[0].Reference, participant1, participant2)
+			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
 		})
 	}
 
@@ -138,7 +139,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	{
 		task.Status = fhir.TaskStatusCompleted
 		var updatedTask fhir.Task
-		err := carePlanContributor.Update("Task/"+*task.Id, task, &updatedTask)
+		err := carePlanContributor1.Update("Task/"+*task.Id, task, &updatedTask)
 		require.Error(t, err)
 	}
 
@@ -146,7 +147,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	{
 		task.Status = fhir.TaskStatusInProgress
 		var updatedTask fhir.Task
-		err := carePlanContributor.Update("Task/"+*task.Id, task, &updatedTask)
+		err := carePlanContributor2.Update("Task/"+*task.Id, task, &updatedTask)
 		require.NoError(t, err)
 		task = updatedTask
 
@@ -155,7 +156,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, fhir.TaskStatusInProgress, updatedTask.Status)
 		})
 		t.Run("Check that CareTeam still contains the 2 parties", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor, *carePlan.CareTeam[0].Reference, participant1, participant2)
+			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
 		})
 	}
 
@@ -163,7 +164,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	{
 		task.Status = fhir.TaskStatusCompleted
 		var updatedTask fhir.Task
-		err := carePlanContributor.Update("Task/"+*task.Id, task, &updatedTask)
+		err := carePlanContributor1.Update("Task/"+*task.Id, task, &updatedTask)
 		require.NoError(t, err)
 		task = updatedTask
 
@@ -172,11 +173,11 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, fhir.TaskStatusCompleted, updatedTask.Status)
 		})
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor, *carePlan.CareTeam[0].Reference, participant1, participant2WithEndDate)
+			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2WithEndDate)
 		})
 	}
 }
-func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
+func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := setupHAPI(t)
 	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
 
@@ -191,11 +192,16 @@ func setupIntegrationTest(t *testing.T) *fhirclient.BaseClient {
 	service.RegisterHandlers(serverMux)
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
-	httpClient := httpService.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(httpService.Client().Transport)
 
-	carePlanContributor := fhirclient.New(carePlanServiceURL, httpClient, nil)
-	return carePlanContributor
+	httpClient1 := httpService.Client()
+	httpClient1.Transport = auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, "1")
+
+	httpClient2 := httpService.Client()
+	httpClient2.Transport = auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, "2")
+
+	carePlanContributor1 := fhirclient.New(carePlanServiceURL, httpClient1, nil)
+	carePlanContributor2 := fhirclient.New(carePlanServiceURL, httpClient2, nil)
+	return carePlanContributor1, carePlanContributor2
 }
 
 func assertCareTeam(t *testing.T, fhirClient fhirclient.Client, careTeamRef string, expectedMembers ...fhir.CareTeamParticipant) {
@@ -235,19 +241,36 @@ outer:
 func setupAuthorizationServer(t *testing.T) *url.URL {
 	authorizationServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		requestData, _ := io.ReadAll(request.Body)
-		if string(requestData) != "token=valid" {
+		// TODO: Switch on orgs to set owner/requester (maybe use token as URA)
+		t.Log("REQUEST DATA: " + string(requestData))
+		switch string(requestData) {
+		case "token=valid":
+			fallthrough
+		case "token=1":
+			writer.Header().Set("Content-Type", "application/json")
+			responseData, _ := json.Marshal(map[string]interface{}{
+				"active":            true,
+				"organization_ura":  "1",
+				"organization_name": "Hospital",
+				"organization_city": "CareTown",
+			})
+			writer.WriteHeader(http.StatusOK)
+			_, _ = writer.Write(responseData)
+		case "token=2":
+			writer.Header().Set("Content-Type", "application/json")
+			responseData, _ := json.Marshal(map[string]interface{}{
+				"active":            true,
+				"organization_ura":  "2",
+				"organization_name": "Hospital",
+				"organization_city": "CareTown",
+			})
+			writer.WriteHeader(http.StatusOK)
+			_, _ = writer.Write(responseData)
+		default:
 			writer.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		writer.Header().Set("Content-Type", "application/json")
-		responseData, _ := json.Marshal(map[string]interface{}{
-			"active":            true,
-			"organization_ura":  "1234",
-			"organization_name": "Hospital",
-			"organization_city": "CareTown",
-		})
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write(responseData)
+		// TODO: Hardcode 2 organisations, return depending on the token passed in
 	}))
 	t.Cleanup(func() {
 		authorizationServer.Close()

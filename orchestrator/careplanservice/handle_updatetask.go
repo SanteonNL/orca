@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -25,7 +26,7 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 		return fmt.Errorf("invalid Task: %w", err)
 	}
 
-	// the task prior to updates, we need this to validate the state transition
+	// the Task prior to updates, we need this to validate the state transition
 	var taskExisting coolfhir.Task
 	if err := s.fhirClient.Read("Task/"+taskID, &taskExisting); err != nil {
 		return fmt.Errorf("failed to read Task: %w", err)
@@ -40,9 +41,38 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 	if err != nil {
 		return err
 	}
-	// TODO: Get owner and requester from principal and use for validation. For now, set owner and requester to true to use existing validation logic
-	if !isValidTransition(taskExistingFHIR.Status, taskFHIR.Status, true, true) {
-		return errors.New(fmt.Sprintf("invalid state transition from %s to %s", taskExistingFHIR.Status.String(), taskFHIR.Status.String()))
+
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		return err
+	}
+	var isOwner bool
+	if taskFHIR.Owner != nil {
+		for _, identifier := range principal.Organization.Identifier {
+			if coolfhir.LogicalReferenceEquals(*taskFHIR.Owner, fhir.Reference{Identifier: &identifier}) {
+				isOwner = true
+				break
+			}
+		}
+	}
+	var isRequester bool
+	if taskFHIR.Requester != nil {
+		for _, identifier := range principal.Organization.Identifier {
+			if coolfhir.LogicalReferenceEquals(*taskFHIR.Requester, fhir.Reference{Identifier: &identifier}) {
+				isRequester = true
+				break
+			}
+		}
+	}
+	if !isValidTransition(taskExistingFHIR.Status, taskFHIR.Status, isOwner, isRequester) {
+		return errors.New(
+			fmt.Sprintf(
+				"invalid state transition from %s to %s, owner(%t) requester(%t)",
+				taskExistingFHIR.Status.String(),
+				taskFHIR.Status.String(),
+				isOwner,
+				isRequester,
+			))
 	}
 
 	// Resolve the CarePlan
