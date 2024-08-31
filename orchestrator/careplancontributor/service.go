@@ -2,14 +2,11 @@
 package careplancontributor
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
 
@@ -175,52 +172,4 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(response).Encode(contextData)
-}
-
-func (s Service) createCarePlan(patient fhir.Patient) (*fhir.CarePlan, error) {
-	patientBSN := coolfhir.FirstIdentifier(patient.Identifier, coolfhir.FilterNamingSystem(coolfhir.BSNNamingSystem))
-	if patientBSN == nil {
-		return nil, errors.New("patient is missing identifier of type " + coolfhir.BSNNamingSystem)
-	}
-
-	carePlan := fhir.CarePlan{
-		Subject: fhir.Reference{
-			Type:       to.Ptr("Patient"),
-			Identifier: patientBSN,
-		},
-	}
-	var result fhir.CarePlan
-	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
-	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
-	if err := s.carePlanService.CreateWithContext(ctx, carePlan, &result); err != nil {
-		return nil, err
-	}
-	return &result, nil
-}
-
-func (s Service) createTask(serviceRequest fhir.ServiceRequest, carePlanID string) (*fhir.Task, error) {
-	// Marshalling of Task is incorrect when providing input
-	// See https://github.com/samply/golang-fhir-models/issues/19
-	// So just create a regular map.
-
-	// TODO: Should we make new cross references here for requester, owner, service request and patient?
-
-	task := map[string]any{
-		"resourceType": "Task",
-		"status":       "requested",
-		"intent":       "order",
-		"requester":    serviceRequest.Requester,
-		"owner":        serviceRequest.Performer,
-		"reasonCode":   serviceRequest.Code,
-		"basedOn": []fhir.Reference{
-			{
-				Type:      to.Ptr("CarePlan"),
-				Reference: to.Ptr("CarePlan/" + carePlanID),
-			},
-		},
-	}
-	ctx := oauth2.WithScope(context.Background(), CarePlanServiceOAuth2Scope)
-	ctx = oauth2.WithResourceURI(ctx, s.carePlanServiceURL.String())
-	createdTask, err := coolfhir.Workflow{CarePlanService: s.carePlanService}.Invoke(ctx, task)
-	return createdTask, err
 }

@@ -15,7 +15,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", s.handleHealthCheck)
 }
 
-func (s Service) handleHealthCheck(writer http.ResponseWriter, request *http.Request) {
+func (s Service) handleHealthCheck(writer http.ResponseWriter, _ *http.Request) {
 	writer.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(writer).Encode(map[string]string{"status": "up"})
 }
