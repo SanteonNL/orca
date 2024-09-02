@@ -66,7 +66,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.NotNil(t, createdCareTeams[0].Id)
 	}
 
-	t.Log("Creating Task - Invalid status")
+	t.Log("Creating Task - Invalid status Accepted")
 	{
 		task = fhir.Task{
 			BasedOn: []fhir.Reference{
@@ -76,6 +76,24 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 				},
 			},
 			Status:    fhir.TaskStatusAccepted,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+		}
+
+		err := carePlanContributor1.Create(task, &task)
+		require.Error(t, err)
+	}
+
+	t.Log("Creating Task - Invalid status Draft")
+	{
+		task = fhir.Task{
+			BasedOn: []fhir.Reference{
+				{
+					Type:      to.Ptr("CarePlan"),
+					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+				},
+			},
+			Status:    fhir.TaskStatusDraft,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}

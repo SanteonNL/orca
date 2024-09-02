@@ -23,8 +23,6 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 		return fmt.Errorf("invalid Task: %w", err)
 	}
 	switch task["status"] {
-	case fhir.TaskStatusDraft.String():
-		task["status"] = fhir.TaskStatusRequested.String()
 	case fhir.TaskStatusRequested.String():
 	case fhir.TaskStatusReady.String():
 	default:
