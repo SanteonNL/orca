@@ -16,6 +16,8 @@ type principalContextKeyType struct{}
 
 var principalContextKey = principalContextKeyType{}
 
+var ErrNotAuthenticated = errors.New("not authenticated")
+
 // Middleware returns a http.HandlerFunc that retrieves the user info from the request header.
 // The user info is to be provided by an API Gateway/reverse proxy that validated the authentication token in the request.
 // It sets the decoded user info in the request context.
@@ -42,6 +44,15 @@ func Middleware(authConfig middleware.Config, fn http.HandlerFunc) func(writer h
 		newCtx := context.WithValue(request.Context(), principalContextKey, principal)
 		fn(response, request.WithContext(newCtx))
 	})
+}
+
+// PrincipalFromContext returns the principal from the request context.
+func PrincipalFromContext(ctx context.Context) (Principal, error) {
+	principal, ok := ctx.Value(principalContextKey).(Principal)
+	if !ok {
+		return Principal{}, ErrNotAuthenticated
+	}
+	return principal, nil
 }
 
 func claimsToOrganization(claims map[string]interface{}) (*fhir.Organization, error) {

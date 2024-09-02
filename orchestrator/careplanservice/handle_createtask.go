@@ -22,6 +22,12 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return fmt.Errorf("invalid Task: %w", err)
 	}
+	switch task["status"] {
+	case fhir.TaskStatusRequested.String():
+	case fhir.TaskStatusReady.String():
+	default:
+		return errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task["status"], fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
+	}
 	// Resolve the CarePlan
 	carePlanRef, err := basedOn(task)
 	if err != nil {
