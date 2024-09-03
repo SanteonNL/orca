@@ -57,11 +57,27 @@ This section describes how the Shared Care Planning transactions are implemented
 3. The care professional inputs the CarePlan details (name, condition) and submits.
 4. The *Frontend* creates the new CarePlan resource at the *Care Plan Service* through ORCA *Orchestrator*. 
 
-#### Initiating a workflow
+#### Workflow initiation/acceptance
 When a care professional wants to initiate a FHIR Task for another care organization, they start a new FHIR workflow.
-As the remote care organization, the Task filler, might 
 
-#### Accepting a workflow Task
+The process is as follows:
+1. Placer: the care professional, using the *Frontend*, chooses to create a new Task for a specified Condition.
+2. Placer: *Frontend* creates a new FHIR Task at the Care Plan Service through ORCA's *Orchestrator*.
+3. At this point, the Care Plan Service notifies the Task filler that a new Task is available.
+4. The Task filler and placer now negotiate the Task details:
+   1. Filler: if the filler needs more information, it adds a Questionnaire to the `Task.input`.
+   2. Placer: responds by filling the Questionnare, adding a QuestionnaireResponse to the Task.output.
+   3. Filler: verifies the QuestionnaireResponse either:
+      - Accept the Task if it is able and willing to perform it.
+      - Add another Questionnaire to the `Task.input` if it needs more information.
+      - Reject the Task if it cannot/won't perform it.
+
+Whenever a Task is created/updated at the Care Plan Service, it notifies the other Task participant.
+The notification is then handled to perform the Task negotiation:
+- Filler: notification is received by ORCA's *Orchestrator* and forwarded to the *Task Engine* (TODO).
+  The *Task Engine* then decides whether to accept the Task, and if not, what additional information is required.
+- Placer: notification is received by ORCA's *Orchestrator* and forwarded to the *Task Engine* (TODO).
+  The *Frontend* has a websocket connection to the *Task Engine* to receive updates on the Task status.
 
 ## Integration
 
