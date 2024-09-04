@@ -79,6 +79,44 @@ The notification is then handled to perform the Task negotiation:
 - Placer: notification is received by ORCA's *Orchestrator* and forwarded to the *Task Engine* (TODO).
   The *Frontend* has a websocket connection to the *Task Engine* to receive updates on the Task status.
 
+### FHIR patient data access
+Participants of a CarePlan can query each other's FHIR APIs to access the patient's data related to that CarePlan.
+The party querying the data is called the *Requester*, and the party providing the data is called the *Holder*.
+
+The process is as follows:
+1. Requester: the care professional using their EHR chooses a patient of which they want to access the data.
+2. Requester: the EHR queries the list of CarePlans available at the Care Plan Service for the patient through ORCA's *Orchestrator*.
+3. Requester: the care professional chooses a CarePlan and uses the EHR to query FHIR resources through ORCA's *Orchestrator*.
+4. Requester: ORCA's *Orchestrator* performs the query at each of the CarePlan's CareTeam participants:
+   1. Requester: *Orchestrator* looks up the DID of the CareTeam participant giving its URA, then resolves the endpoints through its DID document:
+      1. Use local Nuts node to lookup Holder's DID in the SCP Discovery Service using the Holder's URA number.
+      2. Use local Nuts node to resolve the service endpoints from Holder's DID document.
+   2. Requester: *Orchestrator* uses the local Nuts node to request an access token from the remote SCP node.
+      1. Holder: validates the authorization request and returns an access token.
+   3. Requester: *Orchestrator* uses the access token to query the remote SCP node's FHIR API.
+      1. Requester: *Orchestrator* forwards the FHIR query to the remote SCP node's FHIR API.
+      2. Holder: authenticates and authorizes the request, and returns the FHIR resources.
+5. Requester: *Orchestrator* collects the resulting FHIR resources into a Bundle and returns them to the EHR.
+
 ## Integration
+When integrating with the ORCA system, the EHR (and its FHIR API) needs to support the following integrations:
 
+- Allow *Orchestrator* access to the FHIR API
+  - Supported means of authentication: none (TODO)
+- To receive new/updated Task notifications (TODO):
+  - *Option 1*: Provide an API endpoint *Orchestrator* can call to notify the EHR of new/updated Tasks.
+  - *Option 2*: Subscribe to an event queue *Orchestrator* can publish new/updated Tasks to.
+- Invoking *Orchestrator*'s FHIR proxy (to list Shared CarePlans and query remote FHIR resources)
+- *OPTIONAL*: If using the *Frontend*, invoking *Orchestrator*'s app launch
+  - Supported: SMART on FHIR (WIP), ChipSoft HIX (TODO)
 
+## Deployment
+Note: this section needs to be expanded.
+
+When deploying ORCA, you need to supply the following components yourself:
+
+- An HL7 FHIR R4 API that allows *Orchestrator* to access the local EHR's data for answering queries from other CareTeam participants.
+  - Supported: Microsoft Azure Health FHIR API, HAPI FHIR.
+- Key storage for the Orchestrator and Nuts node
+  - Supported: Azure Key Vault, on-disk (not recommended).
+- SQL database for the Nuts node to store its data (refer to Nuts node documentation for details).
