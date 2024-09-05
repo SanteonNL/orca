@@ -67,8 +67,6 @@ services:
     # build:
     #  context: ../../../hospital_simulator
     #  dockerfile: Dockerfile
-    volumes:
-      - "./config/simulator.config.env:/app/.env.production:ro"
     ports:
       - "3001:3000"
     depends_on:
