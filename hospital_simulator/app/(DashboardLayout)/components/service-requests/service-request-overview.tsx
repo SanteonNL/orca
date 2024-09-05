@@ -5,9 +5,9 @@ import { Bundle, Identifier, Patient } from 'fhir/r4';
 
 export default async function ServiceRequestOverview() {
 
-    if (!process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER) {
-        console.error('NEXT_PUBLIC_FHIR_BASE_URL_DOCKER is not defined');
-        return <>NEXT_PUBLIC_FHIR_BASE_URL_DOCKER is not defined</>;
+    if (!process.env.FHIR_BASE_URL) {
+        console.error('FHIR_BASE_URL is not defined');
+        return <>FHIR_BASE_URL is not defined</>;
     }
 
     let rows = [];
@@ -18,7 +18,7 @@ export default async function ServiceRequestOverview() {
     };
 
     try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/ServiceRequest?_count=500`, {
+        const response = await fetch(`${process.env.FHIR_BASE_URL}/ServiceRequest?_count=500`, {
             cache: 'no-store',
             headers: {
                 "Cache-Control": "no-cache"
@@ -32,7 +32,7 @@ export default async function ServiceRequestOverview() {
             throw new Error('Failed to fetch service requests: ' + errorText);
         }
 
-        const patientsResponse = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/Patient?_count=500`, {
+        const patientsResponse = await fetch(`${process.env.FHIR_BASE_URL}/Patient?_count=500`, {
             cache: 'no-store',
             headers: {
                 "Cache-Control": "no-cache"
