@@ -38,7 +38,7 @@ func TestService_Proxy(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport)
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, "")
 
 	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
 	require.NoError(t, err)

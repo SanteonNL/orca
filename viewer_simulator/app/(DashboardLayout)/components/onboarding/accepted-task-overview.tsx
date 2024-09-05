@@ -3,15 +3,15 @@ import EnrolledTaskTable from './enrolled-task-table';
 
 export default async function AcceptedTaskOverview() {
 
-    if (!process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER) {
-        console.error('NEXT_PUBLIC_FHIR_BASE_URL_DOCKER is not defined');
-        return <>NEXT_PUBLIC_FHIR_BASE_URL_DOCKER is not defined</>;
+    if (!process.env.FHIR_BASE_URL) {
+        console.error('FHIR_BASE_URL is not defined');
+        return <>FHIR_BASE_URL is not defined</>;
     }
 
     let rows = [];
 
     try {
-        const response = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}/Task`, {
+        const response = await fetch(`${process.env.FHIR_BASE_URL}/Task`, {
             cache: 'no-store',
             headers: {
                 "Cache-Control": "no-cache"

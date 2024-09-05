@@ -3,15 +3,17 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net/http"
+
 	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	"github.com/SanteonNL/orca/orchestrator/healthcheck"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/nuts-foundation/go-nuts-client/nuts"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
-	"net/http"
 )
 
 func Start(config Config) error {
@@ -43,6 +45,9 @@ func Start(config Config) error {
 
 	// Register services
 	var services []Service
+
+	services = append(services, healthcheck.New())
+
 	if config.CarePlanContributor.Enabled {
 		carePlanContributor := careplancontributor.New(config.CarePlanContributor, sessionManager, nutsOAuth2HttpClient, didResolver)
 		services = append(services, carePlanContributor)

@@ -1,8 +1,8 @@
 "use client"
-import React, { useState } from 'react';
+import React from 'react';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
-import { Button, Tooltip } from '@mui/material';
-import { IconCloudDataConnection, IconProgress, IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
+import { Tooltip } from '@mui/material';
+import { IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
 import { useRouter } from 'next/navigation';
 import EnrollmentPopup from './enrollment-popup';
 
@@ -13,18 +13,9 @@ interface Props {
 const ServiceRequestTable: React.FC<Props> = ({ rows }) => {
     const router = useRouter()
 
-    const getEnrollmentUrl = (row: any) => {
-        return `${process.env.NEXT_PUBLIC_ORCA_BASE_URL}/demo-app-launch?` + new URLSearchParams({
-            patient: row.patientId,
-            serviceRequest: `ServiceRequest/${row.id}`,
-            practitioner: "Practitioner/7",
-            iss: `${process.env.NEXT_PUBLIC_FHIR_BASE_URL_DOCKER}`
-        }).toString()
-    }
-
     const enrollServiceRequest = async (row: any) => {
 
-        const resp = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL}/ServiceRequest/${row.id}`, {
+        const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir/ServiceRequest/${row.id}`, {
             method: "PATCH",
             headers: { "Content-Type": "application/json-patch+json" },
             body: JSON.stringify(
@@ -41,7 +32,6 @@ const ServiceRequestTable: React.FC<Props> = ({ rows }) => {
         if (resp.ok) {
             router.refresh()
         }
-
     }
 
     const columns: GridColDef[] = [
@@ -68,7 +58,8 @@ const ServiceRequestTable: React.FC<Props> = ({ rows }) => {
             sortable: false,
             renderCell: (params) => {
                 if (params.row.status !== "draft") return <></>
-                return <EnrollmentPopup url={getEnrollmentUrl(params.row)} callback={() => enrollServiceRequest(params.row)} />;
+
+                return <EnrollmentPopup patientId={params.row.patientId} serviceRequestId={params.row.id} callback={() => enrollServiceRequest(params.row)} />;
             }
         }
     ];

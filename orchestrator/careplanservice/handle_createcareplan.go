@@ -1,15 +1,14 @@
 package careplanservice
 
 import (
-	"encoding/json"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"net/http"
+	"strings"
 )
 
 func (s *Service) handleCreateCarePlan(httpResponse http.ResponseWriter, httpRequest *http.Request) error {
@@ -35,20 +34,10 @@ func (s *Service) handleCreateCarePlan(httpResponse http.ResponseWriter, httpReq
 		Create(careTeam, coolfhir.WithFullUrl(careTeamURL)).
 		Bundle()
 
-	// TODO: Manage time-outs properly
-	var resultBundle fhir.Bundle
-	if err := s.fhirClient.Create(bundle, &resultBundle, fhirclient.AtPath("/")); err != nil {
+	if err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, bundle, func(entry fhir.BundleEntry) bool {
+		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "CarePlan/")
+	}, httpResponse); err != nil {
 		return fmt.Errorf("failed to create CarePlan and CareTeam: %w", err)
 	}
-
-	var result fhir.CarePlan
-	headers := new(fhirclient.Headers)
-	if err := s.fhirClient.Read(*resultBundle.Entry[0].Response.Location, &result, fhirclient.ResponseHeaders(headers)); err != nil {
-		return fmt.Errorf("failed to read created CarePlan: %w", err)
-	}
-	for key, value := range headers.Header {
-		httpResponse.Header()[key] = value
-	}
-	httpResponse.WriteHeader(http.StatusCreated)
-	return json.NewEncoder(httpResponse).Encode(result)
+	return nil
 }

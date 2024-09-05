@@ -30,7 +30,7 @@ const CreateServiceRequestDialog: React.FC = () => {
     const createServiceRequest = async () => {
         const bundle = createServiceRequestBundle(patientFirstName || "John", patientLastName || "Doe")
 
-        const resp = await fetch(`${process.env.NEXT_PUBLIC_FHIR_BASE_URL}`, {
+        const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir`, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json"
