@@ -72,8 +72,8 @@ The process is as follows:
 2. Placer: *Frontend* creates a new FHIR Task at the Care Plan Service through ORCA's *Orchestrator*.
 3. At this point, the Care Plan Service notifies the Task filler that a new Task is available.
 4. The Task filler and placer now negotiate the Task details:
-   1. Filler: if the filler needs more information, it adds a Questionnaire to the `Task.input`.
-   2. Placer: responds by filling the Questionnare, adding a QuestionnaireResponse to the Task.output.
+   1. Filler: if the filler needs more information, it adds a sub-Task containing a Questionnaire to the `Task.input` (refer to the SCP specification for more details).
+   2. Placer: responds by filling the Questionnare, adding a QuestionnaireResponse to the sub-Task's output (refer to the SCP specification for more details).
    3. Filler: verifies the QuestionnaireResponse either:
       - Accept the Task if it is able and willing to perform it.
       - Add another Questionnaire to the `Task.input` if it needs more information.
