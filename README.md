@@ -36,8 +36,15 @@ This high-level diagram describes components in ORCA and their role.
   * **ORCA**
     * **Frontend** is a web application for care professionals to fill in questionnaires required for a FHIR workflow, and to view shared CarePlans and patient data from remote care organizations.
       It uses the FHIR APIs proxies by the *Orchestrator*.
-    * **Orchestrator** can fill in 2 roles: 1) *Care Plan Contributor* that proxies FHIR calls from the *Frontend* and local EHR to the remote *Care Plan Service*, and authorizes incoming FHIR requests from other CPCs,
-      and 2) Care Plan Service that handles manages CarePlans according to Shared Care Planning.
+    * **Orchestrator** fills in 2 roles:
+      1. *Care Plan Contributor*: provides the EHR with access to remote *Care Plan Service* and *Care Plan Contributor* FHIR APIs.
+         Provides external Care Plan Contributors access to the local EHR's FHIR API. Negotiates new Tasks using Questionnaires.
+         It provides the following APIs:
+         - Internal-facing FHIR API for the local EHR to access the Care Plan Service and other organization's FHIR APIs.
+           This FHIR API notifies the local EHR of updates using FHIR subscription (DECIDE ON THIS).
+         - Internal-facing API for the local EHR to launch the *Frontend* web application.
+         - External-facing FHIR API for other SCP nodes to access the local EHR's data.
+      2. *Care Plan Service* (optional): manages CarePlans and CareTeams according to Shared Care Planning.
     * **Authorization Server** is the OAuth2 server that other SCP nodes use to authenticate to the local ORCA instance, and that ORCA uses to authenticate to other SCP nodes.
 * **External Care Provider**: another care organization participating in Shared Care Planning.
   * **Care Plan Service** is used by *Care Plan Contributor*s to create CarePlans, and manages CareTeams according to those CarePlans. 
@@ -74,10 +81,10 @@ The process is as follows:
 
 Whenever a Task is created/updated at the Care Plan Service, it notifies the other Task participant.
 The notification is then handled to perform the Task negotiation:
-- Filler: notification is received by ORCA's *Orchestrator* and forwarded to the *Task Engine* (TODO).
-  The *Task Engine* then decides whether to accept the Task, and if not, what additional information is required.
-- Placer: notification is received by ORCA's *Orchestrator* and forwarded to the *Task Engine* (TODO).
-  The *Frontend* has a websocket connection to the *Task Engine* to receive updates on the Task status.
+- Filler: notification is received by ORCA's *Orchestrator* and handled by the task engine.
+  The task engine then decides whether to accept the Task, and if not, what additional information is required.
+- Placer: notification is received by ORCA's *Orchestrator* and handled by the task engine.
+  The *Frontend* can be notified through an EventSource stream about Task updates.
 
 ### FHIR patient data access
 Participants of a CarePlan can query each other's FHIR APIs to access the patient's data related to that CarePlan.
@@ -103,12 +110,12 @@ When integrating with the ORCA system, the EHR (and its FHIR API) needs to suppo
 
 - Allow *Orchestrator* access to the FHIR API
   - Supported means of authentication: none (TODO)
-- To receive new/updated Task notifications (TODO):
-  - *Option 1*: Provide an API endpoint *Orchestrator* can call to notify the EHR of new/updated Tasks.
+- To receive new/updated Task notifications (DECISION NEEDED): 
+  - *Option 1*: Provide an FHIR R6 Out-of-band subscription endpoint at which *Orchestrator* can notify the EHR of new/updated Tasks.
   - *Option 2*: Subscribe to an event queue *Orchestrator* can publish new/updated Tasks to.
-- Invoking *Orchestrator*'s FHIR proxy (to list Shared CarePlans and query remote FHIR resources)
+- Invoking *Orchestrator*'s internal-facing FHIR API (to list Shared CarePlans and query remote FHIR resources)
 - *OPTIONAL*: If using the *Frontend*, invoking *Orchestrator*'s app launch
-  - Supported: SMART on FHIR (WIP), ChipSoft HIX (TODO)
+  - Supported: SMART on FHIR, ChipSoft HIX (TODO)
 
 ## Deployment
 Note: this section needs to be expanded.
