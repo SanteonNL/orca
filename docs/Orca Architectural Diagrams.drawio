@@ -1,4 +1,4 @@
-<mxfile host="Electron" modified="2024-09-05T07:42:12.415Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.6.4 Chrome/124.0.6367.207 Electron/30.0.6 Safari/537.36" etag="QjdsYsoR_omu2n-V9Z3q" version="24.6.4" type="device" pages="3">
+<mxfile host="Electron" modified="2024-09-05T08:59:25.738Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.6.4 Chrome/124.0.6367.207 Electron/30.0.6 Safari/537.36" etag="6FhuhG6BRvPFZsGDLkb2" version="24.6.4" type="device" pages="3">
   <diagram name="Orca Architecture" id="ngfdinvVWNWGsdYMm05e">
     <mxGraphModel dx="-420" dy="1214" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
@@ -238,7 +238,7 @@
             </mxGeometry>
           </mxCell>
         </object>
-        <object placeholders="1" c4Type="Relationship" c4Technology="App Launch" c4Description="Notify Task updates" label="&lt;div style=&quot;text-align: left&quot;&gt;&lt;div style=&quot;text-align: center&quot;&gt;&lt;b&gt;%c4Description%&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align: center&quot;&gt;[%c4Technology%]&lt;/div&gt;&lt;/div&gt;" id="1_NIi75ac7ESm0xW4gCz-0">
+        <object placeholders="1" c4Type="Relationship" c4Technology="optional" c4Description="Notify Task updates" label="&lt;div style=&quot;text-align: left&quot;&gt;&lt;div style=&quot;text-align: center&quot;&gt;&lt;b&gt;%c4Description%&lt;/b&gt;&lt;/div&gt;&lt;div style=&quot;text-align: center&quot;&gt;[%c4Technology%]&lt;/div&gt;&lt;/div&gt;" id="1_NIi75ac7ESm0xW4gCz-0">
           <mxCell style="endArrow=blockThin;html=1;fontSize=10;fontColor=#404040;strokeWidth=1;endFill=1;strokeColor=#828282;elbow=vertical;metaEdit=1;endSize=14;startSize=14;jumpStyle=arc;jumpSize=16;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;exitPerimeter=0;entryX=1;entryY=0.5;entryDx=0;entryDy=0;entryPerimeter=0;edgeStyle=orthogonalEdgeStyle;" edge="1" parent="ajsvnF-vnRGO0sYUkrzF-1" source="ajsvnF-vnRGO0sYUkrzF-12" target="ajsvnF-vnRGO0sYUkrzF-14">
             <mxGeometry x="0.0476" width="240" relative="1" as="geometry">
               <mxPoint x="310" y="430" as="sourcePoint" />
