@@ -110,12 +110,16 @@ When integrating with the ORCA system, the EHR (and its FHIR API) needs to suppo
 
 - Allow *Orchestrator* access to the FHIR API
   - Supported means of authentication: none (TODO)
-- To receive new/updated Task notifications (DECISION NEEDED): 
-  - *Option 1*: Provide an FHIR R6 Out-of-band subscription endpoint at which *Orchestrator* can notify the EHR of new/updated Tasks.
-  - *Option 2*: Subscribe to an event queue *Orchestrator* can publish new/updated Tasks to.
+- To receive new/updated Task notifications, provide an FHIR R6 Out-of-band subscription endpoint at which *Orchestrator* can notify the EHR of new/updated Tasks.
 - Invoking *Orchestrator*'s internal-facing FHIR API (to list Shared CarePlans and query remote FHIR resources)
 - *OPTIONAL*: If using the *Frontend*, invoking *Orchestrator*'s app launch
   - Supported: SMART on FHIR, ChipSoft HIX (TODO)
+
+### Accepting a FHIR Task using included Task Engine
+The Task Engine inside ORCA negotiates new Tasks for the local care organization through FHIR Questionnaires, accepting the Task when all required information is provided.
+ORCA then notifies the local EHR using a FHIR notification.
+
+![interaction-taskengine-accepting-task.svg](docs/images/interaction-taskengine-accepting-task.svg)
 
 ## Deployment
 Note: this section needs to be expanded.
