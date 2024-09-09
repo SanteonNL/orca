@@ -56,6 +56,8 @@ func PrincipalFromContext(ctx context.Context) (Principal, error) {
 }
 
 func claimsToOrganization(claims map[string]interface{}) (*fhir.Organization, error) {
+	// TODO: these properties are from a specific credential for a specific country (the Netherlands),
+	//       so this should be made configurable.
 	ura, ok := claims["organization_ura"].(string)
 	if !ok || ura == "" {
 		return nil, errors.New("missing organization_ura claim in user info")
