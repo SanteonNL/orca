@@ -90,7 +90,6 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /cps/Task", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateTask(writer, request)
 		if err != nil {
-			log.Info().Msgf("CarePlanService/CreateTask failed: %v", err)
 			s.writeOperationOutcomeFromError(err, "CarePlanService/CreateTask", writer)
 			return
 		}
@@ -98,7 +97,6 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /cps/Task/{id}", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleUpdateTask(writer, request)
 		if err != nil {
-			log.Info().Msgf("CarePlanService/UpdateTask failed: %v", err)
 			s.writeOperationOutcomeFromError(err, "CarePlanService/UpdateTask", writer)
 			return
 		}
@@ -106,7 +104,6 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /cps/CarePlan", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateCarePlan(writer, request)
 		if err != nil {
-			log.Info().Msgf("CarePlanService/CreateCarePlan failed: %v", err)
 			s.writeOperationOutcomeFromError(err, "CarePlanService/CreateCarePlan", writer)
 			return
 		}

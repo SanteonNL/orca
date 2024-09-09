@@ -12,29 +12,17 @@ import (
 
 // Writes an OperationOutcome based on the given error as HTTP response.
 func (s *Service) writeOperationOutcomeFromError(err error, desc string, httpResponse http.ResponseWriter) {
+	log.Info().Msgf("%s failed: %v", desc, err)
 	diagnostics := fmt.Sprintf("%s failed: %s", desc, err.Error())
 
 	issue := fhir.OperationOutcomeIssue{
-		Id:                nil,
-		Extension:         nil,
-		ModifierExtension: nil,
-		Severity:          fhir.IssueSeverityError,
-		Code:              fhir.IssueTypeProcessing,
-		Details:           nil,
-		Diagnostics:       to.Ptr(diagnostics),
-		Location:          nil,
-		Expression:        nil,
+		Severity:    fhir.IssueSeverityError,
+		Code:        fhir.IssueTypeProcessing,
+		Diagnostics: to.Ptr(diagnostics),
 	}
 
 	outcome := fhir.OperationOutcome{
-		Id:                nil,
-		Meta:              nil,
-		ImplicitRules:     nil,
-		Language:          nil,
-		Text:              nil,
-		Extension:         nil,
-		ModifierExtension: nil,
-		Issue:             []fhir.OperationOutcomeIssue{issue},
+		Issue: []fhir.OperationOutcomeIssue{issue},
 	}
 
 	httpResponse.Header().Add("Content-Type", "application/fhir+json")
@@ -42,13 +30,12 @@ func (s *Service) writeOperationOutcomeFromError(err error, desc string, httpRes
 
 	data, err := json.Marshal(outcome)
 	if err != nil {
-		log.Error().Msgf("Failed to marshal OperationOutcome: %s", diagnostics)
+		log.Error().Err(err).Msgf("Failed to marshal OperationOutcome: %s", diagnostics)
 		return
 	}
 
 	_, err = httpResponse.Write(data)
 	if err != nil {
-		log.Error().Msgf("Failed to return OperationOutcome: %s", diagnostics)
-		return
+		log.Error().Err(err).Msgf("Failed to return OperationOutcome: %s", diagnostics)
 	}
 }
