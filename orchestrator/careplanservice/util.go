@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -25,7 +26,7 @@ func (s *Service) writeOperationOutcomeFromError(err error, desc string, httpRes
 		Issue: []fhir.OperationOutcomeIssue{issue},
 	}
 
-	httpResponse.Header().Add("Content-Type", "application/fhir+json")
+	httpResponse.Header().Add("Content-Type", coolfhir.FHIRContentType)
 	httpResponse.WriteHeader(http.StatusBadRequest)
 
 	data, err := json.Marshal(outcome)

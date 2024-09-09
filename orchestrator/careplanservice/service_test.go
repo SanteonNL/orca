@@ -129,6 +129,7 @@ func TestService_Post_Task_Error(t *testing.T) {
 
 		// Test response
 		require.Equal(t, tt.expectedStatusCode, httpResponse.StatusCode)
+		require.Equal(t, "application/fhir+json", httpResponse.Header.Get("Content-Type"))
 
 		var target OperationOutcomeWithResourceType
 		err = json.NewDecoder(httpResponse.Body).Decode(&target)
