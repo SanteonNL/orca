@@ -3,6 +3,10 @@ package careplanservice
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
@@ -11,9 +15,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"github.com/rs/zerolog/log"
-	"io"
-	"net/http"
-	"net/url"
 )
 
 var tokenIntrospectionClient = http.DefaultClient
@@ -89,27 +90,21 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST /cps/Task", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateTask(writer, request)
 		if err != nil {
-			// TODO: proper OperationOutcome
-			log.Info().Msgf("CarePlanService/CreateTask failed: %v", err)
-			http.Error(writer, "Create Task at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
+			s.writeOperationOutcomeFromError(err, "CarePlanService/CreateTask", writer)
 			return
 		}
 	}))
 	mux.HandleFunc("PUT /cps/Task/{id}", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleUpdateTask(writer, request)
 		if err != nil {
-			// TODO: proper OperationOutcome
-			log.Info().Msgf("CarePlanService/UpdateTask failed: %v", err)
-			http.Error(writer, "Update Task at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
+			s.writeOperationOutcomeFromError(err, "CarePlanService/UpdateTask", writer)
 			return
 		}
 	}))
 	mux.HandleFunc("POST /cps/CarePlan", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateCarePlan(writer, request)
 		if err != nil {
-			// TODO: proper OperationOutcome
-			log.Info().Msgf("CarePlanService/CarePlan failed: %v", err)
-			http.Error(writer, "Create CarePlan at CarePlanService failed: "+err.Error(), http.StatusBadRequest)
+			s.writeOperationOutcomeFromError(err, "CarePlanService/CreateCarePlan", writer)
 			return
 		}
 	}))
