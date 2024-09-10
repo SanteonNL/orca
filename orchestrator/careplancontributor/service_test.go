@@ -13,6 +13,49 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestService_Proxy(t *testing.T) {
+	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	fhirServerMux := http.NewServeMux()
+	capturedHost := ""
+	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+	})
+	fhirServer := httptest.NewServer(fhirServerMux)
+	fhirServerURL, _ := url.Parse(fhirServer.URL)
+	fhirServerURL.Path = "/fhir"
+	// Setup: create the service
+
+	clients.Factories["test"] = func(properties map[string]string) clients.ClientProperties {
+		return clients.ClientProperties{
+			Client:  fhirServer.Client().Transport,
+			BaseURL: fhirServerURL,
+		}
+	}
+	sessionManager, sessionID := createTestSession()
+
+	service, _ := New(Config{
+		FHIR: FHIRConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+	}, sessionManager, http.DefaultClient, nil)
+	// Setup: configure the service to proxy to the backing FHIR server
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
+	httpResponse, err := frontServer.Client().Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	require.Equal(t, fhirServerURL.Host, capturedHost)
+}
+
 func TestService_ProxyToEHR(t *testing.T) {
 	// Test that the service registers the EHR FHIR proxy URL that proxies to the backing FHIR server of the EHR
 	// Setup: configure backing EHR FHIR server to which the service proxies
@@ -35,7 +78,8 @@ func TestService_ProxyToEHR(t *testing.T) {
 	}
 	sessionManager, sessionID := createTestSession()
 
-	service := New(Config{}, sessionManager, http.DefaultClient, nil)
+	service, err := New(Config{}, sessionManager, http.DefaultClient, nil)
+	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -69,11 +113,12 @@ func TestService_ProxyToCPS(t *testing.T) {
 
 	sessionManager, sessionID := createTestSession()
 
-	service := New(Config{
+	service, err := New(Config{
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
 	}, sessionManager, carePlanService.Client(), nil)
+	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)

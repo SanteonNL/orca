@@ -49,7 +49,10 @@ func Start(config Config) error {
 	services = append(services, healthcheck.New())
 
 	if config.CarePlanContributor.Enabled {
-		carePlanContributor := careplancontributor.New(config.CarePlanContributor, sessionManager, nutsOAuth2HttpClient, didResolver)
+		carePlanContributor, err := careplancontributor.New(config.CarePlanContributor, sessionManager, nutsOAuth2HttpClient, didResolver)
+		if err != nil {
+			return err
+		}
 		services = append(services, carePlanContributor)
 		// App Launches
 		services = append(services, smartonfhir.New(config.AppLaunch.SmartOnFhir, sessionManager))
