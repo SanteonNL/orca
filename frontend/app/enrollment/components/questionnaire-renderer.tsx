@@ -20,6 +20,8 @@ interface QuestionnaireRendererPageProps {
   inputTask?: Task
 }
 
+const scpSubTaskIdentifierSystem = "http://santeonnl.github.io/shared-care-planning/scp-identifier"
+
 const LoadingOverlay = () => (
   <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
     <div className="flex items-center justify-center space-x-2 text-white">
@@ -78,7 +80,15 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
     const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire)
 
     const newId = v4()
-    updatableResponse.id = questionnaireResponse?.id ?? newId
+    const responseExists = !!questionnaireResponse?.id
+    const questionnaireResponseRef = responseExists ? `QuestionnaireResponse/${questionnaireResponse.id}` : `urn:uuid:${newId}`
+
+    if (!responseExists) {
+      updatableResponse.identifier = {
+        system: scpSubTaskIdentifierSystem,
+        value: newId
+      }
+    }
 
     if (!outputTask.output) outputTask.output = []
 
@@ -91,7 +101,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         }]
       },
       "valueReference": {
-        "reference": `QuestionnaireResponse/${updatableResponse.id}`,
+        "reference": questionnaireResponseRef,
         "type": "QuestionnaireResponse"
       }
     })
@@ -103,7 +113,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       type: 'transaction',
       entry: [
         {
-          fullUrl: outputTask.id,
+          fullUrl: `Task/${outputTask.id}`,
           resource: {
             ...outputTask
           },
@@ -113,19 +123,19 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
           }
         },
         {
-          fullUrl: questionnaireResponse?.id ? updatableResponse.id : `urn:uuid:${updatableResponse.id}`,
+          fullUrl: questionnaireResponseRef,
           resource: {
             ...updatableResponse
           },
           request: {
             method: 'PUT',
-            url: `QuestionnaireResponse/${updatableResponse.id}`
+            url: responseExists ? questionnaireResponseRef : `QuestionnaireResponse?identifier=${encodeURIComponent(`${scpSubTaskIdentifierSystem}|${newId}`)}`
           }
         }
       ]
     };
 
-    const resultBundle = await cpsClient?.transaction({
+    await cpsClient?.transaction({
       body: bundle
     });
 
