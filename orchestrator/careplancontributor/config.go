@@ -1,10 +1,14 @@
 package careplancontributor
 
-import "errors"
+import (
+	"errors"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+)
 
 type Config struct {
 	CarePlanService CarePlanServiceConfig `koanf:"careplanservice"`
 	FrontendConfig  FrontendConfig        `koanf:"frontend"`
+	FHIR            coolfhir.ClientConfig `koanf:"fhir"`
 	Enabled         bool                  `koanf:"enabled"`
 }
 

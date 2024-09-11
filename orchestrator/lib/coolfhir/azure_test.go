@@ -73,3 +73,59 @@ func Test_azureHttpClient_Do(t *testing.T) {
 		require.Equal(t, "application/fhir+json", capturedHeaders.Get("Content-Type"))
 	})
 }
+
+func Test_NewAuthRoundTripper(t *testing.T) {
+	t.Run("Invalid RoundTripper - Invalid FHIR URL", func(t *testing.T) {
+		config := ClientConfig{
+			BaseURL: "ayiwrq284-02uwqa'trki::$juqwa58tp[9{{}{{}{}{Pwa",
+			Auth:    AuthConfig{},
+		}
+		fhirClientConfig := Config()
+
+		roundTripper, fhirClient, err := NewAuthRoundTripper(config, fhirClientConfig)
+		require.Error(t, err)
+		require.Nil(t, roundTripper)
+		require.Nil(t, fhirClient)
+	})
+	t.Run("Invalid RoundTripper - Invalid Auth Type", func(t *testing.T) {
+		config := ClientConfig{
+			BaseURL: "",
+			Auth:    AuthConfig{Type: "foo"},
+		}
+		fhirClientConfig := Config()
+
+		roundTripper, fhirClient, err := NewAuthRoundTripper(config, fhirClientConfig)
+		require.EqualError(t, err, "invalid FHIR authentication type: foo")
+		require.Nil(t, roundTripper)
+		require.Nil(t, fhirClient)
+	})
+	t.Run("Valid RoundTripper - azuremanaged-identity", func(t *testing.T) {
+		config := ClientConfig{
+			BaseURL: "",
+			Auth: AuthConfig{
+				Type: AzureManagedIdentity,
+			},
+		}
+		fhirClientConfig := Config()
+
+		roundTripper, fhirClient, err := NewAuthRoundTripper(config, fhirClientConfig)
+		require.NoError(t, err)
+		require.NotNil(t, roundTripper)
+		require.NotNil(t, fhirClient)
+		require.Equal(t, fhirClientConfig.MaxResponseSize, 10485760)
+	})
+	t.Run("Valid RoundTripper - default", func(t *testing.T) {
+		config := ClientConfig{
+			BaseURL: "",
+			Auth:    AuthConfig{},
+		}
+		fhirClientConfig := Config()
+
+		roundTripper, fhirClient, err := NewAuthRoundTripper(config, fhirClientConfig)
+		require.NoError(t, err)
+		require.NotNil(t, roundTripper)
+		require.Equal(t, roundTripper, http.DefaultTransport)
+		require.NotNil(t, fhirClient)
+		require.Equal(t, fhirClientConfig.MaxResponseSize, 10485760)
+	})
+}

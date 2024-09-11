@@ -4,9 +4,12 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
 	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
 
@@ -20,27 +23,87 @@ import (
 const LandingURL = "/contrib/"
 const CarePlanServiceOAuth2Scope = "careplanservice"
 
-func New(config Config, sessionManager *user.SessionManager, carePlanServiceHttpClient *http.Client, didResolver addressing.StaticDIDResolver) *Service {
+var tokenIntrospectionClient = http.DefaultClient
+
+func New(
+	config Config,
+	nutsPublicURL *url.URL,
+	orcaPublicURL *url.URL,
+	nutsAPIURL *url.URL,
+	ownDID string,
+	sessionManager *user.SessionManager,
+	carePlanServiceHttpClient *http.Client,
+	didResolver addressing.StaticDIDResolver) (*Service, error) {
+
+	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 	carePlanServiceClient := fhirclient.New(cpsURL, carePlanServiceHttpClient, coolfhir.Config())
+	fhirClientConfig := coolfhir.Config()
+	transport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	if err != nil {
+		return nil, err
+	}
 	return &Service{
+		orcaPublicURL:             orcaPublicURL,
+		nutsPublicURL:             nutsPublicURL,
+		nutsAPIURL:                nutsAPIURL,
+		ownDID:                    ownDID,
 		carePlanServiceURL:        cpsURL,
 		SessionManager:            sessionManager,
 		carePlanService:           carePlanServiceClient,
 		carePlanServiceHttpClient: carePlanServiceHttpClient,
 		frontendUrl:               config.FrontendConfig.URL,
-	}
+		fhirURL:                   fhirURL,
+		transport:                 transport,
+	}, nil
 }
 
 type Service struct {
+	orcaPublicURL             *url.URL
+	nutsPublicURL             *url.URL
+	nutsAPIURL                *url.URL
+	ownDID                    string
 	SessionManager            *user.SessionManager
 	frontendUrl               string
 	carePlanService           fhirclient.Client
 	carePlanServiceURL        *url.URL
 	carePlanServiceHttpClient *http.Client
+	fhirURL                   *url.URL
+	transport                 http.RoundTripper
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
+	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, "/contrib/fhir", s.transport)
+	authConfig := middleware.Config{
+		TokenIntrospectionEndpoint: s.nutsAPIURL.JoinPath("internal/auth/v2/accesstoken/introspect").String(),
+		TokenIntrospectionClient:   tokenIntrospectionClient,
+		BaseURL:                    s.orcaPublicURL.JoinPath("contrib"),
+	}
+
+	//
+	// Unauthorized endpoints
+	//
+	mux.HandleFunc("GET /cps/.well-known/oauth-protected-resource", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Add("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusOK)
+		md := oauth2.ProtectedResourceMetadata{
+			Resource:               s.orcaPublicURL.JoinPath("cps").String(),
+			AuthorizationServers:   []string{s.nutsPublicURL.JoinPath("oauth2", s.ownDID).String()},
+			BearerMethodsSupported: []string{"header"},
+		}
+		_ = json.NewEncoder(writer).Encode(md)
+	})
+	//
+	// Authorized endpoints
+	//
+	// TODO: Determine auth from Nuts node and access token
+	// TODO: Modify this and other URLs to /cpc/* in future change
+	mux.HandleFunc("/contrib/fhir/*", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
+		fhirProxy.ServeHTTP(writer, request)
+	}))
+	//
+	// FE/Session Authorized Endpoints
+	//
 	mux.HandleFunc("GET /contrib/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc("GET /contrib/patient", s.withSession(s.handleGetPatient))
 	mux.HandleFunc("GET /contrib/practitioner", s.withSession(s.handleGetPractitioner))

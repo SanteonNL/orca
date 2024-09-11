@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
 	"github.com/SanteonNL/orca/orchestrator/addressing"
@@ -21,23 +20,10 @@ var tokenIntrospectionClient = http.DefaultClient
 
 func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIURL *url.URL, ownDID string, didResolver addressing.DIDResolver) (*Service, error) {
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
-	var transport http.RoundTripper
-	var fhirClient fhirclient.Client
 	fhirClientConfig := coolfhir.Config()
-	switch config.FHIR.Auth.Type {
-	case "azure-managedidentity":
-		credential, err := azidentity.NewManagedIdentityCredential(nil)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get credential for Azure FHIR API client: %w", err)
-		}
-		httpClient := coolfhir.NewAzureHTTPClient(credential, coolfhir.DefaultAzureScope(fhirURL))
-		transport = httpClient.Transport
-		fhirClient = fhirclient.New(fhirURL, httpClient, fhirClientConfig)
-	case "":
-		transport = http.DefaultTransport
-		fhirClient = fhirclient.New(fhirURL, http.DefaultClient, fhirClientConfig)
-	default:
-		return nil, fmt.Errorf("invalid FHIR authentication type: %s", config.FHIR.Auth.Type)
+	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	if err != nil {
+		return nil, err
 	}
 	return &Service{
 		fhirURL:         fhirURL,
