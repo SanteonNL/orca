@@ -56,27 +56,27 @@ func (a azureTokenSource) Token() (*oauth2.Token, error) {
 	}, nil
 }
 
-type FHIRRoundTripperConfig struct {
+type ClientConfig struct {
 	// BaseURL is the base URL of the FHIR server to connect to.
 	BaseURL string `koanf:"url"`
 	// Auth is the authentication configuration for the FHIR server.
-	Auth FHIRAuthConfig `koanf:"auth"`
+	Auth AuthConfig `koanf:"auth"`
 }
 
-type FHIRAuthConfigType string
+type AuthConfigType string
 
 const (
-	Default              FHIRAuthConfigType = ""
-	AzureManagedIdentity FHIRAuthConfigType = "azure-managedidentity"
+	Default              AuthConfigType = ""
+	AzureManagedIdentity AuthConfigType = "azure-managedidentity"
 )
 
-type FHIRAuthConfig struct {
+type AuthConfig struct {
 	// Type of authentication to use, supported options: azure-managedidentity.
 	// Leave empty for no authentication.
-	Type FHIRAuthConfigType `koanf:"type"`
+	Type AuthConfigType `koanf:"type"`
 }
 
-func NewFHIRAuthRoundTripper(config FHIRRoundTripperConfig, fhirClientConfig *fhirclient.Config) (http.RoundTripper, fhirclient.Client, error) {
+func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Config) (http.RoundTripper, fhirclient.Client, error) {
 	var transport http.RoundTripper
 	var fhirClient fhirclient.Client
 	fhirURL, err := url.Parse(config.BaseURL)

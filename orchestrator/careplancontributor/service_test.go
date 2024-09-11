@@ -37,7 +37,7 @@ func TestService_Proxy(t *testing.T) {
 	sessionManager, _ := createTestSession()
 
 	service, _ := New(Config{
-		FHIR: coolfhir.FHIRRoundTripperConfig{
+		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
 	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "", sessionManager, http.DefaultClient, nil)

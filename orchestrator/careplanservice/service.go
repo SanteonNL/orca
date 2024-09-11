@@ -21,7 +21,7 @@ var tokenIntrospectionClient = http.DefaultClient
 func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIURL *url.URL, ownDID string, didResolver addressing.DIDResolver) (*Service, error) {
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
-	transport, fhirClient, err := coolfhir.NewFHIRAuthRoundTripper(config.FHIR, fhirClientConfig)
+	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
 	if err != nil {
 		return nil, err
 	}

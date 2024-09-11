@@ -10,8 +10,8 @@ func DefaultConfig() Config {
 }
 
 type Config struct {
-	FHIR    coolfhir.FHIRRoundTripperConfig `koanf:"fhir"`
-	Enabled bool                            `koanf:"enabled"`
+	FHIR    coolfhir.ClientConfig `koanf:"fhir"`
+	Enabled bool                  `koanf:"enabled"`
 }
 
 func (c Config) Validate() error {

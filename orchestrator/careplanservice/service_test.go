@@ -34,7 +34,7 @@ func TestService_Proxy(t *testing.T) {
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	// Setup: create the service
 	service, err := New(Config{
-		FHIR: coolfhir.FHIRRoundTripperConfig{
+		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
 	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "", nil)
@@ -101,7 +101,7 @@ func TestService_Post_Task_Error(t *testing.T) {
 	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
 	service, err := New(
 		Config{
-			FHIR: coolfhir.FHIRRoundTripperConfig{
+			FHIR: coolfhir.ClientConfig{
 				BaseURL: "http://example.com",
 			},
 		},
@@ -148,7 +148,7 @@ func Test_HandleProtectedResourceMetadata(t *testing.T) {
 	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
 	// Setup: configure the service
 	service, err := New(Config{
-		FHIR: coolfhir.FHIRRoundTripperConfig{
+		FHIR: coolfhir.ClientConfig{
 			BaseURL: "http://example.com",
 		},
 	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com", nil)

@@ -6,10 +6,10 @@ import (
 )
 
 type Config struct {
-	CarePlanService CarePlanServiceConfig           `koanf:"careplanservice"`
-	FrontendConfig  FrontendConfig                  `koanf:"frontend"`
-	FHIR            coolfhir.FHIRRoundTripperConfig `koanf:"fhir"`
-	Enabled         bool                            `koanf:"enabled"`
+	CarePlanService CarePlanServiceConfig `koanf:"careplanservice"`
+	FrontendConfig  FrontendConfig        `koanf:"frontend"`
+	FHIR            coolfhir.ClientConfig `koanf:"fhir"`
+	Enabled         bool                  `koanf:"enabled"`
 }
 
 func (c Config) Validate() error {

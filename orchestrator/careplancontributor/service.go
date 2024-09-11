@@ -39,7 +39,7 @@ func New(
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 	carePlanServiceClient := fhirclient.New(cpsURL, carePlanServiceHttpClient, coolfhir.Config())
 	fhirClientConfig := coolfhir.Config()
-	transport, _, err := coolfhir.NewFHIRAuthRoundTripper(config.FHIR, fhirClientConfig)
+	transport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
 	if err != nil {
 		return nil, err
 	}

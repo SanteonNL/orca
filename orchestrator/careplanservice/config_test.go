@@ -16,7 +16,7 @@ func TestConfig_Validate(t *testing.T) {
 		require.EqualError(t, err, "careplanservice.fhir.url is not configured")
 	})
 	t.Run("ok", func(t *testing.T) {
-		err := Config{Enabled: true, FHIR: coolfhir.FHIRRoundTripperConfig{BaseURL: "http://example.com"}}.Validate()
+		err := Config{Enabled: true, FHIR: coolfhir.ClientConfig{BaseURL: "http://example.com"}}.Validate()
 		require.NoError(t, err)
 	})
 }
