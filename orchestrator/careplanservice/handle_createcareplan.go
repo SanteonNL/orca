@@ -2,13 +2,14 @@ package careplanservice
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"strings"
 )
 
 func (s *Service) handleCreateCarePlan(httpResponse http.ResponseWriter, httpRequest *http.Request) error {
@@ -34,7 +35,7 @@ func (s *Service) handleCreateCarePlan(httpResponse http.ResponseWriter, httpReq
 		Create(careTeam, coolfhir.WithFullUrl(careTeamURL)).
 		Bundle()
 
-	if err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, bundle, func(entry fhir.BundleEntry) bool {
+	if _, err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, bundle, func(entry fhir.BundleEntry) bool {
 		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "CarePlan/")
 	}, httpResponse); err != nil {
 		return fmt.Errorf("failed to create CarePlan and CareTeam: %w", err)

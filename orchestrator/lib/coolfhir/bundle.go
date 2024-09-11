@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"strconv"
 	"strings"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
 type TransactionBuilder fhir.Bundle
@@ -132,11 +133,23 @@ func ResourceInBundle(bundle *fhir.Bundle, filter func(entry fhir.BundleEntry) b
 	return ErrEntryNotFound
 }
 
-// ExecuteTransactionAndRespondWithEntry executes a transaction (Bundle) on the FHIR server and responds with the entry that matches the filter.
-func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter) error {
+// ExecuteTransaction performs a FHIR transaction and returns the result bundle.
+func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.Bundle, error) {
+	// Perform the FHIR transaction by creating the bundle
 	var resultBundle fhir.Bundle
 	if err := fhirClient.Create(bundle, &resultBundle, fhirclient.AtPath("/")); err != nil {
-		return err
+		return resultBundle, fmt.Errorf("failed to execute FHIR transaction: %w", err)
+	}
+
+	// The transaction was successfully executed, return the result bundle
+	return resultBundle, nil
+}
+
+// ExecuteTransactionAndRespondWithEntry executes a transaction (Bundle) on the FHIR server and responds with the entry that matches the filter.
+func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter) (map[string]interface{}, error) {
+	resultBundle, err := ExecuteTransaction(fhirClient, bundle)
+	if err != nil {
+		return nil, err
 	}
 	for _, entry := range resultBundle.Entry {
 		if !filter(entry) {
@@ -152,13 +165,13 @@ func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle 
 		result := make(map[string]interface{})
 		headers := new(fhirclient.Headers)
 		if err := fhirClient.Read(*entry.Response.Location, &result, fhirclient.ResponseHeaders(headers)); err != nil {
-			return errors.Join(ErrEntryNotFound, fmt.Errorf("failed to re-retrieve result Bundle entry (resource=%s): %w", *entry.Response.Location, err))
+			return result, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to re-retrieve result Bundle entry (resource=%s): %w", *entry.Response.Location, err))
 		}
 		for key, value := range headers.Header {
 			httpResponse.Header()[key] = value
 		}
 		httpResponse.WriteHeader(status)
-		return json.NewEncoder(httpResponse).Encode(result)
+		return result, json.NewEncoder(httpResponse).Encode(result)
 	}
-	return ErrEntryNotFound
+	return nil, ErrEntryNotFound
 }

@@ -37,6 +37,7 @@ export default function EnrollInCpsButton() {
 
     const informCps = async () => {
         setSubmitted(true)
+        //FIXME, contrib does not create the CP anymore
         let carePlan = selectedCarePlan
 
         if (shouldCreateNewCarePlan) {
@@ -125,12 +126,7 @@ export default function EnrollInCpsButton() {
             throw new Error("Missing required items for Task creation")
         }
 
-        const questionnaire = await ehrClient.read({
-            resourceType: "Questionnaire",
-            id: "2.16.840.1.113883.2.4.3.11.60.909.26.18--20240704100750"
-        }) as Questionnaire
-
-        const task = getTask(carePlan, serviceRequest, taskCondition, questionnaire)
+        const task = getTask(carePlan, serviceRequest, taskCondition)
 
         try {
             return await cpsClient.create({ resourceType: 'Task', body: task });

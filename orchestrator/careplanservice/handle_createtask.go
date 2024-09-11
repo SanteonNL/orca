@@ -3,9 +3,10 @@ package careplanservice
 import (
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"net/http"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -31,6 +32,7 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	// Resolve the CarePlan
 	carePlanRef, err := basedOn(task)
 	if err != nil {
+		//FIXME: This logic changed, create a new CarePlan when Task.basedOn is not set
 		return fmt.Errorf("invalid Task.basedOn: %w", err)
 	}
 	// TODO: Manage time-outs properly
@@ -43,9 +45,23 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	if err != nil {
 		return fmt.Errorf("failed to create Task: %w", err)
 	}
-	return coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
+
+	newlyCreatedTask, err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
+		log.Debug().Msgf("Checking if Task is created: %s", *entry.Response.Location)
 		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
 	}, httpResponse)
+
+	if err != nil {
+		return err
+	}
+
+	if newlyCreatedTask == nil {
+		return errors.New("no Task found in bundle")
+	}
+
+	log.Info().Msgf("Task/%s created", newlyCreatedTask["id"])
+
+	return s.handleTaskFiller(newlyCreatedTask)
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.

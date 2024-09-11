@@ -2,13 +2,14 @@ package coolfhir
 
 import (
 	"encoding/json"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"net/http/httptest"
-	"testing"
 )
 
 func TestTransactionBuilder(t *testing.T) {
@@ -64,7 +65,7 @@ func TestExecuteTransactionAndRespondWithEntry(t *testing.T) {
 
 		httpResponse := httptest.NewRecorder()
 
-		err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
+		_, err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
 			return *entry.Response.Location == "Task/task1"
 		}, httpResponse)
 

@@ -77,14 +77,20 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
     }
 }
 
-export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCondition: Condition, questionnaire: Questionnaire): Task => {
+export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCondition: Condition): Task => {
 
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task")
 
+    //TODO: See if the ServiceRequest needs to be included in the Task via input or in a Bundle
     return {
-        "resourceType": "Task",
-        "basedOn": [
+        resourceType: "Task",
+        meta: {
+            profile: [
+                "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
+            ]
+        },
+        basedOn: [
             {
                 "reference": `CarePlan/${carePlan.id}`,
                 type: "CarePlan",
@@ -92,8 +98,14 @@ export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, prim
             }
         ],
         for: carePlan.subject,
-        "status": "requested",
-        "intent": "order",
+        status: "requested",
+        intent: "order",
+        requester: {
+            identifier: serviceRequest.requester?.identifier,
+        },
+        owner: {
+            identifier: serviceRequest.performer?.[0]?.identifier,
+        },
         focus: {
             identifier: {
                 "system": conditionCode.system,
@@ -116,29 +128,12 @@ export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, prim
                     reference: '#contained-sr'
                 }
             },
-            {
-                type: {
-                    coding: [{
-                        system: "http://terminology.hl7.org/CodeSystem/task-input-type",
-                        code: "Reference",
-                        display: "Reference"
-                    }]
-                },
-                valueReference: {
-                    type: "Questionnaire",
-                    reference: '#questionnaire'
-                }
-            },
         ],
         contained: [
             {
                 ...serviceRequest,
                 id: 'contained-sr'
             },
-            {
-                ...questionnaire,
-                id: 'questionnaire'
-            }
         ]
     }
 }
