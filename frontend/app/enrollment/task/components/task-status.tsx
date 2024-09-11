@@ -5,6 +5,7 @@ import { getTaskPerformer } from '@/lib/fhirUtils'
 import useTaskProgressStore from '@/lib/store/task-progress-store'
 import { Reference } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
+import SelectedPatientView from '../../components/selected-patient-view'
 
 export default function TaskStatus() {
 
@@ -24,21 +25,24 @@ export default function TaskStatus() {
         <CardDescription>The following Task has been sent</CardDescription>
       </CardHeader>
       <CardContent>
-        <div className='grid grid-cols-4 gap-4'>
-          <div className='font-bold'>Task focus:</div>
-          <div className='col-span-3'>
-            {loading}
-            {loading ? <Spinner /> : `${task?.focus?.display}` || "unknown"}
+        <>
+          <div className='grid grid-cols-4 gap-4 mb-5'>
+            <div className='font-bold'>Task focus:</div>
+            <div className='col-span-3'>
+              {loading}
+              {loading ? <Spinner /> : `${task?.focus?.display}` || "unknown"}
+            </div>
+            <div className='font-bold'>Status:</div>
+            <div className='col-span-3'>
+              {loading ? <Spinner /> : task?.status || "unknown"}
+            </div>
+            <div className='font-bold'>Sent to:</div>
+            <div className='col-span-3'>
+              {loading ? <Spinner /> : performer?.display || "unknown"}
+            </div>
           </div>
-          <div className='font-bold'>Status:</div>
-          <div className='col-span-3'>
-            {loading ? <Spinner /> : task?.status || "unknown"}
-          </div>
-          <div className='font-bold'>Sent to:</div>
-          <div className='col-span-3'>
-            {loading ? <Spinner /> : performer?.display || "unknown"}
-          </div>
-        </div>
+          <SelectedPatientView />
+        </>
       </CardContent>
     </Card>
   )

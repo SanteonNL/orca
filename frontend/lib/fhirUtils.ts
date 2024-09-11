@@ -149,24 +149,21 @@ export const getTaskPerformer = (task?: Task) => {
     return serviceRequestFromInput?.performer?.[0]
 }
 
-export const getQuestionnaireResponseId = (questionnaire?: Questionnaire) => {
-    if (!questionnaire) throw new Error("Tried to generate a questionnaire response id but the Questionnaire is not defined")
-    return `#questionnaire-response-${questionnaire.id}`
-}
+export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Questionnaire) => {
+    if (!task || !task.output || !questionnaire) return
 
-export const findQuestionnaire = (task?: Task) => {
-    if (!task || !task.contained) return
+    const questionnaireResponse = task.output.find((output) => {
+        return output.valueReference?.reference?.startsWith(`QuestionnaireResponse/`)
+    })
 
-    const questionnaires = task.contained.filter((contained) => contained.resourceType === "Questionnaire") as Questionnaire[]
+    if (!questionnaireResponse) return
 
-    if (questionnaires.length < 1) console.warn("Found more than one Questionnaire for Task/" + task.id)
+    const questionnaireResponseId = questionnaireResponse.valueReference?.reference
+    if (!questionnaireResponseId) return
 
-    return questionnaires.length ? questionnaires[0] : undefined
-}
-
-export const findQuestionnaireResponse = (task?: Task, questionnaire?: Questionnaire) => {
-    if (!task || !task.contained || !questionnaire) return
-
-    const expectedQuestionnaireId = getQuestionnaireResponseId(questionnaire)
-    return task.contained.find((contained) => contained.id === expectedQuestionnaireId) as QuestionnaireResponse | undefined
+    const cpsClient = createCpsClient()
+    return await cpsClient.read({
+        resourceType: "QuestionnaireResponse",
+        id: questionnaireResponseId.split("/")[1]
+    })
 }

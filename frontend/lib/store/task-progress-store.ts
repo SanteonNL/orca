@@ -1,4 +1,4 @@
-import { Bundle, Task } from 'fhir/r4';
+import { Bundle, Questionnaire, Task } from 'fhir/r4';
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import { createCpsClient, fetchAllBundlePages } from '../fhirUtils';
@@ -12,6 +12,8 @@ interface StoreState {
     task?: Task
     selectedTaskId?: string
     subTasks?: Task[]
+    taskToQuestionnaireMap?: Record<string, Questionnaire>
+    questionnaireToResponseMap?: Record<string, Questionnaire>
     setSelectedTaskId: (taskId: string) => void
     setTask: (task?: Task) => void
     setSubTasks: (subTasks: Task[]) => void
@@ -23,6 +25,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     loading: false,
     task: undefined,
     subTasks: undefined,
+    taskToQuestionnaireMap: undefined,
     error: undefined,
     setSelectedTaskId: (taskId: string) => {
         set({ selectedTaskId: taskId })
@@ -47,6 +50,26 @@ const taskProgressStore = create<StoreState>((set, get) => ({
                 ])
 
                 set({ task, subTasks })
+
+                const tmpMap: Record<string, Questionnaire> = {};
+                await Promise.all(subTasks.map(async (task: Task) => {
+                    if (task.input && task.input.length > 0) {
+                        const input = task.input.find(input => input.valueReference?.reference?.startsWith("Questionnaire"));
+                        if (input && task.id && input.valueReference?.reference) {
+                            const questionnaireId = input.valueReference.reference;
+                            try {
+                                const questionnaire = await cpsClient.read({
+                                    resourceType: "Questionnaire",
+                                    id: questionnaireId.split("/")[1]
+                                }) as Questionnaire;
+                                tmpMap[task.id] = questionnaire;
+                            } catch (error) {
+                                console.error("Failed to fetch questionnaire", error);
+                            }
+                        }
+                    }
+                }));
+                set({ taskToQuestionnaireMap: tmpMap });
             }
             set({ initialized: true, loading: false, })
 
@@ -57,7 +80,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
 }));
 
 const fetchSubTasks = async (taskId: string) => {
-    const subTaskBundle = await cpsClient.search({ resourceType: 'Task', searchParams: { "based-on": `Task/${taskId}` } }) as Bundle<Task>
+    const subTaskBundle = await cpsClient.search({ resourceType: 'Task', searchParams: { "part-of": `Task/${taskId}` } }) as Bundle<Task>
     return await fetchAllBundlePages(cpsClient, subTaskBundle)
 }
 
