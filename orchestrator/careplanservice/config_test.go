@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -15,7 +16,7 @@ func TestConfig_Validate(t *testing.T) {
 		require.EqualError(t, err, "careplanservice.fhir.url is not configured")
 	})
 	t.Run("ok", func(t *testing.T) {
-		err := Config{Enabled: true, FHIR: FHIRConfig{BaseURL: "http://example.com"}}.Validate()
+		err := Config{Enabled: true, FHIR: coolfhir.FHIRRoundTripperConfig{BaseURL: "http://example.com"}}.Validate()
 		require.NoError(t, err)
 	})
 }

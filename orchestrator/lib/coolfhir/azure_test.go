@@ -73,3 +73,37 @@ func Test_azureHttpClient_Do(t *testing.T) {
 		require.Equal(t, "application/fhir+json", capturedHeaders.Get("Content-Type"))
 	})
 }
+
+func Test_NewFHIRAuthRoundTripper(t *testing.T) {
+	t.Run("Invalid RoundTripper - Invalid FHIR URL", func(t *testing.T) {
+		config := FHIRRoundTripperConfig{
+			BaseURL: "ayiwrq284-02uwqa'trki::$juqwa58tp[9{{}{{}{}{Pwa",
+			Auth:    FHIRAuthConfig{},
+		}
+
+		roundTripper, err := NewFHIRAuthRoundTripper(config)
+		require.Error(t, err)
+		require.Nil(t, roundTripper)
+	})
+	t.Run("Valid RoundTripper - azuremanaged-identity", func(t *testing.T) {
+		config := FHIRRoundTripperConfig{
+			BaseURL: "",
+			Auth: FHIRAuthConfig{
+				Type: AzureManagedIdentity,
+			},
+		}
+		roundTripper, err := NewFHIRAuthRoundTripper(config)
+		require.NoError(t, err)
+		require.NotNil(t, roundTripper)
+	})
+	t.Run("Valid RoundTripper - default", func(t *testing.T) {
+		config := FHIRRoundTripperConfig{
+			BaseURL: "",
+			Auth:    FHIRAuthConfig{},
+		}
+		roundTripper, err := NewFHIRAuthRoundTripper(config)
+		require.NoError(t, err)
+		require.NotNil(t, roundTripper)
+		require.Equal(t, roundTripper, http.DefaultTransport)
+	})
+}

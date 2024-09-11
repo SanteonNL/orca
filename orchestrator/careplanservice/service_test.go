@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"encoding/json"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -33,7 +34,7 @@ func TestService_Proxy(t *testing.T) {
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	// Setup: create the service
 	service, err := New(Config{
-		FHIR: FHIRConfig{
+		FHIR: coolfhir.FHIRRoundTripperConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
 	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "", nil)
@@ -100,7 +101,7 @@ func TestService_Post_Task_Error(t *testing.T) {
 	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
 	service, err := New(
 		Config{
-			FHIR: FHIRConfig{
+			FHIR: coolfhir.FHIRRoundTripperConfig{
 				BaseURL: "http://example.com",
 			},
 		},
@@ -147,7 +148,7 @@ func Test_HandleProtectedResourceMetadata(t *testing.T) {
 	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
 	// Setup: configure the service
 	service, err := New(Config{
-		FHIR: FHIRConfig{
+		FHIR: coolfhir.FHIRRoundTripperConfig{
 			BaseURL: "http://example.com",
 		},
 	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com", nil)
@@ -166,9 +167,9 @@ func Test_HandleProtectedResourceMetadata(t *testing.T) {
 func TestNew(t *testing.T) {
 	t.Run("unknown FHIR server auth type", func(t *testing.T) {
 		_, err := New(Config{
-			FHIR: FHIRConfig{
+			FHIR: coolfhir.FHIRRoundTripperConfig{
 				BaseURL: "http://example.com",
-				Auth:    FHIRAuthConfig{Type: "foo"},
+				Auth:    coolfhir.FHIRAuthConfig{Type: "foo"},
 			},
 		}, nutsPublicURL, orcaPublicURL, nil, "", nil)
 		require.EqualError(t, err, "invalid FHIR authentication type: foo")
