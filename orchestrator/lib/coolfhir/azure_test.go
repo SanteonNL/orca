@@ -74,7 +74,7 @@ func Test_azureHttpClient_Do(t *testing.T) {
 	})
 }
 
-func Test_NewFHIRAuthRoundTripper(t *testing.T) {
+func Test_NewAuthRoundTripper(t *testing.T) {
 	t.Run("Invalid RoundTripper - Invalid FHIR URL", func(t *testing.T) {
 		config := ClientConfig{
 			BaseURL: "ayiwrq284-02uwqa'trki::$juqwa58tp[9{{}{{}{}{Pwa",
