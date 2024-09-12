@@ -105,6 +105,9 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 		}
 		return fmt.Errorf("failed to update Task (CareTeam updated=%v): %w", careTeamUpdated, err)
 	}
+	// Notify participants
+	err = s.subscriptionManager.Notify(r4Task)
+
 	return nil
 }
 

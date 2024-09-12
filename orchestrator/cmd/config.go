@@ -63,9 +63,16 @@ func (i InterfaceConfig) ParseURL() *url.URL {
 }
 
 type NutsConfig struct {
-	API    NutsAPIConfig    `koanf:"api"`
-	Public NutsPublicConfig `koanf:"public"`
-	OwnDID string           `koanf:"did"`
+	API       NutsAPIConfig       `koanf:"api"`
+	Public    NutsPublicConfig    `koanf:"public"`
+	OwnDID    string              `koanf:"did"`
+	Discovery NutsDiscoveryConfig `koanf:"discovery"`
+}
+
+type NutsDiscoveryConfig struct {
+	// ServiceID specifies which Service Discovery service is used to lookup SCP participants.
+	// It's also used as CSD Directory Service.
+	ServiceID string `koanf:"serviceid"`
 }
 
 type NutsPublicConfig struct {

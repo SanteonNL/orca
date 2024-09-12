@@ -19,6 +19,8 @@ require (
 	golang.org/x/oauth2 v0.21.0
 )
 
+replace github.com/nuts-foundation/go-nuts-client => ../../go-nuts-client
+
 require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.9.0 // indirect

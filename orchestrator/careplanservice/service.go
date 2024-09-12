@@ -3,6 +3,7 @@ package careplanservice
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice/subscriptions"
 	"io"
 	"net/http"
 	"net/url"
@@ -17,7 +18,7 @@ import (
 
 var tokenIntrospectionClient = http.DefaultClient
 
-func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIURL *url.URL, ownDID string) (*Service, error) {
+func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIURL *url.URL, ownDID string, subscriptionManager subscriptions.Manager) (*Service, error) {
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -25,26 +26,29 @@ func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIU
 		return nil, err
 	}
 	return &Service{
-		fhirURL:         fhirURL,
-		orcaPublicURL:   orcaPublicURL,
-		nutsPublicURL:   nutsPublicURL,
-		nutsAPIURL:      nutsAPIURL,
-		ownDID:          ownDID,
-		transport:       transport,
-		fhirClient:      fhirClient,
-		maxReadBodySize: fhirClientConfig.MaxResponseSize,
+		fhirURL:             fhirURL,
+		orcaPublicURL:       orcaPublicURL,
+		nutsPublicURL:       nutsPublicURL,
+		nutsAPIURL:          nutsAPIURL,
+		ownDID:              ownDID,
+		transport:           transport,
+		fhirClient:          fhirClient,
+		subscriptionManager: subscriptionManager,
+		maxReadBodySize:     fhirClientConfig.MaxResponseSize,
 	}, nil
 }
 
 type Service struct {
-	orcaPublicURL   *url.URL
-	nutsPublicURL   *url.URL
-	nutsAPIURL      *url.URL
-	ownDID          string
-	fhirURL         *url.URL
-	transport       http.RoundTripper
-	fhirClient      fhirclient.Client
-	maxReadBodySize int
+	orcaPublicURL *url.URL
+	nutsPublicURL *url.URL
+	nutsAPIURL    *url.URL
+	ownDID        string
+	fhirURL       *url.URL
+	transport     http.RoundTripper
+	fhirClient    fhirclient.Client
+	// subscriptionManager is used to send notifications to subscribers when FHIR resources are created, updated or deleted.
+	subscriptionManager subscriptions.Manager
+	maxReadBodySize     int
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {

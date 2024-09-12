@@ -3,6 +3,10 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice/subscriptions"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/csd"
+	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"net/http"
 
 	"github.com/SanteonNL/orca/orchestrator/applaunch/demo"
@@ -66,8 +70,30 @@ func Start(config Config) error {
 		}
 	}
 	if config.CarePlanService.Enabled {
+		orcaPublicURL := config.Public.ParseURL()
+		// CSD Setup. This is Nuts-based, for now.
+		nutsDiscoveryAPIClient, err := discovery.NewClientWithResponses(config.Nuts.API.URL)
+		if err != nil {
+			return fmt.Errorf("failed to create Nuts Discovery API client: %w", err)
+		}
+		nutsDirectoryService := csd.NutsDirectory{
+			APIClient: nutsDiscoveryAPIClient,
+			IdentifierCredentialMapping: map[string]string{
+				coolfhir.URANamingSystem: "credentialSubject.organization.ura",
+			},
+		}
+		// Subscriptions Setup. This uses Nuts to lookup notification endpoints and for authorization.
+		subscriptionManager := subscriptions.DerivingManager{
+			FhirBaseURL: orcaPublicURL.JoinPath("cps"),
+			Channels: subscriptions.CsdChannelFactory{
+				Directory:         nutsDirectoryService,
+				DirectoryService:  config.Nuts.Discovery.ServiceID,
+				ChannelHttpClient: nutsOAuth2HttpClient,
+			},
+		}
+
 		carePlanService, err := careplanservice.New(config.CarePlanService, config.Nuts.Public.Parse(),
-			config.Public.ParseURL(), config.Nuts.API.Parse(), config.Nuts.OwnDID)
+			orcaPublicURL, config.Nuts.API.Parse(), config.Nuts.OwnDID, subscriptionManager)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}
