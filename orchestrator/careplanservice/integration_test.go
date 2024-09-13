@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,8 +19,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 )
+
+var notificationCounter = new(atomic.Int32)
 
 func Test_Integration_TaskLifecycle(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
@@ -82,6 +88,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 		err := carePlanContributor1.Create(task, &task)
 		require.Error(t, err)
+		require.Equal(t, 0, int(notificationCounter.Load()))
 	}
 
 	t.Log("Creating Task - Invalid status Draft")
@@ -100,6 +107,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 		err := carePlanContributor1.Create(task, &task)
 		require.Error(t, err)
+		require.Equal(t, 0, int(notificationCounter.Load()))
 	}
 
 	t.Log("Creating Task")
@@ -132,6 +140,10 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		})
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
+		})
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Equal(t, 2, int(notificationCounter.Load()))
+			notificationCounter.Store(0)
 		})
 	}
 
@@ -183,6 +195,9 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		t.Run("Check that CareTeam still contains the 2 parties", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
 		})
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Equal(t, 2, int(notificationCounter.Load()))
+		})
 	}
 
 	t.Log("Complete Task")
@@ -204,12 +219,34 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 }
 func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := setupHAPI(t)
+
 	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
+	notificationEndpoint := setupNotificationEndpoint(t)
+	nutsDiscoveryAPIClient := setupNutsDiscoveryClient(t, notificationEndpoint.String())
 
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	service, err := New(config, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com/careplanservice")
+
+	// Setup Subscriptions
+	nutsDirectoryService := csd.NutsDirectory{
+		APIClient: nutsDiscoveryAPIClient,
+		IdentifierCredentialMapping: map[string]string{
+			coolfhir.URANamingSystem: "credentialSubject.organization.ura",
+		},
+	}
+	subscriptionManager := subscriptions.DerivingManager{
+		FhirBaseURL: orcaPublicURL.JoinPath("cps"),
+		Channels: subscriptions.CsdChannelFactory{
+			Directory:        nutsDirectoryService,
+			DirectoryService: "shared-care-planning",
+			ChannelHttpClient: &http.Client{
+				Transport: auth.AuthenticatedTestRoundTripper(nil, "careplanservice"),
+			},
+		},
+	}
+
+	service, err := New(config, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com/careplanservice", subscriptionManager)
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
@@ -295,6 +332,42 @@ func setupAuthorizationServer(t *testing.T) *url.URL {
 		authorizationServer.Close()
 	})
 	u, _ := url.Parse(authorizationServer.URL)
+	return u
+}
+
+// setupNutsDiscoveryClient starts a test Nuts Discovery API server and returns a Nuts Discovery API client.
+// It is used by the CarePlanService to lookup the notification endpoint, given the organizations' URA.
+func setupNutsDiscoveryClient(t *testing.T, cpcNotificationURL string) *discovery.ClientWithResponses {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /internal/discovery/v1/shared-care-planning", func(writer http.ResponseWriter, request *http.Request) {
+		response := []discovery.SearchResult{
+			{
+				RegistrationParameters: map[string]interface{}{
+					"fhirNotificationURL": cpcNotificationURL,
+				},
+			},
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(writer).Encode(response)
+	})
+	server := httptest.NewServer(mux)
+	t.Cleanup(func() {
+		server.Close()
+	})
+	nutsDiscoveryAPIClient, _ := discovery.NewClientWithResponses(server.URL)
+	return nutsDiscoveryAPIClient
+}
+
+func setupNotificationEndpoint(t *testing.T) *url.URL {
+	notificationEndpoint := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		notificationCounter.Add(1)
+		writer.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(func() {
+		notificationEndpoint.Close()
+	})
+	u, _ := url.Parse(notificationEndpoint.URL)
 	return u
 }
 

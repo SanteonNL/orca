@@ -97,9 +97,11 @@ func IdentifierEquals(one *fhir.Identifier, other *fhir.Identifier) bool {
 }
 
 func ToString(resource interface{}) string {
-	switch ResourceType(resource) {
-	case "Identifier":
-		r := resource.(fhir.Identifier)
+	switch r := resource.(type) {
+	case *fhir.Identifier:
+		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
+	case fhir.Identifier:
 		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
 	}
+	return fmt.Sprintf("%T(%v)", resource, resource)
 }

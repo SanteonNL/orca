@@ -7,6 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"net/url"
 	"sync"
@@ -60,6 +61,8 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 	default:
 		return fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
 	}
+
+	log.Info().Msgf("Notifying subscribers for update on resource: %s", *focus.Reference)
 
 	return r.notifyAll(ctx, timeFunc(), focus, subscribers)
 }

@@ -18,7 +18,7 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	log.Info().Msg("Creating Task")
 	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
-	task := make(map[string]interface{})
+	task := make(coolfhir.Task)
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return fmt.Errorf("invalid Task: %w", err)
 	}
@@ -43,9 +43,21 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	if err != nil {
 		return fmt.Errorf("failed to create Task: %w", err)
 	}
-	return coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
+	var createdTask fhir.Task
+	err = coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
 		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
-	}, httpResponse)
+	}, httpResponse, &createdTask)
+	if err != nil {
+		return err
+	}
+
+	s.notifySubscribers(httpRequest.Context(), &createdTask)
+	// If CareTeam was updated, notify about CareTeam
+	var updatedCareTeam fhir.CareTeam
+	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryIsOfType("CareTeam"), &updatedCareTeam); err == nil {
+		s.notifySubscribers(httpRequest.Context(), &updatedCareTeam)
+	}
+	return nil
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.
@@ -67,7 +79,7 @@ func (s *Service) newTaskInCarePlan(task coolfhir.Task, carePlan *fhir.CarePlan)
 	if err != nil {
 		return nil, err
 	}
-	if _, err = careteamservice.Update(s.fhirClient, *carePlan.Id, *r4Task, tx); err != nil {
+	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, *r4Task, tx); err != nil {
 		return nil, fmt.Errorf("failed to update CarePlan: %w", err)
 	}
 	result := tx.Bundle()

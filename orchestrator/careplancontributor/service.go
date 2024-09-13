@@ -94,6 +94,11 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	// Authorized endpoints
 	//
+	// TODO: Modify this and other URLs to /cpc/* in future change
+	mux.HandleFunc("POST /contrib/fhir/notify", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
+		log.Info().Msg("TODO: Handle received notification")
+		writer.WriteHeader(http.StatusOK)
+	}))
 	// TODO: Determine auth from Nuts node and access token
 	// TODO: Modify this and other URLs to /cpc/* in future change
 	mux.HandleFunc("/contrib/fhir/*", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {

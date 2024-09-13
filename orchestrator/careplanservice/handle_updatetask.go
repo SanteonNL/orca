@@ -94,9 +94,10 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 	}
 
 	// Perform update
+	var updatedTask fhir.Task
 	if err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
 		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/"+taskID)
-	}, httpResponse); err != nil {
+	}, httpResponse, &updatedTask); err != nil {
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original Task that was sent.
@@ -104,10 +105,10 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 			return json.NewEncoder(httpResponse).Encode(task)
 		}
 		return fmt.Errorf("failed to update Task (CareTeam updated=%v): %w", careTeamUpdated, err)
+	} else {
+		// Success, notify subscribers with updated Task
+		s.notifySubscribers(httpRequest.Context(), &updatedTask)
 	}
-	// Notify participants
-	err = s.subscriptionManager.Notify(r4Task)
-
 	return nil
 }
 

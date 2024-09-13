@@ -44,7 +44,7 @@ func (n NutsDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier
 		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for system: %s", *owner.System)
 	}
 	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, service, &discovery.SearchPresentationsParams{
-		Query: &map[string]string{
+		Query: &map[string]interface{}{
 			identifierSearchParam: *owner.Value,
 		},
 	})
@@ -56,9 +56,9 @@ func (n NutsDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier
 			if response.ApplicationproblemJSONDefault.Status == http.StatusNotFound {
 				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("%s - %s", response.ApplicationproblemJSONDefault.Title, response.ApplicationproblemJSONDefault.Detail))
 			}
-			return nil, fmt.Errorf("search presentations non-OK HTTP response: %v", response.ApplicationproblemJSONDefault)
+			return nil, fmt.Errorf("search presentations non-OK HTTP response (status=%s): %v", response.Status(), response.ApplicationproblemJSONDefault)
 		}
-		return nil, fmt.Errorf("search presentations non-OK HTTP response: %w", err)
+		return nil, fmt.Errorf("search presentations non-OK HTTP response (status=%s)", response.Status())
 	}
 	var results []fhir.Endpoint
 	for _, searchResult := range *response.JSON200 {

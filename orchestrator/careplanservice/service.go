@@ -1,12 +1,14 @@
 package careplanservice
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice/subscriptions"
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
@@ -18,7 +20,12 @@ import (
 
 var tokenIntrospectionClient = http.DefaultClient
 
-func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIURL *url.URL, ownDID string, subscriptionManager subscriptions.Manager) (*Service, error) {
+// subscriberNotificationTimeout is the timeout for notifying subscribers of changes in FHIR resources.
+// We might want to make this configurable at some point.
+var subscriberNotificationTimeout = 10 * time.Second
+
+func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIURL *url.URL, ownDID string,
+	subscriptionManager subscriptions.Manager) (*Service, error) {
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -111,6 +118,15 @@ func (s Service) readRequest(httpRequest *http.Request, target interface{}) erro
 		return fmt.Errorf("FHIR request body exceeds max. safety limit of %d bytes (%s %s)", s.maxReadBodySize, httpRequest.Method, httpRequest.URL.String())
 	}
 	return json.Unmarshal(data, target)
+}
+
+func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
+	// Send notification for changed resources
+	notifyCtx, cancel := context.WithTimeout(ctx, subscriberNotificationTimeout)
+	defer cancel()
+	if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
+		log.Error().Err(err).Msgf("Failed to notify subscribers for %T", resource)
+	}
 }
 
 // convertInto converts the src object into the target object,
