@@ -56,7 +56,7 @@ func AuthenticatedTestRoundTripper(underlying http.RoundTripper, principal *Prin
 
 	data, _ := json.Marshal(principal.Organization)
 	bearerToken := base64.StdEncoding.EncodeToString(data)
-	return HeaderDecoratorRoundTripper{
+	return headerDecoratorRoundTripper{
 		inner: underlying,
 		header: map[string]string{
 			"Authorization": "Bearer " + bearerToken,
@@ -64,14 +64,14 @@ func AuthenticatedTestRoundTripper(underlying http.RoundTripper, principal *Prin
 	}
 }
 
-var _ http.RoundTripper = HeaderDecoratorRoundTripper{}
+var _ http.RoundTripper = headerDecoratorRoundTripper{}
 
-type HeaderDecoratorRoundTripper struct {
+type headerDecoratorRoundTripper struct {
 	inner  http.RoundTripper
 	header map[string]string
 }
 
-func (h HeaderDecoratorRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+func (h headerDecoratorRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	for name, value := range h.header {
 		request.Header.Set(name, value)
 	}

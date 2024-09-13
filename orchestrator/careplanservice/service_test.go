@@ -16,7 +16,6 @@ import (
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
-var nutsPublicURL, _ = url.Parse("https://example.com/nuts")
 
 var taskJSON = `{"resourceType":"Task","id":"cps-task-01","meta":{"versionId":"1","profile":["http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"]},"text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Generated Narrative</div>"},"status":"requested","intent":"order","code":{"coding":[{"system":"http://hl7.org/fhir/CodeSystem/task-code","code":"fullfill"}]},"focus":{"reference":"urn:uuid:456"},"for":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/bsn","value":"111222333"}},"requester":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/uzi","value":"UZI-1"}},"owner":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/ura","value":"URA-2"}},"reasonReference":{"reference":"urn:uuid:789"}}`
 
