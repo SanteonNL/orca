@@ -157,6 +157,8 @@ github.com/nuts-foundation/go-did v0.14.0 h1:Y1tuQCC2xmDX1bdXQS9iquwzJgcT1zcJxbZ
 github.com/nuts-foundation/go-did v0.14.0/go.mod h1:dQm9b2dYUnhgVW1FmpAi5nNe0mfIrnxM3EaQx4GsDhI=
 github.com/nuts-foundation/go-nuts-client v0.1.1 h1:MRiQHUNvoiAix3y2GsAn2/X76Itbl8CR57f5FizfwHs=
 github.com/nuts-foundation/go-nuts-client v0.1.1/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
+github.com/nuts-foundation/go-nuts-client v0.1.2 h1:GCDo039M1X1n7WSDmo+x3rbyrFeFq+zhcCcpavl7dVI=
+github.com/nuts-foundation/go-nuts-client v0.1.2/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
 github.com/oapi-codegen/oapi-codegen/v2 v2.3.0 h1:rICjNsHbPP1LttefanBPnwsSwl09SqhCO7Ee623qR84=
 github.com/oapi-codegen/oapi-codegen/v2 v2.3.0/go.mod h1:4k+cJeSq5ntkwlcpQSxLxICCxQzCL772o30PxdibRt4=
 github.com/oapi-codegen/runtime v1.1.1 h1:EXLHh0DXIJnWhdRPN2w4MXAzFyE4CskzhNLUmtpMYro=
