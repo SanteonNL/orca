@@ -3,7 +3,6 @@ package careplanservice
 import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -27,7 +26,8 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
 	t.Log("This test requires creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
-	carePlanContributor1, carePlanContributor2 := setupIntegrationTest(t)
+	notificationEndpoint := setupNotificationEndpoint(t)
+	carePlanContributor1, carePlanContributor2 := setupIntegrationTest(t, notificationEndpoint)
 
 	participant1 := fhir.CareTeamParticipant{
 		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
@@ -194,6 +194,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Equal(t, 2, int(notificationCounter.Load()))
+			notificationCounter.Store(0)
 		})
 	}
 
@@ -214,32 +215,15 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		})
 	}
 }
-func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.BaseClient) {
+func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := setupHAPI(t)
+	activeProfile := profile.TestProfile{
+		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
+	}
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	service, err := New(config, profile.TestProfile{}, orcaPublicURL)
-
-	// Setup Subscriptions
-	nutsDirectoryService := csd.NutsDirectory{
-		APIClient: nutsDiscoveryAPIClient,
-		IdentifierCredentialMapping: map[string]string{
-			coolfhir.URANamingSystem: "credentialSubject.organization.ura",
-		},
-	}
-	subscriptionManager := subscriptions.DerivingManager{
-		FhirBaseURL: orcaPublicURL.JoinPath("cps"),
-		Channels: subscriptions.CsdChannelFactory{
-			Directory:        nutsDirectoryService,
-			DirectoryService: "shared-care-planning",
-			ChannelHttpClient: &http.Client{
-				Transport: auth.AuthenticatedTestRoundTripper(nil, "careplanservice"),
-			},
-		},
-	}
-
-	service, err := New(config, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com/careplanservice", subscriptionManager)
+	service, err := New(config, activeProfile, orcaPublicURL)
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()

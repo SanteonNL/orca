@@ -18,6 +18,7 @@ func (d DutchNutsProfile) CsdDirectory() csd.Directory {
 	apiClient, _ := discovery.NewClientWithResponses(d.Config.API.URL)
 	return CsdDirectory{
 		APIClient: apiClient,
+		ServiceID: "shared-care-planning",
 		IdentifierCredentialMapping: map[string]string{
 			coolfhir.URANamingSystem: "credentialSubject.organization.ura", // NutsURACredential provides URA attribute
 		},
