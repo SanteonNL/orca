@@ -1,12 +1,11 @@
 package careplancontributor
 
 import (
-	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -18,11 +17,8 @@ import (
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
-var nutsPublicURL, _ = url.Parse("https://example.com/nuts")
 
 func TestService_Proxy(t *testing.T) {
-	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
-
 	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -40,14 +36,14 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "", sessionManager, http.DefaultClient)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, "")
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, nil)
 
 	httpResponse, err := httpClient.Get(frontServer.URL + "/contrib/fhir/Patient")
 	require.NoError(t, err)
@@ -56,8 +52,6 @@ func TestService_Proxy(t *testing.T) {
 }
 
 func TestService_ProxyToEHR(t *testing.T) {
-	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
-
 	// Test that the service registers the EHR FHIR proxy URL that proxies to the backing FHIR server of the EHR
 	// Setup: configure backing EHR FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -79,9 +73,7 @@ func TestService_ProxyToEHR(t *testing.T) {
 	}
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{},
-		nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "",
-		sessionManager, http.DefaultClient)
+	service, err := New(Config{}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -100,8 +92,6 @@ func TestService_ProxyToEHR(t *testing.T) {
 }
 
 func TestService_ProxyToCPS(t *testing.T) {
-	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
-
 	// Test that the service registers the CarePlanService FHIR proxy URL that proxies to the CarePlanService
 	// Setup: configure CarePlanService to which the service proxies
 	carePlanServiceMux := http.NewServeMux()
@@ -122,8 +112,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "",
-		sessionManager, carePlanService.Client())
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()
@@ -171,31 +160,4 @@ func createTestSession() (*user.SessionManager, string) {
 	cookieValue = strings.Split(cookieValue, ";")[0]
 	cookieValue = strings.Split(cookieValue, "=")[1]
 	return sessionManager, cookieValue
-}
-
-// setupAuthorizationServer starts a test OAuth2 authorization server and returns its OAuth2 Token Introspection URL.
-func setupAuthorizationServer(t *testing.T) *url.URL {
-	authorizationServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		requestData, _ := io.ReadAll(request.Body)
-		switch string(requestData) {
-		case "token=valid":
-			writer.Header().Set("Content-Type", "application/json")
-			responseData, _ := json.Marshal(map[string]interface{}{
-				"active":            true,
-				"organization_ura":  "1",
-				"organization_name": "Hospital",
-				"organization_city": "CareTown",
-			})
-			writer.WriteHeader(http.StatusOK)
-			_, _ = writer.Write(responseData)
-		default:
-			writer.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-	}))
-	t.Cleanup(func() {
-		authorizationServer.Close()
-	})
-	u, _ := url.Parse(authorizationServer.URL)
-	return u
 }

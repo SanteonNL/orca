@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
@@ -11,11 +12,21 @@ import (
 	"net/http"
 )
 
-var _ csd.Directory = &NutsDirectory{}
+var _ csd.Directory = &CsdDirectory{}
 
-// NutsDirectory is a CSD Directory that is backed by Nuts Discovery Services.
+func (d DutchNutsProfile) CsdDirectory() csd.Directory {
+	apiClient, _ := discovery.NewClientWithResponses(d.Config.API.URL)
+	return CsdDirectory{
+		APIClient: apiClient,
+		IdentifierCredentialMapping: map[string]string{
+			coolfhir.URANamingSystem: "credentialSubject.organization.ura", // NutsURACredential provides URA attribute
+		},
+	}
+}
+
+// CsdDirectory is a CSD Directory that is backed by Nuts Discovery Services.
 // It looks up fhir.Endpoint instances of owning entities (e.g. care organizations) in the Nuts Discovery Service.
-type NutsDirectory struct {
+type CsdDirectory struct {
 	// APIClient is a REST API client to invoke the Nuts node's private Discovery Service API.
 	APIClient discovery.ClientWithResponsesInterface
 	// IdentifierCredentialMapping maps logical identifiers to attributes in credentials in the Discovery Service's registrations.
@@ -40,7 +51,7 @@ type NutsDirectory struct {
 // LookupEndpoint searches for endpoints of the given owner, with the given endpointName in the given Discovery Service.
 // It queries the Nuts Discovery Service, translating the owner's identifier to a credential attribute (see IdentifierCredentialMapping).
 // The endpoint is retrieved from the Nuts Discovery Service registration's registrationParameters, identified by endpointName.
-func (n NutsDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, service string, endpointName string) ([]fhir.Endpoint, error) {
+func (n CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, service string, endpointName string) ([]fhir.Endpoint, error) {
 	identifierSearchParam, supported := n.IdentifierCredentialMapping[*owner.System]
 	if !supported {
 		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for CodingSystem: %s", *owner.System)
