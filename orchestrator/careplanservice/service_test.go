@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"encoding/json"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"net/http"
 	"net/http/httptest"
@@ -15,13 +16,10 @@ import (
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
-var nutsPublicURL, _ = url.Parse("https://example.com/nuts")
 
 var taskJSON = `{"resourceType":"Task","id":"cps-task-01","meta":{"versionId":"1","profile":["http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"]},"text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Generated Narrative</div>"},"status":"requested","intent":"order","code":{"coding":[{"system":"http://hl7.org/fhir/CodeSystem/task-code","code":"fullfill"}]},"focus":{"reference":"urn:uuid:456"},"for":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/bsn","value":"111222333"}},"requester":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/uzi","value":"UZI-1"}},"owner":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/ura","value":"URA-2"}},"reasonReference":{"reference":"urn:uuid:789"}}`
 
 func TestService_Proxy(t *testing.T) {
-	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
-
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -37,7 +35,7 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "", nil)
+	}, profile.TestProfile{}, orcaPublicURL)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -45,7 +43,7 @@ func TestService_Proxy(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, "")
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1)
 
 	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
 	require.NoError(t, err)
@@ -98,17 +96,14 @@ func TestService_Post_Task_Error(t *testing.T) {
 	}
 
 	// Setup: configure the service
-	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
 	service, err := New(
 		Config{
 			FHIR: coolfhir.ClientConfig{
 				BaseURL: "http://example.com",
 			},
 		},
-		nutsPublicURL,
-		orcaPublicURL,
-		tokenIntrospectionEndpoint,
-		"did:web:example.com", nil)
+		profile.TestProfile{},
+		orcaPublicURL)
 	require.NoError(t, err)
 	serverMux := http.NewServeMux()
 	service.RegisterHandlers(serverMux)
@@ -116,7 +111,7 @@ func TestService_Post_Task_Error(t *testing.T) {
 
 	// Setup: configure the client
 	httpClient := server.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(server.Client().Transport, "")
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(server.Client().Transport, auth.TestPrincipal1)
 
 	for _, tt := range tests {
 		// Make an invalid call (not providing JSON payload)
@@ -140,25 +135,4 @@ func TestService_Post_Task_Error(t *testing.T) {
 		require.NotEmpty(t, target.Issue)
 		require.Equal(t, tt.expectedMessage, *target.Issue[0].Diagnostics)
 	}
-}
-
-func Test_HandleProtectedResourceMetadata(t *testing.T) {
-	// Test that the service handles the protected resource metadata URL
-	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
-	// Setup: configure the service
-	service, err := New(Config{
-		FHIR: coolfhir.ClientConfig{
-			BaseURL: "http://example.com",
-		},
-	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com", nil)
-	require.NoError(t, err)
-	// Setup: configure the service to handle the protected resource metadata URL
-	serverMux := http.NewServeMux()
-	service.RegisterHandlers(serverMux)
-	server := httptest.NewServer(serverMux)
-
-	httpResponse, err := server.Client().Get(server.URL + "/cps/.well-known/oauth-protected-resource")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-
 }

@@ -3,10 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice/subscriptions"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/csd"
-	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	"net/http"
 
 	"github.com/SanteonNL/orca/orchestrator/applaunch/demo"
@@ -15,8 +13,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/nuts-foundation/go-nuts-client/nuts"
-	"github.com/nuts-foundation/go-nuts-client/oauth2"
 )
 
 func Start(config Config) error {
@@ -31,34 +27,21 @@ func Start(config Config) error {
 	if err := config.Validate(); err != nil {
 		return err
 	}
-	nutsOAuth2HttpClient := &http.Client{
-		Transport: &oauth2.Transport{
-			TokenSource: nuts.OAuth2TokenSource{
-				OwnDID:     config.Nuts.OwnDID,
-				NutsAPIURL: config.Nuts.API.URL,
-			},
-			MetadataLoader: &oauth2.MetadataLoader{},
-			AuthzServerLocators: []oauth2.AuthorizationServerLocator{
-				oauth2.ProtectedResourceMetadataLocator,
-			},
-			Scope: careplancontributor.CarePlanServiceOAuth2Scope,
-		},
-	}
 
 	// Register services
 	var services []Service
 
 	services = append(services, healthcheck.New())
 
+	var activeProfile profile.Provider = nuts.DutchNutsProfile{
+		Config: config.Nuts,
+	}
 	if config.CarePlanContributor.Enabled {
 		carePlanContributor, err := careplancontributor.New(
 			config.CarePlanContributor,
-			config.Nuts.Public.Parse(),
+			activeProfile,
 			config.Public.ParseURL(),
-			config.Nuts.API.Parse(),
-			config.Nuts.OwnDID,
-			sessionManager,
-			nutsOAuth2HttpClient)
+			sessionManager)
 		if err != nil {
 			return err
 		}
@@ -70,30 +53,7 @@ func Start(config Config) error {
 		}
 	}
 	if config.CarePlanService.Enabled {
-		orcaPublicURL := config.Public.ParseURL()
-		// CSD Setup. This is Nuts-based, for now.
-		nutsDiscoveryAPIClient, err := discovery.NewClientWithResponses(config.Nuts.API.URL)
-		if err != nil {
-			return fmt.Errorf("failed to create Nuts Discovery API client: %w", err)
-		}
-		nutsDirectoryService := csd.NutsDirectory{
-			APIClient: nutsDiscoveryAPIClient,
-			IdentifierCredentialMapping: map[string]string{
-				coolfhir.URANamingSystem: "credentialSubject.organization.ura",
-			},
-		}
-		// Subscriptions Setup. This uses Nuts to lookup notification endpoints and for authorization.
-		subscriptionManager := subscriptions.DerivingManager{
-			FhirBaseURL: orcaPublicURL.JoinPath("cps"),
-			Channels: subscriptions.CsdChannelFactory{
-				Directory:         nutsDirectoryService,
-				DirectoryService:  config.Nuts.Discovery.ServiceID,
-				ChannelHttpClient: nutsOAuth2HttpClient,
-			},
-		}
-
-		carePlanService, err := careplanservice.New(config.CarePlanService, config.Nuts.Public.Parse(),
-			orcaPublicURL, config.Nuts.API.Parse(), config.Nuts.OwnDID, subscriptionManager)
+		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL())
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

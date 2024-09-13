@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	koanf "github.com/knadh/koanf/v2"
 	"net/url"
 	"strings"
@@ -14,7 +15,7 @@ import (
 
 type Config struct {
 	// Nuts holds the configuration for communicating with the Nuts API.
-	Nuts NutsConfig `koanf:"nuts"`
+	Nuts nuts.Config `koanf:"nuts"`
 	// Public holds the configuration for the public interface.
 	Public InterfaceConfig `koanf:"public"`
 	// CarePlanContributor holds the configuration for the CarePlanContributor.
@@ -26,7 +27,7 @@ type Config struct {
 
 func (c Config) Validate() error {
 	_, err := url.Parse(c.Nuts.API.URL)
-	if c.Nuts.OwnDID == "" {
+	if c.Nuts.OwnSubject == "" {
 		return errors.New("invalid/empty Nuts DID")
 	}
 	if err != nil || c.Nuts.API.URL == "" {
@@ -59,37 +60,6 @@ type InterfaceConfig struct {
 
 func (i InterfaceConfig) ParseURL() *url.URL {
 	u, _ := url.Parse(i.URL)
-	return u
-}
-
-type NutsConfig struct {
-	API       NutsAPIConfig       `koanf:"api"`
-	Public    NutsPublicConfig    `koanf:"public"`
-	OwnDID    string              `koanf:"did"`
-	Discovery NutsDiscoveryConfig `koanf:"discovery"`
-}
-
-type NutsDiscoveryConfig struct {
-	// ServiceID specifies which Service Discovery service is used to lookup SCP participants.
-	// It's also used as CSD Directory Service.
-	ServiceID string `koanf:"serviceid"`
-}
-
-type NutsPublicConfig struct {
-	URL string `koanf:"url"`
-}
-
-func (c NutsPublicConfig) Parse() *url.URL {
-	u, _ := url.Parse(c.URL)
-	return u
-}
-
-type NutsAPIConfig struct {
-	URL string `koanf:"url"`
-}
-
-func (n NutsAPIConfig) Parse() *url.URL {
-	u, _ := url.Parse(n.URL)
 	return u
 }
 

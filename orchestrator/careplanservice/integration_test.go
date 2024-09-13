@@ -2,20 +2,17 @@ package careplanservice
 
 import (
 	"context"
-	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice/subscriptions"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -219,14 +216,10 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 }
 func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := setupHAPI(t)
-
-	tokenIntrospectionEndpoint := setupAuthorizationServer(t)
-	notificationEndpoint := setupNotificationEndpoint(t)
-	nutsDiscoveryAPIClient := setupNutsDiscoveryClient(t, notificationEndpoint.String())
-
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
+	service, err := New(config, profile.TestProfile{}, orcaPublicURL)
 
 	// Setup Subscriptions
 	nutsDirectoryService := csd.NutsDirectory{
@@ -255,8 +248,8 @@ func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.Bas
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
 
-	transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, "1")
-	transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, "2")
+	transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1)
+	transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2)
 
 	carePlanContributor1 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport1}, nil)
 	carePlanContributor2 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport2}, nil)
@@ -294,69 +287,6 @@ outer:
 		}
 		t.Errorf("expected participant not found: %s", *expectedMember.OnBehalfOf.Identifier.Value)
 	}
-}
-
-// setupAuthorizationServer starts a test OAuth2 authorization server and returns its OAuth2 Token Introspection URL.
-func setupAuthorizationServer(t *testing.T) *url.URL {
-	authorizationServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		requestData, _ := io.ReadAll(request.Body)
-		switch string(requestData) {
-		case "token=valid":
-			fallthrough
-		case "token=1":
-			writer.Header().Set("Content-Type", "application/json")
-			responseData, _ := json.Marshal(map[string]interface{}{
-				"active":            true,
-				"organization_ura":  "1",
-				"organization_name": "Hospital",
-				"organization_city": "CareTown",
-			})
-			writer.WriteHeader(http.StatusOK)
-			_, _ = writer.Write(responseData)
-		case "token=2":
-			writer.Header().Set("Content-Type", "application/json")
-			responseData, _ := json.Marshal(map[string]interface{}{
-				"active":            true,
-				"organization_ura":  "2",
-				"organization_name": "Hospital",
-				"organization_city": "CareTown",
-			})
-			writer.WriteHeader(http.StatusOK)
-			_, _ = writer.Write(responseData)
-		default:
-			writer.WriteHeader(http.StatusUnauthorized)
-			return
-		}
-	}))
-	t.Cleanup(func() {
-		authorizationServer.Close()
-	})
-	u, _ := url.Parse(authorizationServer.URL)
-	return u
-}
-
-// setupNutsDiscoveryClient starts a test Nuts Discovery API server and returns a Nuts Discovery API client.
-// It is used by the CarePlanService to lookup the notification endpoint, given the organizations' URA.
-func setupNutsDiscoveryClient(t *testing.T, cpcNotificationURL string) *discovery.ClientWithResponses {
-	mux := http.NewServeMux()
-	mux.HandleFunc("GET /internal/discovery/v1/shared-care-planning", func(writer http.ResponseWriter, request *http.Request) {
-		response := []discovery.SearchResult{
-			{
-				RegistrationParameters: map[string]interface{}{
-					"fhirNotificationURL": cpcNotificationURL,
-				},
-			},
-		}
-		writer.Header().Set("Content-Type", "application/json")
-		writer.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(writer).Encode(response)
-	})
-	server := httptest.NewServer(mux)
-	t.Cleanup(func() {
-		server.Close()
-	})
-	nutsDiscoveryAPIClient, _ := discovery.NewClientWithResponses(server.URL)
-	return nutsDiscoveryAPIClient
 }
 
 func setupNotificationEndpoint(t *testing.T) *url.URL {

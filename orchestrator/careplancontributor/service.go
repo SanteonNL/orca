@@ -4,11 +4,9 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
 
@@ -19,104 +17,84 @@ import (
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
-const LandingURL = "/contrib/"
-const CarePlanServiceOAuth2Scope = "careplanservice"
+const basePath = "/contrib"
+const LandingURL = basePath + "/"
 
-var tokenIntrospectionClient = http.DefaultClient
+const CarePlanServiceOAuth2Scope = "careplanservice"
 
 func New(
 	config Config,
-	nutsPublicURL *url.URL,
+	profile profile.Provider,
 	orcaPublicURL *url.URL,
-	nutsAPIURL *url.URL,
-	ownDID string,
-	sessionManager *user.SessionManager,
-	carePlanServiceHttpClient *http.Client) (*Service, error) {
+	sessionManager *user.SessionManager) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
-	carePlanServiceClient := fhirclient.New(cpsURL, carePlanServiceHttpClient, coolfhir.Config())
 	fhirClientConfig := coolfhir.Config()
-	transport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	localFHIRStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
 	if err != nil {
 		return nil, err
 	}
+	httpClient := profile.HttpClient()
 	return &Service{
-		orcaPublicURL:             orcaPublicURL,
-		nutsPublicURL:             nutsPublicURL,
-		nutsAPIURL:                nutsAPIURL,
-		ownDID:                    ownDID,
-		carePlanServiceURL:        cpsURL,
-		SessionManager:            sessionManager,
-		carePlanService:           carePlanServiceClient,
-		carePlanServiceHttpClient: carePlanServiceHttpClient,
-		frontendUrl:               config.FrontendConfig.URL,
-		fhirURL:                   fhirURL,
-		transport:                 transport,
+		orcaPublicURL:      orcaPublicURL,
+		carePlanServiceURL: cpsURL,
+		SessionManager:     sessionManager,
+		scpHttpClient:      httpClient,
+		profile:            profile,
+		frontendUrl:        config.FrontendConfig.URL,
+		fhirURL:            fhirURL,
+		transport:          localFHIRStoreTransport,
 	}, nil
 }
 
 type Service struct {
-	orcaPublicURL             *url.URL
-	nutsPublicURL             *url.URL
-	nutsAPIURL                *url.URL
-	ownDID                    string
-	SessionManager            *user.SessionManager
-	frontendUrl               string
-	carePlanService           fhirclient.Client
-	carePlanServiceURL        *url.URL
-	carePlanServiceHttpClient *http.Client
-	fhirURL                   *url.URL
-	transport                 http.RoundTripper
+	profile            profile.Provider
+	orcaPublicURL      *url.URL
+	SessionManager     *user.SessionManager
+	frontendUrl        string
+	carePlanServiceURL *url.URL
+	// scpHttpClient is used to call remote Care Plan Contributors or Care Plan Service, used to:
+	// - proxy requests from the Frontend application (e.g. initiating task workflow)
+	// - proxy requests from EHR (e.g. fetching remote FHIR data)
+	scpHttpClient *http.Client
+	fhirURL       *url.URL
+	// transport is used to call the local FHIR store, used to:
+	// - proxy requests from the Frontend application (e.g. initiating task workflow)
+	// - proxy requests from EHR (e.g. fetching remote FHIR data)
+	transport http.RoundTripper
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
-	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, "/contrib/fhir", s.transport)
-	authConfig := middleware.Config{
-		TokenIntrospectionEndpoint: s.nutsAPIURL.JoinPath("internal/auth/v2/accesstoken/introspect").String(),
-		TokenIntrospectionClient:   tokenIntrospectionClient,
-		BaseURL:                    s.orcaPublicURL.JoinPath("contrib"),
-	}
-
-	//
-	// Unauthorized endpoints
-	//
-	mux.HandleFunc("GET /cps/.well-known/oauth-protected-resource", func(writer http.ResponseWriter, request *http.Request) {
-		writer.Header().Add("Content-Type", "application/json")
-		writer.WriteHeader(http.StatusOK)
-		md := oauth2.ProtectedResourceMetadata{
-			Resource:               s.orcaPublicURL.JoinPath("cps").String(),
-			AuthorizationServers:   []string{s.nutsPublicURL.JoinPath("oauth2", s.ownDID).String()},
-			BearerMethodsSupported: []string{"header"},
-		}
-		_ = json.NewEncoder(writer).Encode(md)
-	})
+	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
+	baseURL := s.orcaPublicURL.JoinPath(basePath)
+	s.profile.RegisterHTTPHandlers(basePath, baseURL, mux)
 	//
 	// Authorized endpoints
 	//
 	// TODO: Modify this and other URLs to /cpc/* in future change
-	mux.HandleFunc("POST /contrib/fhir/notify", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		log.Info().Msg("TODO: Handle received notification")
 		writer.WriteHeader(http.StatusOK)
 	}))
 	// TODO: Determine auth from Nuts node and access token
 	// TODO: Modify this and other URLs to /cpc/* in future change
-	mux.HandleFunc("/contrib/fhir/*", auth.Middleware(authConfig, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePath+"/fhir/*", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		fhirProxy.ServeHTTP(writer, request)
 	}))
 	//
 	// FE/Session Authorized Endpoints
 	//
-	mux.HandleFunc("GET /contrib/context", s.withSession(s.handleGetContext))
-	mux.HandleFunc("GET /contrib/patient", s.withSession(s.handleGetPatient))
-	mux.HandleFunc("GET /contrib/practitioner", s.withSession(s.handleGetPractitioner))
-	mux.HandleFunc("GET /contrib/serviceRequest", s.withSession(s.handleGetServiceRequest))
-	mux.HandleFunc("/contrib/ehr/fhir/*", s.withSession(s.handleProxyToEPD))
-	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, "/contrib/cps/fhir", s.carePlanServiceHttpClient.Transport)
-	mux.HandleFunc("/contrib/cps/fhir/*", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *user.SessionData) {
+	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
+	mux.HandleFunc("GET "+basePath+"/patient", s.withSession(s.handleGetPatient))
+	mux.HandleFunc("GET "+basePath+"/practitioner", s.withSession(s.handleGetPractitioner))
+	mux.HandleFunc("GET "+basePath+"/serviceRequest", s.withSession(s.handleGetServiceRequest))
+	mux.HandleFunc(basePath+"/ehr/fhir/*", s.withSession(s.handleProxyToEPD))
+	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, basePath+"/cps/fhir", s.scpHttpClient.Transport)
+	mux.HandleFunc(basePath+"/cps/fhir/*", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *user.SessionData) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
-	mux.HandleFunc("/contrib/", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePath+"/", func(response http.ResponseWriter, request *http.Request) {
 		log.Info().Msgf("Redirecting to %s", s.frontendUrl)
 		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
 	})
@@ -138,7 +116,7 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 
 func (s Service) handleProxyToEPD(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.Values)
-	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, "/contrib/ehr/fhir", clientFactory.Client)
+	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, basePath+"/ehr/fhir", clientFactory.Client)
 	proxy.ServeHTTP(writer, request)
 }
 

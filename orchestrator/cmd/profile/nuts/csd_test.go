@@ -12,7 +12,7 @@ import (
 	"testing"
 )
 
-func TestNutsDirectory_LookupEndpoint(t *testing.T) {
+func TestCsdDirectory_LookupEndpoint(t *testing.T) {
 	ownerUnsupportedCodingSystem := fhir.Identifier{
 		System: to.Ptr("custom"),
 		Value:  to.Ptr("123456789"),
@@ -46,7 +46,7 @@ func TestNutsDirectory_LookupEndpoint(t *testing.T) {
 	})
 	discoveryServer := httptest.NewServer(discoveryServerRouter)
 	apiClient, _ := discovery.NewClientWithResponses(discoveryServer.URL)
-	directory := NutsDirectory{
+	directory := CsdDirectory{
 		IdentifierCredentialMapping: map[string]string{
 			"http://fhir.nl/fhir/NamingSystem/ura": "credentialSubject.organization.ura", // URACredential
 		},

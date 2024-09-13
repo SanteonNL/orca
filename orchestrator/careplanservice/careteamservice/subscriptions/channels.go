@@ -27,14 +27,13 @@ var _ ChannelFactory = CsdChannelFactory{}
 // In other words, it looks up the subscriber endpoint in an external registry, the CSD.
 // This is typically for out-of-band server-managed FHIR subscriptions.
 type CsdChannelFactory struct {
-	Directory        csd.Directory
-	DirectoryService string
+	Directory csd.Directory
 	// ChannelHttpClient is the HTTP client used to deliver the notification to the subscriber.
 	ChannelHttpClient *http.Client
 }
 
 func (c CsdChannelFactory) Create(ctx context.Context, subscriber fhir.Identifier) (Channel, error) {
-	endpoint, err := c.Directory.LookupEndpoint(ctx, subscriber, c.DirectoryService, "fhir-notify")
+	endpoint, err := c.Directory.LookupEndpoint(ctx, subscriber, "fhir-notify")
 	if err != nil {
 		return nil, fmt.Errorf("lookup notification endpoint in CSD: %w", err)
 	}
