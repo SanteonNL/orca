@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
-	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/user"
@@ -32,8 +31,7 @@ func New(
 	nutsAPIURL *url.URL,
 	ownDID string,
 	sessionManager *user.SessionManager,
-	carePlanServiceHttpClient *http.Client,
-	didResolver addressing.StaticDIDResolver) (*Service, error) {
+	carePlanServiceHttpClient *http.Client) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)

@@ -209,7 +209,7 @@ func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.Bas
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	service, err := New(config, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com/careplanservice", nil)
+	service, err := New(config, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com/careplanservice")
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()

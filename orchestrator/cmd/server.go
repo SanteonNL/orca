@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
@@ -23,7 +22,6 @@ func Start(config Config) error {
 
 	// Set up dependencies
 	httpHandler := http.NewServeMux()
-	didResolver := addressing.StaticDIDResolver(map[string]string{})
 	sessionManager := user.NewSessionManager()
 
 	if err := config.Validate(); err != nil {
@@ -56,8 +54,7 @@ func Start(config Config) error {
 			config.Nuts.API.Parse(),
 			config.Nuts.OwnDID,
 			sessionManager,
-			nutsOAuth2HttpClient,
-			didResolver)
+			nutsOAuth2HttpClient)
 		if err != nil {
 			return err
 		}
@@ -70,7 +67,7 @@ func Start(config Config) error {
 	}
 	if config.CarePlanService.Enabled {
 		carePlanService, err := careplanservice.New(config.CarePlanService, config.Nuts.Public.Parse(),
-			config.Public.ParseURL(), config.Nuts.API.Parse(), config.Nuts.OwnDID, didResolver)
+			config.Public.ParseURL(), config.Nuts.API.Parse(), config.Nuts.OwnDID)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

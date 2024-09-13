@@ -37,7 +37,7 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "", nil)
+	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "")
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -108,8 +108,7 @@ func TestService_Post_Task_Error(t *testing.T) {
 		nutsPublicURL,
 		orcaPublicURL,
 		tokenIntrospectionEndpoint,
-		"did:web:example.com",
-		nil)
+		"did:web:example.com")
 	require.NoError(t, err)
 	serverMux := http.NewServeMux()
 	service.RegisterHandlers(serverMux)
@@ -151,7 +150,7 @@ func Test_HandleProtectedResourceMetadata(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: "http://example.com",
 		},
-	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com", nil)
+	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "did:web:example.com")
 	require.NoError(t, err)
 	// Setup: configure the service to handle the protected resource metadata URL
 	serverMux := http.NewServeMux()

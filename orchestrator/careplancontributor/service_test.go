@@ -40,7 +40,7 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "", sessionManager, http.DefaultClient, nil)
+	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "", sessionManager, http.DefaultClient)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -81,7 +81,7 @@ func TestService_ProxyToEHR(t *testing.T) {
 
 	service, err := New(Config{},
 		nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "",
-		sessionManager, http.DefaultClient, nil)
+		sessionManager, http.DefaultClient)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -123,7 +123,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 			URL: carePlanServiceURL.String(),
 		},
 	}, nutsPublicURL, orcaPublicURL, tokenIntrospectionEndpoint, "",
-		sessionManager, carePlanService.Client(), nil)
+		sessionManager, carePlanService.Client())
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()

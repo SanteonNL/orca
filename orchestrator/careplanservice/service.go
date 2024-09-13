@@ -9,7 +9,6 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
-	"github.com/SanteonNL/orca/orchestrator/addressing"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
@@ -18,7 +17,7 @@ import (
 
 var tokenIntrospectionClient = http.DefaultClient
 
-func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIURL *url.URL, ownDID string, didResolver addressing.DIDResolver) (*Service, error) {
+func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIURL *url.URL, ownDID string) (*Service, error) {
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -31,7 +30,6 @@ func New(config Config, nutsPublicURL *url.URL, orcaPublicURL *url.URL, nutsAPIU
 		nutsPublicURL:   nutsPublicURL,
 		nutsAPIURL:      nutsAPIURL,
 		ownDID:          ownDID,
-		didResolver:     didResolver,
 		transport:       transport,
 		fhirClient:      fhirClient,
 		maxReadBodySize: fhirClientConfig.MaxResponseSize,
@@ -43,7 +41,6 @@ type Service struct {
 	nutsPublicURL   *url.URL
 	nutsAPIURL      *url.URL
 	ownDID          string
-	didResolver     addressing.DIDResolver
 	fhirURL         *url.URL
 	transport       http.RoundTripper
 	fhirClient      fhirclient.Client
