@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"net/http"
@@ -14,6 +14,7 @@ import (
 var _ csd.Directory = &NutsDirectory{}
 
 // NutsDirectory is a CSD Directory that is backed by Nuts Discovery Services.
+// It looks up fhir.Endpoint instances of owning entities (e.g. care organizations) in the Nuts Discovery Service.
 type NutsDirectory struct {
 	// APIClient is a REST API client to invoke the Nuts node's private Discovery Service API.
 	APIClient discovery.ClientWithResponsesInterface
@@ -36,13 +37,13 @@ type NutsDirectory struct {
 	IdentifierCredentialMapping map[string]string
 }
 
+// LookupEndpoint searches for endpoints of the given owner, with the given endpointName in the given Discovery Service.
+// It queries the Nuts Discovery Service, translating the owner's identifier to a credential attribute (see IdentifierCredentialMapping).
+// The endpoint is retrieved from the Nuts Discovery Service registration's registrationParameters, identified by endpointName.
 func (n NutsDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, service string, endpointName string) ([]fhir.Endpoint, error) {
-	if !coolfhir.IsLogicalIdentifier(&owner) {
-		return nil, errors.New("owner must be a logical identifier")
-	}
 	identifierSearchParam, supported := n.IdentifierCredentialMapping[*owner.System]
 	if !supported {
-		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for system: %s", *owner.System)
+		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for CodingSystem: %s", *owner.System)
 	}
 	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, service, &discovery.SearchPresentationsParams{
 		Query: &map[string]interface{}{
@@ -70,10 +71,13 @@ func (n NutsDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier
 		if !ok {
 			continue
 		}
-		// TODO: Supporting non-FHIR endpoints (e.g. Nuts Authorization Server URL) strictly requires a FHIR profile to define the values.
 		results = append(results, fhir.Endpoint{
 			Address: endpoint,
 			Status:  fhir.EndpointStatusActive,
+			ConnectionType: fhir.Coding{
+				System: to.Ptr("http://hl7.org/fhir/ValueSet/endpoint-connection-type"),
+				Code:   to.Ptr("hl7-fhir-rest"),
+			},
 		})
 	}
 	return results, nil
