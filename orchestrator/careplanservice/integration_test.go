@@ -159,6 +159,10 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
 		})
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Equal(t, 2, int(notificationCounter.Load()))
+			notificationCounter.Store(0)
+		})
 	}
 
 	t.Log("Invalid state transition - Accepted -> Completed")
@@ -212,6 +216,10 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		})
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2WithEndDate)
+		})
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Equal(t, 2, int(notificationCounter.Load()))
+			notificationCounter.Store(0)
 		})
 	}
 }

@@ -47,12 +47,11 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 }
 
 type Service struct {
-	orcaPublicURL *url.URL
-	fhirURL       *url.URL
-	transport     http.RoundTripper
-	fhirClient    fhirclient.Client
-	profile       profile.Provider
-	// subscriptionManager is used to send notifications to subscribers when FHIR resources are created, updated or deleted.
+	orcaPublicURL       *url.URL
+	fhirURL             *url.URL
+	transport           http.RoundTripper
+	fhirClient          fhirclient.Client
+	profile             profile.Provider
 	subscriptionManager subscriptions.Manager
 	maxReadBodySize     int
 }
