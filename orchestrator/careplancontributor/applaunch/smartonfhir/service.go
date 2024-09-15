@@ -3,8 +3,8 @@ package smartonfhir
 import (
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/url"

@@ -4,7 +4,7 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"

@@ -7,9 +7,9 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	"net/http"
 
-	"github.com/SanteonNL/orca/orchestrator/applaunch/demo"
-	"github.com/SanteonNL/orca/orchestrator/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
 	"github.com/SanteonNL/orca/orchestrator/user"
