@@ -218,7 +218,8 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
 		// TODO: Change this to something more sophisticated (OpenID Connect?)
-		if request.Header.Get("Authorization") == "Bearer "+s.config.StaticBearerToken || s.SessionManager.Get(request) != nil {
+		if (s.config.StaticBearerToken != "" && request.Header.Get("Authorization") == "Bearer "+s.config.StaticBearerToken) ||
+			s.SessionManager.Get(request) != nil {
 			next(response, request)
 			return
 		}
