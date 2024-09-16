@@ -10,7 +10,7 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-    image: nutsfoundation/nuts-node:6.0.0-beta.9
+    image: nutsfoundation/nuts-node:6.0.0-beta.13
     ports:
       - "8081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
@@ -41,7 +41,7 @@ services:
     environment:
       - ORCA_NUTS_API_URL=http://nutsnode:8081
       - ORCA_NUTS_PUBLIC_URL=${NUTS_URL}
-      - ORCA_NUTS_DID=${CLINIC_DID}
+      - ORCA_NUTS_SUBJECT=clinic
       - ORCA_PUBLIC_URL=/orca
       - ORCA_CAREPLANSERVICE_ENABLED=true
       - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
