@@ -47,9 +47,9 @@ func Start(config Config) error {
 		}
 		services = append(services, carePlanContributor)
 		// App Launches
-		services = append(services, smartonfhir.New(config.AppLaunch.SmartOnFhir, sessionManager))
-		if config.AppLaunch.Demo.Enabled {
-			services = append(services, demo.New(sessionManager, config.AppLaunch.Demo, config.Public.URL))
+		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, careplancontributor.LandingURL))
+		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
+			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Public.URL, careplancontributor.LandingURL))
 		}
 	}
 	if config.CarePlanService.Enabled {

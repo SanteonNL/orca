@@ -11,7 +11,7 @@ import (
 func TestService_handle(t *testing.T) {
 	t.Run("root base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager()
-		service := Service{sessionManager: sessionManager, baseURL: "/"}
+		service := Service{sessionManager: sessionManager, baseURL: "/", landingUrlPath: "/contrib/"}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir", nil)
 
@@ -22,7 +22,7 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager()
-		service := Service{sessionManager: sessionManager, baseURL: "/orca"}
+		service := Service{sessionManager: sessionManager, baseURL: "/orca", landingUrlPath: "/contrib/"}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir", nil)
 
