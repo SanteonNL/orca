@@ -3,10 +3,11 @@ package careplanservice
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"io"
 	"net/http"
 	"net/url"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -70,9 +71,19 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 	}))
 	mux.HandleFunc(basePath+"/*", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		// TODO: Authorize request here
-		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
-		proxy.ServeHTTP(writer, request)
+
+		if request.Method == "POST" && request.URL.Path == basePath+"/" {
+			err := s.handleBundle(writer, request)
+			if err != nil {
+				s.writeOperationOutcomeFromError(err, "CarePlanService/CreateCarePlan", writer)
+				return
+			}
+		} else {
+			// TODO: Authorize request here
+			log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
+			proxy.ServeHTTP(writer, request)
+		}
+
 	}))
 }
 

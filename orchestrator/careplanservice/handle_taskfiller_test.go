@@ -61,7 +61,7 @@ var validTask = map[string]interface{}{
 	},
 }
 
-func TestService_handleTaskFiller(t *testing.T) {
+func TestService_handleTaskFillerCreate(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -176,7 +176,7 @@ func TestService_handleTaskFiller(t *testing.T) {
 				Times(tt.createTimes) // Expect calls based on the test case
 
 			// Call the actual function being tested
-			err := service.handleTaskFiller(tt.task)
+			err := service.handleTaskFillerCreate(tt.task)
 			if tt.expectedError {
 				require.Error(t, err)
 			} else {
@@ -186,7 +186,7 @@ func TestService_handleTaskFiller(t *testing.T) {
 	}
 }
 
-func TestService_createSubTask(t *testing.T) {
+func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

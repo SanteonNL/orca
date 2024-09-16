@@ -80,7 +80,11 @@ const taskProgressStore = create<StoreState>((set, get) => ({
 }));
 
 const fetchSubTasks = async (taskId: string) => {
-    const subTaskBundle = await cpsClient.search({ resourceType: 'Task', searchParams: { "part-of": `Task/${taskId}` } }) as Bundle<Task>
+    const subTaskBundle = await cpsClient.search({
+        resourceType: 'Task',
+        searchParams: { "part-of": `Task/${taskId}` },
+        headers: { "Cache-Control": "no-cache" }
+    }) as Bundle<Task>
     return await fetchAllBundlePages(cpsClient, subTaskBundle)
 }
 

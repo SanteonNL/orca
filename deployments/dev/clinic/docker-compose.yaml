@@ -32,10 +32,10 @@ services:
     ports:
       - "1305:1305"
   orchestrator:
-    image: ghcr.io/santeonnl/orca_orchestrator:main
-    #build:
-    #  context: ../../../orchestrator
-    #  dockerfile: Dockerfile
+    # image: ghcr.io/santeonnl/orca_orchestrator:main
+    build:
+     context: ../../../orchestrator
+     dockerfile: Dockerfile
     ports:
       - "8080"
     environment:
@@ -45,6 +45,7 @@ services:
       - ORCA_PUBLIC_URL=/orca
       - ORCA_CAREPLANSERVICE_ENABLED=true
       - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
+      - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
   fhirstore:
     image: hapiproject/hapi:v7.2.0
     ports:
@@ -52,7 +53,7 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
   viewer:
-     image: ghcr.io/santeonnl/orca_viewersimulator:main
-#     build:
-#       context: ../../../viewer_simulator
-#       dockerfile: Dockerfile
+    #  image: ghcr.io/santeonnl/orca_viewersimulator:main
+    build:
+      context: ../../../viewer_simulator
+      dockerfile: Dockerfile

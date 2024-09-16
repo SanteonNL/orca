@@ -23,6 +23,11 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return fmt.Errorf("invalid Task: %w", err)
 	}
+
+	return s.handleCreateTaskFromMap(task, httpResponse)
+}
+
+func (s *Service) handleCreateTaskFromMap(task map[string]interface{}, httpResponse http.ResponseWriter) error {
 	switch task["status"] {
 	case fhir.TaskStatusRequested.String():
 	case fhir.TaskStatusReady.String():
@@ -46,22 +51,29 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 		return fmt.Errorf("failed to create Task: %w", err)
 	}
 
-	newlyCreatedTask, err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
-		log.Debug().Msgf("Checking if Task is created: %s", *entry.Response.Location)
-		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
-	}, httpResponse)
+	var newlyCreatedTask map[string]interface{}
+	if httpResponse == nil {
+		newlyCreatedTask, err = coolfhir.ExecuteTransactionAndFilter(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
+			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
+		})
+	} else {
+		newlyCreatedTask, err = coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
+			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
+		}, httpResponse)
+	}
 
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to submit Bundle and refetch Task: %w", err)
 	}
 
 	if newlyCreatedTask == nil {
 		return errors.New("no Task found in bundle")
 	}
 
-	log.Info().Msgf("Task/%s created", newlyCreatedTask["id"])
+	// log.Info().Msgf("Task/%s created", newlyCreatedTask["id"])
 
-	return s.handleTaskFiller(newlyCreatedTask)
+	//TODO: This now also processes updates
+	return s.handleTaskFillerCreate(newlyCreatedTask)
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.
