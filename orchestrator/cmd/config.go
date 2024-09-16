@@ -87,5 +87,8 @@ func DefaultConfig() Config {
 			Address: ":8080",
 			URL:     "/",
 		},
+		CarePlanContributor: careplancontributor.Config{
+			Enabled: true,
+		},
 	}
 }
