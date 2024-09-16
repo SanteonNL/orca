@@ -22,7 +22,7 @@ type Config struct {
 	CarePlanContributor careplancontributor.Config `koanf:"careplancontributor"`
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
-	AppLaunch       applaunch.Config       `koanf:"careplancontributor.applaunch"`
+	AppLaunch       applaunch.Config       `koanf:"applaunch"`
 }
 
 func (c Config) Validate() error {
