@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"golang.org/x/oauth2"
 	"net/http"
@@ -53,4 +54,49 @@ func (a azureTokenSource) Token() (*oauth2.Token, error) {
 		TokenType:   "Bearer",
 		Expiry:      accessToken.ExpiresOn,
 	}, nil
+}
+
+type ClientConfig struct {
+	// BaseURL is the base URL of the FHIR server to connect to.
+	BaseURL string `koanf:"url"`
+	// Auth is the authentication configuration for the FHIR server.
+	Auth AuthConfig `koanf:"auth"`
+}
+
+type AuthConfigType string
+
+const (
+	Default              AuthConfigType = ""
+	AzureManagedIdentity AuthConfigType = "azure-managedidentity"
+)
+
+type AuthConfig struct {
+	// Type of authentication to use, supported options: azure-managedidentity.
+	// Leave empty for no authentication.
+	Type AuthConfigType `koanf:"type"`
+}
+
+func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Config) (http.RoundTripper, fhirclient.Client, error) {
+	var transport http.RoundTripper
+	var fhirClient fhirclient.Client
+	fhirURL, err := url.Parse(config.BaseURL)
+	if err != nil {
+		return nil, nil, err
+	}
+	switch config.Auth.Type {
+	case AzureManagedIdentity:
+		credential, err := azidentity.NewManagedIdentityCredential(nil)
+		if err != nil {
+			return nil, nil, fmt.Errorf("unable to get credential for Azure FHIR API client: %w", err)
+		}
+		httpClient := NewAzureHTTPClient(credential, DefaultAzureScope(fhirURL))
+		transport = httpClient.Transport
+		fhirClient = fhirclient.New(fhirURL, httpClient, fhirClientConfig)
+	case Default:
+		transport = http.DefaultTransport
+		fhirClient = fhirclient.New(fhirURL, http.DefaultClient, fhirClientConfig)
+	default:
+		return nil, nil, fmt.Errorf("invalid FHIR authentication type: %s", config.Auth.Type)
+	}
+	return transport, fhirClient, nil
 }

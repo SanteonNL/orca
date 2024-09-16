@@ -1,7 +1,10 @@
 package careplancontributor
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +15,41 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var orcaPublicURL, _ = url.Parse("https://example.com/orca")
+
+func TestService_Proxy(t *testing.T) {
+	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	fhirServerMux := http.NewServeMux()
+	capturedHost := ""
+	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+	})
+	fhirServer := httptest.NewServer(fhirServerMux)
+	fhirServerURL, _ := url.Parse(fhirServer.URL)
+	fhirServerURL.Path = "/fhir"
+	sessionManager, _ := createTestSession()
+
+	service, _ := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	// Setup: configure the service to proxy to the backing FHIR server
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, nil)
+
+	httpResponse, err := httpClient.Get(frontServer.URL + "/contrib/fhir/Patient")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	require.Equal(t, fhirServerURL.Host, capturedHost)
+}
 
 func TestService_ProxyToEHR(t *testing.T) {
 	// Test that the service registers the EHR FHIR proxy URL that proxies to the backing FHIR server of the EHR
@@ -35,7 +73,8 @@ func TestService_ProxyToEHR(t *testing.T) {
 	}
 	sessionManager, sessionID := createTestSession()
 
-	service := New(Config{}, sessionManager, http.DefaultClient, nil)
+	service, err := New(Config{}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -69,11 +108,12 @@ func TestService_ProxyToCPS(t *testing.T) {
 
 	sessionManager, sessionID := createTestSession()
 
-	service := New(Config{
+	service, err := New(Config{
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, sessionManager, carePlanService.Client(), nil)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)

@@ -10,5 +10,5 @@ gen-mocks:
 load-fhir-testdata:
 	curl -X POST -H "Content-Type: application/json" -d @initialize_hopital_data_bundle.json http://localhost:9090/fhir
 
-applaunch-demo:
+careplancontributor.applaunch-demo:
 	open "http://localhost:8080/demo-app-launch?patient=Patient/1&serviceRequest=ServiceRequest/2&practitioner=PractitionerRole/3&iss=http://localhost:9090/fhir"

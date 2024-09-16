@@ -4,29 +4,30 @@ import (
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	koanf "github.com/knadh/koanf/v2"
 	"net/url"
 	"strings"
 
-	"github.com/SanteonNL/orca/orchestrator/applaunch"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/knadh/koanf/providers/env"
 )
 
 type Config struct {
 	// Nuts holds the configuration for communicating with the Nuts API.
-	Nuts NutsConfig `koanf:"nuts"`
+	Nuts nuts.Config `koanf:"nuts"`
 	// Public holds the configuration for the public interface.
 	Public InterfaceConfig `koanf:"public"`
 	// CarePlanContributor holds the configuration for the CarePlanContributor.
 	CarePlanContributor careplancontributor.Config `koanf:"careplancontributor"`
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
-	AppLaunch       applaunch.Config       `koanf:"applaunch"`
+	AppLaunch       applaunch.Config       `koanf:"careplancontributor.applaunch"`
 }
 
 func (c Config) Validate() error {
 	_, err := url.Parse(c.Nuts.API.URL)
-	if c.Nuts.OwnDID == "" {
+	if c.Nuts.OwnSubject == "" {
 		return errors.New("invalid/empty Nuts DID")
 	}
 	if err != nil || c.Nuts.API.URL == "" {
@@ -59,30 +60,6 @@ type InterfaceConfig struct {
 
 func (i InterfaceConfig) ParseURL() *url.URL {
 	u, _ := url.Parse(i.URL)
-	return u
-}
-
-type NutsConfig struct {
-	API    NutsAPIConfig    `koanf:"api"`
-	Public NutsPublicConfig `koanf:"public"`
-	OwnDID string           `koanf:"did"`
-}
-
-type NutsPublicConfig struct {
-	URL string `koanf:"url"`
-}
-
-func (c NutsPublicConfig) Parse() *url.URL {
-	u, _ := url.Parse(c.URL)
-	return u
-}
-
-type NutsAPIConfig struct {
-	URL string `koanf:"url"`
-}
-
-func (n NutsAPIConfig) Parse() *url.URL {
-	u, _ := url.Parse(n.URL)
 	return u
 }
 

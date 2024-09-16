@@ -1,8 +1,8 @@
 package demo
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"net/http"

@@ -4,8 +4,8 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/addressing"
-	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/url"
@@ -17,40 +17,81 @@ import (
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
-const LandingURL = "/contrib/"
+const basePath = "/contrib"
+const LandingURL = basePath + "/"
+
 const CarePlanServiceOAuth2Scope = "careplanservice"
 
-func New(config Config, sessionManager *user.SessionManager, carePlanServiceHttpClient *http.Client, didResolver addressing.StaticDIDResolver) *Service {
+func New(
+	config Config,
+	profile profile.Provider,
+	orcaPublicURL *url.URL,
+	sessionManager *user.SessionManager) (*Service, error) {
+
+	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
-	carePlanServiceClient := fhirclient.New(cpsURL, carePlanServiceHttpClient, coolfhir.Config())
-	return &Service{
-		carePlanServiceURL:        cpsURL,
-		SessionManager:            sessionManager,
-		carePlanService:           carePlanServiceClient,
-		carePlanServiceHttpClient: carePlanServiceHttpClient,
-		frontendUrl:               config.FrontendConfig.URL,
+	fhirClientConfig := coolfhir.Config()
+	localFHIRStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	if err != nil {
+		return nil, err
 	}
+	httpClient := profile.HttpClient()
+	return &Service{
+		config:             config,
+		orcaPublicURL:      orcaPublicURL,
+		carePlanServiceURL: cpsURL,
+		SessionManager:     sessionManager,
+		scpHttpClient:      httpClient,
+		profile:            profile,
+		frontendUrl:        config.FrontendConfig.URL,
+		fhirURL:            fhirURL,
+		transport:          localFHIRStoreTransport,
+	}, nil
 }
 
 type Service struct {
-	SessionManager            *user.SessionManager
-	frontendUrl               string
-	carePlanService           fhirclient.Client
-	carePlanServiceURL        *url.URL
-	carePlanServiceHttpClient *http.Client
+	config             Config
+	profile            profile.Provider
+	orcaPublicURL      *url.URL
+	SessionManager     *user.SessionManager
+	frontendUrl        string
+	carePlanServiceURL *url.URL
+	// scpHttpClient is used to call remote Care Plan Contributors or Care Plan Service, used to:
+	// - proxy requests from the Frontend application (e.g. initiating task workflow)
+	// - proxy requests from EHR (e.g. fetching remote FHIR data)
+	scpHttpClient *http.Client
+	fhirURL       *url.URL
+	// transport is used to call the local FHIR store, used to:
+	// - proxy requests from the Frontend application (e.g. initiating task workflow)
+	// - proxy requests from EHR (e.g. fetching remote FHIR data)
+	transport http.RoundTripper
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("GET /contrib/context", s.withSession(s.handleGetContext))
-	mux.HandleFunc("GET /contrib/patient", s.withSession(s.handleGetPatient))
-	mux.HandleFunc("GET /contrib/practitioner", s.withSession(s.handleGetPractitioner))
-	mux.HandleFunc("GET /contrib/serviceRequest", s.withSession(s.handleGetServiceRequest))
-	mux.HandleFunc("/contrib/ehr/fhir/*", s.withSession(s.handleProxyToEPD))
-	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, "/contrib/cps/fhir", s.carePlanServiceHttpClient.Transport)
-	mux.HandleFunc("/contrib/cps/fhir/*", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *user.SessionData) {
+	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
+	baseURL := s.orcaPublicURL.JoinPath(basePath)
+	s.profile.RegisterHTTPHandlers(basePath, baseURL, mux)
+	//
+	// Authorized endpoints
+	//
+	// TODO: Determine auth from Nuts node and access token
+	// TODO: Modify this and other URLs to /cpc/* in future change
+	mux.HandleFunc(basePath+"/fhir/*", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		fhirProxy.ServeHTTP(writer, request)
+	}))
+	//
+	// FE/Session Authorized Endpoints
+	//
+	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
+	mux.HandleFunc("GET "+basePath+"/patient", s.withSession(s.handleGetPatient))
+	mux.HandleFunc("GET "+basePath+"/practitioner", s.withSession(s.handleGetPractitioner))
+	mux.HandleFunc("GET "+basePath+"/serviceRequest", s.withSession(s.handleGetServiceRequest))
+	mux.HandleFunc(basePath+"/ehr/fhir/*", s.withSession(s.handleProxyToEPD))
+	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, basePath+"/cps/fhir", s.scpHttpClient.Transport)
+	mux.HandleFunc(basePath+"/cps/fhir/*", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
-	mux.HandleFunc("/contrib/", func(response http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePath+"/", func(response http.ResponseWriter, request *http.Request) {
 		log.Info().Msgf("Redirecting to %s", s.frontendUrl)
 		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
 	})
@@ -72,7 +113,7 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 
 func (s Service) handleProxyToEPD(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.Values)
-	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, "/contrib/ehr/fhir", clientFactory.Client)
+	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, basePath+"/ehr/fhir", clientFactory.Client)
 	proxy.ServeHTTP(writer, request)
 }
 
@@ -172,4 +213,16 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(response).Encode(contextData)
+}
+
+func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
+	return func(response http.ResponseWriter, request *http.Request) {
+		// TODO: Change this to something more sophisticated (OpenID Connect?)
+		if (s.config.StaticBearerToken != "" && request.Header.Get("Authorization") == "Bearer "+s.config.StaticBearerToken) ||
+			s.SessionManager.Get(request) != nil {
+			next(response, request)
+			return
+		}
+		http.Error(response, "no session found", http.StatusUnauthorized)
+	}
 }
