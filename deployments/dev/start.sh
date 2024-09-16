@@ -117,6 +117,7 @@ echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
 
 NUTS_URL="${CLINIC_URL}" \
+ CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" \
   docker compose up \
  --wait --build --remove-orphans
 
