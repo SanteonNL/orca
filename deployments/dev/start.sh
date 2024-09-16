@@ -116,7 +116,8 @@ echo "    Clinic DID: $CLINIC_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
 
-NUTS_URL="${CLINIC_URL}" CLINIC_DID="${CLINIC_DID}" \
+NUTS_URL="${CLINIC_URL}" \
+ CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" \
   docker compose up \
  --wait --build --remove-orphans
 
@@ -140,9 +141,9 @@ echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
 echo "  Registering FHIR base URL in DID document"
-curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/did/${HOSPITAL_DID}/service
+curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/subject/hospital/service
 # TODO: Remove this init when the Questionnaire is provided by the sub-Task.input
-NUTS_URL="${HOSPITAL_URL}" HOSPITAL_DID="${HOSPITAL_DID}" \
+NUTS_URL="${HOSPITAL_URL}" \
  CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" \
   docker compose up \
  --wait --build --remove-orphans
