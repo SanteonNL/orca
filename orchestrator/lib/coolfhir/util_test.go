@@ -5,6 +5,7 @@ import (
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
 	"testing"
+	"time"
 )
 
 func TestValidateLogicalReference(t *testing.T) {
@@ -259,6 +260,90 @@ func TestIdentifierEquals(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equalf(t, tt.want, IdentifierEquals(tt.args.one, tt.args.other), "IdentifierEquals(%v, %v)", tt.args.one, tt.args.other)
+		})
+	}
+}
+
+func TestValidateCareTeamParticipantPeriod(t *testing.T) {
+	type args struct {
+		participant fhir.CareTeamParticipant
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr string
+	}{
+		{
+			name: "No period - Fail",
+			args: args{
+				participant: fhir.CareTeamParticipant{},
+			},
+			wantErr: "CareTeamParticipant has nil period",
+		},
+		{
+			name: "No start date - Fail",
+			args: args{
+				participant: fhir.CareTeamParticipant{
+					Period: &fhir.Period{},
+				},
+			},
+			wantErr: "CareTeamParticipant has nil start date",
+		},
+		{
+			name: "Start date in future - Fail",
+			args: args{
+				participant: fhir.CareTeamParticipant{
+					Period: &fhir.Period{
+						Start: to.Ptr(time.Now().Add(time.Minute * 5).Format(time.RFC3339)),
+					},
+				},
+			},
+			wantErr: "CareTeamParticipant start date is in the future",
+		},
+		{
+			name: "Start date in past - Valid",
+			args: args{
+				participant: fhir.CareTeamParticipant{
+					Period: &fhir.Period{
+						Start: to.Ptr(time.Now().Add(time.Minute * -5).Format(time.RFC3339)),
+					},
+				},
+			},
+			wantErr: "",
+		},
+		{
+			name: "End date in past - Fail",
+			args: args{
+				participant: fhir.CareTeamParticipant{
+					Period: &fhir.Period{
+						Start: to.Ptr(time.Now().Add(time.Minute * -5).Format(time.RFC3339)),
+						End:   to.Ptr(time.Now().Add(time.Minute * -3).Format(time.RFC3339)),
+					},
+				},
+			},
+			wantErr: "CareTeamParticipant end date is in the past",
+		},
+		{
+			name: "End date in future - Valid",
+			args: args{
+				participant: fhir.CareTeamParticipant{
+					Period: &fhir.Period{
+						Start: to.Ptr(time.Now().Add(time.Minute * -5).Format(time.RFC3339)),
+						End:   to.Ptr(time.Now().Add(time.Minute * 5).Format(time.RFC3339)),
+					},
+				},
+			},
+			wantErr: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateCareTeamParticipantPeriod(tt.args.participant)
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
 		})
 	}
 }

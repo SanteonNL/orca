@@ -3,18 +3,20 @@ package careplancontributor
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/SanteonNL/orca/orchestrator/user"
-	"net/http"
-	"net/url"
-
-	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"net/http"
+	"net/url"
+	"strings"
 )
 
 const basePath = "/contrib"
@@ -30,6 +32,7 @@ func New(
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
+
 	fhirClientConfig := coolfhir.Config()
 	localFHIRStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
 	if err != nil {
@@ -68,7 +71,26 @@ type Service struct {
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
-	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
+	//authConfig := middleware.Config{
+	//	TokenIntrospectionEndpoint: s.nutsAPIURL.JoinPath("internal/auth/v2/accesstoken/introspect").String(),
+	//	TokenIntrospectionClient:   tokenIntrospectionClient,
+	//	BaseURL:                    s.orcaPublicURL.JoinPath("contrib"),
+	//}
+
+	//
+	// Unauthorized endpoints
+	//
+	//mux.HandleFunc("GET /cps/.well-known/oauth-protected-resource", func(writer http.ResponseWriter, request *http.Request) {
+	//	writer.Header().Add("Content-Type", "application/json")
+	//	writer.WriteHeader(http.StatusOK)
+	//	md := oauth2.ProtectedResourceMetadata{
+	//		Resource:               s.orcaPublicURL.JoinPath("cps").String(),
+	//		AuthorizationServers:   []string{s.nutsPublicURL.JoinPath("oauth2", s.ownDID).String()},
+	//		BearerMethodsSupported: []string{"header"},
+	//	}
+	//	_ = json.NewEncoder(writer).Encode(md)
+	//})
+	//fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
 	baseURL := s.orcaPublicURL.JoinPath(basePath)
 	s.profile.RegisterHTTPHandlers(basePath, baseURL, mux)
 	//
@@ -76,9 +98,15 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	// TODO: Determine auth from Nuts node and access token
 	// TODO: Modify this and other URLs to /cpc/* in future change
-	mux.HandleFunc(basePath+"/fhir/*", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		fhirProxy.ServeHTTP(writer, request)
+	mux.HandleFunc(fmt.Sprintf("GET %s/fhir/*", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		err := s.handleProxyToFHIR(writer, request)
+		if err != nil {
+			// TODO: writeOperationOutcomeFromError
+			// s.writeOperationOutcomeFromError(err, fmt.Sprintf("%s/fhir/*", basePath), writer)
+			return
+		}
 	}))
+	//mux.HandleFunc("GET /contrib/fhir/*", auth.Middleware(authConfig, s.handleProxyToFHIR))
 	//
 	// FE/Session Authorized Endpoints
 	//
@@ -115,6 +143,93 @@ func (s Service) handleProxyToEPD(writer http.ResponseWriter, request *http.Requ
 	clientFactory := clients.Factories[session.FHIRLauncher](session.Values)
 	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, basePath+"/ehr/fhir", clientFactory.Client)
 	proxy.ServeHTTP(writer, request)
+}
+
+func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Request) error {
+	// Authorize requester before proxying FHIR request
+	// Data holder must verify that the requester is part of the CareTeam by checking the URA
+	// Validate by retrieving the CarePlan from CPS, use URA in provided token to validate against CareTeam
+	// CarePlan should be provided in X-SCP-Context header
+	xScpContext := request.Header["X-Scp-Context"]
+	if len(xScpContext) == 0 {
+		// Check if header has different capitalisation, it may be changed by Go canonicalization
+		xScpContext = request.Header["X-SCP-Context"]
+		if len(xScpContext) == 0 {
+			err := errors.New("X-SCP-Context header value must be set")
+			http.Error(writer, err.Error(), http.StatusUnauthorized)
+			return err
+		}
+	}
+	if len(xScpContext) != 1 {
+		return errors.New("X-SCP-Context header must only contain one value")
+	}
+	carePlanURL := xScpContext[0]
+	if carePlanURL == "" {
+		err := errors.New("X-SCP-Context header value must be set")
+		http.Error(writer, err.Error(), http.StatusUnauthorized)
+		return err
+	}
+	u, err := url.Parse(carePlanURL)
+	if err != nil {
+		return err
+	}
+
+	// Get CarePlan from CPS
+	// TODO: How to go from link in X-SCP-Context to valid resource that can be passed to CPS?
+	carePlanServiceClient := fhirclient.New(s.carePlanServiceURL, s.scpHttpClient, coolfhir.Config())
+	var carePlan fhir.CarePlan
+	// Use URL to get CarePlan from CPS
+	newUrl := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/fhir/"), s.carePlanServiceURL.String())
+	err = carePlanServiceClient.Read(newUrl, &carePlan)
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return err
+	}
+
+	// Validate careplan against requester
+	principal, err := auth.PrincipalFromContext(request.Context())
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return err
+	}
+	// For each CareTeam in the CarePlan, check each participant in list against the principal
+	// In theory CarePlan can have multiple CareTeams, in practice this is the CarePlanService i.e. only one CareTeam
+	if len(carePlan.CareTeam) != 1 {
+		return errors.New("CarePlan must have exactly 1 CareTeam")
+	}
+	careTeamRef := carePlan.CareTeam[0]
+	var isValidRequester bool
+	var careTeam fhir.CareTeam
+	// TODO: Correct?
+	err = carePlanServiceClient.Read(*careTeamRef.Identifier.Id, &careTeam)
+	if err != nil {
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return err
+	}
+	for _, participant := range careTeam.Participant {
+		for _, identifier := range principal.Organization.Identifier {
+			if coolfhir.IdentifierEquals(participant.Member.Identifier, &identifier) {
+				// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
+				err = coolfhir.ValidateCareTeamParticipantPeriod(participant)
+				if err != nil {
+					return err
+				}
+				isValidRequester = true
+				break
+			}
+		}
+	}
+
+	// TODO: see https://santeonnl.github.io/shared-care-planning/StructureDefinition-SCPCareTeam.html
+
+	if !isValidRequester {
+		err := errors.New("requester does not have access to resource")
+		http.Error(writer, err.Error(), http.StatusUnauthorized)
+		return err
+	}
+	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
+	fhirProxy.ServeHTTP(writer, request)
+	return nil
 }
 
 // handleGetPatient is the REST API handler that returns the FHIR Patient.

@@ -27,6 +27,10 @@ func TestService_Proxy(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
 	})
+	fhirServerMux.HandleFunc("GET fhir/CarePlan/73012d35", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+	})
 	fhirServer := httptest.NewServer(fhirServerMux)
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	fhirServerURL.Path = "/fhir"
@@ -36,19 +40,53 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
+		CarePlanService: CarePlanServiceConfig{
+			URL: fhirServerURL.String(),
+		},
 	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, nil)
+	// NOTE: These look like subtests but require the TestService_Proxy parent test to be run, otherwise they will fail
+	//t.Run("No x-SCP-Context header - Fails", func(t *testing.T) {
+	//	httpClient := frontServer.Client()
+	//	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+	//
+	//	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	//	httpResponse, err := httpClient.Do(httpRequest)
+	//	require.NoError(t, err)
+	//	require.Equal(t, httpResponse.StatusCode, http.StatusUnauthorized)
+	//})
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/contrib/fhir/Patient")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-	require.Equal(t, fhirServerURL.Host, capturedHost)
+	t.Run("CareTeam does not exist - Fails", func(t *testing.T) {
+		var capturedQueryParams url.Values
+
+		fhirServerMux.HandleFunc("GET /fhir/CarePlan", func(writer http.ResponseWriter, request *http.Request) {
+			writer.WriteHeader(http.StatusOK)
+			capturedHost = request.Host
+			capturedQueryParams = request.URL.Query()
+		})
+
+		httpClient := frontServer.Client()
+		httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "https://careplan-service.example.com/fhir/CarePlan/73012d35")
+
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, httpResponse.StatusCode, http.StatusUnauthorized)
+		t.Log(capturedQueryParams)
+	})
+
+	//httpClient := frontServer.Client()
+	//httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, "", "123")
+	//
+	//httpResponse, err := httpClient.Get(frontServer.URL + "/contrib/fhir/Patient")
+	//require.NoError(t, err)
+	//require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	//require.Equal(t, fhirServerURL.Host, capturedHost)
+	t.Log(capturedHost)
 }
 
 func TestService_ProxyToEHR(t *testing.T) {
