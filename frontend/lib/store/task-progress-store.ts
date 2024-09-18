@@ -10,6 +10,7 @@ interface StoreState {
     loading: boolean
     error?: string
     task?: Task
+    primaryTaskCompleted?: boolean
     selectedTaskId?: string
     subTasks?: Task[]
     taskToQuestionnaireMap?: Record<string, Questionnaire>
@@ -17,6 +18,7 @@ interface StoreState {
     setSelectedTaskId: (taskId: string) => void
     setTask: (task?: Task) => void
     setSubTasks: (subTasks: Task[]) => void
+    onSubTaskSubmit: (callback: any) => void
     fetchAllResources: () => Promise<void>
 }
 
@@ -24,6 +26,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     initialized: false,
     loading: false,
     task: undefined,
+    primaryTaskCompleted: false,
     subTasks: undefined,
     taskToQuestionnaireMap: undefined,
     error: undefined,
@@ -35,6 +38,33 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     },
     setSubTasks: (subTasks: Task[]) => {
         set({ subTasks })
+    },
+    onSubTaskSubmit: async (callback: any) => {
+        //TODO: Should work with EventSource to listen for changes in the Task status
+
+        const selectedTaskId = get().selectedTaskId
+
+        if (!selectedTaskId) return
+
+        const interval = setInterval(async () => {
+            const [task, subTasks] = await Promise.all([
+                await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
+                await fetchSubTasks(selectedTaskId)
+            ])
+
+            if (task.status === 'accepted') {
+                set({ task, subTasks, primaryTaskCompleted: true })
+                clearInterval(interval)
+
+                if (callback) callback()
+            } else if (get().subTasks?.length !== subTasks.length) {
+                await fetchQuestionnaires(subTasks, set)
+                set({ subTasks })
+                clearInterval(interval)
+                if (callback) callback()
+            }
+
+        }, 1000)
     },
     fetchAllResources: async () => {
 
@@ -50,26 +80,8 @@ const taskProgressStore = create<StoreState>((set, get) => ({
                 ])
 
                 set({ task, subTasks })
+                fetchQuestionnaires(subTasks, set)
 
-                const tmpMap: Record<string, Questionnaire> = {};
-                await Promise.all(subTasks.map(async (task: Task) => {
-                    if (task.input && task.input.length > 0) {
-                        const input = task.input.find(input => input.valueReference?.reference?.startsWith("Questionnaire"));
-                        if (input && task.id && input.valueReference?.reference) {
-                            const questionnaireId = input.valueReference.reference;
-                            try {
-                                const questionnaire = await cpsClient.read({
-                                    resourceType: "Questionnaire",
-                                    id: questionnaireId.split("/")[1]
-                                }) as Questionnaire;
-                                tmpMap[task.id] = questionnaire;
-                            } catch (error) {
-                                console.error("Failed to fetch questionnaire", error);
-                            }
-                        }
-                    }
-                }));
-                set({ taskToQuestionnaireMap: tmpMap });
             }
             set({ initialized: true, loading: false, })
 
@@ -78,6 +90,28 @@ const taskProgressStore = create<StoreState>((set, get) => ({
         }
     },
 }));
+
+const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: boolean | undefined) => void) => {
+    const tmpMap: Record<string, Questionnaire> = {};
+    await Promise.all(subTasks.map(async (task: Task) => {
+        if (task.input && task.input.length > 0) {
+            const input = task.input.find(input => input.valueReference?.reference?.startsWith("Questionnaire"));
+            if (input && task.id && input.valueReference?.reference) {
+                const questionnaireId = input.valueReference.reference;
+                try {
+                    const questionnaire = await cpsClient.read({
+                        resourceType: "Questionnaire",
+                        id: questionnaireId.split("/")[1]
+                    }) as Questionnaire;
+                    tmpMap[task.id] = questionnaire;
+                } catch (error) {
+                    console.error("Failed to fetch questionnaire", error);
+                }
+            }
+        }
+    }));
+    set({ taskToQuestionnaireMap: tmpMap });
+}
 
 const fetchSubTasks = async (taskId: string) => {
     const subTaskBundle = await cpsClient.search({

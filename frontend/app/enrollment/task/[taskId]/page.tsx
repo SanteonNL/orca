@@ -7,14 +7,12 @@ import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import { useEffect, useState } from 'react'
 import { Spinner } from '@/components/spinner'
 import StepperFooter from '../components/stepper-footer'
-import useCpsClient from '@/hooks/use-cps-client'
 import { Task } from 'fhir/r4'
 
 export default function TaskEnrollmentView() {
 
     const { taskId } = useParams()
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
-    const { nextStep } = useStepper()
     const [steps, setSteps] = useState<StepItem[]>([
         { label: "Task overview", description: "Information sent to the filler" },
         { label: "Completion", description: "Completion overview" },
@@ -29,8 +27,6 @@ export default function TaskEnrollmentView() {
             <StepperFooter />
         </>,
     ])
-    const cpsClient = useCpsClient()
-    const [error, setError] = useState<string>()
 
     useEffect(() => {
         setSelectedTaskId(taskId as string)
@@ -75,7 +71,7 @@ export default function TaskEnrollmentView() {
     if (loading || !initialized) return <Spinner />
     if (!task) return <>Failed to find Task, cannot continue!</>
     return (
-        <Stepper className='mb-12' initialStep={task.status === "accepted" ? 2 : 0} steps={steps}>
+        <Stepper className='mb-12' initialStep={0} steps={steps} onClickStep={(step, setStep) => setStep(step)}>
             {steps.map((stepProps, index) => {
                 return (
                     <Step key={stepProps.label} {...stepProps}>

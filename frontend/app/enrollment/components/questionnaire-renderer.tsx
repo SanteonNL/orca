@@ -8,7 +8,7 @@ import useEhrFhirClient from '@/hooks/use-ehr-fhir-client';
 import { toast } from 'sonner';
 import useCpsClient from '@/hooks/use-cps-client';
 import useTaskProgressStore from '@/lib/store/task-progress-store';
-import { findQuestionnaireResponse } from '@/lib/fhirUtils';
+import { BSN_SYSTEM, findQuestionnaireResponse } from '@/lib/fhirUtils';
 import { Spinner } from '@/components/spinner';
 import { useStepper } from '@/components/stepper';
 import { v4 } from 'uuid';
@@ -40,11 +40,10 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const [prePopulated, setPrePopulated] = useState(false);
   const [initialized, setInitialized] = useState(false)
   const [prevQuestionnaireResponse, setPrevQuestionnaireReaspone] = useState<QuestionnaireResponse>()
-  const { nextStep } = useStepper()
+  const { activeStep, setStep } = useStepper()
 
-  const ehrClient = useEhrFhirClient()
   const cpsClient = useCpsClient()
-  const { setTask } = useTaskProgressStore()
+  const { onSubTaskSubmit } = useTaskProgressStore()
 
   useEffect(() => {
 
@@ -56,7 +55,9 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
       console.log(`Found QuestionnaireResponse: ${JSON.stringify(questionnaireResponse)}`)
 
-      setPrevQuestionnaireReaspone(questionnaireResponse)
+      if (questionnaireResponse) {
+        setPrevQuestionnaireReaspone(questionnaireResponse)
+      }
     }
 
     if (questionnaire && !initialized) {
@@ -75,6 +76,8 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       toast.error("Cannot set QuestionnaireResponse, no Task provided")
       return
     }
+
+    setIsSubmitting(true)
 
     const outputTask = { ...inputTask }
     const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire)
@@ -108,6 +111,8 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
     outputTask.status = "completed"
 
+    const patientIdentifier = patient?.identifier?.find(id => id.system === BSN_SYSTEM) || patient?.identifier?.[0]
+
     const bundle: FhirResource & { type: "transaction" } = {
       resourceType: 'Bundle',
       type: 'transaction',
@@ -124,9 +129,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         },
         {
           fullUrl: questionnaireResponseRef,
-          resource: {
-            ...updatableResponse
-          },
+          resource: { ...updatableResponse, subject: { identifier: patientIdentifier } },
           request: {
             method: 'PUT',
             url: responseExists ? questionnaireResponseRef : `QuestionnaireResponse?identifier=${encodeURIComponent(`${scpSubTaskIdentifierSystem}|${newId}`)}`
@@ -139,7 +142,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       body: bundle
     });
 
-    nextStep()
+    onSubTaskSubmit(() => setStep(activeStep + 1))
   }
 
   useEffect(() => {
@@ -152,11 +155,14 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       });
 
       if (populateResult && populateResult?.populated) {
+        setPrevQuestionnaireReaspone(populateResult.populated)
+        // updatableResponse = populateResult.populated
         useQuestionnaireResponseStore.setState({ updatableResponse: populateResult.populated })
       }
     }
 
     if (!prePopulated) {
+      console.log('prePopulating')
       prePopulate()
       setPrePopulated(true)
     }
