@@ -76,7 +76,8 @@ func ValidateCareTeamParticipantPeriod(participant fhir.CareTeamParticipant) err
 	if participant.Period.Start == nil {
 		return errors.New("CareTeamParticipant has nil start date")
 	}
-	startTime, err := time.Parse(time.RFC3339, *participant.Period.Start)
+
+	startTime, err := parseTimestamp(*participant.Period.Start)
 	if err != nil {
 		return err
 	}
@@ -84,7 +85,7 @@ func ValidateCareTeamParticipantPeriod(participant fhir.CareTeamParticipant) err
 		return errors.New("CareTeamParticipant start date is in the future")
 	}
 	if participant.Period.End != nil {
-		endTime, err := time.Parse(time.RFC3339, *participant.Period.End)
+		endTime, err := parseTimestamp(*participant.Period.End)
 		if err != nil {
 			return err
 		}
@@ -93,6 +94,26 @@ func ValidateCareTeamParticipantPeriod(participant fhir.CareTeamParticipant) err
 		}
 	}
 	return nil
+}
+
+func parseTimestamp(timestampString string) (time.Time, error) {
+	// Check both yyyy-mm-dd and extended with full timestamp
+	var timeStamp time.Time
+	var err error
+	if len(timestampString) > 10 {
+		timeStamp, err = time.Parse(time.RFC3339, timestampString)
+		if err != nil {
+			return time.Time{}, err
+		}
+	} else if len(timestampString) == 10 {
+		timeStamp, err = time.Parse(time.DateOnly, timestampString)
+		if err != nil {
+			return time.Time{}, err
+		}
+	} else {
+		return time.Time{}, errors.New("unsupported timestamp format")
+	}
+	return timeStamp, nil
 }
 
 func IsLogicalReference(reference *fhir.Reference) bool {

@@ -43,6 +43,23 @@ var TestPrincipal2 = &Principal{
 	},
 }
 
+var TestPrincipal3 = &Principal{
+	Organization: fhir.Organization{
+		Name: to.Ptr("Test Organization 3"),
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr(coolfhir.URANamingSystem),
+				Value:  to.Ptr("3"),
+			},
+		},
+		Address: []fhir.Address{
+			{
+				City: to.Ptr("Notfoundland"),
+			},
+		},
+	},
+}
+
 // AuthenticatedTestRoundTripper returns a RoundTripper that adds a X-Userinfo header to the request
 // with static user information. This is useful for testing purposes.
 func AuthenticatedTestRoundTripper(underlying http.RoundTripper, principal *Principal, xSCPContext string) http.RoundTripper {

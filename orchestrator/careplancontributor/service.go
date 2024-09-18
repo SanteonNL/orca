@@ -177,41 +177,60 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	// Get CarePlan from CPS
 	// TODO: How to go from link in X-SCP-Context to valid resource that can be passed to CPS?
 	carePlanServiceClient := fhirclient.New(s.carePlanServiceURL, s.scpHttpClient, coolfhir.Config())
-	var carePlan fhir.CarePlan
-	// Use URL to get CarePlan from CPS
-	newUrl := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/fhir/"), s.carePlanServiceURL.String())
-	err = carePlanServiceClient.Read(newUrl, &carePlan)
+	var bundle fhir.Bundle
+	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
+	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/fhir/CarePlan/"), s.carePlanServiceURL.String())
+	newUrl := fmt.Sprintf("CarePlan\\?_id\\=%s\\&_include\\=CarePlan:care-team", carePlanId)
+	err = carePlanServiceClient.Read(newUrl, &bundle)
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return err
 	}
+	// We are expecting a total of 1 result, with 2 entries (one for CarePlan, one for CareTeam)
+	if *bundle.Total == 0 {
+		err = errors.New("returned bundle has no results for CarePlan")
+		http.Error(writer, err.Error(), http.StatusNotFound)
+		return err
+	}
+	if len(bundle.Entry) != 2 {
+		err = errors.New(fmt.Sprintf("returned bundle has incorrect number of entries %d expecting 2", len(bundle.Entry)))
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return err
+	}
 
-	// Validate careplan against requester
+	foundCareTeam := false
+	var careTeam fhir.CareTeam
+	// Get CareTeam from entries
+	for _, entry := range bundle.Entry {
+		err = json.Unmarshal(entry.Resource, &careTeam)
+		// Ignore errors, we are just trying to find the CareTeam
+		if err != nil || len(careTeam.Participant) == 0 {
+			continue
+		}
+		foundCareTeam = true
+		break
+	}
+	if !foundCareTeam {
+		err = errors.New("CareTeam not found in bundle")
+		http.Error(writer, err.Error(), http.StatusInternalServerError)
+		return err
+	}
+
+	// Validate CareTeam participants against requester
 	principal, err := auth.PrincipalFromContext(request.Context())
 	if err != nil {
 		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return err
 	}
-	// For each CareTeam in the CarePlan, check each participant in list against the principal
-	// In theory CarePlan can have multiple CareTeams, in practice this is the CarePlanService i.e. only one CareTeam
-	if len(carePlan.CareTeam) != 1 {
-		return errors.New("CarePlan must have exactly 1 CareTeam")
-	}
-	careTeamRef := carePlan.CareTeam[0]
-	var isValidRequester bool
-	var careTeam fhir.CareTeam
-	// TODO: Correct?
-	err = carePlanServiceClient.Read(*careTeamRef.Identifier.Id, &careTeam)
-	if err != nil {
-		http.Error(writer, err.Error(), http.StatusInternalServerError)
-		return err
-	}
+
+	isValidRequester := false
 	for _, participant := range careTeam.Participant {
 		for _, identifier := range principal.Organization.Identifier {
 			if coolfhir.IdentifierEquals(participant.Member.Identifier, &identifier) {
 				// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
 				err = coolfhir.ValidateCareTeamParticipantPeriod(participant)
 				if err != nil {
+					http.Error(writer, err.Error(), http.StatusUnauthorized)
 					return err
 				}
 				isValidRequester = true
