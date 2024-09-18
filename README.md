@@ -65,19 +65,21 @@ This section describes how the Shared Care Planning transactions are implemented
 4. The *Frontend* creates the new CarePlan resource at the *Care Plan Service* through ORCA *Orchestrator*. 
 
 #### Workflow initiation/acceptance
-When a care professional wants to initiate a FHIR Task for another care organization, they start a new FHIR workflow.
+When a care professional wants to initiate a FHIR Task for another care organization, they start a new FHIR workflow [according to Shared Care Planning](https://santeonnl.github.io/shared-care-planning/overview.html#creating-and-responding-to-a-task).
 
 The process is as follows:
 1. Placer: the care professional, using the *Frontend*, chooses to create a new Task for a specified Condition.
 2. Placer: *Frontend* creates a new FHIR Task at the Care Plan Service through ORCA's *Orchestrator*.
 3. At this point, the Care Plan Service notifies the Task filler that a new Task is available.
-4. The Task filler and placer now negotiate the Task details:
+4. The Task filler (using ORCA's *Task Engine*) and placer (using ORCA's *Frontend*) now negotiate the Task details:
    1. Filler: if the filler needs more information, it adds a sub-Task containing a Questionnaire to the `Task.input` (refer to the SCP specification for more details).
    2. Placer: responds by filling the Questionnare, adding a QuestionnaireResponse to the sub-Task's output (refer to the SCP specification for more details).
    3. Filler: verifies the QuestionnaireResponse either:
       - Accept the Task if it is able and willing to perform it.
       - Add another Questionnaire to the `Task.input` if it needs more information.
       - Reject the Task if it cannot/won't perform it.
+5. Filler: ORCA's *Orchestrator* Task Engine notifies the filler's EHR about the accepted Task.
+6. Placer: *Frontend* informs the care professional that the filler has accepted the Task. 
 
 Whenever a Task is created/updated at the Care Plan Service, it notifies the other Task participant.
 The notification is then handled to perform the Task negotiation:
@@ -87,7 +89,8 @@ The notification is then handled to perform the Task negotiation:
   The *Frontend* can be notified through an EventSource stream about Task updates.
 
 ### FHIR patient data access
-Participants of a CarePlan can query each other's FHIR APIs to access the patient's data related to that CarePlan.
+Participants of a CarePlan can query each other's FHIR APIs to access the patient's data related to that CarePlan, [according to Shared Care Planning](https://santeonnl.github.io/shared-care-planning/overview.html#getting-data-from-careteam-members).
+
 The party querying the data is called the *Requester*, and the party providing the data is called the *Holder*.
 
 The process is as follows:
@@ -110,12 +113,11 @@ When integrating with the ORCA system, the EHR (and its FHIR API) needs to suppo
 
 - Allow *Orchestrator* access to the FHIR API
   - Supported means of authentication: none (TODO)
-- To receive new/updated Task notifications (DECISION NEEDED): 
-  - *Option 1*: Provide an FHIR R6 Out-of-band subscription endpoint at which *Orchestrator* can notify the EHR of new/updated Tasks.
-  - *Option 2*: Subscribe to an event queue *Orchestrator* can publish new/updated Tasks to.
+- To receive new/updated Task notifications: 
+  - Provide an FHIR R6 Out-of-band subscription endpoint at which *Orchestrator* can notify the EHR of accepted/updated Tasks.
 - Invoking *Orchestrator*'s internal-facing FHIR API (to list Shared CarePlans and query remote FHIR resources)
 - *OPTIONAL*: If using the *Frontend*, invoking *Orchestrator*'s app launch
-  - Supported: SMART on FHIR, ChipSoft HIX (TODO)
+  - Supported: SMART on FHIR (TODO), ChipSoft HIX (TODO)
 
 ## Deployment
 Note: this section needs to be expanded.
