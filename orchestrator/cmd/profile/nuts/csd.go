@@ -57,7 +57,7 @@ func (n CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier,
 		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for CodingSystem: %s", *owner.System)
 	}
 	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, service, &discovery.SearchPresentationsParams{
-		Query: &map[string]string{
+		Query: &map[string]interface{}{
 			identifierSearchParam: *owner.Value,
 		},
 	})
