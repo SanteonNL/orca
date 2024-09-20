@@ -22,6 +22,9 @@ import (
 const basePath = "/contrib"
 const LandingURL = basePath + "/"
 
+// The care plan header key may be provided as X-SCP-Context but will be changed due to the Go http client canonicalization
+const carePlanURLHeaderKey = "X-Scp-Context"
+
 const CarePlanServiceOAuth2Scope = "careplanservice"
 
 func New(
@@ -71,42 +74,20 @@ type Service struct {
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
-	//authConfig := middleware.Config{
-	//	TokenIntrospectionEndpoint: s.nutsAPIURL.JoinPath("internal/auth/v2/accesstoken/introspect").String(),
-	//	TokenIntrospectionClient:   tokenIntrospectionClient,
-	//	BaseURL:                    s.orcaPublicURL.JoinPath("contrib"),
-	//}
-
-	//
-	// Unauthorized endpoints
-	//
-	//mux.HandleFunc("GET /cps/.well-known/oauth-protected-resource", func(writer http.ResponseWriter, request *http.Request) {
-	//	writer.Header().Add("Content-Type", "application/json")
-	//	writer.WriteHeader(http.StatusOK)
-	//	md := oauth2.ProtectedResourceMetadata{
-	//		Resource:               s.orcaPublicURL.JoinPath("cps").String(),
-	//		AuthorizationServers:   []string{s.nutsPublicURL.JoinPath("oauth2", s.ownDID).String()},
-	//		BearerMethodsSupported: []string{"header"},
-	//	}
-	//	_ = json.NewEncoder(writer).Encode(md)
-	//})
-	//fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
 	baseURL := s.orcaPublicURL.JoinPath(basePath)
 	s.profile.RegisterHTTPHandlers(basePath, baseURL, mux)
 	//
 	// Authorized endpoints
 	//
-	// TODO: Determine auth from Nuts node and access token
 	// TODO: Modify this and other URLs to /cpc/* in future change
 	mux.HandleFunc(fmt.Sprintf("GET %s/fhir/*", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleProxyToFHIR(writer, request)
 		if err != nil {
-			// TODO: writeOperationOutcomeFromError
-			// s.writeOperationOutcomeFromError(err, fmt.Sprintf("%s/fhir/*", basePath), writer)
+			//http.Error(writer, err.Error(), http.StatusInternalServerError)
+			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("%s/fhir/*", basePath), writer)
 			return
 		}
 	}))
-	//mux.HandleFunc("GET /contrib/fhir/*", auth.Middleware(authConfig, s.handleProxyToFHIR))
 	//
 	// FE/Session Authorized Endpoints
 	//
@@ -149,102 +130,76 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	// Authorize requester before proxying FHIR request
 	// Data holder must verify that the requester is part of the CareTeam by checking the URA
 	// Validate by retrieving the CarePlan from CPS, use URA in provided token to validate against CareTeam
-	// CarePlan should be provided in X-SCP-Context header
-	xScpContext := request.Header["X-Scp-Context"]
-	if len(xScpContext) == 0 {
-		// Check if header has different capitalisation, it may be changed by Go canonicalization
-		xScpContext = request.Header["X-SCP-Context"]
-		if len(xScpContext) == 0 {
-			err := errors.New("X-SCP-Context header value must be set")
-			http.Error(writer, err.Error(), http.StatusUnauthorized)
-			return err
-		}
+	// CarePlan should be provided in X-Scp-Context header
+	carePlanURLValue := request.Header[carePlanURLHeaderKey]
+	if len(carePlanURLValue) == 0 {
+		return errors.New(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
 	}
-	if len(xScpContext) != 1 {
-		return errors.New("X-SCP-Context header must only contain one value")
+	if len(carePlanURLValue) != 1 {
+		return errors.New(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
 	}
-	carePlanURL := xScpContext[0]
+	carePlanURL := carePlanURLValue[0]
 	if carePlanURL == "" {
-		err := errors.New("X-SCP-Context header value must be set")
-		http.Error(writer, err.Error(), http.StatusUnauthorized)
-		return err
+		return errors.New(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
+	}
+	if !strings.HasPrefix(carePlanURL, s.carePlanServiceURL.String()) {
+		return errors.New("invalid CarePlan URL in header")
 	}
 	u, err := url.Parse(carePlanURL)
 	if err != nil {
 		return err
 	}
 
-	// Get CarePlan from CPS
-	// TODO: How to go from link in X-SCP-Context to valid resource that can be passed to CPS?
 	carePlanServiceClient := fhirclient.New(s.carePlanServiceURL, s.scpHttpClient, coolfhir.Config())
 	var bundle fhir.Bundle
 	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
 	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/fhir/CarePlan/"), s.carePlanServiceURL.String())
-	newUrl := fmt.Sprintf("CarePlan\\?_id\\=%s\\&_include\\=CarePlan:care-team", carePlanId)
+	newUrl := fmt.Sprintf("CarePlan?_id=%s&_include=CarePlan:care-team", carePlanId)
 	err = carePlanServiceClient.Read(newUrl, &bundle)
 	if err != nil {
-		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return err
 	}
 	// We are expecting a total of 1 result, with 2 entries (one for CarePlan, one for CareTeam)
 	if *bundle.Total == 0 {
-		err = errors.New("returned bundle has no results for CarePlan")
-		http.Error(writer, err.Error(), http.StatusNotFound)
-		return err
+		return errors.New("returned bundle has no results for CarePlan")
 	}
-	if len(bundle.Entry) != 2 {
-		err = errors.New(fmt.Sprintf("returned bundle has incorrect number of entries %d expecting 2", len(bundle.Entry)))
-		http.Error(writer, err.Error(), http.StatusInternalServerError)
-		return err
+	if len(bundle.Entry) < 2 {
+		return errors.New(fmt.Sprintf("returned bundle has incorrect number of entries %d expecting at least 2", len(bundle.Entry)))
 	}
 
-	foundCareTeam := false
-	var careTeam fhir.CareTeam
-	// Get CareTeam from entries
-	for _, entry := range bundle.Entry {
-		err = json.Unmarshal(entry.Resource, &careTeam)
-		// Ignore errors, we are just trying to find the CareTeam
-		if err != nil || len(careTeam.Participant) == 0 {
-			continue
-		}
-		foundCareTeam = true
-		break
-	}
-	if !foundCareTeam {
-		err = errors.New("CareTeam not found in bundle")
-		http.Error(writer, err.Error(), http.StatusInternalServerError)
+	var careTeams []fhir.CareTeam
+	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
+	if err != nil {
 		return err
+	}
+	if len(careTeams) == 0 {
+		return errors.New("CareTeam not found in bundle")
 	}
 
 	// Validate CareTeam participants against requester
 	principal, err := auth.PrincipalFromContext(request.Context())
 	if err != nil {
-		http.Error(writer, err.Error(), http.StatusInternalServerError)
 		return err
 	}
-
 	isValidRequester := false
-	for _, participant := range careTeam.Participant {
-		for _, identifier := range principal.Organization.Identifier {
-			if coolfhir.IdentifierEquals(participant.Member.Identifier, &identifier) {
-				// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
-				err = coolfhir.ValidateCareTeamParticipantPeriod(participant)
-				if err != nil {
-					http.Error(writer, err.Error(), http.StatusUnauthorized)
-					return err
+	for _, careTeam := range careTeams {
+		for _, participant := range careTeam.Participant {
+			for _, identifier := range principal.Organization.Identifier {
+				if coolfhir.IdentifierEquals(participant.Member.Identifier, &identifier) {
+					// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
+					err = coolfhir.ValidateCareTeamParticipantPeriod(participant)
+					if err != nil {
+						return err
+					}
+					isValidRequester = true
+					break
 				}
-				isValidRequester = true
-				break
 			}
 		}
 	}
 
-	// TODO: see https://santeonnl.github.io/shared-care-planning/StructureDefinition-SCPCareTeam.html
-
 	if !isValidRequester {
-		err := errors.New("requester does not have access to resource")
-		http.Error(writer, err.Error(), http.StatusUnauthorized)
-		return err
+		return errors.New("requester does not have access to resource")
 	}
 	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
 	fhirProxy.ServeHTTP(writer, request)

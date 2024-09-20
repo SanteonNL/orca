@@ -51,21 +51,21 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+basePath+"/Task", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateTask(writer, request)
 		if err != nil {
-			s.writeOperationOutcomeFromError(err, "CarePlanService/CreateTask", writer)
+			coolfhir.WriteOperationOutcomeFromError(err, "CarePlanService/CreateTask", writer)
 			return
 		}
 	}))
 	mux.HandleFunc("PUT "+basePath+"/Task/{id}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleUpdateTask(writer, request)
 		if err != nil {
-			s.writeOperationOutcomeFromError(err, "CarePlanService/UpdateTask", writer)
+			coolfhir.WriteOperationOutcomeFromError(err, "CarePlanService/UpdateTask", writer)
 			return
 		}
 	}))
 	mux.HandleFunc("POST "+basePath+"/CarePlan", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleCreateCarePlan(writer, request)
 		if err != nil {
-			s.writeOperationOutcomeFromError(err, "CarePlanService/CreateCarePlan", writer)
+			coolfhir.WriteOperationOutcomeFromError(err, "CarePlanService/CreateCarePlan", writer)
 			return
 		}
 	}))

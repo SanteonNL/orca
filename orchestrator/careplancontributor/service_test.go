@@ -2,12 +2,14 @@ package careplancontributor
 
 import (
 	"encoding/json"
+	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -46,7 +48,9 @@ func TestService_Proxy_NoHeader_Fails(t *testing.T) {
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusUnauthorized)
+	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
+	body, _ := io.ReadAll(httpResponse.Body)
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: X-Scp-Context header value must be set"}],"resourceType":"OperationOutcome"}`, string(body))
 }
 
 func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
@@ -87,13 +91,15 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "https://careplan-service.example.com/fhir/CarePlan/not-exists")
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/not-exists", carePlanServiceURL))
 
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
-	require.Equal(t, capturedPath, "/fhir/CarePlan\\?_id\\=not-exists\\&_include\\=CarePlan:care-team")
+	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
+	body, _ := io.ReadAll(httpResponse.Body)
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: returned bundle has no results for CarePlan"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=not-exists&_include=CarePlan:care-team")
 }
 
 // There is no care team present in the care plan, the proxy is not reached
@@ -135,13 +141,15 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "https://careplan-service.example.com/fhir/CarePlan/cps-careplan-01")
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
 
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusInternalServerError)
-	require.Equal(t, capturedPath, "/fhir/CarePlan\\?_id\\=cps-careplan-01\\&_include\\=CarePlan:care-team")
+	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
+	body, _ := io.ReadAll(httpResponse.Body)
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: returned bundle has incorrect number of entries 1 expecting at least 2"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
 }
 
 // The requester is not in the returned care team, the proxy is not reached
@@ -183,13 +191,15 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal3, "https://careplan-service.example.com/fhir/CarePlan/cps-careplan-01")
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal3, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
 
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusUnauthorized)
-	require.Equal(t, capturedPath, "/fhir/CarePlan\\?_id\\=cps-careplan-01\\&_include\\=CarePlan:care-team")
+	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
+	body, _ := io.ReadAll(httpResponse.Body)
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
 }
 
 func TestService_Proxy_Valid(t *testing.T) {
@@ -233,13 +243,15 @@ func TestService_Proxy_Valid(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "https://careplan-service.example.com/fhir/CarePlan/cps-careplan-01")
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
 
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusOK)
-	require.Equal(t, capturedPath, "/fhir/CarePlan\\?_id\\=cps-careplan-01\\&_include\\=CarePlan:care-team")
+	body, _ := io.ReadAll(httpResponse.Body)
+	require.Equal(t, "", string(body))
+	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
 }
 
 // All validation succeeds but the proxied method returns an error
@@ -284,13 +296,15 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "https://careplan-service.example.com/fhir/CarePlan/cps-careplan-01")
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
 
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
-	require.Equal(t, capturedPath, "/fhir/CarePlan\\?_id\\=cps-careplan-01\\&_include\\=CarePlan:care-team")
+	body, _ := io.ReadAll(httpResponse.Body)
+	require.Equal(t, "", string(body))
+	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
 }
 
 // The practitioner is in the CareTeam, but their Period is expired
@@ -332,13 +346,15 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal2, "https://careplan-service.example.com/fhir/CarePlan/cps-careplan-01")
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal2, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL.String()))
 
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusUnauthorized)
-	require.Equal(t, capturedPath, "/fhir/CarePlan\\?_id\\=cps-careplan-01\\&_include\\=CarePlan:care-team")
+	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
+	body, _ := io.ReadAll(httpResponse.Body)
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: CareTeamParticipant end date is in the past"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
 }
 
 func TestService_ProxyToEHR(t *testing.T) {
