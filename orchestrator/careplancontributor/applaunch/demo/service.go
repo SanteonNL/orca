@@ -7,6 +7,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 const fhirLauncherKey = "demo"
@@ -23,7 +24,13 @@ func init() {
 }
 
 func New(sessionManager *user.SessionManager, config Config, baseURL string) *Service {
-	log.Info().Msgf("Demo app launch: http://localhost%s/demo-app-launch", baseURL)
+	var appLaunchURL string
+	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
+		appLaunchURL = baseURL + "/demo-app-launch"
+	} else {
+		appLaunchURL = "http://localhost" + appLaunchURL + "/demo-app-launch"
+	}
+	log.Info().Msgf("Demo app launch is (%s)", appLaunchURL)
 	return &Service{
 		sessionManager: sessionManager,
 		config:         config,
