@@ -6,7 +6,7 @@ export const getEnrollmentUrl = async (patientId: string, serviceRequestId: stri
 
     const practitioners = await fetch(`${process.env.FHIR_BASE_URL}/Practitioner`)
     if (!practitioners.ok) {
-        throw new Error(`Failed to fetch ${process.env.FHIR_BASE_URL}/Practitioner`)
+        throw new Error(`Failed to fetch ${process.env.FHIR_BASE_URL}/Practitioner: ${practitioners.statusText}`)
     }
 
     const respBundle = await practitioners.json() as Bundle
