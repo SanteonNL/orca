@@ -10,6 +10,7 @@ import (
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 )
 
@@ -85,7 +86,15 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 	}
 	switch config.Auth.Type {
 	case AzureManagedIdentity:
-		credential, err := azidentity.NewManagedIdentityCredential(nil)
+		opts := &azidentity.ManagedIdentityCredentialOptions{
+			ClientOptions: azcore.ClientOptions{},
+		}
+		// For UserAssignedManagedIdentity, client ID needs to be explicitly set.
+		// Taken from github.com/!azure/azure-sdk-for-go/sdk/azidentity@v1.7.0/default_azure_credential.go:100
+		if ID, ok := os.LookupEnv("AZURE_CLIENT_ID"); ok {
+			opts.ID = azidentity.ClientID(ID)
+		}
+		credential, err := azidentity.NewManagedIdentityCredential(opts)
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to get credential for Azure FHIR API client: %w", err)
 		}
