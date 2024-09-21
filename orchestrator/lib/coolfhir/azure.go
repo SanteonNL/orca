@@ -11,13 +11,14 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
 // NewAzureFHIRClient creates a new FHIR client that communicates with an Azure FHIR API.
 // It uses the Managed Identity of the Azure environment to authenticate.
-func NewAzureFHIRClient(fhirBaseURL *url.URL, credential azcore.TokenCredential) fhirclient.Client {
-	return fhirclient.New(fhirBaseURL, NewAzureHTTPClient(credential, DefaultAzureScope(fhirBaseURL)), Config())
+func NewAzureFHIRClient(fhirBaseURL *url.URL, credential azcore.TokenCredential, scopes []string) fhirclient.Client {
+	return fhirclient.New(fhirBaseURL, NewAzureHTTPClient(credential, scopes), Config())
 }
 
 func DefaultAzureScope(fhirBaseURL *url.URL) []string {
@@ -74,7 +75,8 @@ const (
 type AuthConfig struct {
 	// Type of authentication to use, supported options: azure-managedidentity.
 	// Leave empty for no authentication.
-	Type AuthConfigType `koanf:"type"`
+	Type         AuthConfigType `koanf:"type"`
+	OAuth2Scopes string         `koanf:"scopes"`
 }
 
 func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Config) (http.RoundTripper, fhirclient.Client, error) {
@@ -89,6 +91,12 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 		opts := &azidentity.ManagedIdentityCredentialOptions{
 			ClientOptions: azcore.ClientOptions{},
 		}
+		var scopes []string
+		if config.Auth.OAuth2Scopes != "" {
+			scopes = strings.Split(config.Auth.OAuth2Scopes, " ")
+		} else {
+			scopes = DefaultAzureScope(fhirURL)
+		}
 		// For UserAssignedManagedIdentity, client ID needs to be explicitly set.
 		// Taken from github.com/!azure/azure-sdk-for-go/sdk/azidentity@v1.7.0/default_azure_credential.go:100
 		if ID, ok := os.LookupEnv("AZURE_CLIENT_ID"); ok {
@@ -98,7 +106,7 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 		if err != nil {
 			return nil, nil, fmt.Errorf("unable to get credential for Azure FHIR API client: %w", err)
 		}
-		httpClient := NewAzureHTTPClient(credential, DefaultAzureScope(fhirURL))
+		httpClient := NewAzureHTTPClient(credential, scopes)
 		transport = httpClient.Transport
 		fhirClient = fhirclient.New(fhirURL, httpClient, fhirClientConfig)
 	case Default:

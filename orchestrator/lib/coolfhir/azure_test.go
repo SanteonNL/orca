@@ -52,7 +52,7 @@ func Test_azureHttpClient_Do(t *testing.T) {
 	http.DefaultClient = testFHIRServer.Client()
 
 	// Create client
-	fhirClient := NewAzureFHIRClient(fhirBaseURL, &fake.TokenCredential{})
+	fhirClient := NewAzureFHIRClient(fhirBaseURL, &fake.TokenCredential{}, DefaultAzureScope(fhirBaseURL))
 
 	t.Run("Read resource", func(t *testing.T) {
 		var actual fhir.Patient
