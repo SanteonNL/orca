@@ -33,13 +33,13 @@ export default async function AcceptedTaskOverview() {
             rows = tasks.map((entry: any) => {
                 const task = entry.resource;
                 const bsn = task.for.identifier.value
-                const serviceRequest = task.contained?.find((contained: any) => contained.resourceType === "ServiceRequest")
+                //const serviceRequest = task.contained?.find((contained: any) => contained.resourceType === "ServiceRequest")
 
                 console.log(task.basedOn[0].display)
                 return {
                     id: task.id,
-                    hospitalUra: serviceRequest.requester.identifier.value,
-                    hospitalName: serviceRequest.requester.display,
+                    hospitalUra: task.requester.identifier.value,
+                    hospitalName: task.requester.display,
                     patientBsn: bsn || "Unknown",
                     careplan: task.basedOn[0].display,
                     status: task.status,
