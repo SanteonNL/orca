@@ -93,5 +93,4 @@ jobs:
       - name: Run E2E tests
         working-directory: ./e2e-tests
         run: |
-          ORCHESTRATOR_IMAGE=$(echo "${{needs.docker-image.outputs.fully_qualified}}" | cut -d' ' -f1-1)
-          ORCHESTRATOR_IMAGE=$ORCHESTRATOR_IMAGE go test -v ./...
+          ORCHESTRATOR_IMAGE=$(echo "${{needs.docker-image.outputs.fully_qualified}}" | cut -d' ' -f1-1) go test -v ./...
