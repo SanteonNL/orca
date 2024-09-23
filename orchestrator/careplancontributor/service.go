@@ -159,12 +159,9 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	if err != nil {
 		return err
 	}
-	// We are expecting a total of 1 result, with 2 entries (one for CarePlan, one for CareTeam)
-	if *bundle.Total == 0 {
-		return errors.New("returned bundle has no results for CarePlan")
-	}
-	if len(bundle.Entry) < 2 {
-		return errors.New(fmt.Sprintf("returned bundle has incorrect number of entries %d expecting at least 2", len(bundle.Entry)))
+
+	if len(bundle.Entry) == 0 {
+		return coolfhir.NewErrorWithCode("CarePlan not found", http.StatusNotFound)
 	}
 
 	var careTeams []fhir.CareTeam
@@ -173,7 +170,7 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 		return err
 	}
 	if len(careTeams) == 0 {
-		return errors.New("CareTeam not found in bundle")
+		return coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
 	}
 
 	// Validate CareTeam participants against requester
@@ -199,7 +196,7 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	}
 
 	if !isValidRequester {
-		return errors.New("requester does not have access to resource")
+		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
 	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
 	fhirProxy.ServeHTTP(writer, request)

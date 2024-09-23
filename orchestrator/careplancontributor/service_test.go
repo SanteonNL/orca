@@ -96,9 +96,9 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
+	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: returned bundle has no results for CarePlan"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=not-exists&_include=CarePlan:care-team")
 }
 
@@ -146,9 +146,9 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
+	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: returned bundle has incorrect number of entries 1 expecting at least 2"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
 }
 
@@ -196,7 +196,7 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
+	require.Equal(t, httpResponse.StatusCode, http.StatusForbidden)
 	body, _ := io.ReadAll(httpResponse.Body)
 	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
