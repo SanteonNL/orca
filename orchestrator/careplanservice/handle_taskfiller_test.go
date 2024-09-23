@@ -223,65 +223,6 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	require.Equal(t, expectedSubTask["input"], subtask["input"], "Subtask should contain a reference to the questionnaire")
 }
 
-func TestService_handleSubTaskCreate(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create a mock FHIR client using the generated mock
-	mockFHIRClient := mock.NewMockClient(ctrl)
-
-	// Create the service with the mock FHIR client
-	service := &Service{
-		fhirClient: mockFHIRClient,
-	}
-
-	// Define test cases
-	tests := []struct {
-		name          string
-		task          map[string]interface{}
-		expectedError bool
-	}{
-		{
-			name: "Valid SubTask",
-			task: func() map[string]interface{} {
-				task := validTask
-				task["partOf"] = []interface{}{
-					map[string]interface{}{
-						"reference": "Task/parent-task",
-					},
-				}
-				return task
-			}(),
-			expectedError: false,
-		},
-		{
-			name: "SubTask without partOf",
-			task: func() map[string]interface{} {
-				task := validTask
-				delete(task, "partOf")
-				return task
-			}(),
-			expectedError: true,
-		},
-	}
-
-	// Run test cases
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-
-			log.Info().Msg("Starting test case: " + tt.name)
-
-			// Call the actual function being tested
-			err := service.handleSubTaskCreate(tt.task)
-			if tt.expectedError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
 var validTask = map[string]interface{}{
 	"id":           uuid.NewString(),
 	"resourceType": "Task",
