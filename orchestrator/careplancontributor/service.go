@@ -153,9 +153,8 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	carePlanServiceClient := fhirclient.New(s.carePlanServiceURL, s.scpHttpClient, coolfhir.Config())
 	var bundle fhir.Bundle
 	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
-	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/fhir/CarePlan/"), s.carePlanServiceURL.String())
-	newUrl := fmt.Sprintf("CarePlan?_id=%s&_include=CarePlan:care-team", carePlanId)
-	err = carePlanServiceClient.Read(newUrl, &bundle)
+	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.carePlanServiceURL.String())
+	err = carePlanServiceClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"))
 	if err != nil {
 		return err
 	}
@@ -182,7 +181,7 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	for _, careTeam := range careTeams {
 		for _, participant := range careTeam.Participant {
 			for _, identifier := range principal.Organization.Identifier {
-				if coolfhir.IdentifierEquals(participant.Member.Identifier, &identifier) {
+				if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, &identifier) {
 					// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
 					err = coolfhir.ValidateCareTeamParticipantPeriod(participant)
 					if err != nil {

@@ -62,10 +62,10 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
 
-	capturedPath := ""
+	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /fhir/*", func(writer http.ResponseWriter, request *http.Request) {
-		capturedPath = request.URL.Path
+	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-not-found.json")
 		var data fhir.Bundle
 		_ = json.Unmarshal(rawJson, &data)
@@ -75,7 +75,7 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/fhir"
+	carePlanServiceURL.Path = "/cps"
 
 	service, _ := New(Config{
 		FHIR: coolfhir.ClientConfig{
@@ -99,7 +99,7 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
 	body, _ := io.ReadAll(httpResponse.Body)
 	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`, string(body))
-	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=not-exists&_include=CarePlan:care-team")
+	require.Equal(t, "/cps/CarePlan?_id=not-exists&_include=CarePlan%3Acare-team", capturedURL)
 }
 
 // There is no care team present in the care plan, the proxy is not reached
@@ -112,10 +112,10 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
 
-	capturedPath := ""
+	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /fhir/*", func(writer http.ResponseWriter, request *http.Request) {
-		capturedPath = request.URL.Path
+	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-careteam-missing.json")
 		var data fhir.Bundle
 		_ = json.Unmarshal(rawJson, &data)
@@ -125,7 +125,7 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/fhir"
+	carePlanServiceURL.Path = "/cps"
 
 	service, _ := New(Config{
 		FHIR: coolfhir.ClientConfig{
@@ -149,7 +149,7 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
 	body, _ := io.ReadAll(httpResponse.Body)
 	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`, string(body))
-	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
+	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
 // The requester is not in the returned care team, the proxy is not reached
@@ -162,10 +162,10 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
 
-	capturedPath := ""
+	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /fhir/*", func(writer http.ResponseWriter, request *http.Request) {
-		capturedPath = request.URL.Path
+	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
 		var data fhir.Bundle
 		_ = json.Unmarshal(rawJson, &data)
@@ -175,7 +175,7 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/fhir"
+	carePlanServiceURL.Path = "/cps"
 
 	service, _ := New(Config{
 		FHIR: coolfhir.ClientConfig{
@@ -199,7 +199,7 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 	require.Equal(t, httpResponse.StatusCode, http.StatusForbidden)
 	body, _ := io.ReadAll(httpResponse.Body)
 	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
-	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
+	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
 func TestService_Proxy_Valid(t *testing.T) {
@@ -214,10 +214,10 @@ func TestService_Proxy_Valid(t *testing.T) {
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
 
-	capturedPath := ""
+	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /fhir/*", func(writer http.ResponseWriter, request *http.Request) {
-		capturedPath = request.URL.Path
+	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
 		var data fhir.Bundle
 		_ = json.Unmarshal(rawJson, &data)
@@ -227,7 +227,7 @@ func TestService_Proxy_Valid(t *testing.T) {
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/fhir"
+	carePlanServiceURL.Path = "/cps"
 
 	service, _ := New(Config{
 		FHIR: coolfhir.ClientConfig{
@@ -251,7 +251,7 @@ func TestService_Proxy_Valid(t *testing.T) {
 	require.Equal(t, httpResponse.StatusCode, http.StatusOK)
 	body, _ := io.ReadAll(httpResponse.Body)
 	require.Equal(t, "", string(body))
-	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
+	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
 // All validation succeeds but the proxied method returns an error
@@ -267,10 +267,10 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
 
-	capturedPath := ""
+	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /fhir/*", func(writer http.ResponseWriter, request *http.Request) {
-		capturedPath = request.URL.Path
+	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
 		var data fhir.Bundle
 		_ = json.Unmarshal(rawJson, &data)
@@ -280,7 +280,7 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/fhir"
+	carePlanServiceURL.Path = "/cps"
 
 	service, _ := New(Config{
 		FHIR: coolfhir.ClientConfig{
@@ -304,7 +304,7 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
 	body, _ := io.ReadAll(httpResponse.Body)
 	require.Equal(t, "", string(body))
-	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
+	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
 // The practitioner is in the CareTeam, but their Period is expired
@@ -317,10 +317,10 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
 
-	capturedPath := ""
+	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /fhir/*", func(writer http.ResponseWriter, request *http.Request) {
-		capturedPath = request.URL.Path
+	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
 		var data fhir.Bundle
 		_ = json.Unmarshal(rawJson, &data)
@@ -330,7 +330,7 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/fhir"
+	carePlanServiceURL.Path = "/cps"
 
 	service, _ := New(Config{
 		FHIR: coolfhir.ClientConfig{
@@ -354,7 +354,7 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
 	body, _ := io.ReadAll(httpResponse.Body)
 	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: CareTeamParticipant end date is in the past"}],"resourceType":"OperationOutcome"}`, string(body))
-	require.Equal(t, capturedPath, "/fhir/CarePlan?_id=cps-careplan-01&_include=CarePlan:care-team")
+	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
 func TestService_ProxyToEHR(t *testing.T) {

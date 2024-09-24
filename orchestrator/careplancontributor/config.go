@@ -5,6 +5,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 )
 
+func DefaultConfig() Config {
+	return Config{}
+}
+
 type Config struct {
 	CarePlanService   CarePlanServiceConfig `koanf:"careplanservice"`
 	FrontendConfig    FrontendConfig        `koanf:"frontend"`
