@@ -133,7 +133,8 @@ func ResourceInBundle(bundle *fhir.Bundle, filter func(entry fhir.BundleEntry) b
 }
 
 // ExecuteTransactionAndRespondWithEntry executes a transaction (Bundle) on the FHIR server and responds with the entry that matches the filter.
-func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter) error {
+// It unmarshals the filtered entry into the given resultResource
+func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter, resultResource any) error {
 	var resultBundle fhir.Bundle
 	if err := fhirClient.Create(bundle, &resultBundle, fhirclient.AtPath("/")); err != nil {
 		return err
@@ -149,16 +150,19 @@ func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle 
 		}
 
 		// Read the resource from the FHIR server, to return it to the client.
-		result := make(map[string]interface{})
+		if resultResource == nil {
+			// caller doesn't care about the result
+			resultResource = new(map[string]interface{})
+		}
 		headers := new(fhirclient.Headers)
-		if err := fhirClient.Read(*entry.Response.Location, &result, fhirclient.ResponseHeaders(headers)); err != nil {
+		if err := fhirClient.Read(*entry.Response.Location, resultResource, fhirclient.ResponseHeaders(headers)); err != nil {
 			return errors.Join(ErrEntryNotFound, fmt.Errorf("failed to re-retrieve result Bundle entry (resource=%s): %w", *entry.Response.Location, err))
 		}
 		for key, value := range headers.Header {
 			httpResponse.Header()[key] = value
 		}
 		httpResponse.WriteHeader(status)
-		return json.NewEncoder(httpResponse).Encode(result)
+		return json.NewEncoder(httpResponse).Encode(resultResource)
 	}
 	return ErrEntryNotFound
 }

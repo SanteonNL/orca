@@ -15,15 +15,19 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 )
+
+var notificationCounter = new(atomic.Int32)
 
 func Test_Integration_TaskLifecycle(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
 	t.Log("This test requires creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
-	carePlanContributor1, carePlanContributor2 := setupIntegrationTest(t)
+	notificationEndpoint := setupNotificationEndpoint(t)
+	carePlanContributor1, carePlanContributor2 := setupIntegrationTest(t, notificationEndpoint)
 
 	participant1 := fhir.CareTeamParticipant{
 		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
@@ -81,6 +85,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 		err := carePlanContributor1.Create(task, &task)
 		require.Error(t, err)
+		require.Equal(t, 0, int(notificationCounter.Load()))
 	}
 
 	t.Log("Creating Task - Invalid status Draft")
@@ -99,6 +104,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 		err := carePlanContributor1.Create(task, &task)
 		require.Error(t, err)
+		require.Equal(t, 0, int(notificationCounter.Load()))
 	}
 
 	t.Log("Creating Task")
@@ -132,6 +138,10 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 		})
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Equal(t, 2, int(notificationCounter.Load()))
+			notificationCounter.Store(0)
+		})
 	}
 
 	t.Log("Accepting Task")
@@ -148,6 +158,10 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		})
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
+		})
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Equal(t, 2, int(notificationCounter.Load()))
+			notificationCounter.Store(0)
 		})
 	}
 
@@ -182,6 +196,10 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		t.Run("Check that CareTeam still contains the 2 parties", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
 		})
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Equal(t, 2, int(notificationCounter.Load()))
+			notificationCounter.Store(0)
+		})
 	}
 
 	t.Log("Complete Task")
@@ -199,14 +217,21 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2WithEndDate)
 		})
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Equal(t, 2, int(notificationCounter.Load()))
+			notificationCounter.Store(0)
+		})
 	}
 }
-func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.BaseClient) {
+func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := setupHAPI(t)
+	activeProfile := profile.TestProfile{
+		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
+	}
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	service, err := New(config, profile.TestProfile{}, orcaPublicURL)
+	service, err := New(config, activeProfile, orcaPublicURL)
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
@@ -254,6 +279,18 @@ outer:
 		}
 		t.Errorf("expected participant not found: %s", *expectedMember.OnBehalfOf.Identifier.Value)
 	}
+}
+
+func setupNotificationEndpoint(t *testing.T) *url.URL {
+	notificationEndpoint := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		notificationCounter.Add(1)
+		writer.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(func() {
+		notificationEndpoint.Close()
+	})
+	u, _ := url.Parse(notificationEndpoint.URL)
+	return u
 }
 
 func setupHAPI(t *testing.T) *url.URL {

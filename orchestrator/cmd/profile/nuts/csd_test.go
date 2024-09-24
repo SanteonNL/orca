@@ -51,31 +51,44 @@ func TestCsdDirectory_LookupEndpoint(t *testing.T) {
 			"http://fhir.nl/fhir/NamingSystem/ura": "credentialSubject.organization.ura", // URACredential
 		},
 		APIClient: apiClient,
+		ServiceID: serviceID,
 	}
 	ctx := context.Background()
 	t.Run("ok", func(t *testing.T) {
-		result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, serviceID, urlEndpointID)
+		result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, urlEndpointID)
 		require.NoError(t, err)
 		require.Len(t, result, 1)
 		require.Equal(t, endpoint, result[0].Address)
 		require.Equal(t, fhir.EndpointStatusActive, result[0].Status)
 	})
 	t.Run("FHIR CodingSystem not mapped to Verifiable Credential property", func(t *testing.T) {
-		_, err := directory.LookupEndpoint(ctx, ownerUnsupportedCodingSystem, serviceID, urlEndpointID)
+		_, err := directory.LookupEndpoint(ctx, ownerUnsupportedCodingSystem, urlEndpointID)
 		require.EqualError(t, err, "no FHIR->Nuts Discovery Service mapping for CodingSystem: custom")
 	})
 	t.Run("non-OK status", func(t *testing.T) {
-		result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, serviceID, mapEndpointID)
+		result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, mapEndpointID)
 		require.NoError(t, err)
 		require.Empty(t, result)
 	})
-	t.Run("endpoint is not present", func(t *testing.T) {
-		result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, "unknown", urlEndpointID)
+	t.Run("unnknown service", func(t *testing.T) {
+		directory := CsdDirectory{
+			IdentifierCredentialMapping: map[string]string{
+				"http://fhir.nl/fhir/NamingSystem/ura": "credentialSubject.organization.ura", // URACredential
+			},
+			APIClient: apiClient,
+			ServiceID: "unknown",
+		}
+		result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, endpoint)
 		require.EqualError(t, err, "search presentations non-OK HTTP response (status=404 Not Found)")
 		require.Empty(t, result)
 	})
+	t.Run("endpoint is not present", func(t *testing.T) {
+		result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, "unknown")
+		require.NoError(t, err)
+		require.Empty(t, result)
+	})
 	t.Run("endpoint is not a string", func(t *testing.T) {
-		result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, serviceID, mapEndpointID)
+		result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, mapEndpointID)
 		require.NoError(t, err)
 		require.Empty(t, result)
 	})

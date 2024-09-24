@@ -65,7 +65,11 @@ func ValidateLogicalReference(reference *fhir.Reference, expectedType string, ex
 }
 
 func IsLogicalReference(reference *fhir.Reference) bool {
-	return reference != nil && reference.Type != nil && reference.Identifier != nil && reference.Identifier.System != nil && reference.Identifier.Value != nil
+	return reference != nil && reference.Type != nil && IsLogicalIdentifier(reference.Identifier)
+}
+
+func IsLogicalIdentifier(identifier *fhir.Identifier) bool {
+	return identifier != nil && identifier.System != nil && identifier.Value != nil
 }
 
 // LogicalReferenceEquals checks if two references are contain the same logical identifier, given their system and value.
@@ -90,4 +94,14 @@ func IdentifierEquals(one *fhir.Identifier, other *fhir.Identifier) bool {
 		return false
 	}
 	return *one.System == *other.System && *one.Value == *other.Value
+}
+
+func ToString(resource interface{}) string {
+	switch r := resource.(type) {
+	case *fhir.Identifier:
+		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
+	case fhir.Identifier:
+		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
+	}
+	return fmt.Sprintf("%T(%v)", resource, resource)
 }
