@@ -67,9 +67,8 @@ func ValidateLogicalReference(reference *fhir.Reference, expectedType string, ex
 
 // ValidateCareTeamParticipantPeriod validates that a CareTeamParticipant has a start date, and that the start date is in the past
 // end date is not required, but if present it will validate that it is in the future
-func ValidateCareTeamParticipantPeriod(participant fhir.CareTeamParticipant) error {
+func ValidateCareTeamParticipantPeriod(participant fhir.CareTeamParticipant, now time.Time) error {
 	// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
-	now := time.Now()
 	if participant.Period == nil {
 		return errors.New("CareTeamParticipant has nil period")
 	}

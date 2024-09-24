@@ -17,6 +17,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 const basePath = "/contrib"
@@ -83,8 +84,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc(fmt.Sprintf("GET %s/fhir/*", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleProxyToFHIR(writer, request)
 		if err != nil {
-			//http.Error(writer, err.Error(), http.StatusInternalServerError)
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("%s/fhir/*", basePath), writer)
+			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 	}))
@@ -132,9 +132,6 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	// Validate by retrieving the CarePlan from CPS, use URA in provided token to validate against CareTeam
 	// CarePlan should be provided in X-Scp-Context header
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
-	if len(carePlanURLValue) == 0 {
-		return errors.New(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
-	}
 	if len(carePlanURLValue) != 1 {
 		return errors.New(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
 	}
@@ -148,6 +145,10 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	u, err := url.Parse(carePlanURL)
 	if err != nil {
 		return err
+	}
+	// Verify that the u.Path refers to a careplan
+	if !strings.HasPrefix(u.Path, "/cps/CarePlan/") {
+		return errors.New("header does not include CarePlan")
 	}
 
 	carePlanServiceClient := fhirclient.New(s.carePlanServiceURL, s.scpHttpClient, coolfhir.Config())
@@ -183,7 +184,7 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 			for _, identifier := range principal.Organization.Identifier {
 				if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, &identifier) {
 					// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
-					err = coolfhir.ValidateCareTeamParticipantPeriod(participant)
+					err = coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
 					if err != nil {
 						return err
 					}

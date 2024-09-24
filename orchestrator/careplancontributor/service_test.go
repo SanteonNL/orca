@@ -50,7 +50,45 @@ func TestService_Proxy_NoHeader_Fails(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: X-Scp-Context header value must be set"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: X-Scp-Context header value must be set"}],"resourceType":"OperationOutcome"}`, string(body))
+}
+
+func TestService_Proxy_NoCarePlanInHeader_Fails(t *testing.T) {
+	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	fhirServerMux := http.NewServeMux()
+	fhirServer := httptest.NewServer(fhirServerMux)
+	fhirServerURL, _ := url.Parse(fhirServer.URL)
+	fhirServerURL.Path = "/fhir"
+	sessionManager, _ := createTestSession()
+
+	carePlanServiceMux := http.NewServeMux()
+	carePlanService := httptest.NewServer(carePlanServiceMux)
+	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
+	carePlanServiceURL.Path = "/cps"
+
+	service, _ := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+		CarePlanService: CarePlanServiceConfig{
+			URL: carePlanServiceURL.String(),
+		},
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	// Setup: configure the service to proxy to the backing FHIR server
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/SomeResource/invalid", carePlanServiceURL))
+
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpResponse, err := httpClient.Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
+	body, _ := io.ReadAll(httpResponse.Body)
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: header does not include CarePlan"}],"resourceType":"OperationOutcome"}`, string(body))
 }
 
 func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
@@ -98,7 +136,7 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, "/cps/CarePlan?_id=not-exists&_include=CarePlan%3Acare-team", capturedURL)
 }
 
@@ -148,7 +186,7 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
@@ -198,7 +236,7 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusForbidden)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
@@ -353,7 +391,7 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"/contrib/fhir/* failed: CareTeamParticipant end date is in the past"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: CareTeamParticipant end date is in the past"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 

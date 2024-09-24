@@ -338,7 +338,7 @@ func TestValidateCareTeamParticipantPeriod(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateCareTeamParticipantPeriod(tt.args.participant)
+			err := ValidateCareTeamParticipantPeriod(tt.args.participant, time.Now())
 			if tt.wantErr != "" {
 				assert.EqualError(t, err, tt.wantErr)
 			} else {
