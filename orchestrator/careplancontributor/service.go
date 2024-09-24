@@ -4,7 +4,7 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
@@ -37,6 +37,7 @@ func New(
 	}
 	httpClient := profile.HttpClient()
 	return &Service{
+		config:             config,
 		orcaPublicURL:      orcaPublicURL,
 		carePlanServiceURL: cpsURL,
 		SessionManager:     sessionManager,
@@ -49,6 +50,7 @@ func New(
 }
 
 type Service struct {
+	config             Config
 	profile            profile.Provider
 	orcaPublicURL      *url.URL
 	SessionManager     *user.SessionManager
@@ -91,7 +93,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+basePath+"/serviceRequest", s.withSession(s.handleGetServiceRequest))
 	mux.HandleFunc(basePath+"/ehr/fhir/*", s.withSession(s.handleProxyToEPD))
 	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, basePath+"/cps/fhir", s.scpHttpClient.Transport)
-	mux.HandleFunc(basePath+"/cps/fhir/*", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *user.SessionData) {
+	mux.HandleFunc(basePath+"/cps/fhir/*", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
 	mux.HandleFunc(basePath+"/", func(response http.ResponseWriter, request *http.Request) {
@@ -216,4 +218,16 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(response).Encode(contextData)
+}
+
+func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
+	return func(response http.ResponseWriter, request *http.Request) {
+		// TODO: Change this to something more sophisticated (OpenID Connect?)
+		if (s.config.StaticBearerToken != "" && request.Header.Get("Authorization") == "Bearer "+s.config.StaticBearerToken) ||
+			s.SessionManager.Get(request) != nil {
+			next(response, request)
+			return
+		}
+		http.Error(response, "no session found", http.StatusUnauthorized)
+	}
 }

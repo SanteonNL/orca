@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/SanteonNL/orca/orchestrator/applaunch"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/knadh/koanf/providers/env"
 )
 
@@ -28,7 +28,7 @@ type Config struct {
 func (c Config) Validate() error {
 	_, err := url.Parse(c.Nuts.API.URL)
 	if c.Nuts.OwnSubject == "" {
-		return errors.New("invalid/empty Nuts DID")
+		return errors.New("invalid/empty Nuts subject")
 	}
 	if err != nil || c.Nuts.API.URL == "" {
 		return errors.New("invalid Nuts API URL")
@@ -86,6 +86,9 @@ func DefaultConfig() Config {
 		Public: InterfaceConfig{
 			Address: ":8080",
 			URL:     "/",
+		},
+		CarePlanContributor: careplancontributor.Config{
+			Enabled: true,
 		},
 	}
 }
