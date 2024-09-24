@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/knadh/koanf/providers/env"
 )
 
@@ -22,7 +21,6 @@ type Config struct {
 	CarePlanContributor careplancontributor.Config `koanf:"careplancontributor"`
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
-	AppLaunch       applaunch.Config       `koanf:"applaunch"`
 }
 
 func (c Config) Validate() error {
