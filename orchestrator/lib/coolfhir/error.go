@@ -10,6 +10,7 @@ import (
 	"net/http"
 )
 
+// ErrorWithCode is a wrapped error struct that can take an error message as well as an HTTP status code
 type ErrorWithCode struct {
 	Message    string
 	StatusCode int
@@ -19,6 +20,7 @@ func (e *ErrorWithCode) Error() string {
 	return e.Message
 }
 
+// NewErrorWithCode constructs a new ErrorWithCode custom wrapped error
 func NewErrorWithCode(message string, statusCode int) error {
 	return &ErrorWithCode{
 		Message:    message,
@@ -27,6 +29,7 @@ func NewErrorWithCode(message string, statusCode int) error {
 }
 
 // WriteOperationOutcomeFromError writes an OperationOutcome based on the given error as HTTP response.
+// when sent a WriteOperationOutcomeFromError, it will write the contained error code to the header, else it defaults to StatusBadRequest
 func WriteOperationOutcomeFromError(err error, desc string, httpResponse http.ResponseWriter) {
 	log.Info().Msgf("%s failed: %v", desc, err)
 	diagnostics := fmt.Sprintf("%s failed: %s", desc, err.Error())

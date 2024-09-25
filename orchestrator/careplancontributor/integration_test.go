@@ -19,7 +19,17 @@ import (
 )
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
-	cpsDataRequester, cpcDataRequester, cpsDataHolder := setupIntegrationTest(t)
+	carePlanServiceURL, httpService, cpcURL := setupIntegrationTest(t)
+
+	dataHolderTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
+	dataRequesterTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/1")
+	invalidCareplanTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/2")
+	noXSCPHeaderTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")
+	// Test principal is not part of the care team
+	invalidTestPrincipalTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, carePlanServiceURL.String()+"/CarePlan/1")
+
+	cpsDataHolder := fhirclient.New(carePlanServiceURL, &http.Client{Transport: dataHolderTransport}, nil)
+	cpsDataRequester := fhirclient.New(carePlanServiceURL, &http.Client{Transport: dataRequesterTransport}, nil)
 
 	var carePlan fhir.CarePlan
 	var task fhir.Task
@@ -78,6 +88,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	t.Log("Reading task before accepted - Fails")
 	{
 		var fetchedTask fhir.Task
+		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: dataRequesterTransport}, nil)
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.Error(t, err)
 	}
@@ -97,13 +108,34 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	t.Log("Reading task after accepted")
 	{
 		var fetchedTask fhir.Task
+		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: dataRequesterTransport}, nil)
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.NoError(t, err)
 	}
-	// TODO: Failure case tests
+	t.Log("Reading task after accepted - header references non-existent careplan - Fails")
+	{
+		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: invalidCareplanTransport}, nil)
+		var fetchedTask fhir.Task
+		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
+		require.Error(t, err)
+	}
+	t.Log("Reading task after accepted - no xSCP header - Fails")
+	{
+		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: noXSCPHeaderTransport}, nil)
+		var fetchedTask fhir.Task
+		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
+		require.Error(t, err)
+	}
+	t.Log("Reading task after accepted - invalid principal - Fails")
+	{
+		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: invalidTestPrincipalTransport}, nil)
+		var fetchedTask fhir.Task
+		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
+		require.Error(t, err)
+	}
 }
 
-func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {
+func setupIntegrationTest(t *testing.T) (*url.URL, *httptest.Server, *url.URL) {
 	fhirBaseURL := setupHAPI(t)
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
@@ -116,14 +148,6 @@ func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.Bas
 	service.RegisterHandlers(serverMux)
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
-
-	println("xSCP header: " + carePlanServiceURL.String() + "/CarePlan/1")
-
-	transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
-	transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/1")
-
-	cpsDataHolder := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport1}, nil)
-	cpsDataRequester := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport2}, nil)
 
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true
@@ -138,9 +162,9 @@ func setupIntegrationTest(t *testing.T) (*fhirclient.BaseClient, *fhirclient.Bas
 	cpc.RegisterHandlers(cpcServerMux)
 	cpcURL, _ := url.Parse(cpcHttpService.URL + "/contrib/fhir")
 
-	cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: transport2}, nil)
-
-	return cpsDataRequester, cpcDataRequester, cpsDataHolder
+	// Return the URLs and httpService of the cpsDataRequester, cpcDataRequester, cpsDataHolder
+	// these will be used to construct clients with both the correct and incorrect auth for positive and negative testing
+	return carePlanServiceURL, httpService, cpcURL
 }
 
 func setupHAPI(t *testing.T) *url.URL {
