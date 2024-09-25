@@ -14,7 +14,7 @@ import (
 
 const SCP_TASK_PROFILE = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
 
-func (s *Service) handleTaskFillerUpdate(task map[string]interface{}) error {
+func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
 
 	log.Info().Msg("Running handleTaskFillerUpdate")
 
@@ -23,7 +23,7 @@ func (s *Service) handleTaskFillerUpdate(task map[string]interface{}) error {
 		return nil
 	}
 
-	if task["status"] != "completed" {
+	if task.Status != fhir.TaskStatusCompleted {
 		log.Info().Msg("Task.status is not completed - skipping")
 		return nil
 	}
@@ -45,20 +45,11 @@ func (s *Service) handleTaskFillerUpdate(task map[string]interface{}) error {
 	log.Info().Msg("SubTask.status is completed - processing")
 
 	// fetch the questionnaire from the task.input
-	var questionnaire map[string]interface{}
-	input, ok := task["input"].([]interface{})
-	if !ok {
-		return errors.New("task.input is not a valid array")
-	}
-
+	var questionnaire fhir.Questionnaire
 	var questionnaireRefs []string
-	for _, item := range input {
-		if inputMap, ok := item.(map[string]interface{}); ok {
-			if valueRef, ok := inputMap["valueReference"].(map[string]interface{}); ok {
-				if ref, ok := valueRef["reference"].(string); ok && strings.HasPrefix(ref, "Questionnaire/") {
-					questionnaireRefs = append(questionnaireRefs, ref)
-				}
-			}
+	for _, item := range task.Input {
+		if ref := item.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "Questionnaire/") {
+			questionnaireRefs = append(questionnaireRefs, *ref.Reference)
 		}
 	}
 
@@ -66,8 +57,7 @@ func (s *Service) handleTaskFillerUpdate(task map[string]interface{}) error {
 		return fmt.Errorf("expected exactly 1 Questionnaire reference, found %d", len(questionnaireRefs))
 	}
 
-	questionnaire = make(map[string]interface{})
-	err = s.fetchQuestionnaireByID(questionnaireRefs[0], questionnaire)
+	err = s.fetchQuestionnaireByID(questionnaireRefs[0], &questionnaire)
 	if err != nil {
 		return fmt.Errorf("failed to fetch questionnaire: %w", err)
 	}
@@ -78,63 +68,48 @@ func (s *Service) handleTaskFillerUpdate(task map[string]interface{}) error {
 	}
 	log.Info().Msgf("Questionnaire: %s", string(questionnaireJSON))
 
-	// if questionnaire {
-	// 	return errors.New("no valid questionnaire reference found in task.input")
-	// }
-
-	if questionnaire["url"] == "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017" {
-
-		//TODO: Conditional create on not existing
+	if *questionnaire.Url == "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017" {
 		return s.createSubTaskPII(task)
 	}
 
-	if questionnaire["url"] == "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-2--20240902134017" {
-
+	if *questionnaire.Url == "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-2--20240902134017" {
 		log.Info().Msg("SubTask with PII is completed - marking primary Task (partOf value) as accepted")
 
 		// Fetch task from Task.partOf
-		partOfRefs, ok := task["partOf"].([]interface{})
-		if !ok || len(partOfRefs) == 0 {
-			return errors.New("task.partOf is not a valid array or is empty")
+		if len(task.PartOf) == 0 {
+			return errors.New("task.partOf is empty")
 		}
 
-		partOfRef, ok := partOfRefs[0].(map[string]interface{})
-		if !ok {
-			return errors.New("task.partOf[0] is not a valid reference")
-		}
-
-		partOfTaskRef, ok := partOfRef["reference"].(string)
-		if !ok || !strings.HasPrefix(partOfTaskRef, "Task/") {
+		partOfTaskRef := task.PartOf[0].Reference
+		if partOfTaskRef == nil || !strings.HasPrefix(*partOfTaskRef, "Task/") {
 			return errors.New("task.partOf[0].reference is not a valid Task reference")
 		}
 
-		var partOfTask map[string]interface{}
-		err := s.fhirClient.Read(partOfTaskRef, &partOfTask)
+		var partOfTask fhir.Task
+		err := s.fhirClient.Read(*partOfTaskRef, &partOfTask)
 		if err != nil {
 			return fmt.Errorf("failed to fetch partOf Task: %w", err)
 		}
 
-		// Change status to completed
-		partOfTask["status"] = "accepted"
+		// Change status to accepted
+		partOfTask.Status = fhir.TaskStatusAccepted
 
 		// Update the task in the FHIR server
-		err = s.fhirClient.Update(partOfTaskRef, partOfTask, partOfTask)
+		err = s.fhirClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
 		if err != nil {
-			return fmt.Errorf("failed to update partOf %s status: %w", partOfRef, err)
+			return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
 		}
 
-		log.Info().Msgf("Successfully marked %s as completed", partOfTaskRef)
+		log.Info().Msgf("Successfully marked %s as completed", *partOfTaskRef)
 	}
 
 	return nil
 }
 
-func (s *Service) fetchQuestionnaireByID(ref string, questionnaire map[string]interface{}) error {
-
+func (s *Service) fetchQuestionnaireByID(ref string, questionnaire *fhir.Questionnaire) error {
 	log.Info().Msg("Fetching Questionnaire by ID")
 
 	err := s.fhirClient.Read(ref, &questionnaire)
-
 	if err != nil {
 		return fmt.Errorf("failed to fetch Questionnaire: %w", err)
 	}
@@ -142,7 +117,7 @@ func (s *Service) fetchQuestionnaireByID(ref string, questionnaire map[string]in
 	return nil
 }
 
-func (s *Service) handleTaskFillerCreate(task map[string]interface{}) error {
+func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
 	log.Info().Msg("Running handleTaskFillerCreate")
 
 	if !s.isScpTask(task) {
@@ -164,35 +139,27 @@ func (s *Service) handleTaskFillerCreate(task map[string]interface{}) error {
 	if partOfRef == nil {
 		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
 		err := s.createSubTaskEnrollmentCriteria(task)
-
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
 	} else {
 		return s.handleSubTaskCreate(task)
-
 	}
 	return nil
 }
 
-func (s *Service) handleSubTaskCreate(task map[string]interface{}) error {
-	log.Info().Msgf("SubTask for Task/%s create handling not implemented - skipping", task["id"])
+func (s *Service) handleSubTaskCreate(task *fhir.Task) error {
+	log.Info().Msgf("SubTask for Task/%s create handling not implemented - skipping", *task.Id)
 	return nil
 }
 
-func (s *Service) isScpTask(task map[string]interface{}) bool {
-	meta, ok := task["meta"].(map[string]interface{})
-	if !ok {
+func (s *Service) isScpTask(task *fhir.Task) bool {
+	if task.Meta == nil {
 		return false
 	}
 
-	profiles, ok := meta["profile"].([]interface{})
-	if !ok {
-		return false
-	}
-
-	for _, profile := range profiles {
-		if profileStr, ok := profile.(string); ok && profileStr == SCP_TASK_PROFILE {
+	for _, profile := range task.Meta.Profile {
+		if profile == SCP_TASK_PROFILE {
 			return true
 		}
 	}
@@ -200,25 +167,35 @@ func (s *Service) isScpTask(task map[string]interface{}) bool {
 	return false
 }
 
-func (s *Service) isValidTask(task map[string]interface{}) error {
+func (s *Service) isValidTask(task *fhir.Task) error {
+	var errs []string
 
-	requiredFields := []string{"requester", "owner", "id", "basedOn"}
+	if task.Id == nil {
+		errs = append(errs, "Task.id is required but not provided")
+	}
+	if task.Requester == nil {
+		errs = append(errs, "Task.requester is required but not provided")
+	}
+	if task.Owner == nil {
+		errs = append(errs, "Task.owner is required but not provided")
+	}
+	if task.BasedOn == nil {
+		errs = append(errs, "Task.basedOn is required but not provided")
+	}
 
-	for _, field := range requiredFields {
-		if task[field] == nil {
-			return fmt.Errorf("task must have a %s", field)
-		}
+	if len(errs) > 0 {
+		return fmt.Errorf("validation errors: %s", strings.Join(errs, ", "))
 	}
 
 	return nil
 }
 
-func (s *Service) createSubTaskEnrollmentCriteria(task map[string]interface{}) error {
+func (s *Service) createSubTaskEnrollmentCriteria(task *fhir.Task) error {
 	questionnaire := s.getHardCodedHomeMonitoringQuestionnaire()
 
 	// Create a new SubTask based on the Questionnaire reference
 	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
-	subtask := s.getSubTask(task, questionnaireRef)
+	subtask := s.getEnrollmentCriteriaSubTask(task, questionnaireRef)
 	subtaskRef := "urn:uuid:" + subtask["id"].(string)
 
 	tx := coolfhir.Transaction().
@@ -227,18 +204,17 @@ func (s *Service) createSubTaskEnrollmentCriteria(task map[string]interface{}) e
 
 	bundle := tx.Bundle()
 
-	resultBundle, err := coolfhir.ExecuteTransaction(s.fhirClient, bundle)
+	_, err := coolfhir.ExecuteTransaction(s.fhirClient, bundle)
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %w", err)
 	}
 
-	log.Info().Msgf("Successfully created a subtask - tsx contained %d resources", resultBundle.Total)
+	log.Info().Msg("Successfully created an enrollment subtask")
 
 	return nil
 }
 
-func (s *Service) createSubTaskPII(task map[string]interface{}) error {
-
+func (s *Service) createSubTaskPII(task *fhir.Task) error {
 	log.Info().Msg("Creating a new PII subtask")
 
 	questionnaire := s.getHardCodedHomeMonitoringPIIQuestionnaire()
@@ -254,26 +230,21 @@ func (s *Service) createSubTaskPII(task map[string]interface{}) error {
 
 	bundle := tx.Bundle()
 
-	resultBundle, err := coolfhir.ExecuteTransaction(s.fhirClient, bundle)
+	_, err := coolfhir.ExecuteTransaction(s.fhirClient, bundle)
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %w", err)
 	}
 
-	log.Info().Msgf("Successfully created a subtask - tsx contained %d resources", resultBundle.Total)
+	log.Info().Msg("Successfully created a PII subtask")
 
 	return nil
 }
 
-// getSubTask creates a new subtask in map[string]interface{} format
-func (s *Service) getSubTask(task map[string]interface{}, questionnaireRef string) map[string]interface{} {
+// getEnrollmentCriteriaSubTask creates a new subtask in map[string]interface{} format
+// TODO: This doesn't use fhir.Task as the fhir library contains a bug where all possible Task.input[x] are sent to the FHIR client instead of just Task.input.valueReference. This causes either a validation error or not a single Task.input[x] to be set (HAPI)
+func (s *Service) getEnrollmentCriteriaSubTask(task *fhir.Task, questionnaireRef string) map[string]interface{} {
 
-	partOf := []map[string]interface{}{
-		{
-			"reference": "Task/" + task["id"].(string),
-		},
-	}
-
-	subtask := map[string]interface{}{
+	return map[string]interface{}{
 		"id":           uuid.NewString(),
 		"resourceType": "Task",
 		"status":       "ready",
@@ -282,12 +253,16 @@ func (s *Service) getSubTask(task map[string]interface{}, questionnaireRef strin
 				SCP_TASK_PROFILE,
 			},
 		},
-		"basedOn":   task["basedOn"],
-		"partOf":    partOf,
-		"focus":     task["focus"],
-		"for":       task["for"],
-		"owner":     task["requester"], //reversed
-		"requester": task["owner"],     //reversed
+		"basedOn": task.BasedOn,
+		"partOf": []map[string]interface{}{
+			{
+				"reference": "Task/" + *task.Id,
+			},
+		},
+		"focus":     &task.Focus,
+		"for":       &task.For,
+		"owner":     &task.Requester, // reversed
+		"requester": &task.Owner,     // reversed
 		"input": []map[string]interface{}{
 			{
 				"type": map[string]interface{}{
@@ -305,12 +280,11 @@ func (s *Service) getSubTask(task map[string]interface{}, questionnaireRef strin
 			},
 		},
 	}
-
-	return subtask
 }
 
 // Generates the PII subtask - provide the initial enrollment subtask as argument
-func (s *Service) getPIISubTask(task map[string]interface{}, questionnaireRef string) map[string]interface{} {
+// TODO: This doesn't use fhir.Task as the fhir library contains a bug where all possible Task.input[x] are sent to the FHIR client instead of just Task.input.valueReference. This causes either a validation error or not a single Task.input[x] to be set (HAPI)
+func (s *Service) getPIISubTask(task *fhir.Task, questionnaireRef string) map[string]interface{} {
 
 	subtask := map[string]interface{}{
 		"id":           uuid.NewString(),
@@ -321,12 +295,12 @@ func (s *Service) getPIISubTask(task map[string]interface{}, questionnaireRef st
 				SCP_TASK_PROFILE,
 			},
 		},
-		"basedOn":   task["basedOn"],
-		"partOf":    task["partOf"],
-		"focus":     task["focus"],
-		"for":       task["for"],
-		"owner":     task["owner"],
-		"requester": task["requester"],
+		"basedOn":   &task.BasedOn,
+		"partOf":    &task.PartOf,
+		"focus":     &task.Focus,
+		"for":       &task.For,
+		"owner":     &task.Owner,
+		"requester": &task.Requester,
 		"input": []map[string]interface{}{
 			{
 				"type": map[string]interface{}{
@@ -345,25 +319,20 @@ func (s *Service) getPIISubTask(task map[string]interface{}, questionnaireRef st
 		},
 	}
 
+	log.Info().Msgf("Created a new Enrollment PII subtask for questionnaireRef [%s] - subtask: %v", questionnaireRef, task)
+
 	return subtask
 }
 
-func (s *Service) partOf(task map[string]interface{}) (*string, error) {
-	partOf, exists := task["partOf"]
-	if !exists {
+func (s *Service) partOf(task *fhir.Task) (*string, error) {
+	if len(task.PartOf) == 0 {
 		return nil, nil // Optional reference, simply return nil if not set
 	}
 
-	var taskPartOf []fhir.Reference
-	if err := convertInto(partOf, &taskPartOf); err != nil {
-		return nil, fmt.Errorf("failed to convert Task.partOf: %w", err)
-	}
-
-	if len(taskPartOf) != 1 {
-		return nil, errors.New("Task.partOf must have exactly one reference")
-	} else if taskPartOf[0].Reference == nil || !strings.HasPrefix(*taskPartOf[0].Reference, "Task/") {
+	partOfRef := task.PartOf[0].Reference
+	if partOfRef == nil || !strings.HasPrefix(*partOfRef, "Task/") {
 		return nil, errors.New("Task.partOf must contain a relative reference to a Task")
 	}
 
-	return taskPartOf[0].Reference, nil
+	return partOfRef, nil
 }

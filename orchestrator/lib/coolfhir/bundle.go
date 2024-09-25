@@ -151,53 +151,12 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 	return resultBundle, nil
 }
 
-// ExecuteTransaction performs a FHIR transaction and returns the result bundle.
-func ExecuteTransactionAndFilter(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool) (map[string]interface{}, error) {
-	resultBundle, err := ExecuteTransaction(fhirClient, bundle)
-	if err != nil {
-		return nil, err
-	}
-
-	log.Info().Msgf("Found %d entries in result Bundle", len(resultBundle.Entry))
-
-	for _, entry := range resultBundle.Entry {
-
-		entryJSON, err := json.Marshal(entry)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to marshal entry to JSON")
-		} else {
-			log.Info().Msgf("Entry JSON: %s", entryJSON)
-		}
-
-		if !filter(entry) {
-			continue
-		}
-
-		log.Info().Msgf("filter matched on %s", *entry.Response.Location)
-
-		statusParts := strings.Split(entry.Response.Status, " ")
-		status, _ := strconv.Atoi(statusParts[0])
-		if status == 0 {
-			// Read the resource from the FHIR server, to return it to the client.
-			result := make(map[string]interface{})
-			headers := new(fhirclient.Headers)
-			if entry.Response.Location == nil {
-				return nil, fmt.Errorf("entry.Response.Location is nil")
-			}
-			if err := fhirClient.Read(*entry.Response.Location, &result, fhirclient.ResponseHeaders(headers)); err != nil {
-				return result, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to re-retrieve result Bundle entry (resource=%s): %w", *entry.Response.Location, err))
-			}
-			return result, nil
-		}
-	}
-	return nil, ErrEntryNotFound
-}
-
 // ExecuteTransactionAndRespondWithEntry executes a transaction (Bundle) on the FHIR server and responds with the entry that matches the filter.
-func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter) (map[string]interface{}, error) {
+// It unmarshals the filtered entry into the given resultResource
+func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter, resultResource any) error {
 	resultBundle, err := ExecuteTransaction(fhirClient, bundle)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	log.Info().Msgf("Found %d entries in result Bundle", len(resultBundle.Entry))
@@ -231,22 +190,24 @@ func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle 
 		}
 
 		// Read the resource from the FHIR server, to return it to the client.
-		result := make(map[string]interface{})
-		headers := new(fhirclient.Headers)
-
-		log.Info().Msg("Reading resource through fhirClient")
-
-		if err := fhirClient.Read(*entry.Response.Location, &result, fhirclient.ResponseHeaders(headers)); err != nil {
-			return result, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to re-retrieve result Bundle entry (resource=%s): %w", *entry.Response.Location, err))
+		if resultResource == nil {
+			// caller doesn't care about the result
+			resultResource = new(map[string]interface{})
 		}
+		headers := new(fhirclient.Headers)
+		if err := fhirClient.Read(*entry.Response.Location, resultResource, fhirclient.ResponseHeaders(headers)); err != nil {
+			return errors.Join(ErrEntryNotFound, fmt.Errorf("failed to re-retrieve result Bundle entry (resource=%s): %w", *entry.Response.Location, err))
+		}
+
+		if httpResponse == nil {
+			return nil // Only execute the transaction and fill the `resultResource`, caller doesn't want to set the response
+		}
+
 		for key, value := range headers.Header {
 			httpResponse.Header()[key] = value
 		}
 		httpResponse.WriteHeader(status)
-
-		log.Info().Msg("ExecuteTransactionAndRespondWithEntry done, returning result")
-
-		return result, json.NewEncoder(httpResponse).Encode(result)
+		return json.NewEncoder(httpResponse).Encode(resultResource)
 	}
-	return nil, ErrEntryNotFound
+	return ErrEntryNotFound
 }

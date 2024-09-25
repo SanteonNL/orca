@@ -19,15 +19,11 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	log.Info().Msg("Creating Task")
 	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
-	task := make(map[string]interface{})
+	task := make(coolfhir.Task)
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return fmt.Errorf("invalid Task: %w", err)
 	}
 
-	return s.handleCreateTaskFromMap(task, httpResponse)
-}
-
-func (s *Service) handleCreateTaskFromMap(task map[string]interface{}, httpResponse http.ResponseWriter) error {
 	switch task["status"] {
 	case fhir.TaskStatusRequested.String():
 	case fhir.TaskStatusReady.String():
@@ -51,29 +47,22 @@ func (s *Service) handleCreateTaskFromMap(task map[string]interface{}, httpRespo
 		return fmt.Errorf("failed to create Task: %w", err)
 	}
 
-	var newlyCreatedTask map[string]interface{}
-	if httpResponse == nil {
-		newlyCreatedTask, err = coolfhir.ExecuteTransactionAndFilter(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
-			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
-		})
-	} else {
-		newlyCreatedTask, err = coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
-			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
-		}, httpResponse)
-	}
-
+	var createdTask fhir.Task
+	err = coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
+		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
+	}, httpResponse, &createdTask)
 	if err != nil {
-		return fmt.Errorf("failed to submit Bundle and refetch Task: %w", err)
+		return err
 	}
 
-	if newlyCreatedTask == nil {
-		return errors.New("no Task found in bundle")
+	s.notifySubscribers(httpRequest.Context(), &createdTask)
+	// If CareTeam was updated, notify about CareTeam
+	var updatedCareTeam fhir.CareTeam
+	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryIsOfType("CareTeam"), &updatedCareTeam); err == nil {
+		s.notifySubscribers(httpRequest.Context(), &updatedCareTeam)
 	}
 
-	// log.Info().Msgf("Task/%s created", newlyCreatedTask["id"])
-
-	//TODO: This now also processes updates
-	return s.handleTaskFillerCreate(newlyCreatedTask)
+	return s.handleTaskFillerCreate(&createdTask) //TODO: Move to the notification?
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.
@@ -95,7 +84,7 @@ func (s *Service) newTaskInCarePlan(task coolfhir.Task, carePlan *fhir.CarePlan)
 	if err != nil {
 		return nil, err
 	}
-	if _, err = careteamservice.Update(s.fhirClient, *carePlan.Id, *r4Task, tx); err != nil {
+	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, *r4Task, tx); err != nil {
 		return nil, fmt.Errorf("failed to update CarePlan: %w", err)
 	}
 	result := tx.Bundle()

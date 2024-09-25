@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"io"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -51,24 +53,81 @@ func TestExecuteTransactionAndRespondWithEntry(t *testing.T) {
 				},
 			},
 		}
-		fhirClient := mock.NewMockClient(ctrl)
-		fhirClient.EXPECT().Create(tx.Bundle(), gomock.Any(), gomock.Any()).
-			DoAndReturn(func(_ fhir.Bundle, result *fhir.Bundle, _ interface{}) error {
-				*result = fhirBundleResult
-				return nil
-			})
-		fhirClient.EXPECT().Read("Task/task1", gomock.Any(), gomock.Any()).
-			DoAndReturn(func(_ string, result *map[string]interface{}, _ interface{}) error {
-				*result = map[string]interface{}{"id": "task1"}
-				return nil
-			})
+		fhirCreatedTask := fhir.Task{
+			Id:     to.Ptr("task1"),
+			Intent: "order",
+			Status: fhir.TaskStatusCompleted,
+		}
 
-		httpResponse := httptest.NewRecorder()
+		t.Run("provide result struct", func(t *testing.T) {
+			fhirClient := mock.NewMockClient(ctrl)
+			fhirClient.EXPECT().Create(tx.Bundle(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ fhir.Bundle, result *fhir.Bundle, _ interface{}) error {
+					*result = fhirBundleResult
+					return nil
+				})
+			fhirClient.EXPECT().Read("Task/task1", gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ string, result *fhir.Task, _ interface{}) error {
+					*result = fhirCreatedTask
+					return nil
+				})
 
-		_, err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
-			return *entry.Response.Location == "Task/task1"
-		}, httpResponse)
+			var result fhir.Task
+			httpResponse := httptest.NewRecorder()
+			err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
+				return *entry.Response.Location == "Task/task1"
+			}, httpResponse, &result)
 
-		require.NoError(t, err)
+			require.NoError(t, err)
+			require.Equal(t, fhirCreatedTask, result)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			require.JSONEq(t, `{"id":"task1", "intent":"order", "resourceType":"Task", "status":"completed"}`, string(responseData))
+		})
+		t.Run("caller not interested in result", func(t *testing.T) {
+			fhirClient := mock.NewMockClient(ctrl)
+			fhirClient.EXPECT().Create(tx.Bundle(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ fhir.Bundle, result *fhir.Bundle, _ interface{}) error {
+					*result = fhirBundleResult
+					return nil
+				})
+			fhirClient.EXPECT().Read("Task/task1", gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ string, result *map[string]interface{}, _ interface{}) error {
+					*result = map[string]interface{}{
+						"id": "task1",
+					}
+					return nil
+				})
+
+			httpResponse := httptest.NewRecorder()
+			err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
+				return *entry.Response.Location == "Task/task1"
+			}, httpResponse, nil)
+
+			require.NoError(t, err)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			require.JSONEq(t, `{"id":"task1"}`, string(responseData))
+		})
+
+		t.Run("caller not interested in setting the response", func(t *testing.T) {
+			fhirClient := mock.NewMockClient(ctrl)
+			fhirClient.EXPECT().Create(tx.Bundle(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ fhir.Bundle, result *fhir.Bundle, _ interface{}) error {
+					*result = fhirBundleResult
+					return nil
+				})
+			fhirClient.EXPECT().Read("Task/task1", gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ string, result *fhir.Task, _ interface{}) error {
+					*result = fhirCreatedTask
+					return nil
+				})
+
+			var result fhir.Task
+			err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
+				return *entry.Response.Location == "Task/task1"
+			}, nil, &result)
+
+			require.NoError(t, err)
+			require.Equal(t, fhirCreatedTask, result)
+		})
 	})
 }

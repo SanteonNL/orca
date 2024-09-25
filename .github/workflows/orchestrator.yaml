@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - orchestrator/**
+      - .github/workflows/orchestrator.yaml
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -92,4 +93,5 @@ jobs:
           go-version: '1.22'
       - name: Run E2E tests
         working-directory: ./e2e-tests
-        run: ORCHESTRATOR_IMAGE=${{needs.docker-image.outputs.fully_qualified}} go test -v ./...
+        # Docker outputs contains 2 docker tags, we only need the first one
+        run: ORCHESTRATOR_IMAGE=$(echo "${{needs.docker-image.outputs.fully_qualified}}" | cut -d' ' -f1-1) go test -v ./...

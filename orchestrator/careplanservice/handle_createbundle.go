@@ -22,20 +22,21 @@ func (s *Service) handleBundle(httpResponse http.ResponseWriter, httpRequest *ht
 	log.Info().Msg("converted Bundle to fhir.Bundle")
 
 	//Simply execute the bundle for now - extract the Task if it's in the bundle
-	updatedTask, err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, bundle, func(entry fhir.BundleEntry) bool {
+	var updatedTask fhir.Task
+	err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, bundle, func(entry fhir.BundleEntry) bool {
 		//TODO: Add  && entry.Request.Method == fhir.HTTPVerbPUT req
 		return entry.Response != nil && entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
-	}, httpResponse)
+	}, httpResponse, &updatedTask)
 
 	if err != nil {
 		return fmt.Errorf("failed to create Bundle: %w", err)
 	}
 	log.Info().Msg("Executed Bundle")
 
-	if updatedTask != nil {
+	if updatedTask.Id != nil {
 		log.Info().Msg("Found updated task")
 		// s.handleUpdateTaskById(updatedTask["id"].(string), httpResponse, httpRequest)
-		s.handleTaskFillerUpdate(updatedTask)
+		s.handleTaskFillerUpdate(&updatedTask)
 	}
 
 	return nil

@@ -1,12 +1,15 @@
 package careplanservice
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -16,6 +19,10 @@ import (
 
 const basePath = "/cps"
 
+// subscriberNotificationTimeout is the timeout for notifying subscribers of changes in FHIR resources.
+// We might want to make this configurable at some point.
+var subscriberNotificationTimeout = 10 * time.Second
+
 func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Service, error) {
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
@@ -24,22 +31,30 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		return nil, err
 	}
 	return &Service{
-		profile:         profile,
-		fhirURL:         fhirURL,
-		orcaPublicURL:   orcaPublicURL,
-		transport:       transport,
-		fhirClient:      fhirClient,
+		profile:       profile,
+		fhirURL:       fhirURL,
+		orcaPublicURL: orcaPublicURL,
+		transport:     transport,
+		fhirClient:    fhirClient,
+		subscriptionManager: subscriptions.DerivingManager{
+			FhirBaseURL: orcaPublicURL.JoinPath(basePath),
+			Channels: subscriptions.CsdChannelFactory{
+				Directory:         profile.CsdDirectory(),
+				ChannelHttpClient: profile.HttpClient(),
+			},
+		},
 		maxReadBodySize: fhirClientConfig.MaxResponseSize,
 	}, nil
 }
 
 type Service struct {
-	orcaPublicURL   *url.URL
-	fhirURL         *url.URL
-	transport       http.RoundTripper
-	fhirClient      fhirclient.Client
-	profile         profile.Provider
-	maxReadBodySize int
+	orcaPublicURL       *url.URL
+	fhirURL             *url.URL
+	transport           http.RoundTripper
+	fhirClient          fhirclient.Client
+	profile             profile.Provider
+	subscriptionManager subscriptions.Manager
+	maxReadBodySize     int
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
@@ -96,6 +111,15 @@ func (s Service) readRequest(httpRequest *http.Request, target interface{}) erro
 		return fmt.Errorf("FHIR request body exceeds max. safety limit of %d bytes (%s %s)", s.maxReadBodySize, httpRequest.Method, httpRequest.URL.String())
 	}
 	return json.Unmarshal(data, target)
+}
+
+func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
+	// Send notification for changed resources
+	notifyCtx, cancel := context.WithTimeout(ctx, subscriberNotificationTimeout)
+	defer cancel()
+	if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
+		log.Error().Err(err).Msgf("Failed to notify subscribers for %T", resource)
+	}
 }
 
 // convertInto converts the src object into the target object,

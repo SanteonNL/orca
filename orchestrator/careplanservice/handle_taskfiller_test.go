@@ -6,6 +6,7 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -28,88 +29,88 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	// Define test cases
 	tests := []struct {
 		name          string
-		task          map[string]interface{}
+		task          *fhir.Task
 		expectedError bool
 		createTimes   int
 	}{
 		{
 			name:          "Valid SCP Task",
-			task:          validTask,
+			task:          &validTask,
 			expectedError: false,
 			createTimes:   1, // One subtask should be created
 		},
 		{
 			name: "Invalid Task (Missing Profile)",
-			task: func() map[string]interface{} {
-				var copiedTask map[string]interface{}
+			task: func() *fhir.Task {
+				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
 				json.Unmarshal(bytes, &copiedTask)
-				copiedTask["meta"].(map[string]interface{})["profile"] = []interface{}{"SomeOtherProfile"}
-				return copiedTask
+				copiedTask.Meta.Profile = []string{"SomeOtherProfile"}
+				return &copiedTask
 			}(),
 			expectedError: false, // Should skip since it's not an SCP task
 			createTimes:   0,     // No subtask creation expected
 		},
 		{
 			name: "Task without Requester",
-			task: func() map[string]interface{} {
-				var copiedTask map[string]interface{}
+			task: func() *fhir.Task {
+				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
 				json.Unmarshal(bytes, &copiedTask)
-				delete(copiedTask, "requester")
-				return copiedTask
+				copiedTask.Requester = nil
+				return &copiedTask
 			}(),
 			expectedError: true,
 			createTimes:   0, // No subtask creation due to missing requester
 		},
 		{
 			name: "Task without Owner",
-			task: func() map[string]interface{} {
-				var copiedTask map[string]interface{}
+			task: func() *fhir.Task {
+				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
 				json.Unmarshal(bytes, &copiedTask)
-				delete(copiedTask, "owner")
-				return copiedTask
+				copiedTask.Owner = nil
+				return &copiedTask
 			}(),
 			expectedError: true,
 			createTimes:   0, // No subtask creation due to missing owner
 		},
 		{
 			name: "Task without partOf",
-			task: func() map[string]interface{} {
-				var copiedTask map[string]interface{}
+			task: func() *fhir.Task {
+				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
 				json.Unmarshal(bytes, &copiedTask)
-				delete(copiedTask, "partOf")
-				return copiedTask
+				copiedTask.PartOf = nil
+				return &copiedTask
 			}(),
 			expectedError: false,
 			createTimes:   1, // One subtask should be created since it's treated as a primary task
 		},
 		{
 			name: "Task without basedOn reference",
-			task: func() map[string]interface{} {
-				var copiedTask map[string]interface{}
+			task: func() *fhir.Task {
+				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
 				json.Unmarshal(bytes, &copiedTask)
-				delete(copiedTask, "basedOn")
-				return copiedTask
+				copiedTask.BasedOn = nil
+				return &copiedTask
 			}(),
 			expectedError: true, // Invalid partOf reference should cause an error
 			createTimes:   0,    // No subtask creation expected
 		},
 		{
 			name: "Task with partOf reference",
-			task: func() map[string]interface{} {
-				var copiedTask map[string]interface{}
+			task: func() *fhir.Task {
+				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
 				json.Unmarshal(bytes, &copiedTask)
-				copiedTask["partOf"] = []interface{}{
-					map[string]interface{}{
-						"reference": "Task/cps-task-01",
+				copiedTask.PartOf = []fhir.Reference{
+					{
+						Reference: to.Ptr("Task/cps-task-01"),
 					},
 				}
-				return copiedTask
+				return &copiedTask
 			}(),
 			expectedError: false,
 			createTimes:   0, //not yet implemented, so no error nor a subtask creation
@@ -146,7 +147,10 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				Times(tt.createTimes)
 
 			// Call the actual function being tested
-			err := service.handleTaskFillerCreate(tt.task)
+			taskBytes, _ := json.Marshal(tt.task)
+			var task fhir.Task
+			json.Unmarshal(taskBytes, &task)
+			err := service.handleTaskFillerCreate(&task)
 			if tt.expectedError {
 				require.Error(t, err)
 			} else {
@@ -168,98 +172,19 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 		fhirClient: mockFHIRClient,
 	}
 
-	// Create a subtask using the primary task
+	taskBytes, _ := json.Marshal(validTask)
+	var task fhir.Task
+	json.Unmarshal(taskBytes, &task)
 	questionnaire := service.getHardCodedHomeMonitoringQuestionnaire()
 	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
-	subtask := service.getSubTask(validTask, questionnaireRef)
+	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
+	subtask := service.getEnrollmentCriteriaSubTask(&validTask, questionnaireRef)
 
-	partOf := []map[string]interface{}{
+	expectedSubTaskInput := []map[string]interface{}{
 		{
-			"reference": "Task/" + validTask["id"].(string),
-		},
-	}
-
-	// Define the expected values for the subtask
-	expectedSubTask := map[string]interface{}{
-		"id":     subtask["id"],
-		"status": "ready",
-		"meta": map[string]interface{}{
-			"profile": []string{
-				SCP_TASK_PROFILE,
-			},
-		},
-		"basedOn":   validTask["basedOn"],
-		"partOf":    partOf,
-		"focus":     validTask["focus"],
-		"for":       validTask["for"],
-		"owner":     validTask["requester"], // requester becomes owner
-		"requester": validTask["owner"],     // owner becomes requester
-		"input": []map[string]interface{}{
-			{
-				"type": map[string]interface{}{
-					"coding": []map[string]interface{}{
-						{
-							"system":  "http://terminology.hl7.org/CodeSystem/task-input-type",
-							"code":    "Reference",
-							"display": "Reference",
-						},
-					},
-				},
-				"valueReference": map[string]interface{}{
-					"reference": questionnaireRef, // reference to the questionnaire
-				},
-			},
-		},
-	}
-
-	// Verify that the subtask has the correct fields and values
-	require.Equal(t, "Task", subtask["resourceType"], "Subtask should have resourceType Task")
-	require.Equal(t, expectedSubTask["owner"], subtask["owner"], "Task.requester should become Task.owner")
-	require.Equal(t, expectedSubTask["requester"], subtask["requester"], "Task.owner should become Task.requester")
-	require.Equal(t, expectedSubTask["partOf"], subtask["partOf"], "Task.partOf should be copied from the primary task")
-	require.Equal(t, expectedSubTask["basedOn"], subtask["basedOn"], "Task.basedOn should be copied from the primary task")
-	require.Equal(t, expectedSubTask["focus"], subtask["focus"], "Task.focus should be copied from the primary task")
-	require.Equal(t, expectedSubTask["for"], subtask["for"], "Task.for should be copied from the primary task")
-	require.Equal(t, expectedSubTask["input"], subtask["input"], "Subtask should contain a reference to the questionnaire")
-}
-
-var validTask = map[string]interface{}{
-	"id":           uuid.NewString(),
-	"resourceType": "Task",
-	"meta": map[string]interface{}{
-		"profile": []interface{}{SCP_TASK_PROFILE},
-	},
-	"requester": map[string]interface{}{
-		"identifier": map[string]interface{}{
-			"system": "http://fhir.nl/fhir/NamingSystem/ura",
-			"value":  "URA-2",
-		},
-	},
-	"owner": map[string]interface{}{
-		"identifier": map[string]interface{}{
-			"system": "http://fhir.nl/fhir/NamingSystem/ura",
-			"value":  "URA-1",
-		},
-	},
-	"basedOn": []interface{}{
-		map[string]interface{}{
-			"reference": "CarePlan/cps-careplan-01",
-		},
-	},
-	"focus": map[string]interface{}{
-		"reference": "ServiceRequest/cps-servicerequest-telemonitoring",
-	},
-	"for": map[string]interface{}{
-		"identifier": map[string]interface{}{
-			"system": "http://fhir.nl/fhir/NamingSystem/bsn",
-			"value":  "111222333",
-		},
-	},
-	"input": []interface{}{
-		map[string]interface{}{
 			"type": map[string]interface{}{
-				"coding": []interface{}{
-					map[string]interface{}{
+				"coding": []map[string]interface{}{
+					{
 						"system":  "http://terminology.hl7.org/CodeSystem/task-input-type",
 						"code":    "Reference",
 						"display": "Reference",
@@ -267,7 +192,70 @@ var validTask = map[string]interface{}{
 				},
 			},
 			"valueReference": map[string]interface{}{
-				"reference": "urn:uuid:456",
+				"reference": questionnaireRef, // reference to the questionnaire
+			},
+		},
+	}
+
+	partOfSlice, ok := subtask["partOf"].([]map[string]interface{})
+	require.True(t, ok, "subtask[\"partOf\"] should be a slice of maps")
+	require.NotEmpty(t, partOfSlice, "subtask[\"partOf\"] should not be empty")
+	require.Equal(t, "Task/"+*validTask.Id, partOfSlice[0]["reference"], "Task.partOf should be copied from the primary task")
+
+	require.Equal(t, "Task", subtask["resourceType"], "Subtask should have resourceType Task")
+	require.Equal(t, &validTask.Requester, subtask["owner"], "Task.requester should become Task.owner")
+	require.Equal(t, &validTask.Owner, subtask["requester"], "Task.owner should become Task.requester")
+	require.Equal(t, validTask.BasedOn, subtask["basedOn"], "Task.basedOn should be copied from the primary task")
+	require.Equal(t, &validTask.Focus, subtask["focus"], "Task.focus should be copied from the primary task")
+	require.Equal(t, &validTask.For, subtask["for"], "Task.for should be copied from the primary task")
+	require.Equal(t, 1, len(validTask.Input), "Subtask should contain one input")
+	require.Equal(t, expectedSubTaskInput, subtask["input"], "Subtask should contain a reference to the questionnaire")
+}
+
+var validTask = fhir.Task{
+	Id: to.Ptr(uuid.NewString()),
+	Meta: &fhir.Meta{
+		Profile: []string{SCP_TASK_PROFILE},
+	},
+	Requester: &fhir.Reference{
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+			Value:  to.Ptr("URA-2"),
+		},
+	},
+	Owner: &fhir.Reference{
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+			Value:  to.Ptr("URA-1"),
+		},
+	},
+	BasedOn: []fhir.Reference{
+		{
+			Reference: to.Ptr("CarePlan/cps-careplan-01"),
+		},
+	},
+	Focus: &fhir.Reference{
+		Reference: to.Ptr("ServiceRequest/cps-servicerequest-telemonitoring"),
+	},
+	For: &fhir.Reference{
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+			Value:  to.Ptr("111222333"),
+		},
+	},
+	Input: []fhir.TaskInput{
+		{
+			Type: fhir.CodeableConcept{
+				Coding: []fhir.Coding{
+					{
+						System:  to.Ptr("http://terminology.hl7.org/CodeSystem/task-input-type"),
+						Code:    to.Ptr("Reference"),
+						Display: to.Ptr("Reference"),
+					},
+				},
+			},
+			ValueReference: fhir.Reference{
+				Reference: to.Ptr("urn:uuid:456"),
 			},
 		},
 	},
