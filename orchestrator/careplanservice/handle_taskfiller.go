@@ -12,8 +12,6 @@ import (
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
-const SCP_TASK_PROFILE = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
-
 var primaryTaskFocusToQuestionnaireURL = map[string]string{
 	"2.16.528.1.1007.3.3.21514.ehr.orders|99534756439": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017",
 }
@@ -134,7 +132,7 @@ func (s *Service) isScpTask(task *fhir.Task) bool {
 	}
 
 	for _, profile := range task.Meta.Profile {
-		if profile == SCP_TASK_PROFILE {
+		if profile == coolfhir.SCPTaskProfile {
 			return true
 		}
 	}
@@ -287,7 +285,7 @@ func (s *Service) getSubTask(task *fhir.Task, questionnaireRef string, isPrimary
 		"status":       "ready",
 		"meta": map[string]interface{}{
 			"profile": []string{
-				SCP_TASK_PROFILE,
+				coolfhir.SCPTaskProfile,
 			},
 		},
 		"basedOn": task.BasedOn,
@@ -335,7 +333,7 @@ func (s *Service) getPIISubTask(task *fhir.Task, questionnaireRef string) map[st
 		"status":       "ready",
 		"meta": map[string]interface{}{
 			"profile": []string{
-				SCP_TASK_PROFILE,
+				coolfhir.SCPTaskProfile,
 			},
 		},
 		"basedOn":   &task.BasedOn,

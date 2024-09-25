@@ -6,6 +6,7 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -214,7 +215,7 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 var validTask = fhir.Task{
 	Id: to.Ptr(uuid.NewString()),
 	Meta: &fhir.Meta{
-		Profile: []string{SCP_TASK_PROFILE},
+		Profile: []string{coolfhir.SCPTaskProfile},
 	},
 	Focus: &fhir.Reference{
 		Identifier: &fhir.Identifier{
