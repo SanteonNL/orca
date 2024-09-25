@@ -146,11 +146,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				}).
 				Times(tt.createTimes)
 
-			// Call the actual function being tested
-			taskBytes, _ := json.Marshal(tt.task)
-			var task fhir.Task
-			json.Unmarshal(taskBytes, &task)
-			err := service.handleTaskFillerCreate(&task)
+			err := service.handleTaskFillerCreate(tt.task)
 			if tt.expectedError {
 				require.Error(t, err)
 			} else {
@@ -178,7 +174,7 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	questionnaire := service.getHardCodedHomeMonitoringQuestionnaire()
 	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
 	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
-	subtask := service.getEnrollmentCriteriaSubTask(&validTask, questionnaireRef)
+	subtask := service.getSubTask(&validTask, questionnaireRef, true)
 
 	expectedSubTaskInput := []map[string]interface{}{
 		{
@@ -197,14 +193,17 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 		},
 	}
 
-	partOfSlice, ok := subtask["partOf"].([]map[string]interface{})
-	require.True(t, ok, "subtask[\"partOf\"] should be a slice of maps")
-	require.NotEmpty(t, partOfSlice, "subtask[\"partOf\"] should not be empty")
-	require.Equal(t, "Task/"+*validTask.Id, partOfSlice[0]["reference"], "Task.partOf should be copied from the primary task")
+	expectedPartOf := []fhir.Reference{
+		{
+			Reference: to.Ptr("Task/" + *validTask.Id),
+		},
+	}
+
+	require.Equal(t, expectedPartOf, *(subtask["partOf"].(*[]fhir.Reference)), "Task.partOf should be copied from the primary task")
 
 	require.Equal(t, "Task", subtask["resourceType"], "Subtask should have resourceType Task")
-	require.Equal(t, &validTask.Requester, subtask["owner"], "Task.requester should become Task.owner")
-	require.Equal(t, &validTask.Owner, subtask["requester"], "Task.owner should become Task.requester")
+	require.Equal(t, validTask.Requester, subtask["owner"], "Task.requester should become Task.owner")
+	require.Equal(t, validTask.Owner, subtask["requester"], "Task.owner should become Task.requester")
 	require.Equal(t, validTask.BasedOn, subtask["basedOn"], "Task.basedOn should be copied from the primary task")
 	require.Equal(t, &validTask.Focus, subtask["focus"], "Task.focus should be copied from the primary task")
 	require.Equal(t, &validTask.For, subtask["for"], "Task.for should be copied from the primary task")
@@ -216,6 +215,12 @@ var validTask = fhir.Task{
 	Id: to.Ptr(uuid.NewString()),
 	Meta: &fhir.Meta{
 		Profile: []string{SCP_TASK_PROFILE},
+	},
+	Focus: &fhir.Reference{
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+			Value:  to.Ptr("99534756439"),
+		},
 	},
 	Requester: &fhir.Reference{
 		Identifier: &fhir.Identifier{
@@ -233,9 +238,6 @@ var validTask = fhir.Task{
 		{
 			Reference: to.Ptr("CarePlan/cps-careplan-01"),
 		},
-	},
-	Focus: &fhir.Reference{
-		Reference: to.Ptr("ServiceRequest/cps-servicerequest-telemonitoring"),
 	},
 	For: &fhir.Reference{
 		Identifier: &fhir.Identifier{

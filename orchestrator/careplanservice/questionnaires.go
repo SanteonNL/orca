@@ -2,6 +2,17 @@ package careplanservice
 
 import "github.com/google/uuid"
 
+func (s *Service) getQuestionnaireByUrl(url string) map[string]interface{} {
+	switch url {
+	case "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-2--20240902134017":
+		return s.getHardCodedHomeMonitoringPIIQuestionnaire()
+	case "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017":
+		return s.getHardCodedHomeMonitoringQuestionnaire()
+	default:
+		return nil
+	}
+}
+
 func (s *Service) getHardCodedHomeMonitoringPIIQuestionnaire() map[string]interface{} {
 	return map[string]interface{}{
 		"id":           uuid.NewString(),

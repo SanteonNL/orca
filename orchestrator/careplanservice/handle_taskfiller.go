@@ -1,18 +1,56 @@
 package careplanservice
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
 const SCP_TASK_PROFILE = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
+
+var primaryTaskFocusToQuestionnaireURL = map[string]string{
+	"2.16.528.1.1007.3.3.21514.ehr.orders|99534756439": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017",
+}
+
+var followUpQuestionnaireMap = map[string]string{
+	"http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-2--20240902134017",
+}
+
+func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
+	log.Info().Msg("Running handleTaskFillerCreate")
+
+	if !s.isScpTask(task) {
+		log.Info().Msg("Task is not an SCP Task - skipping")
+		return nil
+	}
+
+	if err := s.isValidTask(task); err != nil {
+		log.Error().Msgf("Task invalid - skipping: %v", err)
+		return fmt.Errorf("task is not valid - skipping: %w", err)
+	}
+
+	partOfRef, err := s.partOf(task)
+	if err != nil {
+		return fmt.Errorf("failed to extract Task.partOf: %w", err)
+	}
+
+	// If partOfRef is nil, handle the task as a primary task - no need to create follow-up subtasks for newly created Tasks
+	//This only happens on Task update where the Task.output is filled with a QuestionnaireResponse
+	if partOfRef == nil {
+		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
+		err := s.createSubTaskOrFinishPrimaryTask(task, true)
+		if err != nil {
+			return fmt.Errorf("failed to process new primary Task: %w", err)
+		}
+	}
+	return nil
+}
 
 func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
 
@@ -44,65 +82,38 @@ func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
 
 	log.Info().Msg("SubTask.status is completed - processing")
 
-	// fetch the questionnaire from the task.input
-	var questionnaire fhir.Questionnaire
-	var questionnaireRefs []string
-	for _, item := range task.Input {
-		if ref := item.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "Questionnaire/") {
-			questionnaireRefs = append(questionnaireRefs, *ref.Reference)
-		}
+	return s.createSubTaskOrFinishPrimaryTask(task, false)
+
+}
+
+func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
+	log.Info().Msg("Marking primary Task as completed")
+
+	if subTask.PartOf == nil {
+		return errors.New("task.partOf is empty")
 	}
 
-	if len(questionnaireRefs) != 1 {
-		return fmt.Errorf("expected exactly 1 Questionnaire reference, found %d", len(questionnaireRefs))
+	partOfTaskRef := subTask.PartOf[0].Reference
+	if partOfTaskRef == nil || !strings.HasPrefix(*partOfTaskRef, "Task/") {
+		return errors.New("task.partOf[0].reference is not a valid Task reference")
 	}
 
-	err = s.fetchQuestionnaireByID(questionnaireRefs[0], &questionnaire)
+	var partOfTask fhir.Task
+	err := s.fhirClient.Read(*partOfTaskRef, &partOfTask)
 	if err != nil {
-		return fmt.Errorf("failed to fetch questionnaire: %w", err)
+		return fmt.Errorf("failed to fetch partOf Task: %w", err)
 	}
 
-	questionnaireJSON, err := json.MarshalIndent(questionnaire, "", "  ")
+	// Change status to accepted
+	partOfTask.Status = fhir.TaskStatusAccepted
+
+	// Update the task in the FHIR server
+	err = s.fhirClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
 	if err != nil {
-		return fmt.Errorf("failed to marshal questionnaire to JSON: %w", err)
-	}
-	log.Info().Msgf("Questionnaire: %s", string(questionnaireJSON))
-
-	if *questionnaire.Url == "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017" {
-		return s.createSubTaskPII(task)
+		return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
 	}
 
-	if *questionnaire.Url == "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-2--20240902134017" {
-		log.Info().Msg("SubTask with PII is completed - marking primary Task (partOf value) as accepted")
-
-		// Fetch task from Task.partOf
-		if len(task.PartOf) == 0 {
-			return errors.New("task.partOf is empty")
-		}
-
-		partOfTaskRef := task.PartOf[0].Reference
-		if partOfTaskRef == nil || !strings.HasPrefix(*partOfTaskRef, "Task/") {
-			return errors.New("task.partOf[0].reference is not a valid Task reference")
-		}
-
-		var partOfTask fhir.Task
-		err := s.fhirClient.Read(*partOfTaskRef, &partOfTask)
-		if err != nil {
-			return fmt.Errorf("failed to fetch partOf Task: %w", err)
-		}
-
-		// Change status to accepted
-		partOfTask.Status = fhir.TaskStatusAccepted
-
-		// Update the task in the FHIR server
-		err = s.fhirClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
-		if err != nil {
-			return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
-		}
-
-		log.Info().Msgf("Successfully marked %s as completed", *partOfTaskRef)
-	}
-
+	log.Info().Msgf("Successfully marked %s as completed", *partOfTaskRef)
 	return nil
 }
 
@@ -114,42 +125,6 @@ func (s *Service) fetchQuestionnaireByID(ref string, questionnaire *fhir.Questio
 		return fmt.Errorf("failed to fetch Questionnaire: %w", err)
 	}
 
-	return nil
-}
-
-func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
-	log.Info().Msg("Running handleTaskFillerCreate")
-
-	if !s.isScpTask(task) {
-		log.Info().Msg("Task is not an SCP Task - skipping")
-		return nil
-	}
-
-	if err := s.isValidTask(task); err != nil {
-		log.Error().Msgf("Task invalid - skipping: %v", err)
-		return fmt.Errorf("task is not valid - skipping: %w", err)
-	}
-
-	partOfRef, err := s.partOf(task)
-	if err != nil {
-		return fmt.Errorf("failed to extract Task.partOf: %w", err)
-	}
-
-	// If partOfRef is nil, handle the task as a primary task
-	if partOfRef == nil {
-		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
-		err := s.createSubTaskEnrollmentCriteria(task)
-		if err != nil {
-			return fmt.Errorf("failed to process new primary Task: %w", err)
-		}
-	} else {
-		return s.handleSubTaskCreate(task)
-	}
-	return nil
-}
-
-func (s *Service) handleSubTaskCreate(task *fhir.Task) error {
-	log.Info().Msgf("SubTask for Task/%s create handling not implemented - skipping", *task.Id)
 	return nil
 }
 
@@ -190,12 +165,87 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 	return nil
 }
 
-func (s *Service) createSubTaskEnrollmentCriteria(task *fhir.Task) error {
-	questionnaire := s.getHardCodedHomeMonitoringQuestionnaire()
+func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTask bool) error {
+	if task.Focus == nil || task.Focus.Identifier == nil || task.Focus.Identifier.System == nil || task.Focus.Identifier.Value == nil {
+		return errors.New("task.Focus or its Identifier fields are nil")
+	}
+	taskFocus := fmt.Sprintf("%s|%s", *task.Focus.Identifier.System, *task.Focus.Identifier.Value)
+	var questionnaire map[string]interface{}
+
+	if isPrimaryTask {
+		questionnaire = s.getQuestionnaireByUrl(primaryTaskFocusToQuestionnaireURL[taskFocus])
+	} else {
+		//For subtasks, we need to make sure it's completed, and if so, find out if more Questionnaires are needed.
+		//We do this by fetching the Questionnaire, and comparing it's url value to the followUpQuestionnaireMap
+		if task.Status != fhir.TaskStatusCompleted {
+			log.Info().Msg("SubTask is not completed - skipping")
+		}
+
+		for _, item := range task.Input {
+			if ref := item.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "Questionnaire/") {
+				questionnaireURL := *ref.Reference
+				var fetchedQuestionnaire fhir.Questionnaire
+				err := s.fetchQuestionnaireByID(questionnaireURL, &fetchedQuestionnaire)
+				if err != nil {
+					return fmt.Errorf("failed to fetch questionnaire: %w", err)
+				}
+				followUpURL, exists := followUpQuestionnaireMap[*fetchedQuestionnaire.Url]
+				if exists {
+					questionnaire = s.getQuestionnaireByUrl(followUpURL)
+					break
+				}
+			}
+		}
+	}
+
+	// No follow-up questionnaire found, check if we have to mark the primary task as completed
+	if questionnaire == nil {
+
+		if task.PartOf == nil {
+			log.Info().Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as completed")
+			return nil
+		}
+
+		for _, output := range task.Output {
+			if ref := output.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "QuestionnaireResponse/") {
+
+				var partOfTaskRef *string
+				for _, partOf := range task.PartOf {
+					if partOf.Reference != nil && strings.HasPrefix(*partOf.Reference, "Task/") {
+						partOfTaskRef = partOf.Reference
+						break
+					}
+				}
+
+				if partOfTaskRef == nil {
+					return errors.New("no valid Task reference found in task.partOf")
+				}
+
+				var partOfTask fhir.Task
+				err := s.fhirClient.Read(*partOfTaskRef, &partOfTask)
+				if err != nil {
+					return fmt.Errorf("failed to fetch partOf Task: %w", err)
+				}
+
+				// Change status to accepted
+				partOfTask.Status = fhir.TaskStatusAccepted
+
+				// Update the task in the FHIR server
+				err = s.fhirClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
+				if err != nil {
+					return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
+				}
+
+				log.Info().Msgf("Successfully marked %s as completed", *partOfTaskRef)
+				break
+			}
+		}
+		return nil
+	}
 
 	// Create a new SubTask based on the Questionnaire reference
 	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
-	subtask := s.getEnrollmentCriteriaSubTask(task, questionnaireRef)
+	subtask := s.getSubTask(task, questionnaireRef, isPrimaryTask)
 	subtaskRef := "urn:uuid:" + subtask["id"].(string)
 
 	tx := coolfhir.Transaction().
@@ -209,40 +259,27 @@ func (s *Service) createSubTaskEnrollmentCriteria(task *fhir.Task) error {
 		return fmt.Errorf("failed to execute transaction: %w", err)
 	}
 
-	log.Info().Msg("Successfully created an enrollment subtask")
+	log.Info().Msg("Successfully created a subtask")
 
 	return nil
 }
 
-func (s *Service) createSubTaskPII(task *fhir.Task) error {
-	log.Info().Msg("Creating a new PII subtask")
-
-	questionnaire := s.getHardCodedHomeMonitoringPIIQuestionnaire()
-
-	// Create a new SubTask based on the Questionnaire reference
-	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
-	subtask := s.getPIISubTask(task, questionnaireRef)
-	subtaskRef := "urn:uuid:" + subtask["id"].(string)
-
-	tx := coolfhir.Transaction().
-		Create(questionnaire, coolfhir.WithFullUrl(questionnaireRef)).
-		Create(subtask, coolfhir.WithFullUrl(subtaskRef))
-
-	bundle := tx.Bundle()
-
-	_, err := coolfhir.ExecuteTransaction(s.fhirClient, bundle)
-	if err != nil {
-		return fmt.Errorf("failed to execute transaction: %w", err)
-	}
-
-	log.Info().Msg("Successfully created a PII subtask")
-
-	return nil
-}
-
-// getEnrollmentCriteriaSubTask creates a new subtask in map[string]interface{} format
+// getSubTask creates a new subtask in map[string]interface{} format
 // TODO: This doesn't use fhir.Task as the fhir library contains a bug where all possible Task.input[x] are sent to the FHIR client instead of just Task.input.valueReference. This causes either a validation error or not a single Task.input[x] to be set (HAPI)
-func (s *Service) getEnrollmentCriteriaSubTask(task *fhir.Task, questionnaireRef string) map[string]interface{} {
+func (s *Service) getSubTask(task *fhir.Task, questionnaireRef string, isPrimaryTask bool) map[string]interface{} {
+
+	// By default, point to the Task.partOf, this is used to group the subtasks together under the same primary Task
+	partOf := task.PartOf
+
+	// If this is the first subTask for the primary Task, we need to point to the primary Task itself
+	if isPrimaryTask {
+
+		partOf = []fhir.Reference{
+			{
+				Reference: to.Ptr(fmt.Sprintf("Task/%s", *task.Id)),
+			},
+		}
+	}
 
 	return map[string]interface{}{
 		"id":           uuid.NewString(),
@@ -254,15 +291,21 @@ func (s *Service) getEnrollmentCriteriaSubTask(task *fhir.Task, questionnaireRef
 			},
 		},
 		"basedOn": task.BasedOn,
-		"partOf": []map[string]interface{}{
-			{
-				"reference": "Task/" + *task.Id,
-			},
-		},
-		"focus":     &task.Focus,
-		"for":       &task.For,
-		"owner":     &task.Requester, // reversed
-		"requester": &task.Owner,     // reversed
+		"partOf":  &partOf,
+		"focus":   &task.Focus,
+		"for":     &task.For,
+		"owner": func() *fhir.Reference {
+			if isPrimaryTask {
+				return task.Requester // reversed
+			}
+			return task.Owner
+		}(),
+		"requester": func() *fhir.Reference {
+			if isPrimaryTask {
+				return task.Owner // reversed
+			}
+			return task.Requester
+		}(),
 		"input": []map[string]interface{}{
 			{
 				"type": map[string]interface{}{
