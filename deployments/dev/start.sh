@@ -145,7 +145,7 @@ NUTS_URL="${HOSPITAL_URL}" \
  CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" \
   docker compose up \
  --wait --build --remove-orphans
-echo "  Creating Questionnaire"
+echo "  Waiting for the FHIR server to be ready"
 ./config/init-fhir-resources.sh $HOSPITAL_URL
 popd
 
