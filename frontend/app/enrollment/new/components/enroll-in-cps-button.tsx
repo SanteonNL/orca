@@ -4,7 +4,7 @@ import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
 import { getCarePlan, getTask } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { CarePlan, Condition, Questionnaire } from 'fhir/r4'
+import { CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -116,6 +116,39 @@ export default function EnrollInCpsButton() {
         }
     }
 
+    const forwardServiceRequest = async () => {
+        if (!serviceRequest) {
+            toast.error("Error: Missing ServiceRequest - Cannot forward to CPS", { richColors: true })
+            throw new Error("Missing ServiceRequest - Cannot forward to CPS")
+        }
+
+        if (!cpsClient) {
+            toast.error("Error: CarePlanService not found", { richColors: true })
+            throw new Error("No CPS client found")
+        }
+
+        try {
+            // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
+            // TODO: Properly fix with with bundle refs in INT-288
+            const cleanServiceRequest = { ...serviceRequest };
+            if (cleanServiceRequest.subject?.reference) {
+                delete cleanServiceRequest.subject.reference;
+            }
+            if (cleanServiceRequest.requester?.reference) {
+                delete cleanServiceRequest.requester.reference;
+            }
+            if (cleanServiceRequest.performer?.[0]?.reference) {
+                delete cleanServiceRequest.performer[0].reference;
+            }
+
+            return await cpsClient.create({ resourceType: 'ServiceRequest', body: cleanServiceRequest }) as ServiceRequest
+        } catch (error) {
+            const msg = `Failed to forward ServiceRequest. Error message: ${error ?? "No error message found"}`
+            toast.error(msg, { richColors: true })
+            throw new Error(msg)
+        }
+    }
+
     const createTask = async (carePlan: CarePlan, taskCondition: Condition) => {
         if (!cpsClient || !ehrClient) {
             toast.error("Error: CarePlanService not found", { richColors: true })
@@ -126,7 +159,9 @@ export default function EnrollInCpsButton() {
             throw new Error("Missing required items for Task creation")
         }
 
-        const task = getTask(carePlan, serviceRequest, taskCondition)
+        const forwardedServiceRequest = await forwardServiceRequest()
+
+        const task = getTask(carePlan, forwardedServiceRequest, taskCondition)
 
         try {
             return await cpsClient.create({ resourceType: 'Task', body: task });

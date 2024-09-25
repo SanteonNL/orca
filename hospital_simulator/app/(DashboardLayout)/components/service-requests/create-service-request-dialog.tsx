@@ -479,6 +479,10 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                             }
                         }
                     ],
+                    "identifier": [{
+                        "system": "2.16.528.1.1007.3.3.21514.ehr.orders",
+                        "value": "99534756439"
+                    }],
                     "code": {
                         "coding": [{
                             "system": "http://snomed.info/sct",

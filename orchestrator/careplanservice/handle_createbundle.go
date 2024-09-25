@@ -13,7 +13,7 @@ import (
 func (s *Service) handleBundle(httpResponse http.ResponseWriter, httpRequest *http.Request) error {
 	log.Info().Msg("in de handleCreateBundle")
 	// TODO: Authorize request here
-	// TODO: Make this a valid implementatiomn, currently only handling the subtask with task.output scenario and not executing all in oen transaction
+	// TODO: Make this a valid implementation, currently only handling the subtask with task.output scenario and not executing all in one transaction
 
 	var bundle fhir.Bundle
 	if err := s.readRequest(httpRequest, &bundle); err != nil {

@@ -107,34 +107,10 @@ export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, prim
             identifier: serviceRequest.performer?.[0]?.identifier,
         },
         focus: {
-            identifier: {
-                "system": conditionCode.system,
-                "value": conditionCode.code
-            },
-            display: conditionCode.display,
-            type: 'Condition'
+            identifier: serviceRequest.identifier?.[0],
+            display: serviceRequest.code?.coding?.[0].display,
+            type: 'ServiceRequest'
         },
-        input: [
-            {
-                type: {
-                    coding: [{
-                        system: "http://terminology.hl7.org/CodeSystem/task-input-type",
-                        code: "Reference",
-                        display: "Reference"
-                    }]
-                },
-                valueReference: {
-                    type: "ServiceRequest",
-                    reference: '#contained-sr'
-                }
-            },
-        ],
-        contained: [
-            {
-                ...serviceRequest,
-                id: 'contained-sr'
-            },
-        ]
     }
 }
 
