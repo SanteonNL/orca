@@ -39,11 +39,20 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prePopulated, setPrePopulated] = useState(false);
   const [initialized, setInitialized] = useState(false)
+  const [shouldScroll, setShouldScroll] = useState(false)
+
   const [prevQuestionnaireResponse, setPrevQuestionnaireReaspone] = useState<QuestionnaireResponse>()
   const { activeStep, setStep } = useStepper()
 
   const cpsClient = useCpsClient()
   const { onSubTaskSubmit } = useTaskProgressStore()
+
+  useEffect(() => {
+    if (shouldScroll) {
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      setShouldScroll(false);
+    }
+  }, [shouldScroll]);
 
   useEffect(() => {
 
@@ -78,6 +87,8 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
     }
 
     setIsSubmitting(true)
+
+    setShouldScroll(true)
 
     const outputTask = { ...inputTask }
     const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire)
@@ -183,7 +194,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         questionnaireResponse={prevQuestionnaireResponse}
       />
       <Button size="sm" disabled={isSubmitting} onClick={submitQuestionnaireResponse} className="float-right">
-        {isSubmitting ? <Spinner /> : 'Next'}
+        {isSubmitting && <Spinner className='mr-1 text-white' />}Next
       </Button>
     </div>
   );

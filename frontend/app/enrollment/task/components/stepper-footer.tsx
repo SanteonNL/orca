@@ -1,6 +1,7 @@
+"use client"
 import { useStepper } from '@/components/stepper'
 import { Button } from '@/components/ui/button'
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 
 export default function StepperFooter() {
     const {
@@ -12,6 +13,16 @@ export default function StepperFooter() {
         isOptionalStep,
         isDisabledStep,
     } = useStepper()
+
+    const closePopup = () => {
+        window.close();
+    };
+
+    const handleNext = () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' })
+        nextStep();
+    }
+
     return (
         <>
             {hasCompletedAllSteps && (
@@ -20,24 +31,12 @@ export default function StepperFooter() {
                 </div>
             )}
             <div className="w-full flex justify-end gap-2 mt-2">
-                {hasCompletedAllSteps ? (
-                    <Button size="sm" onClick={resetSteps}>
-                        Reset
-                    </Button>
+                {isLastStep ? (
+                    <Button size="sm" onClick={closePopup}>Close</Button>
                 ) : (
-                    <>
-                        <Button
-                            disabled={isDisabledStep}
-                            onClick={prevStep}
-                            size="sm"
-                            variant="secondary"
-                        >
-                            Prev
-                        </Button>
-                        <Button size="sm" onClick={nextStep}>
-                            {isLastStep ? "Finish" : isOptionalStep ? "Skip" : "Next"}
-                        </Button>
-                    </>
+                    <Button size="sm" onClick={handleNext}>
+                        {isOptionalStep ? "Skip" : "Next"}
+                    </Button>
                 )}
             </div>
         </>
