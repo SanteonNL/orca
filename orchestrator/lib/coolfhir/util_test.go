@@ -269,16 +269,18 @@ func TestValidateCareTeamParticipantPeriod(t *testing.T) {
 		participant fhir.CareTeamParticipant
 	}
 	tests := []struct {
-		name    string
-		args    args
-		wantErr string
+		name       string
+		args       args
+		wantResult bool
+		wantErr    string
 	}{
 		{
 			name: "No period - Fail",
 			args: args{
 				participant: fhir.CareTeamParticipant{},
 			},
-			wantErr: "CareTeamParticipant has nil period",
+			wantResult: false,
+			wantErr:    "CareTeamParticipant has nil period",
 		},
 		{
 			name: "No start date - Fail",
@@ -287,7 +289,8 @@ func TestValidateCareTeamParticipantPeriod(t *testing.T) {
 					Period: &fhir.Period{},
 				},
 			},
-			wantErr: "CareTeamParticipant has nil start date",
+			wantResult: false,
+			wantErr:    "CareTeamParticipant has nil start date",
 		},
 		{
 			name: "Start date in future - Fail",
@@ -298,7 +301,8 @@ func TestValidateCareTeamParticipantPeriod(t *testing.T) {
 					},
 				},
 			},
-			wantErr: "CareTeamParticipant start date is in the future",
+			wantResult: false,
+			wantErr:    "",
 		},
 		{
 			name: "Start date in past - Valid",
@@ -309,7 +313,8 @@ func TestValidateCareTeamParticipantPeriod(t *testing.T) {
 					},
 				},
 			},
-			wantErr: "",
+			wantResult: true,
+			wantErr:    "",
 		},
 		{
 			name: "End date in past - Fail",
@@ -321,7 +326,8 @@ func TestValidateCareTeamParticipantPeriod(t *testing.T) {
 					},
 				},
 			},
-			wantErr: "CareTeamParticipant end date is in the past",
+			wantResult: false,
+			wantErr:    "",
 		},
 		{
 			name: "End date in future - Valid",
@@ -333,12 +339,14 @@ func TestValidateCareTeamParticipantPeriod(t *testing.T) {
 					},
 				},
 			},
-			wantErr: "",
+			wantResult: true,
+			wantErr:    "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ValidateCareTeamParticipantPeriod(tt.args.participant, time.Now())
+			result, err := ValidateCareTeamParticipantPeriod(tt.args.participant, time.Now())
+			assert.Equal(t, tt.wantResult, result)
 			if tt.wantErr != "" {
 				assert.EqualError(t, err, tt.wantErr)
 			} else {

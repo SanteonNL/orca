@@ -206,11 +206,13 @@ func validateRequester(careTeams []fhir.CareTeam, principal auth.Principal) (boo
 			for _, identifier := range principal.Organization.Identifier {
 				if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, &identifier) {
 					// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
-					err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
+					ok, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
 					if err != nil {
-						return false, err
+						log.Warn().Msg("error while validating CareTeam Participant period: " + err.Error())
 					}
-					return true, nil
+					if ok {
+						return true, nil
+					}
 				}
 			}
 		}
