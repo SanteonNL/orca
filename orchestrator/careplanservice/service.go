@@ -87,7 +87,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	}))
 	mux.HandleFunc(basePath+"/*", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 
-		if request.Method == "POST" && request.URL.Path == basePath+"/" {
+		if request.Method == http.MethodPost && request.URL.Path == basePath+"/" {
 			err := s.handleBundle(writer, request)
 			if err != nil {
 				s.writeOperationOutcomeFromError(err, "CarePlanService/CreateCarePlan", writer)
