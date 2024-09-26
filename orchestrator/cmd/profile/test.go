@@ -16,7 +16,8 @@ var _ Provider = TestProfile{}
 
 // TestProfile is a Profile implementation for testing purposes, that does very basic authentication that asserts the right HTTP Client is used.
 type TestProfile struct {
-	Principal        *auth.Principal
+	Principal              *auth.Principal
+	xSCPContextHeaderValue string
 	TestCsdDirectory csd.Directory
 }
 
@@ -70,7 +71,7 @@ func (t TestProfile) HttpClient() *http.Client {
 		principal = t.Principal
 	}
 	return &http.Client{
-		Transport: auth.AuthenticatedTestRoundTripper(nil, principal),
+		Transport: auth.AuthenticatedTestRoundTripper(nil, principal, t.xSCPContextHeaderValue),
 	}
 }
 

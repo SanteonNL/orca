@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"time"
 )
 
 type Task map[string]interface{}
@@ -62,6 +63,56 @@ func ValidateLogicalReference(reference *fhir.Reference, expectedType string, ex
 		return fmt.Errorf("reference.Identifier.System must be %s", expectedSystem)
 	}
 	return nil
+}
+
+// ValidateCareTeamParticipantPeriod validates that a CareTeamParticipant has a start date, and that the start date is in the past
+// end date is not required, but if present it will validate that it is in the future
+func ValidateCareTeamParticipantPeriod(participant fhir.CareTeamParticipant, now time.Time) (bool, error) {
+	// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
+	if participant.Period == nil {
+		return false, errors.New("CareTeamParticipant has nil period")
+	}
+	if participant.Period.Start == nil {
+		return false, errors.New("CareTeamParticipant has nil start date")
+	}
+
+	startTime, err := parseTimestamp(*participant.Period.Start)
+	if err != nil {
+		return false, err
+	}
+	if !now.After(startTime) {
+		return false, nil
+	}
+	if participant.Period.End != nil {
+		endTime, err := parseTimestamp(*participant.Period.End)
+		if err != nil {
+			return false, err
+		}
+		if !now.Before(endTime) {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func parseTimestamp(timestampString string) (time.Time, error) {
+	// Check both yyyy-mm-dd and extended with full timestamp
+	var timeStamp time.Time
+	var err error
+	if len(timestampString) > 10 {
+		timeStamp, err = time.Parse(time.RFC3339, timestampString)
+		if err != nil {
+			return time.Time{}, err
+		}
+	} else if len(timestampString) == 10 {
+		timeStamp, err = time.Parse(time.DateOnly, timestampString)
+		if err != nil {
+			return time.Time{}, err
+		}
+	} else {
+		return time.Time{}, errors.New("unsupported timestamp format")
+	}
+	return timeStamp, nil
 }
 
 func IsLogicalReference(reference *fhir.Reference) bool {

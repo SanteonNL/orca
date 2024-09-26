@@ -86,6 +86,7 @@ func activateMembership(careTeam *fhir.CareTeam, party *fhir.Reference) bool {
 		}
 	}
 	// Not yet in CareTeam, add member
+	// TODO: Set Member
 	careTeam.Participant = append(careTeam.Participant, fhir.CareTeamParticipant{
 		OnBehalfOf: party,
 		Period: &fhir.Period{

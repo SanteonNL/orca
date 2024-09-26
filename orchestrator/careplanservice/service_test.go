@@ -43,7 +43,7 @@ func TestService_Proxy(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 
 	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1)
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
 	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
 	require.NoError(t, err)
@@ -111,7 +111,7 @@ func TestService_Post_Task_Error(t *testing.T) {
 
 	// Setup: configure the client
 	httpClient := server.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(server.Client().Transport, auth.TestPrincipal1)
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(server.Client().Transport, auth.TestPrincipal1, "")
 
 	for _, tt := range tests {
 		// Make an invalid call (not providing JSON payload)
