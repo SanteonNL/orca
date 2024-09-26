@@ -23,7 +23,7 @@ func (s *Service) handleBundle(httpResponse http.ResponseWriter, httpRequest *ht
 
 	//Simply execute the bundle for now - extract the Task if it's in the bundle
 	var updatedTask fhir.Task
-	err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, bundle, func(entry fhir.BundleEntry) bool {
+	err := coolfhir.ExecuteTransactionAndRespondWithResultBundle(s.fhirClient, bundle, func(entry fhir.BundleEntry) bool {
 		//TODO: Add  && entry.Request.Method == fhir.HTTPVerbPUT req
 		return entry.Response != nil && entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
 	}, httpResponse, &updatedTask)

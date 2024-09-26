@@ -35,7 +35,7 @@ func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
 		return fmt.Errorf("task is not valid - skipping: %w", err)
 	}
 
-	partOfRef, err := s.partOf(task)
+	partOfRef, err := s.partOf(task, false)
 	if err != nil {
 		return fmt.Errorf("failed to extract Task.partOf: %w", err)
 	}
@@ -52,6 +52,7 @@ func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
 	return nil
 }
 
+// TODO: This function now always expects a subtask, but it should also be able to handle primary tasks
 func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
 
 	log.Info().Msg("Running handleTaskFillerUpdate")
@@ -71,13 +72,8 @@ func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
 		return fmt.Errorf("task is not valid - skipping: %w", err)
 	}
 
-	partOfRef, err := s.partOf(task)
-	if err != nil {
-		return fmt.Errorf("failed to extract Task.partOf: %w", err)
-	}
-
-	if partOfRef == nil {
-		return errors.New("handleTaskFillerUpdate got a subtask without a partOf set")
+	if _, err := s.partOf(task, true); err != nil {
+		return fmt.Errorf("expected a subTask - failed to extract Task.partOf for Task/%s: %w", *task.Id, err)
 	}
 
 	log.Info().Msg("SubTask.status is completed - processing")
@@ -89,19 +85,15 @@ func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
 func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 	log.Debug().Msg("Marking primary Task as completed")
 
-	if subTask.PartOf == nil {
-		return errors.New("task.partOf is empty")
-	}
-
-	partOfTaskRef := subTask.PartOf[0].Reference
-	if partOfTaskRef == nil || !strings.HasPrefix(*partOfTaskRef, "Task/") {
-		return errors.New("task.partOf[0].reference is not a valid Task reference")
+	partOfTaskRef, err := s.partOf(subTask, true)
+	if err != nil {
+		return err
 	}
 
 	var partOfTask fhir.Task
-	err := s.fhirClient.Read(*partOfTaskRef, &partOfTask)
+	err = s.fhirClient.Read(*partOfTaskRef, &partOfTask)
 	if err != nil {
-		return fmt.Errorf("failed to fetch partOf Task: %w", err)
+		return fmt.Errorf("failed to fetch partOf Task/%s: %w", *partOfTaskRef, err)
 	}
 
 	// Change status to accepted
@@ -206,41 +198,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 			return nil
 		}
 
-		for _, output := range task.Output {
-			if ref := output.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "QuestionnaireResponse/") {
-
-				var partOfTaskRef *string
-				for _, partOf := range task.PartOf {
-					if partOf.Reference != nil && strings.HasPrefix(*partOf.Reference, "Task/") {
-						partOfTaskRef = partOf.Reference
-						break
-					}
-				}
-
-				if partOfTaskRef == nil {
-					return errors.New("no valid Task reference found in task.partOf")
-				}
-
-				var partOfTask fhir.Task
-				err := s.fhirClient.Read(*partOfTaskRef, &partOfTask)
-				if err != nil {
-					return fmt.Errorf("failed to fetch partOf Task: %w", err)
-				}
-
-				// Change status to accepted
-				partOfTask.Status = fhir.TaskStatusAccepted
-
-				// Update the task in the FHIR server
-				err = s.fhirClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
-				if err != nil {
-					return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
-				}
-
-				log.Info().Msgf("Successfully marked %s as completed", *partOfTaskRef)
-				break
-			}
-		}
-		return nil
+		return s.markPrimaryTaskAsCompleted(task)
 	}
 
 	// Create a new SubTask based on the Questionnaire reference
@@ -368,9 +326,13 @@ func (s *Service) getPIISubTask(task *fhir.Task, questionnaireRef string) map[st
 	return subtask
 }
 
-func (s *Service) partOf(task *fhir.Task) (*string, error) {
+func (s *Service) partOf(task *fhir.Task, partOfRequired bool) (*string, error) {
 	if len(task.PartOf) == 0 {
-		return nil, nil // Optional reference, simply return nil if not set
+		if !partOfRequired {
+			return nil, nil // Optional reference, not required in "primary" Tasks. simply return nil if not set
+		}
+
+		return nil, errors.New("Task.partOf is required but not provided")
 	}
 
 	partOfRef := task.PartOf[0].Reference

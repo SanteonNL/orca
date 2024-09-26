@@ -62,7 +62,7 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 		s.notifySubscribers(httpRequest.Context(), &updatedCareTeam)
 	}
 
-	return s.handleTaskFillerCreate(&createdTask) //TODO: Move to the notification?
+	return s.handleTaskFillerCreate(&createdTask) //TODO: This should be done by the CPC after the notification is received
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.

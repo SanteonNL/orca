@@ -154,6 +154,17 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 // ExecuteTransactionAndRespondWithEntry executes a transaction (Bundle) on the FHIR server and responds with the entry that matches the filter.
 // It unmarshals the filtered entry into the given resultResource
 func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter, resultResource any) error {
+	return executeTransactionAndRespond(fhirClient, bundle, filter, httpResponse, resultResource, true)
+}
+
+// ExecuteTransactionAndRespondWithResultBundle executes a transaction (Bundle) on the FHIR server and responds with the result Bundle
+// It unmarshals the filtered entry into the given resultResource
+func ExecuteTransactionAndRespondWithResultBundle(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter, resultResource any) error {
+	return executeTransactionAndRespond(fhirClient, bundle, filter, httpResponse, resultResource, false)
+}
+
+// executeTransactionAndRespond is a helper function that executes a transaction (Bundle) on the FHIR server and responds with either the filtered entry or the whole bundle
+func executeTransactionAndRespond(fhirClient fhirclient.Client, bundle fhir.Bundle, filter func(entry fhir.BundleEntry) bool, httpResponse http.ResponseWriter, resultResource any, respondWithEntry bool) error {
 	resultBundle, err := ExecuteTransaction(fhirClient, bundle)
 	if err != nil {
 		return err
@@ -175,12 +186,6 @@ func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle 
 
 		log.Trace().Msgf("filter matched on %s", *entry.Response.Location)
 
-		statusParts := strings.Split(entry.Response.Status, " ")
-		status, _ := strconv.Atoi(statusParts[0])
-		if status == 0 {
-			status = http.StatusOK
-		}
-
 		// Read the resource from the FHIR server, to return it to the client.
 		if resultResource == nil {
 			// caller doesn't care about the result
@@ -191,15 +196,23 @@ func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle 
 			return errors.Join(ErrEntryNotFound, fmt.Errorf("failed to re-retrieve result Bundle entry (resource=%s): %w", *entry.Response.Location, err))
 		}
 
-		if httpResponse == nil {
-			return nil // Only execute the transaction and fill the `resultResource`, caller doesn't want to set the response
-		}
-
 		for key, value := range headers.Header {
 			httpResponse.Header()[key] = value
 		}
-		httpResponse.WriteHeader(status)
-		return json.NewEncoder(httpResponse).Encode(resultResource)
+
+		if respondWithEntry {
+			statusParts := strings.Split(entry.Response.Status, " ")
+			status, _ := strconv.Atoi(statusParts[0])
+			if status == 0 {
+				status = http.StatusOK
+			}
+			httpResponse.WriteHeader(status)
+			return json.NewEncoder(httpResponse).Encode(resultResource)
+		}
+
+		httpResponse.WriteHeader(http.StatusOK)
+		return json.NewEncoder(httpResponse).Encode(resultBundle)
 	}
+
 	return ErrEntryNotFound
 }
