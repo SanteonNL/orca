@@ -18,6 +18,7 @@ func (d DutchNutsProfile) CsdDirectory() csd.Directory {
 	apiClient, _ := discovery.NewClientWithResponses(d.Config.API.URL)
 	return CsdDirectory{
 		APIClient: apiClient,
+		ServiceID: "shared-care-planning",
 		IdentifierCredentialMapping: map[string]string{
 			coolfhir.URANamingSystem: "credentialSubject.organization.ura", // NutsURACredential provides URA attribute
 		},
@@ -29,6 +30,7 @@ func (d DutchNutsProfile) CsdDirectory() csd.Directory {
 type CsdDirectory struct {
 	// APIClient is a REST API client to invoke the Nuts node's private Discovery Service API.
 	APIClient discovery.ClientWithResponsesInterface
+	ServiceID string
 	// IdentifierCredentialMapping maps logical identifiers to attributes in credentials in the Discovery Service's registrations.
 	// For instance, to map the following FHIR identifier to a credential attribute:
 	// {
@@ -51,12 +53,12 @@ type CsdDirectory struct {
 // LookupEndpoint searches for endpoints of the given owner, with the given endpointName in the given Discovery Service.
 // It queries the Nuts Discovery Service, translating the owner's identifier to a credential attribute (see IdentifierCredentialMapping).
 // The endpoint is retrieved from the Nuts Discovery Service registration's registrationParameters, identified by endpointName.
-func (n CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, service string, endpointName string) ([]fhir.Endpoint, error) {
+func (n CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
 	identifierSearchParam, supported := n.IdentifierCredentialMapping[*owner.System]
 	if !supported {
 		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for CodingSystem: %s", *owner.System)
 	}
-	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, service, &discovery.SearchPresentationsParams{
+	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, n.ServiceID, &discovery.SearchPresentationsParams{
 		Query: &map[string]interface{}{
 			identifierSearchParam: *owner.Value,
 		},

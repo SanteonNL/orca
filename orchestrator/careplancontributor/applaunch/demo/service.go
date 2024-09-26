@@ -1,12 +1,12 @@
 package demo
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 const fhirLauncherKey = "demo"
@@ -22,12 +22,19 @@ func init() {
 	}
 }
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string) *Service {
-	log.Info().Msgf("Demo app launch: http://localhost%s/demo-app-launch", baseURL)
+func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string) *Service {
+	var appLaunchURL string
+	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
+		appLaunchURL = baseURL + "/demo-app-launch"
+	} else {
+		appLaunchURL = "http://localhost" + appLaunchURL + "/demo-app-launch"
+	}
+	log.Info().Msgf("Demo app launch is (%s)", appLaunchURL)
 	return &Service{
 		sessionManager: sessionManager,
 		config:         config,
 		baseURL:        baseURL,
+		landingUrlPath: landingUrlPath,
 	}
 }
 
@@ -35,6 +42,7 @@ type Service struct {
 	sessionManager *user.SessionManager
 	config         Config
 	baseURL        string
+	landingUrlPath string
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -79,6 +87,6 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	})
 	// Redirect to landing page
 	targetURL, _ := url.Parse(s.baseURL)
-	targetURL = targetURL.JoinPath(careplancontributor.LandingURL)
+	targetURL = targetURL.JoinPath(s.landingUrlPath)
 	http.Redirect(response, request, targetURL.String(), http.StatusFound)
 }

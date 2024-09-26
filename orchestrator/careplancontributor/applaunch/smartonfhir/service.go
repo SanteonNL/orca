@@ -3,7 +3,6 @@ package smartonfhir
 import (
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
@@ -31,14 +30,16 @@ type Service struct {
 	stateToTokenUrlMap map[string]string //TODO: move to redis
 	mu                 *sync.Mutex
 	sessionManager     *user.SessionManager
+	landingUrlPath     string
 }
 
-func New(config Config, manager *user.SessionManager) *Service {
+func New(config Config, manager *user.SessionManager, landingUrlPath string) *Service {
 	return &Service{
 		config:             config,
 		stateToTokenUrlMap: make(map[string]string),
 		mu:                 &sync.Mutex{},
 		sessionManager:     manager,
+		landingUrlPath:     landingUrlPath,
 	}
 }
 
@@ -121,7 +122,7 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 			"access_token": tokenResponse["access_token"].(string),
 		},
 	})
-	http.Redirect(response, request, careplancontributor.LandingURL, http.StatusFound)
+	http.Redirect(response, request, s.landingUrlPath, http.StatusFound)
 }
 
 func (s *Service) appLaunchRedirectLogic(state string, code string) (map[string]interface{}, error) {

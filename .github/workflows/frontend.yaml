@@ -6,6 +6,7 @@ on:
   push:
     paths:
       - frontend/**
+      - .github/workflows/frontend.yaml
 
 env:
   REGISTRY: ghcr.io

@@ -81,6 +81,12 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	// Authorized endpoints
 	//
 	// TODO: Modify this and other URLs to /cpc/* in future change
+	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		log.Info().Msg("TODO: Handle received notification")
+		writer.WriteHeader(http.StatusOK)
+	}))
+	// TODO: Determine auth from Nuts node and access token
+	// TODO: Modify this and other URLs to /cpc/* in future change
 	mux.HandleFunc(fmt.Sprintf("GET %s/fhir/*", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		err := s.handleProxyToFHIR(writer, request)
 		if err != nil {

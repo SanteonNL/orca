@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 )
 
@@ -12,6 +13,7 @@ func DefaultConfig() Config {
 type Config struct {
 	CarePlanService   CarePlanServiceConfig `koanf:"careplanservice"`
 	FrontendConfig    FrontendConfig        `koanf:"frontend"`
+	AppLaunch         applaunch.Config      `koanf:"applaunch"`
 	FHIR              coolfhir.ClientConfig `koanf:"fhir"`
 	Enabled           bool                  `koanf:"enabled"`
 	StaticBearerToken string

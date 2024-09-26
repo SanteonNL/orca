@@ -1,6 +1,7 @@
 package profile
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -17,10 +18,11 @@ var _ Provider = TestProfile{}
 type TestProfile struct {
 	Principal              *auth.Principal
 	xSCPContextHeaderValue string
+	TestCsdDirectory csd.Directory
 }
 
 func (t TestProfile) CsdDirectory() csd.Directory {
-	panic("implement me")
+	return t.TestCsdDirectory
 }
 
 func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request) {
@@ -71,4 +73,18 @@ func (t TestProfile) HttpClient() *http.Client {
 	return &http.Client{
 		Transport: auth.AuthenticatedTestRoundTripper(nil, principal, t.xSCPContextHeaderValue),
 	}
+}
+
+var _ csd.Directory = TestCsdDirectory{}
+
+type TestCsdDirectory struct {
+	Endpoint string
+}
+
+func (t TestCsdDirectory) LookupEndpoint(_ context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
+	return []fhir.Endpoint{
+		{
+			Address: t.Endpoint,
+		},
+	}, nil
 }

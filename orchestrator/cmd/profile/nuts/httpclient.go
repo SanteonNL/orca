@@ -11,8 +11,8 @@ func (d DutchNutsProfile) HttpClient() *http.Client {
 	return &http.Client{
 		Transport: &oauth2.Transport{
 			TokenSource: nuts.OAuth2TokenSource{
-				OwnDID:     d.Config.OwnSubject,
-				NutsAPIURL: d.Config.API.URL,
+				NutsSubject: d.Config.OwnSubject,
+				NutsAPIURL:  d.Config.API.URL,
 			},
 			MetadataLoader: &oauth2.MetadataLoader{},
 			AuthzServerLocators: []oauth2.AuthorizationServerLocator{

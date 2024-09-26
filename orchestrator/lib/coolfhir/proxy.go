@@ -18,7 +18,8 @@ func NewProxy(logger zerolog.Logger, targetFHIRBaseURL *url.URL, proxyBasePath s
 		},
 		Transport: sanitizingRoundTripper{
 			next: loggingRoundTripper{
-				next: transport,
+				logger: &logger,
+				next:   transport,
 			},
 		},
 		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
@@ -54,7 +55,7 @@ func (s sanitizingRoundTripper) RoundTrip(request *http.Request) (*http.Response
 var _ http.RoundTripper = &loggingRoundTripper{}
 
 type loggingRoundTripper struct {
-	logger zerolog.Logger
+	logger *zerolog.Logger
 	next   http.RoundTripper
 }
 
