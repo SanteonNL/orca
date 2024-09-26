@@ -10,7 +10,6 @@ export async function GET(req: NextRequest, { params }: { params: { fhirPath: st
         const response = await fetch(`${process.env.FHIR_BASE_URL}/${fhirPathUrlSegment}`, {
             method: req.method,
             headers: req.headers,
-            body: req.method !== 'GET' && req.method !== 'HEAD' ? JSON.stringify(req.body) : undefined,
         });
 
         if (!response.ok) {
