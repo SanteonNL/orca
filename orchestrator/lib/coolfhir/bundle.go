@@ -181,7 +181,7 @@ func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle 
 			continue
 		}
 
-		log.Info().Msgf("filter matched on %s", *entry.Response.Location)
+		log.Trace().Msgf("filter matched on %s", *entry.Response.Location)
 
 		statusParts := strings.Split(entry.Response.Status, " ")
 		status, _ := strconv.Atoi(statusParts[0])
