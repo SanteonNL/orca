@@ -154,7 +154,7 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	}
 	// Verify that the u.Path refers to a careplan
 	if !strings.HasPrefix(u.Path, "/cps/CarePlan/") {
-		return errors.New("header does not include CarePlan")
+		return errors.New("specified SCP context header does not refer to a CarePlan")
 	}
 
 	carePlanServiceClient := fhirclient.New(s.carePlanServiceURL, s.scpHttpClient, coolfhir.Config())
