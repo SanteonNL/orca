@@ -1,9 +1,9 @@
-import React from 'react'
+import React, { useState } from 'react'
 
 import { SmartFormsRenderer } from '@aehrc/smart-forms-renderer';
 import { IconCheckupList } from '@tabler/icons-react';
-import { Task } from 'fhir/r4';
-import { findQuestionnaire, findQuestionnaireResponse } from '@/utils/fhirUtils';
+import { Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
+import { fetchQuestionnaire, fetchQuestionnaireResponse } from '@/utils/fhirUtils';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -12,6 +12,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import Slide from '@mui/material/Slide';
 import { TransitionProps } from '@mui/material/transitions';
 import { Box, IconButton } from '@mui/material';
+import Loading from '@/app/loading';
 
 const Transition = React.forwardRef(function Transition(
     props: TransitionProps & {
@@ -24,12 +25,20 @@ const Transition = React.forwardRef(function Transition(
 
 export default function ViewTaskOutput({ task }: { task: Task }) {
     const [open, setOpen] = React.useState(false);
+    const [questionnaire, setQuestionnaire] = useState<Questionnaire>()
+    const [questionnaireResponse, setQuestionnaireResponse] = useState<QuestionnaireResponse>()
+    const [fetched, setFetched] = useState(false)
 
-    const questionnaire = findQuestionnaire(task)
-    const questionnaireResponse = findQuestionnaireResponse(task, questionnaire)
+    const handleClickOpen = async () => {
 
-    const handleClickOpen = () => {
         setOpen(true);
+
+        if (!fetched) {
+            const questionnaire = await fetchQuestionnaire(task)
+            setQuestionnaire(questionnaire)
+            setQuestionnaireResponse(await fetchQuestionnaireResponse(task, questionnaire))
+            setFetched(true)
+        }
     };
 
     const handleClose = () => {
@@ -68,15 +77,19 @@ export default function ViewTaskOutput({ task }: { task: Task }) {
                     </Toolbar>
                 </AppBar>
                 <Box sx={{ mt: '80px' }}>
-                    {!questionnaire || !questionnaireResponse ? (
-                        <>No Questionnaire or QuestionnaireResponse found</>
-                    ) : (
-                        <SmartFormsRenderer
-                            readOnly
-                            questionnaire={questionnaire}
-                            questionnaireResponse={questionnaireResponse}
-                        />
-                    )}
+                    {!setFetched ?
+                        (<Loading />) :
+                        !questionnaire || !questionnaireResponse ? (
+                            <>No Questionnaire or QuestionnaireResponse found</>
+                        ) : (
+                            <SmartFormsRenderer
+                                readOnly
+                                questionnaire={questionnaire}
+                                questionnaireResponse={questionnaireResponse}
+                            />
+                        )
+                    }
+
                 </Box>
             </Dialog>
         </React.Fragment>

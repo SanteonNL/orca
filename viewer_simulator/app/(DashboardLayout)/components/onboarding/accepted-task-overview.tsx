@@ -1,5 +1,6 @@
 import React from 'react';
 import EnrolledTaskTable from './enrolled-task-table';
+import { Task } from 'fhir/r4';
 
 export default async function AcceptedTaskOverview() {
 
@@ -31,19 +32,21 @@ export default async function AcceptedTaskOverview() {
             const tasks = taskData.entry
 
             rows = tasks.map((entry: any) => {
-                const task = entry.resource;
-                const bsn = task.for.identifier.value
-                //const serviceRequest = task.contained?.find((contained: any) => contained.resourceType === "ServiceRequest")
+                const task = entry.resource as Task;
+                const bsn = task.for?.identifier?.value || "Unknown";
 
-                console.log(task.basedOn[0].display)
+                //TODO: An optional improvement would be to fetch & cache the task.requester by identifier if the display is not set
                 return {
                     id: task.id,
-                    hospitalUra: task.requester.identifier.value,
-                    hospitalName: task.requester.display,
-                    patientBsn: bsn || "Unknown",
-                    careplan: task.basedOn[0].display,
+                    requesterUra: task.requester?.identifier?.value ?? "Unknown",
+                    requesterName: task.requester?.display ?? "Unknown",
+                    performerUra: task.requester?.identifier?.value ?? "Unknown",
+                    performerName: task.requester?.display ?? "Unknown",
+                    isSubtask: !!task.partOf,
+                    patientBsn: bsn,
+                    careplan: task.basedOn?.[0]?.display ?? "Unknown",
                     status: task.status,
-                    lastUpdated: new Date(task.meta.lastUpdated),
+                    lastUpdated: task.meta?.lastUpdated ? new Date(task.meta.lastUpdated) : new Date(),
                     task: task
                 };
             });

@@ -1,23 +1,45 @@
 import { Questionnaire, QuestionnaireResponse, Task } from "fhir/r4"
 
-export const getQuestionnaireResponseId = (questionnaire?: Questionnaire) => {
-    if (!questionnaire) throw new Error("Tried to generate a questionnaire response id but the Questionnaire is not defined")
-    return `#questionnaire-response-${questionnaire.id}`
+export const fetchQuestionnaire = async (task?: Task) => {
+    if (!task || !task.input) return
+
+    const questionnaireRefs = task.input
+        .filter((input) => input.valueReference?.reference?.startsWith("Questionnaire/"))
+        .map((input) => input.valueReference?.reference)
+
+    if (questionnaireRefs.length < 1) console.warn("Found more than one Questionnaire for Task/" + task.id)
+
+    const questionnaireResp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/api/fhir/${questionnaireRefs[0]}`, {
+        headers: {
+            "Content-Type": "application/json"
+        }
+    })
+
+    if (!questionnaireResp.ok) {
+        throw new Error("Failed to fetch Questionnaire. Server message: " + questionnaireResp.statusText)
+    }
+
+    return await questionnaireResp.json() as Questionnaire
 }
 
-export const findQuestionnaire = (task?: Task) => {
-    if (!task || !task.contained) return
+export const fetchQuestionnaireResponse = async (task?: Task, questionnaire?: Questionnaire) => {
+    if (!task || !task.output || !questionnaire) return
 
-    const questionnaires = task.contained.filter((contained) => contained.resourceType === "Questionnaire") as Questionnaire[]
+    const questionnaireResponseRefs = task.output
+        .filter((output) => output.valueReference?.reference?.startsWith("QuestionnaireResponse/"))
+        .map((output) => output.valueReference?.reference)
 
-    if (questionnaires.length < 1) console.warn("Found more than one Questionnaire for Task/" + task.id)
+    if (questionnaireResponseRefs.length < 1) console.warn("Found more than one Questionnaire for Task/" + task.id)
 
-    return questionnaires.length ? questionnaires[0] : undefined
-}
+    const questionnaireResponseResp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/api/fhir/${questionnaireResponseRefs[0]}`, {
+        headers: {
+            "Content-Type": "application/json"
+        }
+    })
 
-export const findQuestionnaireResponse = (task?: Task, questionnaire?: Questionnaire) => {
-    if (!task || !task.contained || !questionnaire) return
+    if (!questionnaireResponseResp.ok) {
+        throw new Error("Failed to fetch QuestionnaireResponse. Server message: " + questionnaireResponseResp.statusText)
+    }
 
-    const expectedQuestionnaireId = getQuestionnaireResponseId(questionnaire)
-    return task.contained.find((contained) => contained.id === expectedQuestionnaireId) as QuestionnaireResponse | undefined
+    return await questionnaireResponseResp.json() as QuestionnaireResponse
 }
