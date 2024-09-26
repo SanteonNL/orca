@@ -19,7 +19,7 @@ func (s *Service) handleBundle(httpResponse http.ResponseWriter, httpRequest *ht
 	if err := s.readRequest(httpRequest, &bundle); err != nil {
 		return fmt.Errorf("invalid %T: %w", bundle, err)
 	}
-	log.Info().Msg("converted Bundle to fhir.Bundle")
+	log.Trace().Msg("converted Bundle to fhir.Bundle")
 
 	//Simply execute the bundle for now - extract the Task if it's in the bundle
 	var updatedTask fhir.Task
