@@ -196,6 +196,10 @@ func executeTransactionAndRespond(fhirClient fhirclient.Client, bundle fhir.Bund
 			return errors.Join(ErrEntryNotFound, fmt.Errorf("failed to re-retrieve result Bundle entry (resource=%s): %w", *entry.Response.Location, err))
 		}
 
+		if httpResponse == nil {
+			return nil // Only execute the transaction and fill the `resultResource`, caller doesn't want to set the response
+		}
+
 		for key, value := range headers.Header {
 			httpResponse.Header()[key] = value
 		}
