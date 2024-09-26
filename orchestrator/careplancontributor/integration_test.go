@@ -15,11 +15,15 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"sync/atomic"
 	"testing"
 )
 
+var notificationCounter = new(atomic.Int32)
+
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
-	carePlanServiceURL, httpService, cpcURL := setupIntegrationTest(t)
+	notificationEndpoint := setupNotificationEndpoint(t)
+	carePlanServiceURL, httpService, cpcURL := setupIntegrationTest(t, notificationEndpoint)
 
 	dataHolderTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
 	dataRequesterTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/1")
@@ -135,12 +139,14 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	}
 }
 
-func setupIntegrationTest(t *testing.T) (*url.URL, *httptest.Server, *url.URL) {
+func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL, *httptest.Server, *url.URL) {
 	fhirBaseURL := setupHAPI(t)
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	service, err := careplanservice.New(config, profile.TestProfile{}, orcaPublicURL)
+	service, err := careplanservice.New(config, profile.TestProfile{
+		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
+	}, orcaPublicURL)
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
@@ -165,6 +171,18 @@ func setupIntegrationTest(t *testing.T) (*url.URL, *httptest.Server, *url.URL) {
 	// Return the URLs and httpService of the cpsDataRequester, cpcDataRequester, cpsDataHolder
 	// these will be used to construct clients with both the correct and incorrect auth for positive and negative testing
 	return carePlanServiceURL, httpService, cpcURL
+}
+
+func setupNotificationEndpoint(t *testing.T) *url.URL {
+	notificationEndpoint := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		notificationCounter.Add(1)
+		writer.WriteHeader(http.StatusOK)
+	}))
+	t.Cleanup(func() {
+		notificationEndpoint.Close()
+	})
+	u, _ := url.Parse(notificationEndpoint.URL)
+	return u
 }
 
 func setupHAPI(t *testing.T) *url.URL {
