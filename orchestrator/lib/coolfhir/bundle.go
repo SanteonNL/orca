@@ -146,7 +146,7 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 		return fhir.Bundle{}, fmt.Errorf("result bundle is nil")
 	}
 
-	log.Info().Msgf("Executed Bundle successfully, got %d entries", len(resultBundle.Entry))
+	log.Debug().Msgf("Executed Bundle successfully, got %d entries", len(resultBundle.Entry))
 	// The transaction was successfully executed, return the result bundle
 	return resultBundle, nil
 }
