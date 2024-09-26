@@ -1,17 +1,15 @@
 package careplanservice
 
 import (
-	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/shared_test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	testcontainers "github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -224,7 +222,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	}
 }
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient) {
-	fhirBaseURL := setupHAPI(t)
+	fhirBaseURL := shared_test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
 		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
 	}
@@ -291,31 +289,4 @@ func setupNotificationEndpoint(t *testing.T) *url.URL {
 	})
 	u, _ := url.Parse(notificationEndpoint.URL)
 	return u
-}
-
-func setupHAPI(t *testing.T) *url.URL {
-	ctx := context.Background()
-	req := testcontainers.ContainerRequest{
-		Image:        "hapiproject/hapi:v7.2.0",
-		ExposedPorts: []string{"8080/tcp"},
-		Env: map[string]string{
-			"hapi.fhir.fhir_version": "R4",
-		},
-		WaitingFor: wait.ForHTTP("/fhir/Task"),
-	}
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		if err := container.Terminate(ctx); err != nil {
-			panic(err)
-		}
-	})
-	endpoint, err := container.Endpoint(ctx, "http")
-	require.NoError(t, err)
-	u, err := url.Parse(endpoint)
-	require.NoError(t, err)
-	return u.JoinPath("fhir")
 }

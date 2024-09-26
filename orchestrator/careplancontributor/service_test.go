@@ -88,7 +88,7 @@ func TestService_Proxy_NoCarePlanInHeader_Fails(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: header does not include CarePlan"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`, string(body))
 }
 
 func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {

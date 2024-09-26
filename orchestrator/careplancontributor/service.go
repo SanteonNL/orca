@@ -184,35 +184,38 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	if err != nil {
 		return err
 	}
-	isValidRequester := false
-	for _, careTeam := range careTeams {
-		for _, participant := range careTeam.Participant {
-			for _, identifier := range principal.Organization.Identifier {
-				if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, &identifier) {
-					// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
-					err = coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
-					if err != nil {
-						return err
-					}
-					isValidRequester = true
-					break
-				}
-				if isValidRequester {
-					break
-				}
-			}
-			if isValidRequester {
-				break
-			}
-		}
+
+	isValid, err := validateRequester(careTeams, principal)
+	if err != nil {
+		return err
 	}
 
-	if !isValidRequester {
+	if !isValid {
 		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
 	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
 	fhirProxy.ServeHTTP(writer, request)
 	return nil
+}
+
+// validateRequester loops through each Participant of each CareTeam present in the CarePlan, trying to match it to the Principal
+// if a match is found, validate the time period of the Participant
+func validateRequester(careTeams []fhir.CareTeam, principal auth.Principal) (bool, error) {
+	for _, careTeam := range careTeams {
+		for _, participant := range careTeam.Participant {
+			for _, identifier := range principal.Organization.Identifier {
+				if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, &identifier) {
+					// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
+					err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
+					if err != nil {
+						return false, err
+					}
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
 }
 
 // handleGetPatient is the REST API handler that returns the FHIR Patient.
