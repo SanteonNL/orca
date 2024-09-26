@@ -9,7 +9,7 @@ export default function SelectedServiceRequestView() {
     const { serviceRequest } = useEnrollmentStore()
 
     return (
-        <Card className='mt-5 bg-primary text-gray-100'>
+        <Card className='my-5 bg-primary text-gray-100'>
             <CardHeader>
                 <CardTitle>
                     <div className='flex items-center'>

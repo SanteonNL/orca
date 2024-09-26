@@ -33,7 +33,7 @@ services:
       - "1305:1305"
   orchestrator:
     image: ghcr.io/santeonnl/orca_orchestrator:main
-    #build:
+    # build:
     #  context: ../../../orchestrator
     #  dockerfile: Dockerfile
     ports:
@@ -53,7 +53,7 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
   viewer:
-     image: ghcr.io/santeonnl/orca_viewersimulator:main
-#     build:
-#       context: ../../../viewer_simulator
-#       dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_viewersimulator:main
+    # build:
+    #   context: ../../../viewer_simulator
+    #   dockerfile: Dockerfile

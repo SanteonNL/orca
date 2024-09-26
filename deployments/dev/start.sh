@@ -123,8 +123,6 @@ NUTS_URL="${CLINIC_URL}" \
 
 echo "  Creating SearchParameter"
 ./config/init-fhir-resources.sh $CLINIC_URL
-echo "\n  Enable polling in viewer"
-curl -s -X POST -H "Content-Type:application/json" -d '{"fhir_base_url": "'$CLINIC_URL/fhir'"}' $CLINIC_URL/viewer/api/task/polling/start
 popd
 
 echo "Creating stack for Hospital..."
@@ -147,7 +145,7 @@ NUTS_URL="${HOSPITAL_URL}" \
  CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" \
   docker compose up \
  --wait --build --remove-orphans
-echo "  Creating Questionnaire"
+echo "  Waiting for the FHIR server to be ready"
 ./config/init-fhir-resources.sh $HOSPITAL_URL
 popd
 

@@ -1,5 +1,5 @@
 import Client from 'fhir-kit-client';
-import { Bundle, CarePlan, CarePlanActivity, Condition, Patient, Resource, ServiceRequest, Task } from 'fhir/r4';
+import { Bundle, CarePlan, CarePlanActivity, Condition, Patient, Questionnaire, QuestionnaireResponse, Resource, ServiceRequest, Task } from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -82,43 +82,64 @@ export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, prim
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task")
 
+    //TODO: See if the ServiceRequest needs to be included in the Task via input or in a Bundle
     return {
-        "resourceType": "Task",
-        "basedOn": [
+        resourceType: "Task",
+        meta: {
+            profile: [
+                "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
+            ]
+        },
+        basedOn: [
             {
                 "reference": `CarePlan/${carePlan.id}`,
-                type: "CarePlan"
+                type: "CarePlan",
+                display: carePlan.title
             }
         ],
-        "status": "requested",
-        "intent": "order",
-        focus: {
-            identifier: {
-                "system": conditionCode.system,
-                "value": conditionCode.code
-            },
-            type: 'Condition'
+        for: carePlan.subject,
+        status: "requested",
+        intent: "order",
+        requester: {
+            identifier: serviceRequest.requester?.identifier,
         },
-        input: [
-            {
-                type: {
-                    coding: [{
-                        system: "http://terminology.hl7.org/CodeSystem/task-input-type",
-                        code: "Reference",
-                        display: "Reference"
-                    }]
-                },
-                valueReference: {
-                    type: "ServiceRequest",
-                    reference: '#contained-sr'
-                }
-            }
-        ],
-        contained: [
-            {
-                ...serviceRequest,
-                id: 'contained-sr'
-            }
-        ]
+        owner: {
+            identifier: serviceRequest.performer?.[0]?.identifier,
+        },
+        focus: {
+            identifier: serviceRequest.identifier?.[0],
+            display: serviceRequest.code?.coding?.[0].display,
+            type: 'ServiceRequest'
+        },
     }
+}
+
+export const getTaskPerformer = (task?: Task) => {
+
+    if (!task) return undefined
+
+    const serviceRequestFromInput = task.contained?.find((contained) => {
+        return contained.resourceType === "ServiceRequest"
+    })
+
+    return serviceRequestFromInput?.performer?.[0]
+}
+
+export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Questionnaire) => {
+    if (!task || !task.output || !questionnaire) return
+
+    const questionnaireResponse = task.output.find((output) => {
+        return output.valueReference?.reference?.startsWith(`QuestionnaireResponse/`)
+    })
+
+    if (!questionnaireResponse) return
+
+    const questionnaireResponseId = questionnaireResponse.valueReference?.reference
+    if (!questionnaireResponseId) return
+
+    const cpsClient = createCpsClient()
+    return await cpsClient.read({
+        resourceType: "QuestionnaireResponse",
+        id: questionnaireResponseId.split("/")[1]
+    })
 }

@@ -2,13 +2,14 @@ package careplanservice
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"strings"
 )
 
 func (s *Service) handleCreateCarePlan(httpResponse http.ResponseWriter, httpRequest *http.Request) error {

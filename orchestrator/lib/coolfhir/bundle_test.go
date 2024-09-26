@@ -2,14 +2,16 @@ package coolfhir
 
 import (
 	"encoding/json"
+	"net/http/httptest"
+	"testing"
+
+	"io"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
-	"io"
-	"net/http/httptest"
-	"testing"
 )
 
 func TestTransactionBuilder(t *testing.T) {
@@ -104,6 +106,28 @@ func TestExecuteTransactionAndRespondWithEntry(t *testing.T) {
 			require.NoError(t, err)
 			responseData, _ := io.ReadAll(httpResponse.Body)
 			require.JSONEq(t, `{"id":"task1"}`, string(responseData))
+		})
+
+		t.Run("caller not interested in setting the response", func(t *testing.T) {
+			fhirClient := mock.NewMockClient(ctrl)
+			fhirClient.EXPECT().Create(tx.Bundle(), gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ fhir.Bundle, result *fhir.Bundle, _ interface{}) error {
+					*result = fhirBundleResult
+					return nil
+				})
+			fhirClient.EXPECT().Read("Task/task1", gomock.Any(), gomock.Any()).
+				DoAndReturn(func(_ string, result *fhir.Task, _ interface{}) error {
+					*result = fhirCreatedTask
+					return nil
+				})
+
+			var result fhir.Task
+			err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
+				return *entry.Response.Location == "Task/task1"
+			}, nil, &result)
+
+			require.NoError(t, err)
+			require.Equal(t, fhirCreatedTask, result)
 		})
 	})
 }

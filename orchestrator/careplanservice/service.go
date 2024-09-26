@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
-	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"io"
 	"net/http"
 	"net/url"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -85,9 +86,20 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 	}))
 	mux.HandleFunc(basePath+"/*", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		// TODO: Authorize request here
-		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
-		proxy.ServeHTTP(writer, request)
+
+		if request.Method == http.MethodPost && request.URL.Path == basePath+"/" {
+			err := s.handleBundle(writer, request)
+			if err != nil {
+				// TODO: Adjust operation name on entries in Bundle
+				s.writeOperationOutcomeFromError(err, "CarePlanService/CreateCarePlan", writer)
+				return
+			}
+		} else {
+			// TODO: Authorize request here
+			log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
+			proxy.ServeHTTP(writer, request)
+		}
+
 	}))
 }
 

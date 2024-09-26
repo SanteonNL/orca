@@ -40,11 +40,8 @@ function PrePopButton(props: PrePopButtonProps) {
 
     if (patient && practitioner && autoPopulate && !autoPrePopulated) {
       handlePrepopulate()
-      setAutoPrePopulated(true)
     }
   }, [patient, practitioner, autoPopulate, autoPrePopulated])
-
-
 
   async function handlePrepopulate() {
     if (!patient || !practitioner) {
@@ -59,6 +56,7 @@ function PrePopButton(props: PrePopButtonProps) {
 
     if (populateResult && populateResult?.populated) {
       useQuestionnaireResponseStore.setState({ updatableResponse: populateResult.populated })
+      setAutoPrePopulated(true)
     }
     setIsPopulating(false);
   }

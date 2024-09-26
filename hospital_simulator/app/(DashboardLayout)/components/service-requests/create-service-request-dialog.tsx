@@ -373,6 +373,78 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 }
             },
             {
+                "fullUrl": "urn:uuid:condition-2",
+                "resource": {
+                    "resourceType": "Condition",
+                    "id": "condition-2",
+                    "identifier": [
+                        {
+                            "system": "http://fhir.nl/fhir/NamingSystem/condition-identifier",
+                            "value": "condition-002"
+                        }
+                    ],
+                    "clinicalStatus": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
+                                "code": "active",
+                                "display": "Active"
+                            }
+                        ]
+                    },
+                    "verificationStatus": {
+                        "coding": [
+                            {
+                                "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
+                                "code": "confirmed",
+                                "display": "Confirmed"
+                            }
+                        ]
+                    },
+                    "category": [
+                        {
+                            "coding": [
+                                {
+                                    "system": "http://terminology.hl7.org/CodeSystem/condition-category",
+                                    "code": "problem-list-item",
+                                    "display": "Problem List Item"
+                                }
+                            ]
+                        }
+                    ],
+                    "code": {
+                        "coding": [
+                            {
+                                "system": "http://snomed.info/sct",
+                                "code": "84114007",
+                                "display": "Heart failure (disorder)"
+                            }
+                        ],
+                        "text": "Hartfalen (aandoening)"
+                    },
+                    "subject": {
+                        "type": "Patient",
+                        "reference": "urn:uuid:patient-1",
+                        "identifier": {
+                            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+                            "value": patientBsn
+                        }
+                    },
+                    "recorder": {
+                        "type": "PractitionerRole",
+                        "reference": "urn:uuid:practitionerrole-1",
+                        "identifier": {
+                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
+                            "value": "uzi-001"
+                        }
+                    }
+                },
+                "request": {
+                    "method": "POST",
+                    "url": "Condition"
+                }
+            },
+            {
                 "fullUrl": "urn:uuid:servicerequest-1",
                 "resource": {
                     "resourceType": "ServiceRequest",
@@ -407,6 +479,10 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                             }
                         }
                     ],
+                    "identifier": [{
+                        "system": "2.16.528.1.1007.3.3.21514.ehr.orders",
+                        "value": "99534756439"
+                    }],
                     "code": {
                         "coding": [{
                             "system": "http://snomed.info/sct",

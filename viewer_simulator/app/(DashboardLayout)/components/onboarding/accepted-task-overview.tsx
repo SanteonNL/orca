@@ -27,34 +27,29 @@ export default async function AcceptedTaskOverview() {
         const taskData = await response.json();
         console.log(`Found [${taskData.total}] Task resources`);
 
-        if (taskData.total > 0) {
+        if (taskData?.total > 0) {
             const tasks = taskData.entry
 
             rows = tasks.map((entry: any) => {
                 const task = entry.resource;
-                console.log(JSON.stringify(task, undefined, 2))
-                let forRef = task.for.reference
-                if (forRef.indexOf('#') === 0) { //local reference
-                    forRef = forRef.substring(1, forRef.length)
-                }
+                const bsn = task.for.identifier.value
+                //const serviceRequest = task.contained?.find((contained: any) => contained.resourceType === "ServiceRequest")
 
-                const patientResource = task.contained && task.contained.find((containedResource: any) => containedResource.id === forRef)
-                const patientIdentifier = patientResource && patientResource.identifier[0]
-                const patientName = patientResource && patientResource.name[0]
-
+                console.log(task.basedOn[0].display)
                 return {
                     id: task.id,
                     hospitalUra: task.requester.identifier.value,
                     hospitalName: task.requester.display,
-                    patientBsn: patientIdentifier?.value || "Unknown",
-                    patientLastname: patientName?.given[0] || "Unknown",
-                    patientSurname: patientName?.family || "Unknown",
-                    condition: task.reasonCode.coding[0].display,
+                    patientBsn: bsn || "Unknown",
+                    careplan: task.basedOn[0].display,
                     status: task.status,
                     lastUpdated: new Date(task.meta.lastUpdated),
+                    task: task
                 };
             });
         }
+
+        console.log(rows)
     } catch (error) {
         console.error('Error occurred while fetching tasks:', error);
     }

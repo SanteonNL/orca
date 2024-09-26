@@ -3,9 +3,10 @@ package careplanservice
 import (
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"net/http"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -22,6 +23,7 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return fmt.Errorf("invalid Task: %w", err)
 	}
+
 	switch task["status"] {
 	case fhir.TaskStatusRequested.String():
 	case fhir.TaskStatusReady.String():
@@ -31,6 +33,7 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	// Resolve the CarePlan
 	carePlanRef, err := basedOn(task)
 	if err != nil {
+		//FIXME: This logic changed, create a new CarePlan when Task.basedOn is not set
 		return fmt.Errorf("invalid Task.basedOn: %w", err)
 	}
 	// TODO: Manage time-outs properly
@@ -43,6 +46,7 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	if err != nil {
 		return fmt.Errorf("failed to create Task: %w", err)
 	}
+
 	var createdTask fhir.Task
 	err = coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
 		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
@@ -57,7 +61,8 @@ func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest
 	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryIsOfType("CareTeam"), &updatedCareTeam); err == nil {
 		s.notifySubscribers(httpRequest.Context(), &updatedCareTeam)
 	}
-	return nil
+
+	return s.handleTaskFillerCreate(&createdTask) //TODO: This should be done by the CPC after the notification is received
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.
