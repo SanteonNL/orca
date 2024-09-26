@@ -13,6 +13,7 @@ func (s *Service) getQuestionnaireByUrl(url string) map[string]interface{} {
 	}
 }
 
+// TODO: Make these configurable, or package them as assets if we want to keep hardcoding them for now
 func (s *Service) getHardCodedHomeMonitoringPIIQuestionnaire() map[string]interface{} {
 	return map[string]interface{}{
 		"id":           uuid.NewString(),
