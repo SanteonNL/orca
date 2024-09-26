@@ -191,6 +191,12 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 					isValidRequester = true
 					break
 				}
+				if isValidRequester {
+					break
+				}
+			}
+			if isValidRequester {
+				break
 			}
 		}
 	}
