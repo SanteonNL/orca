@@ -159,23 +159,15 @@ func ExecuteTransactionAndRespondWithEntry(fhirClient fhirclient.Client, bundle 
 		return err
 	}
 
-	log.Info().Msgf("Found %d entries in result Bundle", len(resultBundle.Entry))
+	log.Trace().Msgf("Found %d entries in result Bundle", len(resultBundle.Entry))
 
 	for _, entry := range resultBundle.Entry {
-
-		entryJSON, err := json.Marshal(entry)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to marshal entry to JSON")
-		} else {
-			log.Info().Msgf("Entry JSON: %s", entryJSON)
-		}
-
 		if entry.Response == nil || entry.Response.Location == nil {
 			log.Error().Msg("entry.Response or entry.Response.Location is nil")
 			continue
 		}
 
-		log.Error().Msgf("entry.Response.Location found: %s", *entry.Response.Location)
+		log.Trace().Msgf("entry.Response.Location found: %s", *entry.Response.Location)
 
 		if !filter(entry) {
 			continue

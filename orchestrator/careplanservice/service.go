@@ -90,6 +90,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		if request.Method == http.MethodPost && request.URL.Path == basePath+"/" {
 			err := s.handleBundle(writer, request)
 			if err != nil {
+				// TODO: Adjust operation name on entries in Bundle
 				s.writeOperationOutcomeFromError(err, "CarePlanService/CreateCarePlan", writer)
 				return
 			}

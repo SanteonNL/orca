@@ -12,6 +12,7 @@ import (
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
+// TODO: Make these configurable
 var primaryTaskFocusToQuestionnaireURL = map[string]string{
 	"2.16.528.1.1007.3.3.21514.ehr.orders|99534756439": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017",
 }
@@ -20,6 +21,7 @@ var followUpQuestionnaireMap = map[string]string{
 	"http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-2--20240902134017",
 }
 
+// TODO: Move to CarePlanContributor as TaskEngine, invoked by the CPS notification
 func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
 	log.Info().Msg("Running handleTaskFillerCreate")
 
@@ -55,17 +57,17 @@ func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
 	log.Info().Msg("Running handleTaskFillerUpdate")
 
 	if !s.isScpTask(task) {
-		log.Info().Msg("Task is not an SCP Task - skipping")
+		log.Debug().Msg("Task is not an SCP Task - skipping")
 		return nil
 	}
 
 	if task.Status != fhir.TaskStatusCompleted {
-		log.Info().Msg("Task.status is not completed - skipping")
+		log.Debug().Msg("Task.status is not completed - skipping")
 		return nil
 	}
 
 	if err := s.isValidTask(task); err != nil {
-		log.Error().Msgf("Task invalid - skipping: %v", err)
+		log.Warn().Err(err).Msg("Task invalid - skipping")
 		return fmt.Errorf("task is not valid - skipping: %w", err)
 	}
 
@@ -85,7 +87,7 @@ func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
 }
 
 func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
-	log.Info().Msg("Marking primary Task as completed")
+	log.Debug().Msg("Marking primary Task as completed")
 
 	if subTask.PartOf == nil {
 		return errors.New("task.partOf is empty")
@@ -116,7 +118,7 @@ func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 }
 
 func (s *Service) fetchQuestionnaireByID(ref string, questionnaire *fhir.Questionnaire) error {
-	log.Info().Msg("Fetching Questionnaire by ID")
+	log.Debug().Msg("Fetching Questionnaire by ID")
 
 	err := s.fhirClient.Read(ref, &questionnaire)
 	if err != nil {
@@ -325,6 +327,7 @@ func (s *Service) getSubTask(task *fhir.Task, questionnaireRef string, isPrimary
 
 // Generates the PII subtask - provide the initial enrollment subtask as argument
 // TODO: This doesn't use fhir.Task as the fhir library contains a bug where all possible Task.input[x] are sent to the FHIR client instead of just Task.input.valueReference. This causes either a validation error or not a single Task.input[x] to be set (HAPI)
+// TODO: Make this more dynamic, given the configured questionnaires (PII/non-PII doesn't matter)
 func (s *Service) getPIISubTask(task *fhir.Task, questionnaireRef string) map[string]interface{} {
 
 	subtask := map[string]interface{}{
