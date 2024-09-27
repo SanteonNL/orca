@@ -33,3 +33,6 @@ go.work
 
 # draw.io backup files
 *.bkp
+
+# build output
+build/
