@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"io"
 	"net/http"
 	"net/url"
@@ -43,7 +44,9 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 				ChannelHttpClient: profile.HttpClient(),
 			},
 		},
-		maxReadBodySize: fhirClientConfig.MaxResponseSize,
+		maxReadBodySize:     fhirClientConfig.MaxResponseSize,
+		workflows:           taskengine.DefaultWorkflows(),
+		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
 	}, nil
 }
 
@@ -54,6 +57,8 @@ type Service struct {
 	fhirClient          fhirclient.Client
 	profile             profile.Provider
 	subscriptionManager subscriptions.Manager
+	workflows           taskengine.Workflows
+	questionnaireLoader taskengine.QuestionnaireLoader
 	maxReadBodySize     int
 }
 
