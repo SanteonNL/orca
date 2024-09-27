@@ -13,10 +13,12 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
 
     const columns: GridColDef[] = [
 
-        { field: 'hospitalUra', headerName: 'Hospital URA', flex: 1 },
-        { field: 'hospitalName', headerName: 'Hospital Name', flex: 2 },
+        { field: 'requesterUra', headerName: 'Requester URA', flex: 2 },
+        { field: 'requesterName', headerName: 'Requester Name', flex: 2 },
+        { field: 'performerUra', headerName: 'Performer URA', flex: 2 },
+        { field: 'performerName', headerName: 'Performer Name', flex: 2 },
         { field: 'patientBsn', headerName: 'Patient BSN', flex: 2 },
-        { field: 'careplan', headerName: 'Careplan', flex: 2 },
+        { field: 'careplan', headerName: 'Careplan', flex: 3 },
         {
             field: 'status',
             headerName: 'Status',
@@ -37,6 +39,9 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
             headerName: 'Task Output',
             flex: 1,
             renderCell: (params) => {
+
+                if (!params.row.isSubtask) return <></>
+
                 return <ViewTaskOutput task={params.row.task} />
             }
         }
