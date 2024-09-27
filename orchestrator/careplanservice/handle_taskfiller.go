@@ -283,49 +283,6 @@ func (s *Service) getSubTask(task *fhir.Task, questionnaireRef string, isPrimary
 	}
 }
 
-// Generates the PII subtask - provide the initial enrollment subtask as argument
-// TODO: This doesn't use fhir.Task as the fhir library contains a bug where all possible Task.input[x] are sent to the FHIR client instead of just Task.input.valueReference. This causes either a validation error or not a single Task.input[x] to be set (HAPI)
-// TODO: Make this more dynamic, given the configured questionnaires (PII/non-PII doesn't matter)
-func (s *Service) getPIISubTask(task *fhir.Task, questionnaireRef string) map[string]interface{} {
-
-	subtask := map[string]interface{}{
-		"id":           uuid.NewString(),
-		"resourceType": "Task",
-		"status":       "ready",
-		"meta": map[string]interface{}{
-			"profile": []string{
-				coolfhir.SCPTaskProfile,
-			},
-		},
-		"basedOn":   &task.BasedOn,
-		"partOf":    &task.PartOf,
-		"focus":     &task.Focus,
-		"for":       &task.For,
-		"owner":     &task.Owner,
-		"requester": &task.Requester,
-		"input": []map[string]interface{}{
-			{
-				"type": map[string]interface{}{
-					"coding": []map[string]interface{}{
-						{
-							"system":  "http://terminology.hl7.org/CodeSystem/task-input-type",
-							"code":    "Reference",
-							"display": "Reference",
-						},
-					},
-				},
-				"valueReference": map[string]interface{}{
-					"reference": questionnaireRef,
-				},
-			},
-		},
-	}
-
-	log.Info().Msgf("Created a new Enrollment PII subtask for questionnaireRef [%s] - subtask: %v", questionnaireRef, task)
-
-	return subtask
-}
-
 func (s *Service) partOf(task *fhir.Task, partOfRequired bool) (*string, error) {
 	if len(task.PartOf) == 0 {
 		if !partOfRequired {
