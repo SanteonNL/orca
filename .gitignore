@@ -33,4 +33,7 @@ go.work
 
 # draw.io backup files
 *.bkp
+
+# temp files
 **/.env
+build/
