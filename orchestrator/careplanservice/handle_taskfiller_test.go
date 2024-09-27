@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"encoding/json"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -24,7 +25,9 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		fhirClient: mockFHIRClient,
+		fhirClient:          mockFHIRClient,
+		workflows:           taskengine.DefaultWorkflows(),
+		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
 	}
 
 	// Define test cases
@@ -166,13 +169,19 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		fhirClient: mockFHIRClient,
+		fhirClient:          mockFHIRClient,
+		workflows:           taskengine.DefaultWorkflows(),
+		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
 	}
 
 	taskBytes, _ := json.Marshal(validTask)
 	var task fhir.Task
 	json.Unmarshal(taskBytes, &task)
-	questionnaire := service.getHardCodedHomeMonitoringQuestionnaire()
+	workflow := service.workflows["2.16.528.1.1007.3.3.21514.ehr.orders|99534756439"].Start()
+	questionnaire, err := service.questionnaireLoader.Load(workflow.QuestionnaireUrl)
+	require.NoError(t, err)
+	require.NotNil(t, questionnaire)
+
 	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
 	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
 	subtask := service.getSubTask(&validTask, questionnaireRef, true)

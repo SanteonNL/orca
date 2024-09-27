@@ -3,6 +3,7 @@ package careplanservice
 import (
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -11,15 +12,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
-
-// TODO: Make these configurable
-var primaryTaskFocusToQuestionnaireURL = map[string]string{
-	"2.16.528.1.1007.3.3.21514.ehr.orders|99534756439": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017",
-}
-
-var followUpQuestionnaireMap = map[string]string{
-	"http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-2--20240902134017",
-}
 
 // TODO: Move to CarePlanContributor as TaskEngine, invoked by the CPS notification
 func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
@@ -164,30 +156,46 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 	taskFocus := fmt.Sprintf("%s|%s", *task.Focus.Identifier.System, *task.Focus.Identifier.Value)
 	var questionnaire map[string]interface{}
 
-	if isPrimaryTask {
-		questionnaire = s.getQuestionnaireByUrl(primaryTaskFocusToQuestionnaireURL[taskFocus])
-	} else {
-		//For subtasks, we need to make sure it's completed, and if so, find out if more Questionnaires are needed.
-		//We do this by fetching the Questionnaire, and comparing it's url value to the followUpQuestionnaireMap
-		if task.Status != fhir.TaskStatusCompleted {
-			log.Info().Msg("SubTask is not completed - skipping")
-		}
-
-		for _, item := range task.Input {
-			if ref := item.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "Questionnaire/") {
-				questionnaireURL := *ref.Reference
-				var fetchedQuestionnaire fhir.Questionnaire
-				err := s.fetchQuestionnaireByID(questionnaireURL, &fetchedQuestionnaire)
-				if err != nil {
-					return fmt.Errorf("failed to fetch questionnaire: %w", err)
-				}
-				followUpURL, exists := followUpQuestionnaireMap[*fetchedQuestionnaire.Url]
-				if exists {
-					questionnaire = s.getQuestionnaireByUrl(followUpURL)
-					break
+	workflow, workflowExists := s.workflows[taskFocus]
+	var err error
+	if workflowExists {
+		var nextStep *taskengine.WorkflowStep
+		if isPrimaryTask {
+			nextStep = new(taskengine.WorkflowStep)
+			*nextStep = workflow.Start()
+		} else {
+			//For subtasks, we need to make sure it's completed, and if so, find out if more Questionnaires are needed.
+			//We do this by fetching the Questionnaire, and comparing it's url value to the followUpQuestionnaireMap
+			if task.Status != fhir.TaskStatusCompleted {
+				log.Info().Msg("SubTask is not completed - skipping")
+			}
+			// TODO: What if multiple Tasks match the conditions?
+			for _, item := range task.Input {
+				if ref := item.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "Questionnaire/") {
+					questionnaireURL := *ref.Reference
+					var fetchedQuestionnaire fhir.Questionnaire
+					if err := s.fetchQuestionnaireByID(questionnaireURL, &fetchedQuestionnaire); err != nil {
+						// TODO: why return an error here, and not for the rest?
+						return fmt.Errorf("failed to fetch questionnaire: %w", err)
+					}
+					nextStep, err = workflow.Proceed(*fetchedQuestionnaire.Url)
+					if err != nil {
+						log.Error().Err(err).Msgf("Unable to determine next questionnaire (previous URL=%s)", *fetchedQuestionnaire.Url)
+					} else {
+						break
+					}
 				}
 			}
 		}
+
+		// TODO: If we can't perform the next step, we should mark the primary task as failed?
+		if nextStep != nil {
+			questionnaire, err = s.questionnaireLoader.Load(nextStep.QuestionnaireUrl)
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to load questionnaire: %s", workflow.Steps[0].QuestionnaireUrl)
+			}
+		}
+
 	}
 
 	// No follow-up questionnaire found, check if we have to mark the primary task as completed
@@ -212,7 +220,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 
 	bundle := tx.Bundle()
 
-	_, err := coolfhir.ExecuteTransaction(s.fhirClient, bundle)
+	_, err = coolfhir.ExecuteTransaction(s.fhirClient, bundle)
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %w", err)
 	}
