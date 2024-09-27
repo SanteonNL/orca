@@ -3,8 +3,9 @@ package careplanservice
 import (
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -85,7 +86,7 @@ func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 	var partOfTask fhir.Task
 	err = s.fhirClient.Read(*partOfTaskRef, &partOfTask)
 	if err != nil {
-		return fmt.Errorf("failed to fetch partOf Task/%s: %w", *partOfTaskRef, err)
+		return fmt.Errorf("failed to fetch partOf for %s: %w", *partOfTaskRef, err)
 	}
 
 	// Change status to accepted
