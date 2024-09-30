@@ -28,6 +28,29 @@ func NewErrorWithCode(message string, statusCode int) error {
 	}
 }
 
+// WrapErrorWithCode wraps an error with a status code
+func WrapErrorWithCode(err error, statusCode int) error {
+	return &ErrorWithCode{
+		Message:    err.Error(),
+		StatusCode: statusCode,
+	}
+}
+
+// BadRequestError wraps an error with a status code of 400
+func BadRequestError(msg string) error {
+	return &ErrorWithCode{
+		Message:    msg,
+		StatusCode: http.StatusBadRequest,
+	}
+}
+
+func BadRequestErrorF(msg string, args ...interface{}) error {
+	return &ErrorWithCode{
+		Message:    fmt.Errorf(msg, args...).Error(),
+		StatusCode: http.StatusBadRequest,
+	}
+}
+
 // WriteOperationOutcomeFromError writes an OperationOutcome based on the given error as HTTP response.
 // when sent a WriteOperationOutcomeFromError, it will write the contained error code to the header, else it defaults to StatusBadRequest
 func WriteOperationOutcomeFromError(err error, desc string, httpResponse http.ResponseWriter) {

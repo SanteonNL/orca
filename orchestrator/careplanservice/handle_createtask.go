@@ -15,58 +15,63 @@ import (
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleCreateTask(httpResponse http.ResponseWriter, httpRequest *http.Request) error {
+func (s *Service) handleCreateTask(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msg("Creating Task")
 	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
 	task := make(coolfhir.Task)
 	if err := s.readRequest(httpRequest, &task); err != nil {
-		return fmt.Errorf("invalid Task: %w", err)
+		return nil, fmt.Errorf("invalid Task: %w", err)
 	}
 
 	switch task["status"] {
 	case fhir.TaskStatusRequested.String():
 	case fhir.TaskStatusReady.String():
 	default:
-		return errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task["status"], fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
+		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task["status"], fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
 	}
 	// Resolve the CarePlan
 	carePlanRef, err := basedOn(task)
 	if err != nil {
 		//FIXME: This logic changed, create a new CarePlan when Task.basedOn is not set
-		return fmt.Errorf("invalid Task.basedOn: %w", err)
+		return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 	}
 	// TODO: Manage time-outs properly
 	var carePlan fhir.CarePlan
 	if err := s.fhirClient.Read(*carePlanRef, &carePlan); err != nil {
-		return fmt.Errorf("failed to read CarePlan: %w", err)
+		return nil, fmt.Errorf("failed to read CarePlan: %w", err)
 	}
 	// Add Task to CarePlan.activities
-	bundle, err := s.newTaskInCarePlan(task, &carePlan)
+	err = s.newTaskInCarePlan(tx, task, &carePlan)
 	if err != nil {
-		return fmt.Errorf("failed to create Task: %w", err)
+		return nil, fmt.Errorf("failed to create Task: %w", err)
 	}
+	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+		var createdTask fhir.Task
+		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(entry fhir.BundleEntry) bool {
+			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
+		}, &createdTask)
+		if err != nil {
+			return nil, nil, err
+		}
+		var notifications = []any{&createdTask}
+		// If CareTeam was updated, notify about CareTeam
+		var updatedCareTeam fhir.CareTeam
+		if err := coolfhir.ResourceInBundle(txResult, coolfhir.EntryIsOfType("CareTeam"), &updatedCareTeam); err == nil {
+			notifications = append(notifications, &updatedCareTeam)
+		}
 
-	var createdTask fhir.Task
-	err = coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, *bundle, func(entry fhir.BundleEntry) bool {
-		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
-	}, httpResponse, &createdTask)
-	if err != nil {
-		return err
-	}
-
-	s.notifySubscribers(httpRequest.Context(), &createdTask)
-	// If CareTeam was updated, notify about CareTeam
-	var updatedCareTeam fhir.CareTeam
-	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryIsOfType("CareTeam"), &updatedCareTeam); err == nil {
-		s.notifySubscribers(httpRequest.Context(), &updatedCareTeam)
-	}
-
-	return s.handleTaskFillerCreate(&createdTask) //TODO: This should be done by the CPC after the notification is received
+		// TODO: this really shouldn't be here. Maybe move to CPC and call it in-process (e.g. goroutine?)
+		// TODO: This should be done by the CPC after the notification is received
+		if err = s.handleTaskFillerCreate(&createdTask); err != nil {
+			return nil, nil, fmt.Errorf("failed to handle TaskFillerCreate: %w", err)
+		}
+		return result, []any{&createdTask}, nil
+	}, nil
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.
-func (s *Service) newTaskInCarePlan(task coolfhir.Task, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
+func (s *Service) newTaskInCarePlan(tx *coolfhir.TransactionBuilder, task coolfhir.Task, carePlan *fhir.CarePlan) error {
 	taskRef := "urn:uuid:" + uuid.NewString()
 	carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
 		Reference: &fhir.Reference{
@@ -76,19 +81,17 @@ func (s *Service) newTaskInCarePlan(task coolfhir.Task, carePlan *fhir.CarePlan)
 	})
 
 	// TODO: Only if not updated
-	tx := coolfhir.Transaction().
-		Create(task, coolfhir.WithFullUrl(taskRef)).
+	tx.Create(task, coolfhir.WithFullUrl(taskRef)).
 		Update(*carePlan, "CarePlan/"+*carePlan.Id)
 
 	r4Task, err := task.ToFHIR()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, *r4Task, tx); err != nil {
-		return nil, fmt.Errorf("failed to update CarePlan: %w", err)
+		return fmt.Errorf("failed to update CarePlan: %w", err)
 	}
-	result := tx.Bundle()
-	return &result, nil
+	return nil
 }
 
 // basedOn returns the CarePlan reference the Task is based on, e.g. CarePlan/123.
