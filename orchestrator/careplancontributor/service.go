@@ -10,7 +10,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -98,9 +97,6 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	// FE/Session Authorized Endpoints
 	//
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
-	mux.HandleFunc("GET "+basePath+"/patient", s.withSession(s.handleGetPatient))
-	mux.HandleFunc("GET "+basePath+"/practitioner", s.withSession(s.handleGetPractitioner))
-	mux.HandleFunc("GET "+basePath+"/serviceRequest", s.withSession(s.handleGetServiceRequest))
 	mux.HandleFunc(basePath+"/ehr/fhir/*", s.withSession(s.handleProxyToEPD))
 	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, basePath+"/cps/fhir", s.scpHttpClient.Transport)
 	mux.HandleFunc(basePath+"/cps/fhir/*", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
@@ -218,89 +214,6 @@ func validateRequester(careTeams []fhir.CareTeam, principal auth.Principal) (boo
 		}
 	}
 	return false, nil
-}
-
-// handleGetPatient is the REST API handler that returns the FHIR Patient.
-func (s Service) handleGetPatient(response http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	// TODO: Remove this when frontend works on the proxy endpoint
-	clientProperties := clients.Factories[session.FHIRLauncher](session.Values)
-	fhirClient := fhirclient.New(clientProperties.BaseURL, &http.Client{Transport: clientProperties.Client}, coolfhir.Config())
-
-	var patient fhir.Patient
-	if err := fhirClient.Read(session.Values["patient"], &patient); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	response.Header().Add("Content-Type", "application/json")
-	response.WriteHeader(http.StatusOK)
-	data, _ := json.Marshal(patient)
-	_, _ = response.Write(data)
-}
-
-// handleGetPractitioner is the REST API handler that returns the FHIR Practitioner.
-func (s Service) handleGetPractitioner(response http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	// TODO: Remove this when frontend works on the proxy endpoint
-	clientProperties := clients.Factories[session.FHIRLauncher](session.Values)
-	fhirClient := fhirclient.New(clientProperties.BaseURL, &http.Client{Transport: clientProperties.Client}, coolfhir.Config())
-	var practitioner fhir.Practitioner
-	if err := fhirClient.Read(session.Values["practitioner"], &practitioner); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	response.Header().Add("Content-Type", "application/json")
-	response.WriteHeader(http.StatusOK)
-	data, _ := json.Marshal(practitioner)
-	_, _ = response.Write(data)
-}
-
-// handleGetServiceRequest is the REST API handler that returns the FHIR ServiceRequest.
-func (s Service) handleGetServiceRequest(response http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	// TODO: Remove this when frontend works on the proxy endpoint
-	clientProperties := clients.Factories[session.FHIRLauncher](session.Values)
-	fhirClient := fhirclient.New(clientProperties.BaseURL, &http.Client{Transport: clientProperties.Client}, coolfhir.Config())
-	var serviceRequest fhir.ServiceRequest
-	if err := fhirClient.Read(session.Values["serviceRequest"], &serviceRequest); err != nil {
-		http.Error(response, err.Error(), http.StatusInternalServerError)
-		return
-	}
-	response.Header().Add("Content-Type", "application/json")
-	response.WriteHeader(http.StatusOK)
-	data, _ := json.Marshal(serviceRequest)
-	_, _ = response.Write(data)
-}
-
-func (s Service) readServiceRequest(localFHIR fhirclient.Client, serviceRequestRef string) (*fhir.ServiceRequest, error) {
-	// TODO: Make this complete, and test this
-	var serviceRequest fhir.ServiceRequest
-	if err := localFHIR.Read(serviceRequestRef, &serviceRequest); err != nil {
-		return nil, err
-	}
-
-	serviceRequest.ReasonReference = nil
-	var serviceRequestReasons []map[string]interface{}
-	for i, reasonReference := range serviceRequest.ReasonReference {
-		// TODO: ReasonReference should probably be an ID instead of logical identifier?
-		if reasonReference.Identifier == nil || reasonReference.Identifier.Value == nil {
-			return nil, fmt.Errorf("expected ServiceRequest.reasonReference[%d].identifier.value to be set", i)
-		}
-		results := make([]map[string]interface{}, 0)
-		// TODO: Just taking first isn't right, fix with technical IDs instead of logical identifiers
-		if err := localFHIR.Read(*reasonReference.Type+"/?identifier="+*reasonReference.Identifier.Value, &results); err != nil {
-			return nil, err
-		}
-		if len(results) == 0 {
-			return nil, fmt.Errorf("could not resolve ServiceRequest.reasonReference[%d].identifier", i)
-		}
-		reason := results[0]
-		ref := fmt.Sprintf("#servicerequest-reason-%d", i+1)
-		reason["id"] = ref
-		serviceRequestReasons = append(serviceRequestReasons, results[0])
-		serviceRequest.ReasonReference = append(serviceRequest.ReasonReference, fhir.Reference{
-			Type:      to.Ptr(*reasonReference.Type),
-			Reference: to.Ptr(ref),
-		})
-	}
-	return &serviceRequest, nil
 }
 
 func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
