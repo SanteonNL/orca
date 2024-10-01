@@ -24,7 +24,7 @@ import (
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
 
 func TestService_Proxy_NoHeader_Fails(t *testing.T) {
-	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	fhirServer := httptest.NewServer(fhirServerMux)
@@ -45,16 +45,16 @@ func TestService_Proxy_NoHeader_Fails(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: X-Scp-Context header value must be set"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: X-Scp-Context header value must be set"}],"resourceType":"OperationOutcome"}`, string(body))
 }
 
 func TestService_Proxy_NoCarePlanInHeader_Fails(t *testing.T) {
-	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	fhirServer := httptest.NewServer(fhirServerMux)
@@ -83,16 +83,16 @@ func TestService_Proxy_NoCarePlanInHeader_Fails(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/SomeResource/invalid", carePlanServiceURL))
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`, string(body))
 }
 
 func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
-	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	fhirServer := httptest.NewServer(fhirServerMux)
@@ -131,18 +131,18 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/not-exists", carePlanServiceURL))
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, "/cps/CarePlan?_id=not-exists&_include=CarePlan%3Acare-team", capturedURL)
 }
 
 // There is no care team present in the care plan, the proxy is not reached
 func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
-	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	fhirServer := httptest.NewServer(fhirServerMux)
@@ -181,18 +181,18 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
 // The requester is not in the returned care team, the proxy is not reached
 func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
-	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	fhirServer := httptest.NewServer(fhirServerMux)
@@ -231,17 +231,17 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal3, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusForbidden)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
 func TestService_Proxy_Valid(t *testing.T) {
-	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
@@ -283,7 +283,7 @@ func TestService_Proxy_Valid(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusOK)
@@ -294,7 +294,7 @@ func TestService_Proxy_Valid(t *testing.T) {
 
 // All validation succeeds but the proxied method returns an error
 func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
-	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
@@ -336,7 +336,7 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
@@ -347,7 +347,7 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 
 // The practitioner is in the CareTeam, but their Period is expired
 func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
-	// Test that the service registers the /contrib URL that proxies to the backing FHIR server
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	fhirServer := httptest.NewServer(fhirServerMux)
@@ -386,12 +386,12 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal2, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL.String()))
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusForbidden)
 	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /contrib/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
+	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
@@ -424,7 +424,7 @@ func TestService_ProxyToEHR(t *testing.T) {
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/ehr/fhir/Patient", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/ehr/fhir/Patient", nil)
 	httpRequest.AddCookie(&http.Cookie{
 		Name:  "sid",
 		Value: sessionID,
@@ -463,7 +463,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/contrib/cps/fhir/Patient?_search=foo:bar", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/cps/fhir/Patient?_search=foo:bar", nil)
 	httpRequest.AddCookie(&http.Cookie{
 		Name:  "sid",
 		Value: sessionID,

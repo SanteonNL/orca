@@ -110,7 +110,7 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
     let launchContext: LaunchContext;
 
     if (process.env.NODE_ENV === "production") {
-        const launchContextRes = await fetch(`/orca/contrib/context`);
+        const launchContextRes = await fetch(`/orca/cpc/context`);
         if (!launchContextRes.ok) throw new Error(`Failed to fetch patient: ${launchContextRes.statusText}`);
 
         launchContext = await launchContextRes.json();

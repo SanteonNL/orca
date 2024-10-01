@@ -8,7 +8,7 @@ export const BSN_SYSTEM = "http://fhir.nl/fhir/NamingSystem/bsn"
 
 export const createEhrClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/contrib/ehr/fhir`
+        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`
         : "http://localhost:9090/fhir";
 
     return new Client({ baseUrl });
@@ -16,7 +16,7 @@ export const createEhrClient = () => {
 
 export const createCpsClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/contrib/cps/fhir`
+        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
         : "http://localhost:7090/fhir";
 
     return new Client({ baseUrl });
