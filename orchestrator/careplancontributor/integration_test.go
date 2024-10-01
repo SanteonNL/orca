@@ -164,7 +164,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcServerMux := http.NewServeMux()
 	cpcHttpService := httptest.NewServer(cpcServerMux)
 	cpc.RegisterHandlers(cpcServerMux)
-	cpcURL, _ := url.Parse(cpcHttpService.URL + "/contrib/fhir")
+	cpcURL, _ := url.Parse(cpcHttpService.URL + "/cpc/fhir")
 
 	// Return the URLs and httpService of the cpsDataRequester, cpcDataRequester, cpsDataHolder
 	// these will be used to construct clients with both the correct and incorrect auth for positive and negative testing

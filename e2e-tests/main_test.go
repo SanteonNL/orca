@@ -27,17 +27,17 @@ func Test_Main(t *testing.T) {
 	const clinicFHIRStoreURL = "http://fhirstore:8080/fhir/clinic"
 	const clinicBaseUrl = "http://clinic-orchestrator:8080"
 	const carePlanServiceBaseURL = clinicBaseUrl + "/cps"
-	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", 1, "Clinic", "Bug City", clinicBaseUrl+"/contrib/fhir/notify")
+	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", 1, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir/notify")
 	require.NoError(t, err)
 	setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", true, carePlanServiceBaseURL, clinicFHIRStoreURL)
 
 	// Setup Hospital
 	const hospitalFHIRStoreURL = "http://fhirstore:8080/fhir/hospital"
 	const hospitalBaseUrl = "http://clinic-orchestrator:8080"
-	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", 2, "Hospital", "Fix City", hospitalBaseUrl+"/contrib/fhir/notify")
+	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", 2, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir/notify")
 	require.NoError(t, err)
 	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, carePlanServiceBaseURL, hospitalFHIRStoreURL)
-	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/contrib/cps/fhir"), orcaHttpClient, nil)
+	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 
 	t.Run("EHR using Orchestrator REST API", func(t *testing.T) {
 		t.Run("Hospital EHR creates New CarePlan, New Task", func(t *testing.T) {
