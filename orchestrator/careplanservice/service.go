@@ -37,7 +37,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 	if err != nil {
 		return nil, err
 	}
-	return &Service{
+	s := Service{
 		profile:       profile,
 		fhirURL:       fhirURL,
 		orcaPublicURL: orcaPublicURL,
@@ -53,7 +53,9 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		maxReadBodySize:     fhirClientConfig.MaxResponseSize,
 		workflows:           taskengine.DefaultWorkflows(),
 		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
-	}, nil
+	}
+	s.handlerProvider = s.defaultHandlerProvider
+	return &s, nil
 }
 
 type Service struct {
@@ -67,6 +69,7 @@ type Service struct {
 	questionnaireLoader taskengine.QuestionnaireLoader
 	maxReadBodySize     int
 	proxy               *httputil.ReverseProxy
+	handlerProvider     func(method string, resourceType string) func(*http.Request, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
@@ -88,7 +91,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 	// Binding to actual routing
 	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-
+		s.handleBundle(request, httpResponse)
 	}))
 	// Creating a resource
 	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
@@ -141,21 +144,7 @@ func (s *Service) proceedTransaction(writer http.ResponseWriter, request *http.R
 			return nil, coolfhir.BadRequestError("specifying IDs when creating resources isn't allowed")
 		}
 	}
-	var handler func(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
-	switch request.Method {
-	case http.MethodPost:
-		switch getResourceType(resourcePath) {
-		case "Task":
-			handler = s.handleCreateTask
-		case "CarePlan":
-			handler = s.handleCreateCarePlan
-		}
-	case http.MethodPut:
-		switch getResourceType(resourcePath) {
-		case "Task":
-			handler = s.handleUpdateTask
-		}
-	}
+	handler := s.handlerProvider(request.Method, getResourceType(resourcePath))
 	if handler == nil {
 		// TODO: Monitor these, and disallow at a later moment
 		log.Warn().Msgf("Unmanaged FHIR Create operation at CarePlanService: %s %s", request.Method, request.URL.String())
@@ -201,7 +190,7 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 	}
 }
 
-func (s *Service) handleHandleBundle(httpRequest *http.Request, httpResponse http.ResponseWriter) {
+func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.ResponseWriter) {
 	// Create Bundle
 	var bundle fhir.Bundle
 	op := "CarePlanService/CreateBundle"
@@ -244,7 +233,7 @@ func (s *Service) handleHandleBundle(httpRequest *http.Request, httpResponse htt
 		}
 		entryResult, err := s.proceedTransaction(httpResponse, entryHttpRequest, resourcePath, tx)
 		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bunde.entry[%d] dispatch failed: %w", entryIdx, err), op, httpResponse)
+			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d]: %w", entryIdx, err), op, httpResponse)
 			return
 		}
 		resultHandlers = append(resultHandlers, entryResult)
@@ -259,6 +248,24 @@ func (s *Service) handleHandleBundle(httpRequest *http.Request, httpResponse htt
 	if err := json.NewEncoder(httpResponse).Encode(resultBundle); err != nil {
 		log.Logger.Error().Err(err).Msg("Failed to encode response")
 	}
+}
+
+func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(*http.Request, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+	switch method {
+	case http.MethodPost:
+		switch getResourceType(resourcePath) {
+		case "Task":
+			return s.handleCreateTask
+		case "CarePlan":
+			return s.handleCreateCarePlan
+		}
+	case http.MethodPut:
+		switch getResourceType(resourcePath) {
+		case "Task":
+			return s.handleUpdateTask
+		}
+	}
+	return nil
 }
 
 func (s Service) readRequest(httpRequest *http.Request, target interface{}) error {
