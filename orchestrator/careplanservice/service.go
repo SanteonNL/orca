@@ -190,13 +190,6 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	}))
-	mux.HandleFunc("POST "+basePath+"/CarePlan", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		err := s.handleCreateCarePlan(writer, request)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(err, "CarePlanService/CreateCarePlan", writer)
-			return
-		}
-	}))
 	mux.HandleFunc("GET "+basePath+"/{resourcePath...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Authorize request here
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
@@ -243,11 +236,13 @@ func (s Service) proceedTransaction(writer http.ResponseWriter, request *http.Re
 		switch getResourceType(resourcePath) {
 		case "Task":
 			handler = s.handleCreateTask
+		case "CarePlan":
+			handler = s.handleCreateCarePlan
 		}
 	}
 	if handler == nil {
 		// TODO: Monitor these, and disallow at a later moment
-		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
+		log.Warn().Msgf("Unmanaged FHIR Create operation at CarePlanService: %s %s", request.Method, request.URL.String())
 		s.proxy.ServeHTTP(writer, request)
 		return nil, coolfhir.BadRequestErrorF("unsupported operation: %s %s", request.Method, request.URL.Path)
 	}

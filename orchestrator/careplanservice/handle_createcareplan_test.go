@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	fhirclient_mock "github.com/SanteonNL/orca/orchestrator/mocks/github.com/SanteonNL/go-fhir-client"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
-	"net/http"
 	"net/http/httptest"
 	"testing"
 )
@@ -21,50 +22,54 @@ func TestService_handleCreateCarePlan(t *testing.T) {
 			fhirClient:      mockClient,
 			maxReadBodySize: 1024 * 1024,
 		}
-		createdCarePlan := map[string]interface{}{
-			"careTeam": []map[string]interface{}{
+		createdCarePlan := fhir.CarePlan{
+			CareTeam: []fhir.Reference{
 				{
-					"reference": "CareTeam/123",
+					Reference: to.Ptr("CareTeam/123"),
 				},
 			},
 		}
-
-		var capturedBundle fhir.Bundle
-		mockClient.EXPECT().Create(mock.AnythingOfType("fhir.Bundle"), mock.AnythingOfType("*fhir.Bundle"),
-			mock.AnythingOfType("PreRequestOption"),
-		).RunAndReturn(func(resource interface{}, result interface{}, option ...fhirclient.Option) error {
-			var bundle fhir.Bundle
-			bundle.Entry = []fhir.BundleEntry{
+		txResult := fhir.Bundle{
+			Entry: []fhir.BundleEntry{
 				{
 					Response: &fhir.BundleEntryResponse{
 						Location: to.Ptr("CarePlan/123"),
+						Status:   "204 Created",
 					},
 				},
 				{
 					Response: &fhir.BundleEntryResponse{
 						Location: to.Ptr("CareTeam/123"),
+						Status:   "204 Created",
 					},
 				},
-			}
-			*(result.(*fhir.Bundle)) = bundle
-			capturedBundle = resource.(fhir.Bundle)
-			return nil
-		})
+			},
+		}
 		mockClient.EXPECT().Read("CarePlan/123", mock.Anything, mock.Anything).RunAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
-			*(result.(*map[string]interface{})) = createdCarePlan
+			data, _ := json.Marshal(createdCarePlan)
+			*(result.(*[]byte)) = data
 			return nil
 		})
 		var carePlan fhir.CarePlan
 		carePlanBytes, _ := json.Marshal(carePlan)
-		httpResponse := httptest.NewRecorder()
 		httpRequest := httptest.NewRequest("POST", "/CarePlan", bytes.NewReader(carePlanBytes))
 
-		err := service.handleCreateCarePlan(httpResponse, httpRequest)
+		tx := coolfhir.Transaction()
+		result, err := service.handleCreateCarePlan(httpRequest, tx)
 
 		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, httpResponse.Code)
-		// Check that the input Bundle is a transaction with a CarePlan and a CareTeam.
-		// The first should be the CarePlan
-		require.Len(t, capturedBundle.Entry, 2)
+
+		// Assert it creates a CareTeam and CarePlan
+		require.Len(t, tx.Entry, 2)
+		assert.Equal(t, "CarePlan", tx.Entry[0].Request.Url)
+		assert.Equal(t, "CareTeam", tx.Entry[1].Request.Url)
+
+		// Process result
+		require.NotNil(t, result)
+		response, notifications, err := result(&txResult)
+		require.NoError(t, err)
+		assert.Empty(t, notifications)
+		require.Equal(t, "CarePlan/123", *response.Response.Location)
+		require.Equal(t, "204 Created", response.Response.Status)
 	})
 }
