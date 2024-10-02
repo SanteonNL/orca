@@ -81,123 +81,34 @@ type FHIRHandler func(http.ResponseWriter, *http.Request, *coolfhir.TransactionB
 // - a list of resources that should be notified to subscribers
 type FHIRHandlerResult func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error)
 
-func (s Service) RegisterHandlers(mux *http.ServeMux) {
+func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	s.proxy = coolfhir.NewProxy(log.Logger, s.fhirURL, basePath, s.transport)
-	baseURL := s.orcaPublicURL.JoinPath(basePath)
-	s.profile.RegisterHTTPHandlers(basePath, baseURL, mux)
+	baseUrl := s.baseUrl()
+	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
 
 	// Binding to actual routing
-	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseURL, func(httpResponse http.ResponseWriter, request *http.Request) {
-		// Create Bundle
-		var bundle fhir.Bundle
-		op := "CarePlanService/CreateBundle"
-		if err := s.readRequest(request, &bundle); err != nil {
-			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("invalid Bundle: %w", err), op, httpResponse)
-			return
-		}
-		if bundle.Type != fhir.BundleTypeTransaction {
-			coolfhir.WriteOperationOutcomeFromError(errors.New("only bundleType 'Transaction' is supported"), op, httpResponse)
-			return
-		}
-		// Validate: Only allow POST/PUT operations in Bundle
-		for _, entry := range bundle.Entry {
-			// TODO: Might have to support DELETE in future
-			if entry.Request == nil || (entry.Request.Method != fhir.HTTPVerbPOST && entry.Request.Method != fhir.HTTPVerbPUT) {
-				coolfhir.WriteOperationOutcomeFromError(errors.New("only write operations are supported in Bundle"), op, httpResponse)
-				return
-			}
-		}
-		// Perform each individual operation. Note this doesn't actually create/update resources at the backing FHIR server,
-		// but only prepares the transaction.
-		tx := coolfhir.Transaction()
-		var resultHandlers []FHIRHandlerResult
-		for entryIdx, entry := range bundle.Entry {
-			// Bundle.entry.request.url must be a relative URL with at most one slash (so Task or Task/1, but not http://example.com/Task or Task/foo/bar)
-			resourcePath := entry.Request.Url
-			if entry.Request == nil || strings.Count(resourcePath, "/") > 1 {
-				coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url (entry #) must be a relative URL", entryIdx), op, httpResponse)
-				return
-			}
-			entryHttpRequest, err := http.NewRequest(entry.Request.Method.Code(), baseURL.JoinPath(resourcePath).String(), bytes.NewReader(entry.Resource))
-			if err != nil {
-				coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bunde.entry[%d]: unable to dispatch: %w", entryIdx, err), op, httpResponse)
-				return
-			}
-			entryResult, err := s.proceedTransaction(httpResponse, entryHttpRequest, resourcePath, tx)
-			if err != nil {
-				coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bunde.entry[%d] dispatch failed: %w", entryIdx, err), op, httpResponse)
-				return
-			}
-			resultHandlers = append(resultHandlers, entryResult)
-		}
-		// Execute the transaction and collect the responses
-		resultBundle, err := s.commitTransaction(request, tx, resultHandlers)
-		if err != nil {
-			return
-		}
+	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 
-		httpResponse.WriteHeader(http.StatusOK)
-		if err := json.NewEncoder(httpResponse).Encode(resultBundle); err != nil {
-			log.Logger.Error().Err(err).Msg("Failed to encode response")
-		}
 	}))
-	// Single Resource Create operation
-	mux.HandleFunc("POST "+basePath+"/{resourcePath}", s.profile.Authenticator(baseURL, func(httpResponse http.ResponseWriter, request *http.Request) {
-		resourcePath := request.PathValue("resourcePath")
-		operationName := "CarePlanService/" + getVerbForHttpMethod(request) + resourcePath
-		tx := coolfhir.Transaction()
-		result, err := s.proceedTransaction(httpResponse, request, resourcePath, tx)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
-			return
-		}
-		txResult, err := s.commitTransaction(request, tx, []FHIRHandlerResult{result})
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
-			return
-		}
-		if len(txResult.Entry) != 1 {
-			log.Logger.Error().Msgf("Expected exactly one entry in transaction result (operation=%s), got %d", operationName, len(txResult.Entry))
-			httpResponse.WriteHeader(http.StatusNoContent)
-			return
-		}
-		var statusCode int
-		fhirResponse := txResult.Entry[0].Response
-		statusParts := strings.Split(fhirResponse.Status, " ")
-		if statusCode, err = strconv.Atoi(statusParts[0]); err != nil {
-			log.Logger.Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
-			statusCode = http.StatusOK
-		}
-		httpResponse.Header().Add("Content-Type", coolfhir.FHIRContentType)
-		if fhirResponse.Location != nil {
-			httpResponse.Header().Add("Location", *fhirResponse.Location)
-		}
-		// TODO: I won't pretend I tested the other response headers (e.g. Last-Modified or ETag), so we won't set them for now.
-		//       Add them (and test them) when needed.
-		httpResponse.WriteHeader(statusCode)
-		if err := json.NewEncoder(httpResponse).Encode(txResult.Entry[0].Resource); err != nil {
-			log.Logger.Warn().Err(err).Msg("Failed to encode response")
-		}
+	// Creating a resource
+	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		resourceType := request.PathValue("type")
+		s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	}))
-
-	//
-	// Authorized endpoints
-	//
-	mux.HandleFunc("PUT "+basePath+"/Task/{id}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		err := s.handleUpdateTask(writer, request)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(err, "CarePlanService/UpdateTask", writer)
-			return
-		}
+	// Updating a resource
+	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		resourceType := request.PathValue("type")
+		resourceId := request.PathValue("type")
+		s.handleCreateOrUpdate(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 	}))
-	mux.HandleFunc("GET "+basePath+"/{resourcePath...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/{resourcePath...}", s.profile.Authenticator(baseUrl, func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Authorize request here
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
 		s.proxy.ServeHTTP(writer, request)
 	}))
 }
 
-func (s Service) commitTransaction(request *http.Request, tx *coolfhir.TransactionBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
+func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.TransactionBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
 	var txResult fhir.Bundle
 	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		log.Error().Err(err).Msgf("Failed to execute transaction (url=%s)", request.URL.String())
@@ -223,7 +134,7 @@ func (s Service) commitTransaction(request *http.Request, tx *coolfhir.Transacti
 	return &resultBundle, nil
 }
 
-func (s Service) proceedTransaction(writer http.ResponseWriter, request *http.Request, resourcePath string, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+func (s *Service) proceedTransaction(writer http.ResponseWriter, request *http.Request, resourcePath string, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	if request.Method == http.MethodPost {
 		// We don't allow creation of resources with a specific ID, so resourceType shouldn't contain any slashes now
 		if strings.Contains(resourcePath, "/") {
@@ -239,6 +150,11 @@ func (s Service) proceedTransaction(writer http.ResponseWriter, request *http.Re
 		case "CarePlan":
 			handler = s.handleCreateCarePlan
 		}
+	case http.MethodPut:
+		switch getResourceType(resourcePath) {
+		case "Task":
+			handler = s.handleUpdateTask
+		}
 	}
 	if handler == nil {
 		// TODO: Monitor these, and disallow at a later moment
@@ -247,6 +163,102 @@ func (s Service) proceedTransaction(writer http.ResponseWriter, request *http.Re
 		return nil, coolfhir.BadRequestErrorF("unsupported operation: %s %s", request.Method, request.URL.Path)
 	}
 	return handler(request, tx)
+}
+
+func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
+	tx := coolfhir.Transaction()
+	result, err := s.proceedTransaction(httpResponse, httpRequest, resourcePath, tx)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
+		return
+	}
+	txResult, err := s.commitTransaction(httpRequest, tx, []FHIRHandlerResult{result})
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
+		return
+	}
+	if len(txResult.Entry) != 1 {
+		log.Logger.Error().Msgf("Expected exactly one entry in transaction result (operation=%s), got %d", operationName, len(txResult.Entry))
+		httpResponse.WriteHeader(http.StatusNoContent)
+		return
+	}
+	var statusCode int
+	fhirResponse := txResult.Entry[0].Response
+	statusParts := strings.Split(fhirResponse.Status, " ")
+	if statusCode, err = strconv.Atoi(statusParts[0]); err != nil {
+		log.Logger.Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
+		statusCode = http.StatusOK
+	}
+	httpResponse.Header().Add("Content-Type", coolfhir.FHIRContentType)
+	if fhirResponse.Location != nil {
+		httpResponse.Header().Add("Location", *fhirResponse.Location)
+	}
+	// TODO: I won't pretend I tested the other response headers (e.g. Last-Modified or ETag), so we won't set them for now.
+	//       Add them (and test them) when needed.
+	httpResponse.WriteHeader(statusCode)
+	if err := json.NewEncoder(httpResponse).Encode(txResult.Entry[0].Resource); err != nil {
+		log.Logger.Warn().Err(err).Msg("Failed to encode response")
+	}
+}
+
+func (s *Service) handleHandleBundle(httpRequest *http.Request, httpResponse http.ResponseWriter) {
+	// Create Bundle
+	var bundle fhir.Bundle
+	op := "CarePlanService/CreateBundle"
+	if err := s.readRequest(httpRequest, &bundle); err != nil {
+		coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("invalid Bundle: %w", err), op, httpResponse)
+		return
+	}
+	if bundle.Type != fhir.BundleTypeTransaction {
+		coolfhir.WriteOperationOutcomeFromError(errors.New("only bundleType 'Transaction' is supported"), op, httpResponse)
+		return
+	}
+	// Validate: Only allow POST/PUT operations in Bundle
+	for _, entry := range bundle.Entry {
+		// TODO: Might have to support DELETE in future
+		if entry.Request == nil || (entry.Request.Method != fhir.HTTPVerbPOST && entry.Request.Method != fhir.HTTPVerbPUT) {
+			coolfhir.WriteOperationOutcomeFromError(errors.New("only write operations are supported in Bundle"), op, httpResponse)
+			return
+		}
+	}
+	// Perform each individual operation. Note this doesn't actually create/update resources at the backing FHIR server,
+	// but only prepares the transaction.
+	tx := coolfhir.Transaction()
+	var resultHandlers []FHIRHandlerResult
+	for entryIdx, entry := range bundle.Entry {
+		// Bundle.entry.request.url must be a relative URL with at most one slash (so Task or Task/1, but not http://example.com/Task or Task/foo/bar)
+		resourcePath := entry.Request.Url
+		resourcePathPartsCount := strings.Count(resourcePath, "/") + 1
+		if entry.Request == nil || resourcePathPartsCount > 2 {
+			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url (entry #) must be a relative URL", entryIdx), op, httpResponse)
+			return
+		}
+		entryHttpRequest, err := http.NewRequest(entry.Request.Method.Code(), s.baseUrl().JoinPath(resourcePath).String(), bytes.NewReader(entry.Resource))
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bunde.entry[%d]: unable to dispatch: %w", entryIdx, err), op, httpResponse)
+			return
+		}
+		// If the resource path contains an ID, set it as ID path parameter
+		if resourcePathPartsCount == 2 {
+			entryHttpRequest.SetPathValue("id", strings.Split(resourcePath, "/")[1])
+		}
+		entryResult, err := s.proceedTransaction(httpResponse, entryHttpRequest, resourcePath, tx)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bunde.entry[%d] dispatch failed: %w", entryIdx, err), op, httpResponse)
+			return
+		}
+		resultHandlers = append(resultHandlers, entryResult)
+	}
+	// Execute the transaction and collect the responses
+	resultBundle, err := s.commitTransaction(httpRequest, tx, resultHandlers)
+	if err != nil {
+		return
+	}
+
+	httpResponse.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(httpResponse).Encode(resultBundle); err != nil {
+		log.Logger.Error().Err(err).Msg("Failed to encode response")
+	}
 }
 
 func (s Service) readRequest(httpRequest *http.Request, target interface{}) error {
@@ -269,6 +281,10 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 	}
 }
 
+func (s Service) baseUrl() *url.URL {
+	return s.orcaPublicURL.JoinPath(basePath)
+}
+
 // convertInto converts the src object into the target object,
 // by marshalling src to JSON and then unmarshalling it into target.
 func convertInto(src interface{}, target interface{}) error {
@@ -277,20 +293,6 @@ func convertInto(src interface{}, target interface{}) error {
 		return err
 	}
 	return json.Unmarshal(data, target)
-}
-
-func getVerbForHttpMethod(request *http.Request) string {
-	switch request.Method {
-	case http.MethodPost:
-		return "Create"
-	case http.MethodPut:
-		return "Update"
-	}
-	return fmt.Sprintf("<%s>", request.Method)
-}
-
-func getResourcePath(requestURL string) string {
-	return strings.TrimPrefix(requestURL, basePath+"/")
 }
 
 func getResourceType(resourcePath string) string {
