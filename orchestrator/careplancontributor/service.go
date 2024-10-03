@@ -10,6 +10,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
@@ -42,7 +43,7 @@ func New(
 		return nil, err
 	}
 	httpClient := profile.HttpClient()
-	return &Service{
+	result := &Service{
 		config:             config,
 		orcaPublicURL:      orcaPublicURL,
 		carePlanServiceURL: cpsURL,
@@ -52,7 +53,9 @@ func New(
 		frontendUrl:        config.FrontendConfig.URL,
 		fhirURL:            fhirURL,
 		transport:          localFHIRStoreTransport,
-	}, nil
+	}
+	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
+	return result, nil
 }
 
 type Service struct {
@@ -80,7 +83,17 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	// Authorized endpoints
 	//
 	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		log.Info().Msg("TODO: Handle received notification")
+		var resourceRaw map[string]interface{}
+		if err := json.NewDecoder(request.Body).Decode(&resourceRaw); err != nil {
+			log.Error().Err(err).Msg("Failed to decode notification")
+			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			return
+		}
+		if err := s.handleNotification(resourceRaw); err != nil {
+			log.Error().Err(err).Msg("Failed to handle notification")
+			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			return
+		}
 		writer.WriteHeader(http.StatusOK)
 	}))
 	mux.HandleFunc(fmt.Sprintf("GET %s/fhir/*", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
@@ -238,4 +251,9 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 		}
 		http.Error(response, "no session found", http.StatusUnauthorized)
 	}
+}
+
+func (s Service) handleNotification(_ any) error {
+	log.Info().Msg("TODO: Handle received notification")
+	return nil
 }

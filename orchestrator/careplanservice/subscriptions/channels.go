@@ -8,8 +8,10 @@ import (
 	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
+	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
@@ -19,6 +21,28 @@ import (
 // A notification channel is the transport that is used to deliver a Subscription Notification to a subscriber.
 type ChannelFactory interface {
 	Create(ctx context.Context, subscriber fhir.Identifier) (Channel, error)
+}
+
+var _ ChannelFactory = InProcessChannelFactory{}
+
+// InProcessChannelFactory is a ChannelFactory that creates subscription notification channels on the following order of preference:
+// - InProcessPubSubChannel: if the subscriber is in the same process (if the target CPC also runs this CPS).
+// - DefaultChannelFactory: use this ChannelFactory otherwise.
+type InProcessChannelFactory struct {
+	Profile               profile.Provider
+	DefaultChannelFactory ChannelFactory
+}
+
+func (d InProcessChannelFactory) Create(ctx context.Context, subscriber fhir.Identifier) (Channel, error) {
+	localIdentities, err := d.Profile.Identities(ctx)
+	if err == nil {
+		for _, localIdentity := range localIdentities {
+			if coolfhir.IdentifierEquals(&localIdentity, &subscriber) {
+				return InProcessPubSubChannel{}, nil
+			}
+		}
+	}
+	return d.DefaultChannelFactory.Create(ctx, subscriber)
 }
 
 var _ ChannelFactory = CsdChannelFactory{}
@@ -81,4 +105,13 @@ func (r RestHookChannel) Notify(ctx context.Context, notification coolfhir.Subsc
 		return errors.Join(ReceiverFailure, fmt.Errorf("non-OK HTTP response status: %v", httpResponse.Status))
 	}
 	return nil
+}
+
+var _ Channel = InProcessPubSubChannel{}
+
+type InProcessPubSubChannel struct {
+}
+
+func (i InProcessPubSubChannel) Notify(_ context.Context, notification coolfhir.SubscriptionNotification) error {
+	return pubsub.DefaultSubscribers.FhirSubscriptionNotify(notification)
 }

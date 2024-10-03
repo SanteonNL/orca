@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
@@ -17,11 +16,9 @@ var _ csd.Directory = &CsdDirectory{}
 func (d DutchNutsProfile) CsdDirectory() csd.Directory {
 	apiClient, _ := discovery.NewClientWithResponses(d.Config.API.URL)
 	return CsdDirectory{
-		APIClient: apiClient,
-		ServiceID: "shared-care-planning",
-		IdentifierCredentialMapping: map[string]string{
-			coolfhir.URANamingSystem: "credentialSubject.organization.ura", // NutsURACredential provides URA attribute
-		},
+		APIClient:                   apiClient,
+		ServiceID:                   "shared-care-planning",
+		IdentifierCredentialMapping: defaultCredentialMapping,
 	}
 }
 

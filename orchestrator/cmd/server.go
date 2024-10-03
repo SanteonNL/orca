@@ -33,7 +33,7 @@ func Start(config Config) error {
 
 	services = append(services, healthcheck.New())
 
-	var activeProfile profile.Provider = nuts.DutchNutsProfile{
+	var activeProfile profile.Provider = &nuts.DutchNutsProfile{
 		Config: config.Nuts,
 	}
 	if config.CarePlanContributor.Enabled {

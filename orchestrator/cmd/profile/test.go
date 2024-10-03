@@ -18,7 +18,11 @@ var _ Provider = TestProfile{}
 type TestProfile struct {
 	Principal              *auth.Principal
 	xSCPContextHeaderValue string
-	TestCsdDirectory csd.Directory
+	TestCsdDirectory       csd.Directory
+}
+
+func (t TestProfile) Identities(_ context.Context) ([]fhir.Identifier, error) {
+	return t.Principal.Organization.Identifier, nil
 }
 
 func (t TestProfile) CsdDirectory() csd.Directory {
