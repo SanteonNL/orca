@@ -33,8 +33,16 @@ func SigningKeyFromAzureKeyVault(keyVaultURL, keyName string) (SigningKey, error
 	return signingKeyFromAzureKeyVault(keyVaultURL, keyName, false)
 }
 
-func DecryptKeyFromAzureKeyVault(digest []byte, keyVaultURL string, keyName string, keyVersion string) (azkeys.DecryptResponse, error) {
-	return decryptKeyFromAzureKeyVault(digest, keyVaultURL, keyName, keyVersion, false)
+func DecryptWithAzureKeyVault(digest []byte, keyVaultURL string, keyName string, keyVersion string) (azkeys.DecryptResponse, error) {
+	return decryptWithKeyVault(digest, keyVaultURL, keyName, keyVersion, false)
+}
+
+func EncryptWithAzureKeyVault(digest []byte, keyVaultURL string, keyName string, keyVersion string) (azkeys.EncryptResponse, error) {
+	return encryptWithAzureKeyVault(digest, keyVaultURL, keyName, keyVersion, false)
+}
+
+func SignWithAzureKeyVault(digest []byte, keyVaultURL string, keyName string, keyVersion string) (azkeys.SignResponse, error) {
+	return signWithAzureKeyVault(digest, keyVaultURL, keyName, keyVersion, false)
 }
 
 func signingKeyFromAzureKeyVault(keyVaultURL, keyName string, insecure bool) (SigningKey, error) {
@@ -169,7 +177,7 @@ func setKeyAlg(parsedKey jwk.Key, key *azkeys.JSONWebKey) error {
 // 	return azkeys.EncryptionAlgorithm(""), fmt.Errorf("unsupported encryption algorithm: %s", alg)
 // }
 
-func decryptKeyFromAzureKeyVault(digest []byte, keyVaultURL string, keyName string, keyVersion string, insecure bool) (azkeys.DecryptResponse, error) {
+func decryptWithKeyVault(digest []byte, keyVaultURL string, keyName string, keyVersion string, insecure bool) (azkeys.DecryptResponse, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), AzureKeyVaultTimeout)
 	defer cancel()
 
@@ -182,6 +190,36 @@ func decryptKeyFromAzureKeyVault(digest []byte, keyVaultURL string, keyName stri
 
 	return client.Decrypt(ctx, keyName, keyVersion, azkeys.KeyOperationParameters{
 		Algorithm: to.Ptr(azkeys.EncryptionAlgorithmRSAOAEP),
+		Value:     digest,
+	}, nil)
+}
+
+func encryptWithAzureKeyVault(digest []byte, keyVaultURL string, keyName string, keyVersion string, insecure bool) (azkeys.EncryptResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), AzureKeyVaultTimeout)
+	defer cancel()
+
+	client, err := getAzureClient(keyVaultURL, insecure)
+	if err != nil {
+		return azkeys.EncryptResponse{}, fmt.Errorf("unable to acquire Azure client: %w", err)
+	}
+
+	return client.Encrypt(ctx, keyName, keyVersion, azkeys.KeyOperationParameters{
+		Algorithm: to.Ptr(azkeys.EncryptionAlgorithmRSAOAEP),
+		Value:     digest,
+	}, nil)
+}
+
+func signWithAzureKeyVault(digest []byte, keyVaultURL string, keyName string, keyVersion string, insecure bool) (azkeys.SignResponse, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), AzureKeyVaultTimeout)
+	defer cancel()
+
+	client, err := getAzureClient(keyVaultURL, insecure)
+	if err != nil {
+		return azkeys.SignResponse{}, fmt.Errorf("unable to acquire Azure client: %w", err)
+	}
+
+	return client.Sign(ctx, keyName, keyVersion, azkeys.SignParameters{
+		Algorithm: to.Ptr(azkeys.SignatureAlgorithmRS256),
 		Value:     digest,
 	}, nil)
 }

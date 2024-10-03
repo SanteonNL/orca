@@ -108,7 +108,7 @@ func (s *Service) decryptAssertion(doc *etree.Document) (azkeys.DecryptResponse,
 	cipher := el.Text()
 
 	//TODO: Currently we only support azure keyvault decryption, ideally this is configurable and logic is extended here
-	decryptedValue, err := keys.DecryptKeyFromAzureKeyVault([]byte(cipher), s.config.AzureConfig.KeyVaultConfig.KeyVaultURL, s.config.AzureConfig.KeyVaultConfig.DecryptCertName, s.config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
+	decryptedValue, err := keys.DecryptWithAzureKeyVault([]byte(cipher), s.config.AzureConfig.KeyVaultConfig.KeyVaultURL, s.config.AzureConfig.KeyVaultConfig.DecryptCertName, s.config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
 
 	// result, err := xmlenc.Decrypt(privateKey, el)
 	if err != nil {
