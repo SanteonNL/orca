@@ -1,0 +1,117 @@
+<!-- Example from the Zorgplatform documentation -->
+<s:Envelope xmlns:s="http://www.w3.org/2003/05/soap-envelope"
+    xmlns:a="http://www.w3.org/2005/08/addressing"
+    xmlns:u="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
+    <s:Header>
+        <a:Action s:mustUnderstand="1">http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue</a:Action>
+        <a:MessageID>urn:uuid:99516cac-36ff-42a0-98d2-f66df7a4a6d2</a:MessageID>
+        <a:ReplyTo>
+            <a:Address>http://www.w3.org/2005/08/addressing/anonymous</a:Address>
+        </a:ReplyTo>
+        <a:To s:mustUnderstand="1">https://zorgplatform.online/sts</a:To>
+        <o:Security s:mustUnderstand="1"
+            xmlns:o="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext1.0.xsd">
+            <u:Timestamp u:Id="_0">
+                <u:Created>2019-04-19T12:55:23.030Z</u:Created>
+                <u:Expires>2019-04-19T13:00:23.030Z</u:Expires>
+            </u:Timestamp>
+            <Assertion ID="_e4d34804-b156-4bdf-9503-ed8cfcefa3e9"
+                IssueInstant="2019-04-19T12:55:23.023Z"
+                Version="2.0"
+                xmlns="urn:oasis:names:tc:SAML:2.0:assertion">
+                <Issuer>urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8</Issuer>
+                <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+                    <SignedInfo>
+                        <CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" />
+                        <SignatureMethod
+                            Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256" />
+                        <Reference URI="#_e4d34804-b156-4bdf-9503-ed8cfcefa3e9">
+                            <Transforms>
+                                <Transform
+                                    Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature" />
+                                <Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#" />
+                            </Transforms>
+                            <DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256" />
+                            <DigestValue>f5DxtXL2LpTXWaPPfU1uCUfPpVPAHdhsGSpBAS4L1kE=</DigestValue>
+                        </Reference>
+                    </SignedInfo>
+                    <SignatureValue>[Base64 encoded]</SignatureValue>
+                    <KeyInfo>
+                        <X509Data>
+                            <X509Certificate>[Base64 Encoded]</X509Certificate>
+                        </X509Data>
+                    </KeyInfo>
+                </Signature>
+                <Subject>
+                    <NameID>USER1@2.16.840.1.113883.2.4.3.124.8.50.8</NameID>
+                    <SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer" />
+                </Subject>
+                <Conditions NotBefore="2019-04-19T12:55:23.023Z"
+                    NotOnOrAfter="2019-04-19T13:07:23.023Z">
+                    <AudienceRestriction>
+                        <Audience>https://partner-application.nl</Audience>
+                    </AudienceRestriction>
+                </Conditions>
+                <AttributeStatement>
+                    <Attribute Name="urn:oasis:names:tc:xspa:1.0:subject:purposeofuse">
+                        <AttributeValue>
+                            <PurposeOfUse code="TREATMENT" codeSystem="2.16.840.1.113883.3.18.7.1"
+                                codeSystemName="nhin-purpose"
+                                displayName="" xmlns="urn:hl7-org:v3" />
+                        </AttributeValue>
+                    </Attribute>
+                    <Attribute Name="urn:oasis:names:tc:xacml:2.0:subject:role">
+                        <AttributeValue>
+                            <Role code="223366009" codeSystem="2.16.840.1.113883.6.96"
+                                codeSystemName="SNOMED_CT"
+                                displayName=""
+                                xmlns="urn:hl7-org:v3" />
+                        </AttributeValue>
+                    </Attribute>
+                    <Attribute Name="urn:oasis:names:tc:xacml:1.0:resource:resource-id">
+                        <AttributeValue>
+                            <InstanceIdentifier root="2.16.840.1.113883.2.4.6.3"
+                                extension="999999205"
+                                xmlns="urn:hl7-org:v3" />
+                        </AttributeValue>
+                    </Attribute>
+                    <Attribute Name="urn:oasis:names:tc:xspa:1.0:subject:organization-id">
+                        <AttributeValue>urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8</AttributeValue>
+                    </Attribute>
+                    <Attribute
+                        Name="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress">
+                        <AttributeValue>DoctorJansen@chipsoft.nl</AttributeValue>
+                    </Attribute>
+                    <Attribute Name="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name">
+                        <AttributeValue>Jansen, Doctor</AttributeValue>
+                    </Attribute>
+                    <Attribute
+                        Name="http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id">
+                        <AttributeValue> test123-workflow-id </AttributeValue>
+                    </Attribute>
+                </AttributeStatement>
+                <AuthnStatement AuthnInstant="2019-04-19T12:55:23.023Z">
+                    <AuthnContext>
+                        <AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:X509</AuthnContextClassRef>
+                    </AuthnContext>
+                </AuthnStatement>
+            </Assertion>
+        </o:Security>
+    </s:Header>
+    <s:Body>
+        <trust:RequestSecurityToken xmlns:trust="http://docs.oasis-open.org/ws-sx/ws-trust/200512">
+            document-ID: CSID-193-1894 versie : 0.1 15 <wsp:AppliesTo
+                xmlns:wsp="http://schemas.xmlsoap.org/ws/2004/09/policy">
+                <wsa:EndpointReference xmlns:wsa="http://www.w3.org/2005/08/addressing">
+                    <wsa:Address>[URL van web applicatie]</wsa:Address>
+                </wsa:EndpointReference>
+            </wsp:AppliesTo>
+<trust:KeyType>
+            http://docs.oasis-open.org/ws-sx/ws-trust/200512/Bearer</trust:KeyType>
+<trust:RequestType>
+            http://docs.oasis-open.org/ws-sx/ws-trust/200512/Issue</trust:RequestType>
+<trust:TokenType>
+            http://docs.oasis-open.org/wss/oasis-wss-saml-token-profile-1.1#SAMLV2.0</trust:TokenType>
+        </trust:RequestSecurityToken>
+    </s:Body>
+</s:Envelope>
