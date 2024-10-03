@@ -47,6 +47,7 @@ func (d DutchNutsProfile) RegisterHTTPHandlers(basePath string, resourceServerUR
 	})
 }
 
+// Identities consults the Nuts node to retrieve the local identities of the SCP node, given the credentials in the subject's wallet.
 func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, error) {
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
 		identifiers, err := d.identities(ctx)
