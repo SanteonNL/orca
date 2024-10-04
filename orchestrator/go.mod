@@ -5,7 +5,7 @@ go 1.23
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
-	github.com/SanteonNL/go-fhir-client v0.2.6
+	github.com/SanteonNL/go-fhir-client v0.2.7
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.0.0-20240805130644-8b92f1cbf865
 	github.com/google/uuid v1.6.0
 	github.com/knadh/koanf/providers/env v0.1.0
