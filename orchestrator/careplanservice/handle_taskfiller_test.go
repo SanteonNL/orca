@@ -2,8 +2,9 @@ package careplanservice
 
 import (
 	"encoding/json"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -186,19 +187,19 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
 	subtask := service.getSubTask(&validTask, questionnaireRef, true)
 
-	expectedSubTaskInput := []map[string]interface{}{
+	expectedSubTaskInput := []fhir.TaskInput{
 		{
-			"type": map[string]interface{}{
-				"coding": []map[string]interface{}{
+			Type: fhir.CodeableConcept{
+				Coding: []fhir.Coding{
 					{
-						"system":  "http://terminology.hl7.org/CodeSystem/task-input-type",
-						"code":    "Reference",
-						"display": "Reference",
+						System:  to.Ptr("http://terminology.hl7.org/CodeSystem/task-input-type"),
+						Code:    to.Ptr("Reference"),
+						Display: to.Ptr("Reference"),
 					},
 				},
 			},
-			"valueReference": map[string]interface{}{
-				"reference": questionnaireRef, // reference to the questionnaire
+			ValueReference: &fhir.Reference{
+				Reference: to.Ptr(questionnaireRef), // reference to the questionnaire
 			},
 		},
 	}
@@ -209,16 +210,15 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 		},
 	}
 
-	require.Equal(t, expectedPartOf, *(subtask["partOf"].(*[]fhir.Reference)), "Task.partOf should be copied from the primary task")
+	require.Equal(t, expectedPartOf, *(&subtask.PartOf), "Task.partOf should be copied from the primary task")
 
-	require.Equal(t, "Task", subtask["resourceType"], "Subtask should have resourceType Task")
-	require.Equal(t, validTask.Requester, subtask["owner"], "Task.requester should become Task.owner")
-	require.Equal(t, validTask.Owner, subtask["requester"], "Task.owner should become Task.requester")
-	require.Equal(t, validTask.BasedOn, subtask["basedOn"], "Task.basedOn should be copied from the primary task")
-	require.Equal(t, &validTask.Focus, subtask["focus"], "Task.focus should be copied from the primary task")
-	require.Equal(t, &validTask.For, subtask["for"], "Task.for should be copied from the primary task")
+	require.Equal(t, validTask.Requester, subtask.Owner, "Task.requester should become Task.owner")
+	require.Equal(t, validTask.Owner, subtask.Requester, "Task.owner should become Task.requester")
+	require.Equal(t, validTask.BasedOn, subtask.BasedOn, "Task.basedOn should be copied from the primary task")
+	require.Equal(t, validTask.Focus, subtask.Focus, "Task.focus should be copied from the primary task")
+	require.Equal(t, validTask.For, subtask.For, "Task.for should be copied from the primary task")
 	require.Equal(t, 1, len(validTask.Input), "Subtask should contain one input")
-	require.Equal(t, expectedSubTaskInput, subtask["input"], "Subtask should contain a reference to the questionnaire")
+	require.Equal(t, expectedSubTaskInput, subtask.Input, "Subtask should contain a reference to the questionnaire")
 }
 
 var validTask = fhir.Task{
