@@ -127,13 +127,3 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 		log.Error().Err(err).Msgf("Failed to notify subscribers for %T", resource)
 	}
 }
-
-// convertInto converts the src object into the target object,
-// by marshalling src to JSON and then unmarshalling it into target.
-func convertInto(src interface{}, target interface{}) error {
-	data, err := json.Marshal(src)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, target)
-}

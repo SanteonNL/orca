@@ -11,7 +11,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest *http.Request) error {
@@ -22,55 +22,46 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 	log.Info().Msgf("Updating Task: %s", taskID)
 	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
-	var task coolfhir.Task
+	var task fhir.Task
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return fmt.Errorf("invalid Task: %w", err)
 	}
 
 	// the Task prior to updates, we need this to validate the state transition
-	var taskExisting coolfhir.Task
+	var taskExisting fhir.Task
 	if err := s.fhirClient.Read("Task/"+taskID, &taskExisting); err != nil {
 		return fmt.Errorf("failed to read Task: %w", err)
 	}
 
 	// Validate state transition
-	taskFHIR, err := task.ToFHIR()
-	if err != nil {
-		return err
-	}
-	taskExistingFHIR, err := taskExisting.ToFHIR()
-	if err != nil {
-		return err
-	}
-
 	principal, err := auth.PrincipalFromContext(httpRequest.Context())
 	if err != nil {
 		return err
 	}
 	var isOwner bool
-	if taskFHIR.Owner != nil {
+	if task.Owner != nil {
 		for _, identifier := range principal.Organization.Identifier {
-			if coolfhir.LogicalReferenceEquals(*taskFHIR.Owner, fhir.Reference{Identifier: &identifier}) {
+			if coolfhir.LogicalReferenceEquals(*task.Owner, fhir.Reference{Identifier: &identifier}) {
 				isOwner = true
 				break
 			}
 		}
 	}
 	var isRequester bool
-	if taskFHIR.Requester != nil {
+	if task.Requester != nil {
 		for _, identifier := range principal.Organization.Identifier {
-			if coolfhir.LogicalReferenceEquals(*taskFHIR.Requester, fhir.Reference{Identifier: &identifier}) {
+			if coolfhir.LogicalReferenceEquals(*task.Requester, fhir.Reference{Identifier: &identifier}) {
 				isRequester = true
 				break
 			}
 		}
 	}
-	if !isValidTransition(taskExistingFHIR.Status, taskFHIR.Status, isOwner, isRequester) {
+	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester) {
 		return errors.New(
 			fmt.Sprintf(
 				"invalid state transition from %s to %s, owner(%t) requester(%t)",
-				taskExistingFHIR.Status.String(),
-				taskFHIR.Status.String(),
+				taskExisting.Status.String(),
+				task.Status.String(),
 				isOwner,
 				isRequester,
 			))
@@ -84,12 +75,8 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 
 	tx := coolfhir.Transaction()
 	tx = tx.Update(task, "Task/"+taskID)
-	r4Task, err := task.ToFHIR()
-	if err != nil {
-		return err
-	}
 	// Update care team
-	careTeamUpdated, err := careteamservice.Update(s.fhirClient, *carePlanRef, *r4Task, tx)
+	careTeamUpdated, err := careteamservice.Update(s.fhirClient, *carePlanRef, task, tx)
 	if err != nil {
 		return fmt.Errorf("update CareTeam: %w", err)
 	}

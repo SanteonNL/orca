@@ -11,7 +11,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 // TODO: Move to CarePlanContributor as TaskEngine, invoked by the CPS notification

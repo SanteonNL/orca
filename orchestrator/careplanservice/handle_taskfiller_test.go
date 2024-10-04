@@ -11,8 +11,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
 )
 
@@ -266,7 +266,7 @@ var validTask = fhir.Task{
 					},
 				},
 			},
-			ValueReference: fhir.Reference{
+			ValueReference: &fhir.Reference{
 				Reference: to.Ptr("urn:uuid:456"),
 			},
 		},

@@ -8,7 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
 	"net/http/httptest"

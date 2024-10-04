@@ -9,7 +9,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func (s *Service) handleCreateCarePlan(httpResponse http.ResponseWriter, httpRequest *http.Request) error {

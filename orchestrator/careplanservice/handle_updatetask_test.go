@@ -3,8 +3,8 @@ package careplanservice
 import (
 	"testing"
 
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func Test_isValidTransition(t *testing.T) {
