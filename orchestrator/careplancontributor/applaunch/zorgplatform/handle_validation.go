@@ -3,11 +3,11 @@ package zorgplatform
 import (
 	"encoding/base64"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/keys"
 	"github.com/beevik/etree"
 	"github.com/rs/zerolog/log"
 )
@@ -108,7 +108,7 @@ func (s *Service) decryptAssertion(doc *etree.Document) (azkeys.DecryptResponse,
 	cipher := el.Text()
 
 	//TODO: Currently we only support azure keyvault decryption, ideally this is configurable and logic is extended here
-	decryptedValue, err := keys.DecryptWithAzureKeyVault([]byte(cipher), s.config.AzureConfig.KeyVaultConfig.KeyVaultURL, s.config.AzureConfig.KeyVaultConfig.DecryptCertName, s.config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
+	decryptedValue, err := azkeyvault.Decrypt([]byte(cipher), s.config.AzureConfig.KeyVaultConfig.KeyVaultURL, s.config.AzureConfig.KeyVaultConfig.DecryptCertName, s.config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
 
 	// result, err := xmlenc.Decrypt(privateKey, el)
 	if err != nil {

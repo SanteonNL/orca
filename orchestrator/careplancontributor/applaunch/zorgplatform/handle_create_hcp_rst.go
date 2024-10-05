@@ -5,13 +5,13 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"io"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/keys"
 	"github.com/beevik/etree"
 	"github.com/google/uuid"
 )
@@ -192,7 +192,7 @@ func (s *Service) signAssertionWithAzureKeyVault(assertion *etree.Element) (*etr
 	}
 
 	// 5. Use Azure Key Vault to Sign the Digest of SignedInfo
-	signatureResponse, err := keys.SignWithAzureKeyVault([]byte(canonicalizedSignedInfo), s.config.AzureConfig.KeyVaultConfig.KeyVaultURL, s.config.AzureConfig.KeyVaultConfig.SignCertName, s.config.AzureConfig.KeyVaultConfig.SignCertVersion)
+	signatureResponse, err := azkeyvault.Sign([]byte(canonicalizedSignedInfo), s.config.AzureConfig.KeyVaultConfig.KeyVaultURL, s.config.AzureConfig.KeyVaultConfig.SignCertName, s.config.AzureConfig.KeyVaultConfig.SignCertVersion)
 	if err != nil {
 		return nil, err
 	}
