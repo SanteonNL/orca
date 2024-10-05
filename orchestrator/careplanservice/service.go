@@ -100,7 +100,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// Updating a resource
 	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
-		resourceId := request.PathValue("type")
+		resourceId := request.PathValue("id")
 		s.handleCreateOrUpdate(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 	}))
 	mux.HandleFunc("GET "+basePath+"/{resourcePath...}", s.profile.Authenticator(baseUrl, func(writer http.ResponseWriter, request *http.Request) {
