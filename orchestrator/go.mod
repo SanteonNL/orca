@@ -12,7 +12,6 @@ require (
 	github.com/knadh/koanf/v2 v2.1.1
 	github.com/nuts-foundation/go-nuts-client v0.1.5
 	github.com/rs/zerolog v1.33.0
-	github.com/samply/golang-fhir-models/fhir-models v0.3.2
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.31.0
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20241004123003-6f30810f220e
