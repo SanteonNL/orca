@@ -2,8 +2,8 @@ package coolfhir
 
 import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"testing"
 	"time"
 )

@@ -2,8 +2,8 @@ package coolfhir
 
 import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
 	"os"
 	"testing"

@@ -90,8 +90,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	}))
-	mux.HandleFunc(basePath+"/*", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-
+	mux.HandleFunc(basePath+"/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method == http.MethodPost && request.URL.Path == basePath+"/" {
 			err := s.handleBundle(writer, request)
 			if err != nil {
@@ -126,14 +125,4 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 	if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
 		log.Error().Err(err).Msgf("Failed to notify subscribers for %T", resource)
 	}
-}
-
-// convertInto converts the src object into the target object,
-// by marshalling src to JSON and then unmarshalling it into target.
-func convertInto(src interface{}, target interface{}) error {
-	data, err := json.Marshal(src)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(data, target)
 }

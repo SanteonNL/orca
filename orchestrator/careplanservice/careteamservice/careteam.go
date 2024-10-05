@@ -6,7 +6,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"slices"
 	"strings"
 	"time"

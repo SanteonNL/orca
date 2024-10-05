@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 )
 

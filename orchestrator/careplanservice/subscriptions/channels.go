@@ -10,7 +10,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
 )
