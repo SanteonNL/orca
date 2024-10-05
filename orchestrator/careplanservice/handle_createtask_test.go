@@ -5,13 +5,13 @@ import (
 	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func Test_basedOn(t *testing.T) {
 	type args struct {
-		task map[string]interface{}
+		task fhir.Task
 	}
 	tests := []struct {
 		name    string
@@ -22,8 +22,8 @@ func Test_basedOn(t *testing.T) {
 		{
 			name: "basedOn references a CarePlan (OK)",
 			args: args{
-				task: map[string]interface{}{
-					"basedOn": []fhir.Reference{
+				task: fhir.Task{
+					BasedOn: []fhir.Reference{
 						{
 							Reference: to.Ptr("CarePlan/123"),
 						},
@@ -36,7 +36,7 @@ func Test_basedOn(t *testing.T) {
 		{
 			name: "no basedOn",
 			args: args{
-				task: map[string]interface{}{},
+				task: fhir.Task{},
 			},
 			want:    nil,
 			wantErr: errors.New("Task.basedOn must have exactly one reference"),
@@ -44,10 +44,10 @@ func Test_basedOn(t *testing.T) {
 		{
 			name: "basedOn contains multiple references (instead of 1)",
 			args: args{
-				task: map[string]interface{}{
-					"basedOn": []interface{}{
-						map[string]interface{}{},
-						map[string]interface{}{},
+				task: fhir.Task{
+					BasedOn: []fhir.Reference{
+						{},
+						{},
 					},
 				},
 			},
@@ -57,8 +57,8 @@ func Test_basedOn(t *testing.T) {
 		{
 			name: "basedOn does not reference a CarePlan",
 			args: args{
-				task: map[string]interface{}{
-					"basedOn": []fhir.Reference{
+				task: fhir.Task{
+					BasedOn: []fhir.Reference{
 						{
 							Reference: to.Ptr("Patient/2"),
 						},
@@ -71,8 +71,8 @@ func Test_basedOn(t *testing.T) {
 		{
 			name: "basedOn is not a relative reference",
 			args: args{
-				task: map[string]interface{}{
-					"basedOn": []fhir.Reference{
+				task: fhir.Task{
+					BasedOn: []fhir.Reference{
 						{
 							Type:       to.Ptr("CarePlan"),
 							Identifier: &fhir.Identifier{},

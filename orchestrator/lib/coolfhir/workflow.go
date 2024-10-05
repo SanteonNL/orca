@@ -3,7 +3,7 @@ package coolfhir
 import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 // Workflow that performs the HL7 FHIR Workflow Option H: https://hl7.org/fhir/R4/workflow-management.html#optionh
