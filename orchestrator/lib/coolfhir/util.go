@@ -7,11 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"time"
 )
 
-type Task map[string]interface{}
+type Task fhir.Task
 
 func (t Task) ToFHIR() (*fhir.Task, error) {
 	taskJSON, _ := json.Marshal(t)

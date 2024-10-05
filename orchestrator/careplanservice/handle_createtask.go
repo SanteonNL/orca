@@ -12,23 +12,23 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func (s *Service) handleCreateTask(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msg("Creating Task")
 	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
-	task := make(coolfhir.Task)
+	var task fhir.Task
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return nil, fmt.Errorf("invalid Task: %w", err)
 	}
 
-	switch task["status"] {
-	case fhir.TaskStatusRequested.String():
-	case fhir.TaskStatusReady.String():
+	switch task.Status {
+	case fhir.TaskStatusRequested:
+	case fhir.TaskStatusReady:
 	default:
-		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task["status"], fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
+		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
 	}
 	// Resolve the CarePlan
 	carePlanRef, err := basedOn(task)
@@ -71,7 +71,7 @@ func (s *Service) handleCreateTask(httpRequest *http.Request, tx *coolfhir.Trans
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.
-func (s *Service) newTaskInCarePlan(tx *coolfhir.TransactionBuilder, task coolfhir.Task, carePlan *fhir.CarePlan) error {
+func (s *Service) newTaskInCarePlan(tx *coolfhir.TransactionBuilder, task fhir.Task, carePlan *fhir.CarePlan) error {
 	taskRef := "urn:uuid:" + uuid.NewString()
 	carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
 		Reference: &fhir.Reference{
@@ -84,25 +84,18 @@ func (s *Service) newTaskInCarePlan(tx *coolfhir.TransactionBuilder, task coolfh
 	tx.Create(task, coolfhir.WithFullUrl(taskRef)).
 		Update(*carePlan, "CarePlan/"+*carePlan.Id)
 
-	r4Task, err := task.ToFHIR()
-	if err != nil {
-		return err
-	}
-	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, *r4Task, tx); err != nil {
+	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
 		return fmt.Errorf("failed to update CarePlan: %w", err)
 	}
 	return nil
 }
 
 // basedOn returns the CarePlan reference the Task is based on, e.g. CarePlan/123.
-func basedOn(task map[string]interface{}) (*string, error) {
-	var taskBasedOn []fhir.Reference
-	if err := convertInto(task["basedOn"], &taskBasedOn); err != nil {
-		return nil, fmt.Errorf("failed to convert Task.basedOn: %w", err)
-	} else if len(taskBasedOn) != 1 {
+func basedOn(task fhir.Task) (*string, error) {
+	if len(task.BasedOn) != 1 {
 		return nil, errors.New("Task.basedOn must have exactly one reference")
-	} else if taskBasedOn[0].Reference == nil || !strings.HasPrefix(*taskBasedOn[0].Reference, "CarePlan/") {
+	} else if task.BasedOn[0].Reference == nil || !strings.HasPrefix(*task.BasedOn[0].Reference, "CarePlan/") {
 		return nil, errors.New("Task.basedOn must contain a relative reference to a CarePlan")
 	}
-	return taskBasedOn[0].Reference, nil
+	return task.BasedOn[0].Reference, nil
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 // TODO: Move to CarePlanContributor as TaskEngine, invoked by the CPS notification
@@ -213,7 +213,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 	// Create a new SubTask based on the Questionnaire reference
 	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
 	subtask := s.getSubTask(task, questionnaireRef, isPrimaryTask)
-	subtaskRef := "urn:uuid:" + subtask["id"].(string)
+	subtaskRef := "urn:uuid:" + *subtask.Id
 
 	tx := coolfhir.Transaction().
 		Create(questionnaire, coolfhir.WithFullUrl(questionnaireRef)).
@@ -231,9 +231,8 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 	return nil
 }
 
-// getSubTask creates a new subtask in map[string]interface{} format
-// TODO: This doesn't use fhir.Task as the fhir library contains a bug where all possible Task.input[x] are sent to the FHIR client instead of just Task.input.valueReference. This causes either a validation error or not a single Task.input[x] to be set (HAPI)
-func (s *Service) getSubTask(task *fhir.Task, questionnaireRef string, isPrimaryTask bool) map[string]interface{} {
+// getSubTask creates a new subtask providing the questionnaire reference as Task.input.valueReference
+func (s *Service) getSubTask(task *fhir.Task, questionnaireRef string, isPrimaryTask bool) fhir.Task {
 
 	// By default, point to the Task.partOf, this is used to group the subtasks together under the same primary Task
 	partOf := task.PartOf
@@ -248,44 +247,43 @@ func (s *Service) getSubTask(task *fhir.Task, questionnaireRef string, isPrimary
 		}
 	}
 
-	return map[string]interface{}{
-		"id":           uuid.NewString(),
-		"resourceType": "Task",
-		"status":       "ready",
-		"meta": map[string]interface{}{
-			"profile": []string{
+	return fhir.Task{
+		Id:     to.Ptr(uuid.NewString()),
+		Status: fhir.TaskStatusReady,
+		Meta: &fhir.Meta{
+			Profile: []string{
 				coolfhir.SCPTaskProfile,
 			},
 		},
-		"basedOn": task.BasedOn,
-		"partOf":  &partOf,
-		"focus":   &task.Focus,
-		"for":     &task.For,
-		"owner": func() *fhir.Reference {
+		BasedOn: task.BasedOn,
+		PartOf:  partOf,
+		Focus:   task.Focus,
+		For:     task.For,
+		Owner: func() *fhir.Reference {
 			if isPrimaryTask {
 				return task.Requester // reversed
 			}
 			return task.Owner
 		}(),
-		"requester": func() *fhir.Reference {
+		Requester: func() *fhir.Reference {
 			if isPrimaryTask {
 				return task.Owner // reversed
 			}
 			return task.Requester
 		}(),
-		"input": []map[string]interface{}{
+		Input: []fhir.TaskInput{
 			{
-				"type": map[string]interface{}{
-					"coding": []map[string]interface{}{
+				Type: fhir.CodeableConcept{
+					Coding: []fhir.Coding{
 						{
-							"system":  "http://terminology.hl7.org/CodeSystem/task-input-type",
-							"code":    "Reference",
-							"display": "Reference",
+							System:  to.Ptr("http://terminology.hl7.org/CodeSystem/task-input-type"),
+							Code:    to.Ptr("Reference"),
+							Display: to.Ptr("Reference"),
 						},
 					},
 				},
-				"valueReference": map[string]interface{}{
-					"reference": questionnaireRef,
+				ValueReference: &fhir.Reference{
+					Reference: to.Ptr(questionnaireRef),
 				},
 			},
 		},

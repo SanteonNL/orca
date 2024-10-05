@@ -4,7 +4,7 @@ package csd
 import (
 	"context"
 	"errors"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 var ErrEntryNotFound = errors.New("CSD does not contain the specified entry")

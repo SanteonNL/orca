@@ -14,8 +14,8 @@ import (
 	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")

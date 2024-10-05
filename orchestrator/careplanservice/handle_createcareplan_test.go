@@ -7,10 +7,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	fhirclient_mock "github.com/SanteonNL/orca/orchestrator/mocks/github.com/SanteonNL/go-fhir-client"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http/httptest"
 	"testing"
 )

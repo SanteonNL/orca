@@ -8,7 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -102,7 +102,7 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 
 	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
 		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-not-found.json")
 		var data fhir.Bundle
@@ -152,7 +152,7 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 
 	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
 		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-careteam-missing.json")
 		var data fhir.Bundle
@@ -202,7 +202,7 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 
 	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
 		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
 		var data fhir.Bundle
@@ -254,7 +254,7 @@ func TestService_Proxy_Valid(t *testing.T) {
 
 	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
 		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
 		var data fhir.Bundle
@@ -307,7 +307,7 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 
 	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
 		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
 		var data fhir.Bundle
@@ -357,7 +357,7 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 
 	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/*", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
 		capturedURL = request.URL.String()
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
 		var data fhir.Bundle

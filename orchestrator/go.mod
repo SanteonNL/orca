@@ -1,11 +1,11 @@
 module github.com/SanteonNL/orca/orchestrator
 
-go 1.22.2
+go 1.23
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
-	github.com/SanteonNL/go-fhir-client v0.2.5
+	github.com/SanteonNL/go-fhir-client v0.2.7
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.0.0-20240805130644-8b92f1cbf865
 	github.com/google/uuid v1.6.0
 	github.com/knadh/koanf/providers/env v0.1.0
@@ -15,6 +15,7 @@ require (
 	github.com/samply/golang-fhir-models/fhir-models v0.3.2
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.31.0
+	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20241004123003-6f30810f220e
 	go.uber.org/mock v0.4.0
 	golang.org/x/oauth2 v0.21.0
 )
