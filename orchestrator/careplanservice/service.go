@@ -90,7 +90,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	}))
-	mux.HandleFunc(basePath+"/*", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePath+"/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 
 		if request.Method == http.MethodPost && request.URL.Path == basePath+"/" {
 			err := s.handleBundle(writer, request)

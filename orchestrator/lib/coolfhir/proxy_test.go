@@ -41,7 +41,7 @@ func TestProxy(t *testing.T) {
 		},
 	})
 	proxyServer := httptest.NewServer(proxyServerMux)
-	proxyServerMux.HandleFunc("/localfhir/*", proxy.ServeHTTP)
+	proxyServerMux.HandleFunc("/localfhir/{rest...}", proxy.ServeHTTP)
 
 	t.Run("base request", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient", nil)
