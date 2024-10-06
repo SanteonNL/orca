@@ -2,6 +2,8 @@ package zorgplatform
 
 import (
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
+	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 	"io"
 	"net/http"
 	"net/url"
@@ -14,7 +16,7 @@ import (
 
 const fhirLauncherKey = "zorgplatform"
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string) *Service {
+func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
 		appLaunchURL = baseURL + "/zorgplatform-launch"
@@ -32,19 +34,34 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 		}
 	}
 
-	return &Service{
-		sessionManager: sessionManager,
-		config:         config,
-		baseURL:        baseURL,
-		landingUrlPath: landingUrlPath,
+	// Load certs: signing, TLS client authentication and decryption certificates
+	azClient, err := azkeyvault.NewClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, "managed_identity", false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
 	}
+	signingCert, err := azkeyvault.GetKey(azClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get signing certificate from Azure Key Vault: %w", err)
+	}
+	tlsClientCert, err := azkeyvault.GetKey(azClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
+
+	return &Service{
+		sessionManager:       sessionManager,
+		config:               config,
+		baseURL:              baseURL,
+		landingUrlPath:       landingUrlPath,
+		signingCertificate:   signingCert,
+		tlsClientCertificate: tlsClientCert,
+	}, nil
 }
 
 type Service struct {
-	sessionManager *user.SessionManager
-	config         Config
-	baseURL        string
-	landingUrlPath string
+	sessionManager       *user.SessionManager
+	config               Config
+	baseURL              string
+	landingUrlPath       string
+	signingCertificate   crypto.Suite
+	tlsClientCertificate crypto.Suite
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {

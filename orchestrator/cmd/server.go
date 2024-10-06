@@ -54,7 +54,11 @@ func Start(config Config) error {
 			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Public.URL, careplancontributor.LandingURL))
 		}
 		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
-			services = append(services, zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, careplancontributor.LandingURL))
+			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, careplancontributor.LandingURL)
+			if err != nil {
+				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
+			}
+			services = append(services, service)
 		}
 	}
 	if config.CarePlanService.Enabled {

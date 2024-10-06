@@ -4,12 +4,19 @@ import (
 	"context"
 	"crypto"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
+	libCrypto "github.com/SanteonNL/orca/orchestrator/lib/crypto"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/rs/zerolog/log"
+	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -21,17 +28,43 @@ type HttpRequestDoer interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-type SigningKey interface {
-	crypto.Signer
-	SigningAlgorithm() string
-	KeyID() string
+var _ libCrypto.Suite = &Suite{}
+
+type Suite struct {
+	keyPair
 }
 
-func GetKey(client *azkeys.Client, keyName string) (SigningKey, error) {
+type keyPair struct {
+	keyName    string
+	keyVersion string
+	asJwk      jwk.Key
+	publicKey  crypto.PublicKey
+	client     *azkeys.Client
+}
+
+func (s Suite) SigningKey() crypto.Signer {
+	return s
+}
+
+func (s Suite) DecryptRsaOaep(cipherText []byte) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), AzureKeyVaultTimeout)
 	defer cancel()
 
-	keyResponse, err := client.GetKey(ctx, keyName, "", nil)
+	decryptResponse, err := s.client.Decrypt(ctx, s.keyName, s.keyVersion, azkeys.KeyOperationParameters{
+		Algorithm: to.Ptr(azkeys.EncryptionAlgorithmRSAOAEP256),
+		Value:     cipherText,
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to decrypt with Azure KeyVault: %w", err)
+	}
+	return decryptResponse.Result, err
+}
+
+func GetKey(client *azkeys.Client, keyName string, keyVersion string) (*Suite, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), AzureKeyVaultTimeout)
+	defer cancel()
+
+	keyResponse, err := client.GetKey(ctx, keyName, keyVersion, nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get key from Azure KeyVault: %w", err)
 	}
@@ -55,18 +88,43 @@ func GetKey(client *azkeys.Client, keyName string) (SigningKey, error) {
 	if err = publicKeyJWK.Raw(&publicKey); err != nil {
 		return nil, fmt.Errorf("unable to parse public key from Azure KeyVault: %w", err)
 	}
-	return &azureSigningKey{
-		keyName:   keyName,
-		key:       parsedKey,
-		publicKey: publicKey,
-		client:    client,
+	return &Suite{
+		keyPair{
+			keyName:    key.KID.Name(),
+			keyVersion: key.KID.Version(),
+			asJwk:      parsedKey,
+			publicKey:  publicKey,
+			client:     client,
+		},
 	}, nil
 }
 
-func NewClient(keyVaultURL string, insecure bool) (*azkeys.Client, error) {
-	var cred *azidentity.DefaultAzureCredential
+func createCredential(credentialType string) (azcore.TokenCredential, error) {
+	switch credentialType {
+	case "default":
+		return azidentity.NewDefaultAzureCredential(nil)
+	case "managed_identity":
+		opts := &azidentity.ManagedIdentityCredentialOptions{
+			ClientOptions: azcore.ClientOptions{},
+		}
+		// For UserAssignedManagedIdentity, client ID needs to be explicitly set.
+		// Taken from github.com/!azure/azure-sdk-for-go/sdk/azidentity@v1.7.0/default_azure_credential.go:100
+		if ID, ok := os.LookupEnv("AZURE_CLIENT_ID"); ok {
+			log.Logger.Debug().Msg("Azure: configuring UserAssignedManagedIdentity (using AZURE_CLIENT_ID) for Azure Key Vault client.")
+			opts.ID = azidentity.ClientID(ID)
+		}
+		return azidentity.NewManagedIdentityCredential(opts)
+	default:
+		return nil, fmt.Errorf("unsupported Azure Key Vault credential type: %s", credentialType)
+	}
+}
+
+func NewClient(keyVaultURL string, credentialType string, insecure bool) (*azkeys.Client, error) {
+	cred, err := createCredential(credentialType)
+	if err != nil {
+		return nil, fmt.Errorf("unable to acquire Azure credential: %w", err)
+	}
 	var clientOptions *azkeys.ClientOptions
-	var err error
 	if insecure {
 		clientOptions = &azkeys.ClientOptions{
 			ClientOptions: azcore.ClientOptions{
@@ -74,12 +132,59 @@ func NewClient(keyVaultURL string, insecure bool) (*azkeys.Client, error) {
 				Transport:                       AzureHttpRequestDoer,
 			},
 		}
-	} else {
-		cred, err = azidentity.NewDefaultAzureCredential(nil)
-		if err != nil {
-			return nil, fmt.Errorf("unable to acquire Azure credential: %w", err)
-		}
+	}
+	return azkeys.NewClient(keyVaultURL, cred, clientOptions) // never returns an error
+}
+
+func (a keyPair) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (signature []byte, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), AzureKeyVaultTimeout)
+	defer cancel()
+
+	// Sanity check
+	if opts != nil && opts.HashFunc() == 0 {
+		return nil, errors.New("hashing should've been done")
 	}
 
-	return azkeys.NewClient(keyVaultURL, cred, clientOptions) // never returns an error
+	response, err := a.client.Sign(ctx, a.keyName, a.keyVersion, azkeys.SignParameters{
+		Algorithm: to.Ptr(azkeys.SignatureAlgorithm(a.SigningAlgorithm())),
+		Value:     digest,
+	}, nil)
+	if err != nil {
+		return nil, fmt.Errorf("unable to sign with Azure KeyVault: %w", err)
+	}
+	return response.Result, nil
+}
+
+func (a keyPair) Public() crypto.PublicKey {
+	return a.publicKey
+}
+
+func (a keyPair) SigningAlgorithm() string {
+	return a.asJwk.Algorithm().String()
+}
+
+func (a keyPair) KeyID() string {
+	return a.asJwk.KeyID()
+}
+
+func setKeyAlg(parsedKey jwk.Key, key *azkeys.JSONWebKey) error {
+	switch parsedKey.KeyType() {
+	case jwa.EC:
+		switch *key.Crv {
+		case azkeys.CurveNameP256:
+			return parsedKey.Set(jwk.AlgorithmKey, jwa.ES256)
+		case azkeys.CurveNameP256K:
+			return parsedKey.Set(jwk.AlgorithmKey, jwa.ES256K)
+		case azkeys.CurveNameP384:
+			return parsedKey.Set(jwk.AlgorithmKey, jwa.ES384)
+		case azkeys.CurveNameP521:
+			return parsedKey.Set(jwk.AlgorithmKey, jwa.ES512)
+		default:
+			return fmt.Errorf("unsupported curve: %s", *key.Crv)
+		}
+	case jwa.RSA:
+		return parsedKey.Set(jwk.AlgorithmKey, jwa.RS256)
+	default:
+		return fmt.Errorf("unsupported key type: %s", parsedKey.KeyType())
+	}
 }
