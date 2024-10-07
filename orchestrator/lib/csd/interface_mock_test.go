@@ -13,7 +13,7 @@ import (
 	context "context"
 	reflect "reflect"
 
-	fhir "github.com/samply/golang-fhir-models/fhir-models/fhir"
+	fhir "github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	gomock "go.uber.org/mock/gomock"
 )
 
