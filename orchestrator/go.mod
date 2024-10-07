@@ -20,7 +20,10 @@ require (
 	golang.org/x/oauth2 v0.21.0
 )
 
-require github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.0.0 // indirect
+require (
+	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.1.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.0.0 // indirect
+)
 
 require (
 	dario.cat/mergo v1.0.0 // indirect

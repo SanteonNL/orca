@@ -23,4 +23,6 @@ type AzureKeyVaultConfig struct {
 	DecryptCertVersion string `koanf:"decryptcertversion"`
 	SignCertName       string `koanf:"signcertname"`
 	SignCertVersion    string `koanf:"signcertversion"`
+	ClientCertName     string `koanf:"clientcertname"`
+	ClientCertVersion  string `koanf:"clientcertversion"`
 }

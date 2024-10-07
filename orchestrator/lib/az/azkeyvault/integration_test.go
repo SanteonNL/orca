@@ -21,7 +21,7 @@ func Test_Suite_DecryptRsaOaep(t *testing.T) {
 	os.Setenv("AZURE_PASSWORD", "")
 
 	plainText := []byte("Hello, World!")
-	client, err := NewClient(vaultUrl, credentialType, false)
+	client, err := NewKeysClient(vaultUrl, credentialType, false)
 	require.NoError(t, err)
 	suite, err := GetKey(client, keyName, "")
 	require.NoError(t, err)

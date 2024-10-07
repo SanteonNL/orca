@@ -119,7 +119,7 @@ func createCredential(credentialType string) (azcore.TokenCredential, error) {
 	}
 }
 
-func NewClient(keyVaultURL string, credentialType string, insecure bool) (*azkeys.Client, error) {
+func NewKeysClient(keyVaultURL string, credentialType string, insecure bool) (*azkeys.Client, error) {
 	cred, err := createCredential(credentialType)
 	if err != nil {
 		return nil, fmt.Errorf("unable to acquire Azure credential: %w", err)

@@ -12,7 +12,7 @@ package azkeyvault
 //	})
 //
 //	AzureHttpRequestDoer = httpServer.Client()
-//	client, err := NewClient(httpServer.URL, true)
+//	client, err := NewKeysClient(httpServer.URL, true)
 //	require.NoError(t, err)
 //	signingKey, err := GetKey(client, "keyz")
 //	require.NoError(t, err)

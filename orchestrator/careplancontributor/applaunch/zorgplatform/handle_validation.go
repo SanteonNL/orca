@@ -3,10 +3,7 @@ package zorgplatform
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"time"
-
-	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 
 	"github.com/beevik/etree"
 	"github.com/rs/zerolog/log"
@@ -38,17 +35,9 @@ func (s *Service) validateEncryptedSAMLToken(base64EncryptedToken string) (Launc
 
 	//TODO: Do we want to trim/cleanup values before validating?
 
-	decryptedResponse, err := s.decryptAssertion(doc)
+	decryptedAssertion, err := s.decryptAssertion(doc)
 	if err != nil {
 		return LaunchContext{}, fmt.Errorf("unable to decrypt assertion: %w", err)
-	}
-
-	log.Info().Msgf("Decrypted assertion: %s", string(decryptedResponse.Result)) //TODO: Remove this line, used for debugging
-
-	decryptedAssertion := etree.NewDocument()
-	err = doc.ReadFromBytes(decryptedResponse.Result)
-	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to parse decrypted assertion XML: %w", err)
 	}
 
 	if err := s.validateTokenExpiry(decryptedAssertion); err != nil {
@@ -101,21 +90,23 @@ func (s *Service) validateEncryptedSAMLToken(base64EncryptedToken string) (Launc
 
 }
 
-func (s *Service) decryptAssertion(doc *etree.Document) (azkeys.DecryptResponse, error) {
-	// privateKey, err := loadPrivateKey()
-
+func (s *Service) decryptAssertion(doc *etree.Document) (*etree.Document, error) {
 	el := doc.Root().FindElement("//EncryptedAssertion/xenc:EncryptedData/xenc:CipherData/xenc:CipherValue")
-	cipher := el.Text()
-
-	//TODO: Currently we only support azure keyvault decryption, ideally this is configurable and logic is extended here
-	decryptedValue, err := azkeyvault.Decrypt([]byte(cipher), s.config.AzureConfig.KeyVaultConfig.KeyVaultURL, s.config.AzureConfig.KeyVaultConfig.DecryptCertName, s.config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
-
-	// result, err := xmlenc.Decrypt(privateKey, el)
-	if err != nil {
-		return azkeys.DecryptResponse{}, fmt.Errorf("failed to decrypt XML: %v", err)
+	if el == nil {
+		return nil, fmt.Errorf("cipher value not found in the assertion")
 	}
-
-	return decryptedValue, nil
+	cipher := el.Text()
+	plainText, err := s.decryptCertificate.DecryptRsaOaep([]byte(cipher))
+	if err != nil {
+		return nil, fmt.Errorf("failed to decrypt assertion: %v", err)
+	}
+	log.Info().Msgf("Decrypted assertion: %s", string(plainText)) //TODO: Remove this line, used for debugging
+	decryptedAssertion := etree.NewDocument()
+	err = doc.ReadFromBytes(plainText)
+	if err != nil {
+		return nil, fmt.Errorf("unable to parse decrypted assertion XML: %w", err)
+	}
+	return decryptedAssertion, nil
 }
 
 func (s *Service) validateTokenExpiry(doc *etree.Document) error {

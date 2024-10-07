@@ -25,17 +25,10 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 	}
 	log.Info().Msgf("Zorgplatform app launch is (%s)", appLaunchURL)
 
-	// Register FHIR client factory that can create FHIR clients when the Zorgplatform AppLaunch is used
-	clients.Factories[fhirLauncherKey] = func(properties map[string]string) clients.ClientProperties {
-		fhirServerURL, _ := url.Parse(config.ApiUrl)
-		return clients.ClientProperties{
-			BaseURL: fhirServerURL,
-			Client:  http.DefaultTransport,
-		}
-	}
+	registerFhirClientFactory(config)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
-	azClient, err := azkeyvault.NewClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, "managed_identity", false)
+	azClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, "managed_identity", false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
 	}
@@ -43,8 +36,14 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 	if err != nil {
 		return nil, fmt.Errorf("unable to get signing certificate from Azure Key Vault: %w", err)
 	}
-	tlsClientCert, err := azkeyvault.GetKey(azClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
-
+	decryptCert, err := azkeyvault.GetKey(azClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get decryption certificate from Azure Key Vault: %w", err)
+	}
+	tlsClientCert, err := azkeyvault.GetKey(azClient, config.AzureConfig.KeyVaultConfig.ClientCertName, config.AzureConfig.KeyVaultConfig.ClientCertVersion)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get TLS client certificate from Azure Key Vault: %w", err)
+	}
 	return &Service{
 		sessionManager:       sessionManager,
 		config:               config,
@@ -52,6 +51,7 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 		landingUrlPath:       landingUrlPath,
 		signingCertificate:   signingCert,
 		tlsClientCertificate: tlsClientCert,
+		decryptCertificate:   decryptCert,
 	}, nil
 }
 
@@ -62,6 +62,7 @@ type Service struct {
 	landingUrlPath       string
 	signingCertificate   crypto.Suite
 	tlsClientCertificate crypto.Suite
+	decryptCertificate   crypto.Suite
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -126,4 +127,15 @@ func (s *Service) getEncryptedSAMLToken(response http.ResponseWriter, request *h
 	}
 
 	return samlResponse, nil
+}
+
+func registerFhirClientFactory(config Config) {
+	// Register FHIR client factory that can create FHIR clients when the Zorgplatform AppLaunch is used
+	clients.Factories[fhirLauncherKey] = func(properties map[string]string) clients.ClientProperties {
+		fhirServerURL, _ := url.Parse(config.ApiUrl)
+		return clients.ClientProperties{
+			BaseURL: fhirServerURL,
+			Client:  http.DefaultTransport,
+		}
+	}
 }

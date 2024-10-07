@@ -1,11 +1,12 @@
 package zorgplatform
 
 import (
+	"crypto"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"io"
 	"net/http"
 	"os"
@@ -25,7 +26,7 @@ func (s *Service) requestHcpRst(launchContext LaunchContext) (string, error) {
 	}
 
 	// Sign the assertion using Azure Key Vault
-	signedAssertion, err := s.signAssertionWithAzureKeyVault(assertion)
+	signedAssertion, err := s.signAssertion(assertion)
 	if err != nil {
 		return "", err
 	}
@@ -170,8 +171,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 	return assertion, nil
 }
 
-// TODO: Azure Key Vault can sign data but doesn't handle the XMLDSig structure - can this be simplified?
-func (s *Service) signAssertionWithAzureKeyVault(assertion *etree.Element) (*etree.Element, error) {
+func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error) {
 	// 1. Canonicalize the Assertion (without the Signature element)
 	canonicalizedAssertion, err := canonicalize(assertion)
 	if err != nil {
@@ -188,17 +188,17 @@ func (s *Service) signAssertionWithAzureKeyVault(assertion *etree.Element) (*etr
 	// 4. Canonicalize the SignedInfo
 	canonicalizedSignedInfo, err := canonicalize(signedInfo)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("canonicalization failed: %w", err)
 	}
 
-	// 5. Use Azure Key Vault to Sign the Digest of SignedInfo
-	signatureResponse, err := azkeyvault.Sign([]byte(canonicalizedSignedInfo), s.config.AzureConfig.KeyVaultConfig.KeyVaultURL, s.config.AzureConfig.KeyVaultConfig.SignCertName, s.config.AzureConfig.KeyVaultConfig.SignCertVersion)
+	// 5. Sign the Digest of SignedInfo
+	signature, err := s.signingCertificate.SigningKey().Sign(rand.Reader, []byte(canonicalizedSignedInfo), crypto.SHA256)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("signing failed: %w", err)
 	}
 
 	// 6. Construct the Signature Element
-	signatureElement, err := s.createSignatureElement(signedInfo, string(signatureResponse.Result))
+	signatureElement, err := s.createSignatureElement(signedInfo, string(signature)) // TODO: Shouldn't this be base64 encoded?
 	if err != nil {
 		return nil, err
 	}
