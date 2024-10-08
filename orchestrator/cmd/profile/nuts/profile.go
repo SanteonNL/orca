@@ -31,6 +31,18 @@ type DutchNutsProfile struct {
 	Config                Config
 	cachedIdentities      []fhir.Identifier
 	identitiesRefreshedAt time.Time
+	vcrClient             vcr.ClientWithResponsesInterface
+}
+
+func New(config Config) (*DutchNutsProfile, error) {
+	vcrClient, err := vcr.NewClientWithResponses(config.API.URL)
+	if err != nil {
+		return nil, err
+	}
+	return &DutchNutsProfile{
+		Config:    config,
+		vcrClient: vcrClient,
+	}, nil
 }
 
 // RegisterHTTPHandlers registers the well-known OAuth2 Protected Resource HTTP endpoint that is used by OAuth2 Relying Parties to discover the OAuth2 Authorization Server.
@@ -66,20 +78,14 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, e
 }
 
 func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, error) {
-	vcrClient, err := vcr.NewClientWithResponses(d.Config.API.URL)
-	if err != nil {
-		return nil, err
-	}
-	response, err := vcrClient.GetCredentialsInWalletWithResponse(ctx, d.Config.OwnSubject)
+	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, d.Config.OwnSubject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
 	}
 	if response.JSON200 == nil {
 		if response.ApplicationproblemJSONDefault != nil {
-			if response.ApplicationproblemJSONDefault.Status == http.StatusNotFound {
-				return nil, fmt.Errorf("%s - %s", response.ApplicationproblemJSONDefault.Title, response.ApplicationproblemJSONDefault.Detail)
-			}
-			return nil, fmt.Errorf("list credentials non-OK HTTP response (status=%s): %v", response.Status(), response.ApplicationproblemJSONDefault)
+			detail := fmt.Sprintf("HTTP %d - %s - %s", int(response.ApplicationproblemJSONDefault.Status), response.ApplicationproblemJSONDefault.Title, response.ApplicationproblemJSONDefault.Detail)
+			return nil, fmt.Errorf("list credentials non-OK HTTP response (status=%s): %s", response.Status(), detail)
 		}
 		return nil, fmt.Errorf("list credentials non-OK HTTP response (status=%s)", response.Status())
 	}

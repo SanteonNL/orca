@@ -1,10 +1,17 @@
 package nuts
 
 import (
+	"context"
+	"errors"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/test/vcrclient_mock"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/nuts-foundation/go-did/vc"
+	"github.com/nuts-foundation/go-nuts-client/nuts/vcr"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -68,5 +75,156 @@ func TestDutchNutsProfile_identifiersFromCredential(t *testing.T) {
 }
 
 func TestDutchNutsProfile_Identities(t *testing.T) {
+	ctx := context.Background()
+	identifier1 := fhir.Identifier{
+		System: to.Ptr(coolfhir.URANamingSystem),
+		Value:  to.Ptr("1234"),
+	}
+	identifier1VC := vc.VerifiableCredential{
+		CredentialSubject: []interface{}{
+			map[string]interface{}{
+				"organization": map[string]interface{}{
+					"ura": *identifier1.Value,
+				},
+			},
+		},
+	}
+	identifier2 := fhir.Identifier{
+		System: to.Ptr(coolfhir.URANamingSystem),
+		Value:  to.Ptr("5678"),
+	}
+	identifier2VC := vc.VerifiableCredential{
+		CredentialSubject: []interface{}{
+			map[string]interface{}{
+				"organization": map[string]interface{}{
+					"ura": *identifier2.Value,
+				},
+			},
+		},
+	}
+	nonUraVC := vc.VerifiableCredential{
+		CredentialSubject: []interface{}{
+			map[string]interface{}{
+				"name": "test",
+			},
+		},
+	}
+	problemResponse := &vcr.GetCredentialsInWalletResponse{
+		ApplicationproblemJSONDefault: &struct {
+			Detail string  `json:"detail"`
+			Status float32 `json:"status"`
+			Title  string  `json:"title"`
+		}{
+			Detail: "something went wrong",
+			Status: http.StatusInternalServerError,
+			Title:  "Oops",
+		},
+	}
+	t.Run("non-URA credentials in wallet", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
+		prof := &DutchNutsProfile{
+			vcrClient: vcrClient,
+			Config:    Config{OwnSubject: "sub"},
+		}
+		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
+			JSON200: &[]vcr.VerifiableCredential{identifier1VC, nonUraVC},
+		}, nil)
 
+		identities, err := prof.Identities(ctx)
+		require.NoError(t, err)
+
+		require.Len(t, identities, 1)
+		assert.Contains(t, identities, identifier1)
+	})
+	t.Run("initial fetch, then cached", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
+		prof := &DutchNutsProfile{
+			vcrClient: vcrClient,
+			Config:    Config{OwnSubject: "sub"},
+		}
+		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
+			JSON200: &[]vcr.VerifiableCredential{identifier1VC, identifier2VC},
+		}, nil)
+
+		identities, err := prof.Identities(ctx)
+		require.NoError(t, err)
+
+		require.Len(t, identities, 2)
+		assert.Contains(t, identities, identifier1)
+		assert.Contains(t, identities, identifier2)
+
+		identities, err = prof.Identities(ctx)
+		require.NoError(t, err)
+		require.Len(t, identities, 2)
+	})
+	t.Run("initial fetch fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
+		prof := &DutchNutsProfile{
+			vcrClient: vcrClient,
+			Config:    Config{OwnSubject: "sub"},
+		}
+		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(nil, errors.New("failed"))
+
+		identities, err := prof.Identities(ctx)
+		require.EqualError(t, err, "failed to load local identities: failed to list credentials: failed")
+		require.Nil(t, identities)
+	})
+	t.Run("initial fetch fails with Problem", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
+		prof := &DutchNutsProfile{
+			vcrClient: vcrClient,
+			Config:    Config{OwnSubject: "sub"},
+		}
+		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(problemResponse, nil)
+
+		identities, err := prof.Identities(ctx)
+		require.EqualError(t, err, "failed to load local identities: list credentials non-OK HTTP response (status=): HTTP 500 - Oops - something went wrong")
+		require.Nil(t, identities)
+	})
+	t.Run("(stale) cache is returned if refresh fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
+		prof := &DutchNutsProfile{
+			vcrClient: vcrClient,
+			Config:    Config{OwnSubject: "sub"},
+			cachedIdentities: []fhir.Identifier{
+				identifier1,
+			},
+		}
+		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(nil, errors.New("failed"))
+
+		identities, err := prof.Identities(ctx)
+		require.NoError(t, err)
+		require.Len(t, identities, 1)
+		assert.Contains(t, identities, identifier1)
+	})
+	t.Run("fetched again when cache is expired", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
+		prof := &DutchNutsProfile{
+			vcrClient: vcrClient,
+			Config:    Config{OwnSubject: "sub"},
+		}
+		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
+			JSON200: &[]vcr.VerifiableCredential{identifier1VC, identifier2VC},
+		}, nil).Times(2)
+
+		identities, err := prof.Identities(ctx)
+		require.NoError(t, err)
+
+		require.Len(t, identities, 2)
+		assert.Contains(t, identities, identifier1)
+		assert.Contains(t, identities, identifier2)
+
+		// expire cache
+		prof.identitiesRefreshedAt = prof.identitiesRefreshedAt.Add(-identitiesCacheTTL)
+
+		identities, err = prof.Identities(ctx)
+		require.NoError(t, err)
+		require.Len(t, identities, 2)
+	})
 }
