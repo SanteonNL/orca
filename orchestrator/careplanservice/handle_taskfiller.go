@@ -45,36 +45,6 @@ func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
 	return nil
 }
 
-// TODO: This function now always expects a subtask, but it should also be able to handle primary tasks
-func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
-
-	log.Info().Msg("Running handleTaskFillerUpdate")
-
-	if !s.isScpTask(task) {
-		log.Debug().Msg("Task is not an SCP Task - skipping")
-		return nil
-	}
-
-	if task.Status != fhir.TaskStatusCompleted {
-		log.Debug().Msg("Task.status is not completed - skipping")
-		return nil
-	}
-
-	if err := s.isValidTask(task); err != nil {
-		log.Warn().Err(err).Msg("Task invalid - skipping")
-		return fmt.Errorf("task is not valid - skipping: %w", err)
-	}
-
-	if _, err := s.partOf(task, true); err != nil {
-		return fmt.Errorf("expected a subTask - failed to extract Task.partOf for Task/%s: %w", *task.Id, err)
-	}
-
-	log.Info().Msg("SubTask.status is completed - processing")
-
-	return s.createSubTaskOrFinishPrimaryTask(task, false)
-
-}
-
 func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 	log.Debug().Msg("Marking primary Task as completed")
 
