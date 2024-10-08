@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
@@ -74,4 +76,67 @@ func TestRestHookChannel_Notify(t *testing.T) {
 		require.ErrorIs(t, err, ReceiverFailure)
 		require.ErrorContains(t, err, "connection refused")
 	})
+}
+
+func TestInProcessChannelFactory_Create(t *testing.T) {
+	t.Run("local identity, in-process channel can be used", func(t *testing.T) {
+		prof := profile.TestProfile{
+			Principal: auth.TestPrincipal1,
+		}
+		factory := InProcessChannelFactory{
+			Profile: prof,
+		}
+
+		channel, err := factory.Create(context.Background(), auth.TestPrincipal1.Organization.Identifier[0])
+
+		require.NoError(t, err)
+		require.NotNil(t, channel)
+	})
+	t.Run("no local identities match, in-process channel cannot be used", func(t *testing.T) {
+		prof := profile.TestProfile{
+			Principal: auth.TestPrincipal2,
+		}
+		defaultChannelFactory := &stubChannelFactory{}
+		factory := InProcessChannelFactory{
+			Profile:               prof,
+			DefaultChannelFactory: defaultChannelFactory,
+		}
+
+		expected := auth.TestPrincipal1.Organization.Identifier[0]
+		_, err := factory.Create(context.Background(), expected)
+
+		require.NoError(t, err)
+		require.Len(t, defaultChannelFactory.calls, 1)
+		require.Equal(t, expected, defaultChannelFactory.calls[0])
+	})
+	t.Run("no local identities, in-process channel cannot be used", func(t *testing.T) {
+		prof := profile.TestProfile{
+			Principal: &auth.Principal{
+				Organization: fhir.Organization{
+					Identifier: []fhir.Identifier{},
+				},
+			},
+		}
+		defaultChannelFactory := &stubChannelFactory{}
+		factory := InProcessChannelFactory{
+			Profile:               prof,
+			DefaultChannelFactory: defaultChannelFactory,
+		}
+
+		_, err := factory.Create(context.Background(), fhir.Identifier{})
+
+		require.NoError(t, err)
+		require.Len(t, defaultChannelFactory.calls, 1)
+		require.Equal(t, fhir.Identifier{}, defaultChannelFactory.calls[0])
+	})
+
+}
+
+type stubChannelFactory struct {
+	calls []fhir.Identifier
+}
+
+func (s *stubChannelFactory) Create(ctx context.Context, subscriber fhir.Identifier) (Channel, error) {
+	s.calls = append(s.calls, subscriber)
+	return nil, nil
 }

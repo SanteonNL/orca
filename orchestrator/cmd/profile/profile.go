@@ -1,7 +1,9 @@
 package profile
 
 import (
+	"context"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
 )
@@ -21,4 +23,6 @@ type Provider interface {
 	HttpClient() *http.Client
 	// CsdDirectory returns the directory service for finding endpoints and organizations through Care Service Discovery (IHE-CSD).
 	CsdDirectory() csd.Directory
+	// Identities returns the identities of the local tenant (e.g., a care organization).
+	Identities(ctx context.Context) ([]fhir.Identifier, error)
 }

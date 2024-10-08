@@ -2,12 +2,15 @@ package careplanservice
 
 import (
 	"encoding/json"
+	"errors"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/stretchr/testify/assert"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -16,8 +19,6 @@ import (
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
-
-var taskJSON = `{"resourceType":"Task","id":"cps-task-01","meta":{"versionId":"1","profile":["http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"]},"text":{"status":"generated","div":"<div xmlns=\"http://www.w3.org/1999/xhtml\">Generated Narrative</div>"},"status":"requested","intent":"order","code":{"coding":[{"system":"http://hl7.org/fhir/CodeSystem/task-code","code":"fullfill"}]},"focus":{"reference":"urn:uuid:456"},"for":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/bsn","value":"111222333"}},"requester":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/uzi","value":"UZI-1"}},"owner":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/ura","value":"URA-2"}},"reasonReference":{"reference":"urn:uuid:789"}}`
 
 func TestService_Proxy(t *testing.T) {
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
@@ -56,50 +57,13 @@ type OperationOutcomeWithResourceType struct {
 	ResourceType *string `bson:"resourceType" json:"resourceType"`
 }
 
-// Test invalid requests return OperationOutcome
-func TestService_Post_Task_Error(t *testing.T) {
-	var tests = []struct {
-		method             string
-		path               string
-		body               string
-		expectedStatusCode int
-		expectedMessage    string
-	}{
-		{
-			http.MethodPost,
-			"/cps/Task",
-			"",
-			http.StatusBadRequest,
-			"CarePlanService/CreateTask failed: invalid Task: unexpected end of JSON input",
-		},
-		{
-			http.MethodPut,
-			"/cps/Task/no-such-task",
-			"",
-			http.StatusBadRequest,
-			"CarePlanService/UpdateTask failed: invalid Task: unexpected end of JSON input",
-		},
-		{
-			http.MethodPut,
-			"/cps/Task/no-such-task",
-			taskJSON,
-			http.StatusBadRequest,
-			"CarePlanService/UpdateTask failed: failed to read Task: FHIR request failed (GET http://example.com/Task/no-such-task, status=500)",
-		},
-		{
-			http.MethodPost,
-			"/cps/CarePlan",
-			"",
-			http.StatusBadRequest,
-			"CarePlanService/CreateCarePlan failed: invalid fhir.CarePlan: unexpected end of JSON input",
-		},
-	}
-
+// TestService_ErrorHandling asserts invalid requests return OperationOutcome
+func TestService_ErrorHandling(t *testing.T) {
 	// Setup: configure the service
 	service, err := New(
 		Config{
 			FHIR: coolfhir.ClientConfig{
-				BaseURL: "http://example.com",
+				BaseURL: "http://localhost",
 			},
 		},
 		profile.TestProfile{},
@@ -113,26 +77,282 @@ func TestService_Post_Task_Error(t *testing.T) {
 	httpClient := server.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(server.Client().Transport, auth.TestPrincipal1, "")
 
-	for _, tt := range tests {
-		// Make an invalid call (not providing JSON payload)
-		request, err := http.NewRequest(tt.method, server.URL+tt.path, strings.NewReader(tt.body))
-		require.NoError(t, err)
-		request.Header.Set("Content-Type", "application/fhir+json")
+	// Make an invalid call (not providing JSON payload)
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/cps/Task", nil)
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", "application/fhir+json")
 
-		httpResponse, err := httpClient.Do(request)
-		require.NoError(t, err)
+	httpResponse, err := httpClient.Do(request)
+	require.NoError(t, err)
 
-		// Test response
-		require.Equal(t, tt.expectedStatusCode, httpResponse.StatusCode)
-		require.Equal(t, "application/fhir+json", httpResponse.Header.Get("Content-Type"))
+	// Test response
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	require.Equal(t, "application/fhir+json", httpResponse.Header.Get("Content-Type"))
 
-		var target OperationOutcomeWithResourceType
-		err = json.NewDecoder(httpResponse.Body).Decode(&target)
-		require.NoError(t, err)
-		require.Equal(t, "OperationOutcome", *target.ResourceType)
+	var target OperationOutcomeWithResourceType
+	err = json.NewDecoder(httpResponse.Body).Decode(&target)
+	require.NoError(t, err)
+	require.Equal(t, "OperationOutcome", *target.ResourceType)
 
-		require.NotNil(t, target)
-		require.NotEmpty(t, target.Issue)
-		require.Equal(t, tt.expectedMessage, *target.Issue[0].Diagnostics)
+	require.NotNil(t, target)
+	require.NotEmpty(t, target.Issue)
+	require.Equal(t, "CarePlanService/CreateTask failed: invalid Task: unexpected end of JSON input", *target.Issue[0].Diagnostics)
+}
+
+func TestService_Handle(t *testing.T) {
+	// Test that the service registers the /cps URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	fhirServerMux := http.NewServeMux()
+	fhirServerMux.HandleFunc("POST /", func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/fhir+json")
+		writer.WriteHeader(http.StatusOK)
+		bundle := map[string]interface{}{
+			"resourceType": "Bundle",
+			"type":         "transaction",
+			"entry": []interface{}{
+				map[string]interface{}{
+					"response": map[string]interface{}{
+						"location": "CarePlan/123",
+						"status":   "201 Created",
+					},
+					"resource": map[string]interface{}{
+						"resourceType": "CarePlan",
+						"id":           "123",
+					},
+				},
+				map[string]interface{}{
+					"response": map[string]interface{}{
+						"location": "Task/123",
+						"status":   "201 Created",
+					},
+					"resource": map[string]interface{}{
+						"resourceType": "Task",
+						"id":           "123",
+					},
+				},
+			},
+		}
+		json.NewEncoder(writer).Encode(bundle)
+	})
+	fhirServer := httptest.NewServer(fhirServerMux)
+	// Setup: create the service
+	service, err := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+	}, profile.TestProfile{}, orcaPublicURL)
+
+	service.handlerProvider = func(method string, resourceType string) func(*http.Request, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+		switch method {
+		case http.MethodPost:
+			switch resourceType {
+			case "CarePlan":
+				return func(_ *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("CarePlan"))
+						carePlan := fhir.CarePlan{
+							Id: to.Ptr("123"),
+						}
+						result.Resource, _ = json.Marshal(carePlan)
+						return result, []any{&carePlan}, nil
+					}, nil
+				}
+			case "Task":
+				return func(_ *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
+						task := fhir.Task{
+							Id: to.Ptr("123"),
+						}
+						result.Resource, _ = json.Marshal(task)
+						return result, []any{&task}, nil
+					}, nil
+				}
+			}
+		case http.MethodPut:
+			switch resourceType {
+			case "Task":
+				return func(_ *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
+						task := fhir.Task{
+							Id: to.Ptr("123"),
+						}
+						result.Resource, _ = json.Marshal(task)
+						return result, []any{&task}, nil
+					}, nil
+				}
+			case "Organization":
+				return func(_ *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					return nil, errors.New("this fails on purpose")
+				}
+			}
+		}
+		return nil
 	}
+	require.NoError(t, err)
+	// Setup: configure the service to proxy to the backing FHIR server
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+	cpsBaseUrl, _ := url.Parse(frontServer.URL)
+	fhirClient := fhirclient.New(cpsBaseUrl.JoinPath("cps"), httpClient, nil)
+
+	t.Run("Bundle", func(t *testing.T) {
+		t.Run("POST 2 items (CarePlan, Task)", func(t *testing.T) {
+			// Create a bundle with 2 Tasks
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+							Url:    "CarePlan",
+						},
+						Resource: json.RawMessage(`{}`),
+					},
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+							Url:    "Task",
+						},
+						Resource: json.RawMessage(`{}`),
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
+			require.NoError(t, err)
+			require.Len(t, resultBundle.Entry, 2)
+			assert.Equal(t, "CarePlan/123", *resultBundle.Entry[0].Response.Location)
+			assert.JSONEq(t, `{"id":"123","status":"draft","intent":"proposal","subject":{},"resourceType":"CarePlan"}`, string(resultBundle.Entry[0].Resource))
+			assert.Equal(t, "Task/123", *resultBundle.Entry[1].Response.Location)
+			assert.JSONEq(t, `{"id":"123","status":"draft","intent":"","resourceType":"Task"}`, string(resultBundle.Entry[1].Resource))
+		})
+		t.Run("PUT 1 item (Task)", func(t *testing.T) {
+			// Create a bundle with 2 Tasks
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPUT,
+							Url:    "Task",
+						},
+						Resource: json.RawMessage(`{}`),
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
+			require.NoError(t, err)
+			require.Len(t, resultBundle.Entry, 1)
+			assert.Equal(t, "Task/123", *resultBundle.Entry[0].Response.Location)
+			assert.JSONEq(t, `{"id":"123","status":"draft","intent":"","resourceType":"Task"}`, string(resultBundle.Entry[0].Resource))
+		})
+		t.Run("handler fails (PUT Organization)", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPUT,
+							Url:    "Organization",
+						},
+						Resource: json.RawMessage(`{}`),
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0]: this fails on purpose")
+		})
+		t.Run("GET is disallowed", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "CarePlan/123",
+						},
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: only write operations are supported in Bundle")
+		})
+		t.Run("POST with specified ID is disallowed", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+							Url:    "CarePlan/123",
+						},
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0]: specifying IDs when creating resources isn't allowed")
+		})
+		t.Run("POST with URL containing too many parts", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+							Url:    "CarePlan/123/456",
+						},
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0].request.url (entry #) must be a relative URL")
+		})
+	})
+	t.Run("Single resources", func(t *testing.T) {
+		t.Run("POST/Create", func(t *testing.T) {
+			var task fhir.Task
+			err = fhirClient.Create(task, &task)
+
+			require.NoError(t, err)
+			assert.Equal(t, "123", *task.Id)
+		})
+		t.Run("PUT/Update", func(t *testing.T) {
+			var task fhir.Task
+			err = fhirClient.Update("Task/123", task, &task)
+
+			require.NoError(t, err)
+			assert.Equal(t, "123", *task.Id)
+		})
+		t.Run("handler fails (PUT/Update Organization)", func(t *testing.T) {
+			var org fhir.Organization
+
+			err = fhirClient.Update("Organization/123", org, &org)
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/UpdateOrganization failed: this fails on purpose")
+		})
+	})
+
 }

@@ -1,7 +1,6 @@
 package careplanservice
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -14,29 +13,29 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest *http.Request) error {
+func (s *Service) handleUpdateTask(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	taskID := httpRequest.PathValue("id")
 	if taskID == "" {
-		return errors.New("missing Task ID")
+		return nil, errors.New("missing Task ID")
 	}
 	log.Info().Msgf("Updating Task: %s", taskID)
 	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
 	var task fhir.Task
 	if err := s.readRequest(httpRequest, &task); err != nil {
-		return fmt.Errorf("invalid Task: %w", err)
+		return nil, fmt.Errorf("invalid Task: %w", err)
 	}
 
 	// the Task prior to updates, we need this to validate the state transition
 	var taskExisting fhir.Task
 	if err := s.fhirClient.Read("Task/"+taskID, &taskExisting); err != nil {
-		return fmt.Errorf("failed to read Task: %w", err)
+		return nil, fmt.Errorf("failed to read Task: %w", err)
 	}
 
 	// Validate state transition
 	principal, err := auth.PrincipalFromContext(httpRequest.Context())
 	if err != nil {
-		return err
+		return nil, err
 	}
 	var isOwner bool
 	if task.Owner != nil {
@@ -57,7 +56,7 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 		}
 	}
 	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester) {
-		return errors.New(
+		return nil, errors.New(
 			fmt.Sprintf(
 				"invalid state transition from %s to %s, owner(%t) requester(%t)",
 				taskExisting.Status.String(),
@@ -70,34 +69,37 @@ func (s *Service) handleUpdateTask(httpResponse http.ResponseWriter, httpRequest
 	// Resolve the CarePlan
 	carePlanRef, err := basedOn(task)
 	if err != nil {
-		return fmt.Errorf("invalid Task.basedOn: %w", err)
+		return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 	}
 
-	tx := coolfhir.Transaction()
 	tx = tx.Update(task, "Task/"+taskID)
 	// Update care team
-	careTeamUpdated, err := careteamservice.Update(s.fhirClient, *carePlanRef, task, tx)
+	_, err = careteamservice.Update(s.fhirClient, *carePlanRef, task, tx)
 	if err != nil {
-		return fmt.Errorf("update CareTeam: %w", err)
+		return nil, fmt.Errorf("update CareTeam: %w", err)
 	}
 
-	// Perform update
-	var updatedTask fhir.Task
-	if err := coolfhir.ExecuteTransactionAndRespondWithEntry(s.fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
-		return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/"+taskID)
-	}, httpResponse, &updatedTask); err != nil {
+	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+		var updatedTask fhir.Task
+		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(entry fhir.BundleEntry) bool {
+			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/"+taskID)
+		}, &updatedTask)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original Task that was sent.
-			httpResponse.WriteHeader(http.StatusOK)
-			return json.NewEncoder(httpResponse).Encode(task)
+			updatedTask = task
+		} else if err != nil {
+			// Other error
+			return nil, nil, err
 		}
-		return fmt.Errorf("failed to update Task (CareTeam updated=%v): %w", careTeamUpdated, err)
-	} else {
-		// Success, notify subscribers with updated Task
-		s.notifySubscribers(httpRequest.Context(), &updatedTask)
-	}
-	return nil
+		var notifications = []any{&updatedTask}
+		// If CareTeam was updated, notify about CareTeam
+		var updatedCareTeam fhir.CareTeam
+		if err := coolfhir.ResourceInBundle(txResult, coolfhir.EntryIsOfType("CareTeam"), &updatedCareTeam); err == nil {
+			notifications = append(notifications, &updatedCareTeam)
+		}
+		return result, notifications, nil
+	}, nil
 }
 
 func isValidTransition(from fhir.TaskStatus, to fhir.TaskStatus, isOwner bool, isRequester bool) bool {
