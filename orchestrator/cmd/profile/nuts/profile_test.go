@@ -66,3 +66,7 @@ func TestDutchNutsProfile_identifiersFromCredential(t *testing.T) {
 	assert.Equal(t, coolfhir.URANamingSystem, *identifiers[0].System)
 	assert.Equal(t, "1234", *identifiers[0].Value)
 }
+
+func TestDutchNutsProfile_Identities(t *testing.T) {
+
+}
