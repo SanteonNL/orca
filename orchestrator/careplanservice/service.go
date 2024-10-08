@@ -150,9 +150,9 @@ func (s *Service) handleTransactionEntry(writer http.ResponseWriter, request *ht
 	handler := s.handlerProvider(request.Method, getResourceType(resourcePath))
 	if handler == nil {
 		// TODO: Monitor these, and disallow at a later moment
-		log.Warn().Msgf("Unmanaged FHIR Create operation at CarePlanService: %s %s", request.Method, request.URL.String())
+		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
 		s.proxy.ServeHTTP(writer, request)
-		return nil, coolfhir.BadRequestErrorF("unsupported operation: %s %s", request.Method, request.URL.Path)
+		//return nil, coolfhir.BadRequestErrorF("unsupported operation: %s %s", request.Method, request.URL.Path)
 	}
 	return handler(request, tx)
 }
@@ -230,6 +230,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bunde.entry[%d]: unable to dispatch: %w", entryIdx, err), op, httpResponse)
 			return
 		}
+		entry.Request.
 		// If the resource path contains an ID, set it as ID path parameter
 		if resourcePathPartsCount == 2 {
 			entryHttpRequest.SetPathValue("id", strings.Split(resourcePath, "/")[1])

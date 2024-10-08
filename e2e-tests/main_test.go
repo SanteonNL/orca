@@ -9,6 +9,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"strconv"
+	"strings"
 	"testing"
 )
 
@@ -95,22 +96,45 @@ func Test_Main(t *testing.T) {
 				err := hospitalOrcaFHIRClient.Create(task, &task)
 				require.NoError(t, err)
 			}
-			taskJSON, _ := json.MarshalIndent(task, "", "  ")
-			println(string(taskJSON))
 			t.Log("Responding to Task Questionnaire")
 			{
 				var searchResult fhir.Bundle
 				err = hospitalOrcaFHIRClient.Read("Task", &searchResult, fhirclient.QueryParam("part-of", "Task/"+*task.ID))
 				require.NoError(t, err)
 				require.Len(t, searchResult.Entry, 1, "Expected 1 subtask")
+
 				var subTask fhir.Task
-				require.NoError(t, json.Unmarshal(searchResult.Entry[0].Resource, &subTask))
-
-				tx := caramel.Transaction()
+				// Assert subtask with Questionnaire
+				var questionnaire fhir.Questionnaire
 				{
-
-					questionnaireResponse := fhir.QuestionnaireResponse{}
+					require.NoError(t, json.Unmarshal(searchResult.Entry[0].Resource, &subTask))
+					require.Len(t, subTask.Input, 1, "Expected 1 input")
+					require.NotNil(t, subTask.Input[0].ValueReference, "Expected input valueReference")
+					require.NotNil(t, subTask.Input[0].ValueReference.Reference, "Expected input valueReference reference")
+					questionnaireRef := *subTask.Input[0].ValueReference.Reference
+					require.True(t, strings.HasPrefix(questionnaireRef, "Questionnaire/"), "Expected input valueReference reference to start with 'Questionnaire/'")
+					err = hospitalOrcaFHIRClient.Read(questionnaireRef, &questionnaire)
+					require.NoError(t, err)
 				}
+				questionnaireResponse := questionnaireResponseTo(questionnaire)
+				subTask.Output = append(subTask.Output, fhir.TaskOutput{
+					Type: fhir.CodeableConcept{
+						Coding: []fhir.Coding{
+							{
+								System: to.Ptr("http://terminology.hl7.org/CodeSystem/task-output-type"),
+								Code:   to.Ptr("Reference"),
+							},
+						},
+					},
+					ValueReference: &fhir.Reference{
+						Reference: to.Ptr("urn:uuid:questionnaire-response"),
+					},
+				})
+				responseBundle := caramel.Transaction().
+					Create(questionnaireResponse, caramel.WithFullUrl("urn:uuid:questionnaire-response")).
+					Update(subTask, "Task/"+*subTask.ID).Bundle()
+				err = hospitalOrcaFHIRClient.Create(responseBundle, &responseBundle, fhirclient.AtPath("/"))
+				require.NoError(t, err)
 			}
 
 			//t.Log("Filler adding Questionnaire sub-Task...")

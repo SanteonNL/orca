@@ -2,10 +2,11 @@ package main
 
 import (
 	"context"
-	"e2e-tests/to"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
 	"strings"
