@@ -110,6 +110,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	}))
 }
 
+// commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
+// It returns the result Bundle that should be returned to the client, or an error if the transaction failed.
 func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.TransactionBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
 	var txResult fhir.Bundle
 	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
@@ -136,7 +138,9 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.Transact
 	return &resultBundle, nil
 }
 
-func (s *Service) proceedTransaction(writer http.ResponseWriter, request *http.Request, resourcePath string, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+// handleTransactionEntry executes the FHIR operation in the HTTP request. It adds the FHIR operations to be executed to the given transaction Bundle,
+// and returns the function that must be executed after the transaction is committed.
+func (s *Service) handleTransactionEntry(writer http.ResponseWriter, request *http.Request, resourcePath string, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	if request.Method == http.MethodPost {
 		// We don't allow creation of resources with a specific ID, so resourceType shouldn't contain any slashes now
 		if strings.Contains(resourcePath, "/") {
@@ -155,7 +159,7 @@ func (s *Service) proceedTransaction(writer http.ResponseWriter, request *http.R
 
 func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
 	tx := coolfhir.Transaction()
-	result, err := s.proceedTransaction(httpResponse, httpRequest, resourcePath, tx)
+	result, err := s.handleTransactionEntry(httpResponse, httpRequest, resourcePath, tx)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 		return
@@ -230,7 +234,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		if resourcePathPartsCount == 2 {
 			entryHttpRequest.SetPathValue("id", strings.Split(resourcePath, "/")[1])
 		}
-		entryResult, err := s.proceedTransaction(httpResponse, entryHttpRequest, resourcePath, tx)
+		entryResult, err := s.handleTransactionEntry(httpResponse, entryHttpRequest, resourcePath, tx)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d]: %w", entryIdx, err), op, httpResponse)
 			return
