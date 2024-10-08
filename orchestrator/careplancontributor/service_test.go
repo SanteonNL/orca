@@ -7,7 +7,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
@@ -16,9 +19,7 @@ import (
 	"os"
 	"strings"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"time"
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
@@ -393,6 +394,37 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 	body, _ := io.ReadAll(httpResponse.Body)
 	require.Equal(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
+}
+
+func TestService_HandleNotification(t *testing.T) {
+	prof := profile.TestProfile{}
+	service, err := New(Config{}, prof, orcaPublicURL, user.NewSessionManager())
+	frontServerMux := http.NewServeMux()
+	frontServer := httptest.NewServer(frontServerMux)
+	service.RegisterHandlers(frontServerMux)
+	require.NoError(t, err)
+
+	t.Run("valid notification", func(t *testing.T) {
+		notificationUrl, _ := url.Parse("https://example.com")
+		notfication := coolfhir.CreateSubscriptionNotification(notificationUrl,
+			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1")})
+		notificationJSON, _ := json.Marshal(notfication)
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpResponse, err := prof.HttpClient().Do(httpRequest)
+
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("invalid notification", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader("invalid"))
+		httpResponse, err := prof.HttpClient().Do(httpRequest)
+
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	})
 }
 
 func TestService_ProxyToEHR(t *testing.T) {

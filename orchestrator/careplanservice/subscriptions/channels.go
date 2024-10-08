@@ -11,8 +11,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
 )
