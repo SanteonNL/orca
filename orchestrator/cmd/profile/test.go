@@ -21,6 +21,10 @@ type TestProfile struct {
 	TestCsdDirectory       csd.Directory
 }
 
+func (t TestProfile) Identities(_ context.Context) ([]fhir.Identifier, error) {
+	return t.Principal.Organization.Identifier, nil
+}
+
 func (t TestProfile) CsdDirectory() csd.Directory {
 	return t.TestCsdDirectory
 }
