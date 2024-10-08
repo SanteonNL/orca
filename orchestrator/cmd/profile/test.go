@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
 	"strings"
@@ -18,7 +18,11 @@ var _ Provider = TestProfile{}
 type TestProfile struct {
 	Principal              *auth.Principal
 	xSCPContextHeaderValue string
-	TestCsdDirectory csd.Directory
+	TestCsdDirectory       csd.Directory
+}
+
+func (t TestProfile) Identities(_ context.Context) ([]fhir.Identifier, error) {
+	return t.Principal.Organization.Identifier, nil
 }
 
 func (t TestProfile) CsdDirectory() csd.Directory {

@@ -11,7 +11,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 type TransactionBuilder fhir.Bundle
@@ -219,4 +219,30 @@ func executeTransactionAndRespond(fhirClient fhirclient.Client, bundle fhir.Bund
 	}
 
 	return ErrEntryNotFound
+}
+
+func FetchBundleEntry(fhirClient fhirclient.Client, bundle *fhir.Bundle, filter func(entry fhir.BundleEntry) bool, result interface{}) (*fhir.BundleEntry, error) {
+	for _, currentEntry := range bundle.Entry {
+		if currentEntry.Response == nil || currentEntry.Response.Location == nil {
+			log.Error().Msg("entry.Response or entry.Response.Location is nil")
+			continue
+		}
+		if !filter(currentEntry) {
+			continue
+		}
+		headers := new(fhirclient.Headers)
+		var responseData []byte
+		if err := fhirClient.Read(*currentEntry.Response.Location, &responseData, fhirclient.ResponseHeaders(headers)); err != nil {
+			return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", *currentEntry.Response.Location, err))
+		}
+		if result != nil {
+			if err := json.Unmarshal(responseData, result); err != nil {
+				return nil, fmt.Errorf("unmarshal Bundle entry (target=%T): %w", result, err)
+			}
+		}
+		response := currentEntry
+		response.Resource = responseData
+		return &response, nil
+	}
+	return nil, ErrEntryNotFound
 }

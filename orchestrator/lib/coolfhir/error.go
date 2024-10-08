@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
-	"github.com/samply/golang-fhir-models/fhir-models/fhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 )
 
@@ -25,6 +25,29 @@ func NewErrorWithCode(message string, statusCode int) error {
 	return &ErrorWithCode{
 		Message:    message,
 		StatusCode: statusCode,
+	}
+}
+
+// WrapErrorWithCode wraps an error with a status code
+func WrapErrorWithCode(err error, statusCode int) error {
+	return &ErrorWithCode{
+		Message:    err.Error(),
+		StatusCode: statusCode,
+	}
+}
+
+// BadRequestError wraps an error with a status code of 400
+func BadRequestError(msg string) error {
+	return &ErrorWithCode{
+		Message:    msg,
+		StatusCode: http.StatusBadRequest,
+	}
+}
+
+func BadRequestErrorF(msg string, args ...interface{}) error {
+	return &ErrorWithCode{
+		Message:    fmt.Errorf(msg, args...).Error(),
+		StatusCode: http.StatusBadRequest,
 	}
 }
 

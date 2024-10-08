@@ -14,7 +14,7 @@ import (
 	reflect "reflect"
 
 	coolfhir "github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	fhir "github.com/samply/golang-fhir-models/fhir-models/fhir"
+	fhir "github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	gomock "go.uber.org/mock/gomock"
 )
 

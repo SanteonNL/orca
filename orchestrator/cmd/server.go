@@ -3,7 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	"net/http"
 
@@ -33,8 +32,9 @@ func Start(config Config) error {
 
 	services = append(services, healthcheck.New())
 
-	var activeProfile profile.Provider = nuts.DutchNutsProfile{
-		Config: config.Nuts,
+	activeProfile, err := nuts.New(config.Nuts)
+	if err != nil {
+		return fmt.Errorf("failed to create profile: %w", err)
 	}
 	if config.CarePlanContributor.Enabled {
 		carePlanContributor, err := careplancontributor.New(
@@ -65,7 +65,7 @@ func Start(config Config) error {
 	}
 
 	// Start HTTP server
-	err := http.ListenAndServe(config.Public.Address, httpHandler)
+	err = http.ListenAndServe(config.Public.Address, httpHandler)
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("failed to start HTTP server: %w", err)
 	}
