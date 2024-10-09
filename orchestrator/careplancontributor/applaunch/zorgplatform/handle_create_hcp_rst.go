@@ -271,7 +271,7 @@ func (s *Service) createSignatureElement(signedInfo *etree.Element, signatureVal
 	x509Certificate := x509Data.CreateElement("X509Certificate")
 
 	// Load your public certificate
-	certData, err := os.ReadFile(s.config.AzureConfig.KeyVaultConfig.TlsCertName)
+	certData, err := os.ReadFile(s.config.AzureConfig.KeyVaultConfig.SignCertName)
 	if err != nil {
 		return nil, err
 	}

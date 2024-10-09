@@ -15,13 +15,14 @@ import (
 )
 
 const fhirLauncherKey = "zorgplatform"
+const appLaunchUrl = "/zorgplatform-app-launch"
 
 func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
-		appLaunchURL = baseURL + "/zorgplatform-launch"
+		appLaunchURL = baseURL + appLaunchUrl
 	} else {
-		appLaunchURL = "http://localhost" + appLaunchURL + "/zorgplatform-launch"
+		appLaunchURL = "http://localhost" + appLaunchURL + appLaunchUrl
 	}
 	log.Info().Msgf("Zorgplatform app launch is (%s)", appLaunchURL)
 
@@ -66,7 +67,7 @@ type Service struct {
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("POST /zorgplatform-launch", s.handle)
+	mux.HandleFunc("POST /"+appLaunchUrl, s.handle)
 }
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
