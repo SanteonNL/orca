@@ -1,11 +1,11 @@
 package careplanservice
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -68,7 +68,7 @@ type Service struct {
 	questionnaireLoader taskengine.QuestionnaireLoader
 	maxReadBodySize     int
 	proxy               *httputil.ReverseProxy
-	handlerProvider     func(method string, resourceType string) func(*http.Request, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
+	handlerProvider     func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
@@ -76,6 +76,35 @@ type Service struct {
 // It is provided with a TransactionBuilder to add FHIR resource operations that must be executed on the backing FHIR server.
 // The handler itself must not cause side-effects in the FHIR server: those MUST be effectuated through the transaction.
 type FHIRHandler func(http.ResponseWriter, *http.Request, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
+
+type FHIRHandlerRequest struct {
+	ResourceId   string
+	ResourcePath string
+	ResourceData json.RawMessage
+	HttpMethod   string
+	RequestUrl   *url.URL
+	FullUrl      string
+}
+
+func (r FHIRHandlerRequest) bundleEntryWithResource(res any) fhir.BundleEntry {
+	result := r.bundleEntry()
+	result.Resource, _ = json.Marshal(res)
+	return result
+}
+
+func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
+	result := fhir.BundleEntry{
+		Request: &fhir.BundleEntryRequest{
+			Method: coolfhir.HttpMethodToVerb(r.HttpMethod),
+			Url:    r.ResourcePath,
+		},
+		Resource: r.ResourceData,
+	}
+	if r.FullUrl != "" {
+		result.FullUrl = to.Ptr(r.FullUrl)
+	}
+	return result
+}
 
 // FHIRHandlerResult is the result of a FHIRHandler execution.
 // It returns:
@@ -140,25 +169,41 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.Transact
 
 // handleTransactionEntry executes the FHIR operation in the HTTP request. It adds the FHIR operations to be executed to the given transaction Bundle,
 // and returns the function that must be executed after the transaction is committed.
-func (s *Service) handleTransactionEntry(writer http.ResponseWriter, request *http.Request, resourcePath string, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-	if request.Method == http.MethodPost {
-		// We don't allow creation of resources with a specific ID, so resourceType shouldn't contain any slashes now
-		if strings.Contains(resourcePath, "/") {
+func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+	if request.HttpMethod == http.MethodPost {
+		// We don't allow creation of resources with a specific ID
+		if request.ResourceId != "" {
 			return nil, coolfhir.BadRequestError("specifying IDs when creating resources isn't allowed")
 		}
 	}
-	handler := s.handlerProvider(request.Method, getResourceType(resourcePath))
+	handler := s.handlerProvider(request.HttpMethod, getResourceType(request.ResourcePath))
 	if handler == nil {
 		// TODO: Monitor these, and disallow at a later moment
-		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
-		s.proxy.ServeHTTP(writer, request)
+		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
+		tx.Append(request.bundleEntry())
+		idx := len(tx.Entry) - 1
+		return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+			return &txResult.Entry[idx], nil, nil
+		}, nil
 	}
-	return handler(request, tx)
+	return handler(ctx, request, tx)
 }
 
 func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
 	tx := coolfhir.Transaction()
-	result, err := s.handleTransactionEntry(httpResponse, httpRequest, resourcePath, tx)
+	bodyBytes, err := io.ReadAll(httpRequest.Body)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("failed to read request body: %w", err), operationName, httpResponse)
+		return
+	}
+	fhirRequest := FHIRHandlerRequest{
+		RequestUrl:   httpRequest.URL,
+		HttpMethod:   httpRequest.Method,
+		ResourceId:   httpRequest.PathValue("id"),
+		ResourcePath: resourcePath,
+		ResourceData: bodyBytes,
+	}
+	result, err := s.handleTransactionEntry(httpRequest.Context(), fhirRequest, tx)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 		return
@@ -219,22 +264,25 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	for entryIdx, entry := range bundle.Entry {
 		// Bundle.entry.request.url must be a relative URL with at most one slash (so Task or Task/1, but not http://example.com/Task or Task/foo/bar)
 		resourcePath := entry.Request.Url
-		resourcePathPartsCount := strings.Count(resourcePath, "/") + 1
-		if entry.Request == nil || resourcePathPartsCount > 2 {
+		resourcePathParts := strings.Split(resourcePath, "/")
+		if entry.Request == nil || len(resourcePathParts) > 2 {
 			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url (entry #) must be a relative URL", entryIdx), op, httpResponse)
 			return
 		}
-		entryHttpRequest, err := http.NewRequest(entry.Request.Method.Code(), s.baseUrl().JoinPath(resourcePath).String(), bytes.NewReader(entry.Resource))
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bunde.entry[%d]: unable to dispatch: %w", entryIdx, err), op, httpResponse)
-			return
+
+		fhirRequest := FHIRHandlerRequest{
+			HttpMethod:   entry.Request.Method.Code(),
+			RequestUrl:   s.baseUrl().JoinPath(resourcePath),
+			ResourcePath: resourcePath,
+			ResourceData: entry.Resource,
 		}
-		entryHttpRequest.Header.Set("Content-Type", coolfhir.FHIRContentType)
-		// If the resource path contains an ID, set it as ID path parameter
-		if resourcePathPartsCount == 2 {
-			entryHttpRequest.SetPathValue("id", strings.Split(resourcePath, "/")[1])
+		if len(resourcePathParts) == 2 {
+			fhirRequest.ResourceId = resourcePathParts[1]
 		}
-		entryResult, err := s.handleTransactionEntry(httpResponse, entryHttpRequest, resourcePath, tx)
+		if entry.FullUrl != nil {
+			fhirRequest.FullUrl = *entry.FullUrl
+		}
+		entryResult, err := s.handleTransactionEntry(httpRequest.Context(), fhirRequest, tx)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d]: %w", entryIdx, err), op, httpResponse)
 			return
@@ -253,7 +301,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	}
 }
 
-func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(*http.Request, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	switch method {
 	case http.MethodPost:
 		switch getResourceType(resourcePath) {

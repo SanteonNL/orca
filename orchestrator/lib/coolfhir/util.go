@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/http"
 	"time"
 )
 
@@ -155,4 +156,23 @@ func ToString(resource interface{}) string {
 		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
 	}
 	return fmt.Sprintf("%T(%v)", resource, resource)
+}
+
+func HttpMethodToVerb(method string) fhir.HTTPVerb {
+	switch method {
+	case http.MethodPut:
+		return fhir.HTTPVerbPUT
+	case http.MethodPost:
+		return fhir.HTTPVerbPOST
+	case http.MethodDelete:
+		return fhir.HTTPVerbDELETE
+	case http.MethodPatch:
+		return fhir.HTTPVerbPATCH
+	case http.MethodGet:
+		return fhir.HTTPVerbGET
+	case http.MethodHead:
+		return fhir.HTTPVerbHEAD
+	default:
+		return 0
+	}
 }

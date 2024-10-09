@@ -117,6 +117,7 @@ func Test_Main(t *testing.T) {
 					require.NoError(t, err)
 				}
 				questionnaireResponse := questionnaireResponseTo(questionnaire)
+				subTask.Status = fhir.TaskStatusCompleted
 				subTask.Output = append(subTask.Output, fhir.TaskOutput{
 					Type: fhir.CodeableConcept{
 						Coding: []fhir.Coding{
@@ -143,9 +144,6 @@ func Test_Main(t *testing.T) {
 			//
 			//}
 		})
-	})
-	t.Run("ORCA Frontend using Orchestrator REST API", func(t *testing.T) {
-		t.Skip("TODO")
 	})
 }
 
