@@ -147,7 +147,8 @@ func TestService_Handle(t *testing.T) {
 		case http.MethodPost:
 			switch resourceType {
 			case "CarePlan":
-				return func(_ *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+				return func(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					assert.Equal(t, httpRequest.Header.Get("Content-Type"), "application/fhir+json")
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("CarePlan"))
 						carePlan := fhir.CarePlan{
@@ -158,7 +159,8 @@ func TestService_Handle(t *testing.T) {
 					}, nil
 				}
 			case "Task":
-				return func(_ *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+				return func(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					assert.Equal(t, httpRequest.Header.Get("Content-Type"), "application/fhir+json")
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
@@ -172,7 +174,8 @@ func TestService_Handle(t *testing.T) {
 		case http.MethodPut:
 			switch resourceType {
 			case "Task":
-				return func(_ *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+				return func(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					assert.Equal(t, httpRequest.Header.Get("Content-Type"), "application/fhir+json")
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
@@ -183,7 +186,8 @@ func TestService_Handle(t *testing.T) {
 					}, nil
 				}
 			case "Organization":
-				return func(_ *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+				return func(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					assert.Equal(t, httpRequest.Header.Get("Content-Type"), "application/fhir+json")
 					return nil, errors.New("this fails on purpose")
 				}
 			}
