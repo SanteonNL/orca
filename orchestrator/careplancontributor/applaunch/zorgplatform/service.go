@@ -88,6 +88,9 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 
+	assertionString, _ := launchContext.DecryptedAssertion.WriteToString()
+	log.Info().Msgf("SAML token validated, subject=%s, bsn=%s, workflowId=%s, decryptedAssertion=%s", launchContext.Subject, launchContext.Bsn, launchContext.WorkflowId, assertionString)
+
 	//TODO: launchContext.Subject needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: fhirLauncherKey,
