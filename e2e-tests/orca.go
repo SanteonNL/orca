@@ -16,7 +16,7 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 	pullImage := false
 	if image == "" {
 		image = "ghcr.io/santeonnl/orca_orchestrator:local"
-		//pullImage = true
+		pullImage = true
 	}
 	println("Starting ORCA Orchestrator...")
 	ctx := context.Background()
