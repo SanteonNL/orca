@@ -25,7 +25,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
 	t.Log("This test requires creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
 	notificationEndpoint := setupNotificationEndpoint(t)
-	carePlanContributor1, carePlanContributor2 := setupIntegrationTest(t, notificationEndpoint)
+	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
 
 	participant1 := fhir.CareTeamParticipant{
 		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
@@ -95,6 +95,52 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, 2, int(notificationCounter.Load()))
 			notificationCounter.Store(0)
 		})
+	}
+	t.Log("Read CarePlan - Not in participants")
+	{
+		var fetchedCarePlan fhir.Task
+		err := invalidCarePlanContributor.Read("CarePlan/"+*carePlan.Id, &fetchedCarePlan)
+		require.Error(t, err)
+	}
+	t.Log("Read CareTeam")
+	{
+		var fetchedCareTeam fhir.CareTeam
+		err := carePlanContributor1.Read(*carePlan.CareTeam[0].Reference, &fetchedCareTeam)
+		require.NoError(t, err)
+		assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
+	}
+	t.Log("Read CareTeam - Does not exist")
+	{
+		var fetchedCareTeam fhir.CareTeam
+		err := carePlanContributor1.Read("CarePlan/999", &fetchedCareTeam)
+		require.Error(t, err)
+	}
+	t.Log("Read CareTeam - Not in participants")
+	{
+		var fetchedCareTeam fhir.CareTeam
+		err := invalidCarePlanContributor.Read(*carePlan.CareTeam[0].Reference, &fetchedCareTeam)
+		require.Error(t, err)
+	}
+	t.Log("Read Task")
+	{
+		var fetchedTask fhir.Task
+		err := carePlanContributor1.Read("Task/"+*task.Id, &fetchedTask)
+		require.NoError(t, err)
+		require.NotNil(t, fetchedTask.Id)
+		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
+		assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
+	}
+	t.Log("Read Task - Not in participants")
+	{
+		var fetchedTask fhir.Task
+		err := invalidCarePlanContributor.Read("Task/"+*task.Id, &fetchedTask)
+		require.Error(t, err)
+	}
+	t.Log("Read Task - Does not exist")
+	{
+		var fetchedTask fhir.Task
+		err := carePlanContributor1.Read("Task/999", &fetchedTask)
+		require.Error(t, err)
 	}
 	previousTask := task
 
@@ -256,23 +302,8 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			notificationCounter.Store(0)
 		})
 	}
-
-	t.Log("Read Task")
-	{
-		var fetchedTask fhir.Task
-		err := carePlanContributor2.Read("Task/"+*task.Id, &fetchedTask)
-		require.NoError(t, err)
-
-		t.Run("Check Task properties", func(t *testing.T) {
-			require.NotNil(t, fetchedTask.Id)
-			require.Equal(t, fhir.TaskStatusCompleted, fetchedTask.Status)
-		})
-		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2WithEndDate)
-		})
-	}
 }
-func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient) {
+func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
 		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
@@ -291,10 +322,12 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhircli
 
 	transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
 	transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")
+	transport3 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, "")
 
 	carePlanContributor1 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport1}, nil)
 	carePlanContributor2 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport2}, nil)
-	return carePlanContributor1, carePlanContributor2
+	carePlanContributor3 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport3}, nil)
+	return carePlanContributor1, carePlanContributor2, carePlanContributor3
 }
 
 func assertCareTeam(t *testing.T, fhirClient fhirclient.Client, careTeamRef string, expectedMembers ...fhir.CareTeamParticipant) {

@@ -103,10 +103,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceId := request.PathValue("id")
 		s.handleCreateOrUpdate(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 	}))
-	mux.HandleFunc("GET "+basePath+"/{resourcePath...}", s.profile.Authenticator(baseUrl, func(writer http.ResponseWriter, request *http.Request) {
-		// TODO: Authorize request here
-		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
-		s.proxy.ServeHTTP(writer, request)
+	mux.HandleFunc("GET "+basePath+"/{resourcePath...}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		err := s.handleGet(httpResponse, request)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(err, "CarePlanService/Get/"+request.PathValue("type"), httpResponse)
+			return
+		}
 	}))
 }
 
@@ -259,8 +261,6 @@ func (s *Service) defaultHandlerProvider(method string, resourcePath string) fun
 		switch getResourceType(resourcePath) {
 		case "Task":
 			return s.handleCreateTask
-		case "CarePlan":
-			return s.handleCreateCarePlan
 		}
 	case http.MethodPut:
 		switch getResourceType(resourcePath) {
