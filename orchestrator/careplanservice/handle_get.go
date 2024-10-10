@@ -13,10 +13,53 @@ import (
 )
 
 func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Request) error {
+	queryParams := request.URL.Query()
 	urlParts := strings.Split(strings.TrimPrefix(request.URL.Path, basePath+"/"), "/")
 	switch urlParts[0] {
 	case "CarePlan":
 		// fetch CarePlan + CareTeam, validate requester is participant of CareTeam
+		// if there are query params present, we need to handle the request a bit differently
+		if len(queryParams) != 0 {
+			if queryParams.Get("_id") == "" {
+				return coolfhir.NewErrorWithCode("Query parameter _id is not present, can't find CarePlan", http.StatusBadRequest)
+			}
+
+			var bundle fhir.Bundle
+			err := s.fhirClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", queryParams.Get("_id")), fhirclient.QueryParam("_include", "CarePlan:care-team"))
+			if err != nil {
+				return err
+			}
+			var careTeams []fhir.CareTeam
+			err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
+			if err != nil {
+				return err
+			}
+			if len(careTeams) == 0 {
+				return coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
+			}
+
+			err = validatePrincipalInCareTeams(request.Context(), careTeams)
+			if err != nil {
+				return err
+			}
+
+			// Valid requester, now perform the bundle request again with all the params
+			params := []fhirclient.Option{}
+			for k, v := range queryParams {
+				params = append(params, fhirclient.QueryParam(k, v[0]))
+			}
+			err = s.fhirClient.Read("CarePlan", &bundle, params...)
+			if err != nil {
+				return err
+			}
+
+			b, err := json.Marshal(bundle)
+			_, err = httpResponse.Write(b)
+			if err != nil {
+				return err
+			}
+			return nil
+		}
 		if len(urlParts) < 2 {
 			return &coolfhir.ErrorWithCode{
 				Message:    "URL missing CarePlan ID",
@@ -63,7 +106,6 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 			return err
 		}
 		// TODO: Do we support additional info in the URL i.e. extra params
-
 	case "Task":
 		// fetch Task + CareTeam, validate requester is participant of CareTeam
 		if len(urlParts) < 2 {

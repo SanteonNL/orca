@@ -165,6 +165,7 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 
 	carePlanServiceClient := fhirclient.New(s.carePlanServiceURL, s.scpHttpClient, coolfhir.Config())
 	var bundle fhir.Bundle
+	// TODO: Discuss changes to this validation with team
 	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
 	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.carePlanServiceURL.String())
 	err = carePlanServiceClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"))
