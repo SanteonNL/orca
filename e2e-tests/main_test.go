@@ -1,7 +1,6 @@
 package main
 
 import (
-	"e2e-tests/to"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/samply/golang-fhir-models/fhir-models/fhir"
 	"github.com/stretchr/testify/require"
@@ -41,22 +40,11 @@ func Test_Main(t *testing.T) {
 
 	t.Run("EHR using Orchestrator REST API", func(t *testing.T) {
 		t.Run("Hospital EHR creates New CarePlan, New Task", func(t *testing.T) {
-			t.Log("Creating new CarePlan...")
-			carePlan := fhir.CarePlan{}
-			{
-				err := hospitalOrcaFHIRClient.Create(carePlan, &carePlan)
-				require.NoError(t, err)
-			}
 			t.Log("Creating new Task...")
 			var task fhir.Task
 			{
 				task.Intent = "order"
 				task.Status = fhir.TaskStatusRequested
-				task.BasedOn = []fhir.Reference{
-					{
-						Reference: to.Ptr("CarePlan/" + *carePlan.Id),
-					},
-				}
 				err := hospitalOrcaFHIRClient.Create(task, &task)
 				require.NoError(t, err)
 			}

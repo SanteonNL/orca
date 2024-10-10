@@ -32,6 +32,16 @@ func (s *Service) handleUpdateTask(httpRequest *http.Request, tx *coolfhir.Trans
 		return nil, fmt.Errorf("failed to read Task: %w", err)
 	}
 
+	// Validate fields on updated Task
+	// if Intent is not set on the updated task then just get it from the existing task, otherwise run usual validation rules
+	if task.Intent == "" {
+		task.Intent = taskExisting.Intent
+	}
+	err := coolfhir.ValidateTaskRequiredFields(task)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Task: %w", err)
+	}
+
 	// Validate state transition
 	principal, err := auth.PrincipalFromContext(httpRequest.Context())
 	if err != nil {
