@@ -45,27 +45,37 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 	var carePlan fhir.CarePlan
 	var task fhir.Task
-	t.Log("Creating CarePlan...")
+	t.Log("Creating Task - No BasedOn, new CarePlan and CareTeam are created")
 	{
-		carePlan.Subject = fhir.Reference{
-			Type: to.Ptr("Patient"),
-			Identifier: &fhir.Identifier{
-				System: to.Ptr(coolfhir.BSNNamingSystem),
-				Value:  to.Ptr("123456789"),
-			},
+		task = fhir.Task{
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
-		err := carePlanContributor1.Create(carePlan, &carePlan)
+
+		err := carePlanContributor1.Create(task, &task)
+		require.NoError(t, err)
+		err = carePlanContributor1.Read(*task.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
 
-		// Check the CarePlan and CareTeam exist
-		var createdCarePlan fhir.CarePlan
-		var createdCareTeams []fhir.CareTeam
-		err = carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &createdCarePlan, fhirclient.ResolveRef("careTeam", &createdCareTeams))
-		require.NoError(t, err)
-		require.NotNil(t, createdCarePlan.Id)
-		require.Len(t, createdCareTeams, 1, "expected 1 CareTeam")
-		require.NotNil(t, createdCareTeams[0].Id)
+		t.Run("Check Task properties", func(t *testing.T) {
+			require.NotNil(t, task.Id)
+			require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
+		})
+		t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
+			require.Len(t, carePlan.Activity, 1)
+			require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
+			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
+		})
+		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
+			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
+		})
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Equal(t, 2, int(notificationCounter.Load()))
+			notificationCounter.Store(0)
+		})
 	}
+	previousTask := task
 
 	t.Log("Creating Task - Invalid status Accepted")
 	{
@@ -105,7 +115,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.Equal(t, 0, int(notificationCounter.Load()))
 	}
 
-	t.Log("Creating Task")
+	t.Log("Creating Task - Existing CarePlan")
 	{
 		task = fhir.Task{
 			BasedOn: []fhir.Reference{
@@ -117,6 +127,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Intent:    "plan",
 		}
 
 		err := carePlanContributor1.Create(task, &task)
@@ -129,9 +140,11 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
 		})
 		t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
-			require.Len(t, carePlan.Activity, 1)
-			require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
-			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
+			require.Len(t, carePlan.Activity, 2)
+			for _, activity := range carePlan.Activity {
+				require.Equal(t, "Task", *activity.Reference.Type)
+				require.Equal(t, true, "Task/"+*task.Id == *activity.Reference.Reference || "Task/"+*previousTask.Id == *activity.Reference.Reference)
+			}
 		})
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
@@ -218,6 +231,21 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Equal(t, 2, int(notificationCounter.Load()))
 			notificationCounter.Store(0)
+		})
+	}
+
+	t.Log("Read Task")
+	{
+		var fetchedTask fhir.Task
+		err := carePlanContributor2.Read("Task/"+*task.Id, &fetchedTask)
+		require.NoError(t, err)
+
+		t.Run("Check Task properties", func(t *testing.T) {
+			require.NotNil(t, fetchedTask.Id)
+			require.Equal(t, fhir.TaskStatusCompleted, fetchedTask.Status)
+		})
+		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
+			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2WithEndDate)
 		})
 	}
 }

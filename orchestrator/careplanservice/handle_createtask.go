@@ -1,9 +1,14 @@
 package careplanservice
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
@@ -17,30 +22,82 @@ import (
 
 func (s *Service) handleCreateTask(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msg("Creating Task")
-	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
 	var task fhir.Task
 	if err := s.readRequest(httpRequest, &task); err != nil {
 		return nil, fmt.Errorf("invalid Task: %w", err)
 	}
 
+	var carePlan fhir.CarePlan
+	var carePlanRef *string
 	switch task.Status {
 	case fhir.TaskStatusRequested:
 	case fhir.TaskStatusReady:
 	default:
 		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
 	}
+	var err error
 	// Resolve the CarePlan
-	carePlanRef, err := basedOn(task)
-	if err != nil {
-		//FIXME: This logic changed, create a new CarePlan when Task.basedOn is not set
-		return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
+	if len(task.BasedOn) == 0 {
+		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
+		cp := fhir.CarePlan{}
+
+		carePlanBytes, _ := json.Marshal(cp)
+		newHttpRequest := httptest.NewRequest("POST", "/CarePlan", bytes.NewReader(carePlanBytes))
+
+		// Create a new transaction, we need these resources to be created before the flow can continue
+		newTx := coolfhir.Transaction()
+
+		res, err := s.handleCreateCarePlan(newHttpRequest, newTx)
+		if err != nil {
+			return nil, err
+		}
+		if res == nil {
+			return nil, errors.New("invalid response")
+		}
+
+		bundle, err := s.commitTransaction(newHttpRequest, newTx, []FHIRHandlerResult{res})
+		if err != nil {
+			return nil, err
+		}
+
+		err = coolfhir.ResourceInBundle(bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
+		if err != nil {
+			return nil, err
+		}
+
+		task.BasedOn = []fhir.Reference{
+			{
+				Type:      to.Ptr("CarePlan"),
+				Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+			},
+		}
+	} else {
+		// Adding a task to an existing CarePlan
+		carePlanRef, err = basedOn(task)
+		if err != nil {
+			return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
+		}
+		// we have a valid reference to a CarePlan, use this to retrieve the CarePlan and CareTeam to validate the requester is a participant
+		var careTeams []fhir.CareTeam
+		err = s.fhirClient.Read(*carePlanRef, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams))
+		if err != nil {
+			return nil, err
+		}
+		if len(careTeams) == 0 {
+			return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
+		}
+		principal, err := auth.PrincipalFromContext(httpRequest.Context())
+		if err != nil {
+			return nil, err
+		}
+
+		participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+		if participant == nil {
+			return nil, coolfhir.NewErrorWithCode("requester is not part of CareTeam", http.StatusUnauthorized)
+		}
 	}
 	// TODO: Manage time-outs properly
-	var carePlan fhir.CarePlan
-	if err := s.fhirClient.Read(*carePlanRef, &carePlan); err != nil {
-		return nil, fmt.Errorf("failed to read CarePlan: %w", err)
-	}
 	// Add Task to CarePlan.activities
 	err = s.newTaskInCarePlan(tx, task, &carePlan)
 	if err != nil {

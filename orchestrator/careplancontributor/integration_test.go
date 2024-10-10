@@ -7,7 +7,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
@@ -35,37 +34,9 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 
 	var carePlan fhir.CarePlan
 	var task fhir.Task
-	t.Log("Creating CarePlan...")
-	{
-		carePlan.Subject = fhir.Reference{
-			Type: to.Ptr("Patient"),
-			Identifier: &fhir.Identifier{
-				System: to.Ptr(coolfhir.BSNNamingSystem),
-				Value:  to.Ptr("123456789"),
-			},
-		}
-		err := cpsDataHolder.Create(carePlan, &carePlan)
-		require.NoError(t, err)
-
-		// Check the CarePlan and CareTeam exist
-		var createdCarePlan fhir.CarePlan
-		var createdCareTeams []fhir.CareTeam
-		err = cpsDataHolder.Read("CarePlan/"+*carePlan.Id, &createdCarePlan, fhirclient.ResolveRef("careTeam", &createdCareTeams))
-		require.NoError(t, err)
-		require.NotNil(t, createdCarePlan.Id)
-		require.Len(t, createdCareTeams, 1, "expected 1 CareTeam")
-		require.NotNil(t, createdCareTeams[0].Id)
-	}
-
 	t.Log("Creating Task")
 	{
 		task = fhir.Task{
-			BasedOn: []fhir.Reference{
-				{
-					Type:      to.Ptr("CarePlan"),
-					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
-				},
-			},
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
@@ -73,8 +44,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 
 		err := cpsDataHolder.Create(task, &task)
 		require.NoError(t, err)
-		println("actual care plan ID: " + *carePlan.Id)
-		err = cpsDataHolder.Read("CarePlan/"+*carePlan.Id, &carePlan)
+		err = cpsDataHolder.Read(*task.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
 
 		t.Run("Check Task properties", func(t *testing.T) {

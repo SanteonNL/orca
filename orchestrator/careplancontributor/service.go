@@ -191,7 +191,12 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 		return err
 	}
 
-	isValid, err := validateRequester(careTeams, principal)
+	// get the CareTeamParticipant, then check that it is active
+	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+	if participant == nil {
+		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
+	}
+	isValid, err := coolfhir.ValidateCareTeamParticipantPeriod(*participant, time.Now())
 	if err != nil {
 		return err
 	}
