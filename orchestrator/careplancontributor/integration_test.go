@@ -38,6 +38,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	{
 		task = fhir.Task{
 			Status:    fhir.TaskStatusRequested,
+			Intent:    "order",
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}

@@ -30,13 +30,10 @@ func (s *Service) handleCreateTask(httpRequest *http.Request, tx *coolfhir.Trans
 
 	var carePlan fhir.CarePlan
 	var carePlanRef *string
-	switch task.Status {
-	case fhir.TaskStatusRequested:
-	case fhir.TaskStatusReady:
-	default:
-		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
+	err := coolfhir.ValidateTaskRequiredFields(task)
+	if err != nil {
+		return nil, err
 	}
-	var err error
 	// Resolve the CarePlan
 	if len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member

@@ -95,6 +95,52 @@ func ValidateCareTeamParticipantPeriod(participant fhir.CareTeamParticipant, now
 	return true, nil
 }
 
+// ValidateTaskRequiredFields Validates that all required fields are set for a Task (i.e. a cardinality of 1..*) as per: https://santeonnl.github.io/shared-care-planning/StructureDefinition-SCPTask.html
+// and that the value is valid
+func ValidateTaskRequiredFields(task fhir.Task) error {
+	switch task.Status {
+	case fhir.TaskStatusRequested:
+	case fhir.TaskStatusReady:
+	default:
+		return errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
+	}
+	if task.Intent != "order" {
+		return errors.New("task.Intent must be 'order'")
+	}
+	if task.For != nil {
+		err := validateIdentifier("task.For", task.For.Identifier)
+		if err != nil {
+			return err
+		}
+	}
+	if task.Requester != nil {
+		err := validateIdentifier("task.Requester", task.Requester.Identifier)
+		if err != nil {
+			return err
+		}
+	}
+	if task.Owner != nil {
+		err := validateIdentifier("task.Owner", task.Owner.Identifier)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateIdentifier(identifierField string, identifier *fhir.Identifier) error {
+	if identifier == nil {
+		return nil
+	}
+	if identifier.System == nil || *identifier.System == "" {
+		return errors.New(identifierField + ".Identifier.System must be set")
+	}
+	if identifier.Value == nil || *identifier.Value == "" {
+		return errors.New(identifierField + ".Identifier.Value must be set")
+	}
+	return nil
+}
+
 func parseTimestamp(timestampString string) (time.Time, error) {
 	// Check both yyyy-mm-dd and extended with full timestamp
 	var timeStamp time.Time

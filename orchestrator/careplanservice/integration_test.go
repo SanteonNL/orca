@@ -45,9 +45,30 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 	var carePlan fhir.CarePlan
 	var task fhir.Task
+	t.Log("Creating Task - CarePlan does not exist")
+	{
+		task = fhir.Task{
+			BasedOn: []fhir.Reference{
+				{
+					Type:      to.Ptr("CarePlan"),
+					Reference: to.Ptr("CarePlan/123"),
+				},
+			},
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+		}
+
+		err := carePlanContributor1.Create(task, &task)
+		require.Error(t, err)
+		require.Equal(t, 0, int(notificationCounter.Load()))
+	}
+
 	t.Log("Creating Task - No BasedOn, new CarePlan and CareTeam are created")
 	{
 		task = fhir.Task{
+			Intent:    "order",
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
@@ -86,6 +107,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
 				},
 			},
+			Intent:    "order",
 			Status:    fhir.TaskStatusAccepted,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
@@ -105,6 +127,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
 				},
 			},
+			Intent:    "order",
 			Status:    fhir.TaskStatusDraft,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
@@ -124,10 +147,10 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
 				},
 			},
+			Intent:    "order",
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
-			Intent:    "plan",
 		}
 
 		err := carePlanContributor1.Create(task, &task)
