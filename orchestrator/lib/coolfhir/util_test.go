@@ -368,15 +368,6 @@ func Test_ValidateTaskRequiredFields(t *testing.T) {
 		wantErr error
 	}{
 		{
-			name: "invalid status",
-			args: args{
-				task: fhir.Task{
-					Status: fhir.TaskStatusCompleted,
-				},
-			},
-			wantErr: errors.New("cannot create Task with status completed, must be requested or ready"),
-		},
-		{
 			name: "invalid intent",
 			args: args{
 				task: fhir.Task{

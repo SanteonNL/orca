@@ -28,6 +28,13 @@ func (s *Service) handleCreateTask(httpRequest *http.Request, tx *coolfhir.Trans
 		return nil, fmt.Errorf("invalid Task: %w", err)
 	}
 
+	switch task.Status {
+	case fhir.TaskStatusRequested:
+	case fhir.TaskStatusReady:
+	default:
+		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
+	}
+
 	var carePlan fhir.CarePlan
 	var carePlanRef *string
 	err := coolfhir.ValidateTaskRequiredFields(task)

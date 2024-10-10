@@ -98,12 +98,6 @@ func ValidateCareTeamParticipantPeriod(participant fhir.CareTeamParticipant, now
 // ValidateTaskRequiredFields Validates that all required fields are set for a Task (i.e. a cardinality of 1..*) as per: https://santeonnl.github.io/shared-care-planning/StructureDefinition-SCPTask.html
 // and that the value is valid
 func ValidateTaskRequiredFields(task fhir.Task) error {
-	switch task.Status {
-	case fhir.TaskStatusRequested:
-	case fhir.TaskStatusReady:
-	default:
-		return errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
-	}
 	if task.Intent != "order" {
 		return errors.New("task.Intent must be 'order'")
 	}
