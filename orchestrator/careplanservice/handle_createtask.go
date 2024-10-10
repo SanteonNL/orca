@@ -1,27 +1,27 @@
 package careplanservice
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
+	"github.com/google/uuid"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
-
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleCreateTask(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msg("Creating Task")
 	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
 	var task fhir.Task
-	if err := s.readRequest(httpRequest, &task); err != nil {
-		return nil, fmt.Errorf("invalid Task: %w", err)
+	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
+		return nil, fmt.Errorf("invalid %T: %w", task, err)
 	}
 
 	switch task.Status {
@@ -42,7 +42,11 @@ func (s *Service) handleCreateTask(httpRequest *http.Request, tx *coolfhir.Trans
 		return nil, fmt.Errorf("failed to read CarePlan: %w", err)
 	}
 	// Add Task to CarePlan.activities
-	err = s.newTaskInCarePlan(tx, task, &carePlan)
+	taskBundleEntry := request.bundleEntryWithResource(task)
+	if taskBundleEntry.FullUrl == nil {
+		taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
+	}
+	err = s.newTaskInCarePlan(tx, taskBundleEntry, task, &carePlan)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Task: %w", err)
 	}
@@ -71,17 +75,16 @@ func (s *Service) handleCreateTask(httpRequest *http.Request, tx *coolfhir.Trans
 }
 
 // newTaskInCarePlan creates a new Task and references the Task from the CarePlan.activities.
-func (s *Service) newTaskInCarePlan(tx *coolfhir.TransactionBuilder, task fhir.Task, carePlan *fhir.CarePlan) error {
-	taskRef := "urn:uuid:" + uuid.NewString()
+func (s *Service) newTaskInCarePlan(tx *coolfhir.TransactionBuilder, taskBundleEntry fhir.BundleEntry, task fhir.Task, carePlan *fhir.CarePlan) error {
 	carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
 		Reference: &fhir.Reference{
-			Reference: to.Ptr(taskRef),
+			Reference: taskBundleEntry.FullUrl,
 			Type:      to.Ptr("Task"),
 		},
 	})
 
 	// TODO: Only if not updated
-	tx.Create(task, coolfhir.WithFullUrl(taskRef)).
+	tx.Append(taskBundleEntry).
 		Update(*carePlan, "CarePlan/"+*carePlan.Id)
 
 	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {

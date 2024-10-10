@@ -355,3 +355,11 @@ func TestValidateCareTeamParticipantPeriod(t *testing.T) {
 		})
 	}
 }
+
+func TestHttpMethodToVerb(t *testing.T) {
+	assert.Equal(t, fhir.HTTPVerbGET, HttpMethodToVerb("GET"))
+	assert.Equal(t, fhir.HTTPVerbPOST, HttpMethodToVerb("POST"))
+	assert.Equal(t, fhir.HTTPVerbPUT, HttpMethodToVerb("PUT"))
+	assert.Equal(t, fhir.HTTPVerbDELETE, HttpMethodToVerb("DELETE"))
+	assert.Equal(t, fhir.HTTPVerbPATCH, HttpMethodToVerb("PATCH"))
+}

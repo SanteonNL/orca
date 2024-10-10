@@ -15,7 +15,7 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 	image := os.Getenv("ORCHESTRATOR_IMAGE")
 	pullImage := false
 	if image == "" {
-		image = "ghcr.io/santeonnl/orca_orchestrator:main"
+		image = "ghcr.io/santeonnl/orca_orchestrator:local"
 		pullImage = true
 	}
 	println("Starting ORCA Orchestrator...")

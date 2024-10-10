@@ -45,6 +45,10 @@ func (t *TransactionBuilder) addEntry(resource interface{}, path string, verb fh
 	for _, opt := range opts {
 		opt(&entry)
 	}
+	return t.Append(entry)
+}
+
+func (t *TransactionBuilder) Append(entry fhir.BundleEntry) *TransactionBuilder {
 	t.Entry = append(t.Entry, entry)
 	return t
 }
