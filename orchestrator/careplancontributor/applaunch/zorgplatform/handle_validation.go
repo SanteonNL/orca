@@ -1,8 +1,8 @@
 package zorgplatform
 
 import (
-	"encoding/base64"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 	"time"
 
 	"github.com/beevik/etree"
@@ -16,18 +16,12 @@ type LaunchContext struct {
 	DecryptedAssertion *etree.Document
 }
 
-func (s *Service) validateEncryptedSAMLToken(base64EncryptedToken string) (LaunchContext, error) {
+func (s *Service) validateEncryptedSAMLToken(requestSecurityTokenResponseXml string) (LaunchContext, error) {
 	// TODO: Implement the SAML token validation logic
 	log.Info().Msg("Validating encrypted SAML token")
 
-	decodedEncryptedToken, err := base64.StdEncoding.DecodeString(base64EncryptedToken)
-	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to decode base64 token: %w", err)
-	}
-	log.Info().Msgf("Decoded token: %s", decodedEncryptedToken)
-
 	doc := etree.NewDocument()
-	err = doc.ReadFromBytes(decodedEncryptedToken)
+	err := doc.ReadFromString(requestSecurityTokenResponseXml)
 
 	if err != nil {
 		return LaunchContext{}, fmt.Errorf("unable to parse XML: %w", err)
@@ -91,22 +85,11 @@ func (s *Service) validateEncryptedSAMLToken(base64EncryptedToken string) (Launc
 }
 
 func (s *Service) decryptAssertion(doc *etree.Document) (*etree.Document, error) {
-	el := doc.Root().FindElement("//EncryptedAssertion/xenc:EncryptedData/xenc:CipherData/xenc:CipherValue")
+	el := doc.Root().FindElement("//EncryptedAssertion/xenc:EncryptedData")
 	if el == nil {
-		return nil, fmt.Errorf("cipher value not found in the assertion")
+		return nil, fmt.Errorf("EncryptedData element not found in the assertion")
 	}
-	cipher := el.Text()
-	plainText, err := s.decryptCertificate.DecryptRsaOaep([]byte(cipher))
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt assertion: %v", err)
-	}
-	log.Info().Msgf("Decrypted assertion: %s", string(plainText)) //TODO: Remove this line, used for debugging
-	decryptedAssertion := etree.NewDocument()
-	err = doc.ReadFromBytes(plainText)
-	if err != nil {
-		return nil, fmt.Errorf("unable to parse decrypted assertion XML: %w", err)
-	}
-	return decryptedAssertion, nil
+	return crypto.DecryptXmlEnc(el, s.decryptCertificate.DecryptRsaOaep)
 }
 
 func (s *Service) validateTokenExpiry(doc *etree.Document) error {

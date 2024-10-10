@@ -11,3 +11,9 @@ type Config struct {
 	Demo         demo.Config         `koanf:"demo"`
 	ZorgPlatform zorgplatform.Config `koanf:"zorgplatform"`
 }
+
+func DefaultConfig() Config {
+	return Config{
+		ZorgPlatform: zorgplatform.DefaultConfig(),
+	}
+}

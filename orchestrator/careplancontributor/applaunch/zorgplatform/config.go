@@ -1,5 +1,11 @@
 package zorgplatform
 
+func DefaultConfig() Config {
+	return Config{
+		AzureConfig: AzureConfig{CredentialType: "managed_identity"},
+	}
+}
+
 type Config struct {
 	Enabled   bool   `koanf:"enabled"`
 	PublicKey string `koanf:"publickey"` // ODO
@@ -13,6 +19,7 @@ type Config struct {
 
 type AzureConfig struct {
 	KeyVaultConfig AzureKeyVaultConfig `koanf:"keyvault"`
+	CredentialType string              `koanf:"credentialtype"`
 }
 
 type AzureKeyVaultConfig struct {
@@ -23,4 +30,5 @@ type AzureKeyVaultConfig struct {
 	SignCertVersion    string `koanf:"signcertversion"`
 	ClientCertName     string `koanf:"clientcertname"`
 	ClientCertVersion  string `koanf:"clientcertversion"`
+	AllowInsecure      bool   `koanf:"allowinsecure"`
 }

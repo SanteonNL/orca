@@ -23,6 +23,7 @@ require (
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.1.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.0.0 // indirect
+	github.com/braineet/saml v0.4.15 // indirect
 )
 
 require (

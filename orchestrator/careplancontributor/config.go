@@ -8,7 +8,9 @@ import (
 )
 
 func DefaultConfig() Config {
-	return Config{}
+	return Config{
+		AppLaunch: applaunch.DefaultConfig(),
+	}
 }
 
 type Config struct {

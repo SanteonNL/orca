@@ -129,7 +129,12 @@ func NewKeysClient(keyVaultURL string, credentialType string, insecure bool) (*a
 		clientOptions = &azkeys.ClientOptions{
 			ClientOptions: azcore.ClientOptions{
 				InsecureAllowCredentialWithHTTP: true,
-				Transport:                       AzureHttpRequestDoer,
+			},
+		}
+	} else {
+		clientOptions = &azkeys.ClientOptions{
+			ClientOptions: azcore.ClientOptions{
+				Transport: AzureHttpRequestDoer,
 			},
 		}
 	}

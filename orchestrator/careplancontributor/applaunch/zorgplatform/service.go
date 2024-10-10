@@ -1,17 +1,17 @@
 package zorgplatform
 
 import (
+	"context"
+	"crypto/x509"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
-	"io"
+	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"strings"
-
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
-	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/rs/zerolog/log"
 )
 
 const fhirLauncherKey = "zorgplatform"
@@ -29,19 +29,23 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 	registerFhirClientFactory(config)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
-	azClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, "managed_identity", false)
+	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
 	}
-	signingCert, err := azkeyvault.GetKey(azClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
+	azCertClient, err := azkeyvault.NewCertificatesClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
+	}
+	signingCert, err := azkeyvault.GetKey(azKeysClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get signing certificate from Azure Key Vault: %w", err)
 	}
-	decryptCert, err := azkeyvault.GetKey(azClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
+	decryptCert, err := azkeyvault.GetKey(azKeysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get decryption certificate from Azure Key Vault: %w", err)
 	}
-	tlsClientCert, err := azkeyvault.GetKey(azClient, config.AzureConfig.KeyVaultConfig.ClientCertName, config.AzureConfig.KeyVaultConfig.ClientCertVersion)
+	tlsClientCert, err := azkeyvault.GetCertificate(context.Background(), azCertClient, config.AzureConfig.KeyVaultConfig.ClientCertName, config.AzureConfig.KeyVaultConfig.ClientCertVersion)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get TLS client certificate from Azure Key Vault: %w", err)
 	}
@@ -62,12 +66,12 @@ type Service struct {
 	baseURL              string
 	landingUrlPath       string
 	signingCertificate   crypto.Suite
-	tlsClientCertificate crypto.Suite
+	tlsClientCertificate *x509.Certificate
 	decryptCertificate   crypto.Suite
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("POST /"+appLaunchUrl, s.handle)
+	mux.HandleFunc("POST "+appLaunchUrl, s.handle)
 }
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
@@ -113,24 +117,14 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 }
 
 func (s *Service) getEncryptedSAMLToken(response http.ResponseWriter, request *http.Request) (token string, err error) {
-	body, err := io.ReadAll(request.Body)
-
-	if err != nil {
-		return "", fmt.Errorf("unable to read request body: %w", err)
+	if err = request.ParseForm(); err != nil {
+		return "", fmt.Errorf("unable to parse form: %w", err)
 	}
-	defer request.Body.Close()
-
-	// Extract SAMLResponse from the body
-	values, err := url.ParseQuery(string(body))
-	if err != nil {
-		return "", fmt.Errorf("unable to parse request body: %w", err)
+	value := request.FormValue("SAMLResponse")
+	if value == "" {
+		return "", fmt.Errorf("SAMLResponse not found in request")
 	}
-	samlResponse := values.Get("SAMLResponse")
-	if samlResponse == "" {
-		return "", fmt.Errorf("SAMLResponse not found in request body")
-	}
-
-	return samlResponse, nil
+	return value, nil
 }
 
 func registerFhirClientFactory(config Config) {

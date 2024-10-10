@@ -23,6 +23,12 @@ func NewCertificatesClient(keyVaultURL string, credentialType string, insecure b
 				Transport:                       AzureHttpRequestDoer,
 			},
 		}
+	} else {
+		clientOptions = &azcertificates.ClientOptions{
+			ClientOptions: azcore.ClientOptions{
+				Transport: AzureHttpRequestDoer,
+			},
+		}
 	}
 	return azcertificates.NewClient(keyVaultURL, cred, clientOptions) // never returns an error
 }
