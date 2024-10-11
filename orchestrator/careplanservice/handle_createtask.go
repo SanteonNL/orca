@@ -8,7 +8,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/google/uuid"
-	"github.com/google/uuid"
+	"net/http"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
@@ -20,10 +20,12 @@ import (
 
 func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msg("Creating Task")
+	log.Info().Msgf("%s", request.RequestUrl)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, err)
 	}
+	log.Info().Msgf("%v", task)
 
 	switch task.Status {
 	case fhir.TaskStatusRequested:
@@ -32,7 +34,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
 	}
 
-	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -44,7 +46,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, err
 	}
 	// Resolve the CarePlan
-	if len(task.BasedOn) == 0 {
+	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
 		// Create a new CarePlan (which will also create a new CareTeam) based on the Task reference
 		carePlanURL := "urn:uuid:" + uuid.NewString()
@@ -103,10 +105,10 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		// TODO: Manage time-outs properly
 		// Add Task to CarePlan.activities
 		taskBundleEntry := request.bundleEntryWithResource(task)
-	if taskBundleEntry.FullUrl == nil {
-		taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
-	}
-	err = s.newTaskInExistingCarePlan(tx, taskBundleEntry,task, &carePlan)
+		if taskBundleEntry.FullUrl == nil {
+			taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
+		}
+		err = s.newTaskInExistingCarePlan(tx, taskBundleEntry, task, &carePlan)
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Task: %w", err)

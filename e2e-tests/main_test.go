@@ -82,11 +82,6 @@ func Test_Main(t *testing.T) {
 				}
 				task.Intent = "order"
 				task.Status = fhir.TaskStatusRequested
-				task.BasedOn = []fhir.Reference{
-					{
-						Reference: to.Ptr("CarePlan/" + *carePlan.ID),
-					},
-				}
 				err := hospitalOrcaFHIRClient.Create(task, &task)
 				require.NoError(t, err)
 			}
