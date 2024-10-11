@@ -15,17 +15,27 @@ import (
 func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Request) error {
 	queryParams := request.URL.Query()
 	urlParts := strings.Split(strings.TrimPrefix(request.URL.Path, basePath+"/"), "/")
+	headers := new(fhirclient.Headers)
+
 	switch urlParts[0] {
 	case "CarePlan":
 		// fetch CarePlan + CareTeam, validate requester is participant of CareTeam
 		// if there are query params present, we need to handle the request a bit differently
 		if len(queryParams) != 0 {
-			if queryParams.Get("_id") == "" {
-				return coolfhir.NewErrorWithCode("Query parameter _id is not present, can't find CarePlan", http.StatusBadRequest)
+			// TODO: Check if all parameters are allowed
+			// TODO: Is it acceptable to return the CareTeam in the bundle if it is not requested?
+			params := []fhirclient.Option{}
+			for k, v := range queryParams {
+				// Skip param to include CareTeam since we need to add this for validation anyway
+				if k == "_include" && v[0] == "CarePlan:care-team" {
+					continue
+				}
+				params = append(params, fhirclient.QueryParam(k, v[0]))
 			}
-
+			params = append(params, fhirclient.QueryParam("_include", "CarePlan:care-team"))
+			params = append(params, fhirclient.ResponseHeaders(headers))
 			var bundle fhir.Bundle
-			err := s.fhirClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", queryParams.Get("_id")), fhirclient.QueryParam("_include", "CarePlan:care-team"))
+			err := s.fhirClient.Read("CarePlan", &bundle, params...)
 			if err != nil {
 				return err
 			}
@@ -43,22 +53,15 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 				return err
 			}
 
-			// Valid requester, now perform the bundle request again with all the params
-			// TODO: Check if all parameters are allowed
-			params := []fhirclient.Option{}
-			for k, v := range queryParams {
-				params = append(params, fhirclient.QueryParam(k, v[0]))
-			}
-			err = s.fhirClient.Read("CarePlan", &bundle, params...)
-			if err != nil {
-				return err
-			}
-
 			b, err := json.Marshal(bundle)
 			_, err = httpResponse.Write(b)
 			if err != nil {
 				return err
 			}
+			for key, value := range headers.Header {
+				httpResponse.Header()[key] = value
+			}
+
 			return nil
 		}
 		if len(urlParts) < 2 {
@@ -67,7 +70,7 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 				StatusCode: http.StatusForbidden,
 			}
 		}
-		carePlan, careTeams, err := s.getCarePlanAndCareTeams("CarePlan/" + urlParts[1])
+		carePlan, careTeams, headers, err := s.getCarePlanAndCareTeams("CarePlan/" + urlParts[1])
 		if err != nil {
 			return err
 		}
@@ -82,8 +85,13 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 		if err != nil {
 			return err
 		}
+
+		for key, value := range headers.Header {
+			httpResponse.Header()[key] = value
+		}
 		// TODO: Do we support additional info in the URL i.e. extra params
 	case "CareTeam":
+		// TODO: Support bundle search for CareTeam, once logic for CarePlan is agreed upon
 		// fetch CareTeam, validate requester is participant
 		if len(urlParts) < 2 {
 			return &coolfhir.ErrorWithCode{
@@ -92,7 +100,7 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 			}
 		}
 		var careTeam fhir.CareTeam
-		err := s.fhirClient.Read("CareTeam/"+urlParts[1], &careTeam)
+		err := s.fhirClient.Read("CareTeam/"+urlParts[1], &careTeam, fhirclient.ResponseHeaders(headers))
 		if err != nil {
 			return err
 		}
@@ -106,8 +114,13 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 		if err != nil {
 			return err
 		}
+
+		for key, value := range headers.Header {
+			httpResponse.Header()[key] = value
+		}
 		// TODO: Do we support additional info in the URL i.e. extra params
 	case "Task":
+		// TODO: Support bundle search for Task, once logic for CarePlan is agreed upon
 		// fetch Task + CareTeam, validate requester is participant of CareTeam
 		if len(urlParts) < 2 {
 			return &coolfhir.ErrorWithCode{
@@ -116,8 +129,7 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 			}
 		}
 		var task fhir.Task
-		// var basedOn []fhir.Reference
-		err := s.fhirClient.Read("Task/"+urlParts[1], &task)
+		err := s.fhirClient.Read("Task/"+urlParts[1], &task, fhirclient.ResponseHeaders(headers))
 		if err != nil {
 			return err
 		}
@@ -135,7 +147,7 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 			}
 		}
 
-		_, careTeams, err := s.getCarePlanAndCareTeams(*task.BasedOn[0].Reference)
+		_, careTeams, _, err := s.getCarePlanAndCareTeams(*task.BasedOn[0].Reference)
 		if err != nil {
 			return err
 		}
@@ -150,6 +162,10 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 		if err != nil {
 			return err
 		}
+
+		for key, value := range headers.Header {
+			httpResponse.Header()[key] = value
+		}
 		// TODO: Do we support additional info in the URL i.e. extra params
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
@@ -158,21 +174,22 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 	return nil
 }
 
-func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, error) {
+func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
 	var carePlan fhir.CarePlan
 	var careTeams []fhir.CareTeam
-	err := s.fhirClient.Read(carePlanReference, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams))
+	headers := new(fhirclient.Headers)
+	err := s.fhirClient.Read(carePlanReference, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams), fhirclient.ResponseHeaders(headers))
 	if err != nil {
-		return fhir.CarePlan{}, nil, err
+		return fhir.CarePlan{}, nil, nil, err
 	}
 	if len(careTeams) == 0 {
-		return fhir.CarePlan{}, nil, &coolfhir.ErrorWithCode{
+		return fhir.CarePlan{}, nil, nil, &coolfhir.ErrorWithCode{
 			Message:    "CareTeam not found in bundle",
 			StatusCode: http.StatusNotFound,
 		}
 	}
 
-	return carePlan, careTeams, nil
+	return carePlan, careTeams, headers, nil
 }
 
 func validatePrincipalInCareTeams(ctx context.Context, careTeams []fhir.CareTeam) error {
@@ -184,7 +201,7 @@ func validatePrincipalInCareTeams(ctx context.Context, careTeams []fhir.CareTeam
 	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
 	if participant == nil {
 		return &coolfhir.ErrorWithCode{
-			Message:    "Participant is not part of CarePlan",
+			Message:    "Participant is not part of CareTeam",
 			StatusCode: http.StatusUnauthorized,
 		}
 	}
