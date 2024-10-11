@@ -15,6 +15,7 @@ import (
 
 type LaunchContext struct {
 	Bsn                string
+	SubjectNameId      string
 	Practitioner       fhir.Practitioner
 	ServiceRequest     fhir.ServiceRequest
 	WorkflowId         string

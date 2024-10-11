@@ -89,12 +89,13 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			}
 
 			// Extract Practitioner
-			subject, err := s.extractPractitioner(decryptedAssertion)
+			practitioner, err := s.extractPractitioner(decryptedAssertion)
 			if tt.expectedError != nil && err != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedSubj, subject)
+				subjectNameId := *practitioner.Identifier[0].Value + "@" + *practitioner.Identifier[0].System
+				assert.Equal(t, tt.expectedSubj, subjectNameId)
 			}
 
 			// Extract Resource ID

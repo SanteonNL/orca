@@ -148,6 +148,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 	instanceIdentifier.CreateAttr("extension", launchContext.Bsn)
 
 	// Organization ID
+	// TODO: if we build this multi-tenant, this has to come from the launch context
 	attrOrgID := attributeStatement.CreateElement("Attribute")
 	attrOrgID.CreateAttr("Name", "urn:oasis:names:tc:xspa:1.0:subject:organization-id")
 	attrValueOrgID := attrOrgID.CreateElement("AttributeValue")
@@ -172,6 +173,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 }
 
 func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error) {
+	// TODO: replace with xmlenc?
 	// 1. Canonicalize the Assertion (without the Signature element)
 	canonicalizedAssertion, err := canonicalize(assertion)
 	if err != nil {
