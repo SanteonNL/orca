@@ -1,7 +1,7 @@
 package careplanservice
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http/httptest"
 	"testing"
 )
 
@@ -52,10 +51,14 @@ func TestService_handleCreateCarePlan(t *testing.T) {
 		})
 		var carePlan fhir.CarePlan
 		carePlanBytes, _ := json.Marshal(carePlan)
-		httpRequest := httptest.NewRequest("POST", "/CarePlan", bytes.NewReader(carePlanBytes))
+		fhirRequest := FHIRHandlerRequest{
+			ResourcePath: "CarePlan",
+			ResourceData: carePlanBytes,
+			HttpMethod:   "POST",
+		}
 
 		tx := coolfhir.Transaction()
-		result, err := service.handleCreateCarePlan(httpRequest, tx)
+		result, err := service.handleCreateCarePlan(context.Background(), fhirRequest, tx)
 
 		require.NoError(t, err)
 

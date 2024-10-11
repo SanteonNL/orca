@@ -1,9 +1,10 @@
 package careplanservice
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
@@ -13,22 +14,18 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleUpdateTask(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-	taskID := httpRequest.PathValue("id")
-	if taskID == "" {
-		return nil, errors.New("missing Task ID")
-	}
-	log.Info().Msgf("Updating Task: %s", taskID)
+func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+	log.Info().Msgf("Updating Task: %s", request.ResourceId)
 	// TODO: Authorize request here
 	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
 	var task fhir.Task
-	if err := s.readRequest(httpRequest, &task); err != nil {
-		return nil, fmt.Errorf("invalid Task: %w", err)
+	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
+		return nil, fmt.Errorf("invalid %T: %w", task, err)
 	}
 
 	// the Task prior to updates, we need this to validate the state transition
 	var taskExisting fhir.Task
-	if err := s.fhirClient.Read("Task/"+taskID, &taskExisting); err != nil {
+	if err := s.fhirClient.Read("Task/"+request.ResourceId, &taskExisting); err != nil {
 		return nil, fmt.Errorf("failed to read Task: %w", err)
 	}
 
@@ -39,7 +36,7 @@ func (s *Service) handleUpdateTask(httpRequest *http.Request, tx *coolfhir.Trans
 	}
 
 	// Validate state transition
-	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +75,7 @@ func (s *Service) handleUpdateTask(httpRequest *http.Request, tx *coolfhir.Trans
 		return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 	}
 
-	tx = tx.Update(task, "Task/"+taskID)
+	tx = tx.Append(request.bundleEntryWithResource(task))
 	// Update care team
 	_, err = careteamservice.Update(s.fhirClient, *carePlanRef, task, tx)
 	if err != nil {
@@ -88,7 +85,7 @@ func (s *Service) handleUpdateTask(httpRequest *http.Request, tx *coolfhir.Trans
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedTask fhir.Task
 		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(entry fhir.BundleEntry) bool {
-			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/"+taskID)
+			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, request.ResourcePath)
 		}, &updatedTask)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
