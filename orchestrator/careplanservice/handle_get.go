@@ -44,6 +44,7 @@ func (s *Service) handleGet(httpResponse http.ResponseWriter, request *http.Requ
 			}
 
 			// Valid requester, now perform the bundle request again with all the params
+			// TODO: Check if all parameters are allowed
 			params := []fhirclient.Option{}
 			for k, v := range queryParams {
 				params = append(params, fhirclient.QueryParam(k, v[0]))
