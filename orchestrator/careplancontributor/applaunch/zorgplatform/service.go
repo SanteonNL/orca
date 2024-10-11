@@ -2,22 +2,36 @@ package zorgplatform
 
 import (
 	"context"
-	"crypto/x509"
+	"crypto/tls"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"strings"
 )
 
-const fhirLauncherKey = "zorgplatform"
+const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
 
 func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string) (*Service, error) {
+	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
+	}
+	azCertClient, err := azkeyvault.NewCertificatesClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
+	}
+	return newWithClients(sessionManager, config, baseURL, landingUrlPath, azKeysClient, azCertClient)
+}
+
+func newWithClients(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string,
+	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
 		appLaunchURL = baseURL + appLaunchUrl
@@ -29,23 +43,15 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 	registerFhirClientFactory(config)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
-	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
-	}
-	azCertClient, err := azkeyvault.NewCertificatesClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
-	if err != nil {
-		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
-	}
-	signingCert, err := azkeyvault.GetKey(azKeysClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
+	signingCert, err := azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get signing certificate from Azure Key Vault: %w", err)
 	}
-	decryptCert, err := azkeyvault.GetKey(azKeysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
+	decryptCert, err := azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get decryption certificate from Azure Key Vault: %w", err)
 	}
-	tlsClientCert, err := azkeyvault.GetCertificate(context.Background(), azCertClient, config.AzureConfig.KeyVaultConfig.ClientCertName, config.AzureConfig.KeyVaultConfig.ClientCertVersion)
+	tlsClientCert, err := azkeyvault.GetTLSCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.ClientCertName, config.AzureConfig.KeyVaultConfig.ClientCertVersion)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get TLS client certificate from Azure Key Vault: %w", err)
 	}
@@ -66,70 +72,65 @@ type Service struct {
 	baseURL              string
 	landingUrlPath       string
 	signingCertificate   crypto.Suite
-	tlsClientCertificate *x509.Certificate
+	tlsClientCertificate *tls.Certificate
 	decryptCertificate   crypto.Suite
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("POST "+appLaunchUrl, s.handle)
+	mux.HandleFunc("POST "+appLaunchUrl, s.handleLaunch)
 }
 
-func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
-
-	encryptedToken, err := s.getEncryptedSAMLToken(response, request)
-
-	if err != nil {
-		log.Error().Err(err).Msg("unable to get SAML token")
-		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Request) {
+	log.Debug().Msg("Handling ChipSoft HiX app launch")
+	if err := request.ParseForm(); err != nil {
+		http.Error(response, fmt.Errorf("unable to parse form: %w", err).Error(), http.StatusBadRequest)
 		return
 	}
+	samlResponse := request.FormValue("SAMLResponse")
+	if samlResponse == "" {
+		http.Error(response, "SAMLResponse not found in request", http.StatusBadRequest)
+	}
 
-	launchContext, err := s.validateEncryptedSAMLToken(encryptedToken)
+	launchContext, err := s.parseSamlResponse(samlResponse)
 
 	if err != nil {
-		//Only log sensitive information, the response just sends out 400
+		// Only log sensitive information, the response just sends out 400
 		log.Error().Err(err).Msg("unable to validate SAML token")
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
 
-	assertionString, _ := launchContext.DecryptedAssertion.WriteToString()
-	log.Info().Msgf("SAML token validated, subject=%s, bsn=%s, workflowId=%s, decryptedAssertion=%s", launchContext.Subject, launchContext.Bsn, launchContext.WorkflowId, assertionString)
+	// TODO: Remove this debug logging later
+	log.Info().Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
 
-	//TODO: launchContext.Subject needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
+	//TODO: launchContext.Practitioner needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
+	// Cache FHIR resources that don't exist in the EHR in the session,
+	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
+	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	s.sessionManager.Create(response, user.SessionData{
-		FHIRLauncher: fhirLauncherKey,
-		Values: map[string]string{
+		FHIRLauncher: launcherKey,
+		StringValues: map[string]string{
 			// "context":        launchContext,
-			"subject": launchContext.Subject,
 			// "patient":        launchContext.Patient,
-			// "practitioner":   launchContext.Practitioner,
+			"practitioner": practitionerRef,
 			// "serviceRequest": launchContext.ServiceRequest,
 			// "iss":            launchContext.Issuer,
+		},
+		OtherValues: map[string]interface{}{
+			practitionerRef: launchContext.Practitioner,
 		},
 	})
 
 	// Redirect to landing page
 	targetURL, _ := url.Parse(s.baseURL)
 	targetURL = targetURL.JoinPath(s.landingUrlPath)
-
+	log.Info().Msg("Successfully launched through ChipSoft HiX app launch")
 	http.Redirect(response, request, targetURL.String(), http.StatusFound)
-}
-
-func (s *Service) getEncryptedSAMLToken(response http.ResponseWriter, request *http.Request) (token string, err error) {
-	if err = request.ParseForm(); err != nil {
-		return "", fmt.Errorf("unable to parse form: %w", err)
-	}
-	value := request.FormValue("SAMLResponse")
-	if value == "" {
-		return "", fmt.Errorf("SAMLResponse not found in request")
-	}
-	return value, nil
 }
 
 func registerFhirClientFactory(config Config) {
 	// Register FHIR client factory that can create FHIR clients when the Zorgplatform AppLaunch is used
-	clients.Factories[fhirLauncherKey] = func(properties map[string]string) clients.ClientProperties {
+	clients.Factories[launcherKey] = func(properties map[string]string) clients.ClientProperties {
 		fhirServerURL, _ := url.Parse(config.ApiUrl)
 		return clients.ClientProperties{
 			BaseURL: fhirServerURL,

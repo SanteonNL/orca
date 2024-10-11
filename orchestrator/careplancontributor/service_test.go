@@ -427,7 +427,7 @@ func TestService_HandleNotification(t *testing.T) {
 	})
 }
 
-func TestService_ProxyToEHR(t *testing.T) {
+func TestService_handleProxyAppRequestToEHR(t *testing.T) {
 	// Test that the service registers the EHR FHIR proxy URL that proxies to the backing FHIR server of the EHR
 	// Setup: configure backing EHR FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -440,14 +440,18 @@ func TestService_ProxyToEHR(t *testing.T) {
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	fhirServerURL.Path = "/fhir"
 	// Setup: create the service
-
 	clients.Factories["test"] = func(properties map[string]string) clients.ClientProperties {
 		return clients.ClientProperties{
 			Client:  fhirServer.Client().Transport,
 			BaseURL: fhirServerURL,
 		}
 	}
-	sessionManager, sessionID := createTestSession()
+	practitioner := fhir.Practitioner{Name: []fhir.HumanName{{Given: []string{"John"}}}}
+	sessionManager, sessionID := createTestSession(func(data *user.SessionData) {
+		data.OtherValues = map[string]interface{}{
+			"Practitioner/john": practitioner,
+		}
+	})
 
 	service, err := New(Config{}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	require.NoError(t, err)
@@ -456,15 +460,31 @@ func TestService_ProxyToEHR(t *testing.T) {
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/ehr/fhir/Patient", nil)
-	httpRequest.AddCookie(&http.Cookie{
-		Name:  "sid",
-		Value: sessionID,
+	t.Run("proxies to EHR FHIR API", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/ehr/fhir/Patient", nil)
+		httpRequest.AddCookie(&http.Cookie{
+			Name:  "sid",
+			Value: sessionID,
+		})
+		httpResponse, err := frontServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		require.Equal(t, fhirServerURL.Host, capturedHost)
 	})
-	httpResponse, err := frontServer.Client().Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-	require.Equal(t, fhirServerURL.Host, capturedHost)
+	t.Run("returns Practitioner FHIR resource cached in session", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/ehr/fhir/Practitioner/john", nil)
+		httpRequest.AddCookie(&http.Cookie{
+			Name:  "sid",
+			Value: sessionID,
+		})
+		httpResponse, err := frontServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		var actual fhir.Practitioner
+		err = json.NewDecoder(httpResponse.Body).Decode(&actual)
+		require.NoError(t, err)
+		require.Equal(t, practitioner, actual)
+	})
 }
 
 func TestService_ProxyToCPS(t *testing.T) {
@@ -510,7 +530,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 func TestService_handleGetContext(t *testing.T) {
 	httpResponse := httptest.NewRecorder()
 	Service{}.handleGetContext(httpResponse, nil, &user.SessionData{
-		Values: map[string]string{
+		StringValues: map[string]string{
 			"test":           "value",
 			"practitioner":   "the-doctor",
 			"serviceRequest": "ServiceRequest/1",
@@ -525,12 +545,16 @@ func TestService_handleGetContext(t *testing.T) {
 	}`, httpResponse.Body.String())
 }
 
-func createTestSession() (*user.SessionManager, string) {
+func createTestSession(visitors ...func(data *user.SessionData)) (*user.SessionManager, string) {
 	sessionManager := user.NewSessionManager()
 	sessionHttpResponse := httptest.NewRecorder()
-	sessionManager.Create(sessionHttpResponse, user.SessionData{
+	sessionData := user.SessionData{
 		FHIRLauncher: "test",
-	})
+	}
+	for _, visitor := range visitors {
+		visitor(&sessionData)
+	}
+	sessionManager.Create(sessionHttpResponse, sessionData)
 	// extract session ID; sid=<something>;
 	cookieValue := sessionHttpResponse.Header().Get("Set-Cookie")
 	cookieValue = strings.Split(cookieValue, ";")[0]

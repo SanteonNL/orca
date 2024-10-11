@@ -22,8 +22,9 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 	if err != nil {
 		t.Fatalf("Failed to read assertion example XML: %v", err)
 	}
-	decryptedAssertion := etree.NewDocument()
-	err = decryptedAssertion.ReadFromBytes(assertionXML)
+	decryptedDocument := etree.NewDocument()
+	err = decryptedDocument.ReadFromBytes(assertionXML)
+	decryptedAssertion := decryptedDocument.FindElement("//Assertion")
 
 	assert.NoError(t, err)
 
@@ -87,8 +88,8 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 				assert.NoError(t, err)
 			}
 
-			// Extract Subject
-			subject, err := s.extractSubject(decryptedAssertion)
+			// Extract Practitioner
+			subject, err := s.extractPractitioner(decryptedAssertion)
 			if tt.expectedError != nil && err != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
@@ -174,7 +175,7 @@ func TestValidateTokenExpiry(t *testing.T) {
 			expires := timestamp.CreateElement("u:Expires")
 			expires.SetText(tt.expires)
 
-			err := s.validateTokenExpiry(doc)
+			err := s.validateAssertionExpiry(doc)
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {

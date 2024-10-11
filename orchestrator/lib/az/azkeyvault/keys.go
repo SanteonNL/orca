@@ -39,19 +39,29 @@ type keyPair struct {
 	keyVersion string
 	asJwk      jwk.Key
 	publicKey  crypto.PublicKey
-	client     *azkeys.Client
+	client     KeysClient
 }
 
 func (s Suite) SigningKey() crypto.Signer {
 	return s
 }
 
-func (s Suite) DecryptRsaOaep(cipherText []byte) ([]byte, error) {
+func (s Suite) DecryptRsaOaep(cipherText []byte, dm libCrypto.DigestMethod) ([]byte, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), AzureKeyVaultTimeout)
 	defer cancel()
 
+	var alg azkeys.EncryptionAlgorithm
+	switch dm {
+	case libCrypto.DigestMethodSha1:
+		alg = azkeys.EncryptionAlgorithmRSAOAEP
+	case libCrypto.DigestMethodSha256:
+		alg = azkeys.EncryptionAlgorithmRSAOAEP256
+	default:
+		return nil, fmt.Errorf("unsupported DigestMethod: %s", dm)
+	}
+
 	decryptResponse, err := s.client.Decrypt(ctx, s.keyName, s.keyVersion, azkeys.KeyOperationParameters{
-		Algorithm: to.Ptr(azkeys.EncryptionAlgorithmRSAOAEP256),
+		Algorithm: to.Ptr(alg),
 		Value:     cipherText,
 	}, nil)
 	if err != nil {
@@ -60,7 +70,7 @@ func (s Suite) DecryptRsaOaep(cipherText []byte) ([]byte, error) {
 	return decryptResponse.Result, err
 }
 
-func GetKey(client *azkeys.Client, keyName string, keyVersion string) (*Suite, error) {
+func GetKey(client KeysClient, keyName string, keyVersion string) (*Suite, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), AzureKeyVaultTimeout)
 	defer cancel()
 

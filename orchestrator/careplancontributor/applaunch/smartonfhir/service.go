@@ -118,7 +118,7 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 	// TODO: Need to provide "patient", "serviceRequest", "practitioner" in the "values" map
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: fhirLauncherKey,
-		Values: map[string]string{
+		StringValues: map[string]string{
 			"access_token": tokenResponse["access_token"].(string),
 		},
 	})

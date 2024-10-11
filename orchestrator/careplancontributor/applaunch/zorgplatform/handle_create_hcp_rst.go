@@ -103,7 +103,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 	// Subject
 	subject := assertion.CreateElement("Subject")
 	nameID := subject.CreateElement("NameID")
-	nameID.SetText(launchContext.Subject) // Unique user ID
+	nameID.SetText(*launchContext.Practitioner.Identifier[0].Value + "@" + *launchContext.Practitioner.Identifier[0].System) // Unique user ID
 	subjectConfirmation := subject.CreateElement("SubjectConfirmation")
 	subjectConfirmation.CreateAttr("Method", "urn:oasis:names:tc:SAML:2.0:cm:bearer")
 

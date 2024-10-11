@@ -97,7 +97,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		writer.WriteHeader(http.StatusOK)
 	}))
 	mux.HandleFunc(fmt.Sprintf("GET %s/fhir/{rest...}", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		err := s.handleProxyToFHIR(writer, request)
+		err := s.handleProxyExternalRequestToEHR(writer, request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
 			return
@@ -107,7 +107,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	// FE/Session Authorized Endpoints
 	//
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
-	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyToEPD))
+	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, basePath+"/cps/fhir", s.scpHttpClient.Transport)
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
@@ -132,13 +132,24 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 	}
 }
 
-func (s Service) handleProxyToEPD(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	clientFactory := clients.Factories[session.FHIRLauncher](session.Values)
+// handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
+func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
 	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, basePath+"/ehr/fhir", clientFactory.Client)
-	proxy.ServeHTTP(writer, request)
+
+	resourcePath := request.PathValue("rest")
+	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
+	// E.g., ChipSoft HiX doesn't provide ServiceRequest and Practitioner as FHIR resources, so whatever there is, is converted to FHIR and cached in the session.
+	if resource, exists := session.OtherValues[resourcePath]; exists {
+		coolfhir.FhirHttpResponse(writer, http.StatusOK, resource)
+	} else {
+		proxy.ServeHTTP(writer, request)
+	}
 }
 
-func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Request) error {
+// handleProxyExternalRequestToEHR handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
+// This is typically used by remote parties to retrieve patient data from the local EHR.
+func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, request *http.Request) error {
 	// Authorize requester before proxying FHIR request
 	// Data holder must verify that the requester is part of the CareTeam by checking the URA
 	// Validate by retrieving the CarePlan from CPS, use URA in provided token to validate against CareTeam
@@ -232,9 +243,9 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 		ServiceRequest string `json:"serviceRequest"`
 		Practitioner   string `json:"practitioner"`
 	}{
-		Patient:        session.Values["patient"],
-		ServiceRequest: session.Values["serviceRequest"],
-		Practitioner:   session.Values["practitioner"],
+		Patient:        session.StringValues["patient"],
+		ServiceRequest: session.StringValues["serviceRequest"],
+		Practitioner:   session.StringValues["practitioner"],
 	}
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)

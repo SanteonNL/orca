@@ -1,7 +1,9 @@
 package azkeyvault
 
 import (
+	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
@@ -9,6 +11,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 	"github.com/rs/zerolog/log"
+	"io"
 	"net/http"
 	"net/http/httptest"
 )
@@ -27,6 +30,33 @@ func NewTestServer() *TestAzureKeyVault {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(bundle)
+		} else {
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	httpServerMux.Handle("POST /keys/{name}/0/decrypt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestBytes, _ := io.ReadAll(r.Body)
+		name := r.PathValue("name")
+		println("data " + string(requestBytes))
+		w.WriteHeader(http.StatusOK)
+		return
+		if key, ok := result.keys[name]; ok {
+			plainText, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, key, []byte("test"), nil)
+			if err != nil {
+				log.Logger.Error().Err(err).Msg("failed to decrypt")
+				w.WriteHeader(http.StatusInternalServerError)
+				return
+			}
+			var response = azkeys.DecryptResponse{
+				KeyOperationResult: azkeys.KeyOperationResult{
+					IV:     nil,
+					KID:    nil,
+					Result: plainText,
+				},
+			}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(w).Encode(response)
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}

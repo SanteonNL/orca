@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/http"
 	"time"
 )
 
@@ -155,4 +156,12 @@ func ToString(resource interface{}) string {
 		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
 	}
 	return fmt.Sprintf("%T(%v)", resource, resource)
+}
+
+func FhirHttpResponse(response http.ResponseWriter, httpStatus int, resource interface{}) {
+	resourceBytes, _ := json.Marshal(resource)
+	response.Header().Set("Content-Type", "application/json+fhir")
+	response.Header().Set("Content-Length", fmt.Sprintf("%d", len(resourceBytes)))
+	response.WriteHeader(httpStatus)
+	_, _ = response.Write(resourceBytes)
 }

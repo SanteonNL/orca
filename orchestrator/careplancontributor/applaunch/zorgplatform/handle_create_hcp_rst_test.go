@@ -1,6 +1,8 @@
 package zorgplatform
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"testing"
 
 	"github.com/beevik/etree"
@@ -18,7 +20,12 @@ func TestCreateSAMLAssertion(t *testing.T) {
 	}
 
 	launchContext := LaunchContext{
-		Subject:    "urn:oid:2.16.840.1.113883.4.1.999999999",
+		Practitioner: fhir.Practitioner{Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("urn:local:123"),
+				Value:  to.Ptr("999999999"),
+			},
+		}},
 		WorkflowId: "workflow-1234",
 		Bsn:        "999999205", // Assuming Bsn is part of LaunchContext
 	}
