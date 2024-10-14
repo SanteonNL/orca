@@ -2,7 +2,10 @@ package zorgplatform
 
 import (
 	"context"
+	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
@@ -12,6 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 )
 
@@ -47,10 +51,28 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 	if err != nil {
 		return nil, fmt.Errorf("unable to get signing certificate from Azure Key Vault: %w", err)
 	}
-	decryptCert, err := azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get decryption certificate from Azure Key Vault: %w", err)
+	var decryptCert crypto.Suite
+	if config.AzureConfig.KeyVaultConfig.DecryptCertName == "" {
+		if config.X509FileConfig.DecryptCertFile == "" {
+			return nil, fmt.Errorf("no decryption certificate provided in configuration")
+		}
+		privateKeyPem, err := os.ReadFile(config.X509FileConfig.DecryptCertFile)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read decryption certificate from file: %w", err)
+		}
+		privateKeyBytes, _ := pem.Decode(privateKeyPem)
+		rsaPrivateKey, err := x509.ParsePKCS8PrivateKey(privateKeyBytes.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("unable to parse decryption certificate: %w", err)
+		}
+		decryptCert = crypto.RsaSuite{PrivateKey: rsaPrivateKey.(*rsa.PrivateKey)}
+	} else {
+		decryptCert, err = azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get decryption certificate from Azure Key Vault: %w", err)
+		}
 	}
+
 	tlsClientCert, err := azkeyvault.GetTLSCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.ClientCertName, config.AzureConfig.KeyVaultConfig.ClientCertVersion)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get TLS client certificate from Azure Key Vault: %w", err)

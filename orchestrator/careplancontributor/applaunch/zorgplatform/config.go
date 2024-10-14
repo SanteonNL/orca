@@ -14,7 +14,12 @@ type Config struct {
 	Issuer    string `koanf:"iss"`
 	Audience  string `koanf:"aud"`
 
-	AzureConfig AzureConfig `koanf:"azure"`
+	AzureConfig    AzureConfig    `koanf:"azure"`
+	X509FileConfig X509FileConfig `koanf:"x509"`
+}
+
+type X509FileConfig struct {
+	DecryptCertFile string `koanf:"decryptcertfile"`
 }
 
 type AzureConfig struct {
