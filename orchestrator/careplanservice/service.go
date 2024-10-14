@@ -178,15 +178,27 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 	}
 	handler := s.handlerProvider(request.HttpMethod, getResourceType(request.ResourcePath))
 	if handler == nil {
-		// TODO: Monitor these, and disallow at a later moment
-		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
-		tx.Append(request.bundleEntry())
-		idx := len(tx.Entry) - 1
-		return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
-			return &txResult.Entry[idx], nil, nil
-		}, nil
+		return nil, fmt.Errorf("unsupported operation %s %s", request.HttpMethod, request.ResourcePath)
 	}
 	return handler(ctx, request, tx)
+}
+
+func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+	// TODO: Monitor these, and disallow at a later moment
+	log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
+	tx.Append(request.bundleEntry())
+	idx := len(tx.Entry) - 1
+	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+		var resultResource []byte
+		err := s.fhirClient.Read(*txResult.Entry[idx].Response.Location, &resultResource)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &fhir.BundleEntry{
+			Resource: resultResource,
+			Response: txResult.Entry[idx].Response,
+		}, nil, nil
+	}, nil
 }
 
 func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
@@ -316,7 +328,9 @@ func (s *Service) defaultHandlerProvider(method string, resourcePath string) fun
 			return s.handleUpdateTask
 		}
 	}
-	return nil
+	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+		return s.handleUnmanagedOperation(request, tx)
+	}
 }
 
 func (s Service) readRequest(httpRequest *http.Request, target interface{}) error {
