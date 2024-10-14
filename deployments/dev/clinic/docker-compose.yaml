@@ -32,7 +32,7 @@ services:
     ports:
       - "1305:1305"
   orchestrator:
-    image: ghcr.io/santeonnl/orca_orchestrator:main
+    image: ghcr.io/santeonnl/orca_orchestrator:local
     # build:
     #  context: ../../../orchestrator
     #  dockerfile: Dockerfile

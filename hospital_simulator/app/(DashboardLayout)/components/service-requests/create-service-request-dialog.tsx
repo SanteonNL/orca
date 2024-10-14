@@ -7,10 +7,31 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
-import { IconPlus } from '@tabler/icons-react';
-import { Alert, Grid, MenuItem, Select } from '@mui/material';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import {IconPlus} from '@tabler/icons-react';
+import {Alert, Grid, MenuItem, Select} from '@mui/material';
+import {useState} from 'react';
+import {useRouter} from 'next/navigation';
+
+
+class FHIROrganization {
+    name: string;
+    identifier: FHIRIdentifier;
+
+    constructor(name: string, identifier: FHIRIdentifier) {
+        this.name = name;
+        this.identifier = identifier;
+    }
+}
+
+class FHIRIdentifier {
+    system: string;
+    value: string;
+
+    constructor(system: string, value: string) {
+        this.system = system;
+        this.value = value;
+    }
+}
 
 const CreateServiceRequestDialog: React.FC = () => {
     const [open, setOpen] = React.useState(false);
@@ -28,7 +49,9 @@ const CreateServiceRequestDialog: React.FC = () => {
     };
 
     const createServiceRequest = async () => {
-        const bundle = createServiceRequestBundle(patientFirstName || "John", patientLastName || "Doe")
+        const requester = new FHIROrganization(process.env.ORCA_LOCAL_ORGANIZATION_NAME, new FHIRIdentifier("http://fhir.nl/fhir/NamingSystem/ura", process.env.ORCA_LOCAL_ORGANIZATION_URA));
+        const performer = new FHIROrganization(process.env.ORCA_REMOTE_ORGANIZATION_NAME, new FHIRIdentifier("http://fhir.nl/fhir/NamingSystem/ura", process.env.ORCA_REMOTE_ORGANIZATION_URA));
+        const bundle = createServiceRequestBundle(patientFirstName || "John", patientLastName || "Doe", requester, performer)
 
         const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir`, {
             method: "POST",
@@ -51,8 +74,9 @@ const CreateServiceRequestDialog: React.FC = () => {
     return (
 
         <React.Fragment>
-            <Button sx={{ position: 'absolute', top: '10px', right: '10px' }} variant="contained" onClick={handleClickOpen}>
-                <IconPlus />
+            <Button sx={{position: 'absolute', top: '10px', right: '10px'}} variant="contained"
+                    onClick={handleClickOpen}>
+                <IconPlus/>
             </Button>
             <Dialog
                 open={open}
@@ -70,7 +94,8 @@ const CreateServiceRequestDialog: React.FC = () => {
                         )}
                         <Grid item xs={12}>
                             <DialogContentText>
-                                Create a new ServiceRequest for a new Patient. For demo purposes, we can only create <i>Telemonitoring</i> ServiceRequests.
+                                Create a new ServiceRequest for a new Patient. For demo purposes, we can only
+                                create <i>Telemonitoring</i> ServiceRequests.
                             </DialogContentText>
                         </Grid>
                         <Grid item xs={12} md={6}>
@@ -117,7 +142,7 @@ const CreateServiceRequestDialog: React.FC = () => {
 
 export default CreateServiceRequestDialog
 
-function createServiceRequestBundle(firstName: string, lastName: string) {
+function createServiceRequestBundle(firstName: string, lastName: string, requester: FHIROrganization, performer: FHIROrganization) {
 
     const patientBsn = Date.now();
 
@@ -178,22 +203,21 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 }
             },
             {
-                "fullUrl": "urn:uuid:zorg-bij-jou-service-center",
+                "fullUrl": "urn:uuid:performer",
                 "resource": {
                     "resourceType": "Organization",
-                    "id": "zorg-bij-jou-service-center",
                     "identifier": [
                         {
-                            "system": "http://fhir.nl/fhir/NamingSystem/ura",
-                            "value": "URA-001"
+                            "system": `${performer.identifier.system}`,
+                            "value": `${performer.identifier.value}`
                         }
                     ],
-                    "name": "Zorg Bij Jou - Medisch Service Center"
+                    "name": `${performer.name}`
                 },
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/ura|URA-001"
+                    "ifNoneExist": `identifier=${performer.identifier.system}|${performer.identifier.value}`
                 }
             },
             {
@@ -282,22 +306,21 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 }
             },
             {
-                "fullUrl": "urn:uuid:stantonius",
+                "fullUrl": "urn:uuid:requester",
                 "resource": {
                     "resourceType": "Organization",
-                    "id": "StAntonius",
                     "identifier": [
                         {
-                            "system": "http://fhir.nl/fhir/NamingSystem/ura",
-                            "value": "URA-002"
+                            "system": `${requester.identifier.system}`,
+                            "value": `${requester.identifier.value}`
                         }
                     ],
-                    "name": "St. Antonius"
+                    "name": `${requester.name}`
                 },
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/ura|URA-002"
+                    "ifNoneExist": `identifier=${requester.identifier.system}|${requester.identifier.value}`
                 }
             },
             {
@@ -461,21 +484,21 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     },
                     "requester": {
                         "type": "Organization",
-                        "display": "St. Antonius",
-                        "reference": "urn:uuid:stantonius",
+                        "display": `${requester.name}`,
+                        "reference": "urn:uuid:requester",
                         "identifier": {
-                            "system": "http://fhir.nl/fhir/NamingSystem/ura",
-                            "value": "URA-002"
+                            "system": `${requester.identifier.system}`,
+                            "value": `${requester.identifier.value}`
                         }
                     },
                     "performer": [
                         {
                             "type": "Organization",
-                            "display": "Zorg Bij Jou - Medisch Service Center",
-                            "reference": "urn:uuid:zorg-bij-jou-service-center",
+                            "display": `${performer.name}`,
+                            "reference": "urn:uuid:performer",
                             "identifier": {
-                                "system": "http://fhir.nl/fhir/NamingSystem/ura",
-                                "value": "URA-001"
+                                "system": `${performer.identifier.system}`,
+                                "value": `${performer.identifier.value}`
                             }
                         }
                     ],

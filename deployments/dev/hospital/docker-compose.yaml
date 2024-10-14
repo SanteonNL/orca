@@ -41,7 +41,7 @@ services:
     ports:
       - "3003:3000"
   orchestrator:
-    image: ghcr.io/santeonnl/orca_orchestrator:main
+    image: ghcr.io/santeonnl/orca_orchestrator:local
     # build:
     #  context: ../../../orchestrator
     #  dockerfile: Dockerfile
@@ -63,14 +63,20 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
   ehr:
-    image: ghcr.io/santeonnl/orca_hospitalsimulator:main
-    # build:
-    #  context: ../../../hospital_simulator
-    #  dockerfile: Dockerfile
+#    image: ghcr.io/santeonnl/orca_hospitalsimulator:main
+    build:
+      context: ../../../hospital_simulator
+      dockerfile: Dockerfile
     ports:
       - "3001:3000"
     depends_on:
       - fhirstore
+    environment:
+      ORCA_LOCAL_ORGANIZATION_URA: 2
+      ORCA_LOCAL_ORGANIZATION_NAME: St. Antonius
+      ORCA_REMOTE_ORGANIZATION_URA: 1
+      ORCA_REMOTE_ORGANIZATION_NAME: Zorg Bij Jou - Medisch Service Center
+
 #  hospital_sof_adapter:
 #    build:
 #      context: ../../../smartonfhir_backend_adapter
