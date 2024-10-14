@@ -25,7 +25,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, err)
 	}
-	log.Info().Msgf("%v", task)
 
 	switch task.Status {
 	case fhir.TaskStatusRequested:

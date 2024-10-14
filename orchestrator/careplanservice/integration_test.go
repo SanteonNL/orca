@@ -98,7 +98,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	}
 	t.Log("Read CarePlan - Not in participants")
 	{
-		var fetchedCarePlan fhir.Task
+		var fetchedCarePlan fhir.CarePlan
 		err := invalidCarePlanContributor.Read("CarePlan/"+*carePlan.Id, &fetchedCarePlan)
 		require.Error(t, err)
 	}
