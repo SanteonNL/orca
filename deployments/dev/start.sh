@@ -106,7 +106,7 @@ CLINIC_URL_ESCAPED=$(sed 's/[&/\]/\\&/g' <<<"${CLINIC_URL}")
 sed "s/DiscoveryServerURL/${CLINIC_URL_ESCAPED}/" shared_config/discovery_input/homemonitoring.json > shared_config/discovery/homemonitoring.json
 echo "  Starting services"
 pushd clinic
-#docker compose pull
+docker compose pull
 NUTS_URL="${CLINIC_URL}" \
   docker compose up nutsnode --wait
 CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/orca/cps"
@@ -130,7 +130,7 @@ echo "  Creating devtunnel"
 HOSPITAL_URL=$(createTunnel ./hospital 9080)
 echo "  Starting services"
 pushd hospital
-#docker compose pull
+docker compose pull
 NUTS_URL="${HOSPITAL_URL}" \
   docker compose up nutsnode --wait
 echo "  Creating DID document"

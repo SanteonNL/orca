@@ -41,7 +41,7 @@ services:
     ports:
       - "3003:3000"
   orchestrator:
-    image: ghcr.io/santeonnl/orca_orchestrator:local
+    image: ghcr.io/santeonnl/orca_orchestrator:main
     # build:
     #  context: ../../../orchestrator
     #  dockerfile: Dockerfile
@@ -63,10 +63,10 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
   ehr:
-#    image: ghcr.io/santeonnl/orca_hospitalsimulator:main
-    build:
-      context: ../../../hospital_simulator
-      dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_hospitalsimulator:main
+    # build:
+    #  context: ../../../hospital_simulator
+    #  dockerfile: Dockerfile
     ports:
       - "3001:3000"
     depends_on:
