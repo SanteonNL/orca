@@ -5,11 +5,11 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -18,7 +18,7 @@ import (
 )
 
 // requestHcpRst requests an HCP token from the Zorgplatform STS
-func (s *Service) requestHcpRst(launchContext LaunchContext) (string, error) {
+func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	// Create the SAML assertion
 	assertion, err := s.createSAMLAssertion(launchContext)
 	if err != nil {
@@ -46,14 +46,10 @@ func (s *Service) requestHcpRst(launchContext LaunchContext) (string, error) {
 	}
 
 	// Set up HTTPS client with mutual TLS
-	//TODO: Load key (s.config.AzureConfig.KeyVaultConfig.TlsCertName) from Azure Key Vault
-	tlsCert, err := tls.LoadX509KeyPair("TODO_REPLACE_WITH_AZURE_KV", "TODO_REPLACE_WITH_AZURE_KV")
-	if err != nil {
-		return "", err
-	}
 	tlsConfig := &tls.Config{
-		Certificates: []tls.Certificate{tlsCert},
-		MinVersion:   tls.VersionTLS12,
+		Certificates:  []tls.Certificate{*s.tlsClientCertificate},
+		MinVersion:    tls.VersionTLS12,
+		Renegotiation: tls.RenegotiateOnceAsClient,
 	}
 	transport := &http.Transport{
 		TLSClientConfig: tlsConfig,
@@ -98,7 +94,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 
 	// Issuer
 	issuer := assertion.CreateElement("Issuer")
-	issuer.SetText(s.config.Issuer) // Replace with your HL7 OID, e.g., "urn:oid:YOUR_HL7_OID"
+	issuer.SetText(s.config.Issuer)
 
 	// Subject
 	subject := assertion.CreateElement("Subject")
@@ -113,7 +109,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 	conditions.CreateAttr("NotOnOrAfter", time.Now().Add(15*time.Minute).UTC().Format(time.RFC3339))
 	audienceRestriction := conditions.CreateElement("AudienceRestriction")
 	audience := audienceRestriction.CreateElement("Audience")
-	audience.SetText(s.config.Audience) // "https://zorgplatform.online"
+	audience.SetText(s.config.Audience)
 
 	// AttributeStatement
 	attributeStatement := assertion.CreateElement("AttributeStatement")
@@ -192,15 +188,15 @@ func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error
 	if err != nil {
 		return nil, fmt.Errorf("canonicalization failed: %w", err)
 	}
-
 	// 5. Sign the Digest of SignedInfo
-	signature, err := s.signingCertificate.SigningKey().Sign(rand.Reader, []byte(canonicalizedSignedInfo), crypto.SHA256)
+	canonSignedInfoHash := sha256.Sum256([]byte(canonicalizedSignedInfo))
+	signature, err := s.signingCertificate.SigningKey().Sign(rand.Reader, canonSignedInfoHash[:], crypto.SHA256)
 	if err != nil {
 		return nil, fmt.Errorf("signing failed: %w", err)
 	}
 
 	// 6. Construct the Signature Element
-	signatureElement, err := s.createSignatureElement(signedInfo, string(signature)) // TODO: Shouldn't this be base64 encoded?
+	signatureElement, err := s.createSignatureElement(signedInfo, base64.StdEncoding.EncodeToString(signature))
 	if err != nil {
 		return nil, err
 	}
@@ -272,12 +268,15 @@ func (s *Service) createSignatureElement(signedInfo *etree.Element, signatureVal
 	x509Data := keyInfo.CreateElement("X509Data")
 	x509Certificate := x509Data.CreateElement("X509Certificate")
 
-	// Load your public certificate
-	certData, err := os.ReadFile(s.config.AzureConfig.KeyVaultConfig.SignCertName)
+	// Load public certificate
+	certData := s.signingCertificate.SigningKey().Public()
+
+	certPEM, err := x509.MarshalPKIXPublicKey(certData)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to marshal public key: %w", err)
 	}
-	certBlock := strings.ReplaceAll(string(certData), "-----BEGIN CERTIFICATE-----", "")
+
+	certBlock := strings.ReplaceAll(string(certPEM), "-----BEGIN CERTIFICATE-----", "")
 	certBlock = strings.ReplaceAll(certBlock, "-----END CERTIFICATE-----", "")
 	certBlock = strings.ReplaceAll(certBlock, "\n", "")
 	x509Certificate.SetText(certBlock)

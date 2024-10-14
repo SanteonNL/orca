@@ -7,16 +7,17 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
-	"net/http"
-	"net/url"
-	"os"
-	"strings"
 )
 
 const launcherKey = "zorgplatform"
@@ -121,13 +122,24 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
-
+	
 	// TODO: Remove this debug logging later
 	log.Info().Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
-
+	
 	//TODO: launchContext.Practitioner needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
 	// Cache FHIR resources that don't exist in the EHR in the session,
 	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
+	
+	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
+	acessToken, err := s.RequestHcpRst(launchContext)
+	
+	if err != nil {
+		log.Error().Err(err).Msg("unable to request access token for HCP ProfessionalService")
+		http.Error(response, "Application launch failed.", http.StatusBadRequest)
+	}
+
+	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s", acessToken)
+		
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: launcherKey,

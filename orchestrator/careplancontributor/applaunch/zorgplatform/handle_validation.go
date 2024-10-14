@@ -1,13 +1,15 @@
 package zorgplatform
 
 import (
+	"encoding/base64"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/braineet/saml/xmlenc"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"strings"
-	"time"
 
 	"github.com/beevik/etree"
 	"github.com/rs/zerolog/log"
@@ -27,7 +29,12 @@ type LaunchContext struct {
 func (s *Service) parseSamlResponse(samlResponse string) (LaunchContext, error) {
 	// TODO: Implement the SAML token validation logic
 	doc := etree.NewDocument()
-	err := doc.ReadFromString(samlResponse)
+	decodedResponse, err := base64.StdEncoding.DecodeString(samlResponse)
+	if err != nil {
+		return LaunchContext{}, fmt.Errorf("unable to decode base64 SAML response: %w", err)
+	}
+
+	err = doc.ReadFromString(string(decodedResponse))
 
 	if err != nil {
 		return LaunchContext{}, fmt.Errorf("unable to parse XML: %w", err)
@@ -189,25 +196,26 @@ func (s *Service) extractPractitioner(assertion *etree.Element) (*fhir.Practitio
 		}
 		result.Identifier = []fhir.Identifier{identifier}
 	}
-	// Name (e.g.: Jansen, Doctor)
+	// Name (e.g.: Jansen, Doctor - optional)
 	{
 
-		value, err := getSubjectAttribute(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
-		if err != nil {
-			return nil, err
-		}
-		parts := strings.Split(value, ",")
-		result.Name = []fhir.HumanName{
-			{
-				Text: to.Ptr(value),
-			},
-		}
-		result.Name[0].Family = to.Ptr(strings.TrimSpace(parts[0]))
-		if len(parts) > 1 {
-			result.Name[0].Given = []string{strings.TrimSpace(parts[1])}
-		}
-		if len(parts) > 2 {
-			result.Name[0].Prefix = []string{strings.TrimSpace(parts[2])}
+		value, _ := getSubjectAttribute(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
+		if value != "" {
+			parts := strings.Split(value, ",")
+			result.Name = []fhir.HumanName{
+				{
+					Text: to.Ptr(value),
+				},
+			}
+			result.Name[0].Family = to.Ptr(strings.TrimSpace(parts[0]))
+			if len(parts) > 1 {
+				result.Name[0].Given = []string{strings.TrimSpace(parts[1])}
+			}
+			if len(parts) > 2 {
+				result.Name[0].Prefix = []string{strings.TrimSpace(parts[2])}
+			}
+		} else {
+			log.Debug().Msg("Name attribute not found")
 		}
 	}
 	// Role (e.g.: <Role code="223366009" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT"/>)
@@ -239,16 +247,18 @@ func (s *Service) extractPractitioner(assertion *etree.Element) (*fhir.Practitio
 			},
 		}
 	}
-	// E-mail
+	// E-mail (optional field)
 	{
-		value, err := getSubjectAttribute(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")
-		if err != nil {
-			return nil, err
+		value, _ := getSubjectAttribute(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")
+
+		if value != "" {
+			result.Telecom = append(result.Telecom, fhir.ContactPoint{
+				System: to.Ptr(fhir.ContactPointSystemEmail),
+				Value:  to.Ptr(value),
+			})
+		} else {
+			log.Debug().Msg("Email attribute not found")
 		}
-		result.Telecom = append(result.Telecom, fhir.ContactPoint{
-			System: to.Ptr(fhir.ContactPointSystemEmail),
-			Value:  to.Ptr(value),
-		})
 	}
 
 	return &result, nil
