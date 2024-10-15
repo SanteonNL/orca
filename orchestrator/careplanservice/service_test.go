@@ -5,14 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -99,6 +102,69 @@ func TestService_ErrorHandling(t *testing.T) {
 	require.NotNil(t, target)
 	require.NotEmpty(t, target.Issue)
 	require.Equal(t, "CarePlanService/CreateTask failed: invalid fhir.Task: unexpected end of JSON input", *target.Issue[0].Diagnostics)
+}
+
+func TestService_DefaultOperationHandler(t *testing.T) {
+	t.Run("handles unmanaged FHIR operations", func(t *testing.T) {
+		// For now, we allow unmanaged FHIR operations. Unmanaged operations are operations (e.g. POST ServiceRequest)
+		// which aren't explicitly implemented in the CarePlanService API. We currently allow these, as we know
+		// some operations are required, but not implemented yet.
+		tx := coolfhir.Transaction()
+		// The unmanaged operation handler reads the resource to return from the result Bundle,
+		// from the same index as the resource it added to the transaction Bundle. To test this,
+		// we make sure there's 2 other resources in the Bundle.
+		tx.Create(fhir.Task{})
+		txResultBundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransaction,
+			Entry: []fhir.BundleEntry{
+				{
+					Response: &fhir.BundleEntryResponse{
+						Location: to.Ptr("Task/456"),
+						Status:   "201 Created",
+					},
+				},
+				{
+					Response: &fhir.BundleEntryResponse{
+						Location: to.Ptr("ServiceRequest/123"),
+						Status:   "201 Created",
+					},
+				},
+				{
+					Response: &fhir.BundleEntryResponse{
+						Location: to.Ptr("Task/789"),
+						Status:   "201 Created",
+					},
+				},
+			},
+		}
+		expectedServiceRequest := fhir.ServiceRequest{
+			Id: to.Ptr("123"),
+		}
+		expectedServiceRequestJson, _ := json.Marshal(expectedServiceRequest)
+		request := FHIRHandlerRequest{
+			ResourcePath: "ServiceRequest",
+			HttpMethod:   http.MethodPost,
+		}
+		ctrl := gomock.NewController(t)
+		fhirClient := mock.NewMockClient(ctrl)
+		fhirClient.EXPECT().Read("ServiceRequest/123", gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ string, resultResource interface{}, opts ...fhirclient.Option) error {
+				reflect.ValueOf(resultResource).Elem().Set(reflect.ValueOf(expectedServiceRequestJson))
+				return nil
+			})
+		service := Service{
+			fhirClient: fhirClient,
+		}
+
+		resultHandler, err := service.handleUnmanagedOperation(request, tx)
+		require.NoError(t, err)
+		resultBundleEntry, notifications, err := resultHandler(&txResultBundle)
+
+		require.NoError(t, err)
+		require.Empty(t, notifications)
+		assert.JSONEq(t, string(expectedServiceRequestJson), string(resultBundleEntry.Resource))
+		assert.Equal(t, "ServiceRequest/123", *resultBundleEntry.Response.Location)
+	})
 }
 
 func TestService_Handle(t *testing.T) {
@@ -366,52 +432,4 @@ func TestService_Handle(t *testing.T) {
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/UpdateOrganization failed: this fails on purpose")
 		})
 	})
-
-}
-
-func TestService_handleTransactionEntry(t *testing.T) {
-	task := fhir.Task{
-		Intent: "order",
-	}
-	taskJson, _ := json.Marshal(task)
-	ctx := context.Background()
-
-	service := &Service{
-		handlerProvider: func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-			return nil
-		},
-	}
-
-	t.Run("unhandled POST, allowed", func(t *testing.T) {
-		fhirRequest := FHIRHandlerRequest{
-			ResourceData: taskJson,
-			HttpMethod:   http.MethodPost,
-			ResourcePath: "Task",
-		}
-
-		tx := coolfhir.Transaction()
-		result, err := service.handleTransactionEntry(ctx, fhirRequest, tx)
-
-		require.NoError(t, err)
-		require.Len(t, tx.Entry, 1)
-		assert.Equal(t, fhir.HTTPVerbPOST, tx.Entry[0].Request.Method)
-		assert.Equal(t, "Task", tx.Entry[0].Request.Url)
-		assert.JSONEq(t, string(taskJson), string(tx.Entry[0].Resource))
-
-		resultBundle := fhir.Bundle{
-			Type: fhir.BundleTypeTransaction,
-			Entry: []fhir.BundleEntry{
-				{
-					Response: &fhir.BundleEntryResponse{
-						Location: to.Ptr("Task/123"),
-					},
-				},
-			},
-		}
-		resultEntry, notifications, err := result(&resultBundle)
-		require.NoError(t, err)
-		require.Empty(t, notifications)
-		assert.Equal(t, "Task/123", *resultEntry.Response.Location)
-	})
-
 }
