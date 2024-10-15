@@ -7,31 +7,13 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
-import {IconPlus} from '@tabler/icons-react';
-import {Alert, Grid, MenuItem, Select} from '@mui/material';
-import {useState} from 'react';
-import {useRouter} from 'next/navigation';
+import { IconPlus } from '@tabler/icons-react';
+import { Alert, Grid, MenuItem, Select } from '@mui/material';
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { Identifier, Organization } from 'fhir/r4';
 
 
-class FHIROrganization {
-    name: string;
-    identifier: FHIRIdentifier;
-
-    constructor(name: string, identifier: FHIRIdentifier) {
-        this.name = name;
-        this.identifier = identifier;
-    }
-}
-
-class FHIRIdentifier {
-    system: string;
-    value: string;
-
-    constructor(system: string, value: string) {
-        this.system = system;
-        this.value = value;
-    }
-}
 
 const CreateServiceRequestDialog: React.FC = () => {
     const [open, setOpen] = React.useState(false);
@@ -49,8 +31,7 @@ const CreateServiceRequestDialog: React.FC = () => {
     };
 
     const createServiceRequest = async () => {
-        const requester = new FHIROrganization(process.env.ORCA_LOCAL_ORGANIZATION_NAME, new FHIRIdentifier("http://fhir.nl/fhir/NamingSystem/ura", process.env.ORCA_LOCAL_ORGANIZATION_URA));
-        const performer = new FHIROrganization(process.env.ORCA_REMOTE_ORGANIZATION_NAME, new FHIRIdentifier("http://fhir.nl/fhir/NamingSystem/ura", process.env.ORCA_REMOTE_ORGANIZATION_URA));
+
         const bundle = createServiceRequestBundle(patientFirstName || "John", patientLastName || "Doe", requester, performer)
 
         const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir`, {
@@ -74,9 +55,9 @@ const CreateServiceRequestDialog: React.FC = () => {
     return (
 
         <React.Fragment>
-            <Button sx={{position: 'absolute', top: '10px', right: '10px'}} variant="contained"
-                    onClick={handleClickOpen}>
-                <IconPlus/>
+            <Button sx={{ position: 'absolute', top: '10px', right: '10px' }} variant="contained"
+                onClick={handleClickOpen}>
+                <IconPlus />
             </Button>
             <Dialog
                 open={open}
@@ -142,7 +123,30 @@ const CreateServiceRequestDialog: React.FC = () => {
 
 export default CreateServiceRequestDialog
 
-function createServiceRequestBundle(firstName: string, lastName: string, requester: FHIROrganization, performer: FHIROrganization) {
+// TODO: This is a client-side component, meaning it has no access to process.env variables. It will use the fallback values until fixed
+const requesterIdentifier: Identifier = {
+    system: "http://fhir.nl/fhir/NamingSystem/ura",
+    value: process.env.ORCA_LOCAL_ORGANIZATION_URA || "URA-001"
+}
+
+const performerIdentifier: Identifier = {
+    system: "http://fhir.nl/fhir/NamingSystem/ura",
+    value: process.env.ORCA_REMOTE_ORGANIZATION_URA || "URA-002"
+}
+
+const requester: Organization = {
+    resourceType: "Organization",
+    name: process.env.ORCA_LOCAL_ORGANIZATION_NAME || "Requester",
+    identifier: [requesterIdentifier]
+}
+
+const performer: Organization = {
+    resourceType: "Organization",
+    name: process.env.ORCA_REMOTE_ORGANIZATION_NAME || "Performer",
+    identifier: [performerIdentifier]
+}
+
+function createServiceRequestBundle(firstName: string, lastName: string, requester: Organization, performer: Organization) {
 
     const patientBsn = Date.now();
 
@@ -204,20 +208,11 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
             },
             {
                 "fullUrl": "urn:uuid:performer",
-                "resource": {
-                    "resourceType": "Organization",
-                    "identifier": [
-                        {
-                            "system": `${performer.identifier.system}`,
-                            "value": `${performer.identifier.value}`
-                        }
-                    ],
-                    "name": `${performer.name}`
-                },
+                "resource": performer,
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": `identifier=${performer.identifier.system}|${performer.identifier.value}`
+                    "ifNoneExist": `identifier=${performerIdentifier.system}|${performerIdentifier.value}`
                 }
             },
             {
@@ -307,20 +302,11 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
             },
             {
                 "fullUrl": "urn:uuid:requester",
-                "resource": {
-                    "resourceType": "Organization",
-                    "identifier": [
-                        {
-                            "system": `${requester.identifier.system}`,
-                            "value": `${requester.identifier.value}`
-                        }
-                    ],
-                    "name": `${requester.name}`
-                },
+                "resource": requester,
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": `identifier=${requester.identifier.system}|${requester.identifier.value}`
+                    "ifNoneExist": `identifier=${requesterIdentifier.system}|${requesterIdentifier.value}`
                 }
             },
             {
@@ -487,8 +473,8 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
                         "display": `${requester.name}`,
                         "reference": "urn:uuid:requester",
                         "identifier": {
-                            "system": `${requester.identifier.system}`,
-                            "value": `${requester.identifier.value}`
+                            "system": `${requesterIdentifier.system}`,
+                            "value": `${requesterIdentifier.value}`
                         }
                     },
                     "performer": [
@@ -497,8 +483,8 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
                             "display": `${performer.name}`,
                             "reference": "urn:uuid:performer",
                             "identifier": {
-                                "system": `${performer.identifier.system}`,
-                                "value": `${performer.identifier.value}`
+                                "system": `${performerIdentifier.system}`,
+                                "value": `${performerIdentifier.value}`
                             }
                         }
                     ],
