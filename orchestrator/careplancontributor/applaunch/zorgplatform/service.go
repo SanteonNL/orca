@@ -74,17 +74,34 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		}
 	}
 
-	tlsClientCert, err := azkeyvault.GetTLSCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.ClientCertName, config.AzureConfig.KeyVaultConfig.ClientCertVersion)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get TLS client certificate from Azure Key Vault: %w", err)
+	var tlsClientCert tls.Certificate
+	if config.AzureConfig.KeyVaultConfig.ClientCertName == "" {
+		if config.X509FileConfig.ClientCertFile == "" {
+			return nil, fmt.Errorf("no TLS client certificate provided in configuration")
+		}
+		certFileContents, err := os.ReadFile(config.X509FileConfig.ClientCertFile)
+		if err != nil {
+			return nil, fmt.Errorf("unable to read TLS client certificate from file: %w", err)
+		}
+		tlsClientCert, err = tls.X509KeyPair(certFileContents, certFileContents)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create TLS client certificate: %w", err)
+		}
+	} else {
+		tlsClientCertPtr, err := azkeyvault.GetTLSCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.ClientCertName, config.AzureConfig.KeyVaultConfig.ClientCertVersion)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get TLS client certificate from Azure Key Vault: %w", err)
+		}
+		tlsClientCert = *tlsClientCertPtr
 	}
+
 	return &Service{
 		sessionManager:       sessionManager,
 		config:               config,
 		baseURL:              baseURL,
 		landingUrlPath:       landingUrlPath,
 		signingCertificate:   signingCert,
-		tlsClientCertificate: tlsClientCert,
+		tlsClientCertificate: &tlsClientCert,
 		decryptCertificate:   decryptCert,
 	}, nil
 }
@@ -122,24 +139,24 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
-	
+
 	// TODO: Remove this debug logging later
 	log.Info().Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
-	
+
 	//TODO: launchContext.Practitioner needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
 	// Cache FHIR resources that don't exist in the EHR in the session,
 	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
-	
+
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
 	acessToken, err := s.RequestHcpRst(launchContext)
-	
+
 	if err != nil {
 		log.Error().Err(err).Msg("unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 	}
 
 	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s", acessToken)
-		
+
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: launcherKey,
