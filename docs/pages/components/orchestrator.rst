@@ -3,6 +3,8 @@
 Orchestrator
 ############
 
+Code: https://github.com/SanteonNL/orca/tree/main/orchestrator
+
 Configuration
 *************
 
@@ -32,7 +34,7 @@ Configuration
       - base URL of the CarePlanService at which the CarePlanContributor creates/reads CarePlans
     * - ``ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL``
       -
-      - base URL of the Orca Frontend
+      - base URL of the ORCA Frontend
     * - ``ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_CLIENTID``
       -
       - 
@@ -80,7 +82,7 @@ Configuration
 Endpoints
 *********
 
-.. list-table:: Orca Endpoints
+.. list-table:: Orchestrator Endpoints
     :header-rows: 1
 
     * - Method
@@ -116,31 +118,31 @@ Endpoints
       - Path
       - Description
     * - ``POST``
-      - ``/contrib/fhir/notify``
+      - ``/cpc/fhir/notify``
       - Handles incoming FHIR notifications
     * - ``GET``
-      - ``/contrib/fhir/*`` (future ``/cpc/*``)
+      - ``/cpc/fhir/*`` (future ``/cpc/*``)
       - Proxies request to ????? EHR after authorization based on the CarePlan
     * - ``GET``
-      - ``/contrib/context``
+      - ``/cpc/context``
       - Returns 
     * - ``GET``
-      - ``/contrib/patient``
+      - ``/cpc/patient``
       - 
     * - ``GET``
-      - ``/contrib/practitioner``
+      - ``/cpc/practitioner``
       - 
     * - ``GET``
-      - ``/contrib/serviceRequest``
+      - ``/cpc/serviceRequest``
       - 
     * - ``GET``
-      - ``/contrib/ehr/fhir/*``
+      - ``/cpc/ehr/fhir/*``
       - 
     * - ``GET``
-      - ``/contrib/cps/fhir/*``
+      - ``/cpc/cps/fhir/*``
       - 
     * - ``GET``
-      - ``/contrib/``
+      - ``/cpc/``
       - Redirect to Frontend
     * - ``GET``
       - ``/smart-app-launch``

@@ -1,5 +1,5 @@
 # Azure Bicep Deployment
-This Orca deployment targets Azure through Bicep.
+This ORCA deployment targets Azure through Bicep.
 
 It deploys the following resources:
 

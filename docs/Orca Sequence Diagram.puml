@@ -9,14 +9,14 @@ legend top
    - A care professional using local XIS to access FHIR APIs at one or more remote XIS's.
    - A care professional from another care organization, using a remote XIS to access the FHIR APIs at the local XIS.
 
-   The local XIS uses Orca to offload localisation, authentication and data retrieval (or writing).
+   The local XIS uses ORCA to offload localisation, authentication and data retrieval (or writing).
    Low-level browser/OAuth2 interactions are not omitted for brevity/clarity.
 end legend
 
 box "Local Care Organization" #Lavender
     actor LocalCP as "Care Professional"
     participant LocalXIS as "XIS"
-    participant LocalOrca as "Orca"
+    participant LocalOrca as "ORCA"
 end box
 participant CPS as "Care Plan Service"
 

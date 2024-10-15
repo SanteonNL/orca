@@ -1,8 +1,8 @@
-# Orca Deployments
-This directory contains example Orca deployments.
+# ORCA Deployments
+This directory contains example ORCA deployments.
 
 ## dev
-A development environment for testing, developing or demo-ing Orca services. It uses FHIR data from the public SMART on FHIR Sandbox.
+A development environment for testing, developing or demo-ing ORCA services. It uses FHIR data from the public SMART on FHIR Sandbox.
 Is uses Microsoft DevTunnel to make DIDs resolvable.
 Pre-requisites:
 - Docker Compose
