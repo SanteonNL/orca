@@ -6,12 +6,12 @@ Overview
 Roles
 *****
 
-Orca provides a reference implementation for the two roles defined by the `Shared Care Planning <https://santeonnl.github.io/shared-care-planning/>`_ (SCP) specification:
+ORCA provides a reference implementation for the two roles defined by the `Shared Care Planning <https://santeonnl.github.io/shared-care-planning/>`_ (SCP) specification:
 
 - `Care Plan Contributor <https://santeonnl.github.io/shared-care-planning/overview.html#care-plan-contributor>`_ (CPC) role allows SCP participants to access EHRs with authorization based on Care Plan membership
 - `Care Plan Service <https://santeonnl.github.io/shared-care-planning/overview.html#care-plan-service>`_ (CPS) role manages Care Plans
 
-The following depicts an Orca setup providing both the CPC role and the optional CPS role. *(Nuts, is not a SCP role, but a trust layer used for asserting identity of SCP participants.)*
+The following depicts an OrORCAca setup providing both the CPC role and the optional CPS role. *(Nuts, is not a SCP role, but a trust layer used for asserting identity of SCP participants.)*
 
 .. image:: ../../_static/images/Shared\ Care\ Planning\ Network-CPC+CPS.drawio.svg
     :alt: Typical Shared Care Planning Network
@@ -32,10 +32,10 @@ A typical SCP network would consist of various hospitals, general practitioners,
 Components
 **********
 
-Each Orca deployment contains at least the following two components:
+Each ORCA deployment contains at least the following two components:
 
 - **Orchestrator:** provides the reference implementations of the CPC and CPS roles
-- **Frontend:** provides a frontend for Orca, allows filling of Questionnaires
+- **Frontend:** provides a frontend for ORCA, allows filling of Questionnaires
 - **Nuts:** provides a distributed trust network, which is used in Shared Care Planning to obtain authentication tokens for authentication to other Shared Care Planning participants (see `Nuts <https://nuts.nl/>`_)
 - **Nuts Admin:** provides an admin interface for Nuts
 

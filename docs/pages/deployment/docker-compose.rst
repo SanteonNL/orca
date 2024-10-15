@@ -3,7 +3,7 @@
 Running with Docker Compose
 ###########################
 
-Thuis guide helps you to run the Orca node in Docker with Docker Compose.
+Thuis guide helps you to run the ORCA node in Docker with Docker Compose.
 
 Examples
 ********

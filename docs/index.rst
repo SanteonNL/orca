@@ -1,10 +1,10 @@
 .. _orca-documentation:
 
 ##################
-Orca Documentation
+ORCA Documentation
 ##################
 
-Orca is a reference implementation of `Shared Care Planning <https://santeonnl.github.io/shared-care-planning/>`_ (SCP).
+ORCA is a reference implementation of `Shared Care Planning <https://santeonnl.github.io/shared-care-planning/>`_ (SCP).
 
 Code: https://github.com/SanteonNL/orca
 
@@ -36,4 +36,5 @@ Code: https://github.com/SanteonNL/orca
     pages/components/nuts-admin.rst
     pages/components/hospital-simulator.rst
     pages/components/viewer-simulator.rst
+    pages/components/reverse-proxy.rst
 

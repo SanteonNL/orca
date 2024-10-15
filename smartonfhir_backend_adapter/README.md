@@ -1,5 +1,5 @@
 # SMART on FHIR Backend Adapter
-This application proxies incoming FHIR data exchanges to a SMART on FHIR-enabled XIS as part of an Orca deployment.
+This application proxies incoming FHIR data exchanges to a SMART on FHIR-enabled XIS as part of an ORCA deployment.
 It authenticates to the SMART on FHIR API through SMART on FHIR OAuth2 Backend.
 
 It can use a private key in JWK format from a local file to sign JWTs for OAuth2 authentication,

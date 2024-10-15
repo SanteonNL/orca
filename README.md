@@ -1,4 +1,4 @@
-# Orca
+# ORCA
 ORCA (**O**pen source **R**eference-implementation shared **CA**replanning) implements the [Shared Care Planning specification](https://santeonnl.github.io/shared-care-planning/).
 
 ## Features

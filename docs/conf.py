@@ -19,9 +19,9 @@ sys.path.insert(0, os.path.abspath('.'))
 
 # -- Project information -----------------------------------------------------
 
-project = u'Orca Node'
-copyright = u'2024, Orca community'
-author = u'Orca Node'
+project = u'ORCA Node'
+copyright = u'2024, ORCA community'
+author = u'ORCA community'
 
 # The short X.Y version
 version = u''
@@ -136,8 +136,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'OrcaNode.tex', u'Orca Node Documentation',
-     u'Orca community', 'manual'),
+    (master_doc, 'OrcaNode.tex', u'ORCA Node Documentation',
+     u'ORCA community', 'manual'),
 ]
 
 
@@ -146,7 +146,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'Orcanode', u'Orca Node Documentation',
+    (master_doc, 'Orcanode', u'ORCA Node Documentation',
      [author], 1)
 ]
 
@@ -157,8 +157,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'OrcaNode', u'Orca Node Documentation',
-     author, 'OrcaNode', 'One line description of project.',
+    (master_doc, 'OrcaNode', u'ORCA Node Documentation',
+     author, 'OrcaNode', 'ORCA provides a reference implementation for Shared Care Planning',
      'Miscellaneous'),
 ]
 

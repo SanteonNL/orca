@@ -3,4 +3,4 @@
 Azure
 #####
 
-This guide helps you to run the Orca node in Azure.
+This guide helps you to run the ORCA node in Azure.
