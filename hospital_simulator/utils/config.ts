@@ -1,6 +1,6 @@
 "use server"
 
-import {Bundle, Organization} from "fhir/r4"
+import { Bundle, Organization } from "fhir/r4"
 
 export const getEnrollmentUrl = async (patientId: string, serviceRequestId: string) => {
 
@@ -23,7 +23,7 @@ export const getEnrollmentUrl = async (patientId: string, serviceRequestId: stri
 
 }
 
-export const getLocalOrganization = async (): Promise<Organization> => {
+export const getLocalOrganization = async () => {
     const ura = process.env.ORCA_LOCAL_ORGANIZATION_URA;
     if (!ura) {
         throw new Error('ORCA_LOCAL_ORGANIZATION_URA is not defined');
@@ -32,10 +32,10 @@ export const getLocalOrganization = async (): Promise<Organization> => {
     if (!name) {
         throw new Error('ORCA_LOCAL_ORGANIZATION_NAME is not defined');
     }
-    return new Promise((resolve) => resolve(toOrganization(name, ura)));
+    return toOrganization(name, ura);
 }
 
-export const getTaskPerformerOrganization = async (): Promise<Organization> => {
+export const getTaskPerformerOrganization = async () => {
     const ura = process.env.ORCA_PERFORMER_ORGANIZATION_URA;
     if (!ura) {
         throw new Error('ORCA_PERFORMER_ORGANIZATION_URA is not defined');
@@ -44,10 +44,10 @@ export const getTaskPerformerOrganization = async (): Promise<Organization> => {
     if (!name) {
         throw new Error('ORCA_PERFORMER_ORGANIZATION_NAME is not defined');
     }
-    return new Promise((resolve) => resolve(toOrganization(name, ura)));
+    return toOrganization(name, ura);
 }
 
-function toOrganization(name: string, ura: string): Organization {
+function toOrganization(name: string, ura: string) {
     return {
         resourceType: "Organization",
         name: name,
