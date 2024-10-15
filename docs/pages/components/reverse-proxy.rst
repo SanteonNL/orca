@@ -20,7 +20,7 @@ The following mapping is suggested.
     * - ``/frontend/``
       - :doc:`/pages/components/frontend`
       - ``/frontend/api/health``
-      - FIXME: mTLS?
+      - internal
     * - ``/nuts/``
       - :doc:`/pages/components/nuts` (Public API)
       - ``/health`` (Internal API!)
@@ -32,7 +32,7 @@ The following mapping is suggested.
     * - ``/admin/``
       - :doc:`/pages/components/nuts-admin`
       - ``/``
-      - FIXME: public?
+      - internal
 
 In test environments you might also want to expose the simulators, in that case we suggest the following mapping.
 
@@ -46,8 +46,8 @@ In test environments you might also want to expose the simulators, in that case 
     * - ``/ehr/``
       - :doc:`/pages/components/hospital-simulator`
       - ``/ehr/api/health``
-      - FIXME: public?
+      - internal
     * - ``/viewer/``
       - :doc:`/pages/components/viewer-simulator`
       - ``/viewer/api/health``
-      - FIXME: public?
+      - internal
