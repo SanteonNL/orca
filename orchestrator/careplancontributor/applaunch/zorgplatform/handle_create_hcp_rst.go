@@ -7,14 +7,17 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/beevik/etree"
 	"github.com/google/uuid"
+	"github.com/russellhaering/goxmldsig"
 )
 
 // requestHcpRst requests an HCP token from the Zorgplatform STS
@@ -59,6 +62,9 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	}
 
 	// Send the request
+	fmt.Println("SOAP request body:")
+	fmt.Println(soapXML)
+
 	req, err := http.NewRequest("POST", s.config.StsUrl, strings.NewReader(soapXML))
 	if err != nil {
 		return "", err
@@ -94,7 +100,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 
 	// Issuer
 	issuer := assertion.CreateElement("Issuer")
-	issuer.SetText(s.config.Issuer)
+	issuer.SetText(s.config.OwnIssuer)
 
 	// Subject
 	subject := assertion.CreateElement("Subject")
@@ -109,7 +115,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 	conditions.CreateAttr("NotOnOrAfter", time.Now().Add(15*time.Minute).UTC().Format(time.RFC3339))
 	audienceRestriction := conditions.CreateElement("AudienceRestriction")
 	audience := audienceRestriction.CreateElement("Audience")
-	audience.SetText(s.config.Audience)
+	audience.SetText("https://zorgplatform.online") //todo: config
 
 	// AttributeStatement
 	attributeStatement := assertion.CreateElement("AttributeStatement")
@@ -201,27 +207,40 @@ func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error
 		return nil, err
 	}
 
-	// 7. Embed the Signature in the Assertion
-	assertion.AddChild(signatureElement)
+	// 7. Find the Issuer element
+	issuerIndex := -1
+	for i, child := range assertion.ChildElements() {
+		if child.Tag == "Issuer" {
+			issuerIndex = i
+			break
+		}
+	}
+
+	if issuerIndex == -1 {
+		return nil, fmt.Errorf("issuer element not found")
+	}
+
+	// 8. Insert the Signature element directly after the Issuer element (SAML:2.0 requirement)
+	assertion.InsertChildAt(issuerIndex+1, signatureElement)
 
 	return assertion, nil
 }
 
 // canonicalize performs Exclusive XML Canonicalization on the provided element
-func canonicalize(element *etree.Element) (string, error) {
-	doc := etree.NewDocument()
-	doc.SetRoot(element.Copy())
-	canonicalXML, err := doc.WriteToString()
+func canonicalize(element *etree.Element) ([]byte, error) {
+	ctx := dsig.NewDefaultSigningContext(nil)
+	ctx.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
+	canonicalXML, err := ctx.Canonicalizer.Canonicalize(element)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(canonicalXML), nil
+	return canonicalXML, nil
 }
 
 // createSignedInfo constructs the SignedInfo element for the XML Signature
 func createSignedInfo(assertionID, digestValue string) *etree.Element {
 	signedInfo := etree.NewElement("SignedInfo")
-	signedInfo.CreateAttr("xmlns", "http://www.w3.org/2000/09/xmldsig#")
+	// signedInfo.CreateAttr("xmlns", "http://www.w3.org/2000/09/xmldsig#")
 
 	// CanonicalizationMethod
 	canonicalizationMethod := signedInfo.CreateElement("CanonicalizationMethod")
@@ -263,23 +282,67 @@ func (s *Service) createSignatureElement(signedInfo *etree.Element, signatureVal
 	signatureValueElement := signature.CreateElement("SignatureValue")
 	signatureValueElement.SetText(signatureValue)
 
+	// // KeyInfo
+	// keyInfo := signature.CreateElement("KeyInfo")
+	// x509Data := keyInfo.CreateElement("X509Data")
+	// x509Certificate := x509Data.CreateElement("X509Certificate")
+
+	// // Load public certificate
+	// certData := s.signingCertificate.SigningKey().Public()
+
+	// certPEM, err := x509.MarshalPKIXPublicKey(certData)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to marshal public key: %w", err)
+	// }
+
+	// certBlock := strings.ReplaceAll(string(certPEM), "-----BEGIN CERTIFICATE-----", "")
+	// certBlock = strings.ReplaceAll(certBlock, "-----END CERTIFICATE-----", "")
+	// certBlock = strings.ReplaceAll(certBlock, "\n", "")
+	// x509Certificate.SetText(base64.StdEncoding.EncodeToString([]byte(certBlock)))
+
 	// KeyInfo
 	keyInfo := signature.CreateElement("KeyInfo")
 	x509Data := keyInfo.CreateElement("X509Data")
 	x509Certificate := x509Data.CreateElement("X509Certificate")
 
-	// Load public certificate
-	certData := s.signingCertificate.SigningKey().Public()
-
-	certPEM, err := x509.MarshalPKIXPublicKey(certData)
+	//TODO: This is a temporary fix to get the certificate from the config, should extend s.signingCertificate to hold the certificate
+	pemData, err := os.ReadFile(s.config.X509FileConfig.SignCertFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal public key: %w", err)
+		return nil, fmt.Errorf("unable to read decryption certificate from file: %w", err)
 	}
 
-	certBlock := strings.ReplaceAll(string(certPEM), "-----BEGIN CERTIFICATE-----", "")
-	certBlock = strings.ReplaceAll(certBlock, "-----END CERTIFICATE-----", "")
-	certBlock = strings.ReplaceAll(certBlock, "\n", "")
-	x509Certificate.SetText(certBlock)
+	var (
+		block        *pem.Block
+		rest         = pemData
+		certificates []*x509.Certificate
+	)
+
+	for {
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+
+		switch block.Type {
+		case "CERTIFICATE":
+			cert, err := x509.ParseCertificate(block.Bytes)
+			if err != nil {
+				return nil, fmt.Errorf("unable to parse certificate: %w", err)
+			}
+			certificates = append(certificates, cert)
+		}
+	}
+
+	if len(certificates) == 0 {
+		return nil, fmt.Errorf("certificate not found in PEM file")
+	}
+
+	// Use the first certificate in the chain
+	certDER := certificates[0]
+
+	// Base64-encode the certificate
+	certBase64 := base64.StdEncoding.EncodeToString(certDER.Raw)
+	x509Certificate.SetText(certBase64)
 
 	return signature, nil
 }

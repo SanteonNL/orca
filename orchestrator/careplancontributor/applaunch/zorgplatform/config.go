@@ -12,6 +12,7 @@ type Config struct {
 	ApiUrl    string `koanf:"apiurl"`
 	StsUrl    string `koanf:"stsurl"`
 	Issuer    string `koanf:"iss"`
+	OwnIssuer string `koanf:"owniss"` //TODO: Properly distinct between signing and decrypting
 	Audience  string `koanf:"aud"`
 
 	AzureConfig    AzureConfig    `koanf:"azure"`
@@ -21,6 +22,7 @@ type Config struct {
 type X509FileConfig struct {
 	DecryptCertFile string `koanf:"decryptcertfile"`
 	ClientCertFile  string `koanf:"clientcertfile"`
+	SignCertFile    string `koanf:"signcertfile"`
 }
 
 type AzureConfig struct {
