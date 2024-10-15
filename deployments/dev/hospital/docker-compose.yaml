@@ -72,10 +72,10 @@ services:
     depends_on:
       - fhirstore
     environment:
-      ORCA_LOCAL_ORGANIZATION_URA: 2
-      ORCA_LOCAL_ORGANIZATION_NAME: St. Antonius
-      ORCA_REMOTE_ORGANIZATION_URA: 1
-      ORCA_REMOTE_ORGANIZATION_NAME: Zorg Bij Jou - Medisch Service Center
+      ORCA_LOCAL_ORGANIZATION_URA: 4567
+      ORCA_LOCAL_ORGANIZATION_NAME: Demo Hospital
+      ORCA_PERFORMER_ORGANIZATION_URA: 1234
+      ORCA_PERFORMER_ORGANIZATION_NAME: Demo Clinic
 
 #  hospital_sof_adapter:
 #    build:

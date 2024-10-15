@@ -1,6 +1,6 @@
 "use server"
 
-import { Bundle } from "fhir/r4"
+import {Bundle, Organization} from "fhir/r4"
 
 export const getEnrollmentUrl = async (patientId: string, serviceRequestId: string) => {
 
@@ -21,4 +21,41 @@ export const getEnrollmentUrl = async (patientId: string, serviceRequestId: stri
         }).toString()
     }
 
+}
+
+export const getLocalOrganization = async (): Promise<Organization> => {
+    const ura = process.env.ORCA_LOCAL_ORGANIZATION_URA;
+    if (!ura) {
+        throw new Error('ORCA_LOCAL_ORGANIZATION_URA is not defined');
+    }
+    const name = process.env.ORCA_LOCAL_ORGANIZATION_NAME;
+    if (!name) {
+        throw new Error('ORCA_LOCAL_ORGANIZATION_NAME is not defined');
+    }
+    return new Promise((resolve) => resolve(toOrganization(name, ura)));
+}
+
+export const getTaskPerformerOrganization = async (): Promise<Organization> => {
+    const ura = process.env.ORCA_PERFORMER_ORGANIZATION_URA;
+    if (!ura) {
+        throw new Error('ORCA_PERFORMER_ORGANIZATION_URA is not defined');
+    }
+    const name = process.env.ORCA_PERFORMER_ORGANIZATION_NAME;
+    if (!name) {
+        throw new Error('ORCA_PERFORMER_ORGANIZATION_NAME is not defined');
+    }
+    return new Promise((resolve) => resolve(toOrganization(name, ura)));
+}
+
+function toOrganization(name: string, ura: string): Organization {
+    return {
+        resourceType: "Organization",
+        name: name,
+        identifier: [
+            {
+                system: "http://fhir.nl/fhir/NamingSystem/ura",
+                value: ura
+            }
+        ],
+    } as Organization;
 }

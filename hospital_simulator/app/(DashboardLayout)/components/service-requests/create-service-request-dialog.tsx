@@ -11,7 +11,11 @@ import { IconPlus } from '@tabler/icons-react';
 import { Alert, Grid, MenuItem, Select } from '@mui/material';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Identifier, Organization } from 'fhir/r4';
+import { Organization } from 'fhir/r4';
+import {
+    getLocalOrganization,
+    getTaskPerformerOrganization
+} from "@/utils/config";
 
 
 
@@ -31,7 +35,8 @@ const CreateServiceRequestDialog: React.FC = () => {
     };
 
     const createServiceRequest = async () => {
-
+        const requester = await getLocalOrganization()
+        const performer = await getTaskPerformerOrganization()
         const bundle = createServiceRequestBundle(patientFirstName || "John", patientLastName || "Doe", requester, performer)
 
         const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir`, {
@@ -123,30 +128,15 @@ const CreateServiceRequestDialog: React.FC = () => {
 
 export default CreateServiceRequestDialog
 
-// TODO: This is a client-side component, meaning it has no access to process.env variables. It will use the fallback values until fixed
-const requesterIdentifier: Identifier = {
-    system: "http://fhir.nl/fhir/NamingSystem/ura",
-    value: process.env.ORCA_LOCAL_ORGANIZATION_URA || "URA-001"
-}
-
-const performerIdentifier: Identifier = {
-    system: "http://fhir.nl/fhir/NamingSystem/ura",
-    value: process.env.ORCA_REMOTE_ORGANIZATION_URA || "URA-002"
-}
-
-const requester: Organization = {
-    resourceType: "Organization",
-    name: process.env.ORCA_LOCAL_ORGANIZATION_NAME || "Requester",
-    identifier: [requesterIdentifier]
-}
-
-const performer: Organization = {
-    resourceType: "Organization",
-    name: process.env.ORCA_REMOTE_ORGANIZATION_NAME || "Performer",
-    identifier: [performerIdentifier]
-}
-
 function createServiceRequestBundle(firstName: string, lastName: string, requester: Organization, performer: Organization) {
+    if (requester.identifier?.length !== 1) {
+        throw new Error("Requester must have exactly one identifier")
+    }
+    const requesterIdentifier = requester.identifier[0]
+    if (performer.identifier?.length !== 1) {
+        throw new Error("Performer must have exactly one identifier")
+    }
+    const performerIdentifier = performer.identifier[0]
 
     const patientBsn = Date.now();
 
