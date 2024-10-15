@@ -244,6 +244,7 @@ var validTask = fhir.Task{
 			Value:  to.Ptr("URA-1"),
 		},
 	},
+	Intent: "order",
 	BasedOn: []fhir.Reference{
 		{
 			Reference: to.Ptr("CarePlan/cps-careplan-01"),

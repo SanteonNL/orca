@@ -6,6 +6,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
+	"net/url"
 )
 
 // handleGetTask fetches the requested Task and validates if the requester has access to the resource (is a participant of one of the CareTeams associated with the task)
@@ -45,4 +46,53 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 	return &task, nil
 }
 
-// TODO: searchTask once settled on searchCarePlan logic
+// handleSearchTask does a search for Task based on the user requester parameters. If CareTeam is not requested, add this to the fetch to be used for validation
+// if the requester is a participant of one of the returned CareTeams, return the whole bundle, else error
+// Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
+func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
+	params := []fhirclient.Option{}
+	for k, v := range queryParams {
+		params = append(params, fhirclient.QueryParam(k, v[0]))
+	}
+
+	params = append(params, fhirclient.ResponseHeaders(headers))
+	var bundle fhir.Bundle
+	err := s.fhirClient.Read("Task", &bundle, params...)
+	if err != nil {
+		return nil, err
+	}
+
+	var tasks []fhir.Task
+	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("Task"), &tasks)
+	if err != nil {
+		return nil, err
+	}
+	if len(tasks) == 0 {
+		// If there are no tasks in the bundle there is no point in doing validation, return empty bundle to user
+		return &bundle, nil
+	}
+
+	// It is possible that we have tasks based on different CarePlans. Create distinct list of References to be used for checking participant
+	refs := make(map[string]bool)
+	for _, task := range tasks {
+		for _, bo := range task.BasedOn {
+			if bo.Reference == nil || refs[*bo.Reference] {
+				continue
+			}
+			refs[*bo.Reference] = true
+		}
+	}
+	for ref, _ := range refs {
+		_, careTeams, _, err := s.getCarePlanAndCareTeams(ref)
+		if err != nil {
+			return nil, err
+		}
+
+		err = validatePrincipalInCareTeams(ctx, careTeams)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &bundle, nil
+}

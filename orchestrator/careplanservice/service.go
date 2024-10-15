@@ -291,7 +291,9 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 	case "CarePlan":
 		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	case "CareTeam":
+		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	case "Task":
+		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		s.proxy.ServeHTTP(httpResponse, httpRequest)

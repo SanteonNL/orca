@@ -58,6 +58,18 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Focus: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			},
 		}
 
 		err := carePlanContributor1.Create(task, &task)
@@ -72,6 +84,18 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Focus: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			},
 		}
 
 		err := carePlanContributor1.Create(task, &task)
@@ -96,6 +120,15 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			notificationCounter.Store(0)
 		})
 	}
+
+	t.Log("Search Subtasks")
+	{
+		var searchResult fhir.Bundle
+		err := carePlanContributor1.Read("Task", &searchResult, fhirclient.QueryParam("part-of", "Task/"+*task.Id))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 1, "Expected 1 subtask")
+	}
+
 	t.Log("Read CarePlan - Not in participants")
 	{
 		var fetchedCarePlan fhir.CarePlan
@@ -222,6 +255,14 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, 2, int(notificationCounter.Load()))
 			notificationCounter.Store(0)
 		})
+	}
+
+	t.Log("Care Team Search")
+	{
+		var searchResult fhir.Bundle
+		err := carePlanContributor1.Read("CareTeam", &searchResult)
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 1, "Expected 1 team")
 	}
 
 	t.Log("Accepting Task")
