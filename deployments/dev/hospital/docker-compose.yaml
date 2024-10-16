@@ -71,6 +71,7 @@ services:
       - "3001:3000"
     depends_on:
       - fhirstore
+
 #  hospital_sof_adapter:
 #    build:
 #      context: ../../../smartonfhir_backend_adapter
