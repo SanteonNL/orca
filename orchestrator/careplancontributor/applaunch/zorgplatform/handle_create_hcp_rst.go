@@ -20,7 +20,7 @@ import (
 	"github.com/russellhaering/goxmldsig"
 )
 
-// requestHcpRst requests an HCP token from the Zorgplatform STS
+// RequestHcpRst requests an HCP token from the Zorgplatform STS
 func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	// Create the SAML assertion
 	assertion, err := s.createSAMLAssertion(launchContext)
@@ -28,7 +28,7 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 		return "", err
 	}
 
-	// Sign the assertion using Azure Key Vault
+	// Sign the assertion
 	signedAssertion, err := s.signAssertion(assertion)
 	if err != nil {
 		return "", err
@@ -62,7 +62,6 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	}
 
 	// Send the request
-	fmt.Println("SOAP request body:")
 	fmt.Println(soapXML)
 
 	req, err := http.NewRequest("POST", s.config.StsUrl, strings.NewReader(soapXML))
@@ -91,12 +90,12 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Element, error) {
 	//TODO: Check below for hard-coded values from the docs, we probably need to provide proper values for role etc
 
-	assertion := etree.NewElement("Assertion")
-	assertion.CreateAttr("xmlns", "urn:oasis:names:tc:SAML:2.0:assertion")
 	assertionID := "_" + uuid.New().String()
+	assertion := etree.NewElement("Assertion")
 	assertion.CreateAttr("ID", assertionID)
 	assertion.CreateAttr("IssueInstant", time.Now().UTC().Format(time.RFC3339))
 	assertion.CreateAttr("Version", "2.0")
+	assertion.CreateAttr("xmlns", "urn:oasis:names:tc:SAML:2.0:assertion")
 
 	// Issuer
 	issuer := assertion.CreateElement("Issuer")
@@ -105,7 +104,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 	// Subject
 	subject := assertion.CreateElement("Subject")
 	nameID := subject.CreateElement("NameID")
-	nameID.SetText(*launchContext.Practitioner.Identifier[0].Value + "@" + *launchContext.Practitioner.Identifier[0].System) // Unique user ID
+	nameID.SetText(*launchContext.Practitioner.Identifier[0].Value + "@" + *launchContext.Practitioner.Identifier[0].System)
 	subjectConfirmation := subject.CreateElement("SubjectConfirmation")
 	subjectConfirmation.CreateAttr("Method", "urn:oasis:names:tc:SAML:2.0:cm:bearer")
 
@@ -115,7 +114,7 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 	conditions.CreateAttr("NotOnOrAfter", time.Now().Add(15*time.Minute).UTC().Format(time.RFC3339))
 	audienceRestriction := conditions.CreateElement("AudienceRestriction")
 	audience := audienceRestriction.CreateElement("Audience")
-	audience.SetText("https://zorgplatform.online") //todo: config
+	audience.SetText("https://zorgplatform.online")
 
 	// AttributeStatement
 	attributeStatement := assertion.CreateElement("AttributeStatement")
@@ -125,36 +124,37 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 	attrPurposeOfUse.CreateAttr("Name", "urn:oasis:names:tc:xspa:1.0:subject:purposeofuse")
 	attrValuePurposeOfUse := attrPurposeOfUse.CreateElement("AttributeValue")
 	purposeOfUse := attrValuePurposeOfUse.CreateElement("PurposeOfUse")
-	purposeOfUse.CreateAttr("xmlns", "urn:hl7-org:v3")
 	purposeOfUse.CreateAttr("code", "TREATMENT")
 	purposeOfUse.CreateAttr("codeSystem", "2.16.840.1.113883.3.18.7.1")
 	purposeOfUse.CreateAttr("codeSystemName", "nhin-purpose")
+	purposeOfUse.CreateAttr("displayName", "")
+	purposeOfUse.CreateAttr("xmlns", "urn:hl7-org:v3")
 
 	// Role
 	attrRole := attributeStatement.CreateElement("Attribute")
 	attrRole.CreateAttr("Name", "urn:oasis:names:tc:xacml:2.0:subject:role")
 	attrValueRole := attrRole.CreateElement("AttributeValue")
 	role := attrValueRole.CreateElement("Role")
-	role.CreateAttr("xmlns", "urn:hl7-org:v3")
-	role.CreateAttr("code", "158970007") // SNOMED CT code for the role
+	role.CreateAttr("code", "158970007")
 	role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
 	role.CreateAttr("codeSystemName", "SNOMED_CT")
+	role.CreateAttr("displayName", "")
+	role.CreateAttr("xmlns", "urn:hl7-org:v3")
 
 	// Resource ID (Patient BSN)
 	attrResourceID := attributeStatement.CreateElement("Attribute")
 	attrResourceID.CreateAttr("Name", "urn:oasis:names:tc:xacml:1.0:resource:resource-id")
 	attrValueResourceID := attrResourceID.CreateElement("AttributeValue")
 	instanceIdentifier := attrValueResourceID.CreateElement("InstanceIdentifier")
-	instanceIdentifier.CreateAttr("xmlns", "urn:hl7-org:v3")
 	instanceIdentifier.CreateAttr("root", "2.16.840.1.113883.2.4.6.3")
 	instanceIdentifier.CreateAttr("extension", launchContext.Bsn)
+	instanceIdentifier.CreateAttr("xmlns", "urn:hl7-org:v3")
 
 	// Organization ID
-	// TODO: if we build this multi-tenant, this has to come from the launch context
 	attrOrgID := attributeStatement.CreateElement("Attribute")
 	attrOrgID.CreateAttr("Name", "urn:oasis:names:tc:xspa:1.0:subject:organization-id")
 	attrValueOrgID := attrOrgID.CreateElement("AttributeValue")
-	attrValueOrgID.SetText(s.config.Issuer)
+	attrValueOrgID.SetText(s.config.OwnIssuer)
 
 	// Workflow ID (Optional)
 	if launchContext.WorkflowId != "" {
@@ -174,141 +174,69 @@ func (s *Service) createSAMLAssertion(launchContext LaunchContext) (*etree.Eleme
 	return assertion, nil
 }
 
+// signAssertion signs the SAML assertion
 func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error) {
-	// TODO: replace with xmlenc?
-	// 1. Canonicalize the Assertion (without the Signature element)
-	canonicalizedAssertion, err := canonicalize(assertion)
-	if err != nil {
-		return nil, err
-	}
+	// Prepare the signature template
+	signature := etree.NewElement("Signature")
+	signature.CreateAttr("xmlns", "http://www.w3.org/2000/09/xmldsig#")
 
-	// 2. Compute the Digest of the Assertion
-	hash := sha256.Sum256([]byte(canonicalizedAssertion))
-	digestValue := base64.StdEncoding.EncodeToString(hash[:])
+	signedInfo := signature.CreateElement("SignedInfo")
 
-	// 3. Create the SignedInfo Element
-	signedInfo := createSignedInfo(assertion.SelectAttrValue("ID", ""), digestValue)
-
-	// 4. Canonicalize the SignedInfo
-	canonicalizedSignedInfo, err := canonicalize(signedInfo)
-	if err != nil {
-		return nil, fmt.Errorf("canonicalization failed: %w", err)
-	}
-	// 5. Sign the Digest of SignedInfo
-	canonSignedInfoHash := sha256.Sum256([]byte(canonicalizedSignedInfo))
-	signature, err := s.signingCertificate.SigningKey().Sign(rand.Reader, canonSignedInfoHash[:], crypto.SHA256)
-	if err != nil {
-		return nil, fmt.Errorf("signing failed: %w", err)
-	}
-
-	// 6. Construct the Signature Element
-	signatureElement, err := s.createSignatureElement(signedInfo, base64.StdEncoding.EncodeToString(signature))
-	if err != nil {
-		return nil, err
-	}
-
-	// 7. Find the Issuer element
-	issuerIndex := -1
-	for i, child := range assertion.ChildElements() {
-		if child.Tag == "Issuer" {
-			issuerIndex = i
-			break
-		}
-	}
-
-	if issuerIndex == -1 {
-		return nil, fmt.Errorf("issuer element not found")
-	}
-
-	// 8. Insert the Signature element directly after the Issuer element (SAML:2.0 requirement)
-	assertion.InsertChildAt(issuerIndex+1, signatureElement)
-
-	return assertion, nil
-}
-
-// canonicalize performs Exclusive XML Canonicalization on the provided element
-func canonicalize(element *etree.Element) ([]byte, error) {
-	ctx := dsig.NewDefaultSigningContext(nil)
-	ctx.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
-	canonicalXML, err := ctx.Canonicalizer.Canonicalize(element)
-	if err != nil {
-		return nil, err
-	}
-	return canonicalXML, nil
-}
-
-// createSignedInfo constructs the SignedInfo element for the XML Signature
-func createSignedInfo(assertionID, digestValue string) *etree.Element {
-	signedInfo := etree.NewElement("SignedInfo")
-	// signedInfo.CreateAttr("xmlns", "http://www.w3.org/2000/09/xmldsig#")
-
-	// CanonicalizationMethod
 	canonicalizationMethod := signedInfo.CreateElement("CanonicalizationMethod")
 	canonicalizationMethod.CreateAttr("Algorithm", "http://www.w3.org/2001/10/xml-exc-c14n#")
 
-	// SignatureMethod
 	signatureMethod := signedInfo.CreateElement("SignatureMethod")
 	signatureMethod.CreateAttr("Algorithm", "http://www.w3.org/2001/04/xmldsig-more#rsa-sha256")
 
-	// Reference
 	reference := signedInfo.CreateElement("Reference")
-	reference.CreateAttr("URI", "#"+assertionID)
+	reference.CreateAttr("URI", "#"+assertion.SelectAttrValue("ID", ""))
 
-	// Transforms
 	transforms := reference.CreateElement("Transforms")
 	transform1 := transforms.CreateElement("Transform")
 	transform1.CreateAttr("Algorithm", "http://www.w3.org/2000/09/xmldsig#enveloped-signature")
 	transform2 := transforms.CreateElement("Transform")
 	transform2.CreateAttr("Algorithm", "http://www.w3.org/2001/10/xml-exc-c14n#")
 
-	// DigestMethod
 	digestMethod := reference.CreateElement("DigestMethod")
 	digestMethod.CreateAttr("Algorithm", "http://www.w3.org/2001/04/xmlenc#sha256")
 
-	// DigestValue
 	digestValueElement := reference.CreateElement("DigestValue")
+	// Compute the digest
+	assertionCopy := assertion.Copy()
+	assertionCopy.RemoveChild(signature) // Ensure Signature is not present
+	canonicalAssertion, err := canonicalize(assertionCopy)
+	if err != nil {
+		return nil, fmt.Errorf("failed to canonicalize assertion: %w", err)
+	}
+	hash := sha256.Sum256(canonicalAssertion)
+	digestValue := base64.StdEncoding.EncodeToString(hash[:])
 	digestValueElement.SetText(digestValue)
 
-	return signedInfo
-}
+	// Now, canonicalize SignedInfo
+	canonicalSignedInfo, err := canonicalize(signedInfo)
+	if err != nil {
+		return nil, fmt.Errorf("failed to canonicalize SignedInfo: %w", err)
+	}
 
-// createSignatureElement constructs the Signature element
-func (s *Service) createSignatureElement(signedInfo *etree.Element, signatureValue string) (*etree.Element, error) {
-	signature := etree.NewElement("Signature")
-	signature.CreateAttr("xmlns", "http://www.w3.org/2000/09/xmldsig#")
-	signature.AddChild(signedInfo)
-
-	// SignatureValue
+	// Sign the canonicalized SignedInfo
 	signatureValueElement := signature.CreateElement("SignatureValue")
+	signatureHash := sha256.Sum256(canonicalSignedInfo)
+	signatureBytes, err := s.signingCertificate.SigningKey().Sign(rand.Reader, signatureHash[:], crypto.SHA256)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign: %w", err)
+	}
+	signatureValue := base64.StdEncoding.EncodeToString(signatureBytes)
 	signatureValueElement.SetText(signatureValue)
-
-	// // KeyInfo
-	// keyInfo := signature.CreateElement("KeyInfo")
-	// x509Data := keyInfo.CreateElement("X509Data")
-	// x509Certificate := x509Data.CreateElement("X509Certificate")
-
-	// // Load public certificate
-	// certData := s.signingCertificate.SigningKey().Public()
-
-	// certPEM, err := x509.MarshalPKIXPublicKey(certData)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to marshal public key: %w", err)
-	// }
-
-	// certBlock := strings.ReplaceAll(string(certPEM), "-----BEGIN CERTIFICATE-----", "")
-	// certBlock = strings.ReplaceAll(certBlock, "-----END CERTIFICATE-----", "")
-	// certBlock = strings.ReplaceAll(certBlock, "\n", "")
-	// x509Certificate.SetText(base64.StdEncoding.EncodeToString([]byte(certBlock)))
 
 	// KeyInfo
 	keyInfo := signature.CreateElement("KeyInfo")
 	x509Data := keyInfo.CreateElement("X509Data")
 	x509Certificate := x509Data.CreateElement("X509Certificate")
 
-	//TODO: This is a temporary fix to get the certificate from the config, should extend s.signingCertificate to hold the certificate
+	// TODO: This is a temporary fix to get the certificate from the config, should extend s.signingCertificate to hold the certificate
 	pemData, err := os.ReadFile(s.config.X509FileConfig.SignCertFile)
 	if err != nil {
-		return nil, fmt.Errorf("unable to read decryption certificate from file: %w", err)
+		return nil, fmt.Errorf("unable to read sign certificate from file: %w", err)
 	}
 
 	var (
@@ -344,7 +272,35 @@ func (s *Service) createSignatureElement(signedInfo *etree.Element, signatureVal
 	certBase64 := base64.StdEncoding.EncodeToString(certDER.Raw)
 	x509Certificate.SetText(certBase64)
 
-	return signature, nil
+	// Insert the Signature element after the Issuer element
+	issuerIndex := -1
+	for i, child := range assertion.ChildElements() {
+		if child.Tag == "Issuer" {
+			issuerIndex = i
+			break
+		}
+	}
+
+	if issuerIndex == -1 {
+		return nil, fmt.Errorf("issuer element not found")
+	}
+
+	assertion.InsertChildAt(issuerIndex+1, signature)
+
+	return assertion, nil
+}
+
+// canonicalize performs Exclusive XML Canonicalization on the provided element
+func canonicalize(element *etree.Element) ([]byte, error) {
+	doc := etree.NewDocument()
+	doc.SetRoot(element.Copy())
+	ctx := dsig.NewDefaultSigningContext(nil)
+	ctx.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
+	canonicalXML, err := ctx.Canonicalizer.Canonicalize(doc.Root())
+	if err != nil {
+		return nil, err
+	}
+	return canonicalXML, nil
 }
 
 // buildSOAPEnvelope constructs the SOAP envelope with the signed assertion
