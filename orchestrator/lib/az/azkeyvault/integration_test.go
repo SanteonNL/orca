@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
+	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
@@ -32,7 +33,7 @@ func Test_Suite_DecryptRsaOaep(t *testing.T) {
 	require.NoError(t, err)
 
 	// Decrypt in Azure Key Vault
-	decrypted, err := suite.DecryptRsaOaep(cipherText)
+	decrypted, err := suite.DecryptRsaOaep(cipherText, crypto.DigestMethodSha256)
 	require.NoError(t, err)
 	require.Equal(t, plainText, decrypted)
 }
