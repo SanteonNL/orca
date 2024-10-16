@@ -3,6 +3,8 @@ package azkeyvault
 import (
 	"context"
 	"crypto"
+	"crypto/rsa"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -159,9 +161,19 @@ func (a keyPair) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (signa
 	if opts != nil && opts.HashFunc() == 0 {
 		return nil, errors.New("hashing should've been done")
 	}
-
+	var signingAlgorithm azkeys.SignatureAlgorithm
+	if pssOpts, ok := opts.(*rsa.PSSOptions); ok {
+		switch pssOpts.Hash.Size() {
+		case sha256.Size:
+			signingAlgorithm = azkeys.SignatureAlgorithmPS256
+		default:
+			return nil, fmt.Errorf("unsupported PSS hash size: %d", pssOpts.Hash.Size())
+		}
+	} else {
+		signingAlgorithm = azkeys.SignatureAlgorithm(a.SigningAlgorithm())
+	}
 	response, err := a.client.Sign(ctx, a.keyName, a.keyVersion, azkeys.SignParameters{
-		Algorithm: to.Ptr(azkeys.SignatureAlgorithm(a.SigningAlgorithm())),
+		Algorithm: to.Ptr(signingAlgorithm),
 		Value:     digest,
 	}, nil)
 	if err != nil {
