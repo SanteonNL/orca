@@ -20,7 +20,6 @@ import (
 
 func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msg("Creating Task")
-	log.Info().Msgf("%s", request.RequestUrl)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, err)

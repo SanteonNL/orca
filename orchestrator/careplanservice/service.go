@@ -143,10 +143,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceType := request.PathValue("type")
 		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Get"+resourceType)
 	}))
-	//mux.HandleFunc("GET "+basePath+"/{resourcePath...}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-	//	log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
-	//	s.proxy.ServeHTTP(httpResponse, request)
-	//}))
 }
 
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
@@ -269,15 +265,15 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		return
 	}
 
+	for key, value := range headers.Header {
+		httpResponse.Header()[key] = value
+	}
+
 	b, err := json.Marshal(resource)
 	_, err = httpResponse.Write(b)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 		return
-	}
-
-	for key, value := range headers.Header {
-		httpResponse.Header()[key] = value
 	}
 	return
 }
@@ -304,15 +300,15 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		return
 	}
 
+	for key, value := range headers.Header {
+		httpResponse.Header()[key] = value
+	}
+
 	b, err := json.Marshal(bundle)
 	_, err = httpResponse.Write(b)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 		return
-	}
-
-	for key, value := range headers.Header {
-		httpResponse.Header()[key] = value
 	}
 	return
 }

@@ -14,6 +14,7 @@ import (
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.CarePlan, error) {
 	// fetch CarePlan + CareTeam, validate requester is participant of CareTeam
+	// headers are passed in by reference and returned to the calling method
 	carePlan, careTeams, headers, err := s.getCarePlanAndCareTeams("CarePlan/" + id)
 	if err != nil {
 		return nil, err

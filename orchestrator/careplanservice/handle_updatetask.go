@@ -16,23 +16,21 @@ import (
 
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msgf("Updating Task: %s", request.ResourceId)
-	// TODO: Authorize request here
-	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, err)
-	}
-
-	// the Task prior to updates, we need this to validate the state transition
-	var taskExisting fhir.Task
-	if err := s.fhirClient.Read("Task/"+request.ResourceId, &taskExisting); err != nil {
-		return nil, fmt.Errorf("failed to read Task: %w", err)
 	}
 
 	// Validate fields on updated Task
 	err := coolfhir.ValidateTaskRequiredFields(task)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Task: %w", err)
+	}
+
+	// the Task prior to updates, we need this to validate the state transition
+	var taskExisting fhir.Task
+	if err := s.fhirClient.Read("Task/"+request.ResourceId, &taskExisting); err != nil {
+		return nil, fmt.Errorf("failed to read Task: %w", err)
 	}
 
 	// Validate state transition

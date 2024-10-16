@@ -72,7 +72,7 @@ func validatePrincipalInCareTeams(ctx context.Context, careTeams []fhir.CareTeam
 	if participant == nil {
 		return &coolfhir.ErrorWithCode{
 			Message:    "Participant is not part of CareTeam",
-			StatusCode: http.StatusUnauthorized,
+			StatusCode: http.StatusForbidden,
 		}
 	}
 	return nil
