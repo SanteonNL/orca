@@ -113,9 +113,12 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	service, err := careplanservice.New(config, profile.TestProfile{
+
+	activeProfile := profile.TestProfile{
+		Principal:        auth.TestPrincipal1,
 		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
-	}, orcaPublicURL)
+	}
+	service, err := careplanservice.New(config, activeProfile, orcaPublicURL)
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
