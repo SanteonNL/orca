@@ -5,13 +5,10 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -218,10 +215,10 @@ func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error
 		return nil, fmt.Errorf("failed to canonicalize SignedInfo: %w", err)
 	}
 
-	// Sign the canonicalized SignedInfo
+	// Sign the canonicalized SignedInfox
 	signatureValueElement := signature.CreateElement("SignatureValue")
 	signatureHash := sha256.Sum256(canonicalSignedInfo)
-	signatureBytes, err := s.signingCertificate.SigningKey().Sign(rand.Reader, signatureHash[:], crypto.SHA256)
+	signatureBytes, err := s.signingCertificateKey.Sign(rand.Reader, signatureHash[:], crypto.SHA256)
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign: %w", err)
 	}
@@ -234,39 +231,40 @@ func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error
 	x509Certificate := x509Data.CreateElement("X509Certificate")
 
 	// TODO: This is a temporary fix to get the certificate from the config, should extend s.signingCertificate to hold the certificate
-	pemData, err := os.ReadFile(s.config.X509FileConfig.SignCertFile)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read sign certificate from file: %w", err)
-	}
-
-	var (
-		block        *pem.Block
-		rest         = pemData
-		certificates []*x509.Certificate
-	)
-
-	for {
-		block, rest = pem.Decode(rest)
-		if block == nil {
-			break
-		}
-
-		switch block.Type {
-		case "CERTIFICATE":
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return nil, fmt.Errorf("unable to parse certificate: %w", err)
-			}
-			certificates = append(certificates, cert)
-		}
-	}
-
-	if len(certificates) == 0 {
-		return nil, fmt.Errorf("certificate not found in PEM file")
-	}
-
-	// Use the first certificate in the chain
-	certDER := certificates[0]
+	//pemData, err := os.ReadFile(s.config.X509FileConfig.SignCertFile)
+	//if err != nil {
+	//	return nil, fmt.Errorf("unable to read sign certificate from file: %w", err)
+	//}
+	//
+	//var (
+	//	block        *pem.Block
+	//	rest         = pemData
+	//	certificates []*x509.Certificate
+	//)
+	//
+	//for {
+	//	block, rest = pem.Decode(rest)
+	//	if block == nil {
+	//		break
+	//	}
+	//
+	//	switch block.Type {
+	//	case "CERTIFICATE":
+	//		cert, err := x509.ParseCertificate(block.Bytes)
+	//		if err != nil {
+	//			return nil, fmt.Errorf("unable to parse certificate: %w", err)
+	//		}
+	//		certificates = append(certificates, cert)
+	//	}
+	//}
+	//
+	//if len(certificates) == 0 {
+	//	return nil, fmt.Errorf("certificate not found in PEM file")
+	//}
+	//
+	//// Use the first certificate in the chain
+	//certDER := certificates[0]
+	certDER := s.signingCertificate
 
 	// Base64-encode the certificate
 	certBase64 := base64.StdEncoding.EncodeToString(certDER.Raw)

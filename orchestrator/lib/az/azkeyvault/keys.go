@@ -170,7 +170,12 @@ func (a keyPair) Sign(_ io.Reader, digest []byte, opts crypto.SignerOpts) (signa
 			return nil, fmt.Errorf("unsupported PSS hash size: %d", pssOpts.Hash.Size())
 		}
 	} else {
-		signingAlgorithm = azkeys.SignatureAlgorithm(a.SigningAlgorithm())
+		switch opts.HashFunc().Size() {
+		case sha256.Size:
+			signingAlgorithm = azkeys.SignatureAlgorithmRS256
+		default:
+			return nil, fmt.Errorf("unsupported RSA hash size: %d", pssOpts.Hash.Size())
+		}
 	}
 	response, err := a.client.Sign(ctx, a.keyName, a.keyVersion, azkeys.SignParameters{
 		Algorithm: to.Ptr(signingAlgorithm),

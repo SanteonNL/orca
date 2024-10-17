@@ -32,18 +32,26 @@ func NewCertificatesClient(keyVaultURL string, credentialType string, insecure b
 	return azcertificates.NewClient(keyVaultURL, cred, clientOptions) // never returns an error
 }
 
-func GetTLSCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string, certificateVersion string) (*tls.Certificate, error) {
+func GetCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string, certificateVersion string) (*x509.Certificate, *Suite, error) {
 	certResponse, err := certClient.GetCertificate(ctx, certificateName, certificateVersion, nil)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get certificate: %w", err)
+		return nil, nil, fmt.Errorf("unable to get certificate: %w", err)
 	}
 	cert, err := x509.ParseCertificate(certResponse.CER)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse certificate: %w", err)
+		return nil, nil, fmt.Errorf("unable to parse certificate: %w", err)
 	}
 	key, err := GetKey(keysClient, certificateName, certificateVersion)
 	if err != nil {
-		return nil, fmt.Errorf("unable to get certificate private key: %w", err)
+		return nil, nil, fmt.Errorf("unable to get certificate private key: %w", err)
+	}
+	return cert, key, nil
+}
+
+func GetTLSCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string, certificateVersion string) (*tls.Certificate, error) {
+	cert, key, err := GetCertificate(ctx, certClient, keysClient, certificateName, certificateVersion)
+	if err != nil {
+		return nil, fmt.Errorf("unable to get TLS certificate: %w", err)
 	}
 	return &tls.Certificate{
 		Certificate: [][]byte{cert.Raw},

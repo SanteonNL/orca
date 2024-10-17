@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/x509"
 	"errors"
 	"hash"
 )
@@ -14,6 +15,11 @@ var _ Suite = &RsaSuite{}
 
 type RsaSuite struct {
 	PrivateKey *rsa.PrivateKey
+	Cert       *x509.Certificate
+}
+
+func (t RsaSuite) Certificate() *x509.Certificate {
+	return t.Cert
 }
 
 func (t RsaSuite) SigningKey() crypto.Signer {

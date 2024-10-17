@@ -20,3 +20,18 @@ package azkeyvault
 //	assert.Equal(t, "https://keyszzz.vault.azure.net/keys/signingkey/5072fbaaa30849298e4b3c60384cdaac", signingKey.keyID())
 //	assert.Equal(t, "ES256", signingKey.SigningAlgorithm())
 //}
+//
+//func Test_keyPair_Sign(t *testing.T) {
+//	h := sha256.New()
+//	signatureHash := h.Sum([]byte("test"))
+//	sig, err := (&keyPair{
+//		client: nil,
+//	}).Sign(nil, signatureHash, crypto.SHA256)
+//	if err != nil {
+//		t.Errorf("Sign() error = %v", err)
+//		return
+//	}
+//	if len(sig) == 0 {
+//		t.Errorf("Sign() got = %v, want non-empty", sig)
+//	}
+//}

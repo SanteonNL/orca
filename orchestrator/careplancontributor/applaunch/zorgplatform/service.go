@@ -2,6 +2,7 @@ package zorgplatform
 
 import (
 	"context"
+	stdCrypto "crypto"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -48,10 +49,26 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 	registerFhirClientFactory(config)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
-	signingCert, err := azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
-	if err != nil {
-		return nil, fmt.Errorf("unable to get signing certificate from Azure Key Vault: %w", err)
+	var signCert *x509.Certificate
+	var signCertKey crypto.Suite
+	if config.AzureConfig.KeyVaultConfig.SignCertName == "" {
+		if config.X509FileConfig.SignCertFile == "" {
+			return nil, fmt.Errorf("no signing certificate provided in configuration")
+		}
+		keyPair, err := tls.LoadX509KeyPair(config.X509FileConfig.SignCertFile, config.X509FileConfig.SignCertFile)
+		if err != nil {
+			return nil, fmt.Errorf("unable to load signing certificate and key: %w", err)
+		}
+		signCert = keyPair.Leaf
+		signCertKey = crypto.RsaSuite{PrivateKey: keyPair.PrivateKey.(*rsa.PrivateKey)}
+	} else {
+		var err error
+		signCert, signCertKey, err = azkeyvault.GetCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get signing certificate from Azure Key Vault: %w", err)
+		}
 	}
+
 	var decryptCert crypto.Suite
 	if config.AzureConfig.KeyVaultConfig.DecryptCertName == "" {
 		if config.X509FileConfig.DecryptCertFile == "" {
@@ -68,6 +85,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		}
 		decryptCert = crypto.RsaSuite{PrivateKey: rsaPrivateKey.(*rsa.PrivateKey)}
 	} else {
+		var err error
 		decryptCert, err = azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get decryption certificate from Azure Key Vault: %w", err)
@@ -96,24 +114,26 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 	}
 
 	return &Service{
-		sessionManager:       sessionManager,
-		config:               config,
-		baseURL:              baseURL,
-		landingUrlPath:       landingUrlPath,
-		signingCertificate:   signingCert,
-		tlsClientCertificate: &tlsClientCert,
-		decryptCertificate:   decryptCert,
+		sessionManager:        sessionManager,
+		config:                config,
+		baseURL:               baseURL,
+		landingUrlPath:        landingUrlPath,
+		signingCertificate:    signCert,
+		signingCertificateKey: signCertKey.SigningKey(),
+		tlsClientCertificate:  &tlsClientCert,
+		decryptCertificate:    decryptCert,
 	}, nil
 }
 
 type Service struct {
-	sessionManager       *user.SessionManager
-	config               Config
-	baseURL              string
-	landingUrlPath       string
-	signingCertificate   crypto.Suite
-	tlsClientCertificate *tls.Certificate
-	decryptCertificate   crypto.Suite
+	sessionManager        *user.SessionManager
+	config                Config
+	baseURL               string
+	landingUrlPath        string
+	signingCertificate    *x509.Certificate
+	signingCertificateKey stdCrypto.Signer
+	tlsClientCertificate  *tls.Certificate
+	decryptCertificate    crypto.Suite
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
