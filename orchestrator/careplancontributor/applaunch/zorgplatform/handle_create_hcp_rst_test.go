@@ -3,10 +3,13 @@ package zorgplatform
 import (
 	"crypto/rsa"
 	"crypto/tls"
+	"os"
 	"testing"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/beevik/etree"
 	"github.com/stretchr/testify/assert"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 //TODO: Add a unit test for the soap envelop structure
@@ -138,21 +141,45 @@ func assertEqualAttributes(t *testing.T, expectedElement, actualElement *etree.E
 }
 
 func TestService_sign(t *testing.T) {
-	keyPair, err2 := tls.LoadX509KeyPair("test-certificate.pem", "test-key.pem")
-	assert.NoError(t, err2)
+	// Load the certificate and private key
+	keyPair, err := tls.LoadX509KeyPair("test-certificate.pem", "test-key.pem")
+	assert.NoError(t, err)
+
+	// Initialize the service with the private key and certificate
 	service := &Service{
 		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey),
 		signingCertificate:    keyPair.Leaf,
 	}
 
-	documentTbs := etree.NewDocument()
-	err := documentTbs.ReadFromString("<root><child>hello</child></root>")
+	launchContext := &LaunchContext{
+		Bsn: "123456789",
+		Practitioner: fhir.Practitioner{
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("urn:oid:2.16.840.1.113883.4.1"),
+					Value:  to.Ptr("999999999"),
+				},
+			},
+		},
+		SubjectNameId:  "Subject",
+		WorkflowId:     "workflow-1234",
+		ServiceRequest: fhir.ServiceRequest{},
+	}
+
+	assertion, err := service.createSAMLAssertion(launchContext)
 	assert.NoError(t, err)
 
-	signedElement, err := service.sign(documentTbs.Root())
+	// Call the signing function
+	signedElement, err := service.signAssertion(assertion)
 
+	// Assert no errors occurred
 	assert.NoError(t, err)
-	documentTbs.AddChild(signedElement)
-	str, _ := documentTbs.WriteToString()
-	println(str)
+
+	// Print the signed assertion for verification with xmlsec1
+	println(signedElement)
+
+	// Optional: You can also save the signed assertion to a file for easier verification with xmlsec1
+	os.WriteFile("signed-assertion.xml", []byte(signedElement), 0644)
+
+	//You can test the output (manually for now) with: xmlsec1 --verify --id-attr:ID urn:oasis:names:tc:SAML:2.0:assertion:Assertion --output /dev/null --trusted-pem ./test-certificate.pem --pubkey-pem ./test-key.pem signed-assertion.xml
 }
