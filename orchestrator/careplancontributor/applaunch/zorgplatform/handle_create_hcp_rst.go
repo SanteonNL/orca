@@ -4,7 +4,6 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/sha256"
-	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -45,19 +44,6 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 		return "", err
 	}
 
-	// Set up HTTPS client with mutual TLS
-	tlsConfig := &tls.Config{
-		Certificates:  []tls.Certificate{*s.tlsClientCertificate},
-		MinVersion:    tls.VersionTLS12,
-		Renegotiation: tls.RenegotiateOnceAsClient,
-	}
-	transport := &http.Transport{
-		TLSClientConfig: tlsConfig,
-	}
-	client := &http.Client{
-		Transport: transport,
-	}
-
 	// Send the request
 	fmt.Println(soapXML)
 
@@ -67,7 +53,7 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	}
 	req.Header.Set("Content-Type", "application/soap+xml; charset=utf-8")
 
-	resp, err := client.Do(req)
+	resp, err := s.zorgplatformHttpClient.Do(req)
 	if err != nil {
 		return "", err
 	}

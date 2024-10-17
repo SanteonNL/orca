@@ -44,9 +44,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 	} else {
 		appLaunchURL = "http://localhost" + appLaunchURL + appLaunchUrl
 	}
-	log.Info().Msgf("Zorgplatform app launch is (%s)", appLaunchURL)
-
-	registerFhirClientFactory(config)
+	log.Info().Msgf("Zorgplatform app launch is: %s:", appLaunchURL)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
 	var signCert *x509.Certificate
@@ -113,7 +111,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		tlsClientCert = *tlsClientCertPtr
 	}
 
-	return &Service{
+	result := &Service{
 		sessionManager:        sessionManager,
 		config:                config,
 		baseURL:               baseURL,
@@ -122,18 +120,31 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
 		decryptCertificate:    decryptCert,
-	}, nil
+		// performing HTTP requests with Zorgplatform requires mutual TLS
+		zorgplatformHttpClient: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					Certificates:  []tls.Certificate{tlsClientCert},
+					MinVersion:    tls.VersionTLS12,
+					Renegotiation: tls.RenegotiateOnceAsClient,
+				},
+			},
+		},
+	}
+	result.registerFhirClientFactory(config)
+	return result, nil
 }
 
 type Service struct {
-	sessionManager        *user.SessionManager
-	config                Config
-	baseURL               string
-	landingUrlPath        string
-	signingCertificate    *x509.Certificate
-	signingCertificateKey stdCrypto.Signer
-	tlsClientCertificate  *tls.Certificate
-	decryptCertificate    crypto.Suite
+	sessionManager         *user.SessionManager
+	config                 Config
+	baseURL                string
+	landingUrlPath         string
+	signingCertificate     *x509.Certificate
+	signingCertificateKey  stdCrypto.Signer
+	tlsClientCertificate   *tls.Certificate
+	decryptCertificate     crypto.Suite
+	zorgplatformHttpClient *http.Client
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -199,13 +210,13 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	http.Redirect(response, request, targetURL.String(), http.StatusFound)
 }
 
-func registerFhirClientFactory(config Config) {
+func (s *Service) registerFhirClientFactory(config Config) {
 	// Register FHIR client factory that can create FHIR clients when the Zorgplatform AppLaunch is used
 	clients.Factories[launcherKey] = func(properties map[string]string) clients.ClientProperties {
 		fhirServerURL, _ := url.Parse(config.ApiUrl)
 		return clients.ClientProperties{
 			BaseURL: fhirServerURL,
-			Client:  http.DefaultTransport,
+			Client:  s.zorgplatformHttpClient.Transport,
 		}
 	}
 }
