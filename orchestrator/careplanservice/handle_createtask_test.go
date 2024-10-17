@@ -7,6 +7,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/stretchr/testify/assert"
@@ -115,6 +116,9 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
+		profile: profile.TestProfile{
+			Principal: auth.TestPrincipal1,
+		},
 		fhirClient:          mockFHIRClient,
 		workflows:           taskengine.DefaultWorkflows(),
 		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},

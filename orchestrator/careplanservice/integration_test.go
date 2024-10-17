@@ -78,6 +78,31 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.Equal(t, 0, int(notificationCounter.Load()))
 	}
 
+	t.Log("Creating Task - No BasedOn, requester is not care organization so creation fails")
+	{
+		task = fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Focus: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			},
+		}
+
+		err := carePlanContributor2.Create(task, &task)
+		require.Error(t, err)
+	}
+
 	t.Log("Creating Task - No BasedOn, new CarePlan and CareTeam are created")
 	{
 		task = fhir.Task{
@@ -358,6 +383,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
+		Principal:        auth.TestPrincipal1,
 		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
 	}
 	config := DefaultConfig()

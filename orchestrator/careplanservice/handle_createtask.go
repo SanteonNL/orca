@@ -46,6 +46,16 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	// Resolve the CarePlan
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
+
+		// In order to create a CarePlan, the requester must have the same URA number as the current node
+		ids, err := s.profile.Identities(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if !isRequesterLocalCareOrganization(ids, principal) {
+			return nil, errors.New("requester must be local care organization in order to create new CarePlan and CareTeam")
+		}
+
 		// Create a new CarePlan (which will also create a new CareTeam) based on the Task reference
 		carePlanURL := "urn:uuid:" + uuid.NewString()
 		careTeamURL := "urn:uuid:" + uuid.NewString()
@@ -162,4 +172,15 @@ func basedOn(task fhir.Task) (*string, error) {
 		return nil, errors.New("Task.basedOn must contain a relative reference to a CarePlan")
 	}
 	return task.BasedOn[0].Reference, nil
+}
+
+func isRequesterLocalCareOrganization(profileIdentities []fhir.Identifier, principal auth.Principal) bool {
+	for _, id := range profileIdentities {
+		for _, poid := range principal.Organization.Identifier {
+			if coolfhir.IdentifierEquals(&id, &poid) {
+				return true
+			}
+		}
+	}
+	return false
 }
