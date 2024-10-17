@@ -1,6 +1,8 @@
 package zorgplatform
 
 import (
+	"crypto/rsa"
+	"crypto/tls"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"testing"
@@ -135,4 +137,24 @@ func assertEqualAttributes(t *testing.T, expectedElement, actualElement *etree.E
 	}
 
 	assert.Equal(t, expectedAttrs, actualAttrs)
+}
+
+func TestService_sign(t *testing.T) {
+	keyPair, err2 := tls.LoadX509KeyPair("test-certificate.pem", "test-key.pem")
+	assert.NoError(t, err2)
+	service := &Service{
+		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey),
+		signingCertificate:    keyPair.Leaf,
+	}
+
+	documentTbs := etree.NewDocument()
+	err := documentTbs.ReadFromString("<root><child>hello</child></root>")
+	assert.NoError(t, err)
+
+	signedElement, err := service.sign(documentTbs.Root())
+
+	assert.NoError(t, err)
+	documentTbs.AddChild(signedElement)
+	str, _ := documentTbs.WriteToString()
+	println(str)
 }

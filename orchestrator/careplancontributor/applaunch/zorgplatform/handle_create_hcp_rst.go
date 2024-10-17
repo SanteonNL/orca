@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/base64"
 	"fmt"
 	"io"
@@ -360,4 +361,38 @@ func (s *Service) buildSOAPEnvelope(signedAssertion *etree.Element) (*etree.Elem
 	tokenType.SetText("http://docs.oasis-open.org/wss/oasis-wss-saml-token-profile-1.1#SAMLV2.0")
 
 	return soapEnvelope, nil
+}
+
+func (s *Service) sign(element *etree.Element) (*etree.Element, error) {
+	signingContext, err := s.signingContext(dsig.RSASHA256SignatureMethod)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create signing context: %w", err)
+	}
+
+	signElement, err := signingContext.SignEnveloped(element)
+	if err != nil {
+		return nil, err
+	}
+	// not sure what this is?
+	//sigEl := signElement.ChildElements()[len(signElement.ChildElements())-1]
+	//response.Signature = sigEl
+	//responseEl = response.Element()
+	//responseEl.AddChild(req.AssertionEl)
+	return signElement, nil
+}
+
+// signingContext will create a signing context for the request.
+func (s *Service) signingContext(dsigMethod string) (*dsig.SigningContext, error) {
+	certificates := [][]byte{s.signingCertificate.Raw}
+	keyStore := dsig.TLSCertKeyStore(tls.Certificate{
+		Certificate: certificates,
+		PrivateKey:  s.signingCertificateKey,
+		Leaf:        s.signingCertificate,
+	})
+	signingContext := dsig.NewDefaultSigningContext(keyStore)
+	signingContext.Canonicalizer = dsig.MakeC14N10ExclusiveCanonicalizerWithPrefixList("")
+	if err := signingContext.SetSignatureMethod(dsigMethod); err != nil {
+		return nil, err
+	}
+	return signingContext, nil
 }
