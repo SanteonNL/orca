@@ -255,6 +255,7 @@ func (s *Service) getSubTask(task *fhir.Task, questionnaireRef string, isPrimary
 				coolfhir.SCPTaskProfile,
 			},
 		},
+		Intent:  "order",
 		BasedOn: task.BasedOn,
 		PartOf:  partOf,
 		Focus:   task.Focus,

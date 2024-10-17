@@ -1,6 +1,17 @@
 package careplanservice
 
 import (
+	"context"
+	"errors"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"go.uber.org/mock/gomock"
+	"os"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -382,6 +393,146 @@ func Test_isValidTransition(t *testing.T) {
 			}
 			got = isValidTransition(tt.args.to, tt.args.from, tt.args.isOwner, tt.args.isRequester)
 			require.Equal(t, false, got)
+		})
+	}
+}
+
+func Test_handleUpdateTask(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a mock FHIR client using the generated mock
+	mockFHIRClient := mock.NewMockClient(ctrl)
+
+	// Create the service with the mock FHIR client
+	service := &Service{
+		fhirClient:          mockFHIRClient,
+		workflows:           taskengine.DefaultWorkflows(),
+		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+	}
+
+	updateTaskAcceptedData, _ := os.ReadFile("./testdata/task-update-accepted.json")
+
+	tests := []struct {
+		name          string
+		ctx           context.Context
+		request       FHIRHandlerRequest
+		existingTask  *fhir.Task
+		errorFromRead error
+		wantErr       bool
+	}{
+		{
+			name: "invalid task update - invalid JSON",
+			ctx:  context.Background(),
+			request: FHIRHandlerRequest{
+				ResourceId:   "1",
+				ResourceData: []byte(`{"resourceType": "Task", "status":`),
+				ResourcePath: "Task/1",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid task update - missing required fields",
+			ctx:  context.Background(),
+			request: FHIRHandlerRequest{
+				ResourceId:   "1",
+				ResourceData: []byte(`{"resourceType": "Task"}`),
+				ResourcePath: "Task/1",
+			},
+			wantErr: true,
+		},
+		{
+			name: "invalid task update - invalid state transition",
+			ctx:  context.Background(),
+			request: FHIRHandlerRequest{
+				ResourceId:   "1",
+				ResourceData: []byte(`{"resourceType": "Task", "status": "received", "intent":"order"}`),
+				ResourcePath: "Task/1",
+			},
+			existingTask: &fhir.Task{
+				Id:     to.Ptr("1"),
+				Status: fhir.TaskStatusInProgress,
+				Intent: "order",
+			},
+			errorFromRead: nil,
+			wantErr:       true,
+		},
+		{
+			name: "valid task update - not authenticated",
+			ctx:  context.Background(),
+			request: FHIRHandlerRequest{
+				ResourceId:   "1",
+				ResourceData: []byte(`{"resourceType": "Task", "status": "completed", "intent":"order"}`),
+				ResourcePath: "Task/1",
+			},
+			existingTask: &fhir.Task{
+				Status: fhir.TaskStatusRequested,
+			},
+			errorFromRead: nil,
+			wantErr:       true,
+		},
+		{
+			name: "valid task update - error from read",
+			ctx:  context.Background(),
+			request: FHIRHandlerRequest{
+				ResourceId:   "1",
+				ResourceData: []byte(`{"resourceType": "Task", "status": "completed", "intent":"order"}`),
+				ResourcePath: "Task/1",
+			},
+			existingTask: &fhir.Task{
+				Status: fhir.TaskStatusRequested,
+			},
+			errorFromRead: errors.New("error"),
+			wantErr:       true,
+		},
+		{
+			name: "valid task update - not owner or requester",
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				ResourceId:   "1",
+				ResourceData: updateTaskAcceptedData,
+				ResourcePath: "Task/1",
+			},
+			existingTask: &fhir.Task{
+				Owner:  &fhir.Reference{Identifier: &auth.TestPrincipal2.Organization.Identifier[0]},
+				Status: fhir.TaskStatusRequested,
+			},
+			errorFromRead: nil,
+			wantErr:       true,
+		},
+		{
+			name: "valid task update - requester, invalid state transition",
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				ResourceId:   "1",
+				ResourceData: updateTaskAcceptedData,
+				ResourcePath: "Task/1",
+			},
+			existingTask: &fhir.Task{
+				Owner:  &fhir.Reference{Identifier: &auth.TestPrincipal1.Organization.Identifier[0]},
+				Status: fhir.TaskStatusRequested,
+			},
+			errorFromRead: nil,
+			wantErr:       true,
+		},
+		// TODO: Positive test cases. These are complex to mock with the side effects of fhir.QueryParam, refactor unit tests to http tests
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tx := &coolfhir.TransactionBuilder{}
+
+			if tt.existingTask != nil {
+				mockFHIRClient.EXPECT().Read("Task/1", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.existingTask))
+					return tt.errorFromRead
+				})
+			}
+
+			_, err := service.handleUpdateTask(tt.ctx, tt.request, tx)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("handleUpdateTask() error = %v, wantErr %v", err, tt.wantErr)
+			}
 		})
 	}
 }
