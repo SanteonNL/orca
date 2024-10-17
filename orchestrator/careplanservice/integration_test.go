@@ -199,6 +199,14 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
 		assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 	}
+	t.Log("Read Task - Non-creating referenced party")
+	{
+		var fetchedTask fhir.Task
+		err := carePlanContributor2.Read("Task/"+*task.Id, &fetchedTask)
+		require.NoError(t, err)
+		require.NotNil(t, fetchedTask.Id)
+		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
+	}
 	t.Log("Read Task - Not in participants")
 	{
 		var fetchedTask fhir.Task
@@ -377,6 +385,49 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Equal(t, 2, int(notificationCounter.Load()))
 			notificationCounter.Store(0)
+		})
+	}
+
+	t.Log("Creating Task - participant is part of CareTeam and is able to create a task in an existing CarePlan")
+	{
+		newTask := fhir.Task{
+			BasedOn: []fhir.Reference{
+				{
+					Type:      to.Ptr("CarePlan"),
+					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+				},
+			},
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Focus: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			},
+		}
+
+		err := carePlanContributor2.Create(newTask, &newTask)
+		require.NoError(t, err)
+		err = carePlanContributor2.Read(*newTask.BasedOn[0].Reference, &carePlan)
+		require.NoError(t, err)
+
+		t.Run("Check Task properties", func(t *testing.T) {
+			require.NotNil(t, task.Id)
+			require.Equal(t, "CarePlan/"+*carePlan.Id, *newTask.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
+		})
+		t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
+			require.Len(t, carePlan.Activity, 3)
+			require.Equal(t, "Task", *carePlan.Activity[2].Reference.Type)
+			require.Equal(t, "Task/"+*newTask.Id, *carePlan.Activity[2].Reference.Reference)
 		})
 	}
 }

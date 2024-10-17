@@ -38,24 +38,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	if err != nil {
 		return nil, err
 	}
-	var isOwner bool
-	if task.Owner != nil {
-		for _, identifier := range principal.Organization.Identifier {
-			if coolfhir.LogicalReferenceEquals(*task.Owner, fhir.Reference{Identifier: &identifier}) {
-				isOwner = true
-				break
-			}
-		}
-	}
-	var isRequester bool
-	if task.Requester != nil {
-		for _, identifier := range principal.Organization.Identifier {
-			if coolfhir.LogicalReferenceEquals(*task.Requester, fhir.Reference{Identifier: &identifier}) {
-				isRequester = true
-				break
-			}
-		}
-	}
+	isOwner, isRequester := coolfhir.ValidateTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester) {
 		return nil, errors.New(
 			fmt.Sprintf(

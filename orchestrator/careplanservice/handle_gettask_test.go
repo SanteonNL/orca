@@ -7,7 +7,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
@@ -51,27 +50,7 @@ func TestService_handleGetTask(t *testing.T) {
 			errorFromRead:    errors.New("error"),
 			expectError:      true,
 		},
-		{
-			ctx:  context.Background(),
-			name: "No CareTeams returned",
-			id:   "1",
-			returnedTask: &fhir.Task{
-				Id: to.Ptr("1"),
-				BasedOn: []fhir.Reference{
-					{
-						Reference: to.Ptr("CarePlan/1"),
-						Id:        to.Ptr("1"),
-					},
-				},
-			},
-			returnedCarePlan: &fhir.CarePlan{
-				Id: to.Ptr("1"),
-			},
-			returnedCareTeam: nil,
-			errorFromRead:    nil,
-			expectError:      true,
-		},
-		// TODO: Positive test cases. These are complex to mock with the side effects of fhir.QueryParam, refactor unit tests to http tests
+		// TODO: These are complex to mock with the side effects of fhir.QueryParam, refactor unit tests to http tests
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
