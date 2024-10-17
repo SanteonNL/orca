@@ -23,6 +23,7 @@ type X509FileConfig struct {
 	DecryptCertFile string `koanf:"decryptcertfile"`
 	ClientCertFile  string `koanf:"clientcertfile"`
 	SignCertFile    string `koanf:"signcertfile"`
+	SignKeyFile     string `koanf:"signkeyfile"`
 }
 
 type AzureConfig struct {
