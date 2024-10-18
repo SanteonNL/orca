@@ -132,10 +132,16 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceId := request.PathValue("id")
 		s.handleCreateOrUpdate(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 	}))
-	mux.HandleFunc("GET "+basePath+"/{resourcePath...}", s.profile.Authenticator(baseUrl, func(writer http.ResponseWriter, request *http.Request) {
-		// TODO: Authorize request here
-		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.Method, request.URL.String())
-		s.proxy.ServeHTTP(writer, request)
+	// Handle reading a specific resource instance
+	mux.HandleFunc("GET "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		resourceType := request.PathValue("type")
+		resourceId := request.PathValue("id")
+		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
+	}))
+	// Handle search
+	mux.HandleFunc("GET "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		resourceType := request.PathValue("type")
+		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Get"+resourceType)
 	}))
 }
 
@@ -249,6 +255,76 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 	}
 }
 
+func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceId string, resourceType, operationName string) {
+	headers := new(fhirclient.Headers)
+
+	var resource interface{}
+	var err error
+	switch resourceType {
+	case "CarePlan":
+		resource, err = s.handleGetCarePlan(httpRequest.Context(), resourceId, headers)
+	case "CareTeam":
+		resource, err = s.handleGetCareTeam(httpRequest.Context(), resourceId, headers)
+	case "Task":
+		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
+	default:
+		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
+		s.proxy.ServeHTTP(httpResponse, httpRequest)
+		return
+	}
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
+		return
+	}
+
+	for key, value := range headers.Header {
+		httpResponse.Header()[key] = value
+	}
+
+	b, err := json.Marshal(resource)
+	_, err = httpResponse.Write(b)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
+		return
+	}
+	return
+}
+
+func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
+	headers := new(fhirclient.Headers)
+
+	var bundle *fhir.Bundle
+	var err error
+	switch resourceType {
+	case "CarePlan":
+		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), httpRequest.URL.Query(), headers)
+	case "CareTeam":
+		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), httpRequest.URL.Query(), headers)
+	case "Task":
+		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
+	default:
+		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
+		s.proxy.ServeHTTP(httpResponse, httpRequest)
+		return
+	}
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
+		return
+	}
+
+	for key, value := range headers.Header {
+		httpResponse.Header()[key] = value
+	}
+
+	b, err := json.Marshal(bundle)
+	_, err = httpResponse.Write(b)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
+		return
+	}
+	return
+}
+
 func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.ResponseWriter) {
 	// Create Bundle
 	var bundle fhir.Bundle
@@ -319,8 +395,6 @@ func (s *Service) defaultHandlerProvider(method string, resourcePath string) fun
 		switch getResourceType(resourcePath) {
 		case "Task":
 			return s.handleCreateTask
-		case "CarePlan":
-			return s.handleCreateCarePlan
 		}
 	case http.MethodPut:
 		switch getResourceType(resourcePath) {

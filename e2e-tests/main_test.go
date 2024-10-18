@@ -39,7 +39,8 @@ func Test_Main(t *testing.T) {
 	const clinicURA = 1
 	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir/notify", true)
 	require.NoError(t, err)
-	setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", true, carePlanServiceBaseURL, clinicFHIRStoreURL)
+	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", true, carePlanServiceBaseURL, clinicFHIRStoreURL)
+	clinicOrcaFHIRClient := fhirclient.New(clinicOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 
 	// Setup Hospital
 	const hospitalFHIRStoreURL = "http://fhirstore:8080/fhir/hospital"
@@ -52,14 +53,8 @@ func Test_Main(t *testing.T) {
 	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 
 	t.Run("EHR using Orchestrator REST API", func(t *testing.T) {
-		t.Run("Hospital EHR creates New CarePlan, New Task", func(t *testing.T) {
-			t.Log("Creating new CarePlan...")
-			carePlan := fhir.CarePlan{}
-			{
-				err := hospitalOrcaFHIRClient.Create(carePlan, &carePlan)
-				require.NoError(t, err)
-			}
-			t.Log("Creating new Task...")
+		t.Run("Clinic EHR creates New CarePlan, New Task", func(t *testing.T) {
+			t.Log("Hospital attempts to create task without existing CarePlan in clinic, fails...")
 			var task fhir.Task
 			{
 				task.Meta = &fhir.Meta{
@@ -88,12 +83,38 @@ func Test_Main(t *testing.T) {
 				}
 				task.Intent = "order"
 				task.Status = fhir.TaskStatusRequested
-				task.BasedOn = []fhir.Reference{
-					{
-						Reference: to.Ptr("CarePlan/" + *carePlan.ID),
+				err := hospitalOrcaFHIRClient.Create(task, &task)
+				require.Error(t, err)
+			}
+			t.Log("Creating new Task...")
+			{
+				task.Meta = &fhir.Meta{
+					Profile: []string{
+						"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
 					},
 				}
-				err := hospitalOrcaFHIRClient.Create(task, &task)
+				task.Requester = &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr(URANamingSystem),
+						Value:  to.Ptr(strconv.Itoa(hospitalURA)),
+					},
+				}
+				task.Owner = &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr(URANamingSystem),
+						Value:  to.Ptr(strconv.Itoa(clinicURA)),
+					},
+				}
+				task.Focus = &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						// COPD
+						System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+						Value:  to.Ptr("99534756439"),
+					},
+				}
+				task.Intent = "order"
+				task.Status = fhir.TaskStatusRequested
+				err := clinicOrcaFHIRClient.Create(task, &task)
 				require.NoError(t, err)
 			}
 			t.Log("Responding to Task Questionnaire")

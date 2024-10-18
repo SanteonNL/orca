@@ -16,11 +16,15 @@ import (
 
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msgf("Updating Task: %s", request.ResourceId)
-	// TODO: Authorize request here
-	// TODO: Check only allowed fields are set, or only the allowed values (INT-204)?
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, err)
+	}
+
+	// Validate fields on updated Task
+	err := coolfhir.ValidateTaskRequiredFields(task)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Task: %w", err)
 	}
 
 	// the Task prior to updates, we need this to validate the state transition
@@ -34,24 +38,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	if err != nil {
 		return nil, err
 	}
-	var isOwner bool
-	if task.Owner != nil {
-		for _, identifier := range principal.Organization.Identifier {
-			if coolfhir.LogicalReferenceEquals(*task.Owner, fhir.Reference{Identifier: &identifier}) {
-				isOwner = true
-				break
-			}
-		}
-	}
-	var isRequester bool
-	if task.Requester != nil {
-		for _, identifier := range principal.Organization.Identifier {
-			if coolfhir.LogicalReferenceEquals(*task.Requester, fhir.Reference{Identifier: &identifier}) {
-				isRequester = true
-				break
-			}
-		}
-	}
+	isOwner, isRequester := coolfhir.ValidateTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester) {
 		return nil, errors.New(
 			fmt.Sprintf(

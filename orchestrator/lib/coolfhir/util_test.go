@@ -1,8 +1,10 @@
 package coolfhir
 
 import (
+	"errors"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"testing"
 	"time"
@@ -356,10 +358,190 @@ func TestValidateCareTeamParticipantPeriod(t *testing.T) {
 	}
 }
 
-func TestHttpMethodToVerb(t *testing.T) {
-	assert.Equal(t, fhir.HTTPVerbGET, HttpMethodToVerb("GET"))
-	assert.Equal(t, fhir.HTTPVerbPOST, HttpMethodToVerb("POST"))
-	assert.Equal(t, fhir.HTTPVerbPUT, HttpMethodToVerb("PUT"))
-	assert.Equal(t, fhir.HTTPVerbDELETE, HttpMethodToVerb("DELETE"))
-	assert.Equal(t, fhir.HTTPVerbPATCH, HttpMethodToVerb("PATCH"))
+func Test_ValidateTaskRequiredFields(t *testing.T) {
+	type args struct {
+		task fhir.Task
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr error
+	}{
+		{
+			name: "invalid intent",
+			args: args{
+				task: fhir.Task{
+					Status: fhir.TaskStatusReady,
+					Intent: "invalid",
+				},
+			},
+			wantErr: errors.New("task.Intent must be 'order'"),
+		},
+		{
+			name: "valid intent",
+			args: args{
+				task: fhir.Task{
+					Status: fhir.TaskStatusReady,
+					Intent: "order",
+				},
+			},
+			wantErr: nil,
+		},
+		{
+			name: "missing task.For.Identifier.System",
+			args: args{
+				task: fhir.Task{
+					Status: fhir.TaskStatusReady,
+					Intent: "order",
+					For: &fhir.Reference{
+						Identifier: &fhir.Identifier{},
+					},
+				},
+			},
+			wantErr: errors.New("task.For.Identifier.System must be set"),
+		},
+		{
+			name: "missing task.For.Identifier.Value",
+			args: args{
+				task: fhir.Task{
+					Status: fhir.TaskStatusReady,
+					Intent: "order",
+					For: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+						},
+					},
+				},
+			},
+			wantErr: errors.New("task.For.Identifier.Value must be set"),
+		},
+		{
+			name: "missing task.Requester.Identifier.System",
+			args: args{
+				task: fhir.Task{
+					Status: fhir.TaskStatusReady,
+					Intent: "order",
+					For: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+							Value:  to.Ptr("value"),
+						},
+					},
+					Requester: &fhir.Reference{
+						Identifier: &fhir.Identifier{},
+					},
+				},
+			},
+			wantErr: errors.New("task.Requester.Identifier.System must be set"),
+		},
+		{
+			name: "missing task.For.Identifier.Value",
+			args: args{
+				task: fhir.Task{
+					Status: fhir.TaskStatusReady,
+					Intent: "order",
+					For: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+							Value:  to.Ptr("value"),
+						},
+					},
+					Requester: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+						},
+					},
+				},
+			},
+			wantErr: errors.New("task.Requester.Identifier.Value must be set"),
+		},
+		{
+			name: "missing task.Owner.Identifier.System",
+			args: args{
+				task: fhir.Task{
+					Status: fhir.TaskStatusReady,
+					Intent: "order",
+					For: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+							Value:  to.Ptr("value"),
+						},
+					},
+					Requester: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+							Value:  to.Ptr("value"),
+						},
+					},
+					Owner: &fhir.Reference{
+						Identifier: &fhir.Identifier{},
+					},
+				},
+			},
+			wantErr: errors.New("task.Owner.Identifier.System must be set"),
+		},
+		{
+			name: "missing task.Owner.Identifier.Value",
+			args: args{
+				task: fhir.Task{
+					Status: fhir.TaskStatusReady,
+					Intent: "order",
+					For: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+							Value:  to.Ptr("value"),
+						},
+					},
+					Requester: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+							Value:  to.Ptr("value"),
+						},
+					},
+					Owner: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+						},
+					},
+				},
+			},
+			wantErr: errors.New("task.Owner.Identifier.Value must be set"),
+		},
+		{
+			name: "Valid - Full",
+			args: args{
+				task: fhir.Task{
+					Status: fhir.TaskStatusReady,
+					Intent: "order",
+					For: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+							Value:  to.Ptr("value"),
+						},
+					},
+					Requester: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+							Value:  to.Ptr("value"),
+						},
+					},
+					Owner: &fhir.Reference{
+						Identifier: &fhir.Identifier{
+							System: to.Ptr("system"),
+							Value:  to.Ptr("value"),
+						},
+					},
+				},
+			},
+			wantErr: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotErr := ValidateTaskRequiredFields(tt.args.task)
+			if tt.wantErr != nil {
+				require.EqualError(t, gotErr, tt.wantErr.Error())
+			}
+		})
+	}
 }

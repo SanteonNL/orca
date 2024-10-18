@@ -51,7 +51,7 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	}
 	// Make sure Task.requester is always in the CareTeam
 	// TODO: But are they always active, regardless of Task status?
-	changed := activateMembership(careTeam, updateTriggerTask.Requester)
+	changed := ActivateMembership(careTeam, updateTriggerTask.Requester)
 	if updateCareTeam(careTeam, otherActivities, updateTriggerTask) {
 		changed = true
 	}
@@ -66,7 +66,7 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 func updateCareTeam(careTeam *fhir.CareTeam, otherActivities []fhir.Task, updatedActivity fhir.Task) bool {
 	if updatedActivity.Status == fhir.TaskStatusAccepted {
 		// Task.owner should be an active member
-		return activateMembership(careTeam, updatedActivity.Owner)
+		return ActivateMembership(careTeam, updatedActivity.Owner)
 	}
 	if updatedActivity.Status == fhir.TaskStatusCompleted ||
 		updatedActivity.Status == fhir.TaskStatusFailed ||
@@ -78,7 +78,7 @@ func updateCareTeam(careTeam *fhir.CareTeam, otherActivities []fhir.Task, update
 	return false
 }
 
-func activateMembership(careTeam *fhir.CareTeam, party *fhir.Reference) bool {
+func ActivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference) bool {
 	for _, participant := range careTeam.Participant {
 		if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, party.Identifier) {
 			// Already in CareTeam
