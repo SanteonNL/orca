@@ -3,6 +3,7 @@ package zorgplatform
 import (
 	"crypto/rsa"
 	"crypto/tls"
+	"net/http"
 	"os"
 	"testing"
 
@@ -148,7 +149,7 @@ func TestService_sign(t *testing.T) {
 	// Initialize the service with the private key and certificate
 	service := &Service{
 		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey),
-		signingCertificate:    keyPair.Leaf,
+		signingCertificate:    keyPair.Certificate,
 	}
 
 	launchContext := &LaunchContext{
@@ -175,11 +176,59 @@ func TestService_sign(t *testing.T) {
 	// Assert no errors occurred
 	assert.NoError(t, err)
 
+	// Convert signed assertion to string
+	doc := etree.NewDocument()
+	doc.SetRoot(signedElement)
+	signedStr, _ := doc.WriteToString()
+
 	// Print the signed assertion for verification with xmlsec1
-	println(signedElement)
+	println(signedStr)
 
 	// Optional: You can also save the signed assertion to a file for easier verification with xmlsec1
-	os.WriteFile("signed-assertion.xml", []byte(signedElement), 0644)
+	os.WriteFile("signed-assertion.xml", []byte(signedStr), 0644)
 
 	//You can test the output (manually for now) with: xmlsec1 --verify --id-attr:ID urn:oasis:names:tc:SAML:2.0:assertion:Assertion --output /dev/null --trusted-pem ./test-certificate.pem --pubkey-pem ./test-key.pem signed-assertion.xml
+}
+
+func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
+	//You can test the output (manually for now) with:
+	// xmlsec1 --verify --id-attr:ID urn:oasis:names:tc:SAML:2.0:assertion:Assertion --output /dev/null --trusted-pem ./test-sign-zorgplatform-chain.private.pem --pubkey-pem ./test-sign-zorgplatform.private.pem signed-envelope.xml
+
+	clientCert, err := tls.LoadX509KeyPair("test-tls-zorgplatform.private.pem", "test-tls-zorgplatform.private.pem")
+	assert.NoError(t, err)
+	signCert, err := tls.LoadX509KeyPair("test-sign-zorgplatform.private.pem", "test-sign-zorgplatform.private.pem")
+	assert.NoError(t, err)
+	service := &Service{
+		tlsClientCertificate:  &clientCert,
+		signingCertificateKey: signCert.PrivateKey.(*rsa.PrivateKey),
+		signingCertificate:    signCert.Certificate,
+		zorgplatformHttpClient: &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					Certificates:  []tls.Certificate{clientCert},
+					MinVersion:    tls.VersionTLS12,
+					Renegotiation: tls.RenegotiateFreelyAsClient,
+				},
+			},
+		},
+		config: Config{
+			StsUrl:    "https://zorgplatform.online/sts",
+			Issuer:    "https://zorgplatform.online/sts",
+			OwnIssuer: "urn:oid:2.16.840.1.113883.2.4.3.224.1.1",
+		},
+	}
+
+	launchContext := LaunchContext{
+		Practitioner: fhir.Practitioner{Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("urn:oid:2.16.840.1.113883.4.1"),
+				Value:  to.Ptr("999999999"),
+			},
+		}},
+		WorkflowId: "workflow-1234",
+		Bsn:        "999999205", // Assuming Bsn is part of LaunchContext
+	}
+	actual, err := service.RequestHcpRst(launchContext)
+	assert.NoError(t, err)
+	println(actual)
 }

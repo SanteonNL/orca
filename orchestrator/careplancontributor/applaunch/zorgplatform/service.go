@@ -116,7 +116,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		config:                config,
 		baseURL:               baseURL,
 		landingUrlPath:        landingUrlPath,
-		signingCertificate:    signCert,
+		signingCertificate:    [][]byte{signCert.Raw},
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
 		decryptCertificate:    decryptCert,
@@ -140,7 +140,7 @@ type Service struct {
 	config                 Config
 	baseURL                string
 	landingUrlPath         string
-	signingCertificate     *x509.Certificate
+	signingCertificate     [][]byte
 	signingCertificateKey  stdCrypto.Signer
 	tlsClientCertificate   *tls.Certificate
 	decryptCertificate     crypto.Suite
