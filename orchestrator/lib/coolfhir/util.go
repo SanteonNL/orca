@@ -186,7 +186,7 @@ func FindMatchingParticipantInCareTeam(careTeams []fhir.CareTeam, principalOrgan
 	for _, careTeam := range careTeams {
 		for _, participant := range careTeam.Participant {
 			for _, identifier := range principalOrganizationIdentifiers {
-				if IdentifierEquals(participant.OnBehalfOf.Identifier, &identifier) {
+				if IdentifierEquals(participant.Member.Identifier, &identifier) {
 					return &participant
 				}
 			}

@@ -82,7 +82,7 @@
         }
       },
       "participant": [ {
-        "onBehalfOf": {
+        "member": {
           "identifier": {
             "system": "http://fhir.nl/fhir/NamingSystem/bsn",
             "value": "111222333"
@@ -92,7 +92,7 @@
           "start": "2024-08-27"
         }
       }, {
-        "onBehalfOf": {
+        "member": {
           "identifier": {
             "system": "http://fhir.nl/fhir/NamingSystem/ura",
             "value": "1"
@@ -102,7 +102,7 @@
           "start": "2024-08-27"
         }
       }, {
-        "onBehalfOf": {
+        "member": {
           "identifier": {
             "system": "http://fhir.nl/fhir/NamingSystem/ura",
             "value": "2"
