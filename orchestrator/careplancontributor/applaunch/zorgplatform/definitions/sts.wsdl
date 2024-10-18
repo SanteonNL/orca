@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<wsdl:definitions targetNamespace="http://schemas.microsoft.com/ws/2008/06/identity/securitytokenservice"
+                  xmlns:wsdl="http://schemas.xmlsoap.org/wsdl/" xmlns:wsx="http://schemas.xmlsoap.org/ws/2004/09/mex"
+                  xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd"
+                  xmlns:wsa10="http://www.w3.org/2005/08/addressing" xmlns:wsp="http://www.w3.org/ns/ws-policy"
+                  xmlns:wsap="http://schemas.xmlsoap.org/ws/2004/08/addressing/policy"
+                  xmlns:msc="http://schemas.microsoft.com/ws/2005/12/wsdl/contract"
+                  xmlns:soap12="http://schemas.xmlsoap.org/wsdl/soap12/"
+                  xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+                  xmlns:wsam="http://www.w3.org/2007/05/addressing/metadata"
+                  xmlns:xsd="http://www.w3.org/2001/XMLSchema"
+                  xmlns:tns="http://schemas.microsoft.com/ws/2008/06/identity/securitytokenservice"
+                  xmlns:soap="http://schemas.xmlsoap.org/wsdl/soap/"
+                  xmlns:wsaw="http://www.w3.org/2006/05/addressing/wsdl"
+                  xmlns:soapenc="http://schemas.xmlsoap.org/soap/encoding/">
+    <wsdl:types>
+        <xsd:schema targetNamespace="http://schemas.microsoft.com/ws/2008/06/identity/securitytokenservice/Imports">
+            <xsd:import schemaLocation="imports.xsd"
+                        namespace="http://schemas.microsoft.com/Message"/>
+        </xsd:schema>
+    </wsdl:types>
+    <wsdl:message name="IWSTrust13Sync_Trust13Cancel_InputMessage">
+        <wsdl:part name="message" type="q1:MessageBody" xmlns:q1="http://schemas.microsoft.com/Message"/>
+    </wsdl:message>
+    <wsdl:message name="IWSTrust13Sync_Trust13Cancel_OutputMessage">
+        <wsdl:part name="Trust13CancelResult" type="q2:MessageBody" xmlns:q2="http://schemas.microsoft.com/Message"/>
+    </wsdl:message>
+    <wsdl:message name="IWSTrust13Sync_Trust13Issue_InputMessage">
+        <wsdl:part name="message" type="q3:MessageBody" xmlns:q3="http://schemas.microsoft.com/Message"/>
+    </wsdl:message>
+    <wsdl:message name="IWSTrust13Sync_Trust13Issue_OutputMessage">
+        <wsdl:part name="Trust13IssueResult" type="q4:MessageBody" xmlns:q4="http://schemas.microsoft.com/Message"/>
+    </wsdl:message>
+    <wsdl:message name="IWSTrust13Sync_Trust13Renew_InputMessage">
+        <wsdl:part name="message" type="q5:MessageBody" xmlns:q5="http://schemas.microsoft.com/Message"/>
+    </wsdl:message>
+    <wsdl:message name="IWSTrust13Sync_Trust13Renew_OutputMessage">
+        <wsdl:part name="Trust13RenewResult" type="q6:MessageBody" xmlns:q6="http://schemas.microsoft.com/Message"/>
+    </wsdl:message>
+    <wsdl:message name="IWSTrust13Sync_Trust13Validate_InputMessage">
+        <wsdl:part name="message" type="q7:MessageBody" xmlns:q7="http://schemas.microsoft.com/Message"/>
+    </wsdl:message>
+    <wsdl:message name="IWSTrust13Sync_Trust13Validate_OutputMessage">
+        <wsdl:part name="Trust13ValidateResult" type="q8:MessageBody" xmlns:q8="http://schemas.microsoft.com/Message"/>
+    </wsdl:message>
+    <wsdl:message name="IWSTrust13Sync_TransformToken_InputMessage"/>
+    <wsdl:message name="IWSTrust13Sync_TransformToken_OutputMessage">
+        <wsdl:part name="TransformTokenResult" type="q9:MessageBody" xmlns:q9="http://schemas.microsoft.com/Message"/>
+    </wsdl:message>
+    <wsdl:portType name="IWSTrust13Sync">
+        <wsdl:operation name="Trust13Cancel">
+            <wsdl:input wsam:Action="http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Cancel"
+                        message="tns:IWSTrust13Sync_Trust13Cancel_InputMessage"/>
+            <wsdl:output wsam:Action="http://docs.oasis-open.org/ws-sx/ws-trust/200512/RSTR/CancelFinal"
+                         message="tns:IWSTrust13Sync_Trust13Cancel_OutputMessage"/>
+        </wsdl:operation>
+        <wsdl:operation name="Trust13Issue">
+            <wsdl:input wsam:Action="http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Issue"
+                        message="tns:IWSTrust13Sync_Trust13Issue_InputMessage"/>
+            <wsdl:output wsam:Action="http://docs.oasis-open.org/ws-sx/ws-trust/200512/RSTRC/IssueFinal"
+                         message="tns:IWSTrust13Sync_Trust13Issue_OutputMessage"/>
+        </wsdl:operation>
+        <wsdl:operation name="Trust13Renew">
+            <wsdl:input wsam:Action="http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Renew"
+                        message="tns:IWSTrust13Sync_Trust13Renew_InputMessage"/>
+            <wsdl:output wsam:Action="http://docs.oasis-open.org/ws-sx/ws-trust/200512/RSTR/RenewFinal"
+                         message="tns:IWSTrust13Sync_Trust13Renew_OutputMessage"/>
+        </wsdl:operation>
+        <wsdl:operation name="Trust13Validate">
+            <wsdl:input wsam:Action="http://docs.oasis-open.org/ws-sx/ws-trust/200512/RST/Validate"
+                        message="tns:IWSTrust13Sync_Trust13Validate_InputMessage"/>
+            <wsdl:output wsam:Action="http://docs.oasis-open.org/ws-sx/ws-trust/200512/RSTR/ValidateFinal"
+                         message="tns:IWSTrust13Sync_Trust13Validate_OutputMessage"/>
+        </wsdl:operation>
+        <wsdl:operation name="TransformToken">
+            <wsdl:input
+                    wsam:Action="http://schemas.microsoft.com/ws/2008/06/identity/securitytokenservice/IWSTrust13Sync/TransformToken"
+                    message="tns:IWSTrust13Sync_TransformToken_InputMessage"/>
+            <wsdl:output
+                    wsam:Action="http://schemas.microsoft.com/ws/2008/06/identity/securitytokenservice/IWSTrust13Sync/TransformTokenResponse"
+                    message="tns:IWSTrust13Sync_TransformToken_OutputMessage"/>
+        </wsdl:operation>
+    </wsdl:portType>
+</wsdl:definitions>
