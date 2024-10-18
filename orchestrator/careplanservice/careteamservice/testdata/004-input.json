@@ -48,7 +48,7 @@
         "id": "10",
         "participant": [
           {
-            "onBehalfOf": {
+            "member": {
               "type": "Organization",
               "identifier": {
                 "system": "http://fhir.nl/fhir/NamingSystem/ura",
@@ -60,7 +60,7 @@
             }
           },
           {
-            "onBehalfOf": {
+            "member": {
               "type": "Organization",
               "identifier": {
                 "system": "http://fhir.nl/fhir/NamingSystem/ura",

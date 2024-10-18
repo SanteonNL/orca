@@ -29,15 +29,15 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
 
 	participant1 := fhir.CareTeamParticipant{
-		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
-		Period:     &fhir.Period{Start: to.Ptr("2021-01-01T00:00:00Z")},
+		Member: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+		Period: &fhir.Period{Start: to.Ptr("2021-01-01T00:00:00Z")},
 	}
 	participant2 := fhir.CareTeamParticipant{
-		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
-		Period:     &fhir.Period{Start: to.Ptr("2021-01-01T00:00:00Z")},
+		Member: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+		Period: &fhir.Period{Start: to.Ptr("2021-01-01T00:00:00Z")},
 	}
 	participant2WithEndDate := fhir.CareTeamParticipant{
-		OnBehalfOf: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+		Member: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		Period: &fhir.Period{
 			Start: to.Ptr("2021-01-01T00:00:00Z"),
 			End:   to.Ptr("2021-01-02T00:00:00Z"),
@@ -467,13 +467,13 @@ func assertCareTeam(t *testing.T, fhirClient fhirclient.Client, careTeamRef stri
 	require.NoError(t, err)
 	require.Lenf(t, careTeam.Participant, len(expectedMembers), "expected %d participants, got %d", len(expectedMembers), len(careTeam.Participant))
 	for _, participant := range careTeam.Participant {
-		require.NoError(t, coolfhir.ValidateLogicalReference(participant.OnBehalfOf, "Organization", coolfhir.URANamingSystem))
+		require.NoError(t, coolfhir.ValidateLogicalReference(participant.Member, "Organization", coolfhir.URANamingSystem))
 	}
 
 outer:
 	for _, expectedMember := range expectedMembers {
 		for _, participant := range careTeam.Participant {
-			if *participant.OnBehalfOf.Identifier.Value == *expectedMember.OnBehalfOf.Identifier.Value {
+			if *participant.Member.Identifier.Value == *expectedMember.Member.Identifier.Value {
 				// assert Period
 				if expectedMember.Period != nil && expectedMember.Period.Start != nil {
 					assert.NotNil(t, participant.Period.Start)
@@ -488,7 +488,7 @@ outer:
 				continue outer
 			}
 		}
-		t.Errorf("expected participant not found: %s", *expectedMember.OnBehalfOf.Identifier.Value)
+		t.Errorf("expected participant not found: %s", *expectedMember.Member.Identifier.Value)
 	}
 }
 

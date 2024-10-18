@@ -7,7 +7,7 @@
     "source" : "#ZHSYrvpo4ZP1aMg7"
   },
   "participant" : [ {
-    "onBehalfOf" : {
+    "member" : {
       "type" : "Organization",
       "identifier" : {
         "system" : "http://fhir.nl/fhir/NamingSystem/ura",

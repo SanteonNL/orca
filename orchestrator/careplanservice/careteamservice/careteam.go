@@ -80,7 +80,7 @@ func updateCareTeam(careTeam *fhir.CareTeam, otherActivities []fhir.Task, update
 
 func ActivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference) bool {
 	for _, participant := range careTeam.Participant {
-		if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, party.Identifier) {
+		if coolfhir.IdentifierEquals(participant.Member.Identifier, party.Identifier) {
 			// Already in CareTeam
 			return false
 		}
@@ -88,7 +88,7 @@ func ActivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference) bool {
 	// Not yet in CareTeam, add member
 	// TODO: Set Member
 	careTeam.Participant = append(careTeam.Participant, fhir.CareTeamParticipant{
-		OnBehalfOf: party,
+		Member: party,
 		Period: &fhir.Period{
 			Start: to.Ptr(now()),
 		},
@@ -107,10 +107,10 @@ func deactivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference, otherA
 
 	var result bool
 	for i, participant := range careTeam.Participant {
-		if !coolfhir.IsLogicalReference(participant.OnBehalfOf) {
+		if !coolfhir.IsLogicalReference(participant.Member) {
 			continue
 		}
-		if coolfhir.IdentifierEquals(participant.OnBehalfOf.Identifier, party.Identifier) {
+		if coolfhir.IdentifierEquals(participant.Member.Identifier, party.Identifier) {
 			// Update end date
 			if participant.Period.End == nil {
 				careTeam.Participant[i].Period.End = to.Ptr(now())
@@ -167,9 +167,9 @@ func now() string {
 }
 
 func sortParticipants(participants []fhir.CareTeamParticipant) {
-	// Sort by OnBehalfOf, so that the order doesn't change every time the CareTeam is updated
+	// Sort by Member, so that the order doesn't change every time the CareTeam is updated
 	// This also aids in testing, as the order of participants is predictable.
 	slices.SortFunc(participants, func(a, b fhir.CareTeamParticipant) int {
-		return strings.Compare(to.Value(a.OnBehalfOf.Identifier.Value), to.Value(b.OnBehalfOf.Identifier.Value))
+		return strings.Compare(to.Value(a.Member.Identifier.Value), to.Value(b.Member.Identifier.Value))
 	})
 }
