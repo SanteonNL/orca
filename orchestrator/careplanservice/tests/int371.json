@@ -1,0 +1,517 @@
+{
+  "resourceType": "Bundle",
+  "id": "cps-bundle-01",
+  "meta": {
+    "versionId": "1"
+  },
+  "type": "transaction",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Task",
+        "id": "cps-task-01",
+        "meta": {
+          "versionId": "1",
+          "profile": [
+            "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
+          ]
+        },
+        "status": "requested",
+        "intent": "order",
+        "code": {
+          "coding": [
+            {
+              "system": "http://hl7.org/fhir/CodeSystem/task-code",
+              "code": "fullfill"
+            }
+          ]
+        },
+        "focus": {
+          "reference": "urn:uuid:e669F4l0Bk3NJpQzoTzVE0opsQR2iWXR41M6FXkeguZo3",
+          "identifier": [
+            {
+              "use": "usual",
+              "type": {
+                "coding": [
+                  {
+                    "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+                    "code": "PLAC",
+                    "display": "Placer Identifier"
+                  }
+                ],
+                "text": "Placer Identifier"
+              },
+              "system": "urn:oid:1.2.840.114350.1.13.487.3.7.2.798268",
+              "value": "55254402"
+            }
+          ]
+        },
+        "for": {
+          "reference": "urn:uuid:ePopaa1twdGel1qh3E74K2t34g8SFrCRSDmPJUY9Zdhw3",
+          "display": "Xxx_Toorn, A., van de"
+        },
+        "requester": {
+          "display": "St Antonius",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "21514"
+          }
+        },
+        "owner": {
+          "display": "Zorg bij jou bv",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "86446"
+          }
+        },
+        "reasonCode": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "195111005",
+                "display": "Hartfalen"
+              }
+            ]
+          }
+        ]
+      },
+      "request": {
+        "method": "POST"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:e669F4l0Bk3NJpQzoTzVE0opsQR2iWXR41M6FXkeguZo3",
+      "resource": {
+        "resourceType": "ServiceRequest",
+        "id": "e669F4l0Bk3NJpQzoTzVE0opsQR2iWXR41M6FXkeguZo3",
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "coding": [
+                {
+                  "system": "http://terminology.hl7.org/CodeSystem/v2-0203",
+                  "code": "PLAC",
+                  "display": "Placer Identifier"
+                }
+              ],
+              "text": "Placer Identifier"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.2.798268",
+            "value": "55254402"
+          }
+        ],
+        "status": "revoked",
+        "intent": "order",
+        "category": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "371883000",
+                "display": "poliklinische verrichting (verrichting)"
+              },
+              {
+                "system": "urn:oid:1.2.840.114350.1.13.487.3.7.10.798268.30",
+                "code": "610000",
+                "display": "Afspraak"
+              }
+            ],
+            "text": "Afspraak"
+          }
+        ],
+        "priority": "routine",
+        "doNotPerform": true,
+        "code": {
+          "coding": [
+            {
+              "system": "urn:oid:1.2.840.114350.1.13.487.3.7.2.696580",
+              "code": "172219",
+              "display": "TM CAR HARTFALEN STABIEL AANMELDING THUISMONITORING"
+            },
+            {
+              "system": "http://snomed.info/sct",
+              "code": "719858009",
+              "display": "monitoren via telegeneeskunde (regime/therapie)"
+            }
+          ],
+          "text": "CAR hartfalen stabiel aanmelding thuismonitoring"
+        },
+        "quantityQuantity": {
+          "value": 1
+        },
+        "subject": {
+          "reference": "urn:uuid:ePopaa1twdGel1qh3E74K2t34g8SFrCRSDmPJUY9Zdhw3",
+          "display": "Xxx_Toorn, A., van de"
+        },
+        "encounter": {
+          "identifier": {
+            "use": "usual",
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.3.698084.8",
+            "value": "72254016"
+          },
+          "display": "Alleen orders"
+        },
+        "occurrencePeriod": {
+          "start": "2024-09-10T22:00:00Z"
+        },
+        "authoredOn": "2024-09-11T08:01:59Z",
+        "requester": {
+          "display": "St Antonius",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "21514"
+          }
+        },
+        "reasonCode": [
+          {
+            "coding": [
+              {
+                "system": "http://snomed.info/sct",
+                "code": "195111005",
+                "display": "Hartfalen"
+              }
+            ]
+          }
+        ],
+        "note": [
+          {
+            "text": "LET OP: streefwaardes moeten in notitie beschreven zijn om te kunnen includeren \r\n\r\n- Emailadres en telefoonnummer zijn juist in EPIC genoteerd: Ja\r\n- Patiënt is in staat de app te bedienen: Ja\r\n- Is er een taalbarriere: Ja\r\n- Patiënt heeft een bloeddrukmeter: Ja \r\n- Ontslagdatum: test"
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "ServiceRequest?identifier=urn:oid:1.2.840.114350.1.13.487.3.7.2.798268|55254402"
+      }
+    },
+    {
+      "fullUrl": "urn:uuid:ePopaa1twdGel1qh3E74K2t34g8SFrCRSDmPJUY9Zdhw3",
+      "resource": {
+        "resourceType": "Patient",
+        "extension": [
+          {
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "system": "urn:oid:1.2.840.114350.1.13.487.3.7.10.698084.130.657370.310560001",
+                  "code": "female",
+                  "display": "female"
+                }
+              ]
+            },
+            "url": "http://open.epic.com/FHIR/StructureDefinition/extension/legal-sex"
+          },
+          {
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "system": "urn:oid:1.2.840.114350.1.13.487.3.7.10.698084.130.657370.310560001",
+                  "code": "female",
+                  "display": "female"
+                }
+              ]
+            },
+            "url": "http://open.epic.com/FHIR/StructureDefinition/extension/sex-for-clinical-use"
+          },
+          {
+            "valueCode": "248152002",
+            "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-sex"
+          }
+        ],
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CEID"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.3.688884.100",
+            "value": "SNZVFMS02J423F3"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "EPIC"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.5.737384.0",
+            "value": "E1931776"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "EXTERNAL"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.2.698084",
+            "value": "Z1932652"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "FHIR"
+            },
+            "system": "http://open.epic.com/FHIR/StructureDefinition/patient-dstu2-fhir-id",
+            "value": "TJmZ.8trbZCxFfQdRUo9ucaqeK2hTlIUnWZa0BKtL17sB"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "FHIR STU3"
+            },
+            "system": "http://open.epic.com/FHIR/StructureDefinition/patient-fhir-id",
+            "value": "ePopaa1twdGel1qh3E74K2t34g8SFrCRSDmPJUY9Zdhw3"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "INTERNAL"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.2.698084",
+            "value": "  Z1932652"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "LOCAL"
+            },
+            "system": "urn:oid:2.16.528.1.1007.3.3.21514.2.2.4.1",
+            "value": "3003135"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "WPRINTERNAL"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.2.878082",
+            "value": "124444"
+          },
+          {
+            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+            "value": "111222333"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "extension": [
+              {
+                "valueCode": "NL4",
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order"
+              }
+            ],
+            "use": "official",
+            "text": "A. van de Xxx_Toorn",
+            "family": "van de Xxx_Toorn",
+            "given": [
+              "A."
+            ],
+            "_family": {
+              "extension": [
+                {
+                  "valueString": "Xxx_Toorn",
+                  "url": "http://hl7.org/fhir/StructureDefinition/humanname-own-name"
+                },
+                {
+                  "valueString": "van de",
+                  "url": "http://hl7.org/fhir/StructureDefinition/humanname-own-prefix"
+                }
+              ]
+            },
+            "_given": [
+              {
+                "extension": [
+                  {
+                    "valueCode": "IN",
+                    "url": "http://hl7.org/fhir/StructureDefinition/iso21090-EN-qualifier"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "extension": [
+              {
+                "valueCode": "NL4",
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order"
+              }
+            ],
+            "use": "usual",
+            "text": "A. van de Xxx_Toorn",
+            "family": "van de Xxx_Toorn",
+            "given": [
+              "A."
+            ],
+            "_family": {
+              "extension": [
+                {
+                  "valueString": "Xxx_Toorn",
+                  "url": "http://hl7.org/fhir/StructureDefinition/humanname-own-name"
+                },
+                {
+                  "valueString": "van de",
+                  "url": "http://hl7.org/fhir/StructureDefinition/humanname-own-prefix"
+                }
+              ]
+            },
+            "_given": [
+              {
+                "extension": [
+                  {
+                    "valueCode": "IN",
+                    "url": "http://hl7.org/fhir/StructureDefinition/iso21090-EN-qualifier"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "extension": [
+              {
+                "valueCode": "NL4",
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order"
+              }
+            ],
+            "use": "old",
+            "text": "XXX_TOORN,A.",
+            "family": "Xxx_Toorn",
+            "given": [
+              "A."
+            ],
+            "_family": {
+              "extension": [
+                {
+                  "valueString": "Xxx_Toorn",
+                  "url": "http://hl7.org/fhir/StructureDefinition/humanname-own-name"
+                }
+              ]
+            }
+          },
+          {
+            "extension": [
+              {
+                "valueCode": "NL4",
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order"
+              }
+            ],
+            "use": "old",
+            "text": "XXX_TOORN,A. VAN DE",
+            "family": "van de Xxx_Toorn",
+            "given": [
+              "A."
+            ],
+            "_family": {
+              "extension": [
+                {
+                  "valueString": "van de Xxx_Toorn",
+                  "url": "http://hl7.org/fhir/StructureDefinition/humanname-own-name"
+                }
+              ]
+            }
+          },
+          {
+            "extension": [
+              {
+                "valueCode": "NL4",
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order"
+              }
+            ],
+            "use": "old",
+            "text": "XXX_TOÖRN,A. VAN DE",
+            "family": "van de Xxx_Toörn",
+            "given": [
+              "A."
+            ],
+            "_family": {
+              "extension": [
+                {
+                  "valueString": "van de Xxx_Toörn",
+                  "url": "http://hl7.org/fhir/StructureDefinition/humanname-own-name"
+                }
+              ]
+            }
+          }
+        ],
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "030-1234567",
+            "use": "home"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1963-09-18",
+        "deceasedBoolean": false,
+        "address": [
+          {
+            "use": "home",
+            "city": "Enschede",
+            "postalCode": "9999 ZA",
+            "country": "NLD",
+            "_line": [
+              {
+                "extension": [
+                  {
+                    "valueString": "Knolweg",
+                    "url": "http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-streetName"
+                  },
+                  {
+                    "valueString": "1003",
+                    "url": "http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-houseNumber"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "use": "old",
+            "city": "Enschede",
+            "postalCode": "9999 ZA",
+            "country": "NLD",
+            "_line": [
+              {
+                "extension": [
+                  {
+                    "valueString": "Knolweg",
+                    "url": "http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-streetName"
+                  },
+                  {
+                    "valueString": "1003",
+                    "url": "http://hl7.org/fhir/StructureDefinition/iso21090-ADXP-houseNumber"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "communication": [
+          {
+            "language": {
+              "coding": [
+                {
+                  "system": "urn:ietf:bcp:47",
+                  "code": "nl",
+                  "display": "Nederlands"
+                }
+              ],
+              "text": "Nederlands"
+            },
+            "preferred": true
+          }
+        ],
+        "generalPractitioner": [
+          {
+            "type": "Practitioner",
+            "display": "CLM. Heerde van"
+          }
+        ],
+        "managingOrganization": {
+          "display": "St Antonius"
+        }
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Patient?identifier=http://fhir.nl/fhir/NamingSystem/bsn|111222333"
+      }
+    }
+  ]
+}

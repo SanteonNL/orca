@@ -278,7 +278,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		resourcePath := entry.Request.Url
 		resourcePathParts := strings.Split(resourcePath, "/")
 		if entry.Request == nil || len(resourcePathParts) > 2 {
-			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url (entry #) must be a relative URL", entryIdx), op, httpResponse)
+			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url must be a relative URL", entryIdx), op, httpResponse)
 			return
 		}
 

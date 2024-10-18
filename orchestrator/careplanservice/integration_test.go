@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"sync/atomic"
 	"testing"
 )
@@ -42,6 +44,20 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			End:   to.Ptr("2021-01-02T00:00:00Z"),
 		},
 	}
+
+	t.Run("Regressions", func(t *testing.T) {
+		t.Run("INT-371: CPS Bundle handling returns unexpected results (SAZ-test)", func(t *testing.T) {
+			bundleData, err := os.ReadFile("tests/int371.json")
+			require.NoError(t, err)
+			requestBundle := fhir.Bundle{}
+			err = json.Unmarshal(bundleData, &requestBundle)
+			require.NoError(t, err)
+
+			var resultBundle fhir.Bundle
+			err = carePlanContributor1.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+			require.NoError(t, err)
+		})
+	})
 
 	var carePlan fhir.CarePlan
 	var task fhir.Task
