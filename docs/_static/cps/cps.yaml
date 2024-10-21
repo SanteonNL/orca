@@ -1,0 +1,28 @@
+openapi: 3.0.3
+info:
+  title: Care Plan Service
+  description: |-
+    Care Plan Service for Shared Care Planning
+  version: 0.0.0
+servers:
+  - url: https://fauxcare.test.integration.zorgbijjou.com/orca/cps
+tags:
+  - name: notify
+    description: Delivering Notifications
+paths:
+  /fhir/notify:
+    post:
+      tags:
+        - notify
+      summary: Deliver notification
+      description: Allows the client to deliver a FHIR [notification bundle](http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification-r4) see [example](https://santeonnl.github.io/shared-care-planning/Bundle-notification-hospitalx-01.json.html).
+      operationId: notify
+      requestBody:
+        description: Notify this CPS of some events
+        content:
+          application/json: {}
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+
