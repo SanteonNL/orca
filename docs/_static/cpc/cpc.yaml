@@ -1,0 +1,300 @@
+openapi: 3.0.3
+info:
+  title: Care Plan Contributor
+  description: |-
+    Care Plan Contributor for Shared Care Planning
+  version: 0.0.0
+
+servers:
+  - url: https://fauxcare.test.integration.zorgbijjou.com/orca/cpc
+
+tags:
+  - name: cpc
+    description: Core CPC endpoints. These endpoints are used for participating in shared care planning.
+
+  - name: launchers
+    description: Application Launchers. These endpoints are used to launch the frontend application for the end user, that is, they create a session and return an URL for accessing the app with that session.
+
+  - name: frontend
+    description: Endpoints for the Frontend Application. These endpoints can be used once an app-launch has created a session for the user.
+
+
+paths:
+  /:
+    get:
+      tags:
+        - frontend
+      summary: Redirect to frontend
+      responses:
+        '200':
+          description: Successful operation
+
+  /fhir/notify:
+    post:
+      tags:
+        - cpc
+      summary: Deliver notification
+      description: Allows the client to deliver a FHIR [notification bundle](http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification-r4) see [example](https://santeonnl.github.io/shared-care-planning/Bundle-notification-hospitalx-01.json.html).
+      requestBody:
+        description: Notify this CPS of some events
+        content:
+          application/json: {}
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+
+  /fhir/{path}:
+    get:
+      tags:
+        - cpc
+      security:
+        - carePlanHeader: []
+      summary: Proxy FHIR
+      description: Proxy to EHR FHIR, provide `X-Scp-Context` header with CarePlan reference.
+      parameters:
+        - name: path
+          in: path
+          description: path to proxy
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+
+  /demo-app-launch:
+    get:
+      tags:
+        - launchers
+      summary: Launch Demo app
+      responses:
+        '302':
+          $ref: "#/components/responses/appLaunch302"
+
+
+  /smart-app-launch:
+    get:
+      tags:
+        - launchers
+      summary: Launch SMART app
+      responses:
+        '200':
+          $ref: "#/components/responses/appLaunch302"
+
+
+  /smart-launch/redirect:
+    get:
+      tags:
+        - launchers
+      summary: Redirect to SMART app
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json: {}
+
+  /zorgplatform-app-launch:
+    post:
+      tags:
+        - launchers
+      summary: Launch Frontend from Zorgplatform
+      responses:
+        '302':
+          $ref: "#/components/responses/appLaunch302"
+
+  /frontend:
+    get:
+      tags:
+        - frontend
+      summary: Frontend
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            text/html: {}
+
+  /context:
+    get:
+      tags:
+        - frontend
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json: {}
+
+
+  /ehr/fhir/{path}:
+    get:
+      tags:
+        - frontend
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: path
+          in: path
+          description: path to proxy
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+    post:
+      tags:
+        - frontend
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: path
+          in: path
+          description: path to proxy
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json: {}
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+    put:
+      tags:
+        - frontend
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: path
+          in: path
+          description: path to proxy
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json: {}
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+
+  /cps/fhir/{path}:
+    summary: CPS
+    description: Proxy request to the CPS's FHIR endpoint
+    get:
+      tags:
+        - frontend
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: path
+          in: path
+          description: path to proxy
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+    post:
+      tags:
+        - frontend
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: header
+          name: X-Scp-Context
+          description: CarePlan for which this request is in-scope. Auhtorization will be based on CareTeam membership.
+          schema:
+            type: string
+            format: uri
+          required: true
+        - name: path
+          in: path
+          description: path to proxy
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json: {}
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+    put:
+      tags:
+        - frontend
+      security:
+        - sessionCookie: []
+      parameters:
+        - in: header
+          name: X-Scp-Context
+          description: CarePlan for which this request is in-scope. Auhtorization will be based on CareTeam membership.
+          schema:
+            type: string
+            format: uri
+          required: true
+        - name: path
+          in: path
+          description: path to proxy
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json: {}
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+
+
+
+
+
+components:
+  securitySchemes:
+    carePlanHeader:
+      type: apiKey
+      in: header
+      name: X-Scp-Context
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sid
+
+  responses:
+    appLaunch302:
+      description: Successful operation
+      headers:
+        Set-Cookie:
+          schema:
+            type: string
+            example: sid=d84861c6-7fe9-44a4-97a3-4597d1d7982f; Path=/; HttpOnly; Expires=Wed, 21 Oct 2015 07:28:00 GMT
+        Content-Type:
+          schema:
+            type: string
+            example: text/html; charset=utf-8
+        Location:
+          schema:
+            type: string
+            example: /orca/cpc/

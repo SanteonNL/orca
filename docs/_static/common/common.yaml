@@ -1,0 +1,35 @@
+openapi: 3.0.3
+info:
+  title: Common
+  description: |-
+    Common API for ORCA
+  version: 0.0.0
+servers:
+  - url: https://fauxcare.test.integration.zorgbijjou.com/orca
+tags:
+  - name: health
+    description: Health Check
+paths:
+  /health:
+    get:
+      tags:
+        - health
+      summary: Health Check
+      description: Responds if the service is healthy
+      operationId: health
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Status'
+
+components:
+  schemas:
+    Status:
+      type: object
+      properties:
+        status:
+          type: string
+          example: up

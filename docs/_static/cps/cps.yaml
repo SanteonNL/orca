@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: Care Plan Service
+  description: |-
+    Care Plan Service for Shared Care Planning
+  version: 0.0.0
+
+servers:
+  - url: https://fauxcare.test.integration.zorgbijjou.com/orca/cps
+
+paths:
+  /:
+    post:
+      summary: Handle Bundle
+      requestBody:
+        content:
+          application/fhir+json: {}
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+
+
+  /{type}:
+    get:
+      summary: Search resources of type {type} in the backing FHIR store
+      parameters:
+        - name: type
+          in: path
+          description: Resource type
+          required: true
+          schema:
+            type: string
+            enum:
+              - Task
+              - CarePlan
+              - CareTeam
+              - ...
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+    post:
+      summary: Create a resource of type {type} in the backing FHIR store
+      parameters:
+        - name: type
+          in: path
+          description: Resource type
+          required: true
+          schema:
+            type: string
+            enum:
+              - Task
+              - CarePlan
+              - CareTeam
+              - ...
+      requestBody:
+        content:
+          application/fhir+json: {}
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+
+  /{type}/{id}:
+    get:
+      summary: Get resource {id} of type {type} in the backing FHIR store
+      parameters:
+        - name: type
+          in: path
+          description: Resource type
+          required: true
+          schema:
+            type: string
+            enum:
+              - Task
+              - CarePlan
+              - CareTeam
+              - ...
+        - name: id
+          in: path
+          description: Resource id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}
+    put:
+      summary: Update resource {id} of type {type} in the backing FHIR store
+      parameters:
+        - name: type
+          in: path
+          description: Resource type
+          required: true
+          schema:
+            type: string
+            enum:
+              - Task
+              - CarePlan
+              - CareTeam
+              - ...
+        - name: id
+          in: path
+          description: Resource id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/fhir+json: {}
+        required: true
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/fhir+json: {}

@@ -14,6 +14,7 @@ Code: https://github.com/SanteonNL/orca
     :glob:
 
     pages/getting-started/overview.rst
+    pages/api.rst
 
 
 .. toctree::

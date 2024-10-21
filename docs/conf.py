@@ -19,7 +19,7 @@ sys.path.insert(0, os.path.abspath('.'))
 
 # -- Project information -----------------------------------------------------
 
-project = u'ORCA Node'
+project = u'ORCA'
 copyright = u'2024, ORCA community'
 author = u'ORCA community'
 
@@ -183,6 +183,6 @@ epub_exclude_files = ['search.html']
 
 # -- Extension configuration -------------------------------------------------
 
-# def setup(app):
-#     app.add_css_file('css/style.css')
-#     app.add_css_file('css/swagger-ui.css')
+def setup(app):
+    app.add_css_file('css/style.css')
+    app.add_css_file('css/swagger-ui.css')
