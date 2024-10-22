@@ -71,6 +71,34 @@
             }
           ]
         }
+      },
+      {
+        "id": "id_registration_parameters_credential",
+        "name": "Registration parameters",
+        "purpose": "Finding endpoints registered by the care organization.",
+        "constraints": {
+          "fields": [
+            {
+              "path": [
+                "$.type"
+              ],
+              "filter": {
+                "type": "string",
+                "const": "DiscoveryRegistrationCredential"
+              }
+            },
+            {
+              "id": "fhir_notification_url",
+              "purpose": "FHIR subscription REST channel endpoint, issued by SCP-nodes notify about FHIR resources.",
+              "path": [
+                "$.credentialSubject.fhirNotificationURL"
+              ],
+              "filter": {
+                "type": "string"
+              }
+            }
+          ]
+        }
       }
     ]
   }
