@@ -22,7 +22,7 @@ func setupNutsNode(t *testing.T, dockerNetworkName string) (string, string) {
 	println("Starting Nuts node...")
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
-		Image:        "nutsfoundation/nuts-node:6.0.0-rc.9",
+		Image:        "nutsfoundation/nuts-node:6.0.0-rc.10",
 		Name:         "nutsnode",
 		ExposedPorts: []string{"8080/tcp", "8081/tcp"},
 		Networks:     []string{dockerNetworkName},
@@ -83,8 +83,8 @@ func createNutsIdentity(internalAPI string, subject string, ura int, name string
 func nutsActivateDiscoveryService(internalAPI string, subject string, notificationEndpointURL string) {
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"registrationParameters": map[string]string{
-			// fhir-notify should be defined by the use case
-			"fhir-notify": notificationEndpointURL,
+			// fhirNotificationURL should be defined by the use case
+			"fhirNotificationURL": notificationEndpointURL,
 		},
 	})
 	httpResponse, err := http.Post(internalAPI+"/internal/discovery/v1/dev:HomeMonitoring2024/"+subject, jsonType, bytes.NewReader(requestBody))
