@@ -8,6 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"time"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
@@ -16,10 +21,6 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/rs/zerolog/log"
-	"io"
-	"net/http"
-	"os"
-	"time"
 )
 
 const AzureKeyVaultTimeout = 10 * time.Second
@@ -115,6 +116,8 @@ func createCredential(credentialType string) (azcore.TokenCredential, error) {
 	switch credentialType {
 	case "default":
 		return azidentity.NewDefaultAzureCredential(nil)
+	case "cli":
+		return azidentity.NewAzureCLICredential(nil)
 	case "managed_identity":
 		opts := &azidentity.ManagedIdentityCredentialOptions{
 			ClientOptions: azcore.ClientOptions{},

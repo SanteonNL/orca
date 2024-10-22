@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
+
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 )
@@ -46,6 +47,48 @@ func GetCertificate(ctx context.Context, certClient CertificatesClient, keysClie
 		return nil, nil, fmt.Errorf("unable to get certificate private key: %w", err)
 	}
 	return cert, key, nil
+}
+
+// GetCertificateChain retrieves the full chain from Azure Key Vault
+func GetCertificateChain(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName, certificateVersion string) ([][]byte, *Suite, error) {
+	certResponse, err := certClient.GetCertificate(ctx, certificateName, certificateVersion, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to get certificate: %w", err)
+	}
+
+	// Parse the DER-encoded certificate (which might contain the chain)
+	certs, err := x509.ParseCertificates(certResponse.CER)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to parse certificate chain: %w", err)
+	}
+
+	// Initialize a slice to hold the complete certificate chain
+	certChain := make([][]byte, 0)
+
+	// Add each parsed certificate to the chain
+	for _, cert := range certs {
+		certChain = append(certChain, cert.Raw)
+	}
+
+	// Retrieve the private key
+	key, err := GetKey(keysClient, certificateName, certificateVersion)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to get certificate private key: %w", err)
+	}
+
+	return certChain, key, nil
+}
+
+func GetSignatureCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string, certificateVersion string) (*tls.Certificate, *Suite, error) {
+	cert, key, err := GetCertificateChain(ctx, certClient, keysClient, certificateName, certificateVersion)
+	if err != nil {
+		return nil, nil, fmt.Errorf("unable to get Signature certificate: %w", err)
+	}
+	return &tls.Certificate{
+		Certificate: cert,
+		PrivateKey:  key.SigningKey(),
+		// Leaf:        x509.ParseCertificate(cert[0]),
+	}, key, nil
 }
 
 func GetTLSCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string, certificateVersion string) (*tls.Certificate, error) {

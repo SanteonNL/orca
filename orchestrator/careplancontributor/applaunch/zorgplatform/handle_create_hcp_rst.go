@@ -4,11 +4,12 @@ import (
 	"bytes"
 	"crypto/tls"
 	"fmt"
-	dsig "github.com/russellhaering/goxmldsig"
 	"io"
 	"net/http"
 	"os"
 	"time"
+
+	dsig "github.com/russellhaering/goxmldsig"
 
 	"github.com/beevik/etree"
 	"github.com/crewjam/saml"
@@ -117,8 +118,8 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*saml.Asser
 		},
 		Subject: &saml.Subject{
 			NameID: &saml.NameID{
-				//Value: *launchContext.Practitioner.Identifier[0].Value + "@" + *launchContext.Practitioner.Identifier[0].System,
-				Value: "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
+				Value: *launchContext.Practitioner.Identifier[0].Value + "@" + *launchContext.Practitioner.Identifier[0].System,
+				// Value: "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
 			},
 			SubjectConfirmations: []saml.SubjectConfirmation{
 				{

@@ -47,24 +47,27 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 	log.Info().Msgf("Zorgplatform app launch is: %s:", appLaunchURL)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
-	var signCert *x509.Certificate
+	var signCert [][]byte
 	var signCertKey crypto.Suite
 	if config.AzureConfig.KeyVaultConfig.SignCertName == "" {
 		if config.X509FileConfig.SignCertFile == "" {
 			return nil, fmt.Errorf("no signing certificate provided in configuration")
 		}
-		keyPair, err := tls.LoadX509KeyPair(config.X509FileConfig.SignCertFile, config.X509FileConfig.SignCertFile)
+		keyPair, err := tls.LoadX509KeyPair(config.X509FileConfig.SignCertFile, config.X509FileConfig.SignKeyFile)
 		if err != nil {
 			return nil, fmt.Errorf("unable to load signing certificate and key: %w", err)
 		}
-		signCert = keyPair.Leaf
+		signCert = keyPair.Certificate
 		signCertKey = crypto.RsaSuite{PrivateKey: keyPair.PrivateKey.(*rsa.PrivateKey)}
 	} else {
 		var err error
-		signCert, signCertKey, err = azkeyvault.GetCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
+		chain, key, err := azkeyvault.GetSignatureCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get signing certificate from Azure Key Vault: %w", err)
 		}
+		signCert = chain.Certificate
+		signCertKey = key
+
 	}
 
 	var decryptCert crypto.Suite
@@ -116,7 +119,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		config:                config,
 		baseURL:               baseURL,
 		landingUrlPath:        landingUrlPath,
-		signingCertificate:    [][]byte{signCert.Raw},
+		signingCertificate:    signCert,
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
 		decryptCertificate:    decryptCert,
