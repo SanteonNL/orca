@@ -73,23 +73,23 @@ function issueUraCredential() {
 
   REQUEST=$(
   cat << EOF
-  {
-    "@context": [
-      "https://www.w3.org/2018/credentials/v1",
-      "https://nuts.nl/credentials/2024"
-    ],
-    "type": "NutsUraCredential",
-    "issuer": "${DID}",
-    "credentialSubject": {
-      "id": "${DID}",
-      "organization": {
-        "ura": "${URA}",
-        "name": "${NAME}",
-        "city": "${CITY}"
-      }
-    },
-    "withStatusList2021Revocation": false
-  }
+{
+  "@context": [
+    "https://www.w3.org/2018/credentials/v1",
+    "https://nuts.nl/credentials/2024"
+  ],
+  "type": "NutsUraCredential",
+  "issuer": "${DID}",
+  "credentialSubject": {
+    "id": "${DID}",
+    "organization": {
+      "ura": "${URA}",
+      "name": "${NAME}",
+      "city": "${CITY}"
+    }
+  },
+  "withStatusList2021Revocation": false
+}
 EOF
   )
 
