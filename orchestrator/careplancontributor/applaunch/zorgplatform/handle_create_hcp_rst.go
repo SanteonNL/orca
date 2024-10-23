@@ -87,6 +87,21 @@ func (s *Service) signAssertion(assertion *saml.Assertion) (*etree.Element, erro
 		}
 	}
 
+	// move saml:AuthnStatement element right after saml:AttributeStatement
+	authnStatement := signedAssertion.SelectElement("saml:AuthnStatement")
+	for idx, element := range signedAssertion.ChildElements() {
+		if element.Tag == "AuthnStatement" {
+			signedAssertion.RemoveChildAt(idx)
+		}
+	}
+	next = false
+	for idx, element := range signedAssertion.ChildElements() {
+		if element.Tag == "AttributeStatement" {
+			next = true
+			signedAssertion.InsertChildAt(idx+1, authnStatement)
+		}
+	}
+
 	return signedAssertion, nil
 }
 

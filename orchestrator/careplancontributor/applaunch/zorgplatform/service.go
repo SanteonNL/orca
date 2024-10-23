@@ -57,7 +57,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		if err != nil {
 			return nil, fmt.Errorf("unable to load signing certificate and key: %w", err)
 		}
-		signCert = keyPair.Certificate
+		signCert = [][]byte{keyPair.Certificate[0]}
 		signCertKey = crypto.RsaSuite{PrivateKey: keyPair.PrivateKey.(*rsa.PrivateKey)}
 	} else {
 		var err error
