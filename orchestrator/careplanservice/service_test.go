@@ -406,6 +406,24 @@ func TestService_Handle(t *testing.T) {
 
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0].request.url (entry #) has too many paths")
+		})
+		t.Run("POST with URL containing a fully qualified url", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+							Url:    "https://example.com/fhir/CarePlan/123",
+						},
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0].request.url (entry #) must be a relative URL")
 		})
 	})
