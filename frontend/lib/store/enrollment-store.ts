@@ -19,19 +19,13 @@ interface StoreState {
     serviceRequest?: ServiceRequest
     carePlans?: CarePlan[]
     selectedCarePlan?: CarePlan | null
-    newCarePlanName: string
     taskCondition?: Condition
     patientConditions?: Condition[]
-    carePlanConditions?: Condition[]
-    shouldCreateNewCarePlan: boolean
     loading: boolean
     error?: string
     setSelectedCarePlan: (carePlan?: CarePlan) => void
-    setNewCarePlanName: (name: string) => void
     setTaskCondition: (condition?: Condition) => void
     setPatientConditions: (conditions: Condition[]) => void
-    setCarePlanConditions: (conditions: Condition[]) => void
-    setShouldCreateNewCarePlan: (createNewCarePlan: boolean) => void
     fetchAllResources: () => Promise<void>
 }
 
@@ -44,45 +38,18 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     serviceRequest: undefined,
     carePlans: undefined,
     selectedCarePlan: undefined,
-    newCarePlanName: "",
     taskCondition: undefined,
     patientConditions: undefined,
-    shouldCreateNewCarePlan: false,
     loading: false,
     error: undefined,
     setSelectedCarePlan: (carePlan?: CarePlan) => {
         set({ selectedCarePlan: carePlan });
-
-        if (!carePlan) {
-            set({ carePlanConditions: undefined, taskCondition: undefined })
-        } else {
-
-            const { patientConditions } = get();
-            const carePlanConditions = carePlan.addresses?.map(conditionCode =>
-                patientConditions?.find(patientCondition => patientCondition.code?.coding?.find(coding =>
-                    coding.system === conditionCode.identifier?.system &&
-                    coding.code === conditionCode.identifier?.value
-                ))
-            ).filter(condition => condition !== undefined)
-
-            set({ carePlanConditions, taskCondition: undefined })
-        }
-    },
-    setNewCarePlanName: (name: string) => {
-        set({ newCarePlanName: name });
     },
     setTaskCondition: (condition?: Condition) => {
         set({ taskCondition: condition });
     },
     setPatientConditions: (conditions: Condition[]) => {
         set({ patientConditions: conditions })
-    },
-    setCarePlanConditions: (conditions: Condition[]) => {
-        set({ carePlanConditions: conditions })
-    },
-    setShouldCreateNewCarePlan: (createNewCarePlan: boolean) => {
-        set({ shouldCreateNewCarePlan: createNewCarePlan })
-        if (createNewCarePlan) set({ selectedCarePlan: undefined })
     },
     fetchAllResources: async () => {
 

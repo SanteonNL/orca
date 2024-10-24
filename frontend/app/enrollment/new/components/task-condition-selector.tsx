@@ -1,15 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Combobox from '@/components/ui/combobox'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { InfoCircledIcon } from '@radix-ui/react-icons'
 import React from 'react'
 
 export default function TaskConditionSelector() {
 
-    const { carePlanConditions, taskCondition, setTaskCondition } = useEnrollment()
+    const { patientConditions, taskCondition, setTaskCondition } = useEnrollment()
 
-    const records = carePlanConditions?.map((condition) => {
+    const records = patientConditions?.map((condition) => {
         return {
             value: condition.id || "no-id",
             label: condition.code?.text || "no-text"
@@ -33,7 +31,7 @@ export default function TaskConditionSelector() {
                             return
                         }
 
-                        const selectedCondition = carePlanConditions?.find(filterCondition => filterCondition.id === value)
+                        const selectedCondition = patientConditions?.find(filterCondition => filterCondition.id === value)
 
                         if (selectedCondition) setTaskCondition(selectedCondition)
                     }} />
