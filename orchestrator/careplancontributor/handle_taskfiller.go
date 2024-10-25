@@ -1,11 +1,10 @@
-package careplanservice
+package careplancontributor
 
 import (
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"strings"
-
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -14,7 +13,6 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-// TODO: Move to CarePlanContributor as TaskEngine, invoked by the CPS notification
 func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
 	log.Info().Msg("Running handleTaskFillerCreate")
 
@@ -84,7 +82,7 @@ func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 	}
 
 	var partOfTask fhir.Task
-	err = s.fhirClient.Read(*partOfTaskRef, &partOfTask)
+	err = s.carePlanServiceClient.Read(*partOfTaskRef, &partOfTask)
 	if err != nil {
 		return fmt.Errorf("failed to fetch partOf for %s: %w", *partOfTaskRef, err)
 	}
@@ -93,7 +91,7 @@ func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 	partOfTask.Status = fhir.TaskStatusAccepted
 
 	// Update the task in the FHIR server
-	err = s.fhirClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
+	err = s.carePlanServiceClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
 	if err != nil {
 		return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
 	}
@@ -105,7 +103,7 @@ func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 func (s *Service) fetchQuestionnaireByID(ref string, questionnaire *fhir.Questionnaire) error {
 	log.Debug().Msg("Fetching Questionnaire by ID")
 
-	err := s.fhirClient.Read(ref, &questionnaire)
+	err := s.carePlanServiceClient.Read(ref, &questionnaire)
 	if err != nil {
 		return fmt.Errorf("failed to fetch Questionnaire: %w", err)
 	}
@@ -221,7 +219,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 
 	bundle := tx.Bundle()
 
-	_, err = coolfhir.ExecuteTransaction(s.fhirClient, bundle)
+	_, err = coolfhir.ExecuteTransaction(s.carePlanServiceClient, bundle)
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %w", err)
 	}

@@ -5,7 +5,6 @@ import (
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -406,9 +405,7 @@ func Test_handleUpdateTask(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		fhirClient:          mockFHIRClient,
-		workflows:           taskengine.DefaultWorkflows(),
-		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+		fhirClient: mockFHIRClient,
 	}
 
 	updateTaskAcceptedData, _ := os.ReadFile("./testdata/task-update-accepted.json")

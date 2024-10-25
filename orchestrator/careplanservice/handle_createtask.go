@@ -136,11 +136,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			notifications = append(notifications, &updatedCareTeam)
 		}
 
-		// TODO: this really shouldn't be here. Maybe move to CPC and call it in-process (e.g. goroutine?)
-		// TODO: This should be done by the CPC after the notification is received
-		if err = s.handleTaskFillerCreate(&createdTask); err != nil {
-			return nil, nil, fmt.Errorf("failed to handle TaskFillerCreate: %w", err)
-		}
 		return result, []any{&createdTask}, nil
 	}, nil
 }

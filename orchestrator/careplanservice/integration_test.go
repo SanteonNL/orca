@@ -157,14 +157,6 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.True(t, strings.HasSuffix(*searchResult.Entry[1].FullUrl, *carePlan.CareTeam[0].Reference))
 	}
 
-	t.Log("Search Subtasks")
-	{
-		var searchResult fhir.Bundle
-		err := carePlanContributor1.Read("Task", &searchResult, fhirclient.QueryParam("part-of", "Task/"+*task.Id))
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 1, "Expected 1 subtask")
-	}
-
 	t.Log("Read CarePlan - Not in participants")
 	{
 		var fetchedCarePlan fhir.CarePlan

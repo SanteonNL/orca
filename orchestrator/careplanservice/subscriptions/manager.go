@@ -62,7 +62,7 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 		return fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
 	}
 
-	log.Info().Msgf("Notifying subscribers for update on resource: %s", *focus.Reference)
+	log.Info().Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)
 
 	return r.notifyAll(ctx, timeFunc(), focus, subscribers)
 }

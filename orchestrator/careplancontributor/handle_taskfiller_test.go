@@ -1,10 +1,9 @@
-package careplanservice
+package careplancontributor
 
 import (
 	"encoding/json"
+	taskengine2 "github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"testing"
-
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -26,9 +25,9 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		fhirClient:          mockFHIRClient,
-		workflows:           taskengine.DefaultWorkflows(),
-		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+		carePlanServiceClient: mockFHIRClient,
+		workflows:             taskengine2.DefaultWorkflows(),
+		questionnaireLoader:   taskengine2.EmbeddedQuestionnaireLoader{},
 	}
 
 	// Define test cases
@@ -170,9 +169,9 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		fhirClient:          mockFHIRClient,
-		workflows:           taskengine.DefaultWorkflows(),
-		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+		carePlanServiceClient: mockFHIRClient,
+		workflows:             taskengine2.DefaultWorkflows(),
+		questionnaireLoader:   taskengine2.EmbeddedQuestionnaireLoader{},
 	}
 
 	taskBytes, _ := json.Marshal(validTask)
