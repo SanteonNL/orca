@@ -1,5 +1,5 @@
 import Client from 'fhir-kit-client';
-import { Bundle, CarePlan, CarePlanActivity, Condition, Patient, Questionnaire, QuestionnaireResponse, Resource, ServiceRequest, Task } from 'fhir/r4';
+import { Bundle, CarePlan, Condition, Patient, Questionnaire, Reference, Resource, ServiceRequest, Task } from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -77,7 +77,7 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
     }
 }
 
-export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, primaryCondition: Condition): Task => {
+export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, carePlanRef?: Reference): Task => {
 
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task")
@@ -90,14 +90,10 @@ export const getTask = (carePlan: CarePlan, serviceRequest: ServiceRequest, prim
                 "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
             ]
         },
-        basedOn: [
-            {
-                "reference": `CarePlan/${carePlan.id}`,
-                type: "CarePlan",
-                display: carePlan.title
-            }
-        ],
-        for: carePlan.subject,
+
+        //TODO: Not setting this, made by CPS - but should maybe set it for existing
+        basedOn: carePlanRef && [carePlanRef],
+        for: serviceRequest.subject,
         status: "requested",
         intent: "order",
         requester: {
