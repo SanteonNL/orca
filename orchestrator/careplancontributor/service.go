@@ -259,7 +259,7 @@ func (s Service) handleNotification(resource any) error {
 	}
 	if focusReference == nil {
 		return &coolfhir.ErrorWithCode{
-			Message:    "Notification focus now found",
+			Message:    "Notification focus not found",
 			StatusCode: http.StatusInternalServerError,
 		}
 	}
