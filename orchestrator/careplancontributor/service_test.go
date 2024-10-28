@@ -456,12 +456,22 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	frontServer := httptest.NewServer(frontServerMux)
 	service.RegisterHandlers(frontServerMux)
 
+	t.Run("invalid notification - wrong data type", func(t *testing.T) {
+		notification := fhir.Task{Id: to.Ptr("1")}
+		notificationJSON, _ := json.Marshal(notification)
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpResponse, err := prof.HttpClient().Do(httpRequest)
+
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	})
 	t.Run("valid notification - unsupported type", func(t *testing.T) {
 		notificationUrl, _ := url.Parse("https://example.com")
-		notfication := coolfhir.CreateSubscriptionNotification(notificationUrl,
+		notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
-		notificationJSON, _ := json.Marshal(notfication)
+		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := prof.HttpClient().Do(httpRequest)
 
@@ -471,10 +481,10 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	})
 	t.Run("valid notification - task - not found", func(t *testing.T) {
 		notificationUrl, _ := url.Parse("https://example.com")
-		notfication := coolfhir.CreateSubscriptionNotification(notificationUrl,
+		notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/999"), Type: to.Ptr("Task")})
-		notificationJSON, _ := json.Marshal(notfication)
+		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := prof.HttpClient().Do(httpRequest)
 
@@ -484,10 +494,10 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	})
 	t.Run("valid notification - task - not SCP", func(t *testing.T) {
 		notificationUrl, _ := url.Parse("https://example.com")
-		notfication := coolfhir.CreateSubscriptionNotification(notificationUrl,
+		notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/1"), Type: to.Ptr("Task")})
-		notificationJSON, _ := json.Marshal(notfication)
+		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := prof.HttpClient().Do(httpRequest)
 
@@ -497,10 +507,10 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	})
 	t.Run("valid notification - task - invalid task missing focus", func(t *testing.T) {
 		notificationUrl, _ := url.Parse("https://example.com")
-		notfication := coolfhir.CreateSubscriptionNotification(notificationUrl,
+		notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/2"), Type: to.Ptr("Task")})
-		notificationJSON, _ := json.Marshal(notfication)
+		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := prof.HttpClient().Do(httpRequest)
 
@@ -551,10 +561,10 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	service.RegisterHandlers(frontServerMux)
 
 	notificationUrl, _ := url.Parse("https://example.com")
-	notfication := coolfhir.CreateSubscriptionNotification(notificationUrl,
+	notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
 		time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 		fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/3"), Type: to.Ptr("Task")})
-	notificationJSON, _ := json.Marshal(notfication)
+	notificationJSON, _ := json.Marshal(notification)
 
 	mockFHIRClient.EXPECT().Read("Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
 		rawJson, _ := os.ReadFile("./testdata/task-3.json")

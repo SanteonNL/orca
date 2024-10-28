@@ -7,7 +7,7 @@ import (
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
-	taskengine2 "github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -56,8 +56,8 @@ func New(
 		frontendUrl:           config.FrontendConfig.URL,
 		fhirURL:               fhirURL,
 		transport:             localFHIRStoreTransport,
-		workflows:             taskengine2.DefaultWorkflows(),
-		questionnaireLoader:   taskengine2.EmbeddedQuestionnaireLoader{},
+		workflows:             taskengine.DefaultWorkflows(),
+		questionnaireLoader:   taskengine.EmbeddedQuestionnaireLoader{},
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
@@ -80,8 +80,8 @@ type Service struct {
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
 	transport           http.RoundTripper
-	workflows           taskengine2.Workflows
-	questionnaireLoader taskengine2.QuestionnaireLoader
+	workflows           taskengine.Workflows
+	questionnaireLoader taskengine.QuestionnaireLoader
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
@@ -245,10 +245,16 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 }
 
 func (s Service) handleNotification(resource any) error {
-	notification := resource.(*coolfhir.SubscriptionNotification)
-	if notification == nil {
+	notification, ok := resource.(*coolfhir.SubscriptionNotification)
+	if !ok {
 		return &coolfhir.ErrorWithCode{
 			Message:    "failed to cast resource to notification",
+			StatusCode: http.StatusBadRequest,
+		}
+	}
+	if notification == nil {
+		return &coolfhir.ErrorWithCode{
+			Message:    "notification is nil",
 			StatusCode: http.StatusInternalServerError,
 		}
 	}
@@ -263,6 +269,15 @@ func (s Service) handleNotification(resource any) error {
 			StatusCode: http.StatusUnprocessableEntity,
 		}
 	}
+
+	if focusReference.Type == nil {
+		return &coolfhir.ErrorWithCode{
+			Message:    "Notification focus type is nil",
+			StatusCode: http.StatusUnprocessableEntity,
+		}
+	}
+
+	log.Info().Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
 
 	switch *focusReference.Type {
 	case "Task":
