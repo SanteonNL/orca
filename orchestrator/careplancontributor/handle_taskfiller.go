@@ -47,7 +47,7 @@ func (s *Service) handleTaskFillerCreate(ctx context.Context, task *fhir.Task) e
 		}
 
 		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
-		err = s.createSubTaskOrFinishPrimaryTask(task, true)
+		err = s.createSubTaskOrFinishPrimaryTask(task, true, isOwner)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
@@ -56,7 +56,7 @@ func (s *Service) handleTaskFillerCreate(ctx context.Context, task *fhir.Task) e
 }
 
 // TODO: This function now always expects a subtask, but it should also be able to handle primary tasks
-func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
+func (s *Service) handleTaskFillerUpdate(ctx context.Context, task *fhir.Task) error {
 
 	log.Info().Msg("Running handleTaskFillerUpdate")
 
@@ -81,7 +81,13 @@ func (s *Service) handleTaskFillerUpdate(task *fhir.Task) error {
 
 	log.Info().Msg("SubTask.status is completed - processing")
 
-	return s.createSubTaskOrFinishPrimaryTask(task, false)
+	ids, err := s.profile.Identities(ctx)
+	if err != nil {
+		return err
+	}
+	isOwner, _ := coolfhir.ValidateTaskOwnerAndRequester(task, ids)
+
+	return s.createSubTaskOrFinishPrimaryTask(task, false, isOwner)
 
 }
 
@@ -160,7 +166,7 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 	return nil
 }
 
-func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTask bool) error {
+func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTask bool, isTaskOwner bool) error {
 	if task.Focus == nil || task.Focus.Identifier == nil || task.Focus.Identifier.System == nil || task.Focus.Identifier.Value == nil {
 		return errors.New("task.Focus or its Identifier fields are nil")
 	}
@@ -217,7 +223,11 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 			return nil
 		}
 
-		return s.markPrimaryTaskAsCompleted(task)
+		if isTaskOwner {
+			return s.markPrimaryTaskAsCompleted(task)
+		} else {
+			return nil
+		}
 	}
 
 	// Create a new SubTask based on the Questionnaire reference
