@@ -61,15 +61,17 @@ function createDID() {
 }
 
 # Self-issue a NutsUraCredential. It takes:
+# - Subject ID holding the wallet the VC should be loaded into
 # - The DID of the entity to issue the credential to
 # - The URA number of the entity
 # - The name of the entity
 # - The city of the entity
 function issueUraCredential() {
-  DID=$1
-  URA=$2
-  NAME=$3
-  CITY=$4
+  SUBJECT=$1
+  DID=$2
+  URA=$3
+  NAME=$4
+  CITY=$5
 
   REQUEST=$(
   cat << EOF
@@ -93,9 +95,9 @@ function issueUraCredential() {
 EOF
   )
 
-  # Issue VC, read it from the response, load it into own wallet.
+   # Issue VC, read it from the response, load it into own wallet.
    RESPONSE=$(docker compose exec nutsnode curl -s -X POST -d "$REQUEST" -H "Content-Type: application/json" http://localhost:8081/internal/vcr/v2/issuer/vc)
-   docker compose exec nutsnode curl -s -X POST -d "$RESPONSE" -H "Content-Type: application/json" "http://localhost:8081/internal/vcr/v2/holder/${DID}/vc"
+   docker compose exec nutsnode curl -s -X POST -d "$RESPONSE" -H "Content-Type: application/json" "http://localhost:8081/internal/vcr/v2/holder/${SUBJECT}/vc"
 }
 
 echo "Creating stack for Clinic..."
@@ -117,7 +119,7 @@ echo "  Creating DID document"
 CLINIC_DID=$(createDID "clinic" http://localhost:8081)
 echo "    Clinic DID: $CLINIC_DID"
 echo "  Self-issuing an NutsUraCredential"
-issueUraCredential "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
+issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
 
 echo "  Starting docker compose"
 echo NUTS_URL="${CLINIC_URL}" > .env
@@ -141,7 +143,7 @@ echo "  Creating DID document"
 HOSPITAL_DID=$(createDID "hospital" http://localhost:9081)
 echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Self-issuing an NutsUraCredential"
-issueUraCredential "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
+issueUraCredential "hospital" "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
 echo "  Registering FHIR base URL in DID document"
 curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/subject/hospital/service
 # TODO: Remove this init when the Questionnaire is provided by the sub-Task.input
