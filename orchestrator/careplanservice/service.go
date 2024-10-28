@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -13,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
@@ -54,6 +55,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
 	}
 	s.handlerProvider = s.defaultHandlerProvider
+	s.ensureSearchParameterExists()
 	return &s, nil
 }
 
@@ -442,4 +444,52 @@ func (s Service) baseUrl() *url.URL {
 
 func getResourceType(resourcePath string) string {
 	return strings.Split(resourcePath, "/")[0]
+}
+
+func (s *Service) ensureSearchParameterExists() {
+	searchParamID := "CarePlan-subject-identifier"
+
+	// Define the SearchParameter
+	searchParam := fhir.SearchParameter{
+		Id:          &searchParamID,
+		Url:         "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
+		Name:        "subject-identifier",
+		Status:      fhir.PublicationStatusActive,
+		Description: "Search CarePlans by subject identifier",
+		Code:        "subject-identifier",
+		Base:        []fhir.ResourceType{fhir.ResourceTypeCarePlan},
+		Type:        fhir.SearchParamTypeToken,
+		Expression:  to.Ptr("CarePlan.subject.identifier"),
+		XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
+		Xpath:       to.Ptr("f:CarePlan/f:subject/f:identifier"),
+		Version:     to.Ptr("1.0"),
+		Publisher:   to.Ptr("Zorg Bij Jou"),
+		Contact: []fhir.ContactDetail{
+			{
+				Name: to.Ptr("Support"),
+				Telecom: []fhir.ContactPoint{
+					{
+						System: to.Ptr(fhir.ContactPointSystemEmail),
+						Value:  to.Ptr("support@zorgbijjou.nl"),
+					},
+				},
+			},
+		},
+	}
+
+	// Create a `PreRequestOption` that adds the `If-None-Exist` header to the request
+	addHeaderOption := func(client fhirclient.Client, req *http.Request) {
+		req.Header.Set("If-None-Exist", fmt.Sprintf("url=%s", searchParam.Url))
+	}
+
+	log.Info().Msgf("Performing conditional create on %s", searchParamID)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := s.fhirClient.CreateWithContext(ctx, &searchParam, &searchParam, addHeaderOption)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to ensure SearchParameter %s", searchParamID)
+	} else {
+		log.Info().Msgf("Ensured SearchParameter/%s", searchParamID)
+	}
 }

@@ -2,8 +2,12 @@ services:
   proxy:
     image: nginx:latest
     depends_on:
-      - nutsnode
-      - ehr
+      nutsnode:
+        condition: service_started
+      ehr:
+        condition: service_started
+      orchestrator:
+        condition: service_started
     ports:
       - "9080:8080"
     volumes:
@@ -47,6 +51,9 @@ services:
     #  dockerfile: Dockerfile
     ports:
       - "8090:8080"
+    depends_on:
+      fhirstore-healthcheck:
+        condition: service_completed_successfully
     environment:
       - ORCA_NUTS_API_URL=http://nutsnode:8081
       - ORCA_NUTS_PUBLIC_URL=${NUTS_URL}
@@ -62,6 +69,15 @@ services:
       - "9090:8080"
     environment:
       - hapi.fhir.fhir_version=R4
+  # The HAPI image has no binaries such as curl, so we use the curl image to perform the health check  
+  fhirstore-healthcheck:
+    image: curlimages/curl:7.87.0
+    depends_on:
+      - fhirstore
+    entrypoint: ["sh", "-c", "echo 'Starting fhirstore healthcheck...'; while ! curl -s -f http://fhirstore:8080/fhir/metadata; do echo 'Waiting for fhirstore to be ready...'; sleep 5; done; echo 'fhirstore is up and running.'"]
+    
+    # Ensure the container exits successfully after the check
+    restart: "no"
   ehr:
     image: ghcr.io/santeonnl/orca_hospitalsimulator:main
     # build:

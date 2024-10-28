@@ -125,8 +125,6 @@ echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERV
 cat .env
 docker compose --env-file .env up --wait --build --remove-orphans
 
-echo "  Creating SearchParameter"
-./config/init-fhir-resources.sh $CLINIC_URL
 popd
 
 echo "Creating stack for Hospital..."
@@ -148,8 +146,6 @@ curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"se
 echo NUTS_URL="${HOSPITAL_URL}" > .env
 echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
 docker compose --env-file .env up --wait --build --remove-orphans
-echo "  Waiting for the FHIR server to be ready"
-./config/init-fhir-resources.sh $HOSPITAL_URL
 popd
 
 # open orchestrator demo app
