@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
@@ -24,17 +25,10 @@ type Config struct {
 }
 
 func (c Config) Validate() error {
-	_, err := url.Parse(c.Nuts.API.URL)
-	if c.Nuts.OwnSubject == "" {
-		return errors.New("invalid/empty Nuts subject")
+	if err := c.Nuts.Validate(); err != nil {
+		return fmt.Errorf("invalid Nuts configuration: %w", err)
 	}
-	if err != nil || c.Nuts.API.URL == "" {
-		return errors.New("invalid Nuts API URL")
-	}
-	if c.Nuts.Public.URL == "" {
-		return errors.New("invalid/empty Nuts public URL")
-	}
-	_, err = url.Parse(c.Public.URL)
+	_, err := url.Parse(c.Public.URL)
 	if err != nil || c.Public.URL == "" {
 		return errors.New("invalid public base URL")
 	}
