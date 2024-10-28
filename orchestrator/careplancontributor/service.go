@@ -279,7 +279,7 @@ func (s Service) handleNotification(resource any) error {
 			return err
 		}
 	default:
-		log.Info().Msgf("Recieved notification of type %s is not yet supported", *focusReference.Type)
+		log.Info().Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
 	}
 
 	return nil
