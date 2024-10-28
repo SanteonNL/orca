@@ -1,8 +1,11 @@
 package careplancontributor
 
 import (
+	"context"
 	"encoding/json"
-	taskengine2 "github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -26,25 +29,45 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	// Create the service with the mock FHIR client
 	service := &Service{
 		carePlanServiceClient: mockFHIRClient,
-		workflows:             taskengine2.DefaultWorkflows(),
-		questionnaireLoader:   taskengine2.EmbeddedQuestionnaireLoader{},
+		workflows:             taskengine.DefaultWorkflows(),
+		questionnaireLoader:   taskengine.EmbeddedQuestionnaireLoader{},
 	}
 
 	// Define test cases
 	tests := []struct {
 		name          string
+		ctx           context.Context
+		profile       profile.Provider
 		task          *fhir.Task
 		expectedError bool
 		createTimes   int
 	}{
 		{
-			name:          "Valid SCP Task",
+			name: "Valid SCP Task",
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			},
 			task:          &validTask,
 			expectedError: false,
 			createTimes:   1, // One subtask should be created
 		},
 		{
+			name: "Valid SCP Task - Not owner",
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal2,
+			},
+			ctx:           auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
+			task:          &validTask,
+			expectedError: false,
+			createTimes:   0,
+		},
+		{
 			name: "Invalid Task (Missing Profile)",
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			},
+			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
 				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
@@ -57,6 +80,10 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		},
 		{
 			name: "Task without Requester",
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			},
+			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
 				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
@@ -69,6 +96,10 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		},
 		{
 			name: "Task without Owner",
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			},
+			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
 				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
@@ -81,6 +112,10 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		},
 		{
 			name: "Task without partOf",
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			},
+			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
 				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
@@ -93,6 +128,10 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		},
 		{
 			name: "Task without basedOn reference",
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			},
+			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
 				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
@@ -105,6 +144,10 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		},
 		{
 			name: "Task with partOf reference",
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			},
+			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
 				var copiedTask fhir.Task
 				bytes, _ := json.Marshal(validTask)
@@ -124,8 +167,9 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	// Run test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			log.Info().Msg("Starting test case: " + tt.name)
+
+			service.profile = tt.profile
 
 			mockFHIRClient.EXPECT().
 				Create(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -150,7 +194,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				}).
 				Times(tt.createTimes)
 
-			err := service.handleTaskFillerCreate(tt.task)
+			err := service.handleTaskFillerCreate(tt.ctx, tt.task)
 			if tt.expectedError {
 				require.Error(t, err)
 			} else {
@@ -170,8 +214,8 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	// Create the service with the mock FHIR client
 	service := &Service{
 		carePlanServiceClient: mockFHIRClient,
-		workflows:             taskengine2.DefaultWorkflows(),
-		questionnaireLoader:   taskengine2.EmbeddedQuestionnaireLoader{},
+		workflows:             taskengine.DefaultWorkflows(),
+		questionnaireLoader:   taskengine.EmbeddedQuestionnaireLoader{},
 	}
 
 	taskBytes, _ := json.Marshal(validTask)
@@ -234,13 +278,13 @@ var validTask = fhir.Task{
 	Requester: &fhir.Reference{
 		Identifier: &fhir.Identifier{
 			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-			Value:  to.Ptr("URA-2"),
+			Value:  to.Ptr("2"),
 		},
 	},
 	Owner: &fhir.Reference{
 		Identifier: &fhir.Identifier{
 			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-			Value:  to.Ptr("URA-1"),
+			Value:  to.Ptr("1"),
 		},
 	},
 	Intent: "order",

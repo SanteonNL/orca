@@ -1,6 +1,7 @@
 package careplancontributor
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
@@ -13,8 +14,8 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
-	log.Info().Msg("Running handleTaskFillerCreate")
+func (s *Service) handleTaskFillerCreate(ctx context.Context, task *fhir.Task) error {
+	log.Info().Msgf("Running handleTaskFillerCreate for Task %s", *task.Id)
 
 	if !s.isScpTask(task) {
 		log.Info().Msg("Task is not an SCP Task - skipping")
@@ -34,8 +35,19 @@ func (s *Service) handleTaskFillerCreate(task *fhir.Task) error {
 	// If partOfRef is nil, handle the task as a primary task - no need to create follow-up subtasks for newly created Tasks
 	//This only happens on Task update where the Task.output is filled with a QuestionnaireResponse
 	if partOfRef == nil {
+		// Validate that the current CPC is the task Owner to perform task filling
+		ids, err := s.profile.Identities(ctx)
+		if err != nil {
+			return err
+		}
+		isOwner, _ := coolfhir.ValidateTaskOwnerAndRequester(task, ids)
+		if !isOwner {
+			log.Info().Msg("Current CPC node is not the task Owner - skipping")
+			return nil
+		}
+
 		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
-		err := s.createSubTaskOrFinishPrimaryTask(task, true)
+		err = s.createSubTaskOrFinishPrimaryTask(task, true)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}

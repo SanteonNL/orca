@@ -402,7 +402,9 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 
 // Invalid test cases are simpler, can be tested with http endpoint mocking
 func TestService_HandleNotification_Invalid(t *testing.T) {
-	prof := profile.TestProfile{}
+	prof := profile.TestProfile{
+		Principal: auth.TestPrincipal1,
+	}
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -450,7 +452,9 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{
+		Principal: auth.TestPrincipal1,
+	}, orcaPublicURL, sessionManager)
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -536,7 +540,9 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	// Create a mock FHIR client using the generated mock
 	mockFHIRClient := mock.NewMockClient(ctrl)
 
-	prof := profile.TestProfile{}
+	prof := profile.TestProfile{
+		Principal: auth.TestPrincipal2,
+	}
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -552,7 +558,9 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: fhirServerURL.String(),
 		},
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{
+		Principal: auth.TestPrincipal2,
+	}, orcaPublicURL, sessionManager)
 
 	service.carePlanServiceClient = mockFHIRClient
 

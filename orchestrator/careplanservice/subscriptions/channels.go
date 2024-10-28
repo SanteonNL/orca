@@ -112,6 +112,6 @@ var _ Channel = InProcessPubSubChannel{}
 type InProcessPubSubChannel struct {
 }
 
-func (i InProcessPubSubChannel) Notify(_ context.Context, notification coolfhir.SubscriptionNotification) error {
-	return pubsub.DefaultSubscribers.FhirSubscriptionNotify(notification)
+func (i InProcessPubSubChannel) Notify(ctx context.Context, notification coolfhir.SubscriptionNotification) error {
+	return pubsub.DefaultSubscribers.FhirSubscriptionNotify(ctx, notification)
 }

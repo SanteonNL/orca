@@ -2,6 +2,7 @@
 package careplancontributor
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -97,7 +98,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
-		if err := s.handleNotification(&notification); err != nil {
+		if err := s.handleNotification(request.Context(), &notification); err != nil {
 			log.Error().Err(err).Msg("Failed to handle notification")
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
@@ -244,7 +245,7 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 	}
 }
 
-func (s Service) handleNotification(resource any) error {
+func (s Service) handleNotification(ctx context.Context, resource any) error {
 	notification, ok := resource.(*coolfhir.SubscriptionNotification)
 	if !ok {
 		return &coolfhir.ErrorWithCode{
@@ -289,7 +290,7 @@ func (s Service) handleNotification(resource any) error {
 		}
 
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
-		err = s.handleTaskFillerCreate(&task)
+		err = s.handleTaskFillerCreate(ctx, &task)
 		if err != nil {
 			return err
 		}

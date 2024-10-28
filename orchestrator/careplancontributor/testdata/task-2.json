@@ -10,14 +10,14 @@
     "type" : "Organization",
     "identifier" : {
       "system" : "http://fhir.nl/fhir/NamingSystem/ura",
-      "value" : "1"
+      "value" : "2"
     }
   },
   "owner" : {
     "type" : "Organization",
     "identifier" : {
       "system" : "http://fhir.nl/fhir/NamingSystem/ura",
-      "value" : "2"
+      "value" : "1"
     }
   },
   "resourceType" : "Task",
