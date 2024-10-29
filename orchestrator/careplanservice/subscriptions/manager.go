@@ -44,6 +44,10 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			Type:      to.Ptr("Task"),
 		}
 		log.Info().Msgf("Notifying subscribers for Task %s", *task.Id)
+		// Owner.Type is optional, if it is null set to empty string so the LogicalReference check doesn't fail
+		if task.Owner.Type == nil {
+			task.Owner.Type = to.Ptr("")
+		}
 		isOwnerValid := coolfhir.IsLogicalReference(task.Owner)
 		if isOwnerValid {
 			subscribers = append(subscribers, *task.Owner.Identifier)
@@ -54,6 +58,10 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			} else {
 				log.Warn().Msgf("Owner LogicalReference is invalid: %s", string(ownerJSON))
 			}
+		}
+		// Requester.Type is optional, if it is null set to empty string so the LogicalReference check doesn't fail
+		if task.Requester.Type == nil {
+			task.Requester.Type = to.Ptr("")
 		}
 		isRequesterValid := coolfhir.IsLogicalReference(task.Requester)
 		if isRequesterValid {
