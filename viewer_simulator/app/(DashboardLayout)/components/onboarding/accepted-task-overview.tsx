@@ -1,6 +1,6 @@
 import React from 'react';
 import EnrolledTaskTable from './enrolled-task-table';
-import { Task } from 'fhir/r4';
+import {Task} from 'fhir/r4';
 
 export default async function AcceptedTaskOverview() {
 
@@ -12,11 +12,14 @@ export default async function AcceptedTaskOverview() {
     let rows = [];
 
     try {
+        let requestHeaders = new Headers();
+        requestHeaders.set("Cache-Control", "no-cache")
+        if (process.env.FHIR_AUTHORIZATION_TOKEN) {
+            requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
+        }
         const response = await fetch(`${process.env.FHIR_BASE_URL}/Task`, {
             cache: 'no-store',
-            headers: {
-                "Cache-Control": "no-cache"
-            }
+            headers: requestHeaders
         });
 
         if (!response.ok) {
@@ -58,6 +61,6 @@ export default async function AcceptedTaskOverview() {
     }
 
     return (
-        <EnrolledTaskTable rows={rows} />
+        <EnrolledTaskTable rows={rows}/>
     );
 }

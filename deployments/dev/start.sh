@@ -61,15 +61,17 @@ function createDID() {
 }
 
 # Self-issue a NutsUraCredential. It takes:
+# - Subject ID holding the wallet the VC should be loaded into
 # - The DID of the entity to issue the credential to
 # - The URA number of the entity
 # - The name of the entity
 # - The city of the entity
 function issueUraCredential() {
-  DID=$1
-  URA=$2
-  NAME=$3
-  CITY=$4
+  SUBJECT=$1
+  DID=$2
+  URA=$3
+  NAME=$4
+  CITY=$5
 
   REQUEST=$(
   cat << EOF
@@ -93,63 +95,53 @@ function issueUraCredential() {
 EOF
   )
 
-  # Issue VC, read it from the response, load it into own wallet.
+   # Issue VC, read it from the response, load it into own wallet.
    RESPONSE=$(docker compose exec nutsnode curl -s -X POST -d "$REQUEST" -H "Content-Type: application/json" http://localhost:8081/internal/vcr/v2/issuer/vc)
-   docker compose exec nutsnode curl -s -X POST -d "$RESPONSE" -H "Content-Type: application/json" "http://localhost:8081/internal/vcr/v2/holder/${DID}/vc"
+   docker compose exec nutsnode curl -s -X POST -d "$RESPONSE" -H "Content-Type: application/json" "http://localhost:8081/internal/vcr/v2/holder/${SUBJECT}/vc"
 }
-
-echo "Creating stack for Clinic..."
-echo "  Creating devtunnel"
-CLINIC_URL=$(createTunnel ./clinic 7080)
-echo "Clinic url is $CLINIC_URL"
-echo "  Creating Discovery Service definition"
-CLINIC_URL_ESCAPED=$(sed 's/[&/\]/\\&/g' <<<"${CLINIC_URL}")
-sed "s/DiscoveryServerURL/${CLINIC_URL_ESCAPED}/" shared_config/discovery_input/homemonitoring.json > shared_config/discovery/homemonitoring.json
-echo "  Starting services"
-pushd clinic
-docker compose pull
-CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CLINIC_URL}/orca/cps"
-echo NUTS_URL="$CLINIC_URL" > .env
-echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
-docker compose --env-file .env  up nutsnode --wait
-
-echo "  Creating DID document"
-CLINIC_DID=$(createDID "clinic" http://localhost:8081)
-echo "    Clinic DID: $CLINIC_DID"
-echo "  Self-issuing an NutsUraCredential"
-issueUraCredential "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
-
-echo "  Starting docker compose"
-echo NUTS_URL="${CLINIC_URL}" > .env
-echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
-cat .env
-docker compose --env-file .env up --wait --build --remove-orphans
-
-echo "  Creating SearchParameter"
-./config/init-fhir-resources.sh $CLINIC_URL
-popd
 
 echo "Creating stack for Hospital..."
 echo "  Creating devtunnel"
-HOSPITAL_URL=$(createTunnel ./hospital 9080)
+export HOSPITAL_URL=$(createTunnel ./hospital 9080)
+export CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${HOSPITAL_URL}/orca/cps"
+echo "  Creating Discovery Service definition"
+HOSPITAL_URL_ESCAPED=$(sed 's/[&/\]/\\&/g' <<<"${HOSPITAL_URL}")
+sed "s/DiscoveryServerURL/${HOSPITAL_URL_ESCAPED}/" shared_config/discovery_input/homemonitoring.json > shared_config/discovery/homemonitoring.json
 echo "  Starting services"
 pushd hospital
-docker compose pull
 echo NUTS_URL="${HOSPITAL_URL}" >> .env
-docker compose --env-file .env up nutsnode --wait
+echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
+docker compose --env-file .env pull
+docker compose --env-file .env up --wait --build --remove-orphans
 echo "  Creating DID document"
 HOSPITAL_DID=$(createDID "hospital" http://localhost:9081)
 echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Self-issuing an NutsUraCredential"
-issueUraCredential "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
-echo "  Registering FHIR base URL in DID document"
-curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/subject/hospital/service
+issueUraCredential "hospital" "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
+echo "  Registering on Nuts Discovery Service"
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${HOSPITAL_URL}/fhir/notify\"}}" http://localhost:9081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
 # TODO: Remove this init when the Questionnaire is provided by the sub-Task.input
-echo NUTS_URL="${HOSPITAL_URL}" > .env
-echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
-docker compose --env-file .env up --wait --build --remove-orphans
 echo "  Waiting for the FHIR server to be ready"
 ./config/init-fhir-resources.sh $HOSPITAL_URL
+popd
+
+echo "Creating stack for Clinic..."
+echo "  Creating devtunnel for Clinic..."
+export CLINIC_URL=$(createTunnel ./clinic 7080)
+echo "  Clinic url is $CLINIC_URL"
+echo "  Starting services"
+pushd clinic
+echo NUTS_URL="${CLINIC_URL}" > .env
+echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
+docker compose --env-file .env pull
+docker compose --env-file .env up --wait --build --remove-orphans
+echo "  Creating DID document"
+CLINIC_DID=$(createDID "clinic" http://localhost:8081)
+echo "    Clinic DID: $CLINIC_DID"
+echo "  Self-issuing an NutsUraCredential"
+issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
+echo "  Registering on Nuts Discovery Service"
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
 popd
 
 # open orchestrator demo app
