@@ -11,6 +11,7 @@ type Config struct {
 	PublicKey string `koanf:"publickey"` // ODO
 	ApiUrl    string `koanf:"apiurl"`
 	StsUrl    string `koanf:"stsurl"`
+	BaseUrl   string `koanf:"baseurl"`
 	Issuer    string `koanf:"iss"`
 	OwnIssuer string `koanf:"owniss"` //TODO: Properly distinct between signing and decrypting
 	Audience  string `koanf:"aud"`
