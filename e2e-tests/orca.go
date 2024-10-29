@@ -33,6 +33,7 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_NUTS_API_URL":                            "http://nutsnode:8081",
 			"ORCA_NUTS_PUBLIC_URL":                         "http://nutsnode:8080",
 			"ORCA_NUTS_SUBJECT":                            nutsSubject,
+			"ORCA_NUTS_DISCOVERYSERVICE":                   "dev:HomeMonitoring2024",
 			"ORCA_CAREPLANSERVICE_ENABLED":                 strconv.FormatBool(cpsEnabled),
 			"ORCA_CAREPLANSERVICE_FHIR_URL":                fhirStoreURL,
 			"ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL": cpsFhirBaseUrl,

@@ -17,7 +17,7 @@ func (d DutchNutsProfile) CsdDirectory() csd.Directory {
 	apiClient, _ := discovery.NewClientWithResponses(d.Config.API.URL)
 	return CsdDirectory{
 		APIClient:                   apiClient,
-		ServiceID:                   "shared-care-planning",
+		ServiceID:                   d.Config.DiscoveryService,
 		IdentifierCredentialMapping: defaultCredentialMapping,
 	}
 }
