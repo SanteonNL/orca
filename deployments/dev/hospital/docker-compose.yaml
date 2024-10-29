@@ -22,6 +22,7 @@ services:
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${NUTS_URL}
       - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
+      - NUTS_DISCOVERY_SERVER_IDS=dev:HomeMonitoring2024
       - NUTS_VDR_DIDMETHODS=web
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
@@ -74,6 +75,9 @@ services:
       - "3001:3000"
     depends_on:
       - fhirstore
+    environment:
+      ORCA_LOCAL_ORGANIZATION_URA: 4567
+      ORCA_LOCAL_ORGANIZATION_NAME: Demo Hospital
 
 #  hospital_sof_adapter:
 #    build:
