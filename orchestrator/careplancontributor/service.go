@@ -2,11 +2,13 @@
 package careplancontributor
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -43,28 +45,33 @@ func New(
 		return nil, err
 	}
 	httpClient := profile.HttpClient()
+	carePlanServiceClient := fhirclient.New(cpsURL, httpClient, coolfhir.Config())
 	result := &Service{
-		config:             config,
-		orcaPublicURL:      orcaPublicURL,
-		carePlanServiceURL: cpsURL,
-		SessionManager:     sessionManager,
-		scpHttpClient:      httpClient,
-		profile:            profile,
-		frontendUrl:        config.FrontendConfig.URL,
-		fhirURL:            fhirURL,
-		transport:          localFHIRStoreTransport,
+		config:                config,
+		orcaPublicURL:         orcaPublicURL,
+		carePlanServiceURL:    cpsURL,
+		carePlanServiceClient: carePlanServiceClient,
+		SessionManager:        sessionManager,
+		scpHttpClient:         httpClient,
+		profile:               profile,
+		frontendUrl:           config.FrontendConfig.URL,
+		fhirURL:               fhirURL,
+		transport:             localFHIRStoreTransport,
+		workflows:             taskengine.DefaultWorkflows(),
+		questionnaireLoader:   taskengine.EmbeddedQuestionnaireLoader{},
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
 }
 
 type Service struct {
-	config             Config
-	profile            profile.Provider
-	orcaPublicURL      *url.URL
-	SessionManager     *user.SessionManager
-	frontendUrl        string
-	carePlanServiceURL *url.URL
+	config                Config
+	profile               profile.Provider
+	orcaPublicURL         *url.URL
+	SessionManager        *user.SessionManager
+	frontendUrl           string
+	carePlanServiceURL    *url.URL
+	carePlanServiceClient fhirclient.Client
 	// scpHttpClient is used to call remote Care Plan Contributors or Care Plan Service, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
@@ -73,7 +80,9 @@ type Service struct {
 	// transport is used to call the local FHIR store, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
-	transport http.RoundTripper
+	transport           http.RoundTripper
+	workflows           taskengine.Workflows
+	questionnaireLoader taskengine.QuestionnaireLoader
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
@@ -83,13 +92,13 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	// Authorized endpoints
 	//
 	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		var resourceRaw map[string]interface{}
-		if err := json.NewDecoder(request.Body).Decode(&resourceRaw); err != nil {
+		var notification coolfhir.SubscriptionNotification
+		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
 			log.Error().Err(err).Msg("Failed to decode notification")
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
-		if err := s.handleNotification(resourceRaw); err != nil {
+		if err := s.handleNotification(request.Context(), &notification); err != nil {
 			log.Error().Err(err).Msg("Failed to handle notification")
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
@@ -163,12 +172,11 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 		return errors.New("specified SCP context header does not refer to a CarePlan")
 	}
 
-	carePlanServiceClient := fhirclient.New(s.carePlanServiceURL, s.scpHttpClient, coolfhir.Config())
 	var bundle fhir.Bundle
 	// TODO: Discuss changes to this validation with team
 	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
 	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.carePlanServiceURL.String())
-	err = carePlanServiceClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"))
+	err = s.carePlanServiceClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"))
 	if err != nil {
 		return err
 	}
@@ -210,28 +218,6 @@ func (s Service) handleProxyToFHIR(writer http.ResponseWriter, request *http.Req
 	return nil
 }
 
-// validateRequester loops through each Participant of each CareTeam present in the CarePlan, trying to match it to the Principal
-// if a match is found, validate the time period of the Participant
-func validateRequester(careTeams []fhir.CareTeam, principal auth.Principal) (bool, error) {
-	for _, careTeam := range careTeams {
-		for _, participant := range careTeam.Participant {
-			for _, identifier := range principal.Organization.Identifier {
-				if coolfhir.IdentifierEquals(participant.Member.Identifier, &identifier) {
-					// Member must have start date, this date must be in the past, and if there is an end date then it must be in the future
-					ok, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
-					if err != nil {
-						log.Warn().Err(err).Msg("invalid CareTeam Participant period")
-					}
-					if ok {
-						return true, nil
-					}
-				}
-			}
-		}
-	}
-	return false, nil
-}
-
 func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
 	contextData := struct {
 		Patient        string `json:"patient"`
@@ -259,7 +245,58 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 	}
 }
 
-func (s Service) handleNotification(_ any) error {
-	log.Info().Msg("TODO: Handle received notification")
+func (s Service) handleNotification(ctx context.Context, resource any) error {
+	notification, ok := resource.(*coolfhir.SubscriptionNotification)
+	if !ok {
+		return &coolfhir.ErrorWithCode{
+			Message:    "failed to cast resource to notification",
+			StatusCode: http.StatusBadRequest,
+		}
+	}
+	if notification == nil {
+		return &coolfhir.ErrorWithCode{
+			Message:    "notification is nil",
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
+	focusReference, err := notification.GetFocus()
+	if err != nil {
+		return err
+	}
+	if focusReference == nil {
+		return &coolfhir.ErrorWithCode{
+			Message:    "Notification focus not found",
+			StatusCode: http.StatusUnprocessableEntity,
+		}
+	}
+
+	if focusReference.Type == nil {
+		return &coolfhir.ErrorWithCode{
+			Message:    "Notification focus type is nil",
+			StatusCode: http.StatusUnprocessableEntity,
+		}
+	}
+
+	log.Info().Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
+
+	switch *focusReference.Type {
+	case "Task":
+		// Get task
+		var task fhir.Task
+		err = s.carePlanServiceClient.Read(*focusReference.Reference, &task)
+		if err != nil {
+			return err
+		}
+
+		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
+		err = s.handleTaskFillerCreate(ctx, &task)
+		if err != nil {
+			return err
+		}
+	default:
+		log.Info().Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
+	}
+
 	return nil
 }

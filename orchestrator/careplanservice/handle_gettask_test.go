@@ -5,7 +5,6 @@ import (
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -25,9 +24,7 @@ func TestService_handleGetTask(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		fhirClient:          mockFHIRClient,
-		workflows:           taskengine.DefaultWorkflows(),
-		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+		fhirClient: mockFHIRClient,
 	}
 
 	tests := []struct {
@@ -86,9 +83,7 @@ func TestService_handleSearchTask(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		fhirClient:          mockFHIRClient,
-		workflows:           taskengine.DefaultWorkflows(),
-		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+		fhirClient: mockFHIRClient,
 	}
 
 	rawCarePlan, _ := os.ReadFile("./testdata/careplan-1.json")

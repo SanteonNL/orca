@@ -13,7 +13,7 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-    image: nutsfoundation/nuts-node:6.0.0-beta.13
+    image: nutsfoundation/nuts-node:6.0.0
     ports:
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
@@ -26,6 +26,7 @@ services:
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${NUTS_URL}
       - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
+      - NUTS_DISCOVERY_SERVER_IDS=dev:HomeMonitoring2024
       - NUTS_VDR_DIDMETHODS=web
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
@@ -58,7 +59,10 @@ services:
       - ORCA_NUTS_API_URL=http://nutsnode:8081
       - ORCA_NUTS_PUBLIC_URL=${NUTS_URL}
       - ORCA_NUTS_SUBJECT=hospital
+      - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
       - ORCA_PUBLIC_URL=/orca
+      - ORCA_CAREPLANSERVICE_ENABLED=true
+      - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
       - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=${HOSPITAL_URL}/frontend/enrollment/new
@@ -87,6 +91,11 @@ services:
       - "3001:3000"
     depends_on:
       - fhirstore
+    environment:
+      ORCA_LOCAL_ORGANIZATION_URA: 4567
+      ORCA_LOCAL_ORGANIZATION_NAME: Demo Hospital
+      ORCA_PERFORMER_ORGANIZATION_URA: 1234
+      ORCA_PERFORMER_ORGANIZATION_NAME: Demo Clinic
 
 #  hospital_sof_adapter:
 #    build:
