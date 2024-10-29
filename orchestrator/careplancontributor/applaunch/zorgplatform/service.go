@@ -189,7 +189,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 	}
 
-	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s", acessToken)
+	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s", acessToken) //TODO: Remove unsecure log when no longer needed
 
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	s.sessionManager.Create(response, user.SessionData{

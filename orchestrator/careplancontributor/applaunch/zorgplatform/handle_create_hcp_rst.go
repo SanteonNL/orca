@@ -48,7 +48,7 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 		return "", err
 	}
 
-	return response, nil
+	return s.validateRSTSResponse(response)
 }
 
 // createSAMLAssertion builds the SAML assertion
@@ -375,4 +375,30 @@ func (s *Service) getSigningPrivateKey() (any, error) {
 	}
 
 	return x509.ParsePKCS8PrivateKey(block.Bytes)
+}
+
+// validateRSTSResponse validates the generated Assertion and returns the SAML Bearer token from the RequestSecurityTokenResponse (RSTS)
+func (s *Service) validateRSTSResponse(rtst string) (string, error) {
+	doc := etree.NewDocument()
+	err := doc.ReadFromString(rtst)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse RTST SOAP response: %w", err)
+	}
+
+	assertionElement := doc.FindElement("//Assertion")
+	if assertionElement == nil {
+		return "", fmt.Errorf("assertion element not found in RTST response")
+	}
+
+	assertionDoc := etree.NewDocument()
+	assertionDoc.SetRoot(assertionElement)
+	assertionString, err := assertionDoc.WriteToString()
+	if err != nil {
+		return "", fmt.Errorf("failed to serialize RTST assertion: %w", err)
+	}
+
+	//TODO: Assertion MUST be validated here!!!
+
+	// Return the SAML Bearer token value; the base64 encoded <Assertion> element
+	return base64.StdEncoding.EncodeToString([]byte(assertionString)), nil
 }
