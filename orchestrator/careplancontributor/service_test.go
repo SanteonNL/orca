@@ -3,15 +3,19 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -396,26 +400,127 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
-func TestService_HandleNotification(t *testing.T) {
-	prof := profile.TestProfile{}
-	service, err := New(Config{}, prof, orcaPublicURL, user.NewSessionManager())
+// Invalid test cases are simpler, can be tested with http endpoint mocking
+func TestService_HandleNotification_Invalid(t *testing.T) {
+	prof := profile.TestProfile{
+		Principal: auth.TestPrincipal1,
+	}
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	fhirServerMux := http.NewServeMux()
+	fhirServer := httptest.NewServer(fhirServerMux)
+	fhirServerURL, _ := url.Parse(fhirServer.URL)
+	fhirServerURL.Path = "/fhir"
+	sessionManager, _ := createTestSession()
+
+	carePlanServiceMux := http.NewServeMux()
+	carePlanServiceMux.HandleFunc("GET /cps/Task/999", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusNotFound)
+	})
+	carePlanServiceMux.HandleFunc("GET /cps/Task/1", func(writer http.ResponseWriter, request *http.Request) {
+		rawJson, _ := os.ReadFile("./testdata/task-1.json")
+		var data fhir.Task
+		_ = json.Unmarshal(rawJson, &data)
+		responseData, _ := json.Marshal(data)
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(responseData)
+	})
+	carePlanServiceMux.HandleFunc("GET /cps/Task/2", func(writer http.ResponseWriter, request *http.Request) {
+		rawJson, _ := os.ReadFile("./testdata/task-2.json")
+		var data fhir.Task
+		_ = json.Unmarshal(rawJson, &data)
+		responseData, _ := json.Marshal(data)
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(responseData)
+	})
+	carePlanServiceMux.HandleFunc("GET /cps/Task/3", func(writer http.ResponseWriter, request *http.Request) {
+		rawJson, _ := os.ReadFile("./testdata/task-3.json")
+		var data fhir.Task
+		_ = json.Unmarshal(rawJson, &data)
+		responseData, _ := json.Marshal(data)
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(responseData)
+	})
+	carePlanService := httptest.NewServer(carePlanServiceMux)
+	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
+	carePlanServiceURL.Path = "/cps"
+
+	service, _ := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+		CarePlanService: CarePlanServiceConfig{
+			URL: carePlanServiceURL.String(),
+		},
+	}, profile.TestProfile{
+		Principal: auth.TestPrincipal1,
+	}, orcaPublicURL, sessionManager)
+
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
 	service.RegisterHandlers(frontServerMux)
-	require.NoError(t, err)
 
-	t.Run("valid notification", func(t *testing.T) {
+	t.Run("invalid notification - wrong data type", func(t *testing.T) {
+		notification := fhir.Task{Id: to.Ptr("1")}
+		notificationJSON, _ := json.Marshal(notification)
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpResponse, err := prof.HttpClient().Do(httpRequest)
+
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	})
+	t.Run("valid notification - unsupported type", func(t *testing.T) {
 		notificationUrl, _ := url.Parse("https://example.com")
-		notfication := coolfhir.CreateSubscriptionNotification(notificationUrl,
+		notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
-			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1")})
-		notificationJSON, _ := json.Marshal(notfication)
+			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
+		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := prof.HttpClient().Do(httpRequest)
 
 		require.NoError(t, err)
 
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("valid notification - task - not found", func(t *testing.T) {
+		notificationUrl, _ := url.Parse("https://example.com")
+		notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
+			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/999"), Type: to.Ptr("Task")})
+		notificationJSON, _ := json.Marshal(notification)
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpResponse, err := prof.HttpClient().Do(httpRequest)
+
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	})
+	t.Run("valid notification - task - not SCP", func(t *testing.T) {
+		notificationUrl, _ := url.Parse("https://example.com")
+		notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
+			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/1"), Type: to.Ptr("Task")})
+		notificationJSON, _ := json.Marshal(notification)
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpResponse, err := prof.HttpClient().Do(httpRequest)
+
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("valid notification - task - invalid task missing focus", func(t *testing.T) {
+		notificationUrl, _ := url.Parse("https://example.com")
+		notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
+			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/2"), Type: to.Ptr("Task")})
+		notificationJSON, _ := json.Marshal(notification)
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpResponse, err := prof.HttpClient().Do(httpRequest)
+
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 	})
 	t.Run("invalid notification", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader("invalid"))
@@ -425,6 +530,86 @@ func TestService_HandleNotification(t *testing.T) {
 
 		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 	})
+}
+
+// Valid test case is more complex, use client mocking to simulate data return
+func TestService_HandleNotification_Valid(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a mock FHIR client using the generated mock
+	mockFHIRClient := mock.NewMockClient(ctrl)
+
+	prof := profile.TestProfile{
+		Principal: auth.TestPrincipal2,
+	}
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	fhirServerMux := http.NewServeMux()
+	fhirServer := httptest.NewServer(fhirServerMux)
+	fhirServerURL, _ := url.Parse(fhirServer.URL)
+	fhirServerURL.Path = "/fhir"
+	sessionManager, _ := createTestSession()
+
+	service, _ := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+		CarePlanService: CarePlanServiceConfig{
+			URL: fhirServerURL.String(),
+		},
+	}, profile.TestProfile{
+		Principal: auth.TestPrincipal2,
+	}, orcaPublicURL, sessionManager)
+
+	service.carePlanServiceClient = mockFHIRClient
+
+	frontServerMux := http.NewServeMux()
+	frontServer := httptest.NewServer(frontServerMux)
+	service.RegisterHandlers(frontServerMux)
+
+	notificationUrl, _ := url.Parse("https://example.com")
+	notification := coolfhir.CreateSubscriptionNotification(notificationUrl,
+		time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+		fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/3"), Type: to.Ptr("Task")})
+	notificationJSON, _ := json.Marshal(notification)
+
+	mockFHIRClient.EXPECT().Read("Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+		rawJson, _ := os.ReadFile("./testdata/task-3.json")
+		var data fhir.Task
+		_ = json.Unmarshal(rawJson, &data)
+		bytes, _ := json.Marshal(data)
+		json.Unmarshal(bytes, &result)
+		return nil
+	})
+
+	mockFHIRClient.EXPECT().
+		Create(gomock.Any(), gomock.Any(), gomock.Any()).
+		DoAndReturn(func(bundle fhir.Bundle, result interface{}, options ...fhirclient.Option) error {
+			mockResponse := map[string]interface{}{
+				"id":           uuid.NewString(),
+				"resourceType": "Bundle",
+				"type":         "transaction-response",
+				"entry": []interface{}{
+					map[string]interface{}{
+						"response": map[string]interface{}{
+							"status":   "201 Created",
+							"location": "Task/" + uuid.NewString(),
+						},
+					},
+				},
+			}
+			bytes, _ := json.Marshal(mockResponse)
+			json.Unmarshal(bytes, &result)
+			return nil
+		})
+
+	httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+	httpResponse, err := prof.HttpClient().Do(httpRequest)
+
+	require.NoError(t, err)
+
+	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 }
 
 func TestService_ProxyToEHR(t *testing.T) {

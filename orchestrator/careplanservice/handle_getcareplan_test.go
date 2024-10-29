@@ -5,7 +5,6 @@ import (
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -22,9 +21,7 @@ func TestService_handleGetCarePlan(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		fhirClient:          mockFHIRClient,
-		workflows:           taskengine.DefaultWorkflows(),
-		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+		fhirClient: mockFHIRClient,
 	}
 
 	tests := []struct {

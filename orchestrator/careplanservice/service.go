@@ -16,7 +16,6 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
@@ -49,9 +48,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 				ChannelHttpClient: profile.HttpClient(),
 			},
 		},
-		maxReadBodySize:     fhirClientConfig.MaxResponseSize,
-		workflows:           taskengine.DefaultWorkflows(),
-		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+		maxReadBodySize: fhirClientConfig.MaxResponseSize,
 	}
 	s.handlerProvider = s.defaultHandlerProvider
 	return &s, nil
@@ -64,8 +61,6 @@ type Service struct {
 	fhirClient          fhirclient.Client
 	profile             profile.Provider
 	subscriptionManager subscriptions.Manager
-	workflows           taskengine.Workflows
-	questionnaireLoader taskengine.QuestionnaireLoader
 	maxReadBodySize     int
 	proxy               *httputil.ReverseProxy
 	handlerProvider     func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)

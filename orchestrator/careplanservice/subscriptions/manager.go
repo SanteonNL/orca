@@ -2,6 +2,7 @@ package subscriptions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -42,11 +43,28 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			Reference: to.Ptr("Task/" + *task.Id),
 			Type:      to.Ptr("Task"),
 		}
-		if coolfhir.IsLogicalReference(task.Owner) {
+		log.Info().Msgf("Notifying subscribers for Task %s", *task.Id)
+		isOwnerValid := coolfhir.IsLogicalReference(task.Owner)
+		if isOwnerValid {
 			subscribers = append(subscribers, *task.Owner.Identifier)
+		} else {
+			ownerJSON, err := json.Marshal(task.Owner)
+			if err != nil {
+				log.Error().Msgf("Failed to marshal owner to JSON: %s", err)
+			} else {
+				log.Warn().Msgf("Owner LogicalReference is invalid: %s", string(ownerJSON))
+			}
 		}
-		if coolfhir.IsLogicalReference(task.Requester) {
+		isRequesterValid := coolfhir.IsLogicalReference(task.Requester)
+		if isRequesterValid {
 			subscribers = append(subscribers, *task.Requester.Identifier)
+		} else {
+			requesterJSON, err := json.Marshal(task.Requester)
+			if err != nil {
+				log.Error().Msgf("Failed to marshal requester to JSON: %s", err)
+			} else {
+				log.Warn().Msgf("Requester LogicalReference is invalid: %s", string(requesterJSON))
+			}
 		}
 	case "CareTeam":
 		careTeam := resource.(*fhir.CareTeam)
@@ -54,15 +72,23 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			Reference: to.Ptr("CareTeam/" + *careTeam.Id),
 		}
 		for _, participant := range careTeam.Participant {
-			if coolfhir.IsLogicalReference(participant.Member) {
+			isMemberValid := coolfhir.IsLogicalReference(participant.Member)
+			if isMemberValid {
 				subscribers = append(subscribers, *participant.Member.Identifier)
+			} else {
+				memberJSON, err := json.Marshal(participant.Member)
+				if err != nil {
+					log.Error().Msgf("Failed to marshal member to JSON: %s", err)
+				} else {
+					log.Warn().Msgf("Member LogicalReference is invalid: %s", string(memberJSON))
+				}
 			}
 		}
 	default:
 		return fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
 	}
 
-	log.Info().Msgf("Notifying subscribers for update on resource: %s", *focus.Reference)
+	log.Info().Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)
 
 	return r.notifyAll(ctx, timeFunc(), focus, subscribers)
 }
