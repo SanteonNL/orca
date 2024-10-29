@@ -111,6 +111,12 @@ echo "Creating devtunnel for Hospital..."
 echo "  Creating devtunnel"
 export HOSPITAL_URL=$(createTunnel ./hospital 9080)
 export CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${HOSPITAL_URL}/orca/cps"
+# start Nuts node
+pushd hospital
+docker compose pull
+echo NUTS_URL="${HOSPITAL_URL}" > .env
+docker compose --env-file .env up nutsnode --wait  --remove-orphans
+popd
 
 echo "Creating stack for Clinic..."
 echo "  Starting services"
@@ -125,6 +131,8 @@ CLINIC_DID=$(createDID "clinic" http://localhost:8081)
 echo "    Clinic DID: $CLINIC_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
+echo "  Registering on Nuts Discovery Service"
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
 
 echo "  Starting docker compose"
 echo NUTS_URL="${CLINIC_URL}" > .env
@@ -144,15 +152,12 @@ HOSPITAL_DID=$(createDID "hospital" http://localhost:9081)
 echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "hospital" "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
-echo "  Registering FHIR base URL in DID document"
-curl -X POST -H "Content-Type: application/json" -d "{\"type\":\"fhir-api\",\"serviceEndpoint\":\"${HOSPITAL_URL}/fhir\"}" http://localhost:9081/internal/vdr/v2/subject/hospital/service
+echo "  Registering on Nuts Discovery Service"
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${HOSPITAL_URL}/fhir/notify\"}}" http://localhost:9081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
 # TODO: Remove this init when the Questionnaire is provided by the sub-Task.input
-echo NUTS_URL="${HOSPITAL_URL}" > .env
 echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
 docker compose --env-file .env up --wait --build --remove-orphans
 echo "  Waiting for the FHIR server to be ready"
-./config/init-fhir-resources.sh $HOSPITAL_URL
-echo "  Creating SearchParameter"
 ./config/init-fhir-resources.sh $HOSPITAL_URL
 popd
 
