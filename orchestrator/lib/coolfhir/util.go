@@ -255,3 +255,17 @@ func HttpMethodToVerb(method string) fhir.HTTPVerb {
 		return 0
 	}
 }
+
+func IsScpTask(task *fhir.Task) bool {
+	if task.Meta == nil {
+		return false
+	}
+
+	for _, profile := range task.Meta.Profile {
+		if profile == SCPTaskProfile {
+			return true
+		}
+	}
+
+	return false
+}

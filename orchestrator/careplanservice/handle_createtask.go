@@ -96,19 +96,46 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		if err != nil {
 			return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 		}
-		// we have a valid reference to a CarePlan, use this to retrieve the CarePlan and CareTeam to validate the requester is a participant
+
 		var careTeams []fhir.CareTeam
 		err = s.fhirClient.Read(*carePlanRef, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams))
 		if err != nil {
 			return nil, err
 		}
-		if len(careTeams) == 0 {
-			return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
-		}
 
-		participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
-		if participant == nil {
-			return nil, coolfhir.NewErrorWithCode("requester is not part of CareTeam", http.StatusUnauthorized)
+		// Different validation logic for an SCP subtask
+		if coolfhir.IsScpTask(&task) && len(task.PartOf) > 0 {
+			if len(task.PartOf) != 1 {
+				return nil, coolfhir.NewErrorWithCode("SCP subtask must have exactly one parent task", http.StatusBadRequest)
+			}
+			// Get the parent task
+			var parentTask fhir.Task
+			err = s.fhirClient.Read(*task.PartOf[0].Reference, &parentTask)
+			if err != nil {
+				return nil, err
+			}
+			// Verify the owner of the parent task is the same as the org creating the subtask
+			isOwner, _ := coolfhir.ValidateTaskOwnerAndRequester(&parentTask, principal.Organization.Identifier)
+			if !isOwner {
+				return nil, coolfhir.NewErrorWithCode("requester is not the owner of the parent task", http.StatusUnauthorized)
+			}
+
+			if !coolfhir.LogicalReferenceEquals(*parentTask.Owner, *task.Requester) {
+				return nil, coolfhir.NewErrorWithCode("requester is not the same as the parent task owner", http.StatusUnauthorized)
+			}
+			if !coolfhir.LogicalReferenceEquals(*parentTask.Requester, *task.Owner) {
+				return nil, coolfhir.NewErrorWithCode("owner is not the same as the parent task requester", http.StatusUnauthorized)
+			}
+		} else {
+			// we have a valid reference to a CarePlan, use this to retrieve the CarePlan and CareTeam to validate the requester is a participant
+			if len(careTeams) == 0 {
+				return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
+			}
+
+			participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+			if participant == nil {
+				return nil, coolfhir.NewErrorWithCode("requester is not part of CareTeam", http.StatusUnauthorized)
+			}
 		}
 		// TODO: Manage time-outs properly
 		// Add Task to CarePlan.activities

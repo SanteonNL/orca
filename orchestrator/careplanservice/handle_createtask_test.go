@@ -408,3 +408,5 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 		})
 	}
 }
+
+// TODO: Unit test for creating an SCP subtask, to be done when refactoring the tests to use HTTP client mocking (too complex to test positive cases with reflection)

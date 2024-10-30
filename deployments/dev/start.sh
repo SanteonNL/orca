@@ -119,7 +119,7 @@ echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "hospital" "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
 echo "  Registering on Nuts Discovery Service"
-curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${HOSPITAL_URL}/fhir/notify\"}}" http://localhost:9081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${HOSPITAL_URL}/orca/cpc/fhir/notify\"}}" http://localhost:9081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
 # TODO: Remove this init when the Questionnaire is provided by the sub-Task.input
 echo "  Waiting for the FHIR server to be ready"
 ./config/init-fhir-resources.sh $HOSPITAL_URL
@@ -141,7 +141,7 @@ echo "    Clinic DID: $CLINIC_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
 echo "  Registering on Nuts Discovery Service"
-curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/orca/cpc/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
 popd
 
 # open orchestrator demo app

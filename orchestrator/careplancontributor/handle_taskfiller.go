@@ -17,7 +17,7 @@ import (
 func (s *Service) handleTaskFillerCreate(ctx context.Context, task *fhir.Task) error {
 	log.Info().Msgf("Running handleTaskFillerCreate for Task %s", *task.Id)
 
-	if !s.isScpTask(task) {
+	if !coolfhir.IsScpTask(task) {
 		log.Info().Msg("Task is not an SCP Task - skipping")
 		return nil
 	}
@@ -60,7 +60,7 @@ func (s *Service) handleTaskFillerUpdate(ctx context.Context, task *fhir.Task) e
 
 	log.Info().Msg("Running handleTaskFillerUpdate")
 
-	if !s.isScpTask(task) {
+	if !coolfhir.IsScpTask(task) {
 		log.Debug().Msg("Task is not an SCP Task - skipping")
 		return nil
 	}
