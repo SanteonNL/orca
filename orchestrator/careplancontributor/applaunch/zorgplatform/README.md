@@ -21,7 +21,7 @@ Make the README clear, currently mostly contains steps I ran into during develop
    ```json 
    {
     "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_ENABLED": "true",
-    "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_ISS": "<iss>", //The hl7 oid of the hospital configured in Zorgplatform
+    "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_ISS": "<iss>", //The hl7 oid of the care organization configured in Zorgplatform
     "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AUD": "<aud>", //The service URL configured in Zorgplatform
     "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_KEYVAULT_URL": "<kv_url>", //The URL of the Azure KeyVault to use
     "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_KEYVAULT_DECRYPTCERTNAME": "<certname>", //The name of the cert inside the configured Azure KeyVault
