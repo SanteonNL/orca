@@ -8,9 +8,9 @@ func DefaultConfig() Config {
 
 type Config struct {
 	Enabled bool   `koanf:"enabled"`
-	ApiUrl  string `koanf:"apiurl"`
-	StsUrl  string `koanf:"stsurl"`
-	BaseUrl string `koanf:"baseurl"`
+	ApiUrl  string `koanf:"apiurl"`  //The FHIR API URL
+	StsUrl  string `koanf:"stsurl"`  //The SAML STS URL
+	BaseUrl string `koanf:"baseurl"` //The base URL of zorgplatform, can be either their acc or prd URL
 
 	SigningConfig SigningConfig `koanf:"sign"`
 	DecryptConfig DecryptConfig `koanf:"decrypt"`
