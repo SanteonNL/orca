@@ -696,7 +696,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 func TestService_handleGetContext(t *testing.T) {
 	httpResponse := httptest.NewRecorder()
 	Service{}.handleGetContext(httpResponse, nil, &user.SessionData{
-		Values: map[string]string{
+		StringValues: map[string]string{
 			"test":           "value",
 			"practitioner":   "the-doctor",
 			"serviceRequest": "ServiceRequest/1",
