@@ -14,7 +14,7 @@ type Config struct {
 	ApiUrl             string        `koanf:"apiurl"`             //The FHIR API URL
 	StsUrl             string        `koanf:"stsurl"`             //The SAML STS URL
 	BaseUrl            string        `koanf:"baseurl"`            //The base URL of zorgplatform, can be either their acc or prd URL
-	SAMLRequestTimeout time.Duration `koanf:"samlrequesttimeout"` //The timeout in seconds for the SAML request
+	SAMLRequestTimeout time.Duration `koanf:"samlrequesttimeout"` //The timeout for the SAML request, e.g. 10s, 100ms etc
 	SigningConfig      SigningConfig `koanf:"sign"`
 	DecryptConfig      DecryptConfig `koanf:"decrypt"`
 
