@@ -10,7 +10,6 @@ require (
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.0.0-20240805130644-8b92f1cbf865
 	github.com/beevik/etree v1.2.0
 	github.com/braineet/saml v0.4.15
-	github.com/crewjam/saml v0.4.14
 	github.com/google/uuid v1.6.0
 	github.com/knadh/koanf/providers/env v0.1.0
 	github.com/knadh/koanf/v2 v2.1.1
@@ -23,12 +22,9 @@ require (
 	golang.org/x/oauth2 v0.21.0
 )
 
-replace github.com/crewjam/saml => ../../saml
-
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.0.0 // indirect
 	github.com/jonboulle/clockwork v0.2.2 // indirect
-	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 )
 
 require (
