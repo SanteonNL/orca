@@ -1,16 +1,21 @@
 package careplanservice
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"reflect"
 	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -96,14 +101,79 @@ func TestService_ErrorHandling(t *testing.T) {
 
 	require.NotNil(t, target)
 	require.NotEmpty(t, target.Issue)
-	require.Equal(t, "CarePlanService/CreateTask failed: invalid Task: unexpected end of JSON input", *target.Issue[0].Diagnostics)
+	require.Equal(t, "CarePlanService/CreateTask failed: invalid fhir.Task: unexpected end of JSON input", *target.Issue[0].Diagnostics)
+}
+
+func TestService_DefaultOperationHandler(t *testing.T) {
+	t.Run("handles unmanaged FHIR operations", func(t *testing.T) {
+		// For now, we allow unmanaged FHIR operations. Unmanaged operations are operations (e.g. POST ServiceRequest)
+		// which aren't explicitly implemented in the CarePlanService API. We currently allow these, as we know
+		// some operations are required, but not implemented yet.
+		tx := coolfhir.Transaction()
+		// The unmanaged operation handler reads the resource to return from the result Bundle,
+		// from the same index as the resource it added to the transaction Bundle. To test this,
+		// we make sure there's 2 other resources in the Bundle.
+		tx.Create(fhir.Task{})
+		txResultBundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransaction,
+			Entry: []fhir.BundleEntry{
+				{
+					Response: &fhir.BundleEntryResponse{
+						Location: to.Ptr("Task/456"),
+						Status:   "201 Created",
+					},
+				},
+				{
+					Response: &fhir.BundleEntryResponse{
+						Location: to.Ptr("ServiceRequest/123"),
+						Status:   "201 Created",
+					},
+				},
+				{
+					Response: &fhir.BundleEntryResponse{
+						Location: to.Ptr("Task/789"),
+						Status:   "201 Created",
+					},
+				},
+			},
+		}
+		expectedServiceRequest := fhir.ServiceRequest{
+			Id: to.Ptr("123"),
+		}
+		expectedServiceRequestJson, _ := json.Marshal(expectedServiceRequest)
+		request := FHIRHandlerRequest{
+			ResourcePath: "ServiceRequest",
+			HttpMethod:   http.MethodPost,
+		}
+		ctrl := gomock.NewController(t)
+		fhirClient := mock.NewMockClient(ctrl)
+		fhirClient.EXPECT().Read("ServiceRequest/123", gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ string, resultResource interface{}, opts ...fhirclient.Option) error {
+				reflect.ValueOf(resultResource).Elem().Set(reflect.ValueOf(expectedServiceRequestJson))
+				return nil
+			})
+		service := Service{
+			fhirClient: fhirClient,
+		}
+
+		resultHandler, err := service.handleUnmanagedOperation(request, tx)
+		require.NoError(t, err)
+		resultBundleEntry, notifications, err := resultHandler(&txResultBundle)
+
+		require.NoError(t, err)
+		require.Empty(t, notifications)
+		assert.JSONEq(t, string(expectedServiceRequestJson), string(resultBundleEntry.Resource))
+		assert.Equal(t, "ServiceRequest/123", *resultBundleEntry.Response.Location)
+	})
 }
 
 func TestService_Handle(t *testing.T) {
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
+	var capturedRequestBody []byte
 	fhirServerMux := http.NewServeMux()
 	fhirServerMux.HandleFunc("POST /", func(writer http.ResponseWriter, request *http.Request) {
+		capturedRequestBody, _ = io.ReadAll(request.Body)
 		writer.Header().Set("Content-Type", "application/fhir+json")
 		writer.WriteHeader(http.StatusOK)
 		bundle := map[string]interface{}{
@@ -142,13 +212,13 @@ func TestService_Handle(t *testing.T) {
 		},
 	}, profile.TestProfile{}, orcaPublicURL)
 
-	service.handlerProvider = func(method string, resourceType string) func(*http.Request, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 		switch method {
 		case http.MethodPost:
 			switch resourceType {
 			case "CarePlan":
-				return func(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					assert.Equal(t, httpRequest.Header.Get("Content-Type"), "application/fhir+json")
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					tx.Append(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("CarePlan"))
 						carePlan := fhir.CarePlan{
@@ -159,8 +229,8 @@ func TestService_Handle(t *testing.T) {
 					}, nil
 				}
 			case "Task":
-				return func(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					assert.Equal(t, httpRequest.Header.Get("Content-Type"), "application/fhir+json")
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					tx.Append(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
@@ -174,8 +244,8 @@ func TestService_Handle(t *testing.T) {
 		case http.MethodPut:
 			switch resourceType {
 			case "Task":
-				return func(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					assert.Equal(t, httpRequest.Header.Get("Content-Type"), "application/fhir+json")
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+					tx.Append(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
@@ -186,8 +256,7 @@ func TestService_Handle(t *testing.T) {
 					}, nil
 				}
 			case "Organization":
-				return func(httpRequest *http.Request, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					assert.Equal(t, httpRequest.Header.Get("Content-Type"), "application/fhir+json")
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 					return nil, errors.New("this fails on purpose")
 				}
 			}
@@ -219,6 +288,7 @@ func TestService_Handle(t *testing.T) {
 						Resource: json.RawMessage(`{}`),
 					},
 					{
+						FullUrl: to.Ptr("urn:uuid:task"),
 						Request: &fhir.BundleEntryRequest{
 							Method: fhir.HTTPVerbPOST,
 							Url:    "Task",
@@ -237,6 +307,10 @@ func TestService_Handle(t *testing.T) {
 			assert.JSONEq(t, `{"id":"123","status":"draft","intent":"proposal","subject":{},"resourceType":"CarePlan"}`, string(resultBundle.Entry[0].Resource))
 			assert.Equal(t, "Task/123", *resultBundle.Entry[1].Response.Location)
 			assert.JSONEq(t, `{"id":"123","status":"draft","intent":"","resourceType":"Task"}`, string(resultBundle.Entry[1].Resource))
+
+			t.Run("Bundle.entry.fullUrl is retained", func(t *testing.T) {
+				assert.Contains(t, string(capturedRequestBody), `"fullUrl":"urn:uuid:task"`)
+			})
 		})
 		t.Run("PUT 1 item (Task)", func(t *testing.T) {
 			// Create a bundle with 2 Tasks
@@ -332,6 +406,24 @@ func TestService_Handle(t *testing.T) {
 
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0].request.url (entry #) has too many paths")
+		})
+		t.Run("POST with URL containing a fully qualified url", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+							Url:    "https://example.com/fhir/CarePlan/123",
+						},
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0].request.url (entry #) must be a relative URL")
 		})
 	})
@@ -358,5 +450,4 @@ func TestService_Handle(t *testing.T) {
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/UpdateOrganization failed: this fails on purpose")
 		})
 	})
-
 }

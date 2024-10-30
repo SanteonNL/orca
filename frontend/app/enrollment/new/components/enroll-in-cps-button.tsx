@@ -23,7 +23,7 @@ import { Spinner } from '@/components/spinner'
  */
 export default function EnrollInCpsButton() {
 
-    const { patient, selectedCarePlan, shouldCreateNewCarePlan, taskCondition, carePlanConditions, serviceRequest, newCarePlanName } = useEnrollment()
+    const { patient, selectedCarePlan, taskCondition, serviceRequest } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
 
@@ -32,24 +32,17 @@ export default function EnrollInCpsButton() {
     const ehrClient = useEhrClient()
 
     useEffect(() => {
-        setDisabled(submitted || !taskCondition || (!selectedCarePlan && !shouldCreateNewCarePlan) || (shouldCreateNewCarePlan && (!newCarePlanName || !carePlanConditions)))
-    }, [taskCondition, selectedCarePlan, shouldCreateNewCarePlan, newCarePlanName, carePlanConditions, submitted])
+        setDisabled(submitted || !taskCondition)
+    }, [taskCondition, selectedCarePlan, submitted])
 
     const informCps = async () => {
         setSubmitted(true)
-        //FIXME, contrib does not create the CP anymore
-        let carePlan = selectedCarePlan
-
-        if (shouldCreateNewCarePlan) {
-            carePlan = await createNewCarePlan() as CarePlan
-        }
-
-        if (!carePlan || !taskCondition) {
+        if (!taskCondition) {
             toast.error("Error: Something went wrong with CarePlan creation", { richColors: true })
             throw new Error("Something went wrong with CarePlan creation")
         }
 
-        const task = await createTask(carePlan, taskCondition)
+        const task = await createTask(taskCondition)
 
         toast.success("Enrollment successfully sent to filler", {
             closeButton: true,
@@ -64,56 +57,24 @@ export default function EnrollInCpsButton() {
             action: (
                 <Dialog>
                     <DialogTrigger asChild>
-                        <Button variant="outline">View Resources</Button>
+                        <Button variant="outline">View Task</Button>
                     </DialogTrigger>
                     <DialogContent className="min-w-[90vw] max-h-[90vh] overflow-y-scroll">
                         <DialogHeader>
-                            <DialogTitle>Created Resources</DialogTitle>
+                            <DialogTitle>Created Task</DialogTitle>
                             <DialogDescription>
-                                See the results of the created CarePlan and Task below
+                                See the results of the created Task below
                             </DialogDescription>
                         </DialogHeader>
-                        <Tabs className="w-full" defaultValue='careplan'>
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="careplan">CarePlan</TabsTrigger>
-                                <TabsTrigger value="task">Task</TabsTrigger>
-                            </TabsList>
-                            <div className='overflow-auto'>
-                                <TabsContent value="careplan">
-                                    <JsonView src={carePlan} collapsed={2} />
-                                </TabsContent>
-                                <TabsContent value="task">
-                                    <JsonView src={task} collapsed={2} />
-                                </TabsContent>
-                            </div>
-                        </Tabs>
+                        <div className='overflow-auto'>
+                            <JsonView src={task} collapsed={2} />
+                        </div>
                     </DialogContent>
-                </Dialog>
+                </Dialog >
             )
         })
 
         router.push(`/enrollment/task/${task.id}`)
-    }
-
-    const createNewCarePlan = async () => {
-        if (!cpsClient) {
-            toast.error("Error: CarePlanService not found", { richColors: true })
-            throw new Error("No CPS client found")
-        }
-        if (!patient || !taskCondition || !serviceRequest || !carePlanConditions) {
-            toast.error("Error: Missing required items for CarePlan creation", { richColors: true })
-            throw new Error("Missing required items for CarePlan creation")
-        }
-
-        const carePlan = getCarePlan(patient, carePlanConditions, newCarePlanName);
-
-        try {
-            return await cpsClient.create({ resourceType: 'CarePlan', body: carePlan })
-        } catch (error) {
-            const msg = `Failed to create CarePlan. Error message: ${error ?? "Not error message found"}`
-            toast.error(msg, { richColors: true })
-            throw new Error(msg)
-        }
     }
 
     const forwardServiceRequest = async () => {
@@ -149,19 +110,19 @@ export default function EnrollInCpsButton() {
         }
     }
 
-    const createTask = async (carePlan: CarePlan, taskCondition: Condition) => {
+    const createTask = async (taskCondition: Condition) => {
         if (!cpsClient || !ehrClient) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
-        if (!patient || !taskCondition || !serviceRequest || !carePlan) {
+        if (!patient || !taskCondition || !serviceRequest) {
             toast.error("Error: Missing required items for Task creation", { richColors: true })
             throw new Error("Missing required items for Task creation")
         }
 
         const forwardedServiceRequest = await forwardServiceRequest()
 
-        const task = getTask(carePlan, forwardedServiceRequest, taskCondition)
+        const task = getTask(forwardedServiceRequest, taskCondition)
 
         try {
             return await cpsClient.create({ resourceType: 'Task', body: task });
@@ -175,6 +136,4 @@ export default function EnrollInCpsButton() {
     return (
         <Button disabled={disabled} onClick={informCps}>{submitted && <Spinner className='mr-5 text-white' />}Proceed</Button >
     )
-
-
 }

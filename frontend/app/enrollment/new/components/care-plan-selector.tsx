@@ -1,14 +1,15 @@
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import Combobox from '@/components/ui/combobox'
 import useEnrollment from '@/lib/store/enrollment-store'
 import { CheckIcon, PlusIcon } from '@radix-ui/react-icons'
-import React from 'react'
-import NewCarePlanInformation from './new-care-plan-information'
+import React, { useState } from 'react'
 
 export default function CarePlanSelector() {
+    //TODO: store cp refs instead of requesting all from CPS, as they can be shared accross multiple CPSs
 
-    const { carePlans, shouldCreateNewCarePlan, selectedCarePlan, setSelectedCarePlan, setShouldCreateNewCarePlan } = useEnrollment()
+    const { carePlans, selectedCarePlan, setSelectedCarePlan } = useEnrollment()
+    const [shouldCreateNewCarePlan, setShouldCreateNewCarePlan] = useState(false)
 
     const records = carePlans?.map((carePlan) => ({
         value: carePlan.id || "no-id",
@@ -19,6 +20,7 @@ export default function CarePlanSelector() {
         <Card>
             <CardHeader>
                 <CardTitle>CarePlan</CardTitle>
+                <CardDescription>Select an existing CarePlan or ask the CarePlan Service to create a new CarePlan</CardDescription>
             </CardHeader>
             <CardContent className='flex flex-col gap-3'>
                 <Combobox disabled={shouldCreateNewCarePlan} className='w-full' records={records} selectedValue={selectedCarePlan?.id} onChange={(value) => {
@@ -35,9 +37,6 @@ export default function CarePlanSelector() {
                     </Button>
                 )}
             </CardContent>
-            {shouldCreateNewCarePlan && (
-                <NewCarePlanInformation />
-            )}
         </Card>
     )
 }

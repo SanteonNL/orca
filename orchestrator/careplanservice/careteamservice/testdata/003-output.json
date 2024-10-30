@@ -2,7 +2,7 @@
   "resourceType": "CareTeam",
   "participant": [
     {
-      "onBehalfOf": {
+      "member": {
         "type": "Organization",
         "identifier": {
           "system": "http://fhir.nl/fhir/NamingSystem/ura",

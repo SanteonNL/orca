@@ -22,7 +22,7 @@ func setupNutsNode(t *testing.T, dockerNetworkName string) (string, string) {
 	println("Starting Nuts node...")
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
-		Image:        "nutsfoundation/nuts-node:6.0.0-beta.12",
+		Image:        "nutsfoundation/nuts-node:6.0.0",
 		Name:         "nutsnode",
 		ExposedPorts: []string{"8080/tcp", "8081/tcp"},
 		Networks:     []string{dockerNetworkName},
@@ -75,7 +75,7 @@ func createNutsIdentity(internalAPI string, subject string, ura int, name string
 	if err != nil {
 		return err
 	}
-	issueNutsURACredential(internalAPI, subjectDID, ura, name, city)
+	issueNutsURACredential(internalAPI, subjectDID, subject, ura, name, city)
 	nutsActivateDiscoveryService(internalAPI, subject, notificationEndpointURL)
 	return nil
 }
@@ -83,8 +83,8 @@ func createNutsIdentity(internalAPI string, subject string, ura int, name string
 func nutsActivateDiscoveryService(internalAPI string, subject string, notificationEndpointURL string) {
 	requestBody, _ := json.Marshal(map[string]interface{}{
 		"registrationParameters": map[string]string{
-			// fhir-notify should be defined by the use case
-			"fhir-notify": notificationEndpointURL,
+			// fhirNotificationURL should be defined by the use case
+			"fhirNotificationURL": notificationEndpointURL,
 		},
 	})
 	httpResponse, err := http.Post(internalAPI+"/internal/discovery/v1/dev:HomeMonitoring2024/"+subject, jsonType, bytes.NewReader(requestBody))
@@ -107,7 +107,7 @@ func createNutsSubject(internalAPI string, subject string) (string, error) {
 	return docs[0].(map[string]interface{})["id"].(string), nil
 }
 
-func issueNutsURACredential(internalAPI string, subjectDID string, ura int, name string, city string) {
+func issueNutsURACredential(internalAPI string, subjectDID string, subject string, ura int, name string, city string) {
 	// Issue NutsUraCredential
 	requestBody := `
 	{
@@ -132,6 +132,6 @@ func issueNutsURACredential(internalAPI string, subjectDID string, ura int, name
 	httpResponse, err := http.Post(internalAPI+"/internal/vcr/v2/issuer/vc", jsonType, strings.NewReader(requestBody))
 	testHTTPResponse(err, httpResponse, http.StatusOK)
 	// Load into wallet
-	httpResponse, err = http.Post(internalAPI+"/internal/vcr/v2/holder/"+subjectDID+"/vc", jsonType, httpResponse.Body)
+	httpResponse, err = http.Post(internalAPI+"/internal/vcr/v2/holder/"+subject+"/vc", jsonType, httpResponse.Body)
 	testHTTPResponse(err, httpResponse, http.StatusNoContent)
 }

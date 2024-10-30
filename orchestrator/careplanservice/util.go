@@ -1,8 +1,11 @@
 package careplanservice
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"net/http"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -39,4 +42,38 @@ func (s *Service) writeOperationOutcomeFromError(err error, desc string, httpRes
 	if err != nil {
 		log.Error().Err(err).Msgf("Failed to return OperationOutcome: %s", diagnostics)
 	}
+}
+
+func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
+	var carePlan fhir.CarePlan
+	var careTeams []fhir.CareTeam
+	headers := new(fhirclient.Headers)
+	err := s.fhirClient.Read(carePlanReference, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams), fhirclient.ResponseHeaders(headers))
+	if err != nil {
+		return fhir.CarePlan{}, nil, nil, err
+	}
+	if len(careTeams) == 0 {
+		return fhir.CarePlan{}, nil, nil, &coolfhir.ErrorWithCode{
+			Message:    "CareTeam not found in bundle",
+			StatusCode: http.StatusNotFound,
+		}
+	}
+
+	return carePlan, careTeams, headers, nil
+}
+
+func validatePrincipalInCareTeams(ctx context.Context, careTeams []fhir.CareTeam) error {
+	// Verify requester is in CareTeams
+	principal, err := auth.PrincipalFromContext(ctx)
+	if err != nil {
+		return err
+	}
+	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+	if participant == nil {
+		return &coolfhir.ErrorWithCode{
+			Message:    "Participant is not part of CareTeam",
+			StatusCode: http.StatusForbidden,
+		}
+	}
+	return nil
 }

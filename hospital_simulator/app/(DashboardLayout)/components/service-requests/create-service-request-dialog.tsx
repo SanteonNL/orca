@@ -11,6 +11,13 @@ import { IconPlus } from '@tabler/icons-react';
 import { Alert, Grid, MenuItem, Select } from '@mui/material';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Organization } from 'fhir/r4';
+import {
+    getLocalOrganization,
+    getTaskPerformerOrganization
+} from "@/utils/config";
+
+
 
 const CreateServiceRequestDialog: React.FC = () => {
     const [open, setOpen] = React.useState(false);
@@ -28,7 +35,9 @@ const CreateServiceRequestDialog: React.FC = () => {
     };
 
     const createServiceRequest = async () => {
-        const bundle = createServiceRequestBundle(patientFirstName || "John", patientLastName || "Doe")
+        const requester = await getLocalOrganization()
+        const performer = await getTaskPerformerOrganization()
+        const bundle = createServiceRequestBundle(patientFirstName || "John", patientLastName || "Doe", requester, performer)
 
         const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir`, {
             method: "POST",
@@ -51,7 +60,8 @@ const CreateServiceRequestDialog: React.FC = () => {
     return (
 
         <React.Fragment>
-            <Button sx={{ position: 'absolute', top: '10px', right: '10px' }} variant="contained" onClick={handleClickOpen}>
+            <Button sx={{ position: 'absolute', top: '10px', right: '10px' }} variant="contained"
+                onClick={handleClickOpen}>
                 <IconPlus />
             </Button>
             <Dialog
@@ -70,7 +80,8 @@ const CreateServiceRequestDialog: React.FC = () => {
                         )}
                         <Grid item xs={12}>
                             <DialogContentText>
-                                Create a new ServiceRequest for a new Patient. For demo purposes, we can only create <i>Telemonitoring</i> ServiceRequests.
+                                Create a new ServiceRequest for a new Patient. For demo purposes, we can only
+                                create <i>Telemonitoring</i> ServiceRequests.
                             </DialogContentText>
                         </Grid>
                         <Grid item xs={12} md={6}>
@@ -117,7 +128,15 @@ const CreateServiceRequestDialog: React.FC = () => {
 
 export default CreateServiceRequestDialog
 
-function createServiceRequestBundle(firstName: string, lastName: string) {
+function createServiceRequestBundle(firstName: string, lastName: string, requester: Organization, performer: Organization) {
+    if (requester.identifier?.length !== 1) {
+        throw new Error("Requester must have exactly one identifier")
+    }
+    const requesterIdentifier = requester.identifier[0]
+    if (performer.identifier?.length !== 1) {
+        throw new Error("Performer must have exactly one identifier")
+    }
+    const performerIdentifier = performer.identifier[0]
 
     const patientBsn = Date.now();
 
@@ -178,22 +197,12 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 }
             },
             {
-                "fullUrl": "urn:uuid:zorg-bij-jou-service-center",
-                "resource": {
-                    "resourceType": "Organization",
-                    "id": "zorg-bij-jou-service-center",
-                    "identifier": [
-                        {
-                            "system": "http://fhir.nl/fhir/NamingSystem/ura",
-                            "value": "URA-001"
-                        }
-                    ],
-                    "name": "Zorg Bij Jou - Medisch Service Center"
-                },
+                "fullUrl": "urn:uuid:performer",
+                "resource": performer,
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/ura|URA-001"
+                    "ifNoneExist": `identifier=${performerIdentifier.system}|${performerIdentifier.value}`
                 }
             },
             {
@@ -282,22 +291,12 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                 }
             },
             {
-                "fullUrl": "urn:uuid:stantonius",
-                "resource": {
-                    "resourceType": "Organization",
-                    "id": "StAntonius",
-                    "identifier": [
-                        {
-                            "system": "http://fhir.nl/fhir/NamingSystem/ura",
-                            "value": "URA-002"
-                        }
-                    ],
-                    "name": "St. Antonius"
-                },
+                "fullUrl": "urn:uuid:requester",
+                "resource": requester,
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/ura|URA-002"
+                    "ifNoneExist": `identifier=${requesterIdentifier.system}|${requesterIdentifier.value}`
                 }
             },
             {
@@ -461,21 +460,21 @@ function createServiceRequestBundle(firstName: string, lastName: string) {
                     },
                     "requester": {
                         "type": "Organization",
-                        "display": "St. Antonius",
-                        "reference": "urn:uuid:stantonius",
+                        "display": `${requester.name}`,
+                        "reference": "urn:uuid:requester",
                         "identifier": {
-                            "system": "http://fhir.nl/fhir/NamingSystem/ura",
-                            "value": "URA-002"
+                            "system": `${requesterIdentifier.system}`,
+                            "value": `${requesterIdentifier.value}`
                         }
                     },
                     "performer": [
                         {
                             "type": "Organization",
-                            "display": "Zorg Bij Jou - Medisch Service Center",
-                            "reference": "urn:uuid:zorg-bij-jou-service-center",
+                            "display": `${performer.name}`,
+                            "reference": "urn:uuid:performer",
                             "identifier": {
-                                "system": "http://fhir.nl/fhir/NamingSystem/ura",
-                                "value": "URA-001"
+                                "system": `${performerIdentifier.system}`,
+                                "value": `${performerIdentifier.value}`
                             }
                         }
                     ],

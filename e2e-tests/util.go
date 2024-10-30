@@ -38,13 +38,15 @@ func (a AuthorizedRoundTripper) RoundTrip(request *http.Request) (*http.Response
 	return a.Underlying.RoundTrip(request)
 }
 
-func createTenant(nutsInternalAPI string, hapiFHIRClient fhirclient.Client, identifier string, ura int, name string, city string, notificationEndpointURL string) error {
+func createTenant(nutsInternalAPI string, hapiFHIRClient fhirclient.Client, identifier string, ura int, name string, city string, notificationEndpointURL string, defaultHAPIPartition bool) error {
 	println("Creating tenant:", identifier)
 	if err := createNutsIdentity(nutsInternalAPI, identifier, ura, name, city, notificationEndpointURL); err != nil {
 		return fmt.Errorf("could not create Nuts subject: %w", err)
 	}
-	if err := createFHIRTenant(identifier, ura, hapiFHIRClient); err != nil {
-		return fmt.Errorf("could not create FHIR tenant: %w", err)
+	if !defaultHAPIPartition {
+		if err := createFHIRTenant(identifier, ura, hapiFHIRClient); err != nil {
+			return fmt.Errorf("could not create FHIR tenant: %w", err)
+		}
 	}
 	return nil
 }

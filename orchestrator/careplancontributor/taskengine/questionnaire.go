@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/taskengine/assets"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine/assets"
 	"io/fs"
 	"net/url"
 	"strings"

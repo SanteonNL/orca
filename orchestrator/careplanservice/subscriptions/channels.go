@@ -57,7 +57,7 @@ type CsdChannelFactory struct {
 }
 
 func (c CsdChannelFactory) Create(ctx context.Context, subscriber fhir.Identifier) (Channel, error) {
-	endpoint, err := c.Directory.LookupEndpoint(ctx, subscriber, "fhir-notify")
+	endpoint, err := c.Directory.LookupEndpoint(ctx, subscriber, "fhirNotificationURL") // fhirNotificationURL
 	if err != nil {
 		return nil, fmt.Errorf("lookup notification endpoint in CSD: %w", err)
 	}
@@ -112,6 +112,6 @@ var _ Channel = InProcessPubSubChannel{}
 type InProcessPubSubChannel struct {
 }
 
-func (i InProcessPubSubChannel) Notify(_ context.Context, notification coolfhir.SubscriptionNotification) error {
-	return pubsub.DefaultSubscribers.FhirSubscriptionNotify(notification)
+func (i InProcessPubSubChannel) Notify(ctx context.Context, notification coolfhir.SubscriptionNotification) error {
+	return pubsub.DefaultSubscribers.FhirSubscriptionNotify(ctx, notification)
 }
