@@ -69,8 +69,8 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			s.config.Audience = tt.audience
-			s.config.Issuer = tt.issuer
+			s.config.DecryptConfig.Audience = tt.audience
+			s.config.DecryptConfig.Issuer = tt.issuer
 
 			// Validate Audience
 			err := s.validateAudience(decryptedAssertion)

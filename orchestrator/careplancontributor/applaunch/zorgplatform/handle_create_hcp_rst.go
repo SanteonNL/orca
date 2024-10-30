@@ -64,7 +64,7 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 
 	// Issuer
 	issuer := assertion.CreateElement("Issuer")
-	issuer.SetText(s.config.OwnIssuer)
+	issuer.SetText(s.config.SigningConfig.Issuer)
 
 	// Subject
 	subject := assertion.CreateElement("Subject")
@@ -79,7 +79,7 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	conditions.CreateAttr("NotOnOrAfter", notOnOrAfter)
 	audienceRestriction := conditions.CreateElement("AudienceRestriction")
 	audience := audienceRestriction.CreateElement("Audience")
-	audience.SetText(s.config.Audience)
+	audience.SetText(s.config.SigningConfig.Audience)
 
 	// AttributeStatement
 	attributeStatement := assertion.CreateElement("AttributeStatement")
@@ -119,7 +119,7 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	attribute4 := attributeStatement.CreateElement("Attribute")
 	attribute4.CreateAttr("Name", "urn:oasis:names:tc:xspa:1.0:subject:organization-id")
 	attributeValue4 := attribute4.CreateElement("AttributeValue")
-	attributeValue4.SetText(s.config.OwnIssuer)
+	attributeValue4.SetText(s.config.SigningConfig.Issuer)
 
 	// Workflow ID Attribute
 	attribute5 := attributeStatement.CreateElement("Attribute")

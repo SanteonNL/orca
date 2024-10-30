@@ -24,6 +24,10 @@ import (
 const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
 
+type HcpRequester interface {
+	RequestHcpRst(launchContext LaunchContext) (string, error)
+}
+
 func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
@@ -123,6 +127,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
 		decryptCertificate:    decryptCert,
+
 		// performing HTTP requests with Zorgplatform requires mutual TLS
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
@@ -187,6 +192,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	if err != nil {
 		log.Error().Err(err).Msg("unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
+		return
 	}
 
 	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s", acessToken) //TODO: Remove unsecure log when no longer needed

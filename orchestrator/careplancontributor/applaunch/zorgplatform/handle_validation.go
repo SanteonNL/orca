@@ -161,11 +161,11 @@ func (s *Service) validateAudience(decryptedAssertion *etree.Element) error {
 	el := decryptedAssertion.FindElement("//AudienceRestriction/Audience")
 	aud := el.Text()
 
-	if aud == s.config.Audience {
+	if aud == s.config.DecryptConfig.Audience {
 		return nil
 	}
 
-	return fmt.Errorf("invalid aud. Found [%s] but expected [%s]", aud, s.config.Audience)
+	return fmt.Errorf("invalid aud. Found [%s] but expected [%s]", aud, s.config.DecryptConfig.Audience)
 }
 
 func (s *Service) validateIssuer(decryptedAssertion *etree.Element) error {
@@ -173,10 +173,10 @@ func (s *Service) validateIssuer(decryptedAssertion *etree.Element) error {
 	el := decryptedAssertion.FindElement("//Issuer")
 	iss := el.Text()
 
-	if iss == s.config.Issuer {
+	if iss == s.config.DecryptConfig.Issuer {
 		return nil
 	}
-	return fmt.Errorf("invalid iss. Found [%s] but expected [%s]", iss, s.config.Issuer)
+	return fmt.Errorf("invalid iss. Found [%s] but expected [%s]", iss, s.config.DecryptConfig.Issuer)
 }
 
 func (s *Service) extractPractitioner(assertion *etree.Element) (*fhir.Practitioner, error) {

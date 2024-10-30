@@ -7,17 +7,27 @@ func DefaultConfig() Config {
 }
 
 type Config struct {
-	Enabled   bool   `koanf:"enabled"`
-	PublicKey string `koanf:"publickey"` // ODO
-	ApiUrl    string `koanf:"apiurl"`
-	StsUrl    string `koanf:"stsurl"`
-	BaseUrl   string `koanf:"baseurl"`
-	Issuer    string `koanf:"iss"`
-	OwnIssuer string `koanf:"owniss"` //TODO: Properly distinct between signing and decrypting
-	Audience  string `koanf:"aud"`
+	Enabled bool   `koanf:"enabled"`
+	ApiUrl  string `koanf:"apiurl"`
+	StsUrl  string `koanf:"stsurl"`
+	BaseUrl string `koanf:"baseurl"`
+
+	SigningConfig SigningConfig `koanf:"sign"`
+	DecryptConfig DecryptConfig `koanf:"decrypt"`
 
 	AzureConfig    AzureConfig    `koanf:"azure"`
 	X509FileConfig X509FileConfig `koanf:"x509"`
+}
+
+type SigningConfig struct {
+	Issuer   string `koanf:"iss"`
+	Audience string `koanf:"aud"`
+}
+
+type DecryptConfig struct {
+	Issuer    string `koanf:"iss"`
+	Audience  string `koanf:"aud"`
+	PublicKey string `koanf:"publickey"`
 }
 
 type X509FileConfig struct {

@@ -19,9 +19,11 @@ func TestCreateSAMLAssertion(t *testing.T) {
 
 	service := &Service{
 		config: Config{
-			BaseUrl:   "https://zorgplatform.online",
-			OwnIssuer: "https://issuer.example.com",
-			Audience:  "https://zorgplatform.online/sts",
+			BaseUrl: "https://zorgplatform.online",
+			SigningConfig: SigningConfig{
+				Issuer:   "https://issuer.example.com",
+				Audience: "https://zorgplatform.online/sts",
+			},
 		},
 	}
 
@@ -217,10 +219,12 @@ func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
 			},
 		},
 		config: Config{
-			Audience:  "https://zorgplatform.online/sts",
-			BaseUrl:   "https://zorgplatform.online",
-			StsUrl:    "https://zorgplatform.online/sts",
-			OwnIssuer: "urn:oid:2.16.840.1.113883.2.4.3.224.1.1",
+			BaseUrl: "https://zorgplatform.online",
+			StsUrl:  "https://zorgplatform.online/sts",
+			SigningConfig: SigningConfig{
+				Audience: "https://zorgplatform.online/sts",
+				Issuer:   "urn:oid:2.16.840.1.113883.2.4.3.224.1.1",
+			},
 		},
 	}
 
