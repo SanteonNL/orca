@@ -56,10 +56,14 @@ CPC2 -> CPS: fetch Task[main]
 CPS --> CPC2: Task[main]
 CPC2 --> careprofs: Task[main]
 careprofs -> careprofs: unpack Task[main]
-careprofs -> CPC2: fetch ServiceRequest
+careprofs -> CPC2: fetch ServiceRequest from Task.focus
 CPC2 --> CPS: fetch ServiceRequest
 CPS --> CPC2: ServiceRequest Bundle
 CPC2 --> careprofs: ServiceRequest Bundle
+careprofs -> CPC2: fetch Condition from Task.reasonReference
+CPC2 --> CPS: fetch Condition
+CPS --> CPC2: Condition Bundle
+CPC2 --> careprofs: Condition Bundle
 careprofs -> careprofs: Create ticket
 end group
 @enduml
