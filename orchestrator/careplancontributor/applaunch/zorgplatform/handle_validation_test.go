@@ -43,7 +43,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			issuer:             "urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8",
 			expectedSubj:       "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
 			expectedBSN:        "999999205",
-			expectedWorkflowId: " test123-workflow-id ",
+			expectedWorkflowId: "test123-workflow-id",
 			expectedError:      nil,
 		},
 		{
@@ -52,7 +52,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			issuer:             "urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8",
 			expectedSubj:       "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
 			expectedBSN:        "999999205",
-			expectedWorkflowId: " test123-workflow-id ",
+			expectedWorkflowId: "test123-workflow-id",
 			expectedError:      errors.New("invalid aud. Found [https://partner-application.nl] but expected [invalid_audience]"),
 		},
 		{
@@ -61,7 +61,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			issuer:             "invalid_issuer",
 			expectedSubj:       "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
 			expectedBSN:        "999999205",
-			expectedWorkflowId: " test123-workflow-id ",
+			expectedWorkflowId: "test123-workflow-id",
 			expectedError:      errors.New("invalid iss. Found [urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8] but expected [invalid_issuer]"),
 		},
 	}
