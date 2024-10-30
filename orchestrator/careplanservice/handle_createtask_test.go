@@ -158,12 +158,41 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name: "CreateTask - Not SCP Task",
+			taskToCreate: fhir.Task{
+				Intent:    "order",
+				Status:    fhir.TaskStatusRequested,
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			},
+			createdTask: fhir.Task{
+				Id: to.Ptr("123"),
+				BasedOn: []fhir.Reference{
+					{
+						Type:      to.Ptr("CarePlan"),
+						Reference: to.Ptr("CarePlan/1"),
+					},
+				},
+				Intent:    "order",
+				Status:    fhir.TaskStatusRequested,
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			},
+			returnedBundle: nil,
+			errorFromRead:  nil,
+			expectError:    true,
+		},
+		{
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name: "CreateTask",
 			taskToCreate: fhir.Task{
 				Intent:    "order",
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				Meta: &fhir.Meta{
+					Profile: []string{coolfhir.SCPTaskProfile},
+				},
 			},
 			createdTask: fhir.Task{
 				Id: to.Ptr("123"),
@@ -307,6 +336,25 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name: "CreateTask - Not SCP Task",
+			taskToCreate: fhir.Task{
+				BasedOn: []fhir.Reference{
+					{
+						Type:      to.Ptr("CarePlan"),
+						Reference: to.Ptr("CarePlan/999"),
+					},
+				},
+				Intent:    "order",
+				Status:    fhir.TaskStatusRequested,
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			},
+			returnedBundle: &fhir.Bundle{},
+			errorFromRead:  nil,
+			expectError:    true,
+		},
+		{
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name: "CreateTask - CarePlan not found",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
@@ -319,6 +367,9 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				Meta: &fhir.Meta{
+					Profile: []string{coolfhir.SCPTaskProfile},
+				},
 			},
 			returnedCarePlan:      nil,
 			returnedCarePlanError: errors.New("not found"),
@@ -340,6 +391,9 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				Meta: &fhir.Meta{
+					Profile: []string{coolfhir.SCPTaskProfile},
+				},
 			},
 			returnedCarePlan: &fhir.CarePlan{
 				Id: to.Ptr("1"),
@@ -408,3 +462,5 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 		})
 	}
 }
+
+// TODO: Unit test for creating an SCP subtask, to be done when refactoring the tests to use HTTP client mocking (too complex to test positive cases with reflection)

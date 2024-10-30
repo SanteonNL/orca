@@ -38,7 +38,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	if err != nil {
 		return nil, err
 	}
-	isOwner, isRequester := coolfhir.ValidateTaskOwnerAndRequester(&task, principal.Organization.Identifier)
+	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester) {
 		return nil, errors.New(
 			fmt.Sprintf(
