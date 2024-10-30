@@ -35,9 +35,6 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	// Wrap the signed assertion in a SOAP envelope
 	envelope := s.createSOAPEnvelope(signedAssertion)
 
-	fmt.Println("SOAP req body: ")
-	fmt.Println(envelope)
-
 	// Submit the request via mTLS
 	response, err := s.submitSAMLRequest(envelope)
 	if err != nil {
@@ -343,8 +340,6 @@ func (s *Service) submitSAMLRequest(envelope string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	fmt.Println("SOAP response: ")
-	fmt.Println(string(body))
 
 	if resp.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("unexpected response status: %d", resp.StatusCode)
