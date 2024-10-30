@@ -7,14 +7,10 @@ import (
 	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/tls"
-	"crypto/x509"
 	"encoding/base64"
-	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/beevik/etree"
@@ -83,7 +79,7 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	conditions.CreateAttr("NotOnOrAfter", notOnOrAfter)
 	audienceRestriction := conditions.CreateElement("AudienceRestriction")
 	audience := audienceRestriction.CreateElement("Audience")
-	audience.SetText("https://zorgplatform.online")
+	audience.SetText(s.config.Audience)
 
 	// AttributeStatement
 	attributeStatement := assertion.CreateElement("AttributeStatement")
@@ -230,18 +226,12 @@ func buildSignedInfo(assertionID, digestValue string) *etree.Element {
 // Helper function to sign the canonicalized SignedInfo
 func (s *Service) signCanonicalizedSignedInfo(canonicalSignedInfo []byte) ([]byte, error) {
 	// Compute the signature
-
-	privateKey, err := s.getSigningPrivateKey()
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse private key: %w", err)
-	}
-
 	hash := sha256.Sum256(canonicalSignedInfo)
-	rsaPrivateKey, ok := privateKey.(*rsa.PrivateKey)
+
+	rsaPrivateKey, ok := s.signingCertificateKey.(*rsa.PrivateKey)
 	if !ok {
 		return nil, fmt.Errorf("failed to assert type *rsa.PrivateKey")
 	}
-
 	signature, err := rsa.SignPKCS1v15(rand.Reader, rsaPrivateKey, crypto.SHA256, hash[:])
 	if err != nil {
 		return nil, err
@@ -361,20 +351,6 @@ func (s *Service) submitSAMLRequest(envelope string) (string, error) {
 	}
 
 	return string(body), nil
-}
-
-func (s *Service) getSigningPrivateKey() (any, error) {
-	privateKeyData, err := os.ReadFile(s.config.X509FileConfig.SignKeyFile)
-	if err != nil {
-		return nil, fmt.Errorf("unable to read sign key from file: %w", err)
-	}
-
-	block, _ := pem.Decode(privateKeyData)
-	if block == nil || !strings.Contains(block.Type, "PRIVATE KEY") {
-		return nil, fmt.Errorf("failed to decode PEM block containing private key")
-	}
-
-	return x509.ParsePKCS8PrivateKey(block.Bytes)
 }
 
 // validateRSTSResponse validates the generated Assertion and returns the SAML Bearer token from the RequestSecurityTokenResponse (RSTS)
