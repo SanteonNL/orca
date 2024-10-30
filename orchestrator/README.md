@@ -42,6 +42,7 @@ In order to use the tst Azure certs locally, the following steps are required:
    It can help to perform an `az logout` & `az login`.
 4. After this, the application should start up and have permission to load the certificates.
 
+
 ## App Launch options
 
 ### Demo

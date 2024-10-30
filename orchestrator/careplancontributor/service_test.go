@@ -3,14 +3,6 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"strings"
-	"testing"
-	"time"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -25,6 +17,15 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
+
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"strings"
+	"testing"
+	"time"
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
