@@ -108,7 +108,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 
 		// Different validation logic for an SCP subtask
-		if coolfhir.IsScpTask(&task) && len(task.PartOf) > 0 {
+		if len(task.PartOf) > 0 {
 			if len(task.PartOf) != 1 {
 				return nil, coolfhir.NewErrorWithCode("SCP subtask must have exactly one parent task", http.StatusBadRequest)
 			}
