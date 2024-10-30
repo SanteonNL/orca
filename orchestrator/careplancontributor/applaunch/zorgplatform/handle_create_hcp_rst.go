@@ -2,6 +2,7 @@ package zorgplatform
 
 import (
 	"bytes"
+	"context"
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
@@ -321,14 +322,16 @@ func (s *Service) submitSAMLRequest(envelope string) (string, error) {
 		},
 	}
 
-	req, err := http.NewRequest("POST", s.config.StsUrl, bytes.NewBuffer([]byte(envelope)))
+	ctx, cancel := context.WithTimeout(context.Background(), s.config.SAMLRequestTimeout)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, "POST", s.config.StsUrl, bytes.NewBuffer([]byte(envelope)))
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Content-Type", "application/soap+xml; charset=utf-8")
 
 	// Send the request
-	client.Timeout = 5 * time.Minute //TODO: Set to a less crazy amount - sometimes reaches a HTTP 499
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", err
