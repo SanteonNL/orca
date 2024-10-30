@@ -266,6 +266,9 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
 		}
 
 		err := carePlanContributor1.Create(task, &task)

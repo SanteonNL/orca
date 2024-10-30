@@ -123,9 +123,9 @@ func ValidateTaskRequiredFields(task fhir.Task) error {
 	return nil
 }
 
-// ValidateTaskOwnerAndRequester checks the owner and requester of a task against the supplied principal
+// IsIdentifierTaskOwnerAndRequester checks the owner and requester of a task against the supplied principal
 // returns 2 booleans, isOwner, and isRequester
-func ValidateTaskOwnerAndRequester(task *fhir.Task, principalOrganizationIdentifier []fhir.Identifier) (bool, bool) {
+func IsIdentifierTaskOwnerAndRequester(task *fhir.Task, principalOrganizationIdentifier []fhir.Identifier) (bool, bool) {
 	isOwner := false
 	if task.Owner != nil {
 		for _, identifier := range principalOrganizationIdentifier {

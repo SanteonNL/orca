@@ -40,7 +40,7 @@ func (s *Service) handleTaskFillerCreate(ctx context.Context, task *fhir.Task) e
 		if err != nil {
 			return err
 		}
-		isOwner, _ := coolfhir.ValidateTaskOwnerAndRequester(task, ids)
+		isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(task, ids)
 		if !isOwner {
 			log.Info().Msg("Current CPC node is not the task Owner - skipping")
 			return nil
@@ -85,7 +85,7 @@ func (s *Service) handleTaskFillerUpdate(ctx context.Context, task *fhir.Task) e
 	if err != nil {
 		return err
 	}
-	isOwner, _ := coolfhir.ValidateTaskOwnerAndRequester(task, ids)
+	isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(task, ids)
 
 	return s.createSubTaskOrFinishPrimaryTask(task, false, isOwner)
 

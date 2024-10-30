@@ -25,6 +25,10 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, fmt.Errorf("invalid %T: %w", task, err)
 	}
 
+	if !coolfhir.IsScpTask(&task) {
+		return nil, coolfhir.NewErrorWithCode("Task is not SCP task", http.StatusBadRequest)
+	}
+
 	switch task.Status {
 	case fhir.TaskStatusRequested:
 	case fhir.TaskStatusReady:
@@ -115,16 +119,16 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, err
 			}
 			// Verify the owner of the parent task is the same as the org creating the subtask
-			isOwner, _ := coolfhir.ValidateTaskOwnerAndRequester(&parentTask, principal.Organization.Identifier)
+			isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(&parentTask, principal.Organization.Identifier)
 			if !isOwner {
 				return nil, coolfhir.NewErrorWithCode("requester is not the owner of the parent task", http.StatusUnauthorized)
 			}
 
 			if !coolfhir.LogicalReferenceEquals(*parentTask.Owner, *task.Requester) {
-				return nil, coolfhir.NewErrorWithCode("requester is not the same as the parent task owner", http.StatusUnauthorized)
+				return nil, coolfhir.NewErrorWithCode("requester is not the same as the parent task owner", http.StatusBadRequest)
 			}
 			if !coolfhir.LogicalReferenceEquals(*parentTask.Requester, *task.Owner) {
-				return nil, coolfhir.NewErrorWithCode("owner is not the same as the parent task requester", http.StatusUnauthorized)
+				return nil, coolfhir.NewErrorWithCode("owner is not the same as the parent task requester", http.StatusBadRequest)
 			}
 		} else {
 			// we have a valid reference to a CarePlan, use this to retrieve the CarePlan and CareTeam to validate the requester is a participant
