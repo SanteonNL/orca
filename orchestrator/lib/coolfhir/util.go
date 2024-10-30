@@ -238,6 +238,14 @@ func ToString(resource interface{}) string {
 	return fmt.Sprintf("%T(%v)", resource, resource)
 }
 
+func FhirHttpResponse(response http.ResponseWriter, httpStatus int, resource interface{}) {
+	resourceBytes, _ := json.Marshal(resource)
+	response.Header().Set("Content-Type", "application/json+fhir")
+	response.Header().Set("Content-Length", fmt.Sprintf("%d", len(resourceBytes)))
+	response.WriteHeader(httpStatus)
+	_, _ = response.Write(resourceBytes)
+}
+
 func HttpMethodToVerb(method string) fhir.HTTPVerb {
 	switch method {
 	case http.MethodPut:
