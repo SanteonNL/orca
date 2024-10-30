@@ -33,8 +33,8 @@ func NewCertificatesClient(keyVaultURL string, credentialType string, insecure b
 	return azcertificates.NewClient(keyVaultURL, cred, clientOptions) // never returns an error
 }
 
-func GetCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string, certificateVersion string) (*x509.Certificate, *Suite, error) {
-	certResponse, err := certClient.GetCertificate(ctx, certificateName, certificateVersion, nil)
+func GetCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string) (*x509.Certificate, *Suite, error) {
+	certResponse, err := certClient.GetCertificate(ctx, certificateName, "", nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get certificate: %w", err)
 	}
@@ -42,7 +42,7 @@ func GetCertificate(ctx context.Context, certClient CertificatesClient, keysClie
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to parse certificate: %w", err)
 	}
-	key, err := GetKey(keysClient, certificateName, certificateVersion)
+	key, err := GetKey(keysClient, certificateName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get certificate private key: %w", err)
 	}
@@ -50,8 +50,8 @@ func GetCertificate(ctx context.Context, certClient CertificatesClient, keysClie
 }
 
 // GetCertificateChain retrieves the full chain from Azure Key Vault
-func GetCertificateChain(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName, certificateVersion string) ([][]byte, *Suite, error) {
-	certResponse, err := certClient.GetCertificate(ctx, certificateName, certificateVersion, nil)
+func GetCertificateChain(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string) ([][]byte, *Suite, error) {
+	certResponse, err := certClient.GetCertificate(ctx, certificateName, "", nil)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get certificate: %w", err)
 	}
@@ -71,7 +71,7 @@ func GetCertificateChain(ctx context.Context, certClient CertificatesClient, key
 	}
 
 	// Retrieve the private key
-	key, err := GetKey(keysClient, certificateName, certificateVersion)
+	key, err := GetKey(keysClient, certificateName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get certificate private key: %w", err)
 	}
@@ -79,8 +79,8 @@ func GetCertificateChain(ctx context.Context, certClient CertificatesClient, key
 	return certChain, key, nil
 }
 
-func GetSignatureCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string, certificateVersion string) (*tls.Certificate, *Suite, error) {
-	cert, key, err := GetCertificateChain(ctx, certClient, keysClient, certificateName, certificateVersion)
+func GetSignatureCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string) (*tls.Certificate, *Suite, error) {
+	cert, key, err := GetCertificateChain(ctx, certClient, keysClient, certificateName)
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get Signature certificate: %w", err)
 	}
@@ -91,8 +91,8 @@ func GetSignatureCertificate(ctx context.Context, certClient CertificatesClient,
 	}, key, nil
 }
 
-func GetTLSCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string, certificateVersion string) (*tls.Certificate, error) {
-	cert, key, err := GetCertificate(ctx, certClient, keysClient, certificateName, certificateVersion)
+func GetTLSCertificate(ctx context.Context, certClient CertificatesClient, keysClient KeysClient, certificateName string) (*tls.Certificate, error) {
+	cert, key, err := GetCertificate(ctx, certClient, keysClient, certificateName)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get TLS certificate: %w", err)
 	}

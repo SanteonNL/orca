@@ -65,7 +65,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		signCertKey = crypto.RsaSuite{PrivateKey: keyPair.PrivateKey.(*rsa.PrivateKey)}
 	} else {
 		var err error
-		chain, key, err := azkeyvault.GetSignatureCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.SignCertName, config.AzureConfig.KeyVaultConfig.SignCertVersion)
+		chain, key, err := azkeyvault.GetSignatureCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.SignCertName)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get signing certificate from Azure Key Vault: %w", err)
 		}
@@ -91,7 +91,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		decryptCert = crypto.RsaSuite{PrivateKey: rsaPrivateKey.(*rsa.PrivateKey)}
 	} else {
 		var err error
-		decryptCert, err = azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, config.AzureConfig.KeyVaultConfig.DecryptCertVersion)
+		decryptCert, err = azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get decryption certificate from Azure Key Vault: %w", err)
 		}
@@ -111,7 +111,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 			return nil, fmt.Errorf("unable to create TLS client certificate: %w", err)
 		}
 	} else {
-		tlsClientCertPtr, err := azkeyvault.GetTLSCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.ClientCertName, config.AzureConfig.KeyVaultConfig.ClientCertVersion)
+		tlsClientCertPtr, err := azkeyvault.GetTLSCertificate(context.Background(), certsClient, keysClient, config.AzureConfig.KeyVaultConfig.ClientCertName)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get TLS client certificate from Azure Key Vault: %w", err)
 		}

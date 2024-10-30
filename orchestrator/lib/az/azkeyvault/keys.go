@@ -73,11 +73,11 @@ func (s Suite) DecryptRsaOaep(cipherText []byte, dm libCrypto.DigestMethod) ([]b
 	return decryptResponse.Result, err
 }
 
-func GetKey(client KeysClient, keyName string, keyVersion string) (*Suite, error) {
+func GetKey(client KeysClient, keyName string) (*Suite, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), AzureKeyVaultTimeout)
 	defer cancel()
 
-	keyResponse, err := client.GetKey(ctx, keyName, keyVersion, nil)
+	keyResponse, err := client.GetKey(ctx, keyName, "", nil)
 	if err != nil {
 		return nil, fmt.Errorf("unable to get key from Azure KeyVault: %w", err)
 	}

@@ -25,6 +25,5 @@ Make the README clear, currently mostly contains steps I ran into during develop
     "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AUD": "<aud>", //The service URL configured in Zorgplatform
     "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_KEYVAULT_URL": "<kv_url>", //The URL of the Azure KeyVault to use
     "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_KEYVAULT_DECRYPTCERTNAME": "<certname>", //The name of the cert inside the configured Azure KeyVault
-    "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_KEYVAULT_DECRYPTCERTVERSION": "<certversion>", //The version of the cert inside the configured Azure KeyVault
    }
    ```

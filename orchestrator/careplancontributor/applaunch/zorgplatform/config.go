@@ -43,12 +43,9 @@ type AzureConfig struct {
 }
 
 type AzureKeyVaultConfig struct {
-	KeyVaultURL        string `koanf:"url"`
-	DecryptCertName    string `koanf:"decryptcertname"`
-	DecryptCertVersion string `koanf:"decryptcertversion"`
-	SignCertName       string `koanf:"signcertname"`
-	SignCertVersion    string `koanf:"signcertversion"`
-	ClientCertName     string `koanf:"clientcertname"`
-	ClientCertVersion  string `koanf:"clientcertversion"`
-	AllowInsecure      bool   `koanf:"allowinsecure"`
+	KeyVaultURL     string `koanf:"url"`
+	DecryptCertName string `koanf:"decryptcertname"`
+	SignCertName    string `koanf:"signcertname"`
+	ClientCertName  string `koanf:"clientcertname"`
+	AllowInsecure   bool   `koanf:"allowinsecure"`
 }
