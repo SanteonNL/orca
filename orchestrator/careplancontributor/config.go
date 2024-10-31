@@ -2,12 +2,15 @@ package careplancontributor
 
 import (
 	"errors"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 )
 
 func DefaultConfig() Config {
-	return Config{}
+	return Config{
+		AppLaunch: applaunch.DefaultConfig(),
+	}
 }
 
 type Config struct {

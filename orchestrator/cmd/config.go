@@ -3,12 +3,14 @@ package cmd
 import (
 	"errors"
 	"fmt"
+
+	"net/url"
+	"strings"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	koanf "github.com/knadh/koanf/v2"
-	"net/url"
-	"strings"
 
 	"github.com/knadh/koanf/providers/env"
 )
@@ -80,7 +82,8 @@ func DefaultConfig() Config {
 			URL:     "/",
 		},
 		CarePlanContributor: careplancontributor.Config{
-			Enabled: true,
+			Enabled:   true,
+			AppLaunch: applaunch.DefaultConfig(),
 		},
 	}
 }

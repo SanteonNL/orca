@@ -1,0 +1,45 @@
+<trust:RequestSecurityTokenResponseCollection xmlns:trust="http://docs.oasis-open.org/ws-sx/ws-trust/200512">
+    <trust:RequestSecurityTokenResponse>
+        <trust:Lifetime>
+            <wsu:Created xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
+                2024-10-10T04:56:09.175Z
+            </wsu:Created>
+            <wsu:Expires xmlns:wsu="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-utility-1.0.xsd">
+                2024-10-10T05:08:09.175Z
+            </wsu:Expires>
+        </trust:Lifetime>
+        <wsp:AppliesTo xmlns:wsp="http://schemas.xmlsoap.org/ws/2004/09/policy">
+            <wsa:EndpointReference xmlns:wsa="http://www.w3.org/2005/08/addressing">
+                <wsa:Address>https://zorgplatform.test.integration.zorgbijjou.com/</wsa:Address>
+            </wsa:EndpointReference>
+        </wsp:AppliesTo>
+        <trust:RequestedSecurityToken>
+            <EncryptedAssertion xmlns="urn:oasis:names:tc:SAML:2.0:assertion">
+                <!-- Unit test adds the EncryptedData here -->
+            </EncryptedAssertion>
+        </trust:RequestedSecurityToken>
+        <trust:RequestedAttachedReference>
+            <SecurityTokenReference
+                    b:TokenType="http://docs.oasis-open.org/wss/oasis-wss-saml-token-profile-1.1#SAMLV2.0"
+                    xmlns="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+                    xmlns:b="http://docs.oasis-open.org/wss/oasis-wss-wssecurity-secext-1.1.xsd">
+                <KeyIdentifier ValueType="http://docs.oasis-open.org/wss/oasis-wss-saml-token-profile-1.1#SAMLID">
+                    _63a2ffe9-2f9f-43d6-ba75-8488bdc3f20d
+                </KeyIdentifier>
+            </SecurityTokenReference>
+        </trust:RequestedAttachedReference>
+        <trust:RequestedUnattachedReference>
+            <SecurityTokenReference
+                    b:TokenType="http://docs.oasis-open.org/wss/oasis-wss-saml-token-profile-1.1#SAMLV2.0"
+                    xmlns="http://docs.oasis-open.org/wss/2004/01/oasis-200401-wss-wssecurity-secext-1.0.xsd"
+                    xmlns:b="http://docs.oasis-open.org/wss/oasis-wss-wssecurity-secext-1.1.xsd">
+                <KeyIdentifier ValueType="http://docs.oasis-open.org/wss/oasis-wss-saml-token-profile-1.1#SAMLID">
+                    _63a2ffe9-2f9f-43d6-ba75-8488bdc3f20d
+                </KeyIdentifier>
+            </SecurityTokenReference>
+        </trust:RequestedUnattachedReference>
+        <trust:TokenType>http://docs.oasis-open.org/wss/oasis-wss-saml-token-profile-1.1#SAMLV2.0</trust:TokenType>
+        <trust:RequestType>http://docs.oasis-open.org/ws-sx/ws-trust/200512/Issue</trust:RequestType>
+        <trust:KeyType>http://docs.oasis-open.org/ws-sx/ws-trust/200512/Bearer</trust:KeyType>
+    </trust:RequestSecurityTokenResponse>
+</trust:RequestSecurityTokenResponseCollection>
