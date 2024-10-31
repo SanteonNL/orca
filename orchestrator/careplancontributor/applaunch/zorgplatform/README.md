@@ -13,7 +13,7 @@ Launch implementation according to the Zorgplatform/Chipsoft SSO specs
    "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_DECRYPT_AUD": "<aud>", //The service URL configured in Zorgplatform
    "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_BASEURL": "<url>", //https://zorgplatform.online OR https://acceptatie.zorgplatform.online
    "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_STSURL": "<url>", //https://zorgplatform.online/sts OR https://acceptatie.zorgplatform.online/sts
-   "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_APIURL": "<url>", //https://api.zorgplatform.online OR https://api.acceptatie.zorgplatform.online
+   "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_APIURL": "<url>", //https://api.zorgplatform.online/fhir/V1/ OR https://api.acceptatie.zorgplatform.online/fhir/V1/
    "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_KEYVAULT_URL": "<url>", //The URL of the Azure KeyVault to use
    "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_CREDENTIALTYPE": "<type>", //The Azure credential type, "default", "cli" or "managed_identity"
    "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_KEYVAULT_DECRYPTCERTNAME": "<certname>", //Name of the KV decrypt certificate (used to decrypt assertions that are received from Zorgplatform)
