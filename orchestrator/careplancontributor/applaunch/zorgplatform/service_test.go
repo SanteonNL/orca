@@ -101,6 +101,14 @@ func TestService(t *testing.T) {
 				Key: publicKeyToJWK(signingKeyPair.PublicKey, signKeyName, "0"),
 			},
 		}, nil)
+	keysClient.EXPECT().Sign(gomock.Any(), signKeyName, "0", gomock.Any(), nil).
+		DoAndReturn(func(ctx interface{}, keyName string, keyVersion string, parameters azkeys.SignParameters, options *azkeys.SignOptions) (azkeys.SignResponse, error) {
+			return azkeys.SignResponse{
+				KeyOperationResult: azkeys.KeyOperationResult{
+					Result: []byte("mocked-signature"),
+				},
+			}, nil
+		})
 
 	zorgplatformHttpServerMux := http.NewServeMux()
 	zorgplatformHttpServer := httptest.NewServer(zorgplatformHttpServerMux)

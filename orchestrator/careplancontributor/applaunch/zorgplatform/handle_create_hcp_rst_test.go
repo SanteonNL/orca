@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/beevik/etree"
@@ -205,8 +206,9 @@ func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
 			},
 		},
 		config: Config{
-			BaseUrl: "https://zorgplatform.online",
-			StsUrl:  "https://zorgplatform.online/sts",
+			SAMLRequestTimeout: 10 * time.Second,
+			BaseUrl:            "https://zorgplatform.online",
+			StsUrl:             "https://zorgplatform.online/sts",
 			SigningConfig: SigningConfig{
 				Audience: "https://zorgplatform.online/sts",
 				Issuer:   "urn:oid:2.16.840.1.113883.2.4.3.224.1.1",
