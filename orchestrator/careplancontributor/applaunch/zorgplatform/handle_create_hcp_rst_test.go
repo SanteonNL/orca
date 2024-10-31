@@ -62,7 +62,7 @@ func TestCreateSAMLAssertion(t *testing.T) {
 			</Attribute>
 			<Attribute Name="urn:oasis:names:tc:xacml:2.0:subject:role">
 				<AttributeValue>
-					<Role code="158970007" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT" displayName="" xmlns="urn:hl7-org:v3"/>
+					<Role code="224609002" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT" displayName="" xmlns="urn:hl7-org:v3"/>
 				</AttributeValue>
 			</Attribute>
 			<Attribute Name="urn:oasis:names:tc:xacml:1.0:resource:resource-id">
