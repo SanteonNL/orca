@@ -48,15 +48,13 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 // createSAMLAssertion builds the SAML assertion
 func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Element, error) {
 	assertionID := "_" + uuid.New().String()
-	issueInstant := time.Now().UTC().Format(time.RFC3339)
-	notBefore := time.Now().UTC().Format(time.RFC3339)
-	notOnOrAfter := time.Now().Add(15 * time.Minute).UTC().Format(time.RFC3339)
-	authnInstant := time.Now().UTC().Format(time.RFC3339)
+	now := GetCurrentXSDDateTime()
+	notOnOrAfter := FormatXSDDateTime(time.Now().Add(15 * time.Minute))
 
 	// Create Assertion element
 	assertion := etree.NewElement("Assertion")
 	assertion.CreateAttr("ID", assertionID)
-	assertion.CreateAttr("IssueInstant", issueInstant)
+	assertion.CreateAttr("IssueInstant", now)
 	assertion.CreateAttr("Version", "2.0")
 	assertion.CreateAttr("xmlns", "urn:oasis:names:tc:SAML:2.0:assertion")
 
@@ -73,7 +71,7 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 
 	// Conditions
 	conditions := assertion.CreateElement("Conditions")
-	conditions.CreateAttr("NotBefore", notBefore)
+	conditions.CreateAttr("NotBefore", now)
 	conditions.CreateAttr("NotOnOrAfter", notOnOrAfter)
 	audienceRestriction := conditions.CreateElement("AudienceRestriction")
 	audience := audienceRestriction.CreateElement("Audience")
@@ -127,7 +125,7 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 
 	// AuthnStatement
 	authnStatement := assertion.CreateElement("AuthnStatement")
-	authnStatement.CreateAttr("AuthnInstant", authnInstant)
+	authnStatement.CreateAttr("AuthnInstant", now)
 	authnContext := authnStatement.CreateElement("AuthnContext")
 	authnContextClassRef := authnContext.CreateElement("AuthnContextClassRef")
 	authnContextClassRef.SetText("urn:oasis:names:tc:SAML:2.0:ac:classes:X509")
@@ -277,9 +275,9 @@ func (s *Service) createSOAPEnvelope(signedAssertion *etree.Element) string {
 	timestamp := security.CreateElement("u:Timestamp")
 	timestamp.CreateAttr("u:Id", "_0")
 	created := timestamp.CreateElement("u:Created")
-	created.SetText(time.Now().UTC().Format(time.RFC3339))
+	created.SetText(GetCurrentXSDDateTime())
 	expires := timestamp.CreateElement("u:Expires")
-	expires.SetText(time.Now().Add(5 * time.Minute).UTC().Format(time.RFC3339))
+	expires.SetText(FormatXSDDateTime(time.Now().Add(5 * time.Minute).UTC()))
 
 	// Add the signed assertion to the security header
 	security.AddChild(signedAssertion)
