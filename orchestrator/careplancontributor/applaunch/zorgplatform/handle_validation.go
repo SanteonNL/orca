@@ -16,12 +16,11 @@ import (
 )
 
 type LaunchContext struct {
-	Bsn                string
-	SubjectNameId      string
-	Practitioner       fhir.Practitioner
-	ServiceRequest     fhir.ServiceRequest
-	WorkflowId         string
-	DecryptedAssertion *etree.Element
+	Bsn            string
+	SubjectNameId  string
+	Practitioner   fhir.Practitioner
+	ServiceRequest fhir.ServiceRequest
+	WorkflowId     string
 }
 
 // parseSamlResponse takes a SAML Response, validates it and extracts the SAML assertion, which is then returned as LaunchContext.
@@ -91,10 +90,9 @@ func (s *Service) parseSamlResponse(samlResponse string) (LaunchContext, error) 
 	// }
 
 	return LaunchContext{
-		Bsn:                resourceID,
-		Practitioner:       *practitioner,
-		WorkflowId:         workflowID,
-		DecryptedAssertion: assertion,
+		Bsn:          resourceID,
+		Practitioner: *practitioner,
+		WorkflowId:   workflowID,
 	}, nil
 
 }
