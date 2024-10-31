@@ -5,8 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
-
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -15,7 +14,7 @@ import (
 )
 
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-	log.Info().Msgf("Updating Task: %s", request.ResourceId)
+	log.Info().Msgf("Updating Task: %s", request.RequestUrl)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, err)
@@ -27,13 +26,43 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, fmt.Errorf("invalid Task: %w", err)
 	}
 
-	// the Task prior to updates, we need this to validate the state transition
 	var taskExisting fhir.Task
-	if err := s.fhirClient.Read("Task/"+request.ResourceId, &taskExisting); err != nil {
+	exists := true
+	if request.ResourceId == "" {
+		// No ID, should be query parameters leading to the Task to update
+		if len(request.RequestUrl.Query()) == 0 {
+			return nil, errors.New("missing Task ID or query parameters for selecting the Task to update")
+		}
+		var opts []fhirclient.Option
+		for k, v := range request.RequestUrl.Query() {
+			opts = append(opts, fhirclient.QueryParam(k, v[0]))
+		}
+		var resultBundle fhir.Bundle
+		if err = s.fhirClient.Read("Task", &resultBundle, opts...); err != nil {
+			return nil, fmt.Errorf("failed to search for Task to update: %w", err)
+		}
+		if len(resultBundle.Entry) == 0 {
+			exists = false
+		} else if len(resultBundle.Entry) > 1 {
+			return nil, errors.New("multiple Tasks found to update, expected 1")
+		} else {
+			if err = coolfhir.ResourceInBundle(&resultBundle, coolfhir.EntryIsOfType("Task"), &taskExisting); err != nil {
+				return nil, fmt.Errorf("failed to read Task from search result: %w", err)
+			}
+		}
+	} else {
+		err = s.fhirClient.Read("Task/"+request.ResourceId, &taskExisting)
+		// TODO: If the resource was identified by a concrete ID, and was intended as upsert (create-if-not-exists), this doesn't work yet.
+	}
+	if err != nil {
 		return nil, fmt.Errorf("failed to read Task: %w", err)
 	}
+	if !exists {
+		// Doesn't exist, create it (upsert)
+		return s.handleCreateTask(ctx, request, tx)
+	}
 
-	// Validate state transition
+	// Prior to the Task update, we need this to validate the state transition
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
@@ -57,6 +86,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 
 	tx = tx.Append(request.bundleEntryWithResource(task))
+	idx := len(tx.Entry) - 1
 	// Update care team
 	_, err = careteamservice.Update(s.fhirClient, *carePlanRef, task, tx)
 	if err != nil {
@@ -65,8 +95,8 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedTask fhir.Task
-		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(entry fhir.BundleEntry) bool {
-			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, request.ResourcePath)
+		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(currIdx int, entry fhir.BundleEntry) bool {
+			return currIdx == idx
 		}, &updatedTask)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.

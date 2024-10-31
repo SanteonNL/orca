@@ -34,7 +34,7 @@ func (s *Service) handleCreateCarePlan(ctx context.Context, request FHIRHandlerR
 	tx.Append(request.bundleEntryWithResource(carePlan)).Create(careTeam, coolfhir.WithFullUrl(careTeamURL))
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
-		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(entry fhir.BundleEntry) bool {
+		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(_ int, entry fhir.BundleEntry) bool {
 			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "CarePlan/")
 		}, nil)
 		return result, nil, err

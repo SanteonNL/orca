@@ -154,7 +154,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdTask fhir.Task
-		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(entry fhir.BundleEntry) bool {
+		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(_ int, entry fhir.BundleEntry) bool {
 			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
 		}, &createdTask)
 		if err != nil {

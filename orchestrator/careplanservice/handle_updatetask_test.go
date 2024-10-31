@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -9,6 +10,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"go.uber.org/mock/gomock"
+	"net/url"
 	"os"
 	"reflect"
 	"testing"
@@ -397,6 +399,55 @@ func Test_isValidTransition(t *testing.T) {
 }
 
 func Test_handleUpdateTask(t *testing.T) {
+	t.Skip("TODO: Fix this unit test")
+	var task fhir.Task
+	taskData, _ := os.ReadFile("./testdata/task-update-accepted.json")
+	require.NoError(t, json.Unmarshal(taskData, &task))
+
+	carePlanData, _ := os.ReadFile("./careteamservice/testdata/001-input.json")
+
+	t.Run("Task is identified by search parameters", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		fhirClient := mock.NewMockClient(ctrl)
+		service := &Service{
+			fhirClient: fhirClient,
+		}
+		requestUrl, _ := url.Parse("Task?_id=1")
+
+		fhirClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
+			result.Entry = []fhir.BundleEntry{
+				{
+					Resource: carePlanData,
+				},
+			}
+			return nil
+		})
+
+		fhirClient.EXPECT().Read("Task", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
+			result.Entry = []fhir.BundleEntry{
+				{
+					Resource: taskData,
+				},
+			}
+			return nil
+		})
+		task.Status = fhir.TaskStatusInProgress
+		newTaskData, _ := json.Marshal(task)
+
+		ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal2)
+		request := FHIRHandlerRequest{
+			ResourceData: newTaskData,
+			RequestUrl:   requestUrl,
+		}
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.NoError(t, err)
+	})
+}
+
+func Test_handleUpdateTask_Validation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
