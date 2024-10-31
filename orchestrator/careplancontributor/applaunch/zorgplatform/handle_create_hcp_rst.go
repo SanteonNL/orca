@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto"
 	"crypto/rand"
-	"crypto/rsa"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
@@ -227,11 +226,7 @@ func (s *Service) signCanonicalizedSignedInfo(canonicalSignedInfo []byte) ([]byt
 	// Compute the signature
 	hash := sha256.Sum256(canonicalSignedInfo)
 
-	rsaPrivateKey, ok := s.signingCertificateKey.(*rsa.PrivateKey)
-	if !ok {
-		return nil, fmt.Errorf("failed to assert type *rsa.PrivateKey")
-	}
-	signature, err := rsa.SignPKCS1v15(rand.Reader, rsaPrivateKey, crypto.SHA256, hash[:])
+	signature, err := s.signingCertificateKey.Sign(rand.Reader, hash[:], crypto.SHA256)
 	if err != nil {
 		return nil, err
 	}
