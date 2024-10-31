@@ -24,22 +24,25 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	// Create the SAML assertion
 	assertion, err := s.createSAMLAssertion(&launchContext)
 	if err != nil {
-		return "", err
+		return "Failed to create SAML assertion", err
 	}
 
 	// Sign the assertion
 	signedAssertion, err := s.signAssertion(assertion)
 	if err != nil {
-		return "", err
+		return "Failed to sign SAML assertion", err
 	}
 
 	// Wrap the signed assertion in a SOAP envelope
-	envelope := s.createSOAPEnvelope(signedAssertion)
+	envelope, err := s.createSOAPEnvelope(signedAssertion)
+	if err != nil {
+		return "Failed to create SOAP envelope", err
+	}
 
 	// Submit the request via mTLS
 	response, err := s.submitSAMLRequest(envelope)
 	if err != nil {
-		return "", err
+		return "Failed to submit SAML request", err
 	}
 
 	return s.validateRSTSResponse(response)
@@ -242,7 +245,7 @@ func (s *Service) getSigningCertificateBase64() string {
 }
 
 // createSOAPEnvelope wraps the signed assertion in a SOAP envelope
-func (s *Service) createSOAPEnvelope(signedAssertion *etree.Element) string {
+func (s *Service) createSOAPEnvelope(signedAssertion *etree.Element) (string, error) {
 	envelope := etree.NewElement("s:Envelope")
 	envelope.CreateAttr("xmlns:s", "http://www.w3.org/2003/05/soap-envelope")
 	envelope.CreateAttr("xmlns:a", "http://www.w3.org/2005/08/addressing")
@@ -275,9 +278,11 @@ func (s *Service) createSOAPEnvelope(signedAssertion *etree.Element) string {
 	timestamp := security.CreateElement("u:Timestamp")
 	timestamp.CreateAttr("u:Id", "_0")
 	created := timestamp.CreateElement("u:Created")
-	created.SetText(GetCurrentXSDDateTime())
+
+	now := time.Now()
+	created.SetText(FormatXSDDateTime(now))
 	expires := timestamp.CreateElement("u:Expires")
-	expires.SetText(FormatXSDDateTime(time.Now().Add(5 * time.Minute).UTC()))
+	expires.SetText(FormatXSDDateTime(now.Add(5 * time.Minute).UTC()))
 
 	// Add the signed assertion to the security header
 	security.AddChild(signedAssertion)
@@ -302,8 +307,7 @@ func (s *Service) createSOAPEnvelope(signedAssertion *etree.Element) string {
 	// Convert the document to string
 	doc := etree.NewDocument()
 	doc.SetRoot(envelope)
-	str, _ := doc.WriteToString()
-	return str
+	return doc.WriteToString()
 }
 
 // submitSAMLRequest sends the SOAP request over mTLS
