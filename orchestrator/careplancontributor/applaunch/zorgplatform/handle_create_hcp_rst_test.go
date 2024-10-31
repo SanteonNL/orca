@@ -4,7 +4,6 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"net/http"
-	"os"
 	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -173,23 +172,10 @@ func TestService_sign(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Call the signing function
-	signedElement, err := service.signAssertion(assertion)
+	_, err = service.signAssertion(assertion)
 
 	// Assert no errors occurred
 	assert.NoError(t, err)
-
-	// Convert signed assertion to string
-	doc := etree.NewDocument()
-	doc.SetRoot(signedElement)
-	signedStr, _ := doc.WriteToString()
-
-	// Print the signed assertion for verification with xmlsec1
-	println(signedStr)
-
-	// Optional: You can also save the signed assertion to a file for easier verification with xmlsec1
-	os.WriteFile("signed-assertion.xml", []byte(signedStr), 0644)
-
-	//You can test the output (manually for now) with: xmlsec1 --verify --id-attr:ID urn:oasis:names:tc:SAML:2.0:assertion:Assertion --output /dev/null --trusted-pem ./test-certificate.pem --pubkey-pem ./test-key.pem signed-assertion.xml
 }
 
 func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
