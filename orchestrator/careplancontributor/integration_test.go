@@ -41,6 +41,9 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 			Intent:    "order",
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
 		}
 
 		err := cpsDataHolder.Create(task, &task)

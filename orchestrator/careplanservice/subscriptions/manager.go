@@ -44,7 +44,10 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			Type:      to.Ptr("Task"),
 		}
 		log.Info().Msgf("Notifying subscribers for Task %s", *task.Id)
-		isOwnerValid := coolfhir.IsLogicalReference(task.Owner)
+		isOwnerValid := false
+		if task.Owner != nil {
+			isOwnerValid = coolfhir.IsLogicalIdentifier(task.Owner.Identifier)
+		}
 		if isOwnerValid {
 			subscribers = append(subscribers, *task.Owner.Identifier)
 		} else {
@@ -52,10 +55,13 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			if err != nil {
 				log.Error().Msgf("Failed to marshal owner to JSON: %s", err)
 			} else {
-				log.Warn().Msgf("Owner LogicalReference is invalid: %s", string(ownerJSON))
+				log.Warn().Msgf("Owner LogicalIdentifier is invalid: %s", string(ownerJSON))
 			}
 		}
-		isRequesterValid := coolfhir.IsLogicalReference(task.Requester)
+		isRequesterValid := false
+		if task.Requester != nil {
+			isRequesterValid = coolfhir.IsLogicalIdentifier(task.Requester.Identifier)
+		}
 		if isRequesterValid {
 			subscribers = append(subscribers, *task.Requester.Identifier)
 		} else {
@@ -63,7 +69,7 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			if err != nil {
 				log.Error().Msgf("Failed to marshal requester to JSON: %s", err)
 			} else {
-				log.Warn().Msgf("Requester LogicalReference is invalid: %s", string(requesterJSON))
+				log.Warn().Msgf("Requester LogicalIdentifier is invalid: %s", string(requesterJSON))
 			}
 		}
 	case "CareTeam":

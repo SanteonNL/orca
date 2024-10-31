@@ -2,10 +2,8 @@ services:
   proxy:
     image: nginx:latest
     depends_on:
-      nutsnode:
-        condition: service_healthy
-      orchestrator:
-        condition: service_started
+      - nutsnode
+      - orchestrator
     ports:
       - "7080:8080"
     volumes:

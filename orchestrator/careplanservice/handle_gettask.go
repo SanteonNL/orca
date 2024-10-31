@@ -40,7 +40,7 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 	}
 
 	// Check if the requester is either the task Owner or Requester, if not, they must be a member of the CareTeam
-	isOwner, isRequester := coolfhir.ValidateTaskOwnerAndRequester(&task, principal.Organization.Identifier)
+	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 	if !(isOwner || isRequester) {
 		_, careTeams, _, err := s.getCarePlanAndCareTeams(*task.BasedOn[0].Reference)
 		if err != nil {
@@ -100,7 +100,7 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 
 	for ref, _ := range refs {
 		for _, task := range tasks {
-			isOwner, isRequester := coolfhir.ValidateTaskOwnerAndRequester(&task, principal.Organization.Identifier)
+			isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 			if !(isOwner || isRequester) {
 				_, careTeams, _, err := s.getCarePlanAndCareTeams(ref)
 				if err != nil {
