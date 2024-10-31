@@ -30,19 +30,6 @@ Configuration to enable Care Plan Service functionality:
 - `ORCA_CAREPLANSERVICE_FHIR_AUTH_TYPE`: Authentication type for the CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
 - `ORCA_CAREPLANSERVICE_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
 
-## Using Azure certificates locally
-In order to use the tst Azure certs locally, the following steps are required:
-
-1. Make sure you have access to the `TestAdministrators` group in [Azure PIM](https://portal.azure.com/?feature.msaljs=true#view/Microsoft_Azure_PIMCommon/ActivationMenuBlade/~/aadgroup)
-2. Verify that you can see the certificates inside the Key Vault instance
-3. Wait until the CLI has processed the `TestAdministrator` assignment. Verify you get results with:
-   ```
-    az keyvault certificate list --vault-name "KV_NAME"
-   ```
-   It can help to perform an `az logout` & `az login`.
-4. After this, the application should start up and have permission to load the certificates.
-
-
 ## App Launch options
 
 ### Demo
