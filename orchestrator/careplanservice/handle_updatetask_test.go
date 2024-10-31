@@ -399,14 +399,15 @@ func Test_isValidTransition(t *testing.T) {
 }
 
 func Test_handleUpdateTask(t *testing.T) {
-	t.Skip("TODO: Fix this unit test")
-	var task fhir.Task
-	taskData, _ := os.ReadFile("./testdata/task-update-accepted.json")
-	require.NoError(t, json.Unmarshal(taskData, &task))
-
-	carePlanData, _ := os.ReadFile("./careteamservice/testdata/001-input.json")
-
 	t.Run("Task is identified by search parameters", func(t *testing.T) {
+		var task fhir.Task
+		taskData, _ := os.ReadFile("./testdata/task-update-accepted.json")
+		require.NoError(t, json.Unmarshal(taskData, &task))
+
+		var carePlanBundle fhir.Bundle
+		carePlanBundleData, _ := os.ReadFile("./careteamservice/testdata/001-input.json")
+		require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
+
 		ctrl := gomock.NewController(t)
 		fhirClient := mock.NewMockClient(ctrl)
 		service := &Service{
@@ -415,14 +416,9 @@ func Test_handleUpdateTask(t *testing.T) {
 		requestUrl, _ := url.Parse("Task?_id=1")
 
 		fhirClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
-			result.Entry = []fhir.BundleEntry{
-				{
-					Resource: carePlanData,
-				},
-			}
+			*result = carePlanBundle
 			return nil
 		})
-
 		fhirClient.EXPECT().Read("Task", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
 			result.Entry = []fhir.BundleEntry{
 				{
@@ -437,13 +433,18 @@ func Test_handleUpdateTask(t *testing.T) {
 		ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal2)
 		request := FHIRHandlerRequest{
 			ResourceData: newTaskData,
+			ResourcePath: requestUrl.Path,
 			RequestUrl:   requestUrl,
+			HttpMethod:   "PUT",
 		}
 		tx := coolfhir.Transaction()
 
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
+		require.Len(t, tx.Entry, 2)
+		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
+		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
 	})
 }
 

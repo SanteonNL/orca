@@ -395,6 +395,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	// Execute the transaction and collect the responses
 	resultBundle, err := s.commitTransaction(httpRequest, tx, resultHandlers)
 	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(err, "Bundle", httpResponse)
 		return
 	}
 
