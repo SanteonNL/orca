@@ -341,7 +341,7 @@ func (s *Service) submitSAMLRequest(envelope string) (string, error) {
 	defer resp.Body.Close()
 
 	// Read and return the response
-	body, err := io.ReadAll(resp.Body)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024)) //1mb
 	if err != nil {
 		return "", err
 	}
