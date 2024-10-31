@@ -99,7 +99,7 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	attribute2.CreateAttr("Name", "urn:oasis:names:tc:xacml:2.0:subject:role")
 	attributeValue2 := attribute2.CreateElement("AttributeValue")
 	role := attributeValue2.CreateElement("Role")
-	role.CreateAttr("code", "158970007")
+	role.CreateAttr("code", "224609002")
 	role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
 	role.CreateAttr("codeSystemName", "SNOMED_CT")
 	role.CreateAttr("displayName", "")
