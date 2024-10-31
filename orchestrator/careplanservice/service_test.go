@@ -16,6 +16,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -174,6 +175,10 @@ func TestService_Handle(t *testing.T) {
 	fhirServerMux := http.NewServeMux()
 	fhirServerMux.HandleFunc("POST /", func(writer http.ResponseWriter, request *http.Request) {
 		capturedRequestBody, _ = io.ReadAll(request.Body)
+		if strings.Contains(string(capturedRequestBody), "THIS-MUST-FAIL") {
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError("this must fail"), "Failed", writer)
+			return
+		}
 		writer.Header().Set("Content-Type", "application/fhir+json")
 		writer.WriteHeader(http.StatusOK)
 		bundle := map[string]interface{}{
@@ -353,6 +358,25 @@ func TestService_Handle(t *testing.T) {
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0]: this fails on purpose")
+		})
+		t.Run("commit fails", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPUT,
+							Url:    "Task",
+						},
+						Resource: json.RawMessage(`{"intent": "THIS-MUST-FAIL"}`),
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: upstream FHIR server error")
 		})
 		t.Run("GET is disallowed", func(t *testing.T) {
 			requestBundle := fhir.Bundle{

@@ -103,6 +103,32 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.Error(t, err)
 	}
 
+	t.Log("Creating Task - Task is created through upsert (PUT on non-existing resource)")
+	{
+		task = fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Focus: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			},
+		}
+
+		err := carePlanContributor1.Update("Task", task, &task, fhirclient.QueryParam("_id", "123"))
+		require.NoError(t, err)
+		notificationCounter.Store(0)
+	}
+
 	t.Log("Creating Task - No BasedOn, new CarePlan and CareTeam are created")
 	{
 		task = fhir.Task{
@@ -301,14 +327,16 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		var searchResult fhir.Bundle
 		err := carePlanContributor1.Read("CareTeam", &searchResult)
 		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 1, "Expected 1 team")
+		require.Len(t, searchResult.Entry, 2, "Expected 1 team")
 	}
 
 	t.Log("Accepting Task")
 	{
 		task.Status = fhir.TaskStatusAccepted
 		var updatedTask fhir.Task
-		err := carePlanContributor2.Update("Task/"+*task.Id, task, &updatedTask)
+		// Note: use FHIR search instead of specifying ID to test support for updating resources identified by logical identifiers
+		err := carePlanContributor2.Update("Task", task, &updatedTask, fhirclient.QueryParam("_id", *task.Id))
+		//err := carePlanContributor2.Update("Task/"+*task.Id, task, &updatedTask)
 		require.NoError(t, err)
 		task = updatedTask
 
