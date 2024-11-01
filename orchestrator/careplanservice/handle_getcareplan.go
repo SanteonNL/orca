@@ -4,7 +4,6 @@ import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
@@ -50,7 +49,6 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 	}
 
 	if len(bundle.Entry) == 0 {
-		log.Info().Msg("CarePlan search returned empty bundle")
 		return &bundle, nil
 	}
 
