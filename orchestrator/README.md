@@ -2,8 +2,8 @@
 Use the following environment variables to configure the orchestrator:
 
 Required configuration:
+- `ORCA_PUBLIC_BASEURL`: base URL of the public endpoints.
 - `ORCA_PUBLIC_ADDRESS`: address the public endpoints bind to (default: `:8080`).
-- `ORCA_PUBLIC_BASEURL`: base URL of the public endpoints (default: `/`). Set in case the orchestrator is exposed on another path than the domain root.
 
 Required configuration for Nuts:
 - `ORCA_NUTS_PUBLIC_URL`: public URL of the Nuts, used for informing OAuth2 clients of the URL of the OAuth2 Authorization Server, e.g. `http://example.com/nuts`.

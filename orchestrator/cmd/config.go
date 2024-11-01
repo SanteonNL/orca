@@ -4,13 +4,13 @@ import (
 	"errors"
 	"fmt"
 
-	"net/url"
-	"strings"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	koanf "github.com/knadh/koanf/v2"
+	"net/url"
+	"strings"
 
 	"github.com/knadh/koanf/providers/env"
 )
@@ -30,8 +30,11 @@ func (c Config) Validate() error {
 	if err := c.Nuts.Validate(); err != nil {
 		return fmt.Errorf("invalid Nuts configuration: %w", err)
 	}
+	if c.Public.URL == "" {
+		return errors.New("public base URL is not configured")
+	}
 	_, err := url.Parse(c.Public.URL)
-	if err != nil || c.Public.URL == "" {
+	if err != nil {
 		return errors.New("invalid public base URL")
 	}
 	if err := c.CarePlanContributor.Validate(); err != nil {
