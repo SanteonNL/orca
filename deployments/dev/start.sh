@@ -141,7 +141,6 @@ issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
 echo "  Registering on Nuts Discovery Service"
 curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
 echo "  Waiting for the FHIR server to be ready"
-./config/init-fhir-resources.sh $HOSPITAL_URL
 popd
 
 echo "Creating stack for Clinic..."

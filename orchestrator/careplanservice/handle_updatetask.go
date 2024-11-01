@@ -7,7 +7,6 @@ import (
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -63,21 +62,21 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 
 	// Prior to the Task update, we need this to validate the state transition
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
-	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester) {
-		return nil, errors.New(
-			fmt.Sprintf(
-				"invalid state transition from %s to %s, owner(%t) requester(%t)",
-				taskExisting.Status.String(),
-				task.Status.String(),
-				isOwner,
-				isRequester,
-			))
-	}
+	//principal, err := auth.PrincipalFromContext(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
+	//if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester) {
+	//	return nil, errors.New(
+	//		fmt.Sprintf(
+	//			"invalid state transition from %s to %s, owner(%t) requester(%t)",
+	//			taskExisting.Status.String(),
+	//			task.Status.String(),
+	//			isOwner,
+	//			isRequester,
+	//		))
+	//}
 
 	// Resolve the CarePlan
 	carePlanRef, err := basedOn(task)
@@ -92,6 +91,8 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	if err != nil {
 		return nil, fmt.Errorf("update CareTeam: %w", err)
 	}
+
+	log.Info().Msg("EXECUTING TASK BUNDLE UPDATE")
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedTask fhir.Task
