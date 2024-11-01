@@ -333,11 +333,13 @@ func TestService_Handle(t *testing.T) {
 			}
 			var resultBundle fhir.Bundle
 
-			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+			hdrs := new(fhirclient.Headers)
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
 
 			require.NoError(t, err)
 			require.Len(t, resultBundle.Entry, 1)
 			assert.Equal(t, "Task/123", *resultBundle.Entry[0].Response.Location)
+			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 			assert.JSONEq(t, `{"id":"123","status":"draft","intent":"","resourceType":"Task"}`, string(resultBundle.Entry[0].Resource))
 		})
 		t.Run("handler fails (PUT Organization)", func(t *testing.T) {
@@ -374,9 +376,11 @@ func TestService_Handle(t *testing.T) {
 			}
 			var resultBundle fhir.Bundle
 
-			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+			hdrs := new(fhirclient.Headers)
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
 
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: upstream FHIR server error")
+			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 		})
 		t.Run("GET is disallowed", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
@@ -454,10 +458,13 @@ func TestService_Handle(t *testing.T) {
 	t.Run("Single resources", func(t *testing.T) {
 		t.Run("POST/Create", func(t *testing.T) {
 			var task fhir.Task
-			err = fhirClient.Create(task, &task)
+
+			hdrs := new(fhirclient.Headers)
+			err = fhirClient.Create(task, &task, fhirclient.ResponseHeaders(hdrs))
 
 			require.NoError(t, err)
 			assert.Equal(t, "123", *task.Id)
+			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 		})
 		t.Run("PUT/Update", func(t *testing.T) {
 			var task fhir.Task
