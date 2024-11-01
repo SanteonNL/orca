@@ -138,6 +138,12 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
 			},
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,
@@ -151,6 +157,12 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
 			},
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,
@@ -164,6 +176,12 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
 			},
 			createdTask: fhir.Task{
 				Id: to.Ptr("123"),
@@ -184,6 +202,22 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name: "CreateTask - No Task.For",
+			taskToCreate: fhir.Task{
+				Intent: "order",
+				Status: fhir.TaskStatusRequested,
+				Meta: &fhir.Meta{
+					Profile: []string{coolfhir.SCPTaskProfile},
+				},
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			},
+			returnedBundle: nil,
+			errorFromRead:  nil,
+			expectError:    true,
+		},
+		{
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name: "CreateTask",
 			taskToCreate: fhir.Task{
 				Intent:    "order",
@@ -192,6 +226,12 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 				Meta: &fhir.Meta{
 					Profile: []string{coolfhir.SCPTaskProfile},
+				},
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
 				},
 			},
 			createdTask: fhir.Task{
@@ -206,6 +246,12 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
 			},
 			returnedBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -310,6 +356,12 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
 			},
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,
@@ -329,6 +381,12 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
 			},
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,
@@ -348,6 +406,12 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
 			},
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,
@@ -369,6 +433,12 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 				Meta: &fhir.Meta{
 					Profile: []string{coolfhir.SCPTaskProfile},
+				},
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
 				},
 			},
 			returnedCarePlan:      nil,
@@ -393,6 +463,12 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 				Meta: &fhir.Meta{
 					Profile: []string{coolfhir.SCPTaskProfile},
+				},
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
 				},
 			},
 			returnedCarePlan: &fhir.CarePlan{

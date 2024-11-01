@@ -1,6 +1,7 @@
 {
   "resourceType" : "CareTeam",
   "id" : "2",
+  "intent" : "order",
   "meta" : {
     "versionId" : "1",
     "lastUpdated" : "2024-10-15T13:55:53.946+00:00",

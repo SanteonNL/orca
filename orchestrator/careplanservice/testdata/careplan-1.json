@@ -2,7 +2,7 @@
   "resourceType" : "CarePlan",
   "id" : "1",
   "status" : "draft",
-  "intent" : "proposal",
+  "intent" : "order",
   "careTeam" : [ {
     "reference" : "CareTeam/2",
     "type" : "CareTeam"
