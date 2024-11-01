@@ -23,8 +23,6 @@ github.com/Microsoft/go-winio v0.6.1/go.mod h1:LRdKpFKfdobln8UmuiYcKPot9D2v6svN5
 github.com/Microsoft/hcsshim v0.11.4 h1:68vKo2VN8DE9AdN4tnkWnmdhqdbpUFM8OF3Airm7fz8=
 github.com/Microsoft/hcsshim v0.11.4/go.mod h1:smjE4dvqPX9Zldna+t5FG3rnoHhaB7QYxPRqGcpAD9w=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
-github.com/SanteonNL/go-fhir-client v0.2.7 h1:PANkBVLD55vlfK2ICckXSZHpLniQVk1VL0pVuA2ZHJE=
-github.com/SanteonNL/go-fhir-client v0.2.7/go.mod h1:CcU6J3vgxsdjTWry0s2BAJcV6SvdaRTsry9ixR7zqc4=
 github.com/SanteonNL/go-fhir-client v0.2.8 h1:YIntYRQigfUqO6F2NNGX/Aux3Ejzv/m1iSGmd0/n9ZU=
 github.com/SanteonNL/go-fhir-client v0.2.8/go.mod h1:CcU6J3vgxsdjTWry0s2BAJcV6SvdaRTsry9ixR7zqc4=
 github.com/SanteonNL/nuts-policy-enforcement-point v0.0.0-20240805130644-8b92f1cbf865 h1:luArkUx6tzRw/t6bI0kB1FdUJIqukSEanJeEIP9613I=
@@ -180,8 +178,6 @@ github.com/multiformats/go-multibase v0.2.0 h1:isdYCVLvksgWlMW9OZRYJEa9pZETFivnc
 github.com/multiformats/go-multibase v0.2.0/go.mod h1:bFBZX4lKCA/2lyOFSAoKH5SS6oPyjtnzK/XTFDPkNuk=
 github.com/nuts-foundation/go-did v0.14.0 h1:Y1tuQCC2xmDX1bdXQS9iquwzJgcT1zcJxbZkqC5Dfac=
 github.com/nuts-foundation/go-did v0.14.0/go.mod h1:dQm9b2dYUnhgVW1FmpAi5nNe0mfIrnxM3EaQx4GsDhI=
-github.com/nuts-foundation/go-nuts-client v0.1.5 h1:AAiX6hdqvkfxaNhw23UV+ybYfThiXdg6M1KWM2WJjTo=
-github.com/nuts-foundation/go-nuts-client v0.1.5/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
 github.com/nuts-foundation/go-nuts-client v0.1.7 h1:o2ZZUckJhY4Ivvu03pLe+HmSpyDzrEvJMd4p0ZYIqVc=
 github.com/nuts-foundation/go-nuts-client v0.1.7/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
 github.com/oapi-codegen/oapi-codegen/v2 v2.3.0 h1:rICjNsHbPP1LttefanBPnwsSwl09SqhCO7Ee623qR84=
