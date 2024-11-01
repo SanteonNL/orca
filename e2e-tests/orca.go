@@ -30,6 +30,7 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			Consumers: []testcontainers.LogConsumer{&testcontainers.StdoutLogConsumer{}},
 		},
 		Env: map[string]string{
+			"ORCA_PUBLIC_URL":                              "http://" + containerName + ":8080",
 			"ORCA_NUTS_API_URL":                            "http://nutsnode:8081",
 			"ORCA_NUTS_PUBLIC_URL":                         "http://nutsnode:8080",
 			"ORCA_NUTS_SUBJECT":                            nutsSubject,
