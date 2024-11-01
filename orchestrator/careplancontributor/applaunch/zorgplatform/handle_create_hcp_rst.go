@@ -337,17 +337,18 @@ func (s *Service) submitSAMLRequest(envelope string) (string, error) {
 	defer resp.Body.Close()
 
 	// Read and return the response
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024*10)) //10mb
+	responseBody, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024*10)) //10mb
 	if err != nil {
 		return "", err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Debug().Msgf("Zorgplatform STS returned: %s", string(body))
+		log.Debug().Msgf("Zorgplatform STS SOAP request: %s", envelope)
+		log.Debug().Msgf("Zorgplatform STS SOAP response: %s", string(responseBody))
 		return "", fmt.Errorf("unexpected response status: %d", resp.StatusCode)
 	}
 
-	return string(body), nil
+	return string(responseBody), nil
 }
 
 // validateRSTSResponse validates the generated Assertion and returns the SAML Bearer token from the RequestSecurityTokenResponse (RSTS)
