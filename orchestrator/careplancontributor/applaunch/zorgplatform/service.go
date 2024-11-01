@@ -48,7 +48,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 	} else {
 		appLaunchURL = "http://localhost" + appLaunchURL + appLaunchUrl
 	}
-	log.Info().Msgf("Zorgplatform app launch is: %s:", appLaunchURL)
+	log.Info().Msgf("Zorgplatform app launch is: %s", appLaunchURL)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
 	var signCert [][]byte

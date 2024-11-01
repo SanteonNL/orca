@@ -9,6 +9,7 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"time"
@@ -336,12 +337,13 @@ func (s *Service) submitSAMLRequest(envelope string) (string, error) {
 	defer resp.Body.Close()
 
 	// Read and return the response
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024)) //1mb
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 1024*1024*10)) //10mb
 	if err != nil {
 		return "", err
 	}
 
 	if resp.StatusCode != http.StatusOK {
+		log.Debug().Msgf("Zorgplatform STS returned: %s", string(body))
 		return "", fmt.Errorf("unexpected response status: %d", resp.StatusCode)
 	}
 
