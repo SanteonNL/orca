@@ -103,6 +103,31 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.Error(t, err)
 	}
 
+	t.Log("Creating Task - No BasedOn, no Task.For so task creation fails")
+	{
+		task = fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Focus: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			},
+		}
+
+		err := carePlanContributor1.Create(task, &task)
+		require.Error(t, err)
+	}
+
 	t.Log("Creating Task - Task is created through upsert (PUT on non-existing resource)")
 	{
 		task = fhir.Task{
@@ -120,6 +145,12 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 					// COPD
 					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
 					Value:  to.Ptr("99534756439"),
+				},
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
 				},
 			},
 		}
@@ -148,6 +179,12 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 					Value:  to.Ptr("99534756439"),
 				},
 			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
 		}
 
 		err := carePlanContributor1.Create(task, &task)
@@ -155,6 +192,11 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		err = carePlanContributor1.Read(*task.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
 
+		t.Run("Check CarePlan properties", func(t *testing.T) {
+			require.Equal(t, fhir.CarePlanIntentOrder, carePlan.Intent)
+			require.Equal(t, fhir.RequestStatusActive, carePlan.Status)
+			require.Equal(t, *task.For, carePlan.Subject)
+		})
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, task.Id)
 			require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")

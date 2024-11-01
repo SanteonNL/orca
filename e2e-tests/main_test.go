@@ -83,6 +83,12 @@ func Test_Main(t *testing.T) {
 						Value:  to.Ptr("99534756439"),
 					},
 				}
+				task.For = &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				}
 				task.Intent = "order"
 				task.Status = fhir.TaskStatusRequested
 				err := hospitalOrcaFHIRClient.Create(task, &task)

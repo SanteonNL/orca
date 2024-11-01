@@ -69,13 +69,24 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			Reference: to.Ptr(careTeamURL),
 			Type:      to.Ptr(coolfhir.ResourceType(careTeam)),
 		})
-
+		carePlan.Intent = fhir.CarePlanIntentOrder
 		carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
 			Reference: &fhir.Reference{
 				Reference: to.Ptr(taskURL),
 				Type:      to.Ptr(coolfhir.ResourceType(task)),
 			},
 		})
+
+		// Validate Task.For
+		if task.For == nil || task.For.Identifier == nil {
+			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a reference to a patient", http.StatusBadRequest)
+		}
+		if *task.For.Identifier.System != "http://fhir.nl/fhir/NamingSystem/bsn" {
+			return nil, coolfhir.NewErrorWithCode("Task.For.Identifier.System must be set with a BSN identifier", http.StatusBadRequest)
+		}
+		carePlan.Subject = *task.For
+		carePlan.Status = fhir.RequestStatusActive
+
 		task.BasedOn = []fhir.Reference{
 			{
 				Type:      to.Ptr(coolfhir.ResourceType(carePlan)),

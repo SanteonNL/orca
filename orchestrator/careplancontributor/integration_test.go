@@ -7,6 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
@@ -43,6 +44,12 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 			Meta: &fhir.Meta{
 				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
 			},
 		}
 
