@@ -23,11 +23,11 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	carePlanServiceURL, httpService, cpcURL := setupIntegrationTest(t, notificationEndpoint)
 
 	dataHolderTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
-	dataRequesterTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/1")
-	invalidCareplanTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/2")
+	dataRequesterTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/2")
+	invalidCareplanTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/3")
 	noXSCPHeaderTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")
 	// Test principal is not part of the care team
-	invalidTestPrincipalTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, carePlanServiceURL.String()+"/CarePlan/1")
+	invalidTestPrincipalTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, carePlanServiceURL.String()+"/CarePlan/2")
 
 	cpsDataHolder := fhirclient.New(carePlanServiceURL, &http.Client{Transport: dataHolderTransport}, nil)
 	cpsDataRequester := fhirclient.New(carePlanServiceURL, &http.Client{Transport: dataRequesterTransport}, nil)
