@@ -67,12 +67,14 @@ func Test_Main(t *testing.T) {
 						System: to.Ptr(URANamingSystem),
 						Value:  to.Ptr(strconv.Itoa(hospitalURA)),
 					},
+					Type: to.Ptr("Organization"),
 				}
 				task.Owner = &fhir.Reference{
 					Identifier: &fhir.Identifier{
 						System: to.Ptr(URANamingSystem),
 						Value:  to.Ptr(strconv.Itoa(clinicURA)),
 					},
+					Type: to.Ptr("Organization"),
 				}
 				task.Focus = &fhir.Reference{
 					Identifier: &fhir.Identifier{
@@ -98,12 +100,14 @@ func Test_Main(t *testing.T) {
 						System: to.Ptr(URANamingSystem),
 						Value:  to.Ptr(strconv.Itoa(hospitalURA)),
 					},
+					Type: to.Ptr("Organization"),
 				}
 				task.Owner = &fhir.Reference{
 					Identifier: &fhir.Identifier{
 						System: to.Ptr(URANamingSystem),
 						Value:  to.Ptr(strconv.Itoa(clinicURA)),
 					},
+					Type: to.Ptr("Organization"),
 				}
 				task.Focus = &fhir.Reference{
 					Identifier: &fhir.Identifier{
