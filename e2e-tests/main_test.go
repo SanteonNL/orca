@@ -29,33 +29,36 @@ func Test_Main(t *testing.T) {
 		},
 	}
 
-	// Setup Clinic
-	// Questionnaires can't be created in HAPI FHIR server partitions, only in the default partition.
-	// Otherwise, the following error occurs: HAPI-1318: Resource type Questionnaire can not be partitioned
-	// This is why the clinic, running the CPS, stores its data in the default partition.
-	const clinicFHIRStoreURL = "http://fhirstore:8080/fhir/DEFAULT"
+	const clinicFHIRStoreURL = "http://fhirstore:8080/fhir/clinic"
 	const clinicBaseUrl = "http://clinic-orchestrator:8080"
-	const carePlanServiceBaseURL = clinicBaseUrl + "/cps"
 	const clinicURA = 1
-	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir/notify", true)
+
+	const hospitalFHIRStoreURL = "http://fhirstore:8080/fhir/DEFAULT"
+	const hospitalBaseUrl = "http://hospital-orchestrator:8080"
+	const hospitalURA = 2
+
+	const carePlanServiceBaseURL = hospitalBaseUrl + "/cps"
+
+	// Setup Clinic
+	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir/notify", false)
 	require.NoError(t, err)
-	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", true, carePlanServiceBaseURL, clinicFHIRStoreURL)
+	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, carePlanServiceBaseURL, clinicFHIRStoreURL)
 	clinicOrcaFHIRClient := fhirclient.New(clinicOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 
 	// Setup Hospital
-	const hospitalFHIRStoreURL = "http://fhirstore:8080/fhir/hospital"
-	const hospitalBaseUrl = "http://clinic-orchestrator:8080"
-	const hospitalURA = 2
-	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir/notify", false)
+	// Questionnaires can't be created in HAPI FHIR server partitions, only in the default partition.
+	// Otherwise, the following error occurs: HAPI-1318: Resource type Questionnaire can not be partitioned
+	// This is why the hospital, running the CPS, stores its data in the default partition.
+	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir/notify", true)
 	require.NoError(t, err)
 	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, carePlanServiceBaseURL, hospitalFHIRStoreURL)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
 	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 
 	t.Run("EHR using Orchestrator REST API", func(t *testing.T) {
-		t.Run("Clinic EHR creates New CarePlan, New Task", func(t *testing.T) {
-			t.Log("Hospital attempts to create task without existing CarePlan in clinic, fails...")
+		t.Run("Hospital EHR creates new Task", func(t *testing.T) {
 			var task fhir.Task
+			t.Log("Creating new Task...")
 			{
 				task.Meta = &fhir.Meta{
 					Profile: []string{
@@ -92,39 +95,6 @@ func Test_Main(t *testing.T) {
 				task.Intent = "order"
 				task.Status = fhir.TaskStatusRequested
 				err := hospitalOrcaFHIRClient.Create(task, &task)
-				require.Error(t, err)
-			}
-			t.Log("Creating new Task...")
-			{
-				task.Meta = &fhir.Meta{
-					Profile: []string{
-						"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
-					},
-				}
-				task.Requester = &fhir.Reference{
-					Identifier: &fhir.Identifier{
-						System: to.Ptr(URANamingSystem),
-						Value:  to.Ptr(strconv.Itoa(hospitalURA)),
-					},
-					Type: to.Ptr("Organization"),
-				}
-				task.Owner = &fhir.Reference{
-					Identifier: &fhir.Identifier{
-						System: to.Ptr(URANamingSystem),
-						Value:  to.Ptr(strconv.Itoa(clinicURA)),
-					},
-					Type: to.Ptr("Organization"),
-				}
-				task.Focus = &fhir.Reference{
-					Identifier: &fhir.Identifier{
-						// COPD
-						System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
-						Value:  to.Ptr("99534756439"),
-					},
-				}
-				task.Intent = "order"
-				task.Status = fhir.TaskStatusRequested
-				err := clinicOrcaFHIRClient.Create(task, &task)
 				require.NoError(t, err)
 			}
 			t.Log("Responding to Task Questionnaire")
@@ -176,9 +146,49 @@ func Test_Main(t *testing.T) {
 			//}
 		})
 	})
-}
-
-func unmarshalJSON(t *testing.T, data []byte, target any) {
-	err := json.Unmarshal(data, target)
-	require.NoError(t, err)
+	t.Run("Clinic attempts to create a CarePlan at Hospital's CarePlanService, which isn't allowed", func(t *testing.T) {
+		var task fhir.Task
+		t.Log("Clinic attempts to create task without existing CarePlan in clinic, fails...")
+		{
+			task.Meta = &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			}
+			task.Requester = &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(URANamingSystem),
+					Value:  to.Ptr(strconv.Itoa(hospitalURA)),
+				},
+				Type: to.Ptr("Organization"),
+			}
+			task.Owner = &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(URANamingSystem),
+					Value:  to.Ptr(strconv.Itoa(clinicURA)),
+				},
+				Type: to.Ptr("Organization"),
+			}
+			task.Focus = &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			}
+			task.For = &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			}
+			task.Intent = "order"
+			task.Status = fhir.TaskStatusRequested
+			err := clinicOrcaFHIRClient.Create(task, &task)
+			var operationOutcome fhirclient.OperationOutcome
+			require.ErrorAs(t, err, &operationOutcome)
+			require.Len(t, operationOutcome.Issue, 1)
+			require.Equal(t, "CarePlanService/CreateTask failed: requester must be local care organization in order to create new CarePlan and CareTeam", *operationOutcome.Issue[0].Diagnostics)
+		}
+	})
 }
