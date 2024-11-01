@@ -27,7 +27,8 @@ type Session struct {
 
 type SessionData struct {
 	FHIRLauncher string
-	Values       map[string]string
+	StringValues map[string]string
+	OtherValues  map[string]interface{}
 }
 
 type SessionManager struct {
@@ -65,6 +66,13 @@ func (s *sessionStore) create(values SessionData) (string, *Session) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	s.prune()
+	// prevent nil derefs later on
+	if values.OtherValues == nil {
+		values.OtherValues = make(map[string]interface{})
+	}
+	if values.StringValues == nil {
+		values.StringValues = make(map[string]string)
+	}
 	result := &Session{
 		Data:    values,
 		Expires: time.Now().Add(sessionLifetime),

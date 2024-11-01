@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -9,6 +10,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"go.uber.org/mock/gomock"
+	"net/url"
 	"os"
 	"reflect"
 	"testing"
@@ -397,6 +399,56 @@ func Test_isValidTransition(t *testing.T) {
 }
 
 func Test_handleUpdateTask(t *testing.T) {
+	t.Run("Task is identified by search parameters", func(t *testing.T) {
+		var task fhir.Task
+		taskData, _ := os.ReadFile("./testdata/task-update-accepted.json")
+		require.NoError(t, json.Unmarshal(taskData, &task))
+
+		var carePlanBundle fhir.Bundle
+		carePlanBundleData, _ := os.ReadFile("./careteamservice/testdata/001-input.json")
+		require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
+
+		ctrl := gomock.NewController(t)
+		fhirClient := mock.NewMockClient(ctrl)
+		service := &Service{
+			fhirClient: fhirClient,
+		}
+		requestUrl, _ := url.Parse("Task?_id=1")
+
+		fhirClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
+			*result = carePlanBundle
+			return nil
+		})
+		fhirClient.EXPECT().Read("Task", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
+			result.Entry = []fhir.BundleEntry{
+				{
+					Resource: taskData,
+				},
+			}
+			return nil
+		})
+		task.Status = fhir.TaskStatusInProgress
+		newTaskData, _ := json.Marshal(task)
+
+		ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal2)
+		request := FHIRHandlerRequest{
+			ResourceData: newTaskData,
+			ResourcePath: requestUrl.Path,
+			RequestUrl:   requestUrl,
+			HttpMethod:   "PUT",
+		}
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.NoError(t, err)
+		require.Len(t, tx.Entry, 2)
+		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
+		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
+	})
+}
+
+func Test_handleUpdateTask_Validation(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

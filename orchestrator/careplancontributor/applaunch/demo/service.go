@@ -83,7 +83,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	}
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: fhirLauncherKey,
-		Values:       values,
+		StringValues: values,
 	})
 	// Redirect to landing page
 	targetURL, _ := url.Parse(s.baseURL)

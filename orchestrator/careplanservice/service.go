@@ -97,6 +97,12 @@ func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
 		},
 		Resource: r.ResourceData,
 	}
+	if r.RequestUrl != nil {
+		query := r.RequestUrl.Query()
+		if len(query) > 0 {
+			result.Request.Url += "?" + query.Encode()
+		}
+	}
 	if r.FullUrl != "" {
 		result.FullUrl = to.Ptr(r.FullUrl)
 	}
@@ -123,11 +129,16 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceType := request.PathValue("type")
 		s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	}))
-	// Updating a resource
+	// Updating a resource by ID
 	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleCreateOrUpdate(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
+	}))
+	// Updating a resource by selecting it based on query params
+	mux.HandleFunc("PUT "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		resourceType := request.PathValue("type")
+		s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
 	}))
 	// Handle reading a specific resource instance
 	mux.HandleFunc("GET "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
@@ -386,6 +397,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	// Execute the transaction and collect the responses
 	resultBundle, err := s.commitTransaction(httpRequest, tx, resultHandlers)
 	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(err, "Bundle", httpResponse)
 		return
 	}
 

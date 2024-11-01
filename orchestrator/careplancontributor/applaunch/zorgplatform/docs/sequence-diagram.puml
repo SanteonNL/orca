@@ -1,0 +1,56 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+autonumber
+skinparam legendBackgroundColor none
+
+title System-Level Sequence Diagram
+legend top
+   (14-10-2024 v1) Describes:
+   Integration of ORCA in ChipSoft HiX EHR using Zorgplatform.
+end legend
+
+box "Hospital using ChipSoft HiX and Zorgplatform" #Lavender
+    actor LocalCP as "Care Professional"
+    participant HIX as "HiX"
+    participant LocalOrca as "Orca"
+end box
+box "Zorgplatform" #Lavender
+    participant STS as "Security Token Service"
+    participant BGZ_API as "BgZ API"
+    participant WORKFLOW_API as "Workflow API"
+end box
+
+LocalCP -> HIX : Create\norder
+group SSO App Launch
+activate HIX
+    activate STS
+        HIX -> STS : Issue ProfessionalSso Token
+        STS --> HIX : Token (SAMLResponse)
+    deactivate STS
+    HIX -> LocalOrca : Launch Frontend app\n(SAMLResponse)
+    activate LocalOrca
+        LocalOrca -> LocalOrca : Decrypt and\nvalidate token
+        LocalOrca -> LocalOrca : Translate SAML Assertion\nto FHIR Practitioner
+end group
+group Retrieve Patient and Order
+        activate STS
+            LocalOrca -> STS : Issue ProfessionalService(?)\nToken
+            STS --> LocalOrca : Token
+        deactivate STS
+        LocalOrca -> BGZ_API : Retrieve Patient\n(token, patientId)
+        activate BGZ_API
+            BGZ_API --> LocalOrca : FHIR Patient
+        deactivate BGZ_API
+        activate WORKFLOW_API
+            LocalOrca -> WORKFLOW_API : Retrieve Task\n(token, workflowId)
+            WORKFLOW_API --> LocalOrca : FHIR Task
+        deactivate BGZ_API
+        LocalOrca -> LocalOrca : Convert FHIR Task\nto ServiceRequest
+        LocalOrca -> LocalOrca : Create user session\n(Practitioner, Patient,\nServiceRequest, Tokens)
+        LocalOrca --> LocalCP : Show Frontend
+    deactivate LocalOrca
+deactivate HIX
+end group
+
+
+@enduml

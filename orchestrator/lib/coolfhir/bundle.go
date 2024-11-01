@@ -225,13 +225,13 @@ func executeTransactionAndRespond(fhirClient fhirclient.Client, bundle fhir.Bund
 	return ErrEntryNotFound
 }
 
-func FetchBundleEntry(fhirClient fhirclient.Client, bundle *fhir.Bundle, filter func(entry fhir.BundleEntry) bool, result interface{}) (*fhir.BundleEntry, error) {
-	for _, currentEntry := range bundle.Entry {
+func FetchBundleEntry(fhirClient fhirclient.Client, bundle *fhir.Bundle, filter func(i int, entry fhir.BundleEntry) bool, result interface{}) (*fhir.BundleEntry, error) {
+	for i, currentEntry := range bundle.Entry {
 		if currentEntry.Response == nil || currentEntry.Response.Location == nil {
 			log.Error().Msg("entry.Response or entry.Response.Location is nil")
 			continue
 		}
-		if !filter(currentEntry) {
+		if !filter(i, currentEntry) {
 			continue
 		}
 		headers := new(fhirclient.Headers)
