@@ -167,12 +167,35 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 }
 
 func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTask bool, isTaskOwner bool) error {
-	if task.Focus == nil || task.Focus.Identifier == nil || task.Focus.Identifier.System == nil || task.Focus.Identifier.Value == nil {
-		return errors.New("task.Focus or its Identifier fields are nil")
+	if task.Focus == nil || task.Focus.Reference == nil {
+		return errors.New("task.Focus or task.Focus.Reference is nil")
 	}
-	taskFocus := fmt.Sprintf("%s|%s", *task.Focus.Identifier.System, *task.Focus.Identifier.Value)
-	var questionnaire map[string]interface{}
 
+	var matchedServiceCodes map[string]map[string]taskengine.Workflow
+	var serviceRequest fhir.ServiceRequest
+	if err := s.carePlanServiceClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
+		return fmt.Errorf("failed to fetch ServiceRequest (path=%s): %w", *task.Focus.Reference, err)
+	}
+	for _, coding := range serviceRequest.Code.Coding {
+		if coding.System == nil || coding.Code == nil {
+			continue
+		}
+		workflow, workflowExists := s.workflows[fmt.Sprintf("%s|%s", *coding.System, *coding.Code)]
+	}
+
+	var taskFocus string
+	if task.Focus.Reference != nil {
+
+	} else {
+		if task.Focus.Identifier != nil && task.Focus.Identifier.System != nil && task.Focus.Identifier.Value == nil {
+			taskFocus = fmt.Sprintf("%s|%s", *task.Focus.Identifier.System, *task.Focus.Identifier.Value)
+		}
+	}
+	if taskFocus == "" {
+		return errors.New("could not determine workflow code from Task.focus")
+	}
+
+	var questionnaire map[string]interface{}
 	workflow, workflowExists := s.workflows[taskFocus]
 	var err error
 	if workflowExists {
