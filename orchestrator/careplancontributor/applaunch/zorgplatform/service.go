@@ -284,7 +284,7 @@ func (s *Service) fetchContext(ctx context.Context, accessToken string, taskId s
 	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryHasID(*encounter.Subject.Reference), &patient); err != nil {
 		return nil, nil, fmt.Errorf("unable to find Patient resource in Bundle (id=%s): %w", *encounter.Subject.Reference, err)
 	}
-	return nil, &patient, nil
+	return &fhir.ServiceRequest{}, &patient, nil
 }
 
 type authHeaderRoundTripper struct {
