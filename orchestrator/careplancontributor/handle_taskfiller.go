@@ -167,20 +167,14 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 }
 
 func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTask bool, isTaskOwner bool) error {
+	// TODO: INT-300 Reject Task if we can't execute it, or if it's invalid
 	if task.Focus == nil || task.Focus.Reference == nil {
 		return errors.New("task.Focus or task.Focus.Reference is nil")
 	}
 
-	var matchedServiceCodes map[string]map[string]taskengine.Workflow
-	var serviceRequest fhir.ServiceRequest
-	if err := s.carePlanServiceClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
-		return fmt.Errorf("failed to fetch ServiceRequest (path=%s): %w", *task.Focus.Reference, err)
-	}
-	for _, coding := range serviceRequest.Code.Coding {
-		if coding.System == nil || coding.Code == nil {
-			continue
-		}
-		workflow, workflowExists := s.workflows[fmt.Sprintf("%s|%s", *coding.System, *coding.Code)]
+	err2 := s.selectWorkflow(task)
+	if err2 != nil {
+		return err2
 	}
 
 	var taskFocus string
@@ -271,6 +265,58 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 
 	log.Info().Msg("Successfully created a subtask")
 
+	return nil
+}
+
+func (s *Service) selectWorkflow(task *fhir.Task) error {
+	var matchedServiceCodes []string
+	// Determine service code from Task.focus
+	var serviceRequest fhir.ServiceRequest
+	if err := s.carePlanServiceClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
+		return fmt.Errorf("failed to fetch ServiceRequest (path=%s): %w", *task.Focus.Reference, err)
+	}
+	for _, coding := range serviceRequest.Code.Coding {
+		if coding.System == nil || coding.Code == nil {
+			continue
+		}
+		key := fmt.Sprintf("%s|%s", *coding.System, *coding.Code)
+		_, exists := s.workflows[key]
+		if exists {
+			matchedServiceCodes = append(matchedServiceCodes, key)
+		}
+	}
+	if len(matchedServiceCodes) == 0 {
+		return errors.New("ServiceRequest.code does not match any offered services")
+	} else if len(matchedServiceCodes) > 1 {
+		return fmt.Errorf("ServiceRequest.code matches multiple services, need to choose one: %s", strings.Join(matchedServiceCodes, ", "))
+	}
+	// Determine workflow based on Task.reasonCode or Task.reasonReference
+	var candidateCodes []fhir.Coding
+	if task.ReasonCode != nil {
+		for _, coding := range task.ReasonCode.Coding {
+			if coding.System == nil || coding.Code == nil {
+				continue
+			}
+			candidateCodes = append(candidateCodes, coding)
+		}
+	}
+	if task.ReasonReference != nil && task.ReasonReference.Reference != nil {
+		var condition fhir.Condition
+		if err := s.carePlanServiceClient.Read(*task.ReasonReference.Reference, &condition); err != nil {
+			return fmt.Errorf("failed to fetch Condition of Task.reasonReference.reference (path=%s): %w", *task.ReasonReference.Reference, err)
+		}
+		for _, coding := range condition.Code.Coding {
+			if coding.System == nil || coding.Code == nil {
+				continue
+			}
+			candidateCodes = append(candidateCodes, coding)
+		}
+	}
+	// find matching workflow
+	service := s.workflows[matchedServiceCodes[0]]
+	if len(candidateCodes) == 0 {
+		return nil
+	}
 	return nil
 }
 
