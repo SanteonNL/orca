@@ -209,6 +209,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	patientRef := "Patient/magic-" + uuid.NewString()
 	serviceRequestRef := "ServiceRequest/magic-" + uuid.NewString()
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
+	// TODO: What if the access token expires?
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: launcherKey,
 		StringValues: map[string]string{
@@ -237,24 +238,27 @@ func (s *Service) registerFhirClientFactory(config Config) {
 		fhirServerURL, _ := url.Parse(config.ApiUrl)
 		return clients.ClientProperties{
 			BaseURL: fhirServerURL,
-			Client:  s.zorgplatformHttpClient.Transport,
+			Client:  s.createZorgplatformApiClient(properties["accessToken"]).Transport,
 		}
 	}
 }
 
-func (s *Service) fetchContext(ctx context.Context, accessToken string, taskId string) (*fhir.ServiceRequest, *fhir.Patient, error) {
-	// New client that uses the access token
-	httpClient := http.Client{
+func (s *Service) createZorgplatformApiClient(accessToken string) *http.Client {
+	return &http.Client{
 		Transport: &authHeaderRoundTripper{
 			value: "SAML " + accessToken,
 			inner: s.zorgplatformHttpClient.Transport,
 		},
 	}
+}
+
+func (s *Service) fetchContext(ctx context.Context, accessToken string, taskId string) (*fhir.ServiceRequest, *fhir.Patient, error) {
+	// New client that uses the access token
 	apiUrl, err := url.Parse(s.config.ApiUrl)
 	if err != nil {
 		return nil, nil, err
 	}
-	fhirClient := fhirclient.New(apiUrl, &httpClient, coolfhir.Config())
+	fhirClient := fhirclient.New(apiUrl, s.createZorgplatformApiClient(accessToken), coolfhir.Config())
 	// Zorgplatform provides us with a Task, from which we need to derive the Patient and ServiceRequest
 	// - Patient is contained in the Task.encounter
 	// - ServiceRequest is referenced in ??? (TODO)
