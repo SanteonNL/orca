@@ -258,22 +258,23 @@ func (s *Service) fetchContext(ctx context.Context, accessToken string, taskId s
 	// Zorgplatform provides us with a Task, from which we need to derive the Patient and ServiceRequest
 	// - Patient is contained in the Task.encounter
 	// - ServiceRequest is referenced in ??? (TODO)
-	var task fhir.Task
+	var task map[string]interface{}
 	if err = fhirClient.ReadWithContext(ctx, "Task/"+taskId, &task); err != nil {
 		return nil, nil, fmt.Errorf("unable to fetch Task resource (id=%s): %w", taskId, err)
 	}
 	// Search for Encounter, contains Encounter, Organization and Patient
-	if task.Encounter == nil || task.Encounter.Reference == nil {
-		return nil, nil, fmt.Errorf("task does not contain a reference to an Encounter")
+	if task["context"] == nil {
+		return nil, nil, fmt.Errorf("task.context is not provided")
 	}
-	encounterId := strings.Split(*task.Encounter.Reference, "/")[1]
+	taskContext := task["context"].(map[string]interface{})
+	encounterId := strings.Split(taskContext["reference"].(string), "/")[1]
 	var encounterSearchResult fhir.Bundle
 	if err = fhirClient.ReadWithContext(ctx, "Encounter", &encounterSearchResult, fhirclient.QueryParam("_id", encounterId)); err != nil {
 		return nil, nil, fmt.Errorf("unable to fetch Encounter resource (id=%s): %w", encounterId, err)
 	}
 	var encounter fhir.Encounter
-	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryIsOfType("Encounter"), encounter); err != nil {
-		return nil, nil, fmt.Errorf("unable to find Encounter resource in Bundle (id=%s): %w", encounterId, err)
+	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryIsOfType("Encounter"), &encounter); err != nil {
+		return nil, nil, fmt.Errorf("get Encounter from Bundle (id=%s): %w", encounterId, err)
 	}
 	// Get Patient from bundle, specified by Encounter.subject
 	if encounter.Subject == nil || encounter.Subject.Reference == nil {
