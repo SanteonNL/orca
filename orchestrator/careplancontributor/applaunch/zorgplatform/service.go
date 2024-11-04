@@ -8,13 +8,15 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
@@ -200,30 +202,14 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:16])
 
-	serviceRequest, patient, err := s.fetchContext(request.Context(), accessToken, launchContext.WorkflowId)
+	sessionData, err := s.getSessionData(request.Context(), accessToken, launchContext)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to fetch FHIR resources from Zorgplatform")
+		log.Error().Err(err).Msg("unable to create session data")
 		http.Error(response, "Application launch failed.", http.StatusInternalServerError)
 		return
 	}
-	patientRef := "Patient/magic-" + uuid.NewString()
-	serviceRequestRef := "ServiceRequest/magic-" + uuid.NewString()
-	practitionerRef := "Practitioner/magic-" + uuid.NewString()
-	// TODO: What if the access token expires?
-	s.sessionManager.Create(response, user.SessionData{
-		FHIRLauncher: launcherKey,
-		StringValues: map[string]string{
-			"patient":        patientRef,
-			"serviceRequest": serviceRequestRef,
-			"practitioner":   practitionerRef,
-			"accessToken":    accessToken,
-		},
-		OtherValues: map[string]interface{}{
-			patientRef:        *patient,
-			serviceRequestRef: *serviceRequest,
-			practitionerRef:   launchContext.Practitioner,
-		},
-	})
+
+	s.sessionManager.Create(response, *sessionData)
 
 	// Redirect to landing page
 	targetURL, _ := url.Parse(s.baseURL)
@@ -252,43 +238,137 @@ func (s *Service) createZorgplatformApiClient(accessToken string) *http.Client {
 	}
 }
 
-func (s *Service) fetchContext(ctx context.Context, accessToken string, taskId string) (*fhir.ServiceRequest, *fhir.Patient, error) {
+func (s *Service) getSessionData(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
 	// New client that uses the access token
 	apiUrl, err := url.Parse(s.config.ApiUrl)
 	if err != nil {
-		return nil, nil, err
+		return &user.SessionData{}, err
 	}
 	fhirClient := fhirclient.New(apiUrl, s.createZorgplatformApiClient(accessToken), coolfhir.Config())
 	// Zorgplatform provides us with a Task, from which we need to derive the Patient and ServiceRequest
-	// - Patient is contained in the Task.encounter
-	// - ServiceRequest is referenced in ??? (TODO)
+	// - Patient is contained in the Task.encounter but separately requested to include the Practitioner
+	// - ServiceRequest is not provided by Zorgplatform, so we need to create one based on the Task and Encounter
 	var task map[string]interface{}
-	if err = fhirClient.ReadWithContext(ctx, "Task/"+taskId, &task); err != nil {
-		return nil, nil, fmt.Errorf("unable to fetch Task resource (id=%s): %w", taskId, err)
+	if err = fhirClient.ReadWithContext(ctx, "Task/"+launchContext.WorkflowId, &task); err != nil {
+		return &user.SessionData{}, fmt.Errorf("unable to fetch Task resource (id=%s): %w", launchContext.WorkflowId, err)
 	}
 	// Search for Encounter, contains Encounter, Organization and Patient
 	if task["context"] == nil {
-		return nil, nil, fmt.Errorf("task.context is not provided")
+		return &user.SessionData{}, fmt.Errorf("task.context is not provided")
 	}
 	taskContext := task["context"].(map[string]interface{})
 	encounterId := strings.Split(taskContext["reference"].(string), "/")[1]
 	var encounterSearchResult fhir.Bundle
 	if err = fhirClient.ReadWithContext(ctx, "Encounter", &encounterSearchResult, fhirclient.QueryParam("_id", encounterId)); err != nil {
-		return nil, nil, fmt.Errorf("unable to fetch Encounter resource (id=%s): %w", encounterId, err)
+		return &user.SessionData{}, fmt.Errorf("unable to fetch Encounter resource (id=%s): %w", encounterId, err)
 	}
 	var encounter fhir.Encounter
 	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryIsOfType("Encounter"), &encounter); err != nil {
-		return nil, nil, fmt.Errorf("get Encounter from Bundle (id=%s): %w", encounterId, err)
+		return &user.SessionData{}, fmt.Errorf("get Encounter from Bundle (id=%s): %w", encounterId, err)
 	}
 	// Get Patient from bundle, specified by Encounter.subject
 	if encounter.Subject == nil || encounter.Subject.Reference == nil {
-		return nil, nil, fmt.Errorf("encounter.subject does not contain a reference to a Patient")
+		return &user.SessionData{}, fmt.Errorf("encounter.subject does not contain a reference to a Patient")
+	}
+
+	if encounter.ServiceProvider == nil || encounter.ServiceProvider.Reference == nil {
+		return &user.SessionData{}, fmt.Errorf("encounter.serviceProvider does not contain a reference to an Organization")
+	}
+
+	// Get Organization from bundle, specified by Encounter.serviceProvider
+	var organization fhir.Organization
+	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryHasID(*encounter.ServiceProvider.Reference), &organization); err != nil {
+		return &user.SessionData{}, fmt.Errorf("get Organization from Bundle (id=%s): %w", encounterId, err)
+	}
+
+	var patientAndPractitionerBundle fhir.Bundle
+	if err = fhirClient.ReadWithContext(ctx, "Patient", &patientAndPractitionerBundle, fhirclient.QueryParam("_include", "Patient:general-practitioner")); err != nil {
+		return &user.SessionData{}, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err)
 	}
 	var patient fhir.Patient
-	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryHasID(*encounter.Subject.Reference), &patient); err != nil {
-		return nil, nil, fmt.Errorf("unable to find Patient resource in Bundle (id=%s): %w", *encounter.Subject.Reference, err)
+	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryHasID(*encounter.Subject.Reference), &patient); err != nil {
+		return &user.SessionData{}, fmt.Errorf("unable to find Patient resource in Bundle (id=%s): %w", *encounter.Subject.Reference, err)
 	}
-	return &fhir.ServiceRequest{}, &patient, nil
+	var practitioner fhir.Practitioner
+	//TODO: The Practitioner has no indetifier set, so we cannot ensure this is the launched Practitioner. Verify with Zorgplatform
+	// if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryHasIdentifier(launchContext.Practitioner.Identifier[0]), &practitioner); err != nil {
+	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Practitioner"), &practitioner); err != nil {
+		return &user.SessionData{}, fmt.Errorf("unable to find Practitioner resource in Bundle: %w", err)
+	}
+
+	var conditionBundle fhir.Bundle
+	var conditions []map[string]interface{}
+	//TODO: We assume this is in context as the HCP token is workflow-specific. Double-check with Zorgplatform
+	if err = fhirClient.ReadWithContext(ctx, "Condition", &conditionBundle, fhirclient.QueryParam("subject", "Patient/"+*patient.Id)); err != nil {
+		return &user.SessionData{}, fmt.Errorf("unable to fetch Conditions bundle: %w", err)
+	}
+	if err := coolfhir.ResourcesInBundle(&conditionBundle, coolfhir.EntryIsOfType("Condition"), &conditions); err != nil {
+		return &user.SessionData{}, fmt.Errorf("unable to find Condition resources in Bundle: %w", err)
+	}
+
+	var reasonReferences []fhir.Reference
+	var conditionMap = make(map[string]interface{})
+
+	for _, condition := range conditions {
+		ref := "Condition/magic-" + condition["id"].(string)
+		reasonReferences = append(reasonReferences, fhir.Reference{
+			Type:      to.Ptr("Condition"),
+			Reference: to.Ptr(ref),
+		})
+		conditionMap[ref] = condition
+	}
+
+	// Zorgplatform does not provide a ServiceRequest, so we need to create one based on other resources they do use
+	serviceRequest := &fhir.ServiceRequest{
+		Status: fhir.RequestStatusActive,
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("https://zorgplatform.online/task/workflow-id"),
+				Value:  &launchContext.WorkflowId,
+			},
+		},
+		ReasonReference: reasonReferences,
+		Subject: fhir.Reference{
+			Reference: to.Ptr("Patient/" + *patient.Id),
+		},
+		//TODO: We need to set the Requester, this is probably only set after the CPC enrolls it to SCP
+		Performer: []fhir.Reference{
+			{
+				Reference: encounter.ServiceProvider.Reference,
+			},
+		},
+	}
+
+	patientRef := "Patient/magic-" + uuid.NewString()
+	serviceRequestRef := "ServiceRequest/magic-" + uuid.NewString()
+	practitionerRef := "Practitioner/magic-" + uuid.NewString()
+	organizationRef := "Organization/magic-" + uuid.NewString()
+
+	otherValues := map[string]interface{}{
+		patientRef:        patient,
+		practitionerRef:   practitioner,
+		serviceRequestRef: *serviceRequest,
+		organizationRef:   organization,
+		"launchContext":   launchContext, // Can be used to fetch a new access token after expiration
+	}
+
+	//inject the conditions into the "other" values
+	for k, v := range conditionMap {
+		otherValues[k] = v
+	}
+
+	return &user.SessionData{
+		FHIRLauncher: launcherKey,
+		//TODO: See how/if to pass the conditions to the StringValues
+		StringValues: map[string]string{
+			"patient":        patientRef,
+			"serviceRequest": serviceRequestRef,
+			"practitioner":   practitionerRef,
+			"organization":   organizationRef,
+			"accessToken":    accessToken,
+		},
+		OtherValues: otherValues,
+	}, nil
 }
 
 type authHeaderRoundTripper struct {

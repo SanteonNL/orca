@@ -4,10 +4,11 @@ import (
 	"context"
 	"crypto/rsa"
 	"crypto/tls"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
@@ -61,8 +62,10 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 
 	accessToken, err := service.RequestHcpRst(launchContext)
 	require.NoError(t, err)
-	serviceRequest, patient, err := service.fetchContext(context.Background(), accessToken, workflowId)
+	sessionData, err := service.getSessionData(context.Background(), accessToken, launchContext)
 	require.NoError(t, err)
-	require.Nil(t, serviceRequest)
-	require.NotNil(t, patient)
+	require.NotNil(t, sessionData.OtherValues[sessionData.StringValues["serviceRequest"]])
+	require.NotNil(t, sessionData.OtherValues[sessionData.StringValues["patient"]])
+	require.NotNil(t, sessionData.OtherValues[sessionData.StringValues["practitioner"]])
+	require.NotNil(t, sessionData.OtherValues[sessionData.StringValues["organization"]])
 }
