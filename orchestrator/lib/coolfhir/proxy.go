@@ -24,7 +24,10 @@ func NewProxy(logger zerolog.Logger, targetFHIRBaseURL *url.URL, proxyBasePath s
 		},
 		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
 			logger.Warn().Err(err).Msgf("FHIR request failed (url=%s)", request.URL.String())
-			http.Error(writer, "FHIR request failed: "+err.Error(), http.StatusBadGateway)
+			SendResponse(writer, http.StatusBadGateway, ErrorWithCode{
+				Message:    "FHIR request failed: " + err.Error(),
+				StatusCode: http.StatusBadGateway,
+			})
 		},
 	}
 }
