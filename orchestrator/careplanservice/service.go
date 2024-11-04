@@ -162,7 +162,9 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.Transact
 		// We don't want to log errors from the backing FHIR server for security reasons.
 		return nil, coolfhir.NewErrorWithCode("upstream FHIR server error", http.StatusBadGateway)
 	}
-	var resultBundle fhir.Bundle
+	resultBundle := fhir.Bundle{
+		Type: fhir.BundleTypeTransactionResponse,
+	}
 	var notificationResources []any
 	for entryIdx, resultHandler := range resultHandlers {
 		currResult, currNotificationResources, err := resultHandler(&txResult)
@@ -174,6 +176,7 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.Transact
 		}
 		notificationResources = append(notificationResources, currNotificationResources...)
 	}
+	resultBundle.Total = to.Ptr(len(resultBundle.Entry))
 
 	for _, notificationResource := range notificationResources {
 		s.notifySubscribers(request.Context(), notificationResource)

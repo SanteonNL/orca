@@ -47,6 +47,11 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 	if err != nil {
 		return nil, err
 	}
+
+	if len(bundle.Entry) == 0 {
+		return &bundle, nil
+	}
+
 	var careTeams []fhir.CareTeam
 	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
 	if err != nil {

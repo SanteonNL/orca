@@ -336,6 +336,8 @@ func TestService_Handle(t *testing.T) {
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
 			require.NoError(t, err)
+			require.Equal(t, 1, *resultBundle.Total)
+			require.Equal(t, fhir.BundleTypeTransactionResponse, resultBundle.Type)
 			require.Len(t, resultBundle.Entry, 1)
 			assert.Equal(t, "Task/123", *resultBundle.Entry[0].Response.Location)
 			assert.JSONEq(t, `{"id":"123","status":"draft","intent":"","resourceType":"Task"}`, string(resultBundle.Entry[0].Resource))
