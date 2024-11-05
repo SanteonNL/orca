@@ -162,7 +162,9 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.Transact
 		// We don't want to log errors from the backing FHIR server for security reasons.
 		return nil, coolfhir.NewErrorWithCode("upstream FHIR server error", http.StatusBadGateway)
 	}
-	var resultBundle fhir.Bundle
+	resultBundle := fhir.Bundle{
+		Type: fhir.BundleTypeTransactionResponse,
+	}
 	var notificationResources []any
 	for entryIdx, resultHandler := range resultHandlers {
 		currResult, currNotificationResources, err := resultHandler(&txResult)
@@ -174,6 +176,7 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.Transact
 		}
 		notificationResources = append(notificationResources, currNotificationResources...)
 	}
+	resultBundle.Total = to.Ptr(len(resultBundle.Entry))
 
 	for _, notificationResource := range notificationResources {
 		s.notifySubscribers(request.Context(), notificationResource)
@@ -251,16 +254,11 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 		log.Logger.Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
 		statusCode = http.StatusOK
 	}
-	httpResponse.Header().Add("Content-Type", coolfhir.FHIRContentType)
-	if fhirResponse.Location != nil {
-		httpResponse.Header().Add("Location", *fhirResponse.Location)
-	}
-	// TODO: I won't pretend I tested the other response headers (e.g. Last-Modified or ETag), so we won't set them for now.
-	//       Add them (and test them) when needed.
-	httpResponse.WriteHeader(statusCode)
-	if err := json.NewEncoder(httpResponse).Encode(txResult.Entry[0].Resource); err != nil {
-		log.Logger.Warn().Err(err).Msg("Failed to encode response")
-	}
+	coolfhir.SendResponse(httpResponse, statusCode, txResult.Entry[0].Resource, map[string]string{
+		// TODO: I won't pretend I tested the other response headers (e.g. Last-Modified or ETag), so we won't set them for now.
+		//       Add them (and test them) when needed.
+		"Location": *fhirResponse.Location,
+	})
 }
 
 func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceId string, resourceType, operationName string) {
@@ -284,18 +282,11 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 		return
 	}
-
+	hdrs := make(map[string]string)
 	for key, value := range headers.Header {
-		httpResponse.Header()[key] = value
+		hdrs[key] = value[0]
 	}
-
-	b, err := json.Marshal(resource)
-	_, err = httpResponse.Write(b)
-	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
-		return
-	}
-	return
+	coolfhir.SendResponse(httpResponse, http.StatusOK, resource, hdrs)
 }
 
 func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
@@ -319,18 +310,11 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 		return
 	}
-
+	hdrs := make(map[string]string)
 	for key, value := range headers.Header {
-		httpResponse.Header()[key] = value
+		hdrs[key] = value[0]
 	}
-
-	b, err := json.Marshal(bundle)
-	_, err = httpResponse.Write(b)
-	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
-		return
-	}
-	return
+	coolfhir.SendResponse(httpResponse, http.StatusOK, bundle, hdrs)
 }
 
 func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.ResponseWriter) {
@@ -401,10 +385,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		return
 	}
 
-	httpResponse.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(httpResponse).Encode(resultBundle); err != nil {
-		log.Logger.Error().Err(err).Msg("Failed to encode response")
-	}
+	coolfhir.SendResponse(httpResponse, http.StatusOK, resultBundle)
 }
 
 func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {

@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog/log"
+	"strconv"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -34,21 +36,6 @@ func LogicalReference(refType, system, identifier string) *fhir.Reference {
 			System: &system,
 			Value:  &identifier,
 		},
-	}
-}
-
-func FirstIdentifier(identifiers []fhir.Identifier, predicate func(fhir.Identifier) bool) *fhir.Identifier {
-	for _, identifier := range identifiers {
-		if predicate(identifier) {
-			return &identifier
-		}
-	}
-	return nil
-}
-
-func FilterNamingSystem(system string) func(fhir.Identifier) bool {
-	return func(ident fhir.Identifier) bool {
-		return ident.System != nil && *ident.System == system
 	}
 }
 
@@ -239,14 +226,6 @@ func ToString(resource interface{}) string {
 	return fmt.Sprintf("%T(%v)", resource, resource)
 }
 
-func FhirHttpResponse(response http.ResponseWriter, httpStatus int, resource interface{}) {
-	resourceBytes, _ := json.Marshal(resource)
-	response.Header().Set("Content-Type", "application/json+fhir")
-	response.Header().Set("Content-Length", fmt.Sprintf("%d", len(resourceBytes)))
-	response.WriteHeader(httpStatus)
-	_, _ = response.Write(resourceBytes)
-}
-
 func HttpMethodToVerb(method string) fhir.HTTPVerb {
 	switch method {
 	case http.MethodPut:
@@ -278,4 +257,25 @@ func IsScpTask(task *fhir.Task) bool {
 	}
 
 	return false
+}
+
+func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource interface{}, additionalHeaders ...map[string]string) {
+	data, err := json.MarshalIndent(resource, "", "  ")
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal response")
+		httpStatus = http.StatusInternalServerError
+		data = []byte(`{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"Failed to marshal response"}]}`)
+	}
+	httpResponse.Header().Set("Content-Type", FHIRContentType)
+	httpResponse.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	for _, hdrs := range additionalHeaders {
+		for key, value := range hdrs {
+			httpResponse.Header().Add(key, value)
+		}
+	}
+	httpResponse.WriteHeader(httpStatus)
+	_, err = httpResponse.Write(data)
+	if err != nil {
+		log.Error().Err(err).Msgf("Failed to write response: %s", string(data))
+	}
 }

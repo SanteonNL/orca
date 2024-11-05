@@ -2,7 +2,6 @@ package careplanservice
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -29,19 +28,7 @@ func (s *Service) writeOperationOutcomeFromError(err error, desc string, httpRes
 		Issue: []fhir.OperationOutcomeIssue{issue},
 	}
 
-	httpResponse.Header().Add("Content-Type", coolfhir.FHIRContentType)
-	httpResponse.WriteHeader(http.StatusBadRequest)
-
-	data, err := json.Marshal(outcome)
-	if err != nil {
-		log.Error().Err(err).Msgf("Failed to marshal OperationOutcome: %s", diagnostics)
-		return
-	}
-
-	_, err = httpResponse.Write(data)
-	if err != nil {
-		log.Error().Err(err).Msgf("Failed to return OperationOutcome: %s", diagnostics)
-	}
+	coolfhir.SendResponse(httpResponse, http.StatusBadRequest, outcome)
 }
 
 func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {

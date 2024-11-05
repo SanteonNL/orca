@@ -99,10 +99,24 @@ func TestService_handleSearchTask(t *testing.T) {
 	}{
 		{
 			ctx:         context.Background(),
-			name:        "No CareTeam in bundle",
+			name:        "Empty bundle",
 			queryParams: url.Values{},
 			returnedBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{},
+			},
+			errorFromRead: nil,
+			expectError:   false,
+		},
+		{
+			ctx:         context.Background(),
+			name:        "No CareTeam in bundle",
+			queryParams: url.Values{},
+			returnedBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: rawCarePlan,
+					},
+				},
 			},
 			errorFromRead: nil,
 			expectError:   true,
