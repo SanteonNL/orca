@@ -97,8 +97,8 @@ func (s *Service) handleTaskFillerUpdate(ctx context.Context, task *fhir.Task) e
 
 }
 
-func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
-	log.Debug().Msg("Marking primary Task as completed")
+func (s *Service) acceptPrimaryTask(subTask *fhir.Task) error {
+	log.Debug().Msg("Accepting primary Task")
 
 	partOfTaskRef, err := s.partOf(subTask, true)
 	if err != nil {
@@ -120,7 +120,7 @@ func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 		return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
 	}
 
-	log.Info().Msgf("Successfully marked %s as completed", *partOfTaskRef)
+	log.Info().Msgf("Successfully accepted Task (ref=%s)", *partOfTaskRef)
 	return nil
 }
 
@@ -221,16 +221,16 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 
 	}
 
-	// No follow-up questionnaire found, check if we have to mark the primary task as completed
+	// No follow-up questionnaire found, check if we can accept the primary Task
 	if questionnaire == nil {
 
 		if task.PartOf == nil {
-			log.Info().Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as completed")
+			log.Info().Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as accepted")
 			return nil
 		}
 
 		if isTaskOwner {
-			return s.markPrimaryTaskAsCompleted(task)
+			return s.acceptPrimaryTask(task)
 		} else {
 			return nil
 		}

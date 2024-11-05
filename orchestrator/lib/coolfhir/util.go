@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 
 	"github.com/rs/zerolog/log"
@@ -138,17 +139,16 @@ func IsIdentifierTaskOwnerAndRequester(task *fhir.Task, principalOrganizationIde
 }
 
 func IsScpSubTask(task *fhir.Task) bool {
+	if task == nil {
+		return false
+	}
+	if len(task.PartOf) == 0 {
+		return false
+	}
 	if task.Meta == nil {
 		return false
 	}
-
-	for _, profile := range task.Meta.Profile {
-		if profile == SCPTaskProfile && task.PartOf != nil {
-			return true
-		}
-	}
-
-	return false
+	return slices.Contains(task.Meta.Profile, SCPTaskProfile)
 }
 
 func validateIdentifier(identifierField string, identifier *fhir.Identifier) error {

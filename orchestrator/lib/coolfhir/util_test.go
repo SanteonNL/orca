@@ -545,3 +545,59 @@ func Test_ValidateTaskRequiredFields(t *testing.T) {
 		})
 	}
 }
+
+func TestIsScpSubTask(t *testing.T) {
+	t.Run("true", func(t *testing.T) {
+		assert.True(t, IsScpSubTask(&fhir.Task{
+			PartOf: []fhir.Reference{
+				{
+					Reference: to.Ptr("Task/cps-task-01"),
+				},
+			},
+			Meta: &fhir.Meta{
+				Profile: []string{SCPTaskProfile},
+			},
+		}))
+	})
+	t.Run("nil", func(t *testing.T) {
+		assert.False(t, IsScpSubTask(nil))
+	})
+	t.Run("no partOf", func(t *testing.T) {
+		assert.False(t, IsScpSubTask(&fhir.Task{
+			Meta: &fhir.Meta{
+				Profile: []string{SCPTaskProfile},
+			},
+		}))
+	})
+	t.Run("no meta", func(t *testing.T) {
+		assert.False(t, IsScpSubTask(&fhir.Task{
+			PartOf: []fhir.Reference{
+				{
+					Reference: to.Ptr("Task/cps-task-01"),
+				},
+			},
+		}))
+	})
+	t.Run("no profile", func(t *testing.T) {
+		assert.False(t, IsScpSubTask(&fhir.Task{
+			PartOf: []fhir.Reference{
+				{
+					Reference: to.Ptr("Task/cps-task-01"),
+				},
+			},
+			Meta: &fhir.Meta{},
+		}))
+	})
+	t.Run("no matching profile", func(t *testing.T) {
+		assert.False(t, IsScpSubTask(&fhir.Task{
+			PartOf: []fhir.Reference{
+				{
+					Reference: to.Ptr("Task/cps-task-01"),
+				},
+			},
+			Meta: &fhir.Meta{
+				Profile: []string{"http://example.org"},
+			},
+		}))
+	})
+}
