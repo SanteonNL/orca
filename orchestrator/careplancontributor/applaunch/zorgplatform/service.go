@@ -244,7 +244,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	// New client that uses the access token
 	apiUrl, err := url.Parse(s.config.ApiUrl)
 	if err != nil {
-		return &user.SessionData{}, err
+		return nil, err
 	}
 	fhirClient := fhirclient.New(apiUrl, s.createZorgplatformApiClient(accessToken), coolfhir.Config())
 	// Zorgplatform provides us with a Task, from which we need to derive the Patient and ServiceRequest
@@ -252,60 +252,60 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	// - ServiceRequest is not provided by Zorgplatform, so we need to create one based on the Task and Encounter
 	var task map[string]interface{}
 	if err = fhirClient.ReadWithContext(ctx, "Task/"+launchContext.WorkflowId, &task); err != nil {
-		return &user.SessionData{}, fmt.Errorf("unable to fetch Task resource (id=%s): %w", launchContext.WorkflowId, err)
+		return nil, fmt.Errorf("unable to fetch Task resource (id=%s): %w", launchContext.WorkflowId, err)
 	}
 	// Search for Encounter, contains Encounter, Organization and Patient
 	if task["context"] == nil {
-		return &user.SessionData{}, fmt.Errorf("task.context is not provided")
+		return nil, fmt.Errorf("task.context is not provided")
 	}
 	taskContext := task["context"].(map[string]interface{})
 	encounterId := strings.Split(taskContext["reference"].(string), "/")[1]
 	var encounterSearchResult fhir.Bundle
 	if err = fhirClient.ReadWithContext(ctx, "Encounter", &encounterSearchResult, fhirclient.QueryParam("_id", encounterId)); err != nil {
-		return &user.SessionData{}, fmt.Errorf("unable to fetch Encounter resource (id=%s): %w", encounterId, err)
+		return nil, fmt.Errorf("unable to fetch Encounter resource (id=%s): %w", encounterId, err)
 	}
 	var encounter fhir.Encounter
 	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryIsOfType("Encounter"), &encounter); err != nil {
-		return &user.SessionData{}, fmt.Errorf("get Encounter from Bundle (id=%s): %w", encounterId, err)
+		return nil, fmt.Errorf("get Encounter from Bundle (id=%s): %w", encounterId, err)
 	}
 	// Get Patient from bundle, specified by Encounter.subject
 	if encounter.Subject == nil || encounter.Subject.Reference == nil {
-		return &user.SessionData{}, fmt.Errorf("encounter.subject does not contain a reference to a Patient")
+		return nil, fmt.Errorf("encounter.subject does not contain a reference to a Patient")
 	}
 
 	if encounter.ServiceProvider == nil || encounter.ServiceProvider.Reference == nil {
-		return &user.SessionData{}, fmt.Errorf("encounter.serviceProvider does not contain a reference to an Organization")
+		return nil, fmt.Errorf("encounter.serviceProvider does not contain a reference to an Organization")
 	}
 
 	// Get Organization from bundle, specified by Encounter.serviceProvider
 	var organization fhir.Organization
 	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryHasID(*encounter.ServiceProvider.Reference), &organization); err != nil {
-		return &user.SessionData{}, fmt.Errorf("get Organization from Bundle (id=%s): %w", encounterId, err)
+		return nil, fmt.Errorf("get Organization from Bundle (id=%s): %w", encounterId, err)
 	}
 
 	var patientAndPractitionerBundle fhir.Bundle
 	if err = fhirClient.ReadWithContext(ctx, "Patient", &patientAndPractitionerBundle, fhirclient.QueryParam("_include", "Patient:general-practitioner")); err != nil {
-		return &user.SessionData{}, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err)
+		return nil, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err)
 	}
 	var patient fhir.Patient
 	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryHasID(*encounter.Subject.Reference), &patient); err != nil {
-		return &user.SessionData{}, fmt.Errorf("unable to find Patient resource in Bundle (id=%s): %w", *encounter.Subject.Reference, err)
+		return nil, fmt.Errorf("unable to find Patient resource in Bundle (id=%s): %w", *encounter.Subject.Reference, err)
 	}
 	var practitioner fhir.Practitioner
 	//TODO: The Practitioner has no indetifier set, so we cannot ensure this is the launched Practitioner. Verify with Zorgplatform
 	// if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryHasIdentifier(launchContext.Practitioner.Identifier[0]), &practitioner); err != nil {
 	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Practitioner"), &practitioner); err != nil {
-		return &user.SessionData{}, fmt.Errorf("unable to find Practitioner resource in Bundle: %w", err)
+		return nil, fmt.Errorf("unable to find Practitioner resource in Bundle: %w", err)
 	}
 
 	var conditionBundle fhir.Bundle
 	var conditions []map[string]interface{}
 	//TODO: We assume this is in context as the HCP token is workflow-specific. Double-check with Zorgplatform
 	if err = fhirClient.ReadWithContext(ctx, "Condition", &conditionBundle, fhirclient.QueryParam("subject", "Patient/"+*patient.Id)); err != nil {
-		return &user.SessionData{}, fmt.Errorf("unable to fetch Conditions bundle: %w", err)
+		return nil, fmt.Errorf("unable to fetch Conditions bundle: %w", err)
 	}
 	if err := coolfhir.ResourcesInBundle(&conditionBundle, coolfhir.EntryIsOfType("Condition"), &conditions); err != nil {
-		return &user.SessionData{}, fmt.Errorf("unable to find Condition resources in Bundle: %w", err)
+		return nil, fmt.Errorf("unable to find Condition resources in Bundle: %w", err)
 	}
 
 	var reasonReferences []fhir.Reference
@@ -321,18 +321,15 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	}
 
 	identities, err := s.profile.Identities(ctx)
-
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch identities: %w", err)
 	}
-
-	uraIdentifierReferences := make([]fhir.Reference, 0, len(identities))
-	for _, identity := range identities {
-		uraIdentifierReferences = append(uraIdentifierReferences, fhir.Reference{
-			Identifier: &identity,
-			Display:    to.Ptr("Zorgbijjou"), //TODO: Remove hard coded value
-		})
+	if len(identities) == 0 {
+		return nil, fmt.Errorf("no identities found")
+	} else if len(identities) > 1 {
+		log.Warn().Msgf("More than one identity found, using the first one: %v", identities[0])
 	}
+	localOrgIdentifier := identities[0]
 
 	var conditionText string
 	if len(conditions) > 0 {
@@ -375,13 +372,17 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 				Value:  &launchContext.Bsn,
 			},
 		},
-		Requester: &fhir.Reference{
-			Identifier: &fhir.Identifier{
-				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-				Value:  &s.config.TaskPerformerUra,
+		Performer: []fhir.Reference{
+			{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  &s.config.TaskPerformerUra,
+				},
 			},
 		},
-		Performer: uraIdentifierReferences,
+		Requester: &fhir.Reference{
+			Identifier: &localOrgIdentifier,
+		},
 	}
 
 	// patientRef := "Patient/magic-" + uuid.NewString() <-- Do not use a magic link so that we can request all Conditions for the Patient
