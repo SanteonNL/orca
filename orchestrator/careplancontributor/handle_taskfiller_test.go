@@ -194,7 +194,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				}).
 				Times(tt.createTimes)
 
-			err := service.handleTaskFillerCreate(tt.ctx, tt.task)
+			err := service.handleTaskFillerCreateOrUpdate(tt.ctx, tt.task)
 			if tt.expectedError {
 				require.Error(t, err)
 			} else {

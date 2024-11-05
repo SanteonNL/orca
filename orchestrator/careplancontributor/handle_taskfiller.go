@@ -14,8 +14,8 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleTaskFillerCreate(ctx context.Context, task *fhir.Task) error {
-	log.Info().Msgf("Running handleTaskFillerCreate for Task %s", *task.Id)
+func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, task *fhir.Task) error {
+	log.Info().Msgf("Running handleTaskFillerCreateOrUpdate for Task %s", *task.Id)
 
 	if !coolfhir.IsScpTask(task) {
 		log.Info().Msg("Task is not an SCP Task - skipping")
@@ -50,6 +50,12 @@ func (s *Service) handleTaskFillerCreate(ctx context.Context, task *fhir.Task) e
 		err = s.createSubTaskOrFinishPrimaryTask(task, true, isOwner)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
+		}
+	} else {
+		log.Info().Msgf("Updating sub Task part of %s", *partOfRef)
+		err = s.handleTaskFillerUpdate(ctx, task)
+		if err != nil {
+			return fmt.Errorf("failed to update sub Task: %w", err)
 		}
 	}
 	return nil

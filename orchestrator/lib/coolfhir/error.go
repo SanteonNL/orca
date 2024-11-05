@@ -44,13 +44,6 @@ func BadRequestError(msg string) error {
 	}
 }
 
-func BadRequestErrorF(msg string, args ...interface{}) error {
-	return &ErrorWithCode{
-		Message:    fmt.Errorf(msg, args...).Error(),
-		StatusCode: http.StatusBadRequest,
-	}
-}
-
 // WriteOperationOutcomeFromError writes an OperationOutcome based on the given error as HTTP response.
 // when sent a WriteOperationOutcomeFromError, it will write the contained error code to the header, else it defaults to StatusBadRequest
 func WriteOperationOutcomeFromError(err error, desc string, httpResponse http.ResponseWriter) {

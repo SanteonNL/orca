@@ -150,7 +150,7 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
 	// E.g., ChipSoft HiX doesn't provide ServiceRequest and Practitioner as FHIR resources, so whatever there is, is converted to FHIR and cached in the session.
 	if resource, exists := session.OtherValues[resourcePath]; exists {
-		coolfhir.FhirHttpResponse(writer, http.StatusOK, resource)
+		coolfhir.SendResponse(writer, http.StatusOK, resource)
 	} else {
 		proxy.ServeHTTP(writer, request)
 	}
@@ -301,7 +301,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		}
 
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
-		err = s.handleTaskFillerCreate(ctx, &task)
+		err = s.handleTaskFillerCreateOrUpdate(ctx, &task)
 		if err != nil {
 			return err
 		}
