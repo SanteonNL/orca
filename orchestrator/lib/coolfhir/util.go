@@ -143,7 +143,7 @@ func IsScpSubTask(task *fhir.Task) bool {
 	}
 
 	for _, profile := range task.Meta.Profile {
-		if profile == SCPTaskProfile {
+		if profile == SCPTaskProfile && task.PartOf != nil {
 			return true
 		}
 	}
