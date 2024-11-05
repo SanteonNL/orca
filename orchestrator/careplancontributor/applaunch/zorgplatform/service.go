@@ -338,8 +338,8 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Status: fhir.RequestStatusActive,
 		Identifier: []fhir.Identifier{
 			{
-				System: to.Ptr("https://zorgplatform.online/task/workflow-id"),
-				Value:  &launchContext.WorkflowId,
+				System: to.Ptr("tmp"), //TODO: Hard coded to fractuur-pols for demo purposes. Should be based on the Task
+				Value:  to.Ptr("fractuur-pols"),
 			},
 		},
 		ReasonReference: reasonReferences,
