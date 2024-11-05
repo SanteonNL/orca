@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -20,27 +21,15 @@ import (
 )
 
 func TestService_handleTaskFillerCreate(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create a mock FHIR client using the generated mock
-	mockFHIRClient := mock.NewMockClient(ctrl)
-
-	// Create the service with the mock FHIR client
-	service := &Service{
-		carePlanServiceClient: mockFHIRClient,
-		workflows:             taskengine.DefaultWorkflows(),
-		questionnaireLoader:   taskengine.EmbeddedQuestionnaireLoader{},
-	}
-
 	// Define test cases
 	tests := []struct {
-		name          string
-		ctx           context.Context
-		profile       profile.Provider
-		task          *fhir.Task
-		expectedError bool
-		createTimes   int
+		name           string
+		ctx            context.Context
+		profile        profile.Provider
+		task           *fhir.Task
+		serviceRequest *fhir.ServiceRequest
+		expectedError  error
+		createTimes    int
 	}{
 		{
 			name: "Valid SCP Task",
@@ -48,19 +37,17 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			profile: profile.TestProfile{
 				Principal: auth.TestPrincipal1,
 			},
-			task:          &validTask,
-			expectedError: false,
-			createTimes:   1, // One subtask should be created
+			task:        &validTask,
+			createTimes: 1, // One subtask should be created
 		},
 		{
 			name: "Valid SCP Task - Not owner",
 			profile: profile.TestProfile{
 				Principal: auth.TestPrincipal2,
 			},
-			ctx:           auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
-			task:          &validTask,
-			expectedError: false,
-			createTimes:   0,
+			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
+			task:        &validTask,
+			createTimes: 0,
 		},
 		{
 			name: "Invalid Task (Missing Profile)",
@@ -75,8 +62,8 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				copiedTask.Meta.Profile = []string{"SomeOtherProfile"}
 				return &copiedTask
 			}(),
-			expectedError: false, // Should skip since it's not an SCP task
-			createTimes:   0,     // No subtask creation expected
+			expectedError: nil, // Should skip since it's not an SCP task
+			createTimes:   0,   // No subtask creation expected
 		},
 		{
 			name: "Task without Requester",
@@ -91,7 +78,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				copiedTask.Requester = nil
 				return &copiedTask
 			}(),
-			expectedError: true,
+			expectedError: errors.New("task is not valid - skipping: validation errors: Task.requester is required but not provided"),
 			createTimes:   0, // No subtask creation due to missing requester
 		},
 		{
@@ -107,11 +94,11 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				copiedTask.Owner = nil
 				return &copiedTask
 			}(),
-			expectedError: true,
+			expectedError: errors.New("task is not valid - skipping: validation errors: Task.owner is required but not provided"),
 			createTimes:   0, // No subtask creation due to missing owner
 		},
 		{
-			name: "Task without partOf",
+			name: "Task without partOf: created Task is primary Task, triggers create of Subtask with Questionnaire",
 			profile: profile.TestProfile{
 				Principal: auth.TestPrincipal1,
 			},
@@ -123,8 +110,23 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				copiedTask.PartOf = nil
 				return &copiedTask
 			}(),
-			expectedError: false,
-			createTimes:   1, // One subtask should be created since it's treated as a primary task
+			createTimes: 1, // One subtask should be created since it's treated as a primary task
+		},
+		{
+			name: "Unknown service is requested (primary Task.focus(ServiceRequest).code is not supported)",
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			},
+			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			serviceRequest: func() *fhir.ServiceRequest {
+				var result fhir.ServiceRequest
+				bytes, _ := json.Marshal(validServiceRequest)
+				_ = json.Unmarshal(bytes, &result)
+				result.Code.Coding[0].Code = to.Ptr("UnknownServiceCode")
+				return &result
+			}(),
+			expectedError: errors.New("failed to process new primary Task: ServiceRequest.code does not match any offered services"),
+			createTimes:   0,
 		},
 		{
 			name: "Task without basedOn reference",
@@ -139,11 +141,12 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				copiedTask.BasedOn = nil
 				return &copiedTask
 			}(),
-			expectedError: true, // Invalid partOf reference should cause an error
-			createTimes:   0,    // No subtask creation expected
+			// Invalid partOf reference should cause an error
+			expectedError: errors.New("task is not valid - skipping: validation errors: Task.basedOn is required but not provided"),
+			createTimes:   0, // No subtask creation expected
 		},
 		{
-			name: "Task with partOf reference",
+			name: "Last subtask of a workflow is completed, primary Task is completed",
 			profile: profile.TestProfile{
 				Principal: auth.TestPrincipal1,
 			},
@@ -159,19 +162,35 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				}
 				return &copiedTask
 			}(),
-			expectedError: false,
-			createTimes:   0, //not yet implemented, so no error nor a subtask creation
+			createTimes: 0, //not yet implemented, so no error nor a subtask creation
 		},
 	}
 
 	// Run test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			log.Info().Msg("Starting test case: " + tt.name)
+			ctrl := gomock.NewController(t)
+			fhirClient := mock.NewMockClient(ctrl)
+			service := &Service{
+				carePlanServiceClient: fhirClient,
+				workflows:             taskengine.DefaultWorkflows(),
+				questionnaireLoader:   taskengine.EmbeddedQuestionnaireLoader{},
+			}
 
 			service.profile = tt.profile
 
-			mockFHIRClient.EXPECT().
+			serviceRequest := validServiceRequest
+			if tt.serviceRequest != nil {
+				serviceRequest = *tt.serviceRequest
+			}
+			fhirClient.EXPECT().
+				Read("ServiceRequest/1", gomock.Any(), gomock.Any()).
+				DoAndReturn(func(id string, result interface{}, options ...fhirclient.Option) error {
+					bytes, _ := json.Marshal(serviceRequest)
+					_ = json.Unmarshal(bytes, &result)
+					return nil
+				}).AnyTimes()
+			fhirClient.EXPECT().
 				Create(gomock.Any(), gomock.Any(), gomock.Any()).
 				DoAndReturn(func(bundle fhir.Bundle, result interface{}, options ...fhirclient.Option) error {
 					// Simulate the creation by setting the result to a mock response
@@ -189,14 +208,19 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 						},
 					}
 					bytes, _ := json.Marshal(mockResponse)
-					json.Unmarshal(bytes, &result)
+					_ = json.Unmarshal(bytes, &result)
 					return nil
 				}).
 				Times(tt.createTimes)
 
-			err := service.handleTaskFillerCreate(tt.ctx, tt.task)
-			if tt.expectedError {
-				require.Error(t, err)
+			task := &validTask
+			if tt.task != nil {
+				task = tt.task
+			}
+
+			err := service.handleTaskNotification(tt.ctx, task)
+			if tt.expectedError != nil {
+				require.EqualError(t, err, tt.expectedError.Error())
 			} else {
 				require.NoError(t, err)
 			}
@@ -221,7 +245,7 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	taskBytes, _ := json.Marshal(validTask)
 	var task fhir.Task
 	json.Unmarshal(taskBytes, &task)
-	workflow := service.workflows["2.16.528.1.1007.3.3.21514.ehr.orders|99534756439"].Start()
+	workflow := service.workflows["http://snomed.info/sct|719858009"]["http://snomed.info/sct|13645005"].Start()
 	questionnaire, err := service.questionnaireLoader.Load(workflow.QuestionnaireUrl)
 	require.NoError(t, err)
 	require.NotNil(t, questionnaire)
@@ -264,16 +288,25 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	require.Equal(t, expectedSubTaskInput, subtask.Input, "Subtask should contain a reference to the questionnaire")
 }
 
+var validServiceRequest = fhir.ServiceRequest{
+	Id: to.Ptr("1"),
+	Code: &fhir.CodeableConcept{
+		Coding: []fhir.Coding{
+			{
+				System: to.Ptr("http://snomed.info/sct"),
+				Code:   to.Ptr("719858009"),
+			},
+		},
+	},
+}
+
 var validTask = fhir.Task{
 	Id: to.Ptr(uuid.NewString()),
 	Meta: &fhir.Meta{
 		Profile: []string{coolfhir.SCPTaskProfile},
 	},
 	Focus: &fhir.Reference{
-		Identifier: &fhir.Identifier{
-			System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
-			Value:  to.Ptr("99534756439"),
-		},
+		Reference: to.Ptr("ServiceRequest/1"),
 	},
 	Requester: &fhir.Reference{
 		Identifier: &fhir.Identifier{
@@ -291,6 +324,14 @@ var validTask = fhir.Task{
 	BasedOn: []fhir.Reference{
 		{
 			Reference: to.Ptr("CarePlan/cps-careplan-01"),
+		},
+	},
+	ReasonCode: &fhir.CodeableConcept{
+		Coding: []fhir.Coding{
+			{
+				System: to.Ptr("http://snomed.info/sct"),
+				Code:   to.Ptr("13645005"),
+			},
 		},
 	},
 	For: &fhir.Reference{

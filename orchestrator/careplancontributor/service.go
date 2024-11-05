@@ -301,7 +301,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		}
 
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
-		err = s.handleTaskFillerCreate(ctx, &task)
+		err = s.handleTaskNotification(ctx, &task)
 		if err != nil {
 			return err
 		}
