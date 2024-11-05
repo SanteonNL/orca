@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -33,7 +34,7 @@ type HcpRequester interface {
 	RequestHcpRst(launchContext LaunchContext) (string, error)
 }
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string) (*Service, error) {
+func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
@@ -42,11 +43,11 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
 	}
-	return newWithClients(sessionManager, config, baseURL, landingUrlPath, azKeysClient, azCertClient)
+	return newWithClients(sessionManager, config, baseURL, landingUrlPath, azKeysClient, azCertClient, profile)
 }
 
 func newWithClients(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string,
-	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient) (*Service, error) {
+	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient, profile profile.Provider) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
 		appLaunchURL = baseURL + appLaunchUrl
@@ -132,7 +133,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
 		decryptCertificate:    decryptCert,
-
+		profile:               profile,
 		// performing HTTP requests with Zorgplatform requires mutual TLS
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
@@ -158,6 +159,7 @@ type Service struct {
 	tlsClientCertificate   *tls.Certificate
 	decryptCertificate     crypto.Suite
 	zorgplatformHttpClient *http.Client
+	profile                profile.Provider
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -318,6 +320,19 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		conditionMap[ref] = condition
 	}
 
+	identities, err := s.profile.Identities(ctx)
+
+	if err != nil {
+		return nil, fmt.Errorf("unable to fetch identities: %w", err)
+	}
+
+	uraIdentifierReferences := make([]fhir.Reference, 0, len(identities))
+	for _, identity := range identities {
+		uraIdentifierReferences = append(uraIdentifierReferences, fhir.Reference{
+			Identifier: &identity,
+		})
+	}
+
 	// Zorgplatform does not provide a ServiceRequest, so we need to create one based on other resources they do use
 	serviceRequest := &fhir.ServiceRequest{
 		Status: fhir.RequestStatusActive,
@@ -329,14 +344,18 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		},
 		ReasonReference: reasonReferences,
 		Subject: fhir.Reference{
-			Reference: to.Ptr("Patient/" + *patient.Id),
-		},
-		//TODO: We need to set the Requester, this is probably only set after the CPC enrolls it to SCP
-		Performer: []fhir.Reference{
-			{
-				Reference: encounter.ServiceProvider.Reference,
+			Identifier: &fhir.Identifier{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  &launchContext.Bsn,
 			},
 		},
+		Requester: &fhir.Reference{
+			Identifier: &fhir.Identifier{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+				Value:  &s.config.TaskPerformerUra,
+			},
+		},
+		Performer: uraIdentifierReferences,
 	}
 
 	patientRef := "Patient/magic-" + uuid.NewString()
