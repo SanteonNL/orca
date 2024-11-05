@@ -52,6 +52,12 @@ func (s *Service) handleTaskNotification(ctx context.Context, task *fhir.Task) e
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
+	} else {
+		log.Info().Msgf("Updating sub Task part of %s", *partOfRef)
+		err = s.handleTaskFillerUpdate(ctx, task)
+		if err != nil {
+			return fmt.Errorf("failed to update sub Task: %w", err)
+		}
 	}
 	return nil
 }

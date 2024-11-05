@@ -139,7 +139,7 @@ echo "    Clinic DID: $CLINIC_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
 echo "  Registering on Nuts Discovery Service"
-curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/orca/cpc/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
 echo "  Waiting for the FHIR server to be ready"
 popd
 
