@@ -15,8 +15,8 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleTaskNotification(ctx context.Context, task *fhir.Task) error {
-	log.Info().Msgf("Handling notification for Task (id=%s)", *task.Id)
+func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, task *fhir.Task) error {
+	log.Info().Msgf("Running handleTaskFillerCreateOrUpdate for Task %s", *task.Id)
 
 	if !coolfhir.IsScpTask(task) {
 		log.Info().Msg("Task is not an SCP Task - skipping")
@@ -173,7 +173,7 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 	return nil
 }
 
-func (s *Service) handlePrimaryTaskNotification(task *fhir.Task, isPrimaryTask bool, isTaskOwner bool) error {
+func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTask bool, isTaskOwner bool) error {
 	// TODO: INT-300 Reject Task if we can't execute it, or if it's invalid
 	// TODO: We only support task.Focus with a literal reference for now, so no logical identifiers
 	if task.Focus == nil || task.Focus.Reference == nil {
