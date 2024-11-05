@@ -79,33 +79,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
   }, [initialized, inputTask, questionnaire])
 
-  useEffect(() => {
-    const markTaskAsInProgressWhenRequested = async () => {
-
-      if (cpsClient && inputTask?.status === "requested") {
-        //accept the task, and mark it as in-progress after as it's loaded by the front-end
-        const acceptedTask = await cpsClient.update({
-          resourceType: 'Task',
-          body: { ...inputTask, status: "accepted" },
-        })
-
-        if (!acceptedTask) {
-          toast.error("Failed to update Task status to 'accepted'")
-        }
-        const inProgressTask = await cpsClient?.update({
-          resourceType: 'Task',
-          body: { ...acceptedTask, status: "in-progress" },
-        })
-        if (!inProgressTask) {
-          toast.error("Failed to update Task status to 'in-progress'")
-        }
-      }
-    }
-
-    markTaskAsInProgressWhenRequested()
-
-  }, [cpsClient, inputTask])
-
   const submitQuestionnaireResponse = async () => {
 
     if (!inputTask || !updatableResponse) {

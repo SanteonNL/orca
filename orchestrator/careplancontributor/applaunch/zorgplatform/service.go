@@ -330,12 +330,38 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	for _, identity := range identities {
 		uraIdentifierReferences = append(uraIdentifierReferences, fhir.Reference{
 			Identifier: &identity,
+			Display:    to.Ptr("Zorgbijjou"), //TODO: Remove hard coded value
 		})
+	}
+
+	var conditionText string
+	if len(conditions) > 0 {
+		if code, ok := conditions[0]["code"].(map[string]interface{}); ok {
+			if text, ok := code["text"].(string); ok {
+				conditionText = text
+			} else {
+				log.Warn().Msg("condition code does not contain text - using default hard-coded value")
+			}
+		} else {
+			log.Warn().Msg("condition does not contain code - using default hard-coded value")
+		}
+	} else {
+		return nil, fmt.Errorf("no conditions found")
+	}
+	if conditionText == "" {
+		conditionText = "fractuur van pols" //TODO: Hard coded value for demo purposes"
 	}
 
 	// Zorgplatform does not provide a ServiceRequest, so we need to create one based on other resources they do use
 	serviceRequest := &fhir.ServiceRequest{
 		Status: fhir.RequestStatusActive,
+		Code: &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					Display: to.Ptr(conditionText),
+				},
+			},
+		},
 		Identifier: []fhir.Identifier{
 			{
 				System: to.Ptr("tmp"), //TODO: Hard coded to fractuur-pols for demo purposes. Should be based on the Task
@@ -368,6 +394,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		practitionerRef:   practitioner,
 		serviceRequestRef: *serviceRequest,
 		organizationRef:   organization,
+		"Condition":       conditions,
 		"launchContext":   launchContext, // Can be used to fetch a new access token after expiration
 	}
 
