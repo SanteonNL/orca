@@ -48,7 +48,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, task *fhir.Task) e
 		}
 
 		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
-		err = s.handlePrimaryTaskNotification(task, true, isOwner)
+		err = s.createSubTaskOrFinishPrimaryTask(task, true, isOwner)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
@@ -94,7 +94,7 @@ func (s *Service) handleTaskFillerUpdate(ctx context.Context, task *fhir.Task) e
 	}
 	isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(task, ids)
 
-	return s.handlePrimaryTaskNotification(task, false, isOwner)
+	return s.createSubTaskOrFinishPrimaryTask(task, false, isOwner)
 
 }
 
