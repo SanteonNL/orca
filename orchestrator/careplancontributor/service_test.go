@@ -560,7 +560,11 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		Principal: auth.TestPrincipal2,
 	}, orcaPublicURL, sessionManager)
 
-	service.carePlanServiceClient = mockFHIRClient
+	var capturedFhirBaseUrl string
+	service.cpsClientFactory = func(baseUrl *url.URL) fhirclient.Client {
+		capturedFhirBaseUrl = baseUrl.String()
+		return mockFHIRClient
+	}
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -605,8 +609,8 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	httpResponse, err := prof.HttpClient().Do(httpRequest)
 
 	require.NoError(t, err)
-
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	require.Equal(t, fhirServerURL.String(), capturedFhirBaseUrl)
 }
 
 func TestService_ProxyToEHR(t *testing.T) {

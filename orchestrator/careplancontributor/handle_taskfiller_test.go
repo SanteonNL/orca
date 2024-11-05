@@ -7,6 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/stretchr/testify/assert"
+	"net/url"
 	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -157,9 +158,11 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			service := &Service{
-				carePlanServiceClient: mockFHIRClient,
-				workflows:             taskengine.DefaultWorkflows(),
-				questionnaireLoader:   taskengine.EmbeddedQuestionnaireLoader{},
+				workflows:           taskengine.DefaultWorkflows(),
+				questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+				cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
+					return mockFHIRClient
+				},
 			}
 
 			primaryTask := deepCopy(primaryTask)
@@ -198,7 +201,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				}).
 				Times(tt.numBundlesPosted)
 
-			err := service.handleTaskFillerCreateOrUpdate(tt.ctx, tt.task)
+			err := service.handleTaskFillerCreateOrUpdate(tt.ctx, mockFHIRClient, tt.task)
 			if tt.expectedError {
 				require.Error(t, err)
 			} else {
@@ -212,14 +215,10 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	// Create a mock FHIR client using the generated mock
-	mockFHIRClient := mock.NewMockClient(ctrl)
-
 	// Create the service with the mock FHIR client
 	service := &Service{
-		carePlanServiceClient: mockFHIRClient,
-		workflows:             taskengine.DefaultWorkflows(),
-		questionnaireLoader:   taskengine.EmbeddedQuestionnaireLoader{},
+		workflows:           taskengine.DefaultWorkflows(),
+		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
 	}
 
 	taskBytes, _ := json.Marshal(primaryTask)
