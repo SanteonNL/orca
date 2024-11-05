@@ -384,17 +384,16 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Performer: uraIdentifierReferences,
 	}
 
-	patientRef := "Patient/magic-" + uuid.NewString()
+	// patientRef := "Patient/magic-" + uuid.NewString()
 	serviceRequestRef := "ServiceRequest/magic-" + uuid.NewString()
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	organizationRef := "Organization/magic-" + uuid.NewString()
 
 	otherValues := map[string]interface{}{
-		patientRef:        patient,
+		// patientRef:        patient,
 		practitionerRef:   practitioner,
 		serviceRequestRef: *serviceRequest,
 		organizationRef:   organization,
-		"Condition":       conditions,
 		"launchContext":   launchContext, // Can be used to fetch a new access token after expiration
 	}
 
@@ -407,7 +406,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		FHIRLauncher: launcherKey,
 		//TODO: See how/if to pass the conditions to the StringValues
 		StringValues: map[string]string{
-			"patient":        patientRef,
+			"patient":        "Patient/" + *patient.Id,
 			"serviceRequest": serviceRequestRef,
 			"practitioner":   practitionerRef,
 			"organization":   organizationRef,
