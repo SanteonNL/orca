@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"strings"
 
@@ -14,7 +15,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, task *fhir.Task) error {
+func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 	log.Info().Msgf("Running handleTaskFillerCreateOrUpdate for Task %s", *task.Id)
 
 	if !coolfhir.IsScpTask(task) {
@@ -47,13 +48,13 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, task *fhir
 		}
 
 		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
-		err = s.createSubTaskOrFinishPrimaryTask(task, true, isOwner)
+		err = s.createSubTaskOrFinishPrimaryTask(cpsClient, task, true, isOwner)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
 	} else {
 		log.Info().Msgf("Updating sub Task part of %s", *partOfRef)
-		err = s.handleTaskFillerUpdate(ctx, task)
+		err = s.handleTaskFillerUpdate(ctx, cpsClient, task)
 		if err != nil {
 			return fmt.Errorf("failed to update sub Task: %w", err)
 		}
@@ -62,7 +63,7 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, task *fhir
 }
 
 // TODO: This function now always expects a subtask, but it should also be able to handle primary tasks
-func (s *Service) handleTaskFillerUpdate(ctx context.Context, task *fhir.Task) error {
+func (s *Service) handleTaskFillerUpdate(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 
 	log.Info().Msg("Running handleTaskFillerUpdate")
 
@@ -93,12 +94,12 @@ func (s *Service) handleTaskFillerUpdate(ctx context.Context, task *fhir.Task) e
 	}
 	isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(task, ids)
 
-	return s.createSubTaskOrFinishPrimaryTask(task, false, isOwner)
+	return s.createSubTaskOrFinishPrimaryTask(cpsClient, task, false, isOwner)
 
 }
 
-func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
-	log.Debug().Msg("Marking primary Task as completed")
+func (s *Service) acceptPrimaryTask(cpsClient fhirclient.Client, subTask *fhir.Task) error {
+	log.Debug().Msg("Accepting primary Task")
 
 	partOfTaskRef, err := s.partOf(subTask, true)
 	if err != nil {
@@ -106,7 +107,7 @@ func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 	}
 
 	var partOfTask fhir.Task
-	err = s.carePlanServiceClient.Read(*partOfTaskRef, &partOfTask)
+	err = cpsClient.Read(*partOfTaskRef, &partOfTask)
 	if err != nil {
 		return fmt.Errorf("failed to fetch partOf for %s: %w", *partOfTaskRef, err)
 	}
@@ -115,23 +116,21 @@ func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
 	partOfTask.Status = fhir.TaskStatusAccepted
 
 	// Update the task in the FHIR server
-	err = s.carePlanServiceClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
+	err = cpsClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
 	if err != nil {
 		return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
 	}
 
-	log.Info().Msgf("Successfully marked %s as completed", *partOfTaskRef)
+	log.Info().Msgf("Successfully accepted Task (ref=%s)", *partOfTaskRef)
 	return nil
 }
 
-func (s *Service) fetchQuestionnaireByID(ref string, questionnaire *fhir.Questionnaire) error {
+func (s *Service) fetchQuestionnaireByID(cpsClient fhirclient.Client, ref string, questionnaire *fhir.Questionnaire) error {
 	log.Debug().Msg("Fetching Questionnaire by ID")
-
-	err := s.carePlanServiceClient.Read(ref, &questionnaire)
+	err := cpsClient.Read(ref, &questionnaire)
 	if err != nil {
 		return fmt.Errorf("failed to fetch Questionnaire: %w", err)
 	}
-
 	return nil
 }
 
@@ -172,7 +171,7 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 	return nil
 }
 
-func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTask bool, isTaskOwner bool) error {
+func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, task *fhir.Task, isPrimaryTask bool, isTaskOwner bool) error {
 	if task.Focus == nil || task.Focus.Identifier == nil || task.Focus.Identifier.System == nil || task.Focus.Identifier.Value == nil {
 		return errors.New("task.Focus or its Identifier fields are nil")
 	}
@@ -197,7 +196,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 				if ref := item.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "Questionnaire/") {
 					questionnaireURL := *ref.Reference
 					var fetchedQuestionnaire fhir.Questionnaire
-					if err := s.fetchQuestionnaireByID(questionnaireURL, &fetchedQuestionnaire); err != nil {
+					if err := s.fetchQuestionnaireByID(cpsClient, questionnaireURL, &fetchedQuestionnaire); err != nil {
 						// TODO: why return an error here, and not for the rest?
 						return fmt.Errorf("failed to fetch questionnaire: %w", err)
 					}
@@ -221,16 +220,16 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 
 	}
 
-	// No follow-up questionnaire found, check if we have to mark the primary task as completed
+	// No follow-up questionnaire found, check if we can accept the primary Task
 	if questionnaire == nil {
 
 		if task.PartOf == nil {
-			log.Info().Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as completed")
+			log.Info().Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as accepted")
 			return nil
 		}
 
 		if isTaskOwner {
-			return s.markPrimaryTaskAsCompleted(task)
+			return s.acceptPrimaryTask(cpsClient, task)
 		} else {
 			return nil
 		}
@@ -247,7 +246,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 
 	bundle := tx.Bundle()
 
-	_, err = coolfhir.ExecuteTransaction(s.carePlanServiceClient, bundle)
+	_, err = coolfhir.ExecuteTransaction(cpsClient, bundle)
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %w", err)
 	}

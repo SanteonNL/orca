@@ -4,16 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
+	"os"
+	"reflect"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"go.uber.org/mock/gomock"
-	"net/url"
-	"os"
-	"reflect"
-	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -21,10 +22,11 @@ import (
 
 func Test_isValidTransition(t *testing.T) {
 	type args struct {
-		from        fhir.TaskStatus
-		to          fhir.TaskStatus
-		isOwner     bool
-		isRequester bool
+		from         fhir.TaskStatus
+		to           fhir.TaskStatus
+		isOwner      bool
+		isRequester  bool
+		isScpSubtask bool
 	}
 	tests := []struct {
 		name string
@@ -35,40 +37,44 @@ func Test_isValidTransition(t *testing.T) {
 		{
 			name: "requested -> received : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusRequested,
-				to:          fhir.TaskStatusReceived,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusRequested,
+				to:           fhir.TaskStatusReceived,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
 		{
 			name: "requested -> accepted : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusRequested,
-				to:          fhir.TaskStatusAccepted,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusRequested,
+				to:           fhir.TaskStatusAccepted,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
 		{
 			name: "requested -> rejected : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusRequested,
-				to:          fhir.TaskStatusRejected,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusRequested,
+				to:           fhir.TaskStatusRejected,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
 		{
 			name: "requested -> cancelled : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusRequested,
-				to:          fhir.TaskStatusCancelled,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusRequested,
+				to:           fhir.TaskStatusCancelled,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
@@ -95,30 +101,33 @@ func Test_isValidTransition(t *testing.T) {
 		{
 			name: "received -> accepted : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusReceived,
-				to:          fhir.TaskStatusAccepted,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusReceived,
+				to:           fhir.TaskStatusAccepted,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
 		{
 			name: "received -> rejected : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusReceived,
-				to:          fhir.TaskStatusRejected,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusReceived,
+				to:           fhir.TaskStatusRejected,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
 		{
 			name: "received -> cancelled : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusReceived,
-				to:          fhir.TaskStatusCancelled,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusReceived,
+				to:           fhir.TaskStatusCancelled,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
@@ -145,20 +154,22 @@ func Test_isValidTransition(t *testing.T) {
 		{
 			name: "accepted -> in-progress : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusAccepted,
-				to:          fhir.TaskStatusInProgress,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusAccepted,
+				to:           fhir.TaskStatusInProgress,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
 		{
 			name: "accepted -> cancelled : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusAccepted,
-				to:          fhir.TaskStatusCancelled,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusAccepted,
+				to:           fhir.TaskStatusCancelled,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
@@ -185,30 +196,33 @@ func Test_isValidTransition(t *testing.T) {
 		{
 			name: "in-progress -> completed : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusInProgress,
-				to:          fhir.TaskStatusCompleted,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusInProgress,
+				to:           fhir.TaskStatusCompleted,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
 		{
 			name: "in-progress -> failed : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusInProgress,
-				to:          fhir.TaskStatusFailed,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusInProgress,
+				to:           fhir.TaskStatusFailed,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
 		{
 			name: "in-progress -> on-hold : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusInProgress,
-				to:          fhir.TaskStatusOnHold,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusInProgress,
+				to:           fhir.TaskStatusOnHold,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
@@ -235,10 +249,11 @@ func Test_isValidTransition(t *testing.T) {
 		{
 			name: "on-hold -> in-progress : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusOnHold,
-				to:          fhir.TaskStatusInProgress,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusOnHold,
+				to:           fhir.TaskStatusInProgress,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
@@ -265,20 +280,22 @@ func Test_isValidTransition(t *testing.T) {
 		{
 			name: "ready -> completed : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusReady,
-				to:          fhir.TaskStatusCompleted,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusReady,
+				to:           fhir.TaskStatusCompleted,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
 		{
 			name: "ready -> failed : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusReady,
-				to:          fhir.TaskStatusFailed,
-				isOwner:     true,
-				isRequester: false,
+				from:         fhir.TaskStatusReady,
+				to:           fhir.TaskStatusFailed,
+				isOwner:      true,
+				isRequester:  false,
+				isScpSubtask: false,
 			},
 			want: true,
 		},
@@ -286,113 +303,145 @@ func Test_isValidTransition(t *testing.T) {
 		{
 			name: "requested -> received : requester (FAIL)",
 			args: args{
-				from:        fhir.TaskStatusRequested,
-				to:          fhir.TaskStatusReceived,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusRequested,
+				to:           fhir.TaskStatusReceived,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
 			},
 			want: false,
 		},
 		{
 			name: "requested -> accepted : requester (FAIL)",
 			args: args{
-				from:        fhir.TaskStatusRequested,
-				to:          fhir.TaskStatusAccepted,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusRequested,
+				to:           fhir.TaskStatusAccepted,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
 			},
 			want: false,
 		},
 		{
 			name: "requested -> rejected : requester (FAIL)",
 			args: args{
-				from:        fhir.TaskStatusRequested,
-				to:          fhir.TaskStatusRejected,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusRequested,
+				to:           fhir.TaskStatusRejected,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
 			},
 			want: false,
 		},
 		{
 			name: "received -> accepted : requester (FAIL)",
 			args: args{
-				from:        fhir.TaskStatusReceived,
-				to:          fhir.TaskStatusAccepted,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusReceived,
+				to:           fhir.TaskStatusAccepted,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
 			},
 			want: false,
 		},
 		{
 			name: "received -> rejected : requester (FAIL)",
 			args: args{
-				from:        fhir.TaskStatusReceived,
-				to:          fhir.TaskStatusRejected,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusReceived,
+				to:           fhir.TaskStatusRejected,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
 			},
 			want: false,
 		},
 		{
 			name: "accepted -> in-progress : requester (FAIL)",
 			args: args{
-				from:        fhir.TaskStatusAccepted,
-				to:          fhir.TaskStatusInProgress,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusAccepted,
+				to:           fhir.TaskStatusInProgress,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
 			},
 			want: false,
 		},
 		{
 			name: "in-progress -> completed : requester (FAIL)",
 			args: args{
-				from:        fhir.TaskStatusInProgress,
-				to:          fhir.TaskStatusCompleted,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusInProgress,
+				to:           fhir.TaskStatusCompleted,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
 			},
 			want: false,
 		},
 		{
 			name: "in-progress -> failed : requester (FAIL)",
 			args: args{
-				from:        fhir.TaskStatusInProgress,
-				to:          fhir.TaskStatusFailed,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusInProgress,
+				to:           fhir.TaskStatusFailed,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
 			},
 			want: false,
 		},
 		{
 			name: "ready -> completed : requester (FAIL)",
 			args: args{
-				from:        fhir.TaskStatusReady,
-				to:          fhir.TaskStatusCompleted,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusReady,
+				to:           fhir.TaskStatusCompleted,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
 			},
 			want: false,
 		},
 		{
 			name: "ready -> failed : owner (OK)",
 			args: args{
-				from:        fhir.TaskStatusReady,
-				to:          fhir.TaskStatusFailed,
-				isOwner:     false,
-				isRequester: true,
+				from:         fhir.TaskStatusReady,
+				to:           fhir.TaskStatusFailed,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: false,
+			},
+			want: false,
+		},
+		{
+			name: "scp subTask ready -> failed : owner (OK)",
+			args: args{
+				from:         fhir.TaskStatusReady,
+				to:           fhir.TaskStatusFailed,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: true,
+			},
+			want: false,
+		},
+		{
+			name: "scp subTask ready -> completed : owner (OK)",
+			args: args{
+				from:         fhir.TaskStatusReady,
+				to:           fhir.TaskStatusCompleted,
+				isOwner:      false,
+				isRequester:  true,
+				isScpSubtask: true,
 			},
 			want: false,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := isValidTransition(tt.args.from, tt.args.to, tt.args.isOwner, tt.args.isRequester)
+			got := isValidTransition(tt.args.from, tt.args.to, tt.args.isOwner, tt.args.isRequester, tt.args.isScpSubtask)
 			require.Equal(t, tt.want, got)
 			// Validate that the opposite direction fails, besides in-progress <-> on-hold
 			if (tt.args.from == fhir.TaskStatusOnHold && tt.args.to == fhir.TaskStatusInProgress) || (tt.args.from == fhir.TaskStatusInProgress && tt.args.to == fhir.TaskStatusOnHold) {
 				return
 			}
-			got = isValidTransition(tt.args.to, tt.args.from, tt.args.isOwner, tt.args.isRequester)
+			got = isValidTransition(tt.args.to, tt.args.from, tt.args.isOwner, tt.args.isRequester, tt.args.isScpSubtask)
 			require.Equal(t, false, got)
 		})
 	}

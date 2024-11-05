@@ -21,6 +21,13 @@ func DefaultWorkflows() Workflows {
 				},
 			},
 		},
+		"tmp|fractuur-pols": Workflow{
+			Steps: []WorkflowStep{
+				{
+					QuestionnaireUrl: "http://tmp.sharedcareplanning.nl/fhir/Questionnaire/fractuur-pols",
+				},
+			},
+		},
 	}
 }
 

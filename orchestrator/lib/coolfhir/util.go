@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
+	"slices"
 	"strconv"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -134,6 +136,19 @@ func IsIdentifierTaskOwnerAndRequester(task *fhir.Task, principalOrganizationIde
 		}
 	}
 	return isOwner, isRequester
+}
+
+func IsScpSubTask(task *fhir.Task) bool {
+	if task == nil {
+		return false
+	}
+	if len(task.PartOf) == 0 {
+		return false
+	}
+	if task.Meta == nil {
+		return false
+	}
+	return slices.Contains(task.Meta.Profile, SCPTaskProfile)
 }
 
 func validateIdentifier(identifierField string, identifier *fhir.Identifier) error {

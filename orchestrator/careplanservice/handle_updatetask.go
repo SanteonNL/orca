@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -68,14 +69,16 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, err
 	}
 	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
-	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester) {
+	isScpSubTask := coolfhir.IsScpSubTask(&task)
+	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester, isScpSubTask) {
 		return nil, errors.New(
 			fmt.Sprintf(
-				"invalid state transition from %s to %s, owner(%t) requester(%t)",
+				"invalid state transition from %s to %s, owner(%t) requester(%t) scpSubtask(%t)",
 				taskExisting.Status.String(),
 				task.Status.String(),
 				isOwner,
 				isRequester,
+				isScpSubTask,
 			))
 	}
 
@@ -116,10 +119,15 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}, nil
 }
 
-func isValidTransition(from fhir.TaskStatus, to fhir.TaskStatus, isOwner bool, isRequester bool) bool {
+func isValidTransition(from fhir.TaskStatus, to fhir.TaskStatus, isOwner bool, isRequester bool, isScpSubtask bool) bool {
 	if isOwner == false && isRequester == false {
 		return false
 	}
+
+	if isScpSubtask {
+		return isOwner && from == fhir.TaskStatusReady && (to == fhir.TaskStatusCompleted || to == fhir.TaskStatusFailed)
+	}
+
 	// Transitions valid for owner only
 	if isOwner {
 		if from == fhir.TaskStatusRequested && to == fhir.TaskStatusReceived {
