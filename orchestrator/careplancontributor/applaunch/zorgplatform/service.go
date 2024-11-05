@@ -384,17 +384,17 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Performer: uraIdentifierReferences,
 	}
 
-	// patientRef := "Patient/magic-" + uuid.NewString()
+	// patientRef := "Patient/magic-" + uuid.NewString() <-- Do not use a magic link so that we can request all Conditions for the Patient
 	serviceRequestRef := "ServiceRequest/magic-" + uuid.NewString()
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	organizationRef := "Organization/magic-" + uuid.NewString()
 
 	otherValues := map[string]interface{}{
-		// patientRef:        patient,
-		practitionerRef:   practitioner,
-		serviceRequestRef: *serviceRequest,
-		organizationRef:   organization,
-		"launchContext":   launchContext, // Can be used to fetch a new access token after expiration
+		"Patient/" + *patient.Id: patient, //Zorgplatform only allows for a GET on /Patient, we request by ID
+		practitionerRef:          practitioner,
+		serviceRequestRef:        *serviceRequest,
+		organizationRef:          organization,
+		"launchContext":          launchContext, // Can be used to fetch a new access token after expiration
 	}
 
 	//inject the conditions into the "other" values
