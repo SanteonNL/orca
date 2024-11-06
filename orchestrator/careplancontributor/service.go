@@ -128,6 +128,12 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		log.Info().Msgf("Redirecting to %s", s.frontendUrl)
 		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
 	})
+
+	// Logout endpoint
+	mux.HandleFunc(basePath+"/zorgplatform/logout", func(response http.ResponseWriter, request *http.Request) {
+		s.SessionManager.Destroy(response, request)
+		http.Redirect(response, request, s.frontendUrl, http.StatusOK)
+	})
 }
 
 // withSession is a middleware that retrieves the session for the given request.
