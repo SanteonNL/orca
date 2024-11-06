@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import useEnrollmentStore from '@/lib/store/enrollment-store'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { InfoCircledIcon } from '@radix-ui/react-icons'
+import OrganizationLabel from "@/app/enrollment/components/organization-label";
 
 export default function SelectedServiceRequestView() {
 
@@ -32,7 +33,7 @@ export default function SelectedServiceRequestView() {
                     <div className='font-bold'>Task:</div>
                     <div className='col-span-3'>{serviceRequest?.code?.coding?.[0].display || "unknown"}</div>
                     <div className='font-bold'>Sent to:</div>
-                    <div className='col-span-3'>{serviceRequest?.performer?.[0].display || "unknown"}</div>
+                    <div className='col-span-3'>{OrganizationLabel(serviceRequest?.performer?.[0])}</div>
                 </div>
             </CardContent>
         </Card>
