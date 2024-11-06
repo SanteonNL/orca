@@ -3,12 +3,13 @@ package careplancontributor
 import (
 	"context"
 	"encoding/json"
+	"net/url"
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/stretchr/testify/assert"
-	"net/url"
-	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -107,6 +108,20 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			}(),
 			expectedError:    false,
 			numBundlesPosted: 1, // One subtask should be created since it's treated as a primary task
+		},
+		{
+			name: "Task without partOf: updated Task is primary Task, should not process",
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			},
+			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			task: func() *fhir.Task {
+				copiedTask := deepCopy(primaryTask)
+				copiedTask.Status = fhir.TaskStatusInProgress
+				return &copiedTask
+			}(),
+			expectedError:    false,
+			numBundlesPosted: 0,
 		},
 		{
 			name: "Task without basedOn reference",
@@ -285,6 +300,7 @@ var primaryTask = fhir.Task{
 	Meta: &fhir.Meta{
 		Profile: []string{coolfhir.SCPTaskProfile},
 	},
+	Status: fhir.TaskStatusRequested,
 	Focus: &fhir.Reference{
 		Identifier: &fhir.Identifier{
 			System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),

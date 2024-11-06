@@ -1,33 +1,37 @@
 {
-  "id" : "3",
-  "basedOn" : [ {
-    "reference" : "CarePlan/1",
-    "type" : "CarePlan"
-  } ],
-  "status" : "accepted",
-  "intent" : "order",
-  "requester" : {
-    "type" : "Organization",
-    "identifier" : {
-      "system" : "http://fhir.nl/fhir/NamingSystem/ura",
-      "value" : "1"
+  "id": "3",
+  "basedOn": [
+    {
+      "reference": "CarePlan/1",
+      "type": "CarePlan"
+    }
+  ],
+  "status": "requested",
+  "intent": "order",
+  "requester": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "1"
     }
   },
-  "owner" : {
-    "type" : "Organization",
-    "identifier" : {
-      "system" : "http://fhir.nl/fhir/NamingSystem/ura",
-      "value" : "2"
+  "owner": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "2"
     }
   },
-  "resourceType" : "Task",
-  "meta":  {
-    "profile": ["http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"]
+  "resourceType": "Task",
+  "meta": {
+    "profile": [
+      "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
+    ]
   },
   "focus": {
     "identifier": {
       "system": "2.16.528.1.1007.3.3.21514.ehr.orders",
-      "value":  "99534756439"
+      "value": "99534756439"
     }
   },
   "for": {
