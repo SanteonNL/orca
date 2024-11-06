@@ -378,6 +378,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  &s.config.TaskPerformerUra,
 				},
+				Display: to.Ptr("Zorg Bij Jou - Service Center"), //TODO: Hard coded value for demo purposes
 			},
 		},
 		Requester: &fhir.Reference{
