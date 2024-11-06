@@ -47,6 +47,20 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	if err != nil {
 		return nil, err
 	}
+
+	// Enrich Task.Requester and Task.Owner with info from CSD (if available), typically to add the organization name
+	// TODO: CSD is queried again later, to get the notification endpoint. We should optimize/cache this. Maybe in the context.Context?
+	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Requester.Identifier); err != nil {
+		log.Info().Err(err).Msgf("Unable to lookup Task.requester in CSD, won't be enriched.")
+	} else {
+		task.Requester = entity
+	}
+	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Owner.Identifier); err != nil {
+		log.Info().Err(err).Msgf("Unable to lookup Task.owner in CSD, won't be enriched.")
+	} else {
+		task.Owner = entity
+	}
+
 	// Resolve the CarePlan
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
