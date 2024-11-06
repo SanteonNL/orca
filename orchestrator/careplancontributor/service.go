@@ -130,10 +130,16 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	})
 
 	// Logout endpoint
-	mux.HandleFunc(basePath+"/zorgplatform/logout", func(response http.ResponseWriter, request *http.Request) {
-		s.SessionManager.Destroy(response, request)
-		http.Redirect(response, request, s.frontendUrl, http.StatusOK)
-	})
+	mux.HandleFunc(basePath+"/zorgplatform/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+		s.SessionManager.Destroy(writer, request)
+		// If there is a 'Referrer' value in the header, redirect to that URL
+		if referrer := request.Header.Get("Referrer"); referrer != "" {
+			http.Redirect(writer, request, referrer, http.StatusOK)
+		} else {
+			// TODO: Redirect to Logout screen
+			http.Redirect(writer, request, s.frontendUrl, http.StatusOK)
+		}
+	}))
 }
 
 // withSession is a middleware that retrieves the session for the given request.

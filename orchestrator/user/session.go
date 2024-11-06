@@ -2,6 +2,7 @@ package user
 
 import (
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"sync"
 	"time"
@@ -66,6 +67,8 @@ func (m *SessionManager) Destroy(response http.ResponseWriter, request *http.Req
 	sessionID := getSessionCookie(request)
 	if sessionID != "" {
 		m.store.destroy(sessionID)
+	} else {
+		log.Warn().Msg("No session to destroy")
 	}
 	cookie := http.Cookie{
 		Name:     "sid",

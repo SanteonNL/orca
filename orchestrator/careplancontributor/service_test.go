@@ -654,11 +654,25 @@ func TestService_ProxyToEHR(t *testing.T) {
 
 	// Logout and attempt to get the patient again
 	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/cpc/zorgplatform/logout", nil)
+
+	// Trying to logout without a session cookie should return an error
+	httpResponse, err = frontServer.Client().Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
+
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
 	httpResponse, err = frontServer.Client().Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 
 	httpRequest, _ = http.NewRequest("GET", frontServer.URL+"/cpc/ehr/fhir/Patient", nil)
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
 	httpResponse, err = frontServer.Client().Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
@@ -705,11 +719,19 @@ func TestService_ProxyToCPS(t *testing.T) {
 
 	// Logout and attempt to get the patient again
 	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/cpc/zorgplatform/logout", nil)
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
 	httpResponse, err = frontServer.Client().Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 
 	httpRequest, _ = http.NewRequest("GET", frontServer.URL+"/cpc/cps/fhir/Patient?_search=foo:bar", nil)
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
 	httpResponse, err = frontServer.Client().Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
