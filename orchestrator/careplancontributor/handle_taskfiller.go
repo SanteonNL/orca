@@ -54,7 +54,7 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, cpsClient 
 			return nil
 		}
 
-		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
+		log.Info().Msg("Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
 		err = s.createSubTaskOrFinishPrimaryTask(cpsClient, task, true, ids)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
