@@ -130,6 +130,9 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
 				subTask := deepCopy(primaryTask)
+				swap := subTask.Owner
+				subTask.Owner = subTask.Requester
+				subTask.Requester = swap
 				subTask.PartOf = []fhir.Reference{
 					{
 						Reference: to.Ptr("Task/" + *primaryTask.Id),

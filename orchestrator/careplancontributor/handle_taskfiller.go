@@ -48,7 +48,7 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, cpsClient 
 		}
 
 		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
-		err = s.createSubTaskOrFinishPrimaryTask(cpsClient, task, true, isOwner)
+		err = s.createSubTaskOrFinishPrimaryTask(cpsClient, task, true, ids)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
@@ -92,36 +92,20 @@ func (s *Service) handleTaskFillerUpdate(ctx context.Context, cpsClient fhirclie
 	if err != nil {
 		return err
 	}
-	isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(task, ids)
-
-	return s.createSubTaskOrFinishPrimaryTask(cpsClient, task, false, isOwner)
+	return s.createSubTaskOrFinishPrimaryTask(cpsClient, task, false, ids)
 
 }
 
-func (s *Service) acceptPrimaryTask(cpsClient fhirclient.Client, subTask *fhir.Task) error {
+func (s *Service) acceptPrimaryTask(cpsClient fhirclient.Client, primaryTask *fhir.Task) error {
 	log.Debug().Msg("Accepting primary Task")
-
-	partOfTaskRef, err := s.partOf(subTask, true)
-	if err != nil {
-		return err
-	}
-
-	var partOfTask fhir.Task
-	err = cpsClient.Read(*partOfTaskRef, &partOfTask)
-	if err != nil {
-		return fmt.Errorf("failed to fetch partOf for %s: %w", *partOfTaskRef, err)
-	}
-
-	// Change status to accepted
-	partOfTask.Status = fhir.TaskStatusAccepted
-
+	primaryTask.Status = fhir.TaskStatusAccepted
 	// Update the task in the FHIR server
-	err = cpsClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
+	ref := "Task/" + *primaryTask.Id
+	err := cpsClient.Update(ref, primaryTask, primaryTask)
 	if err != nil {
-		return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
+		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
 	}
-
-	log.Info().Msgf("Successfully accepted Task (ref=%s)", *partOfTaskRef)
+	log.Info().Msgf("Successfully accepted Task (ref=%s)", ref)
 	return nil
 }
 
@@ -171,7 +155,7 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 	return nil
 }
 
-func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, task *fhir.Task, isPrimaryTask bool, isTaskOwner bool) error {
+func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, task *fhir.Task, isPrimaryTask bool, localOrgIdentifiers []fhir.Identifier) error {
 	if task.Focus == nil || task.Focus.Identifier == nil || task.Focus.Identifier.System == nil || task.Focus.Identifier.Value == nil {
 		return errors.New("task.Focus or its Identifier fields are nil")
 	}
@@ -228,8 +212,19 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, 
 			return nil
 		}
 
-		if isTaskOwner {
-			return s.acceptPrimaryTask(cpsClient, task)
+		// TODO: Doesn't support nested subtasks for now
+		primaryTaskRef, err := s.partOf(task, true)
+		if err != nil {
+			return err
+		}
+		var primaryTask fhir.Task
+		err = cpsClient.Read(*primaryTaskRef, &primaryTask)
+		if err != nil {
+			return fmt.Errorf("failed to fetch primary Task of subtask (subtask.id=%s, primarytask.ref=%s): %w", *task.Id, *primaryTaskRef, err)
+		}
+		isPrimaryTaskOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(&primaryTask, localOrgIdentifiers)
+		if isPrimaryTaskOwner {
+			return s.acceptPrimaryTask(cpsClient, &primaryTask)
 		} else {
 			return nil
 		}
