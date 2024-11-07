@@ -651,6 +651,31 @@ func TestService_ProxyToEHR(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)
+
+	// Logout and attempt to get the patient again
+	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/cpc/logout", nil)
+
+	// Trying to logout without a session cookie should return an error
+	httpResponse, err = frontServer.Client().Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
+
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
+	httpResponse, err = frontServer.Client().Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+
+	httpRequest, _ = http.NewRequest("GET", frontServer.URL+"/cpc/ehr/fhir/Patient", nil)
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
+	httpResponse, err = frontServer.Client().Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
 }
 
 func TestService_ProxyToCPS(t *testing.T) {
@@ -691,6 +716,25 @@ func TestService_ProxyToCPS(t *testing.T) {
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, carePlanServiceURL.Host, capturedHost)
 	require.Equal(t, "foo:bar", capturedQueryParams.Get("_search"))
+
+	// Logout and attempt to get the patient again
+	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/cpc/logout", nil)
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
+	httpResponse, err = frontServer.Client().Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+
+	httpRequest, _ = http.NewRequest("GET", frontServer.URL+"/cpc/cps/fhir/Patient?_search=foo:bar", nil)
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
+	httpResponse, err = frontServer.Client().Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
 }
 
 func TestService_handleGetContext(t *testing.T) {
