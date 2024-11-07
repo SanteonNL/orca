@@ -284,6 +284,13 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
+		if !s.allowUnmanagedFHIROperations {
+			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
+				Message:    "FHIR operation not allowed",
+				StatusCode: http.StatusMethodNotAllowed,
+			}, operationName, httpResponse)
+			return
+		}
 		s.proxy.ServeHTTP(httpResponse, httpRequest)
 		return
 	}
