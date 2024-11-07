@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"slices"
 	"strings"
 
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
@@ -15,7 +16,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, task *fhir.Task) error {
+func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 	log.Info().Msgf("Running handleTaskFillerCreateOrUpdate for Task %s", *task.Id)
 
 	if !coolfhir.IsScpTask(task) {
@@ -36,6 +37,12 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, task *fhir
 	// If partOfRef is nil, handle the task as a primary task - no need to create follow-up subtasks for newly created Tasks
 	//This only happens on Task update where the Task.output is filled with a QuestionnaireResponse
 	if partOfRef == nil {
+		// Check if the priary task is "created", its status will be updated by subtasks that are completed - not directly here
+		if task.Status != fhir.TaskStatusRequested {
+			log.Debug().Msg("primary Task.status != requested (workflow already started) - not processing in handleTaskFillerCreateOrUpdate")
+			return nil
+		}
+
 		// Validate that the current CPC is the task Owner to perform task filling
 		ids, err := s.profile.Identities(ctx)
 		if err != nil {
@@ -47,14 +54,14 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, task *fhir
 			return nil
 		}
 
-		log.Info().Msg("Found a new 'primary' task, checking if more information is needed via a Questionnaire")
-		err = s.createSubTaskOrFinishPrimaryTask(task, true, isOwner)
+		log.Info().Msg("Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
+		err = s.createSubTaskOrFinishPrimaryTask(cpsClient, task, true, ids)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
 	} else {
 		log.Info().Msgf("Updating sub Task part of %s", *partOfRef)
-		err = s.handleTaskFillerUpdate(ctx, task)
+		err = s.handleTaskFillerUpdate(ctx, cpsClient, task)
 		if err != nil {
 			return fmt.Errorf("failed to update sub Task: %w", err)
 		}
@@ -63,7 +70,7 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, task *fhir
 }
 
 // TODO: This function now always expects a subtask, but it should also be able to handle primary tasks
-func (s *Service) handleTaskFillerUpdate(ctx context.Context, task *fhir.Task) error {
+func (s *Service) handleTaskFillerUpdate(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 
 	log.Info().Msg("Running handleTaskFillerUpdate")
 
@@ -92,47 +99,29 @@ func (s *Service) handleTaskFillerUpdate(ctx context.Context, task *fhir.Task) e
 	if err != nil {
 		return err
 	}
-	isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(task, ids)
-
-	return s.createSubTaskOrFinishPrimaryTask(task, false, isOwner)
+	return s.createSubTaskOrFinishPrimaryTask(cpsClient, task, false, ids)
 
 }
 
-func (s *Service) markPrimaryTaskAsCompleted(subTask *fhir.Task) error {
-	log.Debug().Msg("Marking primary Task as completed")
-
-	partOfTaskRef, err := s.partOf(subTask, true)
-	if err != nil {
-		return err
-	}
-
-	var partOfTask fhir.Task
-	err = s.carePlanServiceClient.Read(*partOfTaskRef, &partOfTask)
-	if err != nil {
-		return fmt.Errorf("failed to fetch partOf for %s: %w", *partOfTaskRef, err)
-	}
-
-	// Change status to accepted
-	partOfTask.Status = fhir.TaskStatusAccepted
-
+func (s *Service) acceptPrimaryTask(cpsClient fhirclient.Client, primaryTask *fhir.Task) error {
+	log.Debug().Msg("Accepting primary Task")
+	primaryTask.Status = fhir.TaskStatusAccepted
 	// Update the task in the FHIR server
-	err = s.carePlanServiceClient.Update(*partOfTaskRef, &partOfTask, &partOfTask)
+	ref := "Task/" + *primaryTask.Id
+	err := cpsClient.Update(ref, primaryTask, primaryTask)
 	if err != nil {
-		return fmt.Errorf("failed to update partOf %s status: %w", *partOfTaskRef, err)
+		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
 	}
-
-	log.Info().Msgf("Successfully marked %s as completed", *partOfTaskRef)
+	log.Info().Msgf("Successfully accepted Task (ref=%s)", ref)
 	return nil
 }
 
-func (s *Service) fetchQuestionnaireByID(ref string, questionnaire *fhir.Questionnaire) error {
+func (s *Service) fetchQuestionnaireByID(cpsClient fhirclient.Client, ref string, questionnaire *fhir.Questionnaire) error {
 	log.Debug().Msg("Fetching Questionnaire by ID")
-
-	err := s.carePlanServiceClient.Read(ref, &questionnaire)
+	err := cpsClient.Read(ref, &questionnaire)
 	if err != nil {
 		return fmt.Errorf("failed to fetch Questionnaire: %w", err)
 	}
-
 	return nil
 }
 
@@ -173,14 +162,14 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 	return nil
 }
 
-func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTask bool, isTaskOwner bool) error {
+func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, task *fhir.Task, isPrimaryTask bool, localOrgIdentifiers []fhir.Identifier) error {
 	// TODO: INT-300 Reject Task if we can't execute it, or if it's invalid
 	// TODO: We only support task.Focus with a literal reference for now, so no logical identifiers
 	if task.Focus == nil || task.Focus.Reference == nil {
 		return errors.New("task.Focus or task.Focus.Reference is nil")
 	}
 	var questionnaire map[string]interface{}
-	workflow, err := s.selectWorkflow(task)
+	workflow, err := s.selectWorkflow(cpsClient, task)
 	if err != nil {
 		// TODO: INT-300 Reject Task if we can't execute it, or if it's invalid
 		return err
@@ -202,7 +191,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 				if ref := item.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "Questionnaire/") {
 					questionnaireURL := *ref.Reference
 					var fetchedQuestionnaire fhir.Questionnaire
-					if err := s.fetchQuestionnaireByID(questionnaireURL, &fetchedQuestionnaire); err != nil {
+					if err := s.fetchQuestionnaireByID(cpsClient, questionnaireURL, &fetchedQuestionnaire); err != nil {
 						// TODO: why return an error here, and not for the rest?
 						return fmt.Errorf("failed to fetch questionnaire: %w", err)
 					}
@@ -226,16 +215,28 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 
 	}
 
-	// No follow-up questionnaire found, check if we have to mark the primary task as completed
+	// No follow-up questionnaire found, check if we can accept the primary Task
 	if questionnaire == nil {
 
 		if task.PartOf == nil {
-			log.Info().Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as completed")
+			log.Info().Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as accepted")
 			return nil
 		}
 
-		if isTaskOwner {
-			return s.markPrimaryTaskAsCompleted(task)
+		// TODO: Doesn't support nested subtasks for now
+		primaryTaskRef, err := s.partOf(task, true)
+		if err != nil {
+			return err
+		}
+		var primaryTask fhir.Task
+		err = cpsClient.Read(*primaryTaskRef, &primaryTask)
+		if err != nil {
+			return fmt.Errorf("failed to fetch primary Task of subtask (subtask.id=%s, primarytask.ref=%s): %w", *task.Id, *primaryTaskRef, err)
+		}
+		// TODO: Only accept main task is in status 'requested'
+		isPrimaryTaskOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(&primaryTask, localOrgIdentifiers)
+		if isPrimaryTaskOwner {
+			return s.acceptPrimaryTask(cpsClient, &primaryTask)
 		} else {
 			return nil
 		}
@@ -252,7 +253,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 
 	bundle := tx.Bundle()
 
-	_, err = coolfhir.ExecuteTransaction(s.carePlanServiceClient, bundle)
+	_, err = coolfhir.ExecuteTransaction(cpsClient, bundle)
 	if err != nil {
 		return fmt.Errorf("failed to execute transaction: %w", err)
 	}
@@ -265,11 +266,11 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(task *fhir.Task, isPrimaryTas
 // selectWorkflow determines the workflow to use based on the Task's focus, and reasonCode or reasonReference.
 // It first selects the type of service, from the Task.focus (ServiceRequest), and then selects the workflow based on the Task.reasonCode or Task.reasonReference.
 // If it finds no, or multiple, matching workflows, it returns an error.
-func (s *Service) selectWorkflow(task *fhir.Task) (*taskengine.Workflow, error) {
+func (s *Service) selectWorkflow(cpsClient fhirclient.Client, task *fhir.Task) (*taskengine.Workflow, error) {
 	var matchedServiceCodes []string
 	// Determine service code from Task.focus
 	var serviceRequest fhir.ServiceRequest
-	if err := s.carePlanServiceClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
+	if err := cpsClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
 		return nil, fmt.Errorf("failed to fetch ServiceRequest (path=%s): %w", *task.Focus.Reference, err)
 	}
 	for _, coding := range serviceRequest.Code.Coding {
@@ -300,7 +301,7 @@ func (s *Service) selectWorkflow(task *fhir.Task) (*taskengine.Workflow, error) 
 	}
 	if task.ReasonReference != nil && task.ReasonReference.Reference != nil {
 		var condition fhir.Condition
-		if err := s.carePlanServiceClient.Read(*task.ReasonReference.Reference, &condition); err != nil {
+		if err := cpsClient.Read(*task.ReasonReference.Reference, &condition); err != nil {
 			return nil, fmt.Errorf("failed to fetch Condition of Task.reasonReference.reference (path=%s): %w", *task.ReasonReference.Reference, err)
 		}
 		for _, coding := range condition.Code.Coding {

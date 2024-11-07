@@ -30,6 +30,13 @@ func DefaultWorkflows() Workflows {
 				// TODO
 				Steps: []WorkflowStep{},
 			},
+			"tmp|fractuur-pols": {
+				Steps: []WorkflowStep{
+					{
+						QuestionnaireUrl: "http://tmp.sharedcareplanning.nl/fhir/Questionnaire/fractuur-pols",
+					},
+				},
+			},
 		},
 	}
 }

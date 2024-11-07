@@ -45,38 +45,41 @@ func New(
 		return nil, err
 	}
 	httpClient := profile.HttpClient()
-	carePlanServiceClient := fhirclient.New(cpsURL, httpClient, coolfhir.Config())
 	result := &Service{
-		config:                config,
-		orcaPublicURL:         orcaPublicURL,
-		carePlanServiceURL:    cpsURL,
-		carePlanServiceClient: carePlanServiceClient,
-		SessionManager:        sessionManager,
-		scpHttpClient:         httpClient,
-		profile:               profile,
-		frontendUrl:           config.FrontendConfig.URL,
-		fhirURL:               fhirURL,
-		transport:             localFHIRStoreTransport,
-		workflows:             taskengine.DefaultWorkflows(),
-		questionnaireLoader:   taskengine.EmbeddedQuestionnaireLoader{},
+		config:                  config,
+		orcaPublicURL:           orcaPublicURL,
+		localCarePlanServiceUrl: cpsURL,
+		SessionManager:          sessionManager,
+		scpHttpClient:           httpClient,
+		profile:                 profile,
+		frontendUrl:             config.FrontendConfig.URL,
+		fhirURL:                 fhirURL,
+		transport:               localFHIRStoreTransport,
+		workflows:               taskengine.DefaultWorkflows(),
+		questionnaireLoader:     taskengine.EmbeddedQuestionnaireLoader{},
+		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
+			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
+		},
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
 }
 
 type Service struct {
-	config                Config
-	profile               profile.Provider
-	orcaPublicURL         *url.URL
-	SessionManager        *user.SessionManager
-	frontendUrl           string
-	carePlanServiceURL    *url.URL
-	carePlanServiceClient fhirclient.Client
+	config         Config
+	profile        profile.Provider
+	orcaPublicURL  *url.URL
+	SessionManager *user.SessionManager
+	frontendUrl    string
+	// localCarePlanServiceUrl is the URL of the local Care Plan Service, used to create new CarePlans.
+	localCarePlanServiceUrl *url.URL
 	// scpHttpClient is used to call remote Care Plan Contributors or Care Plan Service, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
 	scpHttpClient *http.Client
-	fhirURL       *url.URL
+	// cpsClientFactory is a factory function that creates a new FHIR client for any CarePlanService.
+	cpsClientFactory func(baseURL *url.URL) fhirclient.Client
+	fhirURL          *url.URL
 	// transport is used to call the local FHIR store, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
@@ -117,7 +120,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
-	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.carePlanServiceURL, basePath+"/cps/fhir", s.scpHttpClient.Transport)
+	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.localCarePlanServiceUrl, basePath+"/cps/fhir", s.scpHttpClient.Transport)
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
@@ -171,7 +174,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	if carePlanURL == "" {
 		return errors.New(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
 	}
-	if !strings.HasPrefix(carePlanURL, s.carePlanServiceURL.String()) {
+	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
 		return errors.New("invalid CarePlan URL in header")
 	}
 	u, err := url.Parse(carePlanURL)
@@ -186,8 +189,8 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	var bundle fhir.Bundle
 	// TODO: Discuss changes to this validation with team
 	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
-	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.carePlanServiceURL.String())
-	err = s.carePlanServiceClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"))
+	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.localCarePlanServiceUrl.String())
+	err = s.cpsClientFactory(s.localCarePlanServiceUrl).Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"))
 	if err != nil {
 		return err
 	}
@@ -291,17 +294,41 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 
 	log.Info().Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
 
+	if focusReference.Reference == nil {
+		return &coolfhir.ErrorWithCode{
+			Message:    "Notification focus reference is nil",
+			StatusCode: http.StatusUnprocessableEntity,
+		}
+	}
+	resourceUrl := *focusReference.Reference
+	if !strings.HasPrefix(strings.ToLower(resourceUrl), "http:") && !strings.HasPrefix(strings.ToLower(resourceUrl), "https:") {
+		return &coolfhir.ErrorWithCode{
+			Message:    "Notification focus.reference is not an absolute URL",
+			StatusCode: http.StatusUnprocessableEntity,
+		}
+	}
+	// TODO: for now, we assume the resource URL is always in the form of <FHIR base url>/<resource type>/<resource id>
+	//       Then, we can deduce the FHIR base URL from the resource URL
+	resourceUrlParts := strings.Split(resourceUrl, "/")
+	resourceUrlParts = resourceUrlParts[:len(resourceUrlParts)-2]
+	resourceBaseUrl := strings.Join(resourceUrlParts, "/")
+	parsedResourceBaseUrl, err := url.Parse(resourceBaseUrl)
+	if err != nil {
+		return err
+	}
+
 	switch *focusReference.Type {
 	case "Task":
+		fhirClient := s.cpsClientFactory(parsedResourceBaseUrl)
 		// Get task
 		var task fhir.Task
-		err = s.carePlanServiceClient.Read(*focusReference.Reference, &task)
+		err = fhirClient.Read(*focusReference.Reference, &task)
 		if err != nil {
 			return err
 		}
 
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
-		err = s.handleTaskFillerCreateOrUpdate(ctx, &task)
+		err = s.handleTaskFillerCreateOrUpdate(ctx, fhirClient, &task)
 		if err != nil {
 			return err
 		}

@@ -118,7 +118,7 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
         patient: patient as Patient,
         practitioner: practitioner as Practitioner,
         serviceRequest: serviceRequest as ServiceRequest,
-        patientConditions: allConditions
+        patientConditions: allConditions.filter(condition => condition.resourceType === "Condition")
     });
 
     return patient;

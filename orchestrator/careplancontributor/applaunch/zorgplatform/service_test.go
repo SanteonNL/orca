@@ -18,6 +18,8 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
@@ -145,7 +147,9 @@ func TestService(t *testing.T) {
 	}
 
 	sessionManager := user.NewSessionManager()
-	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient)
+	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.TestProfile{
+		Principal: auth.TestPrincipal1,
+	})
 	require.NoError(t, err)
 	service.RegisterHandlers(httpServerMux)
 
@@ -168,6 +172,7 @@ func TestService(t *testing.T) {
 	// t.Run("assert user session is created", func(t *testing.T) {
 	// 	sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
 	// 	require.NotNil(t, sessionData)
+	// })
 	// 	t.Run("check Practitioner is in session", func(t *testing.T) {
 	// 		practitionerRef := sessionData.StringValues["practitioner"]
 	// 		require.NotEmpty(t, practitionerRef)

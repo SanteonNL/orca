@@ -17,6 +17,7 @@ type Config struct {
 	SAMLRequestTimeout time.Duration `koanf:"samlrequesttimeout"` //The timeout for the SAML request, e.g. 10s, 100ms etc
 	SigningConfig      SigningConfig `koanf:"sign"`
 	DecryptConfig      DecryptConfig `koanf:"decrypt"`
+	TaskPerformerUra   string        `koanf:"taskperformerura"`
 
 	AzureConfig    AzureConfig    `koanf:"azure"`
 	X509FileConfig X509FileConfig `koanf:"x509"`
