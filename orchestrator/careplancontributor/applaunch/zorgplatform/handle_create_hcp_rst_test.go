@@ -13,6 +13,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/beevik/etree"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -43,7 +44,7 @@ func TestCreateSAMLAssertion(t *testing.T) {
 
 	// Generate the assertion
 	assertionElement, err := service.createSAMLAssertion(&launchContext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Load expected XML into etree.Document
 	expectedXML := `
@@ -90,7 +91,7 @@ func TestCreateSAMLAssertion(t *testing.T) {
 
 	expectedDoc := etree.NewDocument()
 	err = expectedDoc.ReadFromString(expectedXML)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	doc := etree.NewDocument()
 	doc.SetRoot(assertionElement)
@@ -149,7 +150,7 @@ func assertEqualAttributes(t *testing.T, expectedElement, actualElement *etree.E
 func TestService_sign(t *testing.T) {
 	// Load the certificate and private key
 	keyPair, err := tls.LoadX509KeyPair("test-certificate.pem", "test-key.pem")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Initialize the service with the private key and certificate
 	service := &Service{
@@ -173,13 +174,13 @@ func TestService_sign(t *testing.T) {
 	}
 
 	assertion, err := service.createSAMLAssertion(launchContext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	// Call the signing function
 	_, err = service.signAssertion(assertion)
 
 	// Assert no errors occurred
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
@@ -196,17 +197,11 @@ func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
 	}
 
 	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
-	if err != nil {
-		t.Fatalf("Failed to read zorgplatform.online.pem: %v", err)
-	}
+	require.NoError(t, err)
 	zorgplatformCertBlock, _ := pem.Decode(zorgplatformCertData)
-	if zorgplatformCertBlock == nil {
-		t.Fatalf("Failed to decode PEM block containing the certificate")
-	}
+	require.NotNil(t, zorgplatformCertBlock)
 	zorgplatformX509Cert, err := x509.ParseCertificate(zorgplatformCertBlock.Bytes)
-	if err != nil {
-		t.Fatalf("Failed to parse zorgplatform.online.pem: %v", err)
-	}
+	require.NoError(t, err)
 
 	service := &Service{
 		tlsClientCertificate:  &clientCert,
@@ -244,6 +239,6 @@ func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
 		Bsn:        "999999205", // Assuming Bsn is part of LaunchContext
 	}
 	actual, err := service.RequestHcpRst(launchContext)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	println(actual)
 }

@@ -30,17 +30,11 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 	}
 
 	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
-	if err != nil {
-		t.Fatalf("Failed to read zorgplatform.online.pem: %v", err)
-	}
+	require.NoError(t, err)
 	zorgplatformCertBlock, _ := pem.Decode(zorgplatformCertData)
-	if zorgplatformCertBlock == nil {
-		t.Fatalf("Failed to decode PEM block containing the certificate")
-	}
+	require.NotNil(t, zorgplatformCertBlock)
 	zorgplatformX509Cert, err := x509.ParseCertificate(zorgplatformCertBlock.Bytes)
-	if err != nil {
-		t.Fatalf("Failed to parse zorgplatform.online.pem: %v", err)
-	}
+	require.NoError(t, err)
 
 	service := &Service{
 		tlsClientCertificate:  &clientCert,
