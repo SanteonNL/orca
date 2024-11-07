@@ -653,7 +653,7 @@ func TestService_ProxyToEHR(t *testing.T) {
 	require.Equal(t, fhirServerURL.Host, capturedHost)
 
 	// Logout and attempt to get the patient again
-	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/cpc/logout", nil)
+	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/logout", nil)
 
 	// Trying to logout without a session cookie should return an error
 	httpResponse, err = frontServer.Client().Do(httpRequest)
@@ -718,7 +718,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 	require.Equal(t, "foo:bar", capturedQueryParams.Get("_search"))
 
 	// Logout and attempt to get the patient again
-	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/cpc/logout", nil)
+	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/logout", nil)
 	httpRequest.AddCookie(&http.Cookie{
 		Name:  "sid",
 		Value: sessionID,
