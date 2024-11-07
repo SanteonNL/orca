@@ -128,6 +128,18 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		log.Info().Msgf("Redirecting to %s", s.frontendUrl)
 		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
 	})
+
+	// Logout endpoint
+	mux.HandleFunc(basePath+"/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+		s.SessionManager.Destroy(writer, request)
+		// If there is a 'Referer' value in the header, redirect to that URL
+		if referer := request.Header.Get("Referer"); referer != "" {
+			http.Redirect(writer, request, referer, http.StatusFound)
+		} else {
+			// This redirection will be handled by middleware in the frontend
+			http.Redirect(writer, request, s.frontendUrl, http.StatusOK)
+		}
+	}))
 }
 
 // withSession is a middleware that retrieves the session for the given request.
