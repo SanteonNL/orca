@@ -47,6 +47,56 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			notificationTask: &primaryTask,
 		},
 		{
+			name: "primary task, contains reasonReference instead of reasonCode, triggers subtask creation",
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			notificationTask: func() *fhir.Task {
+				copiedTask := deepCopy(primaryTask)
+				copiedTask.ReasonReference = &fhir.Reference{
+					Reference: to.Ptr("Condition/1"),
+				}
+				copiedTask.ReasonCode = nil
+				return &copiedTask
+			}(),
+			mock: func(client *mock.MockClient) {
+				client.EXPECT().Read("Condition/1", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ string, result *fhir.Condition, _ ...fhirclient.Option) error {
+						*result = fhir.Condition{
+							Id: to.Ptr("1"),
+							Code: &fhir.CodeableConcept{
+								Coding: []fhir.Coding{
+									{
+										System: to.Ptr("http://snomed.info/sct"),
+										Code:   to.Ptr("13645005"),
+									},
+								},
+							},
+						}
+						return nil
+					})
+			},
+			numBundlesPosted: 1, // One subtask should be created
+		},
+		{
+			name: "(error): primary task, multiple reasonCodes match",
+			notificationTask: func() *fhir.Task {
+				copiedTask := deepCopy(primaryTask)
+				copiedTask.ReasonCode = &fhir.CodeableConcept{
+					Coding: []fhir.Coding{
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("13645005"), // COPD
+						},
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("84114007"), // Heart failure
+						},
+					},
+				}
+				return &copiedTask
+			}(),
+			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference matches multiple workflows (http://snomed.info/sct|13645005, http://snomed.info/sct|84114007) for service http://snomed.info/sct|719858009"),
+		},
+		{
 			name: "(error): primary task, invalid (missing SCP profile)",
 			notificationTask: func() *fhir.Task {
 				copiedTask := deepCopy(primaryTask)
