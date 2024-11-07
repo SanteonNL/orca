@@ -134,7 +134,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		s.SessionManager.Destroy(writer, request)
 		// If there is a 'Referrer' value in the header, redirect to that URL
 		if referrer := request.Header.Get("Referrer"); referrer != "" {
-			http.Redirect(writer, request, referrer, http.StatusOK)
+			http.Redirect(writer, request, referrer, http.Found)
 		} else {
 			// This redirection will be handled by middleware in the frontend
 			http.Redirect(writer, request, s.frontendUrl, http.StatusOK)
