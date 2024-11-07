@@ -58,8 +58,28 @@ func Test_Main(t *testing.T) {
 	t.Run("EHR using Orchestrator REST API", func(t *testing.T) {
 		t.Run("Hospital EHR creates new Task", func(t *testing.T) {
 			var task fhir.Task
+			var serviceRequest fhir.ServiceRequest
 			t.Log("Creating new Task...")
 			{
+				t.Log("  Creating associated ServiceRequest...")
+				serviceRequest = fhir.ServiceRequest{
+					Meta: &fhir.Meta{
+						Profile: []string{
+							"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+						},
+					},
+					Code: &fhir.CodeableConcept{
+						Coding: []fhir.Coding{
+							{
+								System: to.Ptr("http://snomed.info/sct"),
+								Code:   to.Ptr("719858009"), // Telemonitoring
+							},
+						},
+					},
+				}
+				err := hospitalOrcaFHIRClient.Create(serviceRequest, &serviceRequest)
+				require.NoError(t, err)
+
 				task.Meta = &fhir.Meta{
 					Profile: []string{
 						"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
@@ -80,10 +100,14 @@ func Test_Main(t *testing.T) {
 					Type: to.Ptr("Organization"),
 				}
 				task.Focus = &fhir.Reference{
-					Identifier: &fhir.Identifier{
-						// COPD
-						System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
-						Value:  to.Ptr("99534756439"),
+					Reference: to.Ptr("ServiceRequest/" + *serviceRequest.ID),
+				}
+				task.ReasonCode = &fhir.CodeableConcept{
+					Coding: []fhir.Coding{
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("13645005"), // COPD
+						},
 					},
 				}
 				task.For = &fhir.Reference{
@@ -94,7 +118,7 @@ func Test_Main(t *testing.T) {
 				}
 				task.Intent = "order"
 				task.Status = fhir.TaskStatusRequested
-				err := hospitalOrcaFHIRClient.Create(task, &task)
+				err = hospitalOrcaFHIRClient.Create(task, &task)
 				require.NoError(t, err)
 			}
 			t.Log("Responding to Task Questionnaire")
