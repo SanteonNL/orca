@@ -170,7 +170,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, 
 	if task.Focus == nil || task.Focus.Reference == nil {
 		return errors.New("task.Focus or task.Focus.Reference is nil")
 	}
-	var questionnaire map[string]interface{}
+	var questionnaire *fhir.Questionnaire
 	workflow, err := s.selectWorkflow(cpsClient, task)
 	if err != nil {
 		// TODO: INT-300 Reject Task if we can't execute it, or if it's invalid
@@ -245,7 +245,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, 
 	}
 
 	// Create a new SubTask based on the Questionnaire reference
-	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
+	questionnaireRef := "urn:uuid:" + *questionnaire.Id
 	subtask := s.getSubTask(task, questionnaireRef, isPrimaryTask)
 	subtaskRef := "urn:uuid:" + *subtask.Id
 

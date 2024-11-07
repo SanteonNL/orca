@@ -278,10 +278,13 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					*result = primaryTask
 					return nil
 				}).AnyTimes()
+
+			var capturedTx fhir.Bundle
 			if tt.numBundlesPosted > 0 {
 				mockFHIRClient.EXPECT().
 					Create(gomock.Any(), gomock.Any(), gomock.Any()).
 					DoAndReturn(func(bundle fhir.Bundle, result interface{}, options ...fhirclient.Option) error {
+						capturedTx = bundle
 						// Simulate the creation by setting the result to a mock response
 						mockResponse := map[string]interface{}{
 							"id":           uuid.NewString(),
@@ -309,6 +312,9 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+			for _, bundleEntry := range capturedTx.Entry {
+				require.NotEmpty(t, bundleEntry.Request.Url)
+			}
 		})
 	}
 }
@@ -331,7 +337,7 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, questionnaire)
 
-	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
+	questionnaireRef := "urn:uuid:" + *questionnaire.Id
 	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
 	subtask := service.getSubTask(&primaryTask, questionnaireRef, true)
 
