@@ -130,7 +130,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	})
 
 	// Logout endpoint
-	mux.HandleFunc(basePath+"/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 		s.SessionManager.Destroy(writer, request)
 		// If there is a 'Referer' value in the header, redirect to that URL
 		if referer := request.Header.Get("Referer"); referer != "" {

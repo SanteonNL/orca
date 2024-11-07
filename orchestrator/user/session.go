@@ -79,6 +79,13 @@ func (m *SessionManager) Destroy(response http.ResponseWriter, request *http.Req
 	http.SetCookie(response, &cookie)
 }
 
+// PruneSessions removes expired sessions.
+func (m *SessionManager) PruneSessions() {
+	m.store.mux.Lock()
+	defer m.store.mux.Unlock()
+	m.store.prune()
+}
+
 func (s *sessionStore) create(values SessionData) (string, *Session) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
