@@ -3,7 +3,10 @@ package zorgplatform
 import (
 	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -192,10 +195,24 @@ func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
 		t.Skip("Skipping TestService_RequestHcpRst_IntegrationTest as test-sign-zorgplatform.private.pem is not present locally")
 	}
 
+	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
+	if err != nil {
+		t.Fatalf("Failed to read zorgplatform.online.pem: %v", err)
+	}
+	zorgplatformCertBlock, _ := pem.Decode(zorgplatformCertData)
+	if zorgplatformCertBlock == nil {
+		t.Fatalf("Failed to decode PEM block containing the certificate")
+	}
+	zorgplatformX509Cert, err := x509.ParseCertificate(zorgplatformCertBlock.Bytes)
+	if err != nil {
+		t.Fatalf("Failed to parse zorgplatform.online.pem: %v", err)
+	}
+
 	service := &Service{
 		tlsClientCertificate:  &clientCert,
 		signingCertificateKey: signCert.PrivateKey.(*rsa.PrivateKey),
 		signingCertificate:    signCert.Certificate,
+		zorgplatformCert:      zorgplatformX509Cert,
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
