@@ -1,6 +1,7 @@
 package zorgplatform
 
 import (
+	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -8,6 +9,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/binary"
+	"encoding/pem"
 	"fmt"
 	"hash"
 	"net/http"
@@ -15,6 +17,7 @@ import (
 	"net/url"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
@@ -105,9 +108,14 @@ func TestService(t *testing.T) {
 		}, nil)
 	keysClient.EXPECT().Sign(gomock.Any(), signKeyName, "0", gomock.Any(), nil).
 		DoAndReturn(func(ctx interface{}, keyName string, keyVersion string, parameters azkeys.SignParameters, options *azkeys.SignOptions) (azkeys.SignResponse, error) {
+			hashed := sha256.Sum256(parameters.Value)
+			signature, err := rsa.SignPKCS1v15(rand.Reader, signingKeyPair, crypto.SHA256, hashed[:])
+			if err != nil {
+				return azkeys.SignResponse{}, err
+			}
 			return azkeys.SignResponse{
 				KeyOperationResult: azkeys.KeyOperationResult{
-					Result: []byte("mocked-signature"),
+					Result: signature,
 				},
 			}, nil
 		})
@@ -123,17 +131,27 @@ func TestService(t *testing.T) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	certDER := certificate.Certificate[0]
+
+	// Encode to PEM
+	pemBlock := pem.EncodeToMemory(&pem.Block{
+		Type:  "CERTIFICATE",
+		Bytes: certDER,
+	})
+
 	cfg := Config{
-		Enabled: true,
-		ApiUrl:  zorgplatformHttpServer.URL + "/api",
-		StsUrl:  zorgplatformHttpServer.URL + "/sts",
+		Enabled:            true,
+		ApiUrl:             zorgplatformHttpServer.URL + "/api",
+		StsUrl:             zorgplatformHttpServer.URL + "/sts",
+		SAMLRequestTimeout: 10 * time.Second,
 		SigningConfig: SigningConfig{
 			Issuer:   "https://partner-application.nl",
-			Audience: "urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8",
+			Audience: "unit-test",
 		},
 		DecryptConfig: DecryptConfig{
-			Issuer:   "urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8",
-			Audience: "https://partner-application.nl",
+			Issuer:      "unit-test",
+			Audience:    "https://partner-application.nl",
+			SignCertPem: string(pemBlock),
 		},
 		AzureConfig: AzureConfig{
 			CredentialType: "default",
@@ -207,7 +225,8 @@ func TestService(t *testing.T) {
 }
 
 func createSAMLResponse(t *testing.T, encryptionKey *x509.Certificate) string {
-	plainText, err := os.ReadFile("saml_assertion_input.xml")
+	//TODO: This needs to be fixed once the validation verified expiration date
+	plainText, err := os.ReadFile("saml_assertion_input.xml") //DO NOT modify this file, it is a signed assertion with the test-certificate.pem via the service integration test - needs to be to validate the signature
 	require.NoError(t, err)
 
 	e := xmlenc.OAEP()

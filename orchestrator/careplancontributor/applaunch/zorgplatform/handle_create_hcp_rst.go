@@ -9,10 +9,11 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/beevik/etree"
 	"github.com/google/uuid"
@@ -371,7 +372,10 @@ func (s *Service) validateRSTSResponse(rtst string) (string, error) {
 		return "", fmt.Errorf("failed to serialize RTST assertion: %w", err)
 	}
 
-	//TODO: Assertion MUST be validated here!!!
+	err = s.validateZorgplatformSignature(assertionElement)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate RTST assertion signature: %w", err)
+	}
 
 	// Return the SAML Bearer token value; the base64 encoded <Assertion> element
 	return base64.StdEncoding.EncodeToString([]byte(assertionString)), nil
