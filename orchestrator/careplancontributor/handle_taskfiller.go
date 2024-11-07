@@ -37,9 +37,9 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, cpsClient 
 	// If partOfRef is nil, handle the task as a primary task - no need to create follow-up subtasks for newly created Tasks
 	//This only happens on Task update where the Task.output is filled with a QuestionnaireResponse
 	if partOfRef == nil {
-		// Check if the priary task is "created", its status will be updated by subtasks that are completed - not directly here
-		if task.Status != fhir.TaskStatusRequested {
-			log.Debug().Msg("primary Task.status != requested (workflow already started) - not processing in handleTaskFillerCreateOrUpdate")
+		// Check if the primary task is "created", its status will be updated by subtasks that are completed - not directly here
+		if task.Status != fhir.TaskStatusRequested && task.Status != fhir.TaskStatusReceived {
+			log.Debug().Msg("primary Task.status != requested||received (workflow already started) - not processing in handleTaskFillerCreateOrUpdate")
 			return nil
 		}
 
@@ -71,9 +71,7 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, cpsClient 
 
 // TODO: This function now always expects a subtask, but it should also be able to handle primary tasks
 func (s *Service) handleTaskFillerUpdate(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
-
 	log.Info().Msg("Running handleTaskFillerUpdate")
-
 	if !coolfhir.IsScpTask(task) {
 		log.Debug().Msg("Task is not an SCP Task - skipping")
 		return nil
@@ -104,6 +102,10 @@ func (s *Service) handleTaskFillerUpdate(ctx context.Context, cpsClient fhirclie
 }
 
 func (s *Service) acceptPrimaryTask(cpsClient fhirclient.Client, primaryTask *fhir.Task) error {
+	if primaryTask.Status != fhir.TaskStatusRequested && primaryTask.Status != fhir.TaskStatusReceived {
+		log.Debug().Msg("primary Task.status != requested||received (workflow already started) - not processing in handleTaskFillerCreateOrUpdate")
+		return nil
+	}
 	log.Debug().Msg("Accepting primary Task")
 	primaryTask.Status = fhir.TaskStatusAccepted
 	// Update the task in the FHIR server

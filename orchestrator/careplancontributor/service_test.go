@@ -575,14 +575,15 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/3"), Type: to.Ptr("Task")})
 	notificationJSON, _ := json.Marshal(notification)
 
-	mockFHIRClient.EXPECT().Read(fhirServerURL.String()+"/Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+	mockFHIRClient.EXPECT().Read(fhirServerURL.String()+"/Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Task, option ...fhirclient.Option) error {
 		rawJson, _ := os.ReadFile("./testdata/task-3.json")
-		var data fhir.Task
-		_ = json.Unmarshal(rawJson, &data)
-		bytes, _ := json.Marshal(data)
-		json.Unmarshal(bytes, &result)
-		return nil
+		return json.Unmarshal(rawJson, &result)
 	})
+	mockFHIRClient.EXPECT().Read("ServiceRequest/1", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(path string, result *fhir.ServiceRequest, option ...fhirclient.Option) error {
+			rawJson, _ := os.ReadFile("./testdata/servicerequest-1.json")
+			return json.Unmarshal(rawJson, &result)
+		})
 
 	mockFHIRClient.EXPECT().
 		Create(gomock.Any(), gomock.Any(), gomock.Any()).
