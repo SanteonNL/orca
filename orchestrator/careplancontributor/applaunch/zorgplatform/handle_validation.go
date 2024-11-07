@@ -160,6 +160,7 @@ func (s *Service) validateZorgplatformSignature(decryptedAssertion *etree.Elemen
 
 	_, err := ctx.Validate(decryptedAssertion)
 	if err != nil {
+		log.Err(err).Msg("Signature is invalid")
 		return fmt.Errorf("unable to validate signature: %w", err)
 	}
 
