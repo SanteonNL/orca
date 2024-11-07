@@ -62,16 +62,9 @@ func Start(config Config) error {
 
 		// Start session expiration ticker
 		ticker := time.NewTicker(time.Minute)
-		shutdown := make(chan struct{})
 		go func() {
-			for {
-				select {
-				case <-ticker.C:
-					sessionManager.PruneSessions()
-				case <-shutdown:
-					ticker.Stop()
-					return
-				}
+			for range ticker.C {
+				sessionManager.PruneSessions()
 			}
 		}()
 	}
