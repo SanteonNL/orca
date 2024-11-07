@@ -49,7 +49,8 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 				ChannelHttpClient: profile.HttpClient(),
 			},
 		},
-		maxReadBodySize: fhirClientConfig.MaxResponseSize,
+		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
+		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
 	}
 	s.handlerProvider = s.defaultHandlerProvider
 	s.ensureSearchParameterExists()
@@ -57,15 +58,16 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 }
 
 type Service struct {
-	orcaPublicURL       *url.URL
-	fhirURL             *url.URL
-	transport           http.RoundTripper
-	fhirClient          fhirclient.Client
-	profile             profile.Provider
-	subscriptionManager subscriptions.Manager
-	maxReadBodySize     int
-	proxy               *httputil.ReverseProxy
-	handlerProvider     func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
+	orcaPublicURL                *url.URL
+	fhirURL                      *url.URL
+	transport                    http.RoundTripper
+	fhirClient                   fhirclient.Client
+	profile                      profile.Provider
+	subscriptionManager          subscriptions.Manager
+	maxReadBodySize              int
+	proxy                        *httputil.ReverseProxy
+	allowUnmanagedFHIROperations bool
+	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
@@ -201,8 +203,15 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 }
 
 func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-	// TODO: Monitor these, and disallow at a later moment
 	log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
+
+	if !s.allowUnmanagedFHIROperations {
+		return nil, &coolfhir.ErrorWithCode{
+			Message:    "FHIR operation not allowed",
+			StatusCode: http.StatusMethodNotAllowed,
+		}
+	}
+
 	tx.Append(request.bundleEntry())
 	idx := len(tx.Entry) - 1
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
@@ -303,6 +312,13 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
+		if !s.allowUnmanagedFHIROperations {
+			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
+				Message:    "FHIR operation not allowed",
+				StatusCode: http.StatusMethodNotAllowed,
+			}, operationName, httpResponse)
+			return
+		}
 		s.proxy.ServeHTTP(httpResponse, httpRequest)
 		return
 	}
