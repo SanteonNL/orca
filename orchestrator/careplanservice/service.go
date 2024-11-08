@@ -360,6 +360,10 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	var resultHandlers []FHIRHandlerResult
 	for entryIdx, entry := range bundle.Entry {
 		// Bundle.entry.request.url must be a relative URL with at most one slash (so Task or Task/1, but not http://example.com/Task or Task/foo/bar)
+		if entry.Request.Url == "" {
+			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url (entry #) is required", entryIdx), op, httpResponse)
+			return
+		}
 		requestUrl, err := url.Parse(entry.Request.Url)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(err, op, httpResponse)
