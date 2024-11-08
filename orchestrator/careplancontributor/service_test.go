@@ -30,6 +30,34 @@ import (
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
 
+func TestService_Proxy_NoZorginzageEndpointEnabledFlag_Fails(t *testing.T) {
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	fhirServerMux := http.NewServeMux()
+	fhirServer := httptest.NewServer(fhirServerMux)
+	fhirServerURL, _ := url.Parse(fhirServer.URL)
+	fhirServerURL.Path = "/fhir"
+	sessionManager, _ := createTestSession()
+
+	service, _ := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	// Setup: configure the service to proxy to the backing FHIR server
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
+	httpResponse, err := httpClient.Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, httpResponse.StatusCode, http.StatusMethodNotAllowed)
+}
+
 func TestService_Proxy_NoHeader_Fails(t *testing.T) {
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
@@ -43,6 +71,7 @@ func TestService_Proxy_NoHeader_Fails(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
+		ZorginzageEndpointEnabled: true,
 	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -81,6 +110,7 @@ func TestService_Proxy_NoCarePlanInHeader_Fails(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
+		ZorginzageEndpointEnabled: true,
 	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -129,6 +159,7 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
+		ZorginzageEndpointEnabled: true,
 	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -179,6 +210,7 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
+		ZorginzageEndpointEnabled: true,
 	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -229,6 +261,7 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
+		ZorginzageEndpointEnabled: true,
 	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -281,6 +314,7 @@ func TestService_Proxy_Valid(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
+		ZorginzageEndpointEnabled: true,
 	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -334,6 +368,7 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
+		ZorginzageEndpointEnabled: true,
 	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -384,6 +419,7 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
+		ZorginzageEndpointEnabled: true,
 	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
