@@ -122,6 +122,7 @@ func (s *sessionStore) prune() {
 }
 
 func (s *sessionStore) destroy(id string) {
+	log.Info().Msgf("Destroying user session (id=%s)", id)
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	delete(s.sessions, id)
