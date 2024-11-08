@@ -205,11 +205,9 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
 
-	if !s.allowUnmanagedFHIROperations {
-		return nil, &coolfhir.ErrorWithCode{
-			Message:    "FHIR operation not allowed",
-			StatusCode: http.StatusMethodNotAllowed,
-		}
+	err := s.checkAllowUnmanagedOperations()
+	if err != nil {
+		return nil, err
 	}
 
 	tx.Append(request.bundleEntry())
@@ -284,11 +282,9 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
-		if !s.allowUnmanagedFHIROperations {
-			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
-				Message:    "FHIR operation not allowed",
-				StatusCode: http.StatusMethodNotAllowed,
-			}, operationName, httpResponse)
+		err = s.checkAllowUnmanagedOperations()
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 			return
 		}
 		s.proxy.ServeHTTP(httpResponse, httpRequest)
@@ -319,11 +315,9 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
-		if !s.allowUnmanagedFHIROperations {
-			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
-				Message:    "FHIR operation not allowed",
-				StatusCode: http.StatusMethodNotAllowed,
-			}, operationName, httpResponse)
+		err = s.checkAllowUnmanagedOperations()
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 			return
 		}
 		s.proxy.ServeHTTP(httpResponse, httpRequest)
@@ -503,4 +497,15 @@ func (s *Service) ensureSearchParameterExists() {
 	} else {
 		log.Info().Msgf("Ensured SearchParameter/%s", searchParamID)
 	}
+}
+
+// checkAllowUnmanagedOperations checks if unmanaged operations are allowed. It errors if they are not.
+func (s *Service) checkAllowUnmanagedOperations() error {
+	if !s.allowUnmanagedFHIROperations {
+		return &coolfhir.ErrorWithCode{
+			Message:    "FHIR operation not allowed",
+			StatusCode: http.StatusMethodNotAllowed,
+		}
+	}
+	return nil
 }
