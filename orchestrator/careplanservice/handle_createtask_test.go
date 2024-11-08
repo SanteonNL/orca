@@ -224,9 +224,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 			},
-			returnedBundle: nil,
-			errorFromRead:  nil,
-			expectError:    errors.New("Task is not SCP task"),
+			expectError: errors.New("Task is not SCP task"),
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
@@ -238,9 +236,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 			},
-			returnedBundle: nil,
-			errorFromRead:  nil,
-			expectError:    errors.New("Task.For must be set with a local reference, or a logical identifier, referencing a patient"),
+			expectError: errors.New("Task.For must be set with a local reference, or a logical identifier, referencing a patient"),
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
@@ -330,7 +326,6 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				},
 			},
 			returnedBundle: defaultReturnedBundle,
-			errorFromRead:  nil,
 		},
 	}
 
