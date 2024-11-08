@@ -13,4 +13,8 @@ var ErrEntryNotFound = errors.New("CSD does not contain the specified entry")
 type Directory interface {
 	// LookupEndpoint searches for endpoints with the given name of the given owner.
 	LookupEndpoint(ctx context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error)
+	// LookupEntity searches for an entity with the given identifier, returning it as reference.
+	// The reference then might contain more information on the entity, like a human-readable display name.
+	// If the entity is not found, it returns ErrEntryNotFound.
+	LookupEntity(ctx context.Context, identifier fhir.Identifier) (*fhir.Reference, error)
 }

@@ -41,6 +41,14 @@ func LogicalReference(refType, system, identifier string) *fhir.Reference {
 	}
 }
 
+// ValidateReference validates that a reference is either a logical reference, a reference to a resource, or both.
+func ValidateReference(reference fhir.Reference) bool {
+	if reference.Reference != nil {
+		return true
+	}
+	return reference.Identifier != nil && reference.Identifier.System != nil && reference.Identifier.Value != nil
+}
+
 func ValidateLogicalReference(reference *fhir.Reference, expectedType string, expectedSystem string) error {
 	if reference == nil {
 		return errors.New("reference cannot be nil")

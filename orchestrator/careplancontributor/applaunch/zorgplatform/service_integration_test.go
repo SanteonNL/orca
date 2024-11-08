@@ -4,7 +4,10 @@ import (
 	"context"
 	"crypto/rsa"
 	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -25,6 +28,14 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 	if err != nil {
 		t.Skip("Skipping TestService_RequestHcpRst_IntegrationTest as test-sign-zorgplatform.private.pem is not present locally")
 	}
+
+	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
+	require.NoError(t, err)
+	zorgplatformCertBlock, _ := pem.Decode(zorgplatformCertData)
+	require.NotNil(t, zorgplatformCertBlock)
+	zorgplatformX509Cert, err := x509.ParseCertificate(zorgplatformCertBlock.Bytes)
+	require.NoError(t, err)
+
 	service := &Service{
 		tlsClientCertificate:  &clientCert,
 		signingCertificateKey: signCert.PrivateKey.(*rsa.PrivateKey),
@@ -41,6 +52,7 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 				},
 			},
 		},
+		zorgplatformCert: zorgplatformX509Cert,
 		config: Config{
 			SAMLRequestTimeout: 10 * time.Second,
 			BaseUrl:            "https://zorgplatform.online",

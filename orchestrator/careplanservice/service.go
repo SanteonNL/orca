@@ -49,7 +49,8 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 				ChannelHttpClient: profile.HttpClient(),
 			},
 		},
-		maxReadBodySize: fhirClientConfig.MaxResponseSize,
+		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
+		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
 	}
 	s.handlerProvider = s.defaultHandlerProvider
 	s.ensureSearchParameterExists()
@@ -57,15 +58,16 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 }
 
 type Service struct {
-	orcaPublicURL       *url.URL
-	fhirURL             *url.URL
-	transport           http.RoundTripper
-	fhirClient          fhirclient.Client
-	profile             profile.Provider
-	subscriptionManager subscriptions.Manager
-	maxReadBodySize     int
-	proxy               *httputil.ReverseProxy
-	handlerProvider     func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
+	orcaPublicURL                *url.URL
+	fhirURL                      *url.URL
+	transport                    http.RoundTripper
+	fhirClient                   fhirclient.Client
+	profile                      profile.Provider
+	subscriptionManager          subscriptions.Manager
+	maxReadBodySize              int
+	proxy                        *httputil.ReverseProxy
+	allowUnmanagedFHIROperations bool
+	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
@@ -201,8 +203,13 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 }
 
 func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-	// TODO: Monitor these, and disallow at a later moment
 	log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
+
+	err := s.checkAllowUnmanagedOperations()
+	if err != nil {
+		return nil, err
+	}
+
 	tx.Append(request.bundleEntry())
 	idx := len(tx.Entry) - 1
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
@@ -275,6 +282,11 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
+		err = s.checkAllowUnmanagedOperations()
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
+			return
+		}
 		s.proxy.ServeHTTP(httpResponse, httpRequest)
 		return
 	}
@@ -303,6 +315,11 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
+		err = s.checkAllowUnmanagedOperations()
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
+			return
+		}
 		s.proxy.ServeHTTP(httpResponse, httpRequest)
 		return
 	}
@@ -343,6 +360,10 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	var resultHandlers []FHIRHandlerResult
 	for entryIdx, entry := range bundle.Entry {
 		// Bundle.entry.request.url must be a relative URL with at most one slash (so Task or Task/1, but not http://example.com/Task or Task/foo/bar)
+		if entry.Request.Url == "" {
+			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url (entry #) is required", entryIdx), op, httpResponse)
+			return
+		}
 		requestUrl, err := url.Parse(entry.Request.Url)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(err, op, httpResponse)
@@ -480,4 +501,15 @@ func (s *Service) ensureSearchParameterExists() {
 	} else {
 		log.Info().Msgf("Ensured SearchParameter/%s", searchParamID)
 	}
+}
+
+// checkAllowUnmanagedOperations checks if unmanaged operations are allowed. It errors if they are not.
+func (s *Service) checkAllowUnmanagedOperations() error {
+	if !s.allowUnmanagedFHIROperations {
+		return &coolfhir.ErrorWithCode{
+			Message:    "FHIR operation not allowed",
+			StatusCode: http.StatusMethodNotAllowed,
+		}
+	}
+	return nil
 }

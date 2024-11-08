@@ -250,7 +250,9 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, 
 	subtaskRef := "urn:uuid:" + *subtask.Id
 
 	tx := coolfhir.Transaction().
-		Create(questionnaire, coolfhir.WithFullUrl(questionnaireRef)).
+		Create(questionnaire, coolfhir.WithFullUrl(questionnaireRef), func(entry *fhir.BundleEntry) {
+			entry.Request.Url = "Questionnaire" // TODO: remove this after changed to fhir.Questionnaire
+		}).
 		Create(subtask, coolfhir.WithFullUrl(subtaskRef))
 
 	bundle := tx.Bundle()

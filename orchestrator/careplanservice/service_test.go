@@ -30,6 +30,31 @@ func TestService_Proxy(t *testing.T) {
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
+	fhirServer := httptest.NewServer(fhirServerMux)
+	// Setup: create the service
+	service, err := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+	}, profile.TestProfile{}, orcaPublicURL)
+	require.NoError(t, err)
+	// Setup: configure the service to proxy to the backing FHIR server
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+
+	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+}
+
+func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
+	// Test that the service registers the /cps URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	fhirServerMux := http.NewServeMux()
 	capturedHost := ""
 	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
@@ -42,6 +67,7 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
+		AllowUnmanagedFHIROperations: true,
 	}, profile.TestProfile{}, orcaPublicURL)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
@@ -106,10 +132,8 @@ func TestService_ErrorHandling(t *testing.T) {
 }
 
 func TestService_DefaultOperationHandler(t *testing.T) {
-	t.Run("handles unmanaged FHIR operations", func(t *testing.T) {
-		// For now, we allow unmanaged FHIR operations. Unmanaged operations are operations (e.g. POST ServiceRequest)
-		// which aren't explicitly implemented in the CarePlanService API. We currently allow these, as we know
-		// some operations are required, but not implemented yet.
+	t.Run("handles unmanaged FHIR operations - allow unmanaged operations", func(t *testing.T) {
+		// For now, we have a flag that can be enabled in config that will allow unmanaged FHIR operations. This defaults to false and should not be enabled in test or prod environments
 		tx := coolfhir.Transaction()
 		// The unmanaged operation handler reads the resource to return from the result Bundle,
 		// from the same index as the resource it added to the transaction Bundle. To test this,
@@ -154,7 +178,8 @@ func TestService_DefaultOperationHandler(t *testing.T) {
 				return nil
 			})
 		service := Service{
-			fhirClient: fhirClient,
+			fhirClient:                   fhirClient,
+			allowUnmanagedFHIROperations: true,
 		}
 
 		resultHandler, err := service.handleUnmanagedOperation(request, tx)
@@ -165,6 +190,27 @@ func TestService_DefaultOperationHandler(t *testing.T) {
 		require.Empty(t, notifications)
 		assert.JSONEq(t, string(expectedServiceRequestJson), string(resultBundleEntry.Resource))
 		assert.Equal(t, "ServiceRequest/123", *resultBundleEntry.Response.Location)
+	})
+	t.Run("handles unmanaged FHIR operations - fail for unmanaged operations", func(t *testing.T) {
+		// Default behaviour is that we fail when a user tries to perform an unmanaged operation
+		tx := coolfhir.Transaction()
+		// The unmanaged operation handler reads the resource to return from the result Bundle,
+		// from the same index as the resource it added to the transaction Bundle. To test this,
+		// we make sure there's 2 other resources in the Bundle.
+		tx.Create(fhir.Task{})
+		ctrl := gomock.NewController(t)
+		fhirClient := mock.NewMockClient(ctrl)
+		service := Service{
+			fhirClient: fhirClient,
+		}
+		request := FHIRHandlerRequest{
+			ResourcePath: "ServiceRequest",
+			HttpMethod:   http.MethodPost,
+		}
+
+		resultHandler, err := service.handleUnmanagedOperation(request, tx)
+		require.Error(t, err)
+		require.Nil(t, resultHandler)
 	})
 }
 
@@ -419,6 +465,23 @@ func TestService_Handle(t *testing.T) {
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0]: specifying IDs when creating resources isn't allowed")
+		})
+		t.Run("entry without request.url", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+						},
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0].request.url (entry #) is required")
 		})
 		t.Run("POST with URL containing too many parts", func(t *testing.T) {
 			requestBundle := fhir.Bundle{

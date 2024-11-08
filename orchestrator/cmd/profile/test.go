@@ -85,6 +85,10 @@ type TestCsdDirectory struct {
 	Endpoint string
 }
 
+func (t TestCsdDirectory) LookupEntity(ctx context.Context, identifier fhir.Identifier) (*fhir.Reference, error) {
+	return nil, csd.ErrEntryNotFound
+}
+
 func (t TestCsdDirectory) LookupEndpoint(_ context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
 	return []fhir.Endpoint{
 		{

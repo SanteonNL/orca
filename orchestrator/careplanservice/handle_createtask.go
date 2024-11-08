@@ -47,6 +47,20 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	if err != nil {
 		return nil, err
 	}
+
+	// Enrich Task.Requester and Task.Owner with info from CSD (if available), typically to add the organization name
+	// TODO: CSD is queried again later, to get the notification endpoint. We should optimize/cache this. Maybe in the context.Context?
+	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Requester.Identifier); err != nil {
+		log.Info().Err(err).Msgf("Unable to lookup Task.requester in CSD, won't be enriched.")
+	} else {
+		task.Requester = entity
+	}
+	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Owner.Identifier); err != nil {
+		log.Info().Err(err).Msgf("Unable to lookup Task.owner in CSD, won't be enriched.")
+	} else {
+		task.Owner = entity
+	}
+
 	// Resolve the CarePlan
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
@@ -77,12 +91,9 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			},
 		})
 
-		// Validate Task.For
-		if task.For == nil || task.For.Identifier == nil {
-			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a reference to a patient", http.StatusBadRequest)
-		}
-		if *task.For.Identifier.System != coolfhir.BSNNamingSystem {
-			return nil, coolfhir.NewErrorWithCode("Task.For.Identifier.System must be set with a BSN identifier", http.StatusBadRequest)
+		// Validate Task.For: identifier (with system and value), and/or reference must be set
+		if task.For == nil || !coolfhir.ValidateReference(*task.For) {
+			return nil, coolfhir.NewErrorWithCode(fmt.Sprintf("Task.For must be set with a local reference, or a logical identifier, referencing a patient"), http.StatusBadRequest)
 		}
 		carePlan.Subject = *task.For
 		carePlan.Status = fhir.RequestStatusActive

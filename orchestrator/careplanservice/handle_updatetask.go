@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
@@ -68,7 +68,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	if err != nil {
 		return nil, err
 	}
-	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
+	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&taskExisting, principal.Organization.Identifier)
 	isScpSubTask := coolfhir.IsScpSubTask(&task)
 	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester, isScpSubTask) {
 		return nil, errors.New(
@@ -80,6 +80,23 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 				isRequester,
 				isScpSubTask,
 			))
+	}
+
+	// Check fields that aren't allowed to be changed: owner, requester, basedOn, partOf, for
+	if !deep.Equal(task.Requester, taskExisting.Requester) {
+		return nil, errors.New("Task.requester cannot be changed")
+	}
+	if !deep.Equal(task.Owner, taskExisting.Owner) {
+		return nil, errors.New("Task.owner cannot be changed")
+	}
+	if !deep.Equal(task.BasedOn, taskExisting.BasedOn) {
+		return nil, errors.New("Task.basedOn cannot be changed")
+	}
+	if !deep.Equal(task.PartOf, taskExisting.PartOf) {
+		return nil, errors.New("Task.partOf cannot be changed")
+	}
+	if !deep.Equal(task.For, taskExisting.For) {
+		return nil, errors.New("Task.for cannot be changed")
 	}
 
 	// Resolve the CarePlan
