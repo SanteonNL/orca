@@ -34,11 +34,13 @@ func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhi
 func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
 	params := []fhirclient.Option{}
 	for k, v := range queryParams {
-		// Skip param to include CareTeam since we need to add this for validation anyway
-		if k == "_include" && v[0] == "CarePlan:care-team" {
-			continue
+		for _, value := range v {
+			// Skip param to include CareTeam since we need to add this for validation anyway
+			if k == "_include" && value == "CarePlan:care-team" {
+				continue
+			}
+			params = append(params, fhirclient.QueryParam(k, value))
 		}
-		params = append(params, fhirclient.QueryParam(k, v[0]))
 	}
 	params = append(params, fhirclient.QueryParam("_include", "CarePlan:care-team"))
 	params = append(params, fhirclient.ResponseHeaders(headers))

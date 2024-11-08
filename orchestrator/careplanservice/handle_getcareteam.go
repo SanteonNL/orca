@@ -32,7 +32,9 @@ func (s *Service) handleGetCareTeam(ctx context.Context, id string, headers *fhi
 func (s *Service) handleSearchCareTeam(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
 	params := []fhirclient.Option{}
 	for k, v := range queryParams {
-		params = append(params, fhirclient.QueryParam(k, v[0]))
+		for _, value := range v {
+			params = append(params, fhirclient.QueryParam(k, value))
+		}
 	}
 	params = append(params, fhirclient.ResponseHeaders(headers))
 	var bundle fhir.Bundle
