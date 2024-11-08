@@ -29,9 +29,9 @@ type SigningConfig struct {
 }
 
 type DecryptConfig struct {
-	Issuer    string `koanf:"iss"`
-	Audience  string `koanf:"aud"`
-	PublicKey string `koanf:"publickey"`
+	Issuer      string `koanf:"iss"`
+	Audience    string `koanf:"aud"`
+	SignCertPem string `koanf:"signcertpem"`
 }
 
 type X509FileConfig struct {

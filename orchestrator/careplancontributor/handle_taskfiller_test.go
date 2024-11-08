@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"context"
 	"encoding/json"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
 	"testing"
 
@@ -60,7 +61,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := deepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.Meta.Profile = []string{"SomeOtherProfile"}
 				return &copiedTask
 			}(),
@@ -74,7 +75,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := deepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.Requester = nil
 				return &copiedTask
 			}(),
@@ -88,7 +89,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := deepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.Owner = nil
 				return &copiedTask
 			}(),
@@ -102,7 +103,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := deepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.PartOf = nil
 				return &copiedTask
 			}(),
@@ -116,7 +117,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := deepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.Status = fhir.TaskStatusInProgress
 				return &copiedTask
 			}(),
@@ -130,7 +131,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := deepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.BasedOn = nil
 				return &copiedTask
 			}(),
@@ -144,7 +145,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				subTask := deepCopy(primaryTask)
+				subTask := deep.Copy(primaryTask)
 				swap := subTask.Owner
 				subTask.Owner = subTask.Requester
 				subTask.Requester = swap
@@ -183,7 +184,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				},
 			}
 
-			primaryTask := deepCopy(primaryTask)
+			primaryTask := deep.Copy(primaryTask)
 
 			service.profile = tt.profile
 			if tt.mock != nil {
@@ -283,19 +284,6 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	require.Equal(t, primaryTask.For, subtask.For, "Task.for should be copied from the primary task")
 	require.Equal(t, 1, len(primaryTask.Input), "Subtask should contain one input")
 	require.Equal(t, expectedSubTaskInput, subtask.Input, "Subtask should contain a reference to the questionnaire")
-}
-
-func deepCopy[T any](src T) T {
-	var dst T
-	bytes, err := json.Marshal(src)
-	if err != nil {
-		panic(err)
-	}
-	err = json.Unmarshal(bytes, &dst)
-	if err != nil {
-		panic(err)
-	}
-	return dst
 }
 
 var primaryTask = fhir.Task{

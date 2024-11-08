@@ -2,6 +2,7 @@ package user
 
 import (
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"sync"
 	"time"
@@ -62,6 +63,29 @@ func (m *SessionManager) Get(request *http.Request) *SessionData {
 	return &session.Data
 }
 
+func (m *SessionManager) Destroy(response http.ResponseWriter, request *http.Request) {
+	sessionID := getSessionCookie(request)
+	if sessionID != "" {
+		m.store.destroy(sessionID)
+	} else {
+		log.Warn().Msg("No session to destroy")
+	}
+	cookie := http.Cookie{
+		Name:     "sid",
+		Value:    "",
+		HttpOnly: true,
+		Expires:  time.Now().Add(-time.Minute),
+	}
+	http.SetCookie(response, &cookie)
+}
+
+// PruneSessions removes expired sessions.
+func (m *SessionManager) PruneSessions() {
+	m.store.mux.Lock()
+	defer m.store.mux.Unlock()
+	m.store.prune()
+}
+
 func (s *sessionStore) create(values SessionData) (string, *Session) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -95,6 +119,13 @@ func (s *sessionStore) prune() {
 			delete(s.sessions, id)
 		}
 	}
+}
+
+func (s *sessionStore) destroy(id string) {
+	log.Info().Msgf("Destroying user session (id=%s)", id)
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	delete(s.sessions, id)
 }
 
 func setSessionCookie(sessionID string, response http.ResponseWriter) {

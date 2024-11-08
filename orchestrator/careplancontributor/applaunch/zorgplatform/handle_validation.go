@@ -1,6 +1,7 @@
 package zorgplatform
 
 import (
+	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/braineet/saml/xmlenc"
+	dsig "github.com/russellhaering/goxmldsig"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
 	"github.com/beevik/etree"
@@ -46,7 +48,7 @@ func (s *Service) parseSamlResponse(samlResponse string) (LaunchContext, error) 
 	}
 
 	// Validate the signature of the assertion using the public key of the Zorgplatform STS
-	if err := s.validateSignature(assertion); err != nil {
+	if err := s.validateZorgplatformSignature(assertion); err != nil {
 		return LaunchContext{}, fmt.Errorf("invalid assertion signature: %w", err)
 	}
 
@@ -146,13 +148,25 @@ func (s *Service) validateAssertionExpiry(doc *etree.Document) error {
 }
 
 // Validates the descrypted assertion signature using the public key of the Zorgplatform STS
-func (s *Service) validateSignature(decryptedAssertion *etree.Element) error {
+func (s *Service) validateZorgplatformSignature(decryptedAssertion *etree.Element) error {
 	signatureElement := decryptedAssertion.FindElement("Signature")
 	if signatureElement == nil {
 		return fmt.Errorf("signature element not found in the assertion")
 	}
-	//TODO: Implement when we can decrypt the assertions
-	return nil
+
+	ctx := dsig.NewDefaultValidationContext(&dsig.MemoryX509CertificateStore{
+		Roots: []*x509.Certificate{s.zorgplatformCert},
+	})
+
+	_, err := ctx.Validate(decryptedAssertion)
+	if err != nil {
+		log.Err(err).Msg("Signature is invalid")
+		return fmt.Errorf("unable to validate signature: %w", err)
+	}
+
+	log.Debug().Msg("Signature is valid")
+
+	return nil //valid
 }
 
 func (s *Service) validateAudience(decryptedAssertion *etree.Element) error {

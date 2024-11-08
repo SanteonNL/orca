@@ -51,26 +51,9 @@ type CsdDirectory struct {
 // It queries the Nuts Discovery Service, translating the owner's identifier to a credential attribute (see IdentifierCredentialMapping).
 // The endpoint is retrieved from the Nuts Discovery Service registration's registrationParameters, identified by endpointName.
 func (n CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
-	identifierSearchParam, supported := n.IdentifierCredentialMapping[*owner.System]
-	if !supported {
-		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for CodingSystem: %s", *owner.System)
-	}
-	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, n.ServiceID, &discovery.SearchPresentationsParams{
-		Query: &map[string]interface{}{
-			identifierSearchParam: *owner.Value,
-		},
-	})
+	response, err := n.find(ctx, owner)
 	if err != nil {
-		return nil, fmt.Errorf("search presentations: %w", err)
-	}
-	if response.JSON200 == nil {
-		if response.ApplicationproblemJSONDefault != nil {
-			if response.ApplicationproblemJSONDefault.Status == http.StatusNotFound {
-				return nil, errors.Join(csd.ErrEntryNotFound, fmt.Errorf("%s - %s", response.ApplicationproblemJSONDefault.Title, response.ApplicationproblemJSONDefault.Detail))
-			}
-			return nil, fmt.Errorf("search presentations non-OK HTTP response (status=%s): %v", response.Status(), response.ApplicationproblemJSONDefault)
-		}
-		return nil, fmt.Errorf("search presentations non-OK HTTP response (status=%s)", response.Status())
+		return nil, err
 	}
 	var results []fhir.Endpoint
 	for _, searchResult := range *response.JSON200 {
@@ -91,4 +74,51 @@ func (n CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier,
 		})
 	}
 	return results, nil
+}
+
+func (n CsdDirectory) LookupEntity(ctx context.Context, identifier fhir.Identifier) (*fhir.Reference, error) {
+	response, err := n.find(ctx, identifier)
+	if err != nil {
+		return nil, err
+	}
+	if len(*response.JSON200) == 0 {
+		return nil, csd.ErrEntryNotFound
+	}
+	organizationName, hasName := (*response.JSON200)[0].Fields["organization_name"]
+	result := fhir.Reference{
+		Type:       to.Ptr("Organization"),
+		Identifier: &identifier,
+	}
+	if hasName {
+		result.Display = to.Ptr(organizationName.(string))
+	}
+	return &result, nil
+}
+
+func (n CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discovery.SearchPresentationsResponse, error) {
+	if owner.Value == nil || owner.System == nil {
+		return nil, errors.New("identifier must contain both System and Value")
+	}
+	identifierSearchParam, supported := n.IdentifierCredentialMapping[*owner.System]
+	if !supported {
+		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for CodingSystem: %s", *owner.System)
+	}
+	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, n.ServiceID, &discovery.SearchPresentationsParams{
+		Query: &map[string]interface{}{
+			identifierSearchParam: *owner.Value,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("search presentations: %w", err)
+	}
+	if response.JSON200 == nil || response.StatusCode() != http.StatusOK {
+		if response.ApplicationproblemJSONDefault != nil {
+			if response.ApplicationproblemJSONDefault.Status == http.StatusNotFound {
+				return nil, errors.Join(csd.ErrEntryNotFound, fmt.Errorf("%s - %s", response.ApplicationproblemJSONDefault.Title, response.ApplicationproblemJSONDefault.Detail))
+			}
+			return nil, fmt.Errorf("search presentations non-OK HTTP response (status=%s): %v", response.Status(), response.ApplicationproblemJSONDefault)
+		}
+		return nil, fmt.Errorf("search presentations non-OK HTTP response (status=%s)", response.Status())
+	}
+	return response, nil
 }

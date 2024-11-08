@@ -124,6 +124,11 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		tlsClientCert = *tlsClientCertPtr
 	}
 
+	cert, err := getCertificate(config.DecryptConfig.SignCertPem)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load Zorgplatform's public signing certificate: %w", err)
+	}
+
 	result := &Service{
 		sessionManager:        sessionManager,
 		config:                config,
@@ -133,6 +138,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
 		decryptCertificate:    decryptCert,
+		zorgplatformCert:      cert,
 		profile:               profile,
 		// performing HTTP requests with Zorgplatform requires mutual TLS
 		zorgplatformHttpClient: &http.Client{
@@ -159,6 +165,7 @@ type Service struct {
 	tlsClientCertificate   *tls.Certificate
 	decryptCertificate     crypto.Suite
 	zorgplatformHttpClient *http.Client
+	zorgplatformCert       *x509.Certificate
 	profile                profile.Provider
 }
 
@@ -426,4 +433,25 @@ type authHeaderRoundTripper struct {
 func (a authHeaderRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	request.Header.Add("Authorization", a.value)
 	return a.inner.RoundTrip(request)
+}
+
+func getCertificate(pemCert string) (*x509.Certificate, error) {
+
+	if pemCert == "" {
+		return nil, fmt.Errorf("no certificate provided")
+	}
+
+	block, _ := pem.Decode([]byte(pemCert))
+	if block == nil {
+		return nil, fmt.Errorf("failed to parse PEM block containing the public key")
+	}
+
+	cert, parseErr := x509.ParseCertificate(block.Bytes)
+	if parseErr != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", parseErr)
+	}
+
+	log.Info().Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
+
+	return cert, nil
 }
