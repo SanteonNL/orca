@@ -93,6 +93,28 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference matches multiple workflows (http://snomed.info/sct|13645005, http://snomed.info/sct|84114007) for service http://snomed.info/sct|719858009"),
 		},
 		{
+			name: "primary task, duplicate reasonCodes (but fine, since they're the same)",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.ReasonCode = &fhir.CodeableConcept{
+					Coding: []fhir.Coding{
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("13645005"), // COPD
+						},
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("13645005"), // COPD
+						},
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("some-other"),
+						},
+					},
+				}
+			}),
+			numBundlesPosted: 1,
+		},
+		{
 			name: "error: primary task, invalid (missing SCP profile)",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.Meta.Profile = []string{"SomeOtherProfile"}
@@ -172,6 +194,13 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				sr.Code.Coding[0].Code = to.Ptr("UnknownServiceCode")
 			}),
 			expectedError: errors.New("failed to process new primary Task: ServiceRequest.code does not match any offered services"),
+		},
+		{
+			name: "error: primary task, unknown codition for requested service (primary Task.reasonCode or reasonReference is not supported)",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.ReasonCode.Coding[0].Code = to.Ptr("UnknownConditionCode")
+			}),
+			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference does not match any workflow for service http://snomed.info/sct|719858009"),
 		},
 		{
 			name: "error: primary task, without basedOn",
