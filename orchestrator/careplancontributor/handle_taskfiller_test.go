@@ -3,7 +3,7 @@ package careplancontributor
 import (
 	"context"
 	"encoding/json"
-	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
 	"testing"
 
@@ -61,7 +61,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := test.DeepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.Meta.Profile = []string{"SomeOtherProfile"}
 				return &copiedTask
 			}(),
@@ -75,7 +75,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := test.DeepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.Requester = nil
 				return &copiedTask
 			}(),
@@ -89,7 +89,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := test.DeepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.Owner = nil
 				return &copiedTask
 			}(),
@@ -103,7 +103,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := test.DeepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.PartOf = nil
 				return &copiedTask
 			}(),
@@ -117,7 +117,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := test.DeepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.Status = fhir.TaskStatusInProgress
 				return &copiedTask
 			}(),
@@ -131,7 +131,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				copiedTask := test.DeepCopy(primaryTask)
+				copiedTask := deep.Copy(primaryTask)
 				copiedTask.BasedOn = nil
 				return &copiedTask
 			}(),
@@ -145,7 +145,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			},
 			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			task: func() *fhir.Task {
-				subTask := test.DeepCopy(primaryTask)
+				subTask := deep.Copy(primaryTask)
 				swap := subTask.Owner
 				subTask.Owner = subTask.Requester
 				subTask.Requester = swap
@@ -184,7 +184,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				},
 			}
 
-			primaryTask := test.DeepCopy(primaryTask)
+			primaryTask := deep.Copy(primaryTask)
 
 			service.profile = tt.profile
 			if tt.mock != nil {

@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
 	"os"
 	"reflect"
@@ -482,18 +482,27 @@ func Test_handleUpdateTask(t *testing.T) {
 
 	ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal2)
 
-	t.Run("Task is identified by search parameters", func(t *testing.T) {
-		updatedTask := test.DeepCopy(task)
+	updateRequest := func(fn ...func(*fhir.Task)) FHIRHandlerRequest {
+		updatedTask := deep.Copy(task)
 		updatedTask.Status = fhir.TaskStatusInProgress
+		for _, f := range fn {
+			f(&updatedTask)
+		}
 		updatedTaskData, _ := json.Marshal(updatedTask)
-
-		requestUrl, _ := url.Parse("Task?_id=1")
-		request := FHIRHandlerRequest{
+		requestUrl, _ := url.Parse("Task/" + *task.Id)
+		return FHIRHandlerRequest{
 			ResourceData: updatedTaskData,
 			ResourcePath: requestUrl.Path,
+			ResourceId:   *updatedTask.Id,
 			RequestUrl:   requestUrl,
 			HttpMethod:   "PUT",
 		}
+	}
+
+	t.Run("Task is identified by search parameters", func(t *testing.T) {
+		request := updateRequest()
+		request.RequestUrl, _ = url.Parse("Task?_id=" + *task.Id)
+		request.ResourcePath = request.RequestUrl.Path
 		tx := coolfhir.Transaction()
 
 		_, err := service.handleUpdateTask(ctx, request, tx)
@@ -503,29 +512,77 @@ func Test_handleUpdateTask(t *testing.T) {
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
 	})
-	t.Run("update Task requester", func(t *testing.T) {
-		updatedTask := test.DeepCopy(task)
-		updatedTask.Status = fhir.TaskStatusInProgress
-		updatedTask.Requester = &fhir.Reference{
-			Identifier: &fhir.Identifier{
-				System: to.Ptr(coolfhir.URANamingSystem),
-				Value:  to.Ptr("attacker-ura"),
-			},
-		}
-		updatedTaskData, _ := json.Marshal(updatedTask)
-
-		request := FHIRHandlerRequest{
-			ResourceData: updatedTaskData,
-			ResourcePath: "Task/" + *task.Id,
-			ResourceId:   *updatedTask.Id,
-			HttpMethod:   "PUT",
-		}
-		request.RequestUrl, _ = url.Parse(request.ResourcePath)
+	t.Run("error: change Task.requester (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.Requester = &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("attacker-ura"),
+				},
+			}
+		})
 		tx := coolfhir.Transaction()
 
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
-		require.EqualError(t, err, "")
+		require.EqualError(t, err, "Task.requester cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: change Task.owner (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.Owner = &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("attacker-ura"),
+				},
+			}
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "Task.owner cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: change Task.basedOn (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.BasedOn = []fhir.Reference{
+				{
+					Reference: to.Ptr("Task/2"),
+				},
+			}
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "Task.basedOn cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: change Task.partOf (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.PartOf = append(task.PartOf, fhir.Reference{
+				Reference: to.Ptr("Task/2"),
+			})
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "Task.partOf cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: change Task.for (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.For = &fhir.Reference{
+				Reference: to.Ptr("Patient/2"),
+			}
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "Task.for cannot be changed")
 		require.Empty(t, tx.Entry)
 	})
 }
