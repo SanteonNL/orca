@@ -122,6 +122,31 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		fhirClient: mockFHIRClient,
 	}
 
+	scpMeta := &fhir.Meta{
+		Profile: []string{coolfhir.SCPTaskProfile},
+	}
+	defaultReturnedBundle := &fhir.Bundle{
+		Entry: []fhir.BundleEntry{
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("CarePlan/1"),
+					Status:   "204 Created",
+				},
+			},
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("CareTeam/2"),
+					Status:   "204 Created",
+				},
+			},
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("Task/3"),
+					Status:   "204 Created",
+				},
+			},
+		},
+	}
 	tests := []struct {
 		ctx            context.Context
 		name           string
@@ -129,14 +154,15 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		createdTask    fhir.Task
 		returnedBundle *fhir.Bundle
 		errorFromRead  error
-		expectError    bool
+		expectError    error
 	}{
 		{
 			ctx:  context.Background(),
-			name: "CreateTask - not authorised",
+			name: "error: not authorised",
 			taskToCreate: fhir.Task{
 				Intent:    "order",
 				Status:    fhir.TaskStatusRequested,
+				Meta:      scpMeta,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 				For: &fhir.Reference{
@@ -148,14 +174,15 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			},
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,
-			expectError:    true,
+			expectError:    errors.New("not authenticated"),
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name: "CreateTask - invalid field",
+			name: "error: invalid 'intent' field",
 			taskToCreate: fhir.Task{
 				Intent:    "invalid",
 				Status:    fhir.TaskStatusRequested,
+				Meta:      scpMeta,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 				For: &fhir.Reference{
@@ -167,11 +194,11 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			},
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,
-			expectError:    true,
+			expectError:    errors.New("task.Intent must be 'order'"),
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name: "CreateTask - Not SCP Task",
+			name: "error: not an SCP Task",
 			taskToCreate: fhir.Task{
 				Intent:    "order",
 				Status:    fhir.TaskStatusRequested,
@@ -199,23 +226,73 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			},
 			returnedBundle: nil,
 			errorFromRead:  nil,
-			expectError:    true,
+			expectError:    errors.New("Task is not SCP task"),
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name: "CreateTask - No Task.For",
+			name: "error: no Task.for",
 			taskToCreate: fhir.Task{
-				Intent: "order",
-				Status: fhir.TaskStatusRequested,
-				Meta: &fhir.Meta{
-					Profile: []string{coolfhir.SCPTaskProfile},
-				},
+				Intent:    "order",
+				Status:    fhir.TaskStatusRequested,
+				Meta:      scpMeta,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 			},
 			returnedBundle: nil,
 			errorFromRead:  nil,
-			expectError:    true,
+			expectError:    errors.New("Task.For must be set with a local reference, or a logical identifier, referencing a patient"),
+		},
+		{
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name: "Task.for contains a local reference",
+			taskToCreate: fhir.Task{
+				Intent:    "order",
+				Status:    fhir.TaskStatusRequested,
+				Meta:      scpMeta,
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Reference: to.Ptr("Patient/1"),
+				},
+			},
+			returnedBundle: defaultReturnedBundle,
+		},
+		{
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name: "Task.for contains a logical identifier with BSN",
+			taskToCreate: fhir.Task{
+				Intent:    "order",
+				Status:    fhir.TaskStatusRequested,
+				Meta:      scpMeta,
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
+			},
+			returnedBundle: defaultReturnedBundle,
+		},
+		{
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name: "Task.for contains a local reference and a logical identifier with BSN",
+			taskToCreate: fhir.Task{
+				Intent:    "order",
+				Status:    fhir.TaskStatusRequested,
+				Meta:      scpMeta,
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				For: &fhir.Reference{
+					Reference: to.Ptr("Patient/1"),
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
+			},
+			returnedBundle: defaultReturnedBundle,
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
@@ -225,9 +302,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				Status:    fhir.TaskStatusRequested,
 				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
-				Meta: &fhir.Meta{
-					Profile: []string{coolfhir.SCPTaskProfile},
-				},
+				Meta:      scpMeta,
 				For: &fhir.Reference{
 					Identifier: &fhir.Identifier{
 						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
@@ -254,30 +329,8 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 					},
 				},
 			},
-			returnedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Response: &fhir.BundleEntryResponse{
-							Location: to.Ptr("CarePlan/1"),
-							Status:   "204 Created",
-						},
-					},
-					{
-						Response: &fhir.BundleEntryResponse{
-							Location: to.Ptr("CareTeam/2"),
-							Status:   "204 Created",
-						},
-					},
-					{
-						Response: &fhir.BundleEntryResponse{
-							Location: to.Ptr("Task/3"),
-							Status:   "204 Created",
-						},
-					},
-				},
-			},
-			errorFromRead: nil,
-			expectError:   false,
+			returnedBundle: defaultReturnedBundle,
+			errorFromRead:  nil,
 		},
 	}
 
@@ -294,8 +347,8 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			tx := coolfhir.Transaction()
 
 			result, err := service.handleCreateTask(tt.ctx, fhirRequest, tx)
-			if tt.expectError {
-				require.Error(t, err)
+			if tt.expectError != nil {
+				require.EqualError(t, err, tt.expectError.Error())
 				return
 			}
 			require.NoError(t, err)
@@ -348,7 +401,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 	}{
 		{
 			ctx:  context.Background(),
-			name: "CreateTask - not authorised",
+			name: "not authorised",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
 					{
@@ -373,7 +426,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name: "CreateTask - invalid field",
+			name: "invalid field",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
 					{
@@ -398,7 +451,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name: "CreateTask - Not SCP Task",
+			name: "Not SCP Task",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
 					{
@@ -423,7 +476,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name: "CreateTask - CarePlan not found",
+			name: "CarePlan not found",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
 					{
@@ -453,7 +506,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 		},
 		{
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
-			name: "CreateTask - No CareTeam in CarePlan",
+			name: "No CareTeam in CarePlan",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
 					{
