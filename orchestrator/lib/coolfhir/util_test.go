@@ -601,3 +601,61 @@ func TestIsScpSubTask(t *testing.T) {
 		}))
 	})
 }
+
+func TestValidateReference(t *testing.T) {
+	type args struct {
+		reference fhir.Reference
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			name: "local reference",
+			args: args{
+				reference: fhir.Reference{
+					Reference: to.Ptr("Patient/123"),
+				},
+			},
+			want: true,
+		},
+		{
+			name: "logical identifier",
+			args: args{
+				reference: fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://example.com"),
+						Value:  to.Ptr("123"),
+					},
+				},
+			},
+			want: true,
+		},
+		{
+			name: "neither",
+			args: args{
+				reference: fhir.Reference{},
+			},
+			want: false,
+		},
+		{
+			name: "both",
+			args: args{
+				reference: fhir.Reference{
+					Reference: to.Ptr("Patient/123"),
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://example.com"),
+						Value:  to.Ptr("123"),
+					},
+				},
+			},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, ValidateReference(tt.args.reference), "ValidateReference(%v)", tt.args.reference)
+		})
+	}
+}

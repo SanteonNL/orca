@@ -50,3 +50,15 @@ func TestEqual(t *testing.T) {
 		})
 	})
 }
+
+func TestAlterCopy(t *testing.T) {
+	type Foo struct {
+		Bar string
+	}
+	foo := Foo{Bar: "baz"}
+	fooCopy := AlterCopy(foo, func(s *Foo) {
+		s.Bar = "bar"
+	})
+	require.Equal(t, "baz", foo.Bar, "original should not be altered")
+	require.Equal(t, "bar", fooCopy.Bar, "copy should be altered")
+}

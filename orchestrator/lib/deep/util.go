@@ -15,6 +15,12 @@ func Copy[T any](src T) T {
 	return dst
 }
 
+func AlterCopy[T any](src T, alterator func(s *T)) T {
+	dst := Copy(src)
+	alterator(&dst)
+	return dst
+}
+
 func Equal(a, b interface{}) bool {
 	bytesA, err := json.Marshal(a)
 	if err != nil {

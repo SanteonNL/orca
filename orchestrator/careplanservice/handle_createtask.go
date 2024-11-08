@@ -91,12 +91,9 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			},
 		})
 
-		// Validate Task.For
-		if task.For == nil || task.For.Identifier == nil {
-			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a reference to a patient", http.StatusBadRequest)
-		}
-		if *task.For.Identifier.System != coolfhir.BSNNamingSystem {
-			return nil, coolfhir.NewErrorWithCode("Task.For.Identifier.System must be set with a BSN identifier", http.StatusBadRequest)
+		// Validate Task.For: identifier (with system and value), and/or reference must be set
+		if task.For == nil || !coolfhir.ValidateReference(*task.For) {
+			return nil, coolfhir.NewErrorWithCode(fmt.Sprintf("Task.For must be set with a local reference, or a logical identifier, referencing a patient"), http.StatusBadRequest)
 		}
 		carePlan.Subject = *task.For
 		carePlan.Status = fhir.RequestStatusActive
