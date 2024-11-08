@@ -51,7 +51,13 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, fmt.Errorf("failed to read Task from search result: %w", err)
 			}
 		}
+		if task.Id != nil && *taskExisting.Id != *task.Id {
+			return nil, coolfhir.BadRequestError("ID in request URL does not match ID in resource")
+		}
 	} else {
+		if (task.Id != nil && request.ResourceId != "") && request.ResourceId != *task.Id {
+			return nil, coolfhir.BadRequestError("ID in request URL does not match ID in resource")
+		}
 		err = s.fhirClient.Read("Task/"+request.ResourceId, &taskExisting)
 		// TODO: If the resource was identified by a concrete ID, and was intended as upsert (create-if-not-exists), this doesn't work yet.
 	}
