@@ -64,3 +64,16 @@ func validatePrincipalInCareTeams(ctx context.Context, careTeams []fhir.CareTeam
 	}
 	return nil
 }
+
+// matchResourceIDs matches whether the ID in the request URL matches the ID in the resource.
+// This is important for PUT requests, where the ID in the URL is the ID of the resource to update.
+// They do not need to be set both, but if they are, they should match.
+func matchResourceIDs(request *FHIRHandlerRequest, idFromResource *string) error {
+	if (idFromResource != nil && request.ResourceId != "") && request.ResourceId != *idFromResource {
+		return &coolfhir.ErrorWithCode{
+			Message:    "ID in request URL does not match ID in resource",
+			StatusCode: http.StatusBadRequest,
+		}
+	}
+	return nil
+}
