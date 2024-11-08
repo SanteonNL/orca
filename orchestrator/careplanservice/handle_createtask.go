@@ -92,8 +92,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		})
 
 		// Validate Task.For: identifier (with system and value), and/or reference must be set
-		if task.For == nil ||
-			((task.For.Identifier == nil || task.For.Identifier.System == nil || task.For.Identifier.Value == nil) && task.For.Reference == nil) {
+		if task.For == nil || !coolfhir.ValidateReference(*task.For) {
 			return nil, coolfhir.NewErrorWithCode(fmt.Sprintf("Task.For must be set with a local reference, or a logical identifier, referencing a patient"), http.StatusBadRequest)
 		}
 		carePlan.Subject = *task.For
