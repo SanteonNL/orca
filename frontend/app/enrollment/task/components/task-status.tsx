@@ -39,7 +39,7 @@ export default function TaskStatus() {
             </div>
             <div className='font-bold'>Sent to:</div>
             <div className='col-span-3'>
-              {loading ? <Spinner /> : OrganizationLabel(performer)}
+              {loading ? <Spinner /> : <OrganizationLabel reference={performer} />}
             </div>
           </div>
           <SelectedPatientView />
