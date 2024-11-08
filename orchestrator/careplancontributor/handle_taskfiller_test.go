@@ -38,7 +38,6 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	}{
 		{
 			name:             "primary task, owner = local organization, triggers subtask creation",
-			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			notificationTask: deep.Copy(primaryTask),
 			numBundlesPosted: 1, // One subtask should be created
 		},
@@ -50,7 +49,6 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		},
 		{
 			name: "primary task, contains reasonReference instead of reasonCode, triggers subtask creation",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonReference = &fhir.Reference{
 					Reference: to.Ptr("Condition/1"),
@@ -113,6 +111,54 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				t.Owner = nil
 			}),
 			expectedError: errors.New("task is not valid - skipping: validation errors: Task.owner is required but not provided"),
+		},
+		{
+			name: "primary task, status=received, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusReceived
+			}),
+		},
+		{
+			name: "primary task, status=accepted, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusAccepted
+			}),
+		},
+		{
+			name: "primary task, status=accepted, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusRejected
+			}),
+		},
+		{
+			name: "primary task, status=on-hold, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusOnHold
+			}),
+		},
+		{
+			name: "primary task, status=cancelled, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusCancelled
+			}),
+		},
+		{
+			name: "primary task, status=completed, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusCompleted
+			}),
+		},
+		{
+			name: "primary task, status=failed, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusFailed
+			}),
+		},
+		{
+			name: "primary task, status=ready, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusReady
+			}),
 		},
 		{
 			name: "primary task, status=in-progress, should not process",
@@ -432,8 +478,7 @@ var primaryTask = fhir.Task{
 	},
 }
 
-var subTask = func() fhir.Task {
-	subTask := deep.Copy(primaryTask)
+var subTask = deep.AlterCopy(primaryTask, func(subTask *fhir.Task) {
 	swap := subTask.Owner
 	subTask.Owner = subTask.Requester
 	subTask.Requester = swap
@@ -444,5 +489,4 @@ var subTask = func() fhir.Task {
 	}
 	subTask.Id = to.Ptr("subtask")
 	subTask.Status = fhir.TaskStatusCompleted
-	return subTask
-}()
+})
