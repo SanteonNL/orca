@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
 	"os"
 	"reflect"
@@ -448,44 +449,60 @@ func Test_isValidTransition(t *testing.T) {
 }
 
 func Test_handleUpdateTask(t *testing.T) {
-	t.Run("Task is identified by search parameters", func(t *testing.T) {
-		var task fhir.Task
-		taskData, _ := os.ReadFile("./testdata/task-update-accepted.json")
-		require.NoError(t, json.Unmarshal(taskData, &task))
+	var task fhir.Task
+	taskData, _ := os.ReadFile("./testdata/task-update-accepted.json")
+	require.NoError(t, json.Unmarshal(taskData, &task))
 
-		var carePlanBundle fhir.Bundle
-		carePlanBundleData, _ := os.ReadFile("./careteamservice/testdata/001-input.json")
-		require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
+	var carePlanBundle fhir.Bundle
+	carePlanBundleData, _ := os.ReadFile("./careteamservice/testdata/001-input.json")
+	require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
 
-		ctrl := gomock.NewController(t)
-		fhirClient := mock.NewMockClient(ctrl)
-		service := &Service{
-			fhirClient: fhirClient,
+	ctrl := gomock.NewController(t)
+	fhirClient := mock.NewMockClient(ctrl)
+	service := &Service{
+		fhirClient: fhirClient,
+	}
+	fhirClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
+		*result = carePlanBundle
+		return nil
+	}).AnyTimes()
+	// mock for ?id=1
+	fhirClient.EXPECT().Read("Task", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
+		result.Entry = []fhir.BundleEntry{
+			{
+				Resource: taskData,
+			},
 		}
-		requestUrl, _ := url.Parse("Task?_id=1")
+		return nil
+	}).AnyTimes()
+	fhirClient.EXPECT().Read("Task/1", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Task, option ...fhirclient.Option) error {
+		*result = task
+		return nil
+	}).AnyTimes()
 
-		fhirClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
-			*result = carePlanBundle
-			return nil
-		})
-		fhirClient.EXPECT().Read("Task", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
-			result.Entry = []fhir.BundleEntry{
-				{
-					Resource: taskData,
-				},
-			}
-			return nil
-		})
-		task.Status = fhir.TaskStatusInProgress
-		newTaskData, _ := json.Marshal(task)
+	ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal2)
 
-		ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal2)
-		request := FHIRHandlerRequest{
-			ResourceData: newTaskData,
+	updateRequest := func(fn ...func(*fhir.Task)) FHIRHandlerRequest {
+		updatedTask := deep.Copy(task)
+		updatedTask.Status = fhir.TaskStatusInProgress
+		for _, f := range fn {
+			f(&updatedTask)
+		}
+		updatedTaskData, _ := json.Marshal(updatedTask)
+		requestUrl, _ := url.Parse("Task/" + *task.Id)
+		return FHIRHandlerRequest{
+			ResourceData: updatedTaskData,
 			ResourcePath: requestUrl.Path,
+			ResourceId:   *updatedTask.Id,
 			RequestUrl:   requestUrl,
 			HttpMethod:   "PUT",
 		}
+	}
+
+	t.Run("Task is identified by search parameters", func(t *testing.T) {
+		request := updateRequest()
+		request.RequestUrl, _ = url.Parse("Task?_id=" + *task.Id)
+		request.ResourcePath = request.RequestUrl.Path
 		tx := coolfhir.Transaction()
 
 		_, err := service.handleUpdateTask(ctx, request, tx)
@@ -494,6 +511,79 @@ func Test_handleUpdateTask(t *testing.T) {
 		require.Len(t, tx.Entry, 2)
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
+	})
+	t.Run("error: change Task.requester (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.Requester = &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("attacker-ura"),
+				},
+			}
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "Task.requester cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: change Task.owner (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.Owner = &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("attacker-ura"),
+				},
+			}
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "Task.owner cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: change Task.basedOn (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.BasedOn = []fhir.Reference{
+				{
+					Reference: to.Ptr("Task/2"),
+				},
+			}
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "Task.basedOn cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: change Task.partOf (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.PartOf = append(task.PartOf, fhir.Reference{
+				Reference: to.Ptr("Task/2"),
+			})
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "Task.partOf cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: change Task.for (not allowed)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.For = &fhir.Reference{
+				Reference: to.Ptr("Patient/2"),
+			}
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "Task.for cannot be changed")
+		require.Empty(t, tx.Entry)
 	})
 }
 
