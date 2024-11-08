@@ -6,6 +6,7 @@ import useTaskProgressStore from '@/lib/store/task-progress-store'
 import { Reference } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import SelectedPatientView from '../../components/selected-patient-view'
+import OrganizationLabel from "@/app/enrollment/components/organization-label";
 
 export default function TaskStatus() {
 
@@ -38,7 +39,7 @@ export default function TaskStatus() {
             </div>
             <div className='font-bold'>Sent to:</div>
             <div className='col-span-3'>
-              {loading ? <Spinner /> : performer?.display || "unknown"}
+              {loading ? <Spinner /> : <OrganizationLabel reference={performer} />}
             </div>
           </div>
           <SelectedPatientView />
