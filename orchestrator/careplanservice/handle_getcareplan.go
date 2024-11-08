@@ -39,8 +39,8 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 			if k == "_include" && value == "CarePlan:care-team" {
 				continue
 			}
+			params = append(params, fhirclient.QueryParam(k, value))
 		}
-		params = append(params, fhirclient.QueryParam(k, v[0]))
 	}
 	params = append(params, fhirclient.QueryParam("_include", "CarePlan:care-team"))
 	params = append(params, fhirclient.ResponseHeaders(headers))
