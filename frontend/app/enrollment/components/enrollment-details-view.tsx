@@ -40,7 +40,8 @@ export default function EnrollmentDetailsView() {
                     <div className='font-bold'>Service:</div>
                     <div className='col-span-3'>{serviceRequest?.code?.coding?.[0].display || "Unknown"}</div>
                     <div className='font-bold'>Care Path:</div>
-                    <div className='col-span-3'>{taskCondition?.code?.coding?.[0].display || "Unknown"}</div>
+                    {/* TODO: Check whether to prefer code.text or code.coding.display - NullFlavour hurts in coding display */}
+                    <div className='col-span-3'>{taskCondition?.code?.text || taskCondition?.code?.coding?.[0].display || "Unknown"}</div>
                     <div className='font-bold'>{task?.status ? 'Sent' : 'Send'} to:</div>
                     <div className='col-span-3'>
                         <OrganizationLabel reference={serviceRequest?.performer?.[0]} />

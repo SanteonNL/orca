@@ -415,7 +415,7 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
                             "system": "http://snomed.info/sct",
                             "code": "719858009",
                             "display": "monitoren via telegeneeskunde (regime/therapie)"
-                        }]
+                        }],
                     },
                     "reasonReference": [
                         {
