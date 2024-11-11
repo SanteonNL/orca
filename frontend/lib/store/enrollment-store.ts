@@ -1,9 +1,7 @@
-import Client from 'fhir-kit-client';
 import { Bundle, CarePlan, Condition, Patient, Practitioner, ServiceRequest } from 'fhir/r4';
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import { BSN_SYSTEM, createCpsClient, createEhrClient, fetchAllBundlePages, getBsn } from '../fhirUtils';
-import useEhrFhirClient from '@/hooks/use-ehr-fhir-client';
 
 interface LaunchContext {
     patient: string
@@ -20,12 +18,10 @@ interface StoreState {
     carePlans?: CarePlan[]
     selectedCarePlan?: CarePlan | null
     taskCondition?: Condition
-    patientConditions?: Condition[]
     loading: boolean
     error?: string
     setSelectedCarePlan: (carePlan?: CarePlan) => void
     setTaskCondition: (condition?: Condition) => void
-    setPatientConditions: (conditions: Condition[]) => void
     fetchAllResources: () => Promise<void>
 }
 
@@ -39,7 +35,6 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     carePlans: undefined,
     selectedCarePlan: undefined,
     taskCondition: undefined,
-    patientConditions: undefined,
     loading: false,
     error: undefined,
     setSelectedCarePlan: (carePlan?: CarePlan) => {
@@ -47,9 +42,6 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     },
     setTaskCondition: (condition?: Condition) => {
         set({ taskCondition: condition });
-    },
-    setPatientConditions: (conditions: Condition[]) => {
-        set({ patientConditions: conditions })
     },
     fetchAllResources: async () => {
 
@@ -63,8 +55,7 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
                 await fetchEhrResources(get, set);
                 await fetchCarePlans(get, set);
 
-                //TODO: Hard-coded to first condition now to prevent having a user select this in the UI, should be properly set in the back-end
-                set({ initialized: true, loading: false, taskCondition: get().patientConditions?.[0] });
+                set({ initialized: true, loading: false });
             }
 
         } catch (error: any) {
@@ -106,20 +97,29 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
 
     const ehrClient = createEhrClient()
 
-    const [patient, practitioner, serviceRequest, conditions] = await Promise.all([
+    const [patient, practitioner, serviceRequest] = await Promise.all([
         ehrClient.read({ resourceType: 'Patient', id: launchContext.patient.replace("Patient/", "") }),
         ehrClient.read({ resourceType: 'Practitioner', id: launchContext.practitioner.replace("Practitioner/", "") }),
         ehrClient.read({ resourceType: 'ServiceRequest', id: launchContext.serviceRequest.replace("ServiceRequest/", "") }),
-        ehrClient.search({ resourceType: 'Condition', searchParams: { patient: launchContext.patient, "_count": 100 } }),
     ]);
 
-    const allConditions = await fetchAllBundlePages(ehrClient, conditions as Bundle<Condition>); //paginate in case there are more than 100 conditions or the server doesn't allow for a large pagination size
+    const sr = serviceRequest as ServiceRequest
+
+    //We extract the Task Condition from the ServiceRequest, for now, simply match the first Condition reference
+    //TODO: We need to ensure only one Condition is bound to the ServiceRequest
+    const taskReference = sr.reasonReference?.find(ref => ref.reference?.startsWith("Condition"))
+
+    if (taskReference && taskReference.reference) {
+        const taskCondition = await ehrClient.read({ resourceType: 'Condition', id: taskReference.reference.replace("Condition/", "") }) as Condition
+        set({ taskCondition });
+    } else {
+        console.warn(`No Task Condition found for ServiceRequest/${serviceRequest.id}`)
+    }
 
     set({
         patient: patient as Patient,
         practitioner: practitioner as Practitioner,
-        serviceRequest: serviceRequest as ServiceRequest,
-        patientConditions: allConditions.filter(condition => condition.resourceType === "Condition")
+        serviceRequest: sr,
     });
 
     return patient;
@@ -135,14 +135,14 @@ const fetchCarePlans = async (
     const { patient } = get();
 
     const bsn = getBsn(patient)
-    if (!bsn) throw new Error(`No BSN identifier found for Patient/${patient?.id}`);
+    if (!bsn) throw new Error(`No BSN identifier found for Patient / ${patient?.id}`);
 
     const cpsClient = createCpsClient()
 
     const initialBundle = await cpsClient.search({
         resourceType: 'CarePlan',
         searchParams: {
-            'subject-identifier': `${BSN_SYSTEM}|${bsn}`,
+            'subject-identifier': `${BSN_SYSTEM}| ${bsn} `,
             '_count': 100
         }
     }) as Bundle<CarePlan>;
