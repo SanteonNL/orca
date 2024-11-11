@@ -96,6 +96,9 @@ export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condit
         for: serviceRequest.subject,
         status: "requested",
         intent: "order",
+        reasonCode: {
+            coding: [conditionCode]
+        },
         requester: {
             identifier: serviceRequest.requester?.identifier,
         },
@@ -108,17 +111,6 @@ export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condit
             type: 'ServiceRequest'
         },
     }
-}
-
-export const getTaskPerformer = (task?: Task) => {
-
-    if (!task) return undefined
-
-    const serviceRequestFromInput = task.contained?.find((contained) => {
-        return contained.resourceType === "ServiceRequest"
-    })
-
-    return serviceRequestFromInput?.performer?.[0]
 }
 
 export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Questionnaire) => {

@@ -63,7 +63,8 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
                 await fetchEhrResources(get, set);
                 await fetchCarePlans(get, set);
 
-                set({ initialized: true, loading: false, })
+                //TODO: Hard-coded to first condition now to prevent having a user select this in the UI, should be properly set in the back-end
+                set({ initialized: true, loading: false, taskCondition: get().patientConditions?.[0] });
             }
 
         } catch (error: any) {
