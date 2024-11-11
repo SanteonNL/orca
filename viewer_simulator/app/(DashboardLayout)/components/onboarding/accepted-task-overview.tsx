@@ -1,6 +1,6 @@
 import React from 'react';
 import EnrolledTaskTable from './enrolled-task-table';
-import {Task} from 'fhir/r4';
+import { Task } from 'fhir/r4';
 
 export default async function AcceptedTaskOverview() {
 
@@ -43,8 +43,8 @@ export default async function AcceptedTaskOverview() {
                     id: task.id,
                     requesterUra: task.requester?.identifier?.value ?? "Unknown",
                     requesterName: task.requester?.display ?? "Unknown",
-                    performerUra: task.requester?.identifier?.value ?? "Unknown",
-                    performerName: task.requester?.display ?? "Unknown",
+                    performerUra: task.owner?.identifier?.value ?? "Unknown",
+                    performerName: task.owner?.display ?? "Unknown",
                     isSubtask: !!task.partOf,
                     patientBsn: bsn,
                     careplan: task.basedOn?.[0]?.display ?? "Unknown",
@@ -61,6 +61,6 @@ export default async function AcceptedTaskOverview() {
     }
 
     return (
-        <EnrolledTaskTable rows={rows}/>
+        <EnrolledTaskTable rows={rows} />
     );
 }
