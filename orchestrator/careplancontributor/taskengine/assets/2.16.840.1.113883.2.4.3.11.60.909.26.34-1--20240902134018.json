@@ -67,8 +67,22 @@
         {
           "linkId": "1.5",
           "text": "Titratie nodig?",
-          "type": "boolean",
-          "required": true
+          "type": "choice",
+          "required": true,
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "Ja"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "Nee"
+              }
+            }
+          ]
         }
       ]
     }
