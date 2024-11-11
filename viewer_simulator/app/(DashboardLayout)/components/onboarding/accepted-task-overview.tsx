@@ -47,7 +47,7 @@ export default async function AcceptedTaskOverview() {
                     performerName: task.owner?.display ?? "Unknown",
                     isSubtask: !!task.partOf,
                     patientBsn: bsn,
-                    careplan: task.basedOn?.[0]?.display ?? "Unknown",
+                    careplan: task.basedOn?.[0]?.reference ? task.basedOn?.[0]?.reference : "Unknown",
                     status: task.status,
                     lastUpdated: task.meta?.lastUpdated ? new Date(task.meta.lastUpdated) : new Date(),
                     task: task
