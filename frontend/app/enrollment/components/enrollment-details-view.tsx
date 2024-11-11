@@ -39,7 +39,7 @@ export default function EnrollmentDetailsView() {
                     <div className='col-span-3'>{getBsn(patient) || "Unknown"}</div>
                     <div className='font-bold'>Service:</div>
                     <div className='col-span-3'>{serviceRequest?.code?.coding?.[0].display || "Unknown"}</div>
-                    <div className='font-bold'>Condition:</div>
+                    <div className='font-bold'>Zorgpad:</div>
                     <div className='col-span-3'>{taskCondition?.code?.coding?.[0].display || "Unknown"}</div>
                     {task?.status && (
                         <>
