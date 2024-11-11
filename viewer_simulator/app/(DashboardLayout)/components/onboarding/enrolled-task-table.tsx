@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { Button, Tooltip } from '@mui/material';
-import { IconCloudDataConnection, IconEye, IconProgress, IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
+import { IconEye, IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
 import ViewTaskOutput from './view-task-output';
 
 interface Props {
@@ -18,7 +18,8 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
         { field: 'performerUra', headerName: 'Performer URA', flex: 2 },
         { field: 'performerName', headerName: 'Performer Name', flex: 2 },
         { field: 'patientBsn', headerName: 'Patient BSN', flex: 2 },
-        { field: 'careplan', headerName: 'Careplan', flex: 3 },
+        { field: 'serviceRequest', headerName: 'Service', flex: 3 },
+        { field: 'condition', headerName: 'Zorgpad', flex: 3 },
         {
             field: 'status',
             headerName: 'Status',
@@ -26,6 +27,7 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
             renderCell: (params) => {
                 switch (params.row.status) {
                     case "requested": return <Tooltip title={params.row.status}><IconProgressHelp /></Tooltip>
+                    case "ready": return <Tooltip title={params.row.status}><IconEye /></Tooltip>
                     case "accepted": return <Tooltip title={params.row.status}><IconProgressBolt /></Tooltip>
                     case "cancelled": return <Tooltip title={params.row.status}><IconProgressX /></Tooltip>
                     case "completed": return <Tooltip title={params.row.status}><IconProgressCheck /></Tooltip>

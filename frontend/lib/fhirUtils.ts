@@ -96,6 +96,9 @@ export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condit
         for: serviceRequest.subject,
         status: "requested",
         intent: "order",
+        reasonCode: {
+            coding: [conditionCode]
+        },
         requester: {
             identifier: serviceRequest.requester?.identifier,
         },
