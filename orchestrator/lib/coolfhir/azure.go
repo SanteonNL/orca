@@ -22,7 +22,7 @@ func NewAzureFHIRClient(fhirBaseURL *url.URL, credential azcore.TokenCredential,
 }
 
 func DefaultAzureScope(fhirBaseURL *url.URL) []string {
-	return []string{fhirBaseURL.Host + "/.default"}
+	return []string{fhirBaseURL.JoinPath(".default").String()}
 }
 
 func NewAzureHTTPClient(credential azcore.TokenCredential, scopes []string) *http.Client {
