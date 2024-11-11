@@ -2,35 +2,34 @@
 import { Step, StepItem, Stepper, useStepper } from '@/components/stepper'
 import useTaskProgressStore from '@/lib/store/task-progress-store'
 import { useParams } from 'next/navigation'
-import TaskStatus from '../components/task-status'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import { useEffect, useState } from 'react'
 import { Spinner } from '@/components/spinner'
 import StepperFooter from '../components/stepper-footer'
 import { Task } from 'fhir/r4'
+import EnrollmentDetailsView from '../../components/enrollment-details-view'
 
 export default function TaskEnrollmentView() {
 
     const { taskId } = useParams()
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
     const [steps, setSteps] = useState<StepItem[]>([
-        { label: "Task overview", description: "Information sent to the filler" },
+        { label: "Awaiting Confirmation", description: "Checking if more information is needed..." },
         { label: "Completion", description: "Completion overview" },
     ])
     const [content, setContent] = useState<JSX.Element[]>([
         <>
-            <TaskStatus key="task-status-component" />
-            <StepperFooter />
+            <Spinner />
         </>,
         <>
-            <TaskStatus key="task-status-component" />
+            <EnrollmentDetailsView key="enrollment-status-component" />
             <StepperFooter />
         </>,
     ])
 
     useEffect(() => {
         setSelectedTaskId(taskId as string)
-    }, [])
+    }, [setSelectedTaskId, taskId])
 
 
     // This useEffect is responsible for setting the steps and content of the stepper based on the subtasks
@@ -39,7 +38,6 @@ export default function TaskEnrollmentView() {
         if (!subTasks || !taskToQuestionnaireMap) return
 
         setSteps([
-            { label: "Task overview", description: "Information sent to the filler" },
             ...subTasks.map((task: Task) => {
                 return { label: taskToQuestionnaireMap[task.id || ""]?.title || task.id, description: "Subtask Questionnaire" }
             }),
@@ -47,10 +45,6 @@ export default function TaskEnrollmentView() {
         ])
 
         setContent([
-            <>
-                <TaskStatus key="task-status-component" />
-                <StepperFooter />
-            </>,
             ...subTasks.map((task: Task) => {
                 return (
                     <QuestionnaireRenderer
@@ -61,7 +55,7 @@ export default function TaskEnrollmentView() {
                 )
             }),
             <>
-                <TaskStatus key="task-status-component" />
+                <EnrollmentDetailsView key="enrollment-status-component" />
                 <StepperFooter />
             </>
         ])

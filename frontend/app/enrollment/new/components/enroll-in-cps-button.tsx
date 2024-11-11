@@ -134,6 +134,11 @@ export default function EnrollInCpsButton() {
     }
 
     return (
-        <Button disabled={disabled} onClick={informCps}>{submitted && <Spinner className='mr-5 text-white' />}Proceed</Button >
+        <Button disabled={disabled} onClick={informCps}>
+            {submitted ? <Spinner className='mr-5 text-white' /> : null}
+            <span className='mr-1'>{submitted ? "Sending" : "Send"}</span>
+            Task
+            {serviceRequest?.performer?.[0].display && <span className='ml-1'>to {serviceRequest.performer[0].display}</span>}
+        </Button>
     )
 }

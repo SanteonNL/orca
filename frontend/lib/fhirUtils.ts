@@ -110,17 +110,6 @@ export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condit
     }
 }
 
-export const getTaskPerformer = (task?: Task) => {
-
-    if (!task) return undefined
-
-    const serviceRequestFromInput = task.contained?.find((contained) => {
-        return contained.resourceType === "ServiceRequest"
-    })
-
-    return serviceRequestFromInput?.performer?.[0]
-}
-
 export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Questionnaire) => {
     if (!task || !task.output || !questionnaire) return
 
