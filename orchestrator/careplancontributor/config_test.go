@@ -17,3 +17,10 @@ func TestConfig_Validate(t *testing.T) {
 		require.EqualError(t, err, "careplancontributor.careplanservice.url is not configured")
 	})
 }
+
+func TestDefaultConfig(t *testing.T) {
+	t.Run("validate healthDataView Endpoint is disabled by default", func(t *testing.T) {
+		config := DefaultConfig()
+		require.Equal(t, false, config.HealthDataViewEndpointEnabled)
+	})
+}

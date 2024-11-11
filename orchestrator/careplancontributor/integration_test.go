@@ -141,7 +141,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.CarePlanService.URL = carePlanServiceURL.String()
-	cpcConfig.ZorginzageEndpointEnabled = true
+	cpcConfig.HealthDataViewEndpointEnabled = true
 	sessionManager, _ := createTestSession()
 	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	require.NoError(t, err)
