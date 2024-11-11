@@ -19,7 +19,7 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
         { field: 'performerName', headerName: 'Performer Name', flex: 2 },
         { field: 'patientBsn', headerName: 'Patient BSN', flex: 2 },
         { field: 'serviceRequest', headerName: 'Service', flex: 3 },
-        { field: 'condition', headerName: 'Zorgpad', flex: 3 },
+        { field: 'condition', headerName: 'Care Path', flex: 3 },
         {
             field: 'status',
             headerName: 'Status',

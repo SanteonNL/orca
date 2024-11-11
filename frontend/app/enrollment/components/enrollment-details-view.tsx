@@ -27,7 +27,7 @@ export default function EnrollmentDetailsView() {
                                 </TooltipContent>
                             </Tooltip>
                         </TooltipProvider>
-                        <p className='ml-2'>Enrollment information</p>
+                        <p className='ml-2'>Task information</p>
                     </div>
                 </CardTitle>
             </CardHeader>
@@ -39,7 +39,7 @@ export default function EnrollmentDetailsView() {
                     <div className='col-span-3'>{getBsn(patient) || "Unknown"}</div>
                     <div className='font-bold'>Service:</div>
                     <div className='col-span-3'>{serviceRequest?.code?.coding?.[0].display || "Unknown"}</div>
-                    <div className='font-bold'>Zorgpad:</div>
+                    <div className='font-bold'>Care Path:</div>
                     <div className='col-span-3'>{taskCondition?.code?.coding?.[0].display || "Unknown"}</div>
                     {task?.status && (
                         <>
