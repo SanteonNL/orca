@@ -5,6 +5,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { InfoCircledIcon } from '@radix-ui/react-icons'
 import { getBsn } from '@/lib/fhirUtils'
 import useTaskProgressStore from '@/lib/store/task-progress-store'
+import OrganizationLabel from './organization-label'
 
 export default function EnrollmentDetailsView() {
 
@@ -45,7 +46,9 @@ export default function EnrollmentDetailsView() {
                             <div className='font-bold'>Task status:</div>
                             <div className='col-span-3'>{task?.status}</div>
                             <div className='font-bold'>Sent to:</div>
-                            <div className='col-span-3'>{serviceRequest?.performer?.[0].display || "Unknown"}</div>
+                            <div className='col-span-3'>
+                                <OrganizationLabel reference={serviceRequest?.performer?.[0]} />
+                            </div>
                         </>
                     )}
                 </div>

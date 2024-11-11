@@ -14,12 +14,13 @@ func DefaultConfig() Config {
 }
 
 type Config struct {
-	CarePlanService   CarePlanServiceConfig `koanf:"careplanservice"`
-	FrontendConfig    FrontendConfig        `koanf:"frontend"`
-	AppLaunch         applaunch.Config      `koanf:"applaunch"`
-	FHIR              coolfhir.ClientConfig `koanf:"fhir"`
-	Enabled           bool                  `koanf:"enabled"`
-	StaticBearerToken string
+	CarePlanService               CarePlanServiceConfig `koanf:"careplanservice"`
+	FrontendConfig                FrontendConfig        `koanf:"frontend"`
+	AppLaunch                     applaunch.Config      `koanf:"applaunch"`
+	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
+	Enabled                       bool                  `koanf:"enabled"`
+	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
+	StaticBearerToken             string
 }
 
 func (c Config) Validate() error {
