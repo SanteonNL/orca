@@ -5,9 +5,9 @@ import EnrollmentDetailsView from "../components/enrollment-details-view";
 export default function Home() {
 
   return (
-    <div className="flex flex-col">
+    <>
       <EnrollmentDetailsView />
-      <EnrollInCpsButton />
-    </div>
+      <EnrollInCpsButton className="float-right" />
+    </>
   );
 }

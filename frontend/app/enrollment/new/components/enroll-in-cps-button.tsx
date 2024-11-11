@@ -13,15 +13,18 @@ import JsonView from 'react18-json-view';
 import 'react18-json-view/src/style.css';
 import { Spinner } from '@/components/spinner'
 
+interface Props {
+    className?: string
+}
+
 /**
  * This button informs the CarePlanService of the new enrollment.
  * 
- * 1. If the CarePlan does not exist yet, it will be created.
- * 2. It will create a Task, referring to the CarePlan and ServiceRequest
+ * It currently always creates a new CarePlan in the CPS
  * 
  * @returns 
  */
-export default function EnrollInCpsButton() {
+export default function EnrollInCpsButton({ className }: Props) {
 
     const { patient, selectedCarePlan, taskCondition, serviceRequest } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
@@ -134,7 +137,7 @@ export default function EnrollInCpsButton() {
     }
 
     return (
-        <Button disabled={disabled} onClick={informCps}>
+        <Button className={className} disabled={disabled} onClick={informCps}>
             {submitted ? <Spinner className='mr-5 text-white' /> : null}
             <span className='mr-1'>{submitted ? "Sending" : "Send"}</span>
             Task
