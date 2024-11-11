@@ -1,0 +1,76 @@
+{
+  "resourceType": "Questionnaire",
+  "id": "hartfalen-1234",
+  "url": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134018",
+  "title": "Questionnaire Hartfalen",
+  "status": "draft",
+  "date": "2024-11-11T13:40:17Z",
+  "publisher": "Medical Service Centre",
+  "language": "nl-NL",
+  "meta": {
+    "lastUpdated": "2024-11-05T13:40:17Z",
+    "profile": [
+      "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-render"
+    ],
+    "tag": [
+      {
+        "system": "http://hl7.org/fhir/FHIR-version",
+        "code": "4.0.1"
+      }
+    ]
+  },
+  "item": [
+    {
+      "linkId": "1",
+      "text": "Hartfalen Details",
+      "type": "group",
+      "required": true,
+      "item": [
+        {
+          "linkId": "1.1",
+          "text": "Protocol",
+          "type": "choice",
+          "required": true,
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "stabiel",
+                "display": "Stabiel"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "instabiel",
+                "display": "Instabiel"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "1.2",
+          "text": "Streefwaarde Bloeddruk (ochtend)",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "linkId": "1.3",
+          "text": "Streefwaarde Bloeddruk (avond)",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "linkId": "1.4",
+          "text": "Streefgewicht",
+          "type": "decimal",
+          "required": true
+        },
+        {
+          "linkId": "1.5",
+          "text": "Titratie nodig?",
+          "type": "boolean",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

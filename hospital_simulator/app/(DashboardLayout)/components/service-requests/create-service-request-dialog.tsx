@@ -343,78 +343,6 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
                         "coding": [
                             {
                                 "system": "http://snomed.info/sct",
-                                "code": "13645005",
-                                "display": "Chronic obstructive lung disease (disorder)"
-                            }
-                        ],
-                        "text": "Chronische obstructieve longaandoening (aandoening)"
-                    },
-                    "subject": {
-                        "type": "Patient",
-                        "reference": "urn:uuid:patient-1",
-                        "identifier": {
-                            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
-                            "value": patientBsn
-                        }
-                    },
-                    "recorder": {
-                        "type": "PractitionerRole",
-                        "reference": "urn:uuid:practitionerrole-1",
-                        "identifier": {
-                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
-                            "value": "uzi-001"
-                        }
-                    }
-                },
-                "request": {
-                    "method": "POST",
-                    "url": "Condition"
-                }
-            },
-            {
-                "fullUrl": "urn:uuid:condition-2",
-                "resource": {
-                    "resourceType": "Condition",
-                    "id": "condition-2",
-                    "identifier": [
-                        {
-                            "system": "http://fhir.nl/fhir/NamingSystem/condition-identifier",
-                            "value": "condition-002"
-                        }
-                    ],
-                    "clinicalStatus": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
-                                "code": "active",
-                                "display": "Active"
-                            }
-                        ]
-                    },
-                    "verificationStatus": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
-                                "code": "confirmed",
-                                "display": "Confirmed"
-                            }
-                        ]
-                    },
-                    "category": [
-                        {
-                            "coding": [
-                                {
-                                    "system": "http://terminology.hl7.org/CodeSystem/condition-category",
-                                    "code": "problem-list-item",
-                                    "display": "Problem List Item"
-                                }
-                            ]
-                        }
-                    ],
-                    "code": {
-                        "coding": [
-                            {
-                                "system": "http://snomed.info/sct",
                                 "code": "84114007",
                                 "display": "Heart failure (disorder)"
                             }
@@ -480,7 +408,7 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
                     ],
                     "identifier": [{
                         "system": "2.16.528.1.1007.3.3.21514.ehr.orders",
-                        "value": "99534756439"
+                        "value": "99534756440" //Hartfalen
                     }],
                     "code": {
                         "coding": [{
@@ -492,7 +420,7 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
                     "reasonReference": [
                         {
                             "type": "Condition",
-                            "display": "Chronische obstructieve longaandoening (aandoening)",
+                            "display": "Hartfalen (aandoening)",
                             "reference": "urn:uuid:condition-1",
                             "identifier": {
                                 "system": "http://fhir.nl/fhir/NamingSystem/condition-identifier",
