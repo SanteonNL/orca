@@ -48,7 +48,7 @@ export default async function AcceptedTaskOverview() {
                     isSubtask: !!task.partOf,
                     patientBsn: bsn,
                     serviceRequest: task.focus?.display ?? "Unknown",
-                    condition: task?.reasonCode?.coding?.[0].display ?? "",
+                    condition: task?.reasonCode?.text ?? task?.reasonCode?.coding?.[0].display ?? "",
                     status: task.status,
                     lastUpdated: task.meta?.lastUpdated ? new Date(task.meta.lastUpdated) : new Date(),
                     task: task

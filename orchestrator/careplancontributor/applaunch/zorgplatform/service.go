@@ -305,26 +305,42 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		return nil, fmt.Errorf("unable to find Practitioner resource in Bundle: %w", err)
 	}
 
-	var conditionBundle fhir.Bundle
-	var conditions []map[string]interface{}
+	// var conditionBundle fhir.Bundle
 	//TODO: We assume this is in context as the HCP token is workflow-specific. Double-check with Zorgplatform
-	if err = fhirClient.ReadWithContext(ctx, "Condition", &conditionBundle, fhirclient.QueryParam("subject", "Patient/"+*patient.Id)); err != nil {
-		return nil, fmt.Errorf("unable to fetch Conditions bundle: %w", err)
-	}
-	if err := coolfhir.ResourcesInBundle(&conditionBundle, coolfhir.EntryIsOfType("Condition"), &conditions); err != nil {
-		return nil, fmt.Errorf("unable to find Condition resources in Bundle: %w", err)
+	// var conditions []map[string]interface{}
+	// if err = fhirClient.ReadWithContext(ctx, "Condition", &conditionBundle, fhirclient.QueryParam("subject", "Patient/"+*patient.Id)); err != nil {
+	// 	return nil, fmt.Errorf("unable to fetch Conditions bundle: %w", err)
+	// }
+	// if err := coolfhir.ResourcesInBundle(&conditionBundle, coolfhir.EntryIsOfType("Condition"), &conditions); err != nil {
+	// 	return nil, fmt.Errorf("unable to find Condition resources in Bundle: %w", err)
+	// }
+
+	// if *conditionBundle.Total < 1 {
+	// 	return nil, fmt.Errorf("expected at least one Condition, got %d", conditionBundle.Total)
+	// }
+
+	var reasonReference fhir.Reference
+
+	// reason := conditions[0] //TODO: Overwriting with Heart failure for demo, should be based on the Task
+	reason := fhir.Condition{
+		Id: to.Ptr(uuid.NewString()),
+		Code: &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("84114007"),
+					Display: to.Ptr("Hartfalen (aandoening)"),
+				},
+			},
+			Text: to.Ptr("Hartfalen (aandoening)"),
+		},
 	}
 
-	var reasonReferences []fhir.Reference
-	var conditionMap = make(map[string]interface{})
-
-	for _, condition := range conditions {
-		ref := "Condition/magic-" + condition["id"].(string)
-		reasonReferences = append(reasonReferences, fhir.Reference{
-			Type:      to.Ptr("Condition"),
-			Reference: to.Ptr(ref),
-		})
-		conditionMap[ref] = condition
+	ref := "Condition/magic-" + *reason.Id
+	reasonReference = fhir.Reference{
+		Type:      to.Ptr("Condition"),
+		Reference: to.Ptr(ref),
+		Display:   to.Ptr(*reason.Code.Text),
 	}
 
 	identities, err := s.profile.Identities(ctx)
@@ -338,43 +354,25 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	}
 	localOrgIdentifier := identities[0]
 
-	var conditionText string
-	if len(conditions) > 0 {
-		if code, ok := conditions[0]["code"].(map[string]interface{}); ok {
-			if text, ok := code["text"].(string); ok {
-				conditionText = text
-			} else {
-				log.Warn().Msg("condition code does not contain text - using default hard-coded value")
-			}
-		} else {
-			log.Warn().Msg("condition does not contain code - using default hard-coded value")
-		}
-	} else {
-		return nil, fmt.Errorf("no conditions found")
-	}
-	if conditionText == "" {
-		conditionText = "fractuur van pols" //TODO: Hard coded value for demo purposes"
-	}
-
 	// Zorgplatform does not provide a ServiceRequest, so we need to create one based on other resources they do use
 	serviceRequest := &fhir.ServiceRequest{
 		Status: fhir.RequestStatusActive,
 		Code: &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{
-					System:  to.Ptr("http://snomed.info/sct"),
-					Code:    to.Ptr("719858009"), // TODO: Make dynamic, for now hard coded to Telemonitoring
-					Display: to.Ptr(conditionText),
+					System:  to.Ptr("http://snomed.info/sct"), //TODO: Hard code to telemonitoring for demo
+					Code:    to.Ptr("719858009"),
+					Display: to.Ptr("monitoren via telegeneeskunde (regime/therapie)"),
 				},
 			},
 		},
 		Identifier: []fhir.Identifier{
 			{
-				System: to.Ptr("tmp"), //TODO: Hard coded to fractuur-pols for demo purposes. Should be based on the Task
-				Value:  to.Ptr("fractuur-pols"),
+				System: to.Ptr("http://snomed.info/sct"), //TODO: Hard coded to Hartfalen for demo purposes. Should be based on the Task
+				Value:  to.Ptr("84114007"),
 			},
 		},
-		ReasonReference: reasonReferences,
+		ReasonReference: []fhir.Reference{reasonReference},
 		Subject: fhir.Reference{
 			Identifier: &fhir.Identifier{
 				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
@@ -387,7 +385,6 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  &s.config.TaskPerformerUra,
 				},
-				Display: to.Ptr("Zorg Bij Jou - Service Center"), //TODO: Hard coded value for demo purposes
 			},
 		},
 		Requester: &fhir.Reference{
@@ -400,19 +397,6 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	organizationRef := "Organization/magic-" + uuid.NewString()
 
-	otherValues := map[string]interface{}{
-		"Patient/" + *patient.Id: patient, //Zorgplatform only allows for a GET on /Patient, we request by ID
-		practitionerRef:          practitioner,
-		serviceRequestRef:        *serviceRequest,
-		organizationRef:          organization,
-		"launchContext":          launchContext, // Can be used to fetch a new access token after expiration
-	}
-
-	//inject the conditions into the "other" values
-	for k, v := range conditionMap {
-		otherValues[k] = v
-	}
-
 	return &user.SessionData{
 		FHIRLauncher: launcherKey,
 		//TODO: See how/if to pass the conditions to the StringValues
@@ -423,7 +407,14 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 			"organization":   organizationRef,
 			"accessToken":    accessToken,
 		},
-		OtherValues: otherValues,
+		OtherValues: map[string]interface{}{
+			"Patient/" + *patient.Id:   patient, //Zorgplatform only allows for a GET on /Patient, we request by ID
+			practitionerRef:            practitioner,
+			serviceRequestRef:          *serviceRequest,
+			organizationRef:            organization,
+			*reasonReference.Reference: reason,
+			"launchContext":            launchContext, // Can be used to fetch a new access token after expiration
+		},
 	}, nil
 }
 
