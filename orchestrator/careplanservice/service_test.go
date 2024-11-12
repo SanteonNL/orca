@@ -56,17 +56,33 @@ func TestService_Proxy(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
 	})
-	// TODO: Fix this test
 	t.Run("PUT/Update Questionnaire - allowed", func(t *testing.T) {
-		fhirServerMux.HandleFunc("PUT /fhir/Questionnaire/1", func(writer http.ResponseWriter, request *http.Request) {
+		fhirServerMux.HandleFunc("POST /", func(writer http.ResponseWriter, request *http.Request) {
 			writer.WriteHeader(http.StatusOK)
+			resp := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Response: &fhir.BundleEntryResponse{
+							Location: to.Ptr("Questionnaire/1"),
+							Status:   "200 OK",
+						},
+					},
+				},
+			}
+			_ = json.NewEncoder(writer).Encode(resp)
+		})
+		fhirServerMux.HandleFunc("GET /fhir/Questionnaire/1", func(writer http.ResponseWriter, request *http.Request) {
+			writer.WriteHeader(http.StatusOK)
+			_ = json.NewEncoder(writer).Encode(fhir.Questionnaire{
+				Id: to.Ptr("1"),
+			})
 		})
 
 		request, err := http.NewRequest(http.MethodPut, frontServer.URL+"/cps/Questionnaire/1", nil)
 		require.NoError(t, err)
-		request.Header.Set("Content-Type", "application/fhir+json")
-
 		response, err := httpClient.Do(request)
+
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, response.StatusCode)
 	})
@@ -84,6 +100,14 @@ func TestService_Proxy(t *testing.T) {
 		httpResponse, err := httpClient.Do(request)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+	})
+
+	// Unauthorised Get
+	t.Run("GET Questionnaire - not authorised, not allowed", func(t *testing.T) {
+		httpClient.Transport = http.DefaultTransport
+		response, err := httpClient.Get(frontServer.URL + "/cps/Questionnaire")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusUnauthorized, response.StatusCode)
 	})
 }
 
