@@ -368,8 +368,8 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		},
 		Identifier: []fhir.Identifier{
 			{
-				System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"), //TODO: Hard coded to Hartfalen for demo purposes. Should be based on the Task
-				Value:  to.Ptr("99534756440"),
+				System: to.Ptr("http://snomed.info/sct"), //TODO: Hard coded to Hartfalen for demo purposes. Should be based on the Task
+				Value:  to.Ptr("84114007"),
 			},
 		},
 		ReasonReference: []fhir.Reference{reasonReference},
@@ -385,7 +385,6 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  &s.config.TaskPerformerUra,
 				},
-				Display: to.Ptr("Zorg Bij Jou - Service Center"), //TODO: Hard coded value for demo purposes
 			},
 		},
 		Requester: &fhir.Reference{
