@@ -36,7 +36,7 @@ func (t *BundleBuilder) Create(resource interface{}, opts ...BundleEntryOption) 
 func (t *BundleBuilder) Update(resource interface{}, path string, opts ...BundleEntryOption) *BundleBuilder {
 	return t.Append(resource, &fhir.BundleEntryRequest{
 		Method: fhir.HTTPVerbPUT,
-		Url:    ResourceType(resource),
+		Url:    path,
 	}, nil, opts...)
 }
 
