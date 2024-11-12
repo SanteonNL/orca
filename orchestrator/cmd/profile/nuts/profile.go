@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/knadh/koanf/maps"
+	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"github.com/nuts-foundation/go-nuts-client/nuts/vcr"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"github.com/rs/zerolog/log"
@@ -14,6 +16,7 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"sync"
 	"time"
 )
 
@@ -32,6 +35,7 @@ type DutchNutsProfile struct {
 	cachedIdentities      []fhir.Identifier
 	identitiesRefreshedAt time.Time
 	vcrClient             vcr.ClientWithResponsesInterface
+	csd                   csd.Directory
 }
 
 func New(config Config) (*DutchNutsProfile, error) {
@@ -39,9 +43,17 @@ func New(config Config) (*DutchNutsProfile, error) {
 	if err != nil {
 		return nil, err
 	}
+	apiClient, _ := discovery.NewClientWithResponses(config.API.URL)
 	return &DutchNutsProfile{
 		Config:    config,
 		vcrClient: vcrClient,
+		csd: &CsdDirectory{
+			APIClient:                   apiClient,
+			ServiceID:                   config.DiscoveryService,
+			IdentifierCredentialMapping: defaultCredentialMapping,
+			entryCache:                  make(map[string]cacheEntry),
+			cacheMux:                    sync.RWMutex{},
+		},
 	}, nil
 }
 
