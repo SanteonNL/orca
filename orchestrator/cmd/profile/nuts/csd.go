@@ -9,17 +9,16 @@ import (
 	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
+	"sync"
+	"time"
 )
 
 var _ csd.Directory = &CsdDirectory{}
 
+const cacheTtl = 30 * time.Second
+
 func (d DutchNutsProfile) CsdDirectory() csd.Directory {
-	apiClient, _ := discovery.NewClientWithResponses(d.Config.API.URL)
-	return CsdDirectory{
-		APIClient:                   apiClient,
-		ServiceID:                   d.Config.DiscoveryService,
-		IdentifierCredentialMapping: defaultCredentialMapping,
-	}
+	return d.csd
 }
 
 // CsdDirectory is a CSD Directory that is backed by Nuts Discovery Services.
@@ -45,12 +44,20 @@ type CsdDirectory struct {
 	// }
 	// The value of the mapping would then be "credentialSubject.organization.name".
 	IdentifierCredentialMapping map[string]string
+
+	entryCache map[string]cacheEntry
+	cacheMux   sync.RWMutex
+}
+
+type cacheEntry struct {
+	response discovery.SearchPresentationsResponse
+	created  time.Time
 }
 
 // LookupEndpoint searches for endpoints of the given owner, with the given endpointName in the given Discovery Service.
 // It queries the Nuts Discovery Service, translating the owner's identifier to a credential attribute (see IdentifierCredentialMapping).
 // The endpoint is retrieved from the Nuts Discovery Service registration's registrationParameters, identified by endpointName.
-func (n CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
+func (n *CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
 	response, err := n.find(ctx, owner)
 	if err != nil {
 		return nil, err
@@ -76,7 +83,7 @@ func (n CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier,
 	return results, nil
 }
 
-func (n CsdDirectory) LookupEntity(ctx context.Context, identifier fhir.Identifier) (*fhir.Reference, error) {
+func (n *CsdDirectory) LookupEntity(ctx context.Context, identifier fhir.Identifier) (*fhir.Reference, error) {
 	response, err := n.find(ctx, identifier)
 	if err != nil {
 		return nil, err
@@ -95,7 +102,7 @@ func (n CsdDirectory) LookupEntity(ctx context.Context, identifier fhir.Identifi
 	return &result, nil
 }
 
-func (n CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discovery.SearchPresentationsResponse, error) {
+func (n *CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discovery.SearchPresentationsResponse, error) {
 	if owner.Value == nil || owner.System == nil {
 		return nil, errors.New("identifier must contain both System and Value")
 	}
@@ -103,6 +110,22 @@ func (n CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discove
 	if !supported {
 		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for CodingSystem: %s", *owner.System)
 	}
+
+	// Check if the entry is cached
+	cacheKey := fmt.Sprintf("%s|%s", *owner.System, *owner.Value)
+	n.cacheMux.RLock()
+	entry, isCached := n.entryCache[cacheKey]
+	n.cacheMux.RUnlock()
+	if isCached {
+		if time.Since(entry.created) < cacheTtl {
+			return &entry.response, nil
+		}
+		// evict
+		n.cacheMux.Lock()
+		delete(n.entryCache, cacheKey)
+		n.cacheMux.Unlock()
+	}
+
 	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, n.ServiceID, &discovery.SearchPresentationsParams{
 		Query: &map[string]interface{}{
 			identifierSearchParam: *owner.Value,
@@ -120,5 +143,14 @@ func (n CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discove
 		}
 		return nil, fmt.Errorf("search presentations non-OK HTTP response (status=%s)", response.Status())
 	}
+
+	// Cache the entry
+	n.cacheMux.Lock()
+	n.entryCache[cacheKey] = cacheEntry{
+		response: *response,
+		created:  time.Now(),
+	}
+	n.cacheMux.Unlock()
+
 	return response, nil
 }
