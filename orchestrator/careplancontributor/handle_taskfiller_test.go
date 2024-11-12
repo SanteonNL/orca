@@ -509,6 +509,8 @@ var primaryTask = fhir.Task{
 
 var subTask = deep.AlterCopy(primaryTask, func(subTask *fhir.Task) {
 	swap := subTask.Owner
+	subTask.ReasonCode = nil
+	subTask.ReasonReference = nil
 	subTask.Owner = subTask.Requester
 	subTask.Requester = swap
 	subTask.PartOf = []fhir.Reference{

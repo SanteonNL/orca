@@ -366,12 +366,6 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 				},
 			},
 		},
-		Identifier: []fhir.Identifier{
-			{
-				System: to.Ptr("http://snomed.info/sct"), //TODO: Hard coded to Hartfalen for demo purposes. Should be based on the Task
-				Value:  to.Ptr("84114007"),
-			},
-		},
 		ReasonReference: []fhir.Reference{reasonReference},
 		Subject: fhir.Reference{
 			Identifier: &fhir.Identifier{

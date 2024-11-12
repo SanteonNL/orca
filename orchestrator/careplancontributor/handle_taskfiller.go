@@ -170,8 +170,25 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, 
 	if task.Focus == nil || task.Focus.Reference == nil {
 		return errors.New("task.Focus or task.Focus.Reference is nil")
 	}
+
+	// Look up primary Task: workflow selection works on primary Task.reasonCode/reasonReference
+	var primaryTask = new(fhir.Task)
+	if isPrimaryTask {
+		primaryTask = task
+	} else {
+		// TODO: Doesn't support nested subtasks for now
+		primaryTaskRef, err := s.partOf(task, true)
+		if err != nil {
+			return err
+		}
+		err = cpsClient.Read(*primaryTaskRef, primaryTask)
+		if err != nil {
+			return fmt.Errorf("failed to fetch primary Task of subtask (subtask.id=%s, primarytask.ref=%s): %w", *task.Id, *primaryTaskRef, err)
+		}
+	}
+
 	var questionnaire *fhir.Questionnaire
-	workflow, err := s.selectWorkflow(cpsClient, task)
+	workflow, err := s.selectWorkflow(cpsClient, primaryTask)
 	if err != nil {
 		// TODO: INT-300 Reject Task if we can't execute it, or if it's invalid
 		return err
@@ -226,20 +243,10 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, 
 			return nil
 		}
 
-		// TODO: Doesn't support nested subtasks for now
-		primaryTaskRef, err := s.partOf(task, true)
-		if err != nil {
-			return err
-		}
-		var primaryTask fhir.Task
-		err = cpsClient.Read(*primaryTaskRef, &primaryTask)
-		if err != nil {
-			return fmt.Errorf("failed to fetch primary Task of subtask (subtask.id=%s, primarytask.ref=%s): %w", *task.Id, *primaryTaskRef, err)
-		}
 		// TODO: Only accept main task is in status 'requested'
-		isPrimaryTaskOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(&primaryTask, localOrgIdentifiers)
+		isPrimaryTaskOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(primaryTask, localOrgIdentifiers)
 		if isPrimaryTaskOwner {
-			return s.acceptPrimaryTask(cpsClient, &primaryTask)
+			return s.acceptPrimaryTask(cpsClient, primaryTask)
 		} else {
 			return nil
 		}

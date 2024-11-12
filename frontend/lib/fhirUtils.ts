@@ -106,9 +106,9 @@ export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condit
             identifier: serviceRequest.performer?.[0]?.identifier,
         },
         focus: {
-            identifier: serviceRequest.identifier?.[0],
             display: serviceRequest.code?.coding?.[0].display,
-            type: 'ServiceRequest'
+            type: 'ServiceRequest',
+            reference: "ServiceRequest/" + serviceRequest.id
         },
     }
 }
