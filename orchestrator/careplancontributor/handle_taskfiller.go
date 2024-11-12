@@ -209,6 +209,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(cpsClient fhirclient.Client, 
 
 		// TODO: If we can't perform the next step, we should mark the primary task as failed?
 		if nextStep != nil {
+			log.Debug().Msgf("Found next step in workflow. Finding Questionnaire by url: %s", nextStep.QuestionnaireUrl)
 			questionnaire, err = s.questionnaireLoader.Load(nextStep.QuestionnaireUrl)
 			if err != nil {
 				log.Error().Err(err).Msgf("Failed to load questionnaire: %s", nextStep.QuestionnaireUrl)

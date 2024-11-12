@@ -512,6 +512,20 @@ func Test_handleUpdateTask(t *testing.T) {
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
 	})
+	t.Run("error: resource ID can't be changed (while Task is identified by search parameters)", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.Id = to.Ptr("1000")
+		})
+		request.RequestUrl, _ = url.Parse("Task?_id=" + *task.Id)
+		request.ResourceId = ""
+		request.ResourcePath = request.RequestUrl.Path
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "ID in request URL does not match ID in resource")
+		require.Empty(t, tx.Entry)
+	})
 	t.Run("error: change Task.requester (not allowed)", func(t *testing.T) {
 		request := updateRequest(func(task *fhir.Task) {
 			task.Requester = &fhir.Reference{
@@ -570,6 +584,19 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.EqualError(t, err, "Task.partOf cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: request.ID != resource.ID", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.Id = to.Ptr("1000")
+		})
+		request.RequestUrl, _ = url.Parse("Task/1")
+		request.ResourceId = "1"
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "ID in request URL does not match ID in resource")
 		require.Empty(t, tx.Entry)
 	})
 	t.Run("error: change Task.for (not allowed)", func(t *testing.T) {

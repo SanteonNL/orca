@@ -9,6 +9,8 @@ import (
 	"io/fs"
 	"net/url"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 )
 
 type QuestionnaireLoader interface {
@@ -30,12 +32,14 @@ func (e EmbeddedQuestionnaireLoader) Load(targetUrl string) (*fhir.Questionnaire
 	parts := strings.Split(parsedUrl.Path, "/")
 	fileName := parts[len(parts)-1]
 	if fileName == "" {
+		log.Info().Msgf("Cannot load Questionnaire - No path in URL %s", targetUrl)
 		// No path, can't handle this URL
 		return nil, nil
 	}
 	fileName = fileName + ".json"
 	asJSON, err := assets.FS.ReadFile(fileName)
 	if errors.Is(err, fs.ErrNotExist) {
+		log.Debug().Msgf("Embedded asset %s not found", fileName)
 		return nil, nil
 	} else if err != nil {
 		// other error

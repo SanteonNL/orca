@@ -1,10 +1,9 @@
 'use client'
-import { getResponse, SmartFormsRenderer, useQuestionnaireResponseStore } from '@aehrc/smart-forms-renderer';
-import type { BundleEntry, FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
+import { SmartFormsRenderer, useQuestionnaireResponseStore } from '@aehrc/smart-forms-renderer';
+import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { ReloadIcon } from "@radix-ui/react-icons";
-import useEhrFhirClient from '@/hooks/use-ehr-fhir-client';
 import { toast } from 'sonner';
 import useCpsClient from '@/hooks/use-cps-client';
 import useTaskProgressStore from '@/lib/store/task-progress-store';

@@ -6,17 +6,10 @@ import React, { useEffect, useState } from 'react'
 export default function StepperFooter() {
     const {
         nextStep,
-        prevStep,
-        resetSteps,
         hasCompletedAllSteps,
         isLastStep,
         isOptionalStep,
-        isDisabledStep,
     } = useStepper()
-
-    const closePopup = () => {
-        window.close();
-    };
 
     const handleNext = () => {
         window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -31,9 +24,7 @@ export default function StepperFooter() {
                 </div>
             )}
             <div className="w-full flex justify-end gap-2 mt-2">
-                {isLastStep ? (
-                    <Button size="sm" onClick={closePopup}>Close</Button>
-                ) : (
+                {!isLastStep && (
                     <Button size="sm" onClick={handleNext}>
                         {isOptionalStep ? "Skip" : "Next"}
                     </Button>

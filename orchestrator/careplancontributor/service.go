@@ -60,6 +60,7 @@ func New(
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
+		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
@@ -83,9 +84,10 @@ type Service struct {
 	// transport is used to call the local FHIR store, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
-	transport           http.RoundTripper
-	workflows           taskengine.Workflows
-	questionnaireLoader taskengine.QuestionnaireLoader
+	transport                     http.RoundTripper
+	workflows                     taskengine.Workflows
+	questionnaireLoader           taskengine.QuestionnaireLoader
+	healthdataviewEndpointEnabled bool
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
@@ -109,6 +111,14 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		writer.WriteHeader(http.StatusOK)
 	}))
 	mux.HandleFunc(fmt.Sprintf("GET %s/fhir/{rest...}", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		if !s.healthdataviewEndpointEnabled {
+			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
+				Message:    "health data view proxy endpoint is disabled",
+				StatusCode: http.StatusMethodNotAllowed,
+			}, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+
 		err := s.handleProxyExternalRequestToEHR(writer, request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
