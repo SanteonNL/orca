@@ -46,9 +46,45 @@ func TestService_Proxy(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+	t.Run("GET Patient - not allowed", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+	})
+	t.Run("POST/Create Questionnaire - not allowed", func(t *testing.T) {
+		httpResponse, err := httpClient.Post(frontServer.URL+"/cps/Questionnaire", "application/fhir+json", nil)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+	})
+	// TODO: Fix this test
+	t.Run("PUT/Update Questionnaire - allowed", func(t *testing.T) {
+		fhirServerMux.HandleFunc("PUT /fhir/Questionnaire/1", func(writer http.ResponseWriter, request *http.Request) {
+			writer.WriteHeader(http.StatusOK)
+		})
+
+		request, err := http.NewRequest(http.MethodPut, frontServer.URL+"/cps/Questionnaire/1", nil)
+		require.NoError(t, err)
+		request.Header.Set("Content-Type", "application/fhir+json")
+
+		response, err := httpClient.Do(request)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, response.StatusCode)
+	})
+	t.Run("GET Questionnaire - allowed", func(t *testing.T) {
+		fhirServerMux.HandleFunc("GET /fhir/Questionnaire", func(writer http.ResponseWriter, request *http.Request) {
+			writer.WriteHeader(http.StatusOK)
+		})
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Questionnaire")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("DELETE Questionnaire - not supported", func(t *testing.T) {
+		request, err := http.NewRequest(http.MethodDelete, frontServer.URL+"/cps/Questionnaire/1", nil)
+		require.NoError(t, err)
+		httpResponse, err := httpClient.Do(request)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+	})
 }
 
 func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {

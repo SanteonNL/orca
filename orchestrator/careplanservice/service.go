@@ -205,9 +205,24 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 	log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
 
-	err := s.checkAllowUnmanagedOperations()
-	if err != nil {
-		return nil, err
+	// This is temporary while we still allow proxying of these resource types, in the future we will have explicit handlers for each resource type
+	operationAllowed := false
+	resourceType := getResourceType(request.ResourcePath)
+
+	switch resourceType {
+	case "Questionnaire":
+		if request.HttpMethod == http.MethodPut {
+			operationAllowed = true
+		}
+	default:
+		operationAllowed = false
+	}
+
+	if !operationAllowed {
+		err := s.checkAllowUnmanagedOperations()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	tx.Append(request.bundleEntry())
@@ -280,6 +295,9 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		resource, err = s.handleGetCareTeam(httpRequest.Context(), resourceId, headers)
 	case "Task":
 		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
+	case "Questionnaire":
+		s.proxy.ServeHTTP(httpResponse, httpRequest)
+		return
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
@@ -313,6 +331,9 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	case "Task":
 		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
+	case "Questionnaire":
+		s.proxy.ServeHTTP(httpResponse, httpRequest)
+		return
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
@@ -421,6 +442,7 @@ func (s *Service) defaultHandlerProvider(method string, resourcePath string) fun
 		case "Task":
 			return s.handleUpdateTask
 		}
+		// TODO: explicit Questionnaire update handler
 	}
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
 		return s.handleUnmanagedOperation(request, tx)
