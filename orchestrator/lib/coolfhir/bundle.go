@@ -12,46 +12,56 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-type TransactionBuilder fhir.Bundle
+type BundleBuilder fhir.Bundle
 
-func Transaction() *TransactionBuilder {
-	return &TransactionBuilder{
+func Transaction() *BundleBuilder {
+	return &BundleBuilder{
 		Type: fhir.BundleTypeTransaction,
 	}
 }
 
-func (t *TransactionBuilder) Create(resource interface{}, opts ...BundleEntryOption) *TransactionBuilder {
-	return t.addEntry(resource, ResourceType(resource), fhir.HTTPVerbPOST, opts...)
+func SearchSet() *BundleBuilder {
+	return &BundleBuilder{
+		Type: fhir.BundleTypeSearchset,
+	}
 }
 
-func (t *TransactionBuilder) Update(resource interface{}, path string, opts ...BundleEntryOption) *TransactionBuilder {
-	return t.addEntry(resource, path, fhir.HTTPVerbPUT, opts...)
+func (t *BundleBuilder) Create(resource interface{}, opts ...BundleEntryOption) *BundleBuilder {
+	return t.Append(resource, &fhir.BundleEntryRequest{
+		Method: fhir.HTTPVerbPOST,
+		Url:    ResourceType(resource),
+	}, nil, opts...)
 }
 
-func (t *TransactionBuilder) addEntry(resource interface{}, path string, verb fhir.HTTPVerb, opts ...BundleEntryOption) *TransactionBuilder {
+func (t *BundleBuilder) Update(resource interface{}, path string, opts ...BundleEntryOption) *BundleBuilder {
+	return t.Append(resource, &fhir.BundleEntryRequest{
+		Method: fhir.HTTPVerbPUT,
+		Url:    ResourceType(resource),
+	}, nil, opts...)
+}
+
+func (t *BundleBuilder) Append(resource interface{}, request *fhir.BundleEntryRequest, response *fhir.BundleEntryResponse, opts ...BundleEntryOption) *BundleBuilder {
 	data, err := json.Marshal(resource)
 	if err != nil {
 		return t
 	}
 	entry := fhir.BundleEntry{
 		Resource: data,
-		Request: &fhir.BundleEntryRequest{
-			Method: verb,
-			Url:    path,
-		},
+		Request:  request,
+		Response: response,
 	}
 	for _, opt := range opts {
 		opt(&entry)
 	}
-	return t.Append(entry)
+	return t.AppendEntry(entry)
 }
 
-func (t *TransactionBuilder) Append(entry fhir.BundleEntry) *TransactionBuilder {
+func (t *BundleBuilder) AppendEntry(entry fhir.BundleEntry) *BundleBuilder {
 	t.Entry = append(t.Entry, entry)
 	return t
 }
 
-func (t *TransactionBuilder) Bundle() fhir.Bundle {
+func (t *BundleBuilder) Bundle() fhir.Bundle {
 	return fhir.Bundle(*t)
 }
 

@@ -151,6 +151,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 			},
 		},
 	}
+	result.secureTokenService = result
 	result.registerFhirClientFactory(config)
 	return result, nil
 }
@@ -167,6 +168,7 @@ type Service struct {
 	zorgplatformHttpClient *http.Client
 	zorgplatformCert       *x509.Certificate
 	profile                profile.Provider
+	secureTokenService     SecureTokenService
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -182,6 +184,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	samlResponse := request.FormValue("SAMLResponse")
 	if samlResponse == "" {
 		http.Error(response, "SAMLResponse not found in request", http.StatusBadRequest)
+		return
 	}
 
 	launchContext, err := s.parseSamlResponse(samlResponse)
@@ -201,7 +204,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
 
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
-	accessToken, err := s.RequestHcpRst(launchContext)
+	accessToken, err := s.secureTokenService.RequestHcpRst(launchContext)
 
 	if err != nil {
 		log.Error().Err(err).Msg("unable to request access token for HCP ProfessionalService")
@@ -209,7 +212,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:16])
+	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
 	sessionData, err := s.getSessionData(request.Context(), accessToken, launchContext)
 	if err != nil {
@@ -355,6 +358,19 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	localOrgIdentifier := identities[0]
 
 	// Zorgplatform does not provide a ServiceRequest, so we need to create one based on other resources they do use
+	taskPerformer := fhir.Reference{
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+			Value:  &s.config.TaskPerformerUra,
+		},
+	}
+	// Enrich performer URA with registered name
+	if result, err := s.profile.CsdDirectory().LookupEntity(ctx, *taskPerformer.Identifier); err != nil {
+		log.Warn().Err(err).Msgf("Couldn't resolve performer name (ura: %s)", s.config.TaskPerformerUra)
+	} else {
+		taskPerformer = *result
+	}
+
 	serviceRequest := &fhir.ServiceRequest{
 		Status: fhir.RequestStatusActive,
 		Code: &fhir.CodeableConcept{
@@ -373,14 +389,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 				Value:  &launchContext.Bsn,
 			},
 		},
-		Performer: []fhir.Reference{
-			{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  &s.config.TaskPerformerUra,
-				},
-			},
-		},
+		Performer: []fhir.Reference{taskPerformer},
 		Requester: &fhir.Reference{
 			Identifier: &localOrgIdentifier,
 		},
