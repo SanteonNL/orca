@@ -362,6 +362,8 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Code: &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("719858009"), // TODO: Make dynamic, for now hard coded to Telemonitoring
 					Display: to.Ptr(conditionText),
 				},
 			},

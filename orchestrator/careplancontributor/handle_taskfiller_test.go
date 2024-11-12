@@ -3,161 +3,215 @@ package careplancontributor
 import (
 	"context"
 	"encoding/json"
-	"github.com/SanteonNL/orca/orchestrator/lib/deep"
+	"errors"
+
 	"net/url"
 	"testing"
 
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
-	"github.com/stretchr/testify/assert"
-
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
 )
 
 func TestService_handleTaskFillerCreate(t *testing.T) {
-	// Define test cases
 	tests := []struct {
 		name             string
 		ctx              context.Context
 		profile          profile.Provider
-		task             *fhir.Task
-		expectedError    bool
+		notificationTask fhir.Task
+		primaryTask      *fhir.Task
+		serviceRequest   fhir.ServiceRequest
+		expectedError    error
 		numBundlesPosted int
 		mock             func(*mock.MockClient)
 	}{
 		{
-			name: "Valid SCP Task",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal1,
-			},
-			task:             &primaryTask,
-			expectedError:    false,
+			name:             "primary task, owner = local organization, triggers subtask creation",
+			notificationTask: deep.Copy(primaryTask),
 			numBundlesPosted: 1, // One subtask should be created
 		},
 		{
-			name: "Valid SCP Task - Not owner",
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal2,
-			},
+			name:             "primary task, owner != local organization, nothing should happen",
+			profile:          profile.TestProfile{Principal: auth.TestPrincipal2},
 			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
-			task:             &primaryTask,
-			expectedError:    false,
-			numBundlesPosted: 0,
+			notificationTask: deep.Copy(primaryTask),
 		},
 		{
-			name: "Invalid Task (Missing Profile)",
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal1,
+			name: "primary task, contains reasonReference instead of reasonCode, triggers subtask creation",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.ReasonReference = &fhir.Reference{
+					Reference: to.Ptr("Condition/1"),
+				}
+				t.ReasonCode = nil
+			}),
+			mock: func(client *mock.MockClient) {
+				client.EXPECT().Read("Condition/1", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ string, result *fhir.Condition, _ ...fhirclient.Option) error {
+						*result = fhir.Condition{
+							Id: to.Ptr("1"),
+							Code: &fhir.CodeableConcept{
+								Coding: []fhir.Coding{
+									{
+										System: to.Ptr("http://snomed.info/sct"),
+										Code:   to.Ptr("13645005"),
+									},
+								},
+							},
+						}
+						return nil
+					})
 			},
-			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			task: func() *fhir.Task {
-				copiedTask := deep.Copy(primaryTask)
-				copiedTask.Meta.Profile = []string{"SomeOtherProfile"}
-				return &copiedTask
-			}(),
-			expectedError:    false, // Should skip since it's not an SCP task
-			numBundlesPosted: 0,     // No subtask creation expected
+			numBundlesPosted: 1, // One subtask should be created
 		},
 		{
-			name: "Task without Requester",
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal1,
-			},
-			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			task: func() *fhir.Task {
-				copiedTask := deep.Copy(primaryTask)
-				copiedTask.Requester = nil
-				return &copiedTask
-			}(),
-			expectedError:    true,
-			numBundlesPosted: 0, // No subtask creation due to missing requester
-		},
-		{
-			name: "Task without Owner",
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal1,
-			},
-			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			task: func() *fhir.Task {
-				copiedTask := deep.Copy(primaryTask)
-				copiedTask.Owner = nil
-				return &copiedTask
-			}(),
-			expectedError:    true,
-			numBundlesPosted: 0, // No subtask creation due to missing owner
-		},
-		{
-			name: "Task without partOf: created Task is primary Task, triggers create of Subtask with Questionnaire",
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal1,
-			},
-			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			task: func() *fhir.Task {
-				copiedTask := deep.Copy(primaryTask)
-				copiedTask.PartOf = nil
-				return &copiedTask
-			}(),
-			expectedError:    false,
-			numBundlesPosted: 1, // One subtask should be created since it's treated as a primary task
-		},
-		{
-			name: "Task without partOf: updated Task is primary Task, should not process",
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal1,
-			},
-			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			task: func() *fhir.Task {
-				copiedTask := deep.Copy(primaryTask)
-				copiedTask.Status = fhir.TaskStatusInProgress
-				return &copiedTask
-			}(),
-			expectedError:    false,
-			numBundlesPosted: 0,
-		},
-		{
-			name: "Task without basedOn reference",
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal1,
-			},
-			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			task: func() *fhir.Task {
-				copiedTask := deep.Copy(primaryTask)
-				copiedTask.BasedOn = nil
-				return &copiedTask
-			}(),
-			expectedError:    true, // Invalid partOf reference should cause an error
-			numBundlesPosted: 0,    // No subtask creation expected
-		},
-		{
-			name: "Task with partOf: last subtask of a workflow is completed, primary Task is completed",
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal1,
-			},
-			ctx: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			task: func() *fhir.Task {
-				subTask := deep.Copy(primaryTask)
-				swap := subTask.Owner
-				subTask.Owner = subTask.Requester
-				subTask.Requester = swap
-				subTask.PartOf = []fhir.Reference{
-					{
-						Reference: to.Ptr("Task/" + *primaryTask.Id),
+			name: "error: primary task, multiple reasonCodes match",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.ReasonCode = &fhir.CodeableConcept{
+					Coding: []fhir.Coding{
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("13645005"), // COPD
+						},
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("84114007"), // Heart failure
+						},
 					},
 				}
-				subTask.Id = to.Ptr("subtask")
-				subTask.Status = fhir.TaskStatusCompleted
-				return &subTask
-			}(),
+			}),
+			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference matches multiple workflows (http://snomed.info/sct|13645005, http://snomed.info/sct|84114007) for service http://snomed.info/sct|719858009"),
+		},
+		{
+			name: "primary task, duplicate reasonCodes (but fine, since they're the same)",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.ReasonCode = &fhir.CodeableConcept{
+					Coding: []fhir.Coding{
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("13645005"), // COPD
+						},
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("13645005"), // COPD
+						},
+						{
+							System: to.Ptr("http://snomed.info/sct"),
+							Code:   to.Ptr("some-other"),
+						},
+					},
+				}
+			}),
+			numBundlesPosted: 1,
+		},
+		{
+			name: "error: primary task, invalid (missing SCP profile)",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Meta.Profile = []string{"SomeOtherProfile"}
+			}),
+		},
+		{
+			name: "error: primary task, without Requester",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Requester = nil
+			}),
+			expectedError: errors.New("task is not valid - skipping: validation errors: Task.requester is required but not provided"),
+		},
+		{
+			name: "error: primary task, without Owner",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Owner = nil
+			}),
+			expectedError: errors.New("task is not valid - skipping: validation errors: Task.owner is required but not provided"),
+		},
+		{
+			name: "primary task, status=received, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusReceived
+			}),
+		},
+		{
+			name: "primary task, status=accepted, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusAccepted
+			}),
+		},
+		{
+			name: "primary task, status=accepted, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusRejected
+			}),
+		},
+		{
+			name: "primary task, status=on-hold, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusOnHold
+			}),
+		},
+		{
+			name: "primary task, status=cancelled, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusCancelled
+			}),
+		},
+		{
+			name: "primary task, status=completed, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusCompleted
+			}),
+		},
+		{
+			name: "primary task, status=failed, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusFailed
+			}),
+		},
+		{
+			name: "primary task, status=ready, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusReady
+			}),
+		},
+		{
+			name: "primary task, status=in-progress, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusInProgress
+			}),
+		},
+		{
+			name: "error: primary task, unknown service is requested (primary Task.focus(ServiceRequest).code is not supported)",
+			serviceRequest: deep.AlterCopy(serviceRequest, func(sr *fhir.ServiceRequest) {
+				sr.Code.Coding[0].Code = to.Ptr("UnknownServiceCode")
+			}),
+			expectedError: errors.New("failed to process new primary Task: ServiceRequest.code does not match any offered services"),
+		},
+		{
+			name: "error: primary task, unknown codition for requested service (primary Task.reasonCode or reasonReference is not supported)",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.ReasonCode.Coding[0].Code = to.Ptr("UnknownConditionCode")
+			}),
+			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference does not match any workflow for service http://snomed.info/sct|719858009"),
+		},
+		{
+			name: "error: primary task, without basedOn",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.BasedOn = nil
+			}),
+			expectedError: errors.New("task is not valid - skipping: validation errors: Task.basedOn is required but not provided"),
+		},
+		{
+			name:             "subtask status=completed, primary task should be accepted",
+			notificationTask: subTask,
 			mock: func(client *mock.MockClient) {
 				client.EXPECT().
 					Update("Task/primary", gomock.Any(), gomock.Any()).
@@ -166,8 +220,69 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 						return nil
 					})
 			},
-			expectedError:    false,
-			numBundlesPosted: 0,
+		},
+		{
+			name:             "subtask status=completed, primary task status=accepted (nothing should be done)",
+			notificationTask: subTask,
+			primaryTask: func() *fhir.Task {
+				copiedTask := deep.Copy(primaryTask)
+				copiedTask.Status = fhir.TaskStatusAccepted
+				return &copiedTask
+			}(),
+		},
+		{
+			name:             "subtask status=completed, primary task status=in-progress (nothing should be done)",
+			notificationTask: subTask,
+			primaryTask: func() *fhir.Task {
+				copiedTask := deep.Copy(primaryTask)
+				copiedTask.Status = fhir.TaskStatusInProgress
+				return &copiedTask
+			}(),
+		},
+		{
+			name:             "subtask status=completed, primary task status=completed (nothing should be done)",
+			notificationTask: subTask,
+			primaryTask: func() *fhir.Task {
+				copiedTask := deep.Copy(primaryTask)
+				copiedTask.Status = fhir.TaskStatusCompleted
+				return &copiedTask
+			}(),
+		},
+		{
+			name:             "subtask status=completed, primary task status=failed (nothing should be done)",
+			notificationTask: subTask,
+			primaryTask: func() *fhir.Task {
+				copiedTask := deep.Copy(primaryTask)
+				copiedTask.Status = fhir.TaskStatusFailed
+				return &copiedTask
+			}(),
+		},
+		{
+			name:             "subtask status=completed, primary task status=on-hold (nothing should be done)",
+			notificationTask: subTask,
+			primaryTask: func() *fhir.Task {
+				copiedTask := deep.Copy(primaryTask)
+				copiedTask.Status = fhir.TaskStatusOnHold
+				return &copiedTask
+			}(),
+		},
+		{
+			name:             "subtask status=completed, primary task status=cancelled (nothing should be done)",
+			notificationTask: subTask,
+			primaryTask: func() *fhir.Task {
+				copiedTask := deep.Copy(primaryTask)
+				copiedTask.Status = fhir.TaskStatusCancelled
+				return &copiedTask
+			}(),
+		},
+		{
+			name:             "subtask status=completed, primary task status=ready (nothing should be done)",
+			notificationTask: subTask,
+			primaryTask: func() *fhir.Task {
+				copiedTask := deep.Copy(primaryTask)
+				copiedTask.Status = fhir.TaskStatusReady
+				return &copiedTask
+			}(),
 		},
 	}
 
@@ -183,48 +298,83 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					return mockFHIRClient
 				},
 			}
-
-			primaryTask := deep.Copy(primaryTask)
-
-			service.profile = tt.profile
 			if tt.mock != nil {
 				tt.mock(mockFHIRClient)
 			}
 
+			// Set up tested FHIR resources
+			primaryTask := deep.Copy(primaryTask)
+			if tt.primaryTask != nil {
+				primaryTask = *tt.primaryTask
+			}
+			serviceRequest := deep.Copy(serviceRequest)
+			if !deep.Equal(tt.serviceRequest, fhir.ServiceRequest{}) {
+				serviceRequest = tt.serviceRequest
+			}
+			notifiedTask := deep.Copy(primaryTask)
+			if !deep.Equal(tt.notificationTask, fhir.Task{}) {
+				notifiedTask = tt.notificationTask
+			}
+			// Set up tested context
+			service.profile = profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+			}
+			if tt.profile != nil {
+				service.profile = tt.profile
+			}
+			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+			if tt.ctx != nil {
+				ctx = tt.ctx
+			}
+
+			mockFHIRClient.EXPECT().
+				Read("ServiceRequest/"+*serviceRequest.Id, gomock.Any(), gomock.Any()).
+				DoAndReturn(func(id string, result *fhir.ServiceRequest, options ...fhirclient.Option) error {
+					*result = serviceRequest
+					return nil
+				}).AnyTimes()
 			mockFHIRClient.EXPECT().
 				Read("Task/"+*primaryTask.Id, gomock.Any(), gomock.Any()).
 				DoAndReturn(func(id string, result *fhir.Task, options ...fhirclient.Option) error {
 					*result = primaryTask
 					return nil
 				}).AnyTimes()
-			mockFHIRClient.EXPECT().
-				Create(gomock.Any(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(bundle fhir.Bundle, result interface{}, options ...fhirclient.Option) error {
-					// Simulate the creation by setting the result to a mock response
-					mockResponse := map[string]interface{}{
-						"id":           uuid.NewString(),
-						"resourceType": "Bundle",
-						"type":         "transaction-response",
-						"entry": []interface{}{
-							map[string]interface{}{
-								"response": map[string]interface{}{
-									"status":   "201 Created",
-									"location": "Task/" + uuid.NewString(),
+
+			var capturedTx fhir.Bundle
+			if tt.numBundlesPosted > 0 {
+				mockFHIRClient.EXPECT().
+					Create(gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(bundle fhir.Bundle, result interface{}, options ...fhirclient.Option) error {
+						capturedTx = bundle
+						// Simulate the creation by setting the result to a mock response
+						mockResponse := map[string]interface{}{
+							"id":           uuid.NewString(),
+							"resourceType": "Bundle",
+							"type":         "transaction-response",
+							"entry": []interface{}{
+								map[string]interface{}{
+									"response": map[string]interface{}{
+										"status":   "201 Created",
+										"location": "Task/" + uuid.NewString(),
+									},
 								},
 							},
-						},
-					}
-					bytes, _ := json.Marshal(mockResponse)
-					json.Unmarshal(bytes, &result)
-					return nil
-				}).
-				Times(tt.numBundlesPosted)
+						}
+						bytes, _ := json.Marshal(mockResponse)
+						_ = json.Unmarshal(bytes, &result)
+						return nil
+					}).
+					Times(tt.numBundlesPosted)
+			}
 
-			err := service.handleTaskFillerCreateOrUpdate(tt.ctx, mockFHIRClient, tt.task)
-			if tt.expectedError {
-				require.Error(t, err)
+			err := service.handleTaskFillerCreateOrUpdate(ctx, mockFHIRClient, &notifiedTask)
+			if tt.expectedError != nil {
+				require.EqualError(t, err, tt.expectedError.Error())
 			} else {
 				require.NoError(t, err)
+			}
+			for _, bundleEntry := range capturedTx.Entry {
+				require.NotEmpty(t, bundleEntry.Request.Url)
 			}
 		})
 	}
@@ -243,12 +393,12 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	taskBytes, _ := json.Marshal(primaryTask)
 	var task fhir.Task
 	json.Unmarshal(taskBytes, &task)
-	workflow := service.workflows["2.16.528.1.1007.3.3.21514.ehr.orders|99534756439"].Start()
+	workflow := service.workflows["http://snomed.info/sct|719858009"]["http://snomed.info/sct|13645005"].Start()
 	questionnaire, err := service.questionnaireLoader.Load(workflow.QuestionnaireUrl)
 	require.NoError(t, err)
 	require.NotNil(t, questionnaire)
 
-	questionnaireRef := "urn:uuid:" + questionnaire["id"].(string)
+	questionnaireRef := "urn:uuid:" + *questionnaire.Id
 	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
 	subtask := service.getSubTask(&primaryTask, questionnaireRef, true)
 
@@ -286,6 +436,18 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	require.Equal(t, expectedSubTaskInput, subtask.Input, "Subtask should contain a reference to the questionnaire")
 }
 
+var serviceRequest = fhir.ServiceRequest{
+	Id: to.Ptr("1"),
+	Code: &fhir.CodeableConcept{
+		Coding: []fhir.Coding{
+			{
+				System: to.Ptr("http://snomed.info/sct"),
+				Code:   to.Ptr("719858009"),
+			},
+		},
+	},
+}
+
 var primaryTask = fhir.Task{
 	Id: to.Ptr("primary"),
 	Meta: &fhir.Meta{
@@ -293,10 +455,7 @@ var primaryTask = fhir.Task{
 	},
 	Status: fhir.TaskStatusRequested,
 	Focus: &fhir.Reference{
-		Identifier: &fhir.Identifier{
-			System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
-			Value:  to.Ptr("99534756439"),
-		},
+		Reference: to.Ptr("ServiceRequest/1"),
 	},
 	Requester: &fhir.Reference{
 		Identifier: &fhir.Identifier{
@@ -314,6 +473,14 @@ var primaryTask = fhir.Task{
 	BasedOn: []fhir.Reference{
 		{
 			Reference: to.Ptr("CarePlan/cps-careplan-01"),
+		},
+	},
+	ReasonCode: &fhir.CodeableConcept{
+		Coding: []fhir.Coding{
+			{
+				System: to.Ptr("http://snomed.info/sct"),
+				Code:   to.Ptr("13645005"),
+			},
 		},
 	},
 	For: &fhir.Reference{
@@ -339,3 +506,16 @@ var primaryTask = fhir.Task{
 		},
 	},
 }
+
+var subTask = deep.AlterCopy(primaryTask, func(subTask *fhir.Task) {
+	swap := subTask.Owner
+	subTask.Owner = subTask.Requester
+	subTask.Requester = swap
+	subTask.PartOf = []fhir.Reference{
+		{
+			Reference: to.Ptr("Task/" + *primaryTask.Id),
+		},
+	}
+	subTask.Id = to.Ptr("subtask")
+	subTask.Status = fhir.TaskStatusCompleted
+})
