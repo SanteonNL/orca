@@ -6959,6 +6959,100 @@
                         }
                     }
                 }
+            },
+            "post": {
+                "tags": [
+                    "Flag"
+                ],
+                "summary": "Creates a new Flag resource",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/fhir+json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Hl7.Fhir.Model.Flag"
+                            },
+                            "example": {
+                                "resourceType": "Flag",
+                                "status": "active",
+                                "category": {
+                                    "coding": [
+                                        {
+                                            "system": "http://loinc.org",
+                                            "code": "74018-3",
+                                            "display": "alert"
+                                        }
+                                    ],
+                                    "text": "warning"
+                                },
+                                "code": {
+                                    "coding": [
+                                        {
+                                            "system": "http://snomed.info/sct",
+                                            "code": "432415000",
+                                            "display": "Methicillin resistant staphylococcus aureus carrier"
+                                        }
+                                    ],
+                                    "text": "MRSA carrier"
+                                },
+                                "subject": {
+                                    "reference": "Patient/123",
+                                    "display": "John Doe"
+                                },
+                                "period": {
+                                    "start": "2024-11-12"
+                                }
+                            }
+                        },
+                        "application/fhir+xml": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Hl7.Fhir.Model.Flag"
+                            },
+                            "example": "<Flag xmlns=\"http://hl7.org/fhir\">\n  <status value=\"active\"/>\n  <category>\n    <coding>\n      <system value=\"http://loinc.org\"/>\n      <code value=\"74018-3\"/>\n      <display value=\"alert\"/>\n    </coding>\n    <text value=\"warning\"/>\n  </category>\n  <code>\n    <coding>\n      <system value=\"http://snomed.info/sct\"/>\n      <code value=\"432415000\"/>\n      <display value=\"Methicillin resistant staphylococcus aureus carrier\"/>\n    </coding>\n    <text value=\"MRSA carrier\"/>\n  </code>\n  <subject>\n    <reference value=\"Patient/123\"/>\n    <display value=\"John Doe\"/>\n  </subject>\n  <period>\n    <start value=\"2024-11-12\"/>\n  </period>\n</Flag>"
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Flag created successfully",
+                        "content": {
+                            "application/fhir+json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Hl7.Fhir.Model.Flag"
+                                }
+                            },
+                            "application/fhir+xml": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Hl7.Fhir.Model.Flag"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "content": {
+                            "application/fhir+json": {
+                                "$ref": "#/components/responses/BadRequest"
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "content": {
+                            "application/fhir+json": {
+                                "$ref": "#/components/responses/Unauthorized"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/fhir+json": {
+                                "$ref": "#/components/responses/ServerError"
+                            }
+                        }
+                    }
+                }
             }
         },
         "/fhir/Immunization": {
