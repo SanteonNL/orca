@@ -37,7 +37,7 @@ export default function EnrollmentDetailsView() {
                     <div className='col-span-3'>{patient?.name?.[0].text || "Unknown"}</div>
                     <div className='font-bold'>BSN:</div>
                     <div className='col-span-3'>{getBsn(patient) || "Unknown"}</div>
-                    <div className='font-bold'>Adres:</div>
+                    <div className='font-bold'>Address:</div>
                     <div className='col-span-3'>{getPatientAddress(patient) || "Unknown"}</div>
                     <div className='font-bold'>Service:</div>
                     <div className='col-span-3'>{serviceRequest?.code?.coding?.[0].display || "Unknown"}</div>
