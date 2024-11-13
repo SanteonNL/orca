@@ -53,10 +53,17 @@ func (s *Service) handleSearchCareTeam(ctx context.Context, queryParams url.Valu
 		return &bundle, nil
 	}
 
-	err = validatePrincipalInCareTeams(ctx, careTeams)
-	if err != nil {
-		return nil, err
+	// For each CareTeam in bundle, validate the requester is a participant, and if not remove it from the bundle
+	// This will be done by adding the IDs we do want to keep to a list, and then filtering the bundle based on this list
+	IDs := make([]string, 0)
+	for _, ct := range careTeams {
+		err = validatePrincipalInCareTeams(ctx, []fhir.CareTeam{ct})
+		if err != nil {
+			continue
+		}
+		IDs = append(IDs, *ct.Id)
 	}
+	filterMissingResourcesOutOfBundle(&bundle, "CareTeam", IDs)
 
 	return &bundle, nil
 }

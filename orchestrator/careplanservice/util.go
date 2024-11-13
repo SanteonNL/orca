@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -76,4 +77,32 @@ func matchResourceIDs(request *FHIRHandlerRequest, idFromResource *string) error
 		}
 	}
 	return nil
+}
+
+// filterMissingResourcesOutOfBundle will remove all entries of given type that are not in the list of IDs supplied
+func filterMissingResourcesOutOfBundle(bundle *fhir.Bundle, resourceType string, IDs []string) {
+	for i, entry := range bundle.Entry {
+		removeEntry := true
+		var resourceInBundle coolfhir.Resource
+		err := json.Unmarshal(entry.Resource, &resourceInBundle)
+		if err != nil {
+			// We don't want to fail the whole operation if one resource fails to unmarshal
+			log.Error().Msgf("filterMissingResourcesOutOfBundle: Failed to unmarshal resource: %v", err)
+			continue
+		}
+
+		if resourceInBundle.Type != resourceType {
+			continue
+		}
+
+		for _, id := range IDs {
+			if id == resourceInBundle.ID {
+				removeEntry = false
+				break
+			}
+		}
+		if removeEntry {
+			bundle.Entry = append(bundle.Entry[:i], bundle.Entry[i+1:]...)
+		}
+	}
 }

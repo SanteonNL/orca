@@ -1,0 +1,16 @@
+{
+  "resourceType" : "CarePlan",
+  "id" : "2",
+  "status" : "draft",
+  "intent" : "order",
+  "careTeam" : [ {
+    "reference" : "CareTeam/999",
+    "type" : "CareTeam"
+  } ],
+  "activity" : [ {
+    "reference" : {
+      "reference" : "Task/999",
+      "type" : "Task"
+    }
+  } ]
+}
