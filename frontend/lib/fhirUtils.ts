@@ -131,3 +131,10 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
         id: questionnaireResponseId.split("/")[1]
     })
 }
+
+export function getPatientAddress(patient?: Patient) {
+    const address = patient?.address?.[0]
+    if (!address) return "Unknown address"
+
+    return `${address.line?.join(", ")}, ${address.postalCode} ${address.city}`
+}
