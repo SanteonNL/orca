@@ -27,7 +27,7 @@ COPY --from=base /app/node_modules ./node_modules
 COPY --from=base /app/package.json ./package.json
 COPY --from=base /app/next.config.mjs ./next.config.mjs
 COPY --from=base /app/.env.production ./.env.production
-# COPY --from=base /app/public ./public
+COPY --from=base /app/public ./public
 
 # Expose the port the app runs on
 EXPOSE 3000
