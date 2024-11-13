@@ -2,10 +2,12 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"net/http"
+	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -32,13 +34,25 @@ func (s *Service) writeOperationOutcomeFromError(err error, desc string, httpRes
 }
 
 func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
+	bundle := fhir.Bundle{}
 	var carePlan fhir.CarePlan
 	var careTeams []fhir.CareTeam
 	headers := new(fhirclient.Headers)
-	err := s.fhirClient.Read(carePlanReference, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams), fhirclient.ResponseHeaders(headers))
+
+	carePlanId := strings.TrimPrefix(carePlanReference, "CarePlan/")
+
+	err := s.fhirClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"), fhirclient.ResponseHeaders(headers))
+	//err := s.fhirClient.Read(carePlanReference, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams), fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return fhir.CarePlan{}, nil, nil, err
 	}
+
+	err = coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
+	if err != nil {
+		return fhir.CarePlan{}, nil, nil, err
+	}
+
+	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
 	if len(careTeams) == 0 {
 		return fhir.CarePlan{}, nil, nil, &coolfhir.ErrorWithCode{
 			Message:    "CareTeam not found in bundle",
@@ -76,4 +90,32 @@ func matchResourceIDs(request *FHIRHandlerRequest, idFromResource *string) error
 		}
 	}
 	return nil
+}
+
+// filterMatchingResourcesInBundle will find all resources in the bundle of the given type with a matching ID and return a new bundle with only those resources
+func filterMatchingResourcesInBundle(bundle *fhir.Bundle, resourceType string, IDs []string) fhir.Bundle {
+	newBundle := fhir.Bundle{
+		Entry: []fhir.BundleEntry{},
+	}
+
+	for i, entry := range bundle.Entry {
+		var resourceInBundle coolfhir.Resource
+		err := json.Unmarshal(entry.Resource, &resourceInBundle)
+		if err != nil {
+			// We don't want to fail the whole operation if one resource fails to unmarshal
+			log.Error().Msgf("filterMatchingResourcesInBundle: Failed to unmarshal resource: %v", err)
+			continue
+		}
+
+		if resourceInBundle.Type == resourceType {
+			for _, id := range IDs {
+				if id == resourceInBundle.ID {
+					newBundle.Entry = append(newBundle.Entry, bundle.Entry[i])
+					break
+				}
+			}
+		}
+	}
+
+	return newBundle
 }

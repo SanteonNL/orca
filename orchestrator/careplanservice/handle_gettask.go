@@ -100,22 +100,25 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 		return nil, err
 	}
 
+	IDs := make([]string, 0)
 	for ref, _ := range refs {
 		for _, task := range tasks {
 			isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 			if !(isOwner || isRequester) {
 				_, careTeams, _, err := s.getCarePlanAndCareTeams(ref)
 				if err != nil {
-					return nil, err
+					continue
 				}
 
 				err = validatePrincipalInCareTeams(ctx, careTeams)
 				if err != nil {
-					return nil, err
+					continue
 				}
 			}
+			IDs = append(IDs, *task.Id)
 		}
 	}
+	retBundle := filterMatchingResourcesInBundle(&bundle, "Task", IDs)
 
-	return &bundle, nil
+	return &retBundle, nil
 }

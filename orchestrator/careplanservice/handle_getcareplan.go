@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -15,7 +16,7 @@ import (
 func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.CarePlan, error) {
 	// fetch CarePlan + CareTeam, validate requester is participant of CareTeam
 	// headers are passed in by reference and returned to the calling method
-	carePlan, careTeams, headers, err := s.getCarePlanAndCareTeams("CarePlan/" + id)
+	carePlan, careTeams, headers, err := s.getCarePlanAndCareTeams(id)
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +55,16 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 		return &bundle, nil
 	}
 
+	var carePlans []fhir.CarePlan
+	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlans)
+	if err != nil {
+		return nil, err
+	}
+	if len(carePlans) == 0 {
+		// If there are no carePlans in the bundle there is no point in doing validation, return empty bundle to user
+		return &bundle, nil
+	}
+
 	var careTeams []fhir.CareTeam
 	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
 	if err != nil {
@@ -63,10 +74,24 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 		return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
 	}
 
-	err = validatePrincipalInCareTeams(ctx, careTeams)
-	if err != nil {
-		return nil, err
+	// For each CareTeam in bundle, validate the requester is a participant, and if not remove it from the bundle
+	// This will be done by adding the IDs we do want to keep to a list, and then filtering the bundle based on this list
+	//careTeamIDs := make([]string, 0)
+	carePlanIDs := make([]string, 0)
+	for _, ct := range careTeams {
+		err = validatePrincipalInCareTeams(ctx, []fhir.CareTeam{ct})
+		if err != nil {
+			continue
+		}
+		for _, cp := range carePlans {
+			for _, cpct := range cp.CareTeam {
+				if *cpct.Reference == fmt.Sprintf("CareTeam/%s", *ct.Id) {
+					carePlanIDs = append(carePlanIDs, *cp.Id)
+				}
+			}
+		}
 	}
+	retBundle := filterMatchingResourcesInBundle(&bundle, "CarePlan", carePlanIDs)
 
-	return &bundle, nil
+	return &retBundle, nil
 }
