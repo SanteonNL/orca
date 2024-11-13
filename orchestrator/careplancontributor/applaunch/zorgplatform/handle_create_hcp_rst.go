@@ -20,6 +20,35 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
+func (s *Service) RequestApplicationToken(launchContext LaunchContext) (string, error) {
+
+	assertion, err := s.createSAMLAssertionForApplication(&launchContext)
+	if err != nil {
+		return "Failed to create SAML assertion", err
+	}
+
+	// Sign the assertion
+	signedAssertion, err := s.signAssertion(assertion)
+	if err != nil {
+		return "Failed to sign SAML assertion", err
+	}
+
+	// Wrap the signed assertion in a SOAP envelope
+	envelope, err := s.createSOAPEnvelope(signedAssertion)
+	if err != nil {
+		return "Failed to create SOAP envelope", err
+	}
+
+	// Submit the request via mTLS
+	response, err := s.submitSAMLRequest(envelope)
+	if err != nil {
+		return "Failed to submit SAML request", err
+	}
+
+	return s.validateRSTSResponse(response)
+
+}
+
 // RequestHcpRst generates the SAML assertion, signs it, and sends the SOAP request to the Zorgplatform STS
 func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	// Create the SAML assertion
@@ -133,6 +162,38 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	authnContext := authnStatement.CreateElement("AuthnContext")
 	authnContextClassRef := authnContext.CreateElement("AuthnContextClassRef")
 	authnContextClassRef.SetText("urn:oasis:names:tc:SAML:2.0:ac:classes:X509")
+
+	return assertion, nil
+}
+
+func (s *Service) createSAMLAssertionForApplication(launchContext *LaunchContext) (*etree.Element, error) {
+
+	assertion, err := s.createSAMLAssertion(launchContext)
+	if err != nil {
+		return nil, err
+	}
+
+	// Replace the PurposeOfUse attribute in the assertion
+	attrValue := assertion.FindElement(".//Attribute[@Name='urn:oasis:names:tc:xspa:1.0:subject:purposeofuse']//AttributeValue/PurposeOfUse")
+	if attrValue == nil {
+		return nil, fmt.Errorf("PurposeOfUse element not found in assertion")
+	}
+	attrValue.CreateAttr("code", "OPERATIONS")
+
+	// Replace the Role attribute in the assertion
+	roleAttr := assertion.FindElement(".//Attribute[@Name='urn:oasis:names:tc:xacml:2.0:subject:role']//AttributeValue/Role")
+	if roleAttr == nil {
+		return nil, fmt.Errorf("role element not found in assertion")
+	}
+	roleAttr.CreateAttr("code", "182777000")
+
+	//Remove the workflow id if not provided
+	if launchContext.WorkflowId == "" {
+		workflowAttr := assertion.FindElement(".//Attribute[@Name='http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id']")
+		if workflowAttr != nil {
+			workflowAttr.Parent().RemoveChild(workflowAttr)
+		}
+	}
 
 	return assertion, nil
 }
