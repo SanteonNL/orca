@@ -354,6 +354,14 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	}
 	localOrgIdentifier := identities[0]
 
+	for _, identifier := range patient.Identifier {
+		if identifier.System != nil && *identifier.System == "http://fhir.nl/fhir/NamingSystem/bsn" {
+			//TODO: overwriting the BSN with the one from the Patient resource, as with test data they can differ, normally we want to throw an error
+			launchContext.Bsn = *identifier.Value
+			break
+		}
+	}
+
 	// Zorgplatform does not provide a ServiceRequest, so we need to create one based on other resources they do use
 	serviceRequest := &fhir.ServiceRequest{
 		Status: fhir.RequestStatusActive,
