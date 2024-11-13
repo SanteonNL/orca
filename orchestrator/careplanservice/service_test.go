@@ -46,7 +46,7 @@ func TestService_Proxy(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
+	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
 }
@@ -56,7 +56,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	capturedHost := ""
-	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/SomeResource", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
 	})
@@ -78,7 +78,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
+	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)

@@ -44,6 +44,30 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		},
 	}
 
+	// Create patient, this will be used as the subject of the CarePlan
+	patient := fhir.Patient{
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("1333333337"),
+			},
+		},
+	}
+	err := carePlanContributor1.Create(patient, &patient)
+	require.NoError(t, err)
+
+	// Patient not associated with any CarePlans or CareTeams for negative auth testing
+	var patient2 fhir.Patient
+	err = carePlanContributor1.Create(fhir.Patient{
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("12345"),
+			},
+		},
+	}, &patient2)
+	require.NoError(t, err)
+
 	var carePlan fhir.CarePlan
 	var task fhir.Task
 	t.Log("Creating Task - CarePlan does not exist")
@@ -495,6 +519,59 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, "Task/"+*newTask.Id, *carePlan.Activity[2].Reference.Reference)
 		})
 	}
+
+	// Patient Auth tests
+	t.Log("GET patient")
+	{
+		// Get existing patient
+		var fetchedPatient fhir.Patient
+		err = carePlanContributor1.Read("Patient/"+*patient.Id, &fetchedPatient)
+		require.NoError(t, err)
+		require.True(t, coolfhir.IdentifierEquals(&patient.Identifier[0], &fetchedPatient.Identifier[0]))
+
+		// Get non-existing patient
+		err = carePlanContributor1.Read("Patient/999", &fetchedPatient)
+		require.Error(t, err)
+
+		// Search for existing patient - by ID
+		var searchResult fhir.Bundle
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("_id", *patient.Id))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 1)
+		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
+
+		// Search for existing patient - by BSN
+		searchResult = fhir.Bundle{}
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|1333333337"))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 1)
+		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
+
+		// Get existing patient - no access
+		searchResult = fhir.Bundle{}
+		err = carePlanContributor1.Read("Patient/"+*patient2.Id, &fetchedPatient)
+		require.Error(t, err)
+
+		// Search for existing patient - by ID - no access
+		searchResult = fhir.Bundle{}
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("_id", *patient2.Id))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 0)
+
+		// Search for existing patient - by BSN - no access
+		searchResult = fhir.Bundle{}
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|12345"))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 0)
+
+		searchResult = fhir.Bundle{}
+		// Search for patients, one with access one without
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|1333333337,http://fhir.nl/fhir/NamingSystem/bsn|12345"))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 1)
+		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
+	}
+
 }
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := test.SetupHAPI(t)
@@ -505,6 +582,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhircli
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
+	config.AllowUnmanagedFHIROperations = true
 	service, err := New(config, activeProfile, orcaPublicURL)
 	require.NoError(t, err)
 
