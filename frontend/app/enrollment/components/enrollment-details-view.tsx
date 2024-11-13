@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import useEnrollmentStore from '@/lib/store/enrollment-store'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { InfoCircledIcon } from '@radix-ui/react-icons'
-import { getBsn } from '@/lib/fhirUtils'
+import { getBsn, getPatientAddress } from '@/lib/fhirUtils'
 import useTaskProgressStore from '@/lib/store/task-progress-store'
 import OrganizationLabel from './organization-label'
 
@@ -37,6 +37,8 @@ export default function EnrollmentDetailsView() {
                     <div className='col-span-3'>{patient?.name?.[0].text || "Unknown"}</div>
                     <div className='font-bold'>BSN:</div>
                     <div className='col-span-3'>{getBsn(patient) || "Unknown"}</div>
+                    <div className='font-bold'>Adres:</div>
+                    <div className='col-span-3'>{getPatientAddress(patient) || "Unknown"}</div>
                     <div className='font-bold'>Service:</div>
                     <div className='col-span-3'>{serviceRequest?.code?.coding?.[0].display || "Unknown"}</div>
                     <div className='font-bold'>Care Path:</div>
