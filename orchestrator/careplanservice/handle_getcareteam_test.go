@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -14,6 +15,77 @@ import (
 	"reflect"
 	"testing"
 )
+
+func TestService_handleGetCareTeam(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a mock FHIR client using the generated mock
+	mockFHIRClient := mock.NewMockClient(ctrl)
+
+	// Create the service with the mock FHIR client
+	service := &Service{
+		fhirClient: mockFHIRClient,
+	}
+
+	careTeam2Raw, _ := os.ReadFile("./testdata/careteam-2.json")
+	var careTeam2 fhir.CareTeam
+	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
+
+	tests := []struct {
+		ctx              context.Context
+		name             string
+		id               string
+		returnedCareTeam *fhir.CareTeam
+		errorFromRead    error
+		expectError      bool
+	}{
+		{
+			ctx:              context.Background(),
+			name:             "CareTeam does not exist",
+			id:               "2",
+			returnedCareTeam: &fhir.CareTeam{},
+			errorFromRead:    errors.New("error"),
+			expectError:      true,
+		},
+		{
+			ctx:              context.Background(),
+			name:             "CareTeam exists, no auth",
+			id:               "2",
+			returnedCareTeam: &careTeam2,
+			expectError:      true,
+		},
+		{
+			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			name:             "CareTeam exists, auth, incorrect principal",
+			id:               "2",
+			returnedCareTeam: &careTeam2,
+			expectError:      true,
+		},
+		{
+			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name:             "CareTeam exists, auth, correct principal",
+			id:               "2",
+			returnedCareTeam: &careTeam2,
+			expectError:      false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockFHIRClient.EXPECT().Read("CareTeam/2", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+				reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedCareTeam))
+				return tt.errorFromRead
+			})
+			got, err := service.handleGetCareTeam(tt.ctx, tt.id, &fhirclient.Headers{})
+			if tt.expectError == true {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, tt.returnedCareTeam, got)
+			}
+		})
+	}
+}
 
 func TestService_handleSearchCareTeam(t *testing.T) {
 	ctrl := gomock.NewController(t)

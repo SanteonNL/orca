@@ -2,11 +2,11 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
@@ -28,53 +28,103 @@ func TestService_handleGetCarePlan(t *testing.T) {
 		fhirClient: mockFHIRClient,
 	}
 
+	carePlan1Raw, _ := os.ReadFile("./testdata/careplan-1.json")
+	var carePlan1 fhir.CarePlan
+	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
+	careTeam2Raw, _ := os.ReadFile("./testdata/careteam-2.json")
+
 	tests := []struct {
-		ctx                 context.Context
-		name                string
-		id                  string
-		returnedCarePlan    *fhir.CarePlan
-		returnedCareTeam    *fhir.CareTeam
-		expectErrorFromRead bool
-		expectError         bool
+		ctx                    context.Context
+		name                   string
+		id                     string
+		returnedCarePlanBundle *fhir.Bundle
+		expectedCarePlan       *fhir.CarePlan
+		errorFromRead          error
+		expectError            bool
 	}{
 		{
-			ctx:                 context.Background(),
-			name:                "CarePlan does not exist",
-			id:                  "1",
-			returnedCarePlan:    nil,
-			returnedCareTeam:    nil,
-			expectErrorFromRead: false,
-			expectError:         true,
+			ctx:                    context.Background(),
+			name:                   "CarePlan does not exist",
+			id:                     "1",
+			errorFromRead:          errors.New("error"),
+			returnedCarePlanBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{}},
+			expectError:            true,
 		},
 		{
 			ctx:  context.Background(),
 			name: "No CareTeams returned",
 			id:   "1",
-			returnedCarePlan: &fhir.CarePlan{
-				Id: to.Ptr("1"),
+			returnedCarePlanBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: carePlan1Raw,
+					},
+				},
 			},
-			returnedCareTeam:    nil,
-			expectErrorFromRead: false,
-			expectError:         true,
+			expectError: true,
 		},
-		// TODO: Positive test cases. These are complex to mock with the side effects of fhir.QueryParam, refactor unit tests to http tests
+		{
+			ctx:  context.Background(),
+			name: "CarePlan, CareTeam returned, no auth",
+			id:   "1",
+			returnedCarePlanBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: carePlan1Raw,
+					},
+					{
+						Resource: careTeam2Raw,
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			name: "CarePlan, CareTeam returned, incorrect principal",
+			id:   "1",
+			returnedCarePlanBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: carePlan1Raw,
+					},
+					{
+						Resource: careTeam2Raw,
+					},
+				},
+			},
+			expectError: true,
+		},
+		{
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name: "CarePlan, CareTeam returned, correct principal",
+			id:   "1",
+			returnedCarePlanBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: carePlan1Raw,
+					},
+					{
+						Resource: careTeam2Raw,
+					},
+				},
+			},
+			expectError:      false,
+			expectedCarePlan: &carePlan1,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockFHIRClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
-				result = tt.returnedCarePlan
-				if tt.expectErrorFromRead {
-					return errors.New("error")
-				}
-
-				return nil
+				reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedCarePlanBundle))
+				return tt.errorFromRead
 			})
 			got, err := service.handleGetCarePlan(tt.ctx, tt.id, &fhirclient.Headers{})
 			if tt.expectError == true {
 				require.Error(t, err)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, tt.returnedCarePlan, got)
+				require.Equal(t, tt.expectedCarePlan, got)
 			}
 		})
 	}
@@ -169,7 +219,34 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 		},
 		{
 			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:        "CarePlan, CareTeam returned, correct principal",
+			name:        "CarePlan, CareTeam returned, correct principal, include careteam",
+			queryParams: url.Values{"_include": []string{"CarePlan:care-team"}},
+			returnedBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: carePlan1,
+					},
+					{
+						Resource: careTeam2,
+					},
+				},
+			},
+			expectedBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: carePlan1,
+					},
+					{
+						Resource: careTeam2,
+					},
+				},
+			},
+			errorFromRead: nil,
+			expectError:   false,
+		},
+		{
+			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name:        "CarePlan, CareTeam returned, correct principal, do not include careteam",
 			queryParams: url.Values{},
 			returnedBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -194,7 +271,7 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 		{
 			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:        "Multiple CarePlans, CareTeams returned, correct principal, results filtered",
-			queryParams: url.Values{},
+			queryParams: url.Values{"_include": []string{"CarePlan:care-team"}},
 			returnedBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{
@@ -215,6 +292,9 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 				Entry: []fhir.BundleEntry{
 					{
 						Resource: carePlan1,
+					},
+					{
+						Resource: careTeam2,
 					},
 				},
 			},

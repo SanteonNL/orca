@@ -218,10 +218,11 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("Search CarePlan")
 	{
 		var searchResult fhir.Bundle
-		err := carePlanContributor1.Read("CarePlan", &searchResult, fhirclient.QueryParam("_id", *carePlan.Id))
+		err := carePlanContributor1.Read("CarePlan", &searchResult, fhirclient.QueryParam("_id", *carePlan.Id), fhirclient.QueryParam("_include", "CarePlan:care-team"))
 		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 1, "Expected 1 CarePlan")
+		require.Len(t, searchResult.Entry, 2, "Expected 1 CarePlan and 1 CareTeam")
 		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "CarePlan/"+*carePlan.Id))
+		require.True(t, strings.HasSuffix(*searchResult.Entry[1].FullUrl, *carePlan.CareTeam[0].Reference))
 	}
 
 	t.Log("Read CarePlan - Not in participants")

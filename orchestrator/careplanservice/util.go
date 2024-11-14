@@ -7,6 +7,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -93,7 +94,7 @@ func matchResourceIDs(request *FHIRHandlerRequest, idFromResource *string) error
 }
 
 // filterMatchingResourcesInBundle will find all resources in the bundle of the given type with a matching ID and return a new bundle with only those resources
-func filterMatchingResourcesInBundle(bundle *fhir.Bundle, resourceType string, IDs []string) fhir.Bundle {
+func filterMatchingResourcesInBundle(bundle *fhir.Bundle, resourceTypes []string, references []string) fhir.Bundle {
 	newBundle := fhir.Bundle{
 		Entry: []fhir.BundleEntry{},
 	}
@@ -107,9 +108,14 @@ func filterMatchingResourcesInBundle(bundle *fhir.Bundle, resourceType string, I
 			continue
 		}
 
-		if resourceInBundle.Type == resourceType {
-			for _, id := range IDs {
-				if id == resourceInBundle.ID {
+		if slices.Contains(resourceTypes, resourceInBundle.Type) {
+			for _, ref := range references {
+				parts := strings.Split(ref, "/")
+				if len(parts) != 2 {
+					// TODO: Should we error here and let the caller know they are supplying an invalid ref?
+					continue
+				}
+				if parts[0] == resourceInBundle.Type && parts[1] == resourceInBundle.ID {
 					newBundle.Entry = append(newBundle.Entry, bundle.Entry[i])
 					break
 				}

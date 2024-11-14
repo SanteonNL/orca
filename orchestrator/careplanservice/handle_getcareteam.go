@@ -55,15 +55,15 @@ func (s *Service) handleSearchCareTeam(ctx context.Context, queryParams url.Valu
 
 	// For each CareTeam in bundle, validate the requester is a participant, and if not remove it from the bundle
 	// This will be done by adding the IDs we do want to keep to a list, and then filtering the bundle based on this list
-	IDs := make([]string, 0)
+	careTeamRefs := make([]string, 0)
 	for _, ct := range careTeams {
 		err = validatePrincipalInCareTeams(ctx, []fhir.CareTeam{ct})
 		if err != nil {
 			continue
 		}
-		IDs = append(IDs, *ct.Id)
+		careTeamRefs = append(careTeamRefs, "CareTeam/"+*ct.Id)
 	}
-	retBundle := filterMatchingResourcesInBundle(&bundle, "CareTeam", IDs)
+	retBundle := filterMatchingResourcesInBundle(&bundle, []string{"CareTeam"}, careTeamRefs)
 
 	return &retBundle, nil
 }

@@ -100,7 +100,7 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 		return nil, err
 	}
 
-	IDs := make([]string, 0)
+	taskRefs := make([]string, 0)
 	for ref, _ := range refs {
 		for _, task := range tasks {
 			isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
@@ -115,10 +115,10 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 					continue
 				}
 			}
-			IDs = append(IDs, *task.Id)
+			taskRefs = append(taskRefs, "Task/"+*task.Id)
 		}
 	}
-	retBundle := filterMatchingResourcesInBundle(&bundle, "Task", IDs)
+	retBundle := filterMatchingResourcesInBundle(&bundle, []string{"Task"}, taskRefs)
 
 	return &retBundle, nil
 }

@@ -34,10 +34,12 @@ func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhi
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
 	params := []fhirclient.Option{}
+	includeCareTeamInResponse := false
 	for k, v := range queryParams {
 		for _, value := range v {
 			// Skip param to include CareTeam since we need to add this for validation anyway
 			if k == "_include" && value == "CarePlan:care-team" {
+				includeCareTeamInResponse = true
 				continue
 			}
 			params = append(params, fhirclient.QueryParam(k, value))
@@ -76,22 +78,24 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 
 	// For each CareTeam in bundle, validate the requester is a participant, and if not remove it from the bundle
 	// This will be done by adding the IDs we do want to keep to a list, and then filtering the bundle based on this list
-	//careTeamIDs := make([]string, 0)
-	carePlanIDs := make([]string, 0)
+	filterRefs := make([]string, 0)
 	for _, ct := range careTeams {
 		err = validatePrincipalInCareTeams(ctx, []fhir.CareTeam{ct})
 		if err != nil {
 			continue
 		}
+		if includeCareTeamInResponse {
+			filterRefs = append(filterRefs, "CareTeam/"+*ct.Id)
+		}
 		for _, cp := range carePlans {
 			for _, cpct := range cp.CareTeam {
 				if *cpct.Reference == fmt.Sprintf("CareTeam/%s", *ct.Id) {
-					carePlanIDs = append(carePlanIDs, *cp.Id)
+					filterRefs = append(filterRefs, "CarePlan/"+*cp.Id)
 				}
 			}
 		}
 	}
-	retBundle := filterMatchingResourcesInBundle(&bundle, "CarePlan", carePlanIDs)
+	retBundle := filterMatchingResourcesInBundle(&bundle, []string{"CarePlan", "CareTeam"}, filterRefs)
 
 	return &retBundle, nil
 }
