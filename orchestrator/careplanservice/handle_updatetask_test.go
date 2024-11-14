@@ -735,7 +735,7 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tx := &coolfhir.TransactionBuilder{}
+			tx := &coolfhir.BundleBuilder{}
 
 			if tt.existingTask != nil {
 				mockFHIRClient.EXPECT().Read("Task/1", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {

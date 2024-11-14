@@ -263,13 +263,13 @@ func TestService_Handle(t *testing.T) {
 		},
 	}, profile.TestProfile{}, orcaPublicURL)
 
-	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		switch method {
 		case http.MethodPost:
 			switch resourceType {
 			case "CarePlan":
-				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					tx.Append(request.bundleEntry())
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("CarePlan"))
 						carePlan := fhir.CarePlan{
@@ -280,8 +280,8 @@ func TestService_Handle(t *testing.T) {
 					}, nil
 				}
 			case "Task":
-				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					tx.Append(request.bundleEntry())
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
@@ -295,8 +295,8 @@ func TestService_Handle(t *testing.T) {
 		case http.MethodPut:
 			switch resourceType {
 			case "Task":
-				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					tx.Append(request.bundleEntry())
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
@@ -307,7 +307,7 @@ func TestService_Handle(t *testing.T) {
 					}, nil
 				}
 			case "Organization":
-				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 					return nil, errors.New("this fails on purpose")
 				}
 			}

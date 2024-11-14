@@ -20,6 +20,12 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
+type SecureTokenService interface {
+	RequestHcpRst(launchContext LaunchContext) (string, error)
+}
+
+var _ SecureTokenService = &Service{}
+
 func (s *Service) RequestApplicationToken(launchContext LaunchContext) (string, error) {
 
 	assertion, err := s.createSAMLAssertionForApplication(&launchContext)
