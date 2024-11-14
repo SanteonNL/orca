@@ -264,6 +264,12 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	if err = fhirClient.ReadWithContext(ctx, "Task/"+launchContext.WorkflowId, &task); err != nil {
 		return nil, fmt.Errorf("unable to fetch Task resource (id=%s): %w", launchContext.WorkflowId, err)
 	}
+	// Determine service and condition code from the workflow specified by Task.definitionReference.reference (e.g. Telemonitoring, COPD)
+	conditionCode, err := getConditionCodeFromWorkflowTask(task)
+	if err != nil {
+		return nil, err
+	}
+
 	// Search for Encounter, contains Encounter, Organization and Patient
 	if task["context"] == nil {
 		return nil, fmt.Errorf("task.context is not provided")
@@ -324,19 +330,9 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 
 	var reasonReference fhir.Reference
 
-	// reason := conditions[0] //TODO: Overwriting with Heart failure for demo, should be based on the Task
 	reason := fhir.Condition{
-		Id: to.Ptr(uuid.NewString()),
-		Code: &fhir.CodeableConcept{
-			Coding: []fhir.Coding{
-				{
-					System:  to.Ptr("http://snomed.info/sct"),
-					Code:    to.Ptr("84114007"),
-					Display: to.Ptr("Hartfalen (aandoening)"),
-				},
-			},
-			Text: to.Ptr("Hartfalen (aandoening)"),
-		},
+		Id:   to.Ptr(uuid.NewString()),
+		Code: conditionCode,
 	}
 
 	ref := "Condition/magic-" + *reason.Id
@@ -383,8 +379,9 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Status: fhir.RequestStatusActive,
 		Code: &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
+				// Hardcoded, we only do Telemonitoring for now
 				{
-					System:  to.Ptr("http://snomed.info/sct"), //TODO: Hard code to telemonitoring for demo
+					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("719858009"),
 					Display: to.Ptr("monitoren via telegeneeskunde (regime/therapie)"),
 				},
@@ -427,6 +424,59 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 			"launchContext":            launchContext, // Can be used to fetch a new access token after expiration
 		},
 	}, nil
+}
+
+func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.CodeableConcept, error) {
+	var workflowReference string
+	if definitionRef, ok := task["definitionReference"].(map[string]interface{}); !ok {
+		return nil, fmt.Errorf("Task.definitionReference is missing or invalid")
+	} else if workflowReference, ok = definitionRef["reference"].(string); !ok {
+		return nil, fmt.Errorf("Task.definitionReference.reference is missing or invalid")
+	}
+	prefix := "ActivityDefinition/"
+	if !strings.HasPrefix(workflowReference, prefix) {
+		return nil, fmt.Errorf("Task.definitionReference.reference does is not in the form '%s/<id>': %s", prefix, workflowReference)
+	}
+	// Mapping defined by https://github.com/Zorgbijjou/oid-repository/blob/main/oid-repository.md
+	switch strings.TrimPrefix(workflowReference, prefix) {
+	case "1.0":
+		// Used by Zorgplatform Developer Portal, default to Hartfalen
+		fallthrough
+	case "2.16.840.1.113883.2.4.3.224.2.1":
+		return &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("84114007"),
+					Display: to.Ptr("Heart failure (disorder)"),
+				},
+			},
+			Text: to.Ptr("Heart failure (disorder)"),
+		}, nil
+	case "2.16.840.1.113883.2.4.3.224.2.2":
+		return &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("13645005"),
+					Display: to.Ptr("Chronic obstructive pulmonary disease (disorder)"),
+				},
+			},
+			Text: to.Ptr("Chronic obstructive pulmonary disease (disorder)"),
+		}, nil
+	case "2.16.840.1.113883.2.4.3.224.2.3":
+		return &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("195967001"),
+					Display: to.Ptr("Asthma (disorder)"),
+				},
+			},
+			Text: to.Ptr("Asthma (disorder)"),
+		}, nil
+	}
+	return nil, fmt.Errorf("unsupported workflow definition: %s", workflowReference)
 }
 
 type authHeaderRoundTripper struct {
