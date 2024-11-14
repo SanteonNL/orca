@@ -45,19 +45,18 @@ func TestService_handleGetTask(t *testing.T) {
 		expectError            bool
 	}{
 		{
-			ctx:           context.Background(),
+			ctx:         context.Background(),
+			name:        "No auth",
+			id:          "1",
+			expectError: true,
+		},
+		{
+			ctx:           auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			name:          "Task does not exist",
 			id:            "1",
 			returnedTask:  nil,
 			errorFromRead: errors.New("error"),
 			expectError:   true,
-		},
-		{
-			ctx:          context.Background(),
-			name:         "Task exists, no auth",
-			id:           "1",
-			returnedTask: &task1,
-			expectError:  true,
 		},
 		{
 			ctx:                    auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
@@ -101,12 +100,14 @@ func TestService_handleGetTask(t *testing.T) {
 					return tt.errorFromCarePlanRead
 				})
 			}
-			mockFHIRClient.EXPECT().Read("Task/1", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
-				if tt.returnedTask != nil {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedTask))
-				}
-				return tt.errorFromRead
-			})
+			if tt.returnedTask != nil || tt.errorFromRead != nil {
+				mockFHIRClient.EXPECT().Read("Task/1", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+					if tt.returnedTask != nil {
+						reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedTask))
+					}
+					return tt.errorFromRead
+				})
+			}
 			got, err := service.handleGetTask(tt.ctx, tt.id, &fhirclient.Headers{})
 			if tt.expectError == true {
 				require.Error(t, err)
@@ -143,12 +144,16 @@ func TestService_handleSearchTask(t *testing.T) {
 		errorFromRead          error
 		returnedCarePlanBundle *fhir.Bundle
 		errorFromCarePlanRead  error
-		// used to validate result filtering, if needed
-		expectedBundle *fhir.Bundle
-		expectError    bool
+		expectedBundle         *fhir.Bundle
+		expectError            bool
 	}{
 		{
 			ctx:         context.Background(),
+			name:        "No auth",
+			expectError: true,
+		},
+		{
+			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:        "Empty bundle",
 			queryParams: url.Values{},
 			returnedBundle: &fhir.Bundle{
@@ -158,7 +163,7 @@ func TestService_handleSearchTask(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			ctx:         context.Background(),
+			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:        "fhirclient error - task",
 			queryParams: url.Values{},
 			returnedBundle: &fhir.Bundle{
@@ -166,18 +171,6 @@ func TestService_handleSearchTask(t *testing.T) {
 			},
 			errorFromRead: errors.New("error"),
 			expectError:   true,
-		},
-		{
-			ctx:  context.Background(),
-			name: "Task returned, no auth",
-			returnedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: task1,
-					},
-				},
-			},
-			expectError: true,
 		},
 		{
 			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
@@ -276,10 +269,12 @@ func TestService_handleSearchTask(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockFHIRClient.EXPECT().Read("Task", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
-				reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedBundle))
-				return tt.errorFromRead
-			})
+			if tt.returnedBundle != nil || tt.errorFromRead != nil {
+				mockFHIRClient.EXPECT().Read("Task", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedBundle))
+					return tt.errorFromRead
+				})
+			}
 			if tt.returnedCarePlanBundle != nil || tt.errorFromCarePlanRead != nil {
 				mockFHIRClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
 					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedCarePlanBundle))

@@ -1,7 +1,6 @@
 package careplanservice
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -90,12 +89,7 @@ func handleSearchResource[T any](s *Service, resourceType string, queryParams ur
 
 	return reflect.ValueOf(resourceSlice).Elem().Interface().([]T), &bundle, nil
 }
-func validatePrincipalInCareTeams(ctx context.Context, careTeams []fhir.CareTeam) error {
-	// Verify requester is in CareTeams
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return err
-	}
+func validatePrincipalInCareTeams(principal auth.Principal, careTeams []fhir.CareTeam) error {
 	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
 	if participant == nil {
 		return &coolfhir.ErrorWithCode{

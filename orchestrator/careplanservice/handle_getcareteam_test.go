@@ -41,18 +41,17 @@ func TestService_handleGetCareTeam(t *testing.T) {
 		expectError      bool
 	}{
 		{
-			ctx:              context.Background(),
+			ctx:         context.Background(),
+			name:        "No auth",
+			id:          "2",
+			expectError: true,
+		},
+		{
+			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			name:             "CareTeam does not exist",
 			id:               "2",
 			returnedCareTeam: &fhir.CareTeam{},
 			errorFromRead:    errors.New("error"),
-			expectError:      true,
-		},
-		{
-			ctx:              context.Background(),
-			name:             "CareTeam exists, no auth",
-			id:               "2",
-			returnedCareTeam: &careTeam2,
 			expectError:      true,
 		},
 		{
@@ -72,10 +71,12 @@ func TestService_handleGetCareTeam(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockFHIRClient.EXPECT().Read("CareTeam/2", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
-				reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedCareTeam))
-				return tt.errorFromRead
-			})
+			if tt.returnedCareTeam != nil || tt.errorFromRead != nil {
+				mockFHIRClient.EXPECT().Read("CareTeam/2", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedCareTeam))
+					return tt.errorFromRead
+				})
+			}
 			got, err := service.handleGetCareTeam(tt.ctx, tt.id, &fhirclient.Headers{})
 			if tt.expectError == true {
 				require.Error(t, err)
@@ -115,6 +116,12 @@ func TestService_handleSearchCareTeam(t *testing.T) {
 	}{
 		{
 			ctx:         context.Background(),
+			name:        "No auth",
+			queryParams: url.Values{},
+			expectError: true,
+		},
+		{
+			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:        "Empty bundle",
 			queryParams: url.Values{},
 			returnedBundle: &fhir.Bundle{
@@ -124,24 +131,7 @@ func TestService_handleSearchCareTeam(t *testing.T) {
 			expectError:   false,
 		},
 		{
-			ctx:         context.Background(),
-			name:        "CareTeam returned, no auth",
-			queryParams: url.Values{},
-			returnedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: careTeam2,
-					},
-				},
-			},
-			expectedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{},
-			},
-			errorFromRead: nil,
-			expectError:   false,
-		},
-		{
-			ctx:         context.Background(),
+			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:        "fhirclient error",
 			queryParams: url.Values{},
 			returnedBundle: &fhir.Bundle{
@@ -219,10 +209,12 @@ func TestService_handleSearchCareTeam(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockFHIRClient.EXPECT().Read("CareTeam", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
-				reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedBundle))
-				return tt.errorFromRead
-			})
+			if tt.returnedBundle != nil || tt.errorFromRead != nil {
+				mockFHIRClient.EXPECT().Read("CareTeam", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedBundle))
+					return tt.errorFromRead
+				})
+			}
 
 			got, err := service.handleSearchCareTeam(tt.ctx, tt.queryParams, &fhirclient.Headers{})
 			if tt.expectError == true {
