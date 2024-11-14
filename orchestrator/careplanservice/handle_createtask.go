@@ -18,7 +18,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msg("Creating Task")
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
@@ -197,7 +197,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 }
 
 // newTaskInExistingCarePlan creates a new Task and references the Task from the CarePlan.activities.
-func (s *Service) newTaskInExistingCarePlan(tx *coolfhir.TransactionBuilder, taskBundleEntry fhir.BundleEntry, task fhir.Task, carePlan *fhir.CarePlan) error {
+func (s *Service) newTaskInExistingCarePlan(tx *coolfhir.BundleBuilder, taskBundleEntry fhir.BundleEntry, task fhir.Task, carePlan *fhir.CarePlan) error {
 	carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
 		Reference: &fhir.Reference{
 			Reference: taskBundleEntry.FullUrl,
@@ -206,7 +206,7 @@ func (s *Service) newTaskInExistingCarePlan(tx *coolfhir.TransactionBuilder, tas
 	})
 
 	// TODO: Only if not updated
-	tx.Append(taskBundleEntry).
+	tx.AppendEntry(taskBundleEntry).
 		Update(*carePlan, "CarePlan/"+*carePlan.Id)
 
 	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
