@@ -43,7 +43,6 @@ func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePl
 	carePlanId := strings.TrimPrefix(carePlanReference, "CarePlan/")
 
 	err := s.fhirClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"), fhirclient.ResponseHeaders(headers))
-	//err := s.fhirClient.Read(carePlanReference, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams), fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return fhir.CarePlan{}, nil, nil, err
 	}
