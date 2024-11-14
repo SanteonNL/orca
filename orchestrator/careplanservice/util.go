@@ -7,6 +7,8 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"net/http"
+	"net/url"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -63,6 +65,31 @@ func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePl
 	return carePlan, careTeams, headers, nil
 }
 
+// handleSearchResource is a generic function to search for a resource of a given type and return the results
+// it returns a processed list of the required resource type, the full bundle and an error
+func handleSearchResource[T any](s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
+	params := []fhirclient.Option{}
+	for k, v := range queryParams {
+		for _, value := range v {
+			params = append(params, fhirclient.QueryParam(k, value))
+		}
+	}
+
+	params = append(params, fhirclient.ResponseHeaders(headers))
+	var bundle fhir.Bundle
+	err := s.fhirClient.Read(resourceType, &bundle, params...)
+	if err != nil {
+		return nil, &fhir.Bundle{}, err
+	}
+
+	resourceSlice := reflect.New(reflect.SliceOf(reflect.TypeOf((*T)(nil)).Elem())).Interface()
+	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType(resourceType), resourceSlice)
+	if err != nil {
+		return nil, &fhir.Bundle{}, err
+	}
+
+	return reflect.ValueOf(resourceSlice).Elem().Interface().([]T), &bundle, nil
+}
 func validatePrincipalInCareTeams(ctx context.Context, careTeams []fhir.CareTeam) error {
 	// Verify requester is in CareTeams
 	principal, err := auth.PrincipalFromContext(ctx)

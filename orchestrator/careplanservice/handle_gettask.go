@@ -60,28 +60,13 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 // if the requester is a participant of one of the returned CareTeams, return the whole bundle, else error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
-	params := []fhirclient.Option{}
-	for k, v := range queryParams {
-		for _, value := range v {
-			params = append(params, fhirclient.QueryParam(k, value))
-		}
-	}
-
-	params = append(params, fhirclient.ResponseHeaders(headers))
-	var bundle fhir.Bundle
-	err := s.fhirClient.Read("Task", &bundle, params...)
-	if err != nil {
-		return nil, err
-	}
-
-	var tasks []fhir.Task
-	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("Task"), &tasks)
+	tasks, bundle, err := handleSearchResource[fhir.Task](s, "Task", queryParams, headers)
 	if err != nil {
 		return nil, err
 	}
 	if len(tasks) == 0 {
 		// If there are no tasks in the bundle there is no point in doing validation, return empty bundle to user
-		return &bundle, nil
+		return &fhir.Bundle{Entry: []fhir.BundleEntry{}}, nil
 	}
 
 	// It is possible that we have tasks based on different CarePlans. Create distinct list of References to be used for checking participant
@@ -118,7 +103,7 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 			taskRefs = append(taskRefs, "Task/"+*task.Id)
 		}
 	}
-	retBundle := filterMatchingResourcesInBundle(&bundle, []string{"Task"}, taskRefs)
+	retBundle := filterMatchingResourcesInBundle(bundle, []string{"Task"}, taskRefs)
 
 	return &retBundle, nil
 }
