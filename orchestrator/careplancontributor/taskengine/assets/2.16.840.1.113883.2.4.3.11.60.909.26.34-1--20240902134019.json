@@ -1,0 +1,92 @@
+{
+  "resourceType": "Questionnaire",
+  "id": "asthma-1234",
+  "url": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134018",
+  "title": "Questionnaire Asthma",
+  "status": "draft",
+  "date": "2024-11-11T13:40:17Z",
+  "publisher": "Medical Service Centre",
+  "language": "nl-NL",
+  "meta": {
+    "lastUpdated": "2024-11-14T13:40:17Z",
+    "profile": [
+      "http://hl7.org/fhir/uv/sdc/StructureDefinition/sdc-questionnaire-render"
+    ],
+    "tag": [
+      {
+        "system": "http://hl7.org/fhir/FHIR-version",
+        "code": "4.0.1"
+      }
+    ]
+  },
+  "item": [
+    {
+      "linkId": "1",
+      "text": "Asthma Details",
+      "type": "group",
+      "required": true,
+      "item": [
+        {
+          "linkId": "1.1",
+          "text": "Asthma Diagnosis",
+          "type": "choice",
+          "required": true,
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "Yes"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "No"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "1.2",
+          "text": "Asthma Medication",
+          "type": "choice",
+          "required": true,
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "Yes"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "No"
+              }
+            }
+          ]
+        },
+        {
+          "linkId": "1.3",
+          "text": "Asthma Symptoms",
+          "type": "choice",
+          "required": true,
+          "answerOption": [
+            {
+              "valueCoding": {
+                "code": "yes",
+                "display": "Yes"
+              }
+            },
+            {
+              "valueCoding": {
+                "code": "no",
+                "display": "No"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
