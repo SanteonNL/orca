@@ -95,7 +95,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		})
 		carePlan.Category = []fhir.CodeableConcept{
 			{
-				// snomed 135411000146103
 				Coding: []fhir.Coding{
 					{
 						System: to.Ptr("http://snomed.info/sct"),
