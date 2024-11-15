@@ -24,7 +24,7 @@ func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhi
 
 	// fetch CarePlan + CareTeam, validate requester is participant of CareTeam
 	// headers are passed in by reference and returned to the calling method
-	carePlan, careTeams, headers, err := s.getCarePlanAndCareTeams(id)
+	carePlan, careTeams, headers, err := s.getCarePlanAndCareTeams("CarePlan/" + id)
 	if err != nil {
 		return nil, err
 	}

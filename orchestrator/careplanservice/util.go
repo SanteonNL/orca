@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -61,6 +62,39 @@ func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePl
 	}
 
 	return carePlan, careTeams, headers, nil
+}
+
+// handleTaskBasedResourceAuth is a generic function to handle the authorization of a resource based on a Task
+// it will check if the resource is based on a Task, and if so, fetch the Task and in doing so - validate the requester has access to the Task
+// it returns an error if the Task is not found or the requester is not a participant of the CareTeam associated with the Task
+func (s *Service) handleTaskBasedResourceAuth(ctx context.Context, headers *fhirclient.Headers, basedOn []fhir.Reference, resourceType string) error {
+	if len(basedOn) != 1 {
+		return &coolfhir.ErrorWithCode{
+			Message:    fmt.Sprintf("%s has invalid number of BasedOn values", resourceType),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	if basedOn[0].Reference == nil {
+		return &coolfhir.ErrorWithCode{
+			Message:    fmt.Sprintf("%s has invalid BasedOn Reference", resourceType),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
+	// Fetch the task this questionnaireResponse is based on
+	// As long as we get a task back, we can assume the user has access to the service request
+	if !strings.HasPrefix(*basedOn[0].Reference, "Task/") {
+		return &coolfhir.ErrorWithCode{
+			Message:    fmt.Sprintf("%s BasedOn is not a Task", resourceType),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	taskId := strings.TrimPrefix(*basedOn[0].Reference, "Task/")
+	_, err := s.handleGetTask(ctx, taskId, headers)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // handleSearchResource is a generic function to search for a resource of a given type and return the results

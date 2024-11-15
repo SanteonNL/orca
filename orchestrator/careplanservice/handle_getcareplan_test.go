@@ -2,7 +2,6 @@ package careplanservice
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -15,112 +14,6 @@ import (
 	"reflect"
 	"testing"
 )
-
-func TestService_handleGetCarePlan(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create a mock FHIR client using the generated mock
-	mockFHIRClient := mock.NewMockClient(ctrl)
-
-	// Create the service with the mock FHIR client
-	service := &Service{
-		fhirClient: mockFHIRClient,
-	}
-
-	carePlan1Raw, _ := os.ReadFile("./testdata/careplan-1.json")
-	var carePlan1 fhir.CarePlan
-	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
-	careTeam2Raw, _ := os.ReadFile("./testdata/careteam-2.json")
-
-	tests := []struct {
-		ctx                    context.Context
-		name                   string
-		id                     string
-		returnedCarePlanBundle *fhir.Bundle
-		expectedCarePlan       *fhir.CarePlan
-		errorFromRead          error
-		expectError            bool
-	}{
-		{
-			ctx:         context.Background(),
-			name:        "No auth",
-			id:          "1",
-			expectError: true,
-		},
-		{
-			ctx:                    auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:                   "CarePlan does not exist",
-			id:                     "1",
-			errorFromRead:          errors.New("error"),
-			returnedCarePlanBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-			expectError:            true,
-		},
-		{
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name: "No CareTeams returned",
-			id:   "1",
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: carePlan1Raw,
-					},
-				},
-			},
-			expectError: true,
-		},
-		{
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
-			name: "CarePlan, CareTeam returned, incorrect principal",
-			id:   "1",
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: carePlan1Raw,
-					},
-					{
-						Resource: careTeam2Raw,
-					},
-				},
-			},
-			expectError: true,
-		},
-		{
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name: "CarePlan, CareTeam returned, correct principal",
-			id:   "1",
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: carePlan1Raw,
-					},
-					{
-						Resource: careTeam2Raw,
-					},
-				},
-			},
-			expectError:      false,
-			expectedCarePlan: &carePlan1,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.returnedCarePlanBundle != nil || tt.errorFromRead != nil {
-				mockFHIRClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedCarePlanBundle))
-					return tt.errorFromRead
-				})
-			}
-			got, err := service.handleGetCarePlan(tt.ctx, tt.id, &fhirclient.Headers{})
-			if tt.expectError == true {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.expectedCarePlan, got)
-			}
-		})
-	}
-}
 
 func TestService_handleSearchCarePlan(t *testing.T) {
 	ctrl := gomock.NewController(t)

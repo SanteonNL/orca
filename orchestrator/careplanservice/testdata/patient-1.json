@@ -1,0 +1,7 @@
+{
+  "id": 1,
+  "identifier": {
+    "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+    "value": "123456789"
+  }
+}
