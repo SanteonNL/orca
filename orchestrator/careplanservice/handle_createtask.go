@@ -93,6 +93,16 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				Type:      to.Ptr(coolfhir.ResourceType(task)),
 			},
 		})
+		carePlan.Category = []fhir.CodeableConcept{
+			{
+				Coding: []fhir.Coding{
+					{
+						System: to.Ptr("http://snomed.info/sct"),
+						Code:   to.Ptr("135411000146103"),
+					},
+				},
+			},
+		}
 
 		// Validate Task.For: identifier (with system and value), and/or reference must be set
 		if task.For == nil || !coolfhir.ValidateReference(*task.For) {
