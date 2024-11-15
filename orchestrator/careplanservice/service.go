@@ -158,9 +158,9 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
 // It returns the result Bundle that should be returned to the client, or an error if the transaction failed.
 func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
-	if log.Debug().Enabled() {
+	if log.Trace().Enabled() {
 		txJson, _ := json.MarshalIndent(tx, "", "  ")
-		log.Debug().Msgf("Transaction bundle request: %s", txJson)
+		log.Trace().Msgf("FHIR Transaction request: %s", txJson)
 	}
 	var txResult fhir.Bundle
 	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
@@ -171,9 +171,9 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBu
 	resultBundle := fhir.Bundle{
 		Type: fhir.BundleTypeTransactionResponse,
 	}
-	if log.Debug().Enabled() {
+	if log.Trace().Enabled() {
 		txJson, _ := json.MarshalIndent(txResult, "", "  ")
-		log.Debug().Msgf("Transaction bundle response: %s", txJson)
+		log.Trace().Msgf("FHIR Transaction response: %s", txJson)
 	}
 	var notificationResources []any
 	for entryIdx, resultHandler := range resultHandlers {
