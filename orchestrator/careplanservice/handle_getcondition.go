@@ -7,7 +7,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
-	"strings"
 )
 
 func (s *Service) handleGetCondition(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.Condition, error) {
@@ -24,13 +23,18 @@ func (s *Service) handleGetCondition(ctx context.Context, id string, headers *fh
 	}
 
 	// if the condition is for a patient, fetch the patient. If the requester has access to the patient they also have access to the condition
-	if condition.Subject.Reference != nil && strings.HasPrefix(*condition.Subject.Reference, "Patient/") {
-		_, err = s.handleGetPatient(ctx, strings.TrimPrefix(*condition.Subject.Reference, "Patient/"), headers)
+	if condition.Subject.Identifier != nil && *condition.Subject.Identifier.System == "http://fhir.nl/fhir/NamingSystem/bsn" {
+		bundle, err := s.handleSearchPatient(ctx, map[string][]string{"identifier": {patientBSNFromIdentifier(condition.Subject.Identifier)}}, headers)
 		if err != nil {
 			return nil, err
 		}
+		if len(bundle.Entry) == 0 {
+			return nil, &coolfhir.ErrorWithCode{
+				Message:    "User does not have access to Condition",
+				StatusCode: http.StatusUnauthorized,
+			}
+		}
 	} else {
-		// TODO: How to handle condition.Subject being of type Group?
 		return nil, &coolfhir.ErrorWithCode{
 			Message:    "Condition does not have Patient as subject, can't verify access",
 			StatusCode: http.StatusForbidden,

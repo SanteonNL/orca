@@ -1,6 +1,6 @@
 {
   "resourceType" : "Patient",
-  "id" : "1",
+  "id" : "2",
   "meta" : {
     "versionId" : "1",
     "lastUpdated" : "2024-11-15T16:14:05.308+00:00",
@@ -8,6 +8,6 @@
   },
   "identifier" : [ {
     "system" : "http://fhir.nl/fhir/NamingSystem/bsn",
-    "value" : "123456789"
+    "value" : "987654321"
   } ]
 }

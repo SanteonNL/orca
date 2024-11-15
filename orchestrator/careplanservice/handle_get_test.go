@@ -26,15 +26,17 @@ type TestStruct[T any] struct {
 	errorFromRead          error
 	returnedCarePlanBundle *fhir.Bundle
 	errorFromCarePlanRead  error
+	// For resources that require a Task Search to validate
+	returnedTaskBundle      *fhir.Bundle
+	errorFromTaskBundleRead error
 	// For resources that are part of a task
 	returnedTaskId    string
 	returnedTask      *fhir.Task
 	errorFromTaskRead error
-	// For resources tied to patient
-	returnedPatientId    string
-	returnedPatient      *fhir.Patient
-	errorFromPatientRead error
-	expectError          bool
+	// For resources that require a Patient Search to validate
+	returnedPatientBundle      *fhir.Bundle
+	errorFromPatientBundleRead error
+	expectError                bool
 }
 
 // We have many resources that have similar Get requirements, all tests with at least one of the following requirements can go here:
@@ -416,30 +418,14 @@ func Test_handleGetResource(t *testing.T) {
 		},
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:         "ServiceRequest exists, no basedOn",
+			name:         "ServiceRequest exists, error searching for task",
 			id:           "1",
 			resourceType: "ServiceRequest",
 			returnedResource: &fhir.ServiceRequest{
 				Id: to.Ptr("1"),
 			},
-			expectError: true,
-		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:         "ServiceRequest exists, error fetching task",
-			id:           "1",
-			resourceType: "ServiceRequest",
-			returnedResource: &fhir.ServiceRequest{
-				Id: to.Ptr("1"),
-				BasedOn: []fhir.Reference{
-					{
-						Reference: to.Ptr("Task/1"),
-					},
-				},
-			},
-			returnedTaskId:    "1",
-			errorFromTaskRead: errors.New("error"),
-			expectError:       true,
+			errorFromTaskBundleRead: errors.New("error"),
+			expectError:             true,
 		},
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
@@ -448,14 +434,14 @@ func Test_handleGetResource(t *testing.T) {
 			resourceType: "ServiceRequest",
 			returnedResource: &fhir.ServiceRequest{
 				Id: to.Ptr("1"),
-				BasedOn: []fhir.Reference{
+			},
+			returnedTaskBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
 					{
-						Reference: to.Ptr("Task/1"),
+						Resource: task1Raw,
 					},
 				},
 			},
-			returnedTaskId: "1",
-			returnedTask:   &task1,
 			returnedCarePlanBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{
@@ -475,15 +461,15 @@ func Test_handleGetResource(t *testing.T) {
 			resourceType: "ServiceRequest",
 			returnedResource: &fhir.ServiceRequest{
 				Id: to.Ptr("1"),
-				BasedOn: []fhir.Reference{
+			},
+			returnedTaskBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
 					{
-						Reference: to.Ptr("Task/1"),
+						Resource: task1Raw,
 					},
 				},
 			},
-			returnedTaskId: "1",
-			returnedTask:   &task1,
-			expectError:    false,
+			expectError: false,
 		},
 	}
 	conditionTests := []TestStruct[fhir.Condition]{
@@ -518,8 +504,13 @@ func Test_handleGetResource(t *testing.T) {
 			id:           "1",
 			resourceType: "Condition",
 			returnedResource: &fhir.Condition{
-				Id:      to.Ptr("1"),
-				Subject: fhir.Reference{Reference: to.Ptr("Group/1")},
+				Id: to.Ptr("1"),
+				Subject: fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("SomethingWrong"),
+						Value:  to.Ptr("1"),
+					},
+				},
 			},
 			expectError: true,
 		},
@@ -529,12 +520,16 @@ func Test_handleGetResource(t *testing.T) {
 			id:           "1",
 			resourceType: "Condition",
 			returnedResource: &fhir.Condition{
-				Id:      to.Ptr("1"),
-				Subject: fhir.Reference{Reference: to.Ptr("Patient/1")},
+				Id: to.Ptr("1"),
+				Subject: fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("123456789"),
+					},
+				},
 			},
-			returnedPatientId:    "1",
-			errorFromPatientRead: errors.New("error"),
-			expectError:          true,
+			errorFromPatientBundleRead: errors.New("error"),
+			expectError:                true,
 		},
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
@@ -542,8 +537,13 @@ func Test_handleGetResource(t *testing.T) {
 			id:           "1",
 			resourceType: "Condition",
 			returnedResource: &fhir.Condition{
-				Id:      to.Ptr("1"),
-				Subject: fhir.Reference{Reference: to.Ptr("Patient/1")},
+				Id: to.Ptr("1"),
+				Subject: fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("123456789"),
+					},
+				},
 			},
 			returnedCarePlanBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -555,9 +555,14 @@ func Test_handleGetResource(t *testing.T) {
 					},
 				},
 			},
-			returnedPatientId: "1",
-			returnedPatient:   &patient1,
-			expectError:       true,
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: patient1Raw,
+					},
+				},
+			},
+			expectError: true,
 		},
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
@@ -565,8 +570,13 @@ func Test_handleGetResource(t *testing.T) {
 			id:           "1",
 			resourceType: "Condition",
 			returnedResource: &fhir.Condition{
-				Id:      to.Ptr("1"),
-				Subject: fhir.Reference{Reference: to.Ptr("Patient/1")},
+				Id: to.Ptr("1"),
+				Subject: fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("123456789"),
+					},
+				},
 			},
 			returnedCarePlanBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -578,9 +588,14 @@ func Test_handleGetResource(t *testing.T) {
 					},
 				},
 			},
-			returnedPatientId: "1",
-			returnedPatient:   &patient1,
-			expectError:       false,
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: patient1Raw,
+					},
+				},
+			},
+			expectError: false,
 		},
 	}
 
@@ -631,6 +646,14 @@ func testHelperHandleGetResource[T any](t *testing.T, params TestStruct[T]) {
 				return params.errorFromCarePlanRead
 			})
 		}
+		if params.returnedTaskBundle != nil || params.errorFromTaskBundleRead != nil {
+			mockFHIRClient.EXPECT().Read("Task", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+				if params.returnedTaskBundle != nil {
+					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedTaskBundle))
+				}
+				return params.errorFromTaskBundleRead
+			})
+		}
 		if params.returnedTask != nil || params.errorFromTaskRead != nil {
 			mockFHIRClient.EXPECT().Read("Task/"+params.returnedTaskId, gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
 				if params.returnedTask != nil {
@@ -639,12 +662,12 @@ func testHelperHandleGetResource[T any](t *testing.T, params TestStruct[T]) {
 				return params.errorFromTaskRead
 			})
 		}
-		if params.returnedPatient != nil || params.errorFromPatientRead != nil {
-			mockFHIRClient.EXPECT().Read("Patient/"+params.returnedPatientId, gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
-				if params.returnedPatient != nil {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedPatient))
+		if params.returnedPatientBundle != nil || params.errorFromPatientBundleRead != nil {
+			mockFHIRClient.EXPECT().Read("Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+				if params.returnedPatientBundle != nil {
+					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedPatientBundle))
 				}
-				return params.errorFromPatientRead
+				return params.errorFromPatientBundleRead
 			})
 		}
 		if (params.returnedResource != nil || params.errorFromRead != nil) && params.resourceType != "CarePlan" {
