@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
@@ -25,26 +26,8 @@ func (d DutchNutsProfile) CsdDirectory() csd.Directory {
 // It looks up fhir.Endpoint instances of owning entities (e.g. care organizations) in the Nuts Discovery Service.
 type CsdDirectory struct {
 	// APIClient is a REST API client to invoke the Nuts node's private Discovery Service API.
-	APIClient discovery.ClientWithResponsesInterface
-	ServiceID string
-	// IdentifierCredentialMapping maps logical identifiers to attributes in credentials in the Discovery Service's registrations.
-	// For instance, to map the following FHIR identifier to a credential attribute:
-	// {
-	//   "system": "urn:simple:organization_name",
-	//   "value": "123456789"
-	// }
-	// Given the following credential:
-	// {
-	//   "credentialSubject": {
-	//     "organization": {
-	//       "name": "Acme Hospital",
-	//       "id": "123456789"
-	//     }
-	//   }
-	// }
-	// The value of the mapping would then be "credentialSubject.organization.name".
-	IdentifierCredentialMapping map[string]string
-
+	APIClient  discovery.ClientWithResponsesInterface
+	ServiceID  string
 	entryCache map[string]cacheEntry
 	cacheMux   sync.RWMutex
 }
@@ -106,9 +89,8 @@ func (n *CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discov
 	if owner.Value == nil || owner.System == nil {
 		return nil, errors.New("identifier must contain both System and Value")
 	}
-	identifierSearchParam, supported := n.IdentifierCredentialMapping[*owner.System]
-	if !supported {
-		return nil, fmt.Errorf("no FHIR->Nuts Discovery Service mapping for CodingSystem: %s", *owner.System)
+	if *owner.System != coolfhir.URANamingSystem {
+		return nil, errors.New("identifier.system must be " + coolfhir.URANamingSystem)
 	}
 
 	// Check if the entry is cached
@@ -126,11 +108,51 @@ func (n *CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discov
 		n.cacheMux.Unlock()
 	}
 
-	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, n.ServiceID, &discovery.SearchPresentationsParams{
+	// 2 credentials are supported:
+	// - NutsUraCredential, which contains credentialSubject.organization.ura
+	// - UziServerCertificateCredential, which contains credentialSubject.otherName (which is a string that contains the URA)
+	//   Example otherName: 2.16.528.1.1007.99.2110-1-1234-S-86446-00.000-5678 (86446 is the URA)
+	var searchResponse *discovery.SearchPresentationsResponse
+	searchResponse, err := n.doSearch(ctx, discovery.SearchPresentationsParams{
 		Query: &map[string]interface{}{
-			identifierSearchParam: *owner.Value,
+			"credentialSubject.otherName": "*-S-" + *owner.Value + "-00.000*",
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
+	// Filter UziServerCertificateCredential to check actually match the URA, removing entries that don't match. Important since we do a wildcard match.
+	j := 0
+	for i := 0; i < len(*searchResponse.JSON200); i++ {
+		if *owner.Value != (*searchResponse.JSON200)[i].Fields["organization_ura"] {
+			continue
+		}
+		(*searchResponse.JSON200)[j] = (*searchResponse.JSON200)[i]
+		j++
+	}
+	*searchResponse.JSON200 = (*searchResponse.JSON200)[:j]
+	// If not found, try NutsUraCredential (backwards compatibility)
+	if len(*searchResponse.JSON200) == 0 {
+		searchResponse, err = n.doSearch(ctx, discovery.SearchPresentationsParams{
+			Query: &map[string]interface{}{
+				"credentialSubject.organization.ura": *owner.Value,
+			},
+		})
+	}
+
+	// Cache the entry
+	n.cacheMux.Lock()
+	n.entryCache[cacheKey] = cacheEntry{
+		response: *searchResponse,
+		created:  time.Now(),
+	}
+	n.cacheMux.Unlock()
+
+	return searchResponse, nil
+}
+
+func (n *CsdDirectory) doSearch(ctx context.Context, query discovery.SearchPresentationsParams) (*discovery.SearchPresentationsResponse, error) {
+	response, err := n.APIClient.SearchPresentationsWithResponse(ctx, n.ServiceID, &query)
 	if err != nil {
 		return nil, fmt.Errorf("search presentations: %w", err)
 	}
@@ -143,14 +165,5 @@ func (n *CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discov
 		}
 		return nil, fmt.Errorf("search presentations non-OK HTTP response (status=%s)", response.Status())
 	}
-
-	// Cache the entry
-	n.cacheMux.Lock()
-	n.entryCache[cacheKey] = cacheEntry{
-		response: *response,
-		created:  time.Now(),
-	}
-	n.cacheMux.Unlock()
-
 	return response, nil
 }
