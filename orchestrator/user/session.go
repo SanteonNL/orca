@@ -1,11 +1,12 @@
 package user
 
 import (
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 )
 
 const sessionLifetime = 15 * time.Minute
@@ -145,4 +146,8 @@ func getSessionCookie(request *http.Request) string {
 		return ""
 	}
 	return cookie.Value
+}
+
+func (m *SessionManager) SessionCount() int {
+	return len(m.store.sessions)
 }

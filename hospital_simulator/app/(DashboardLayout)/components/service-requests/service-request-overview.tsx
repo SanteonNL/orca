@@ -69,6 +69,7 @@ export default async function ServiceRequestOverview() {
                 const patient = serviceRequest.subject ? idToPatientMap[serviceRequest.subject.identifier.value] : undefined;
                 const patientIdentifier = serviceRequest.subject ? serviceRequest.subject.identifier.value : ""
                 const patientName = patient?.name && patient.name[0] ? patient.name[0].text : patientIdentifier;
+                const reasonRef = serviceRequest.reasonReference?.[0].display || "unknown";
 
                 return {
                     id: serviceRequest.id,
@@ -76,7 +77,8 @@ export default async function ServiceRequestOverview() {
                     title: serviceRequest.code.coding[0].display,
                     patient: patientName,
                     status: serviceRequest.status,
-                    patientId: patient ? `Patient/${patient.id}` : patientIdentifier
+                    patientId: patient ? `Patient/${patient.id}` : patientIdentifier,
+                    reasonReference: reasonRef,
                 }
             });
         }
