@@ -16,12 +16,6 @@ import (
 // if the requester is valid, return the CarePlan, else return an error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.CarePlan, error) {
-	// Verify requester is authenticated
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// fetch CarePlan + CareTeam, validate requester is participant of CareTeam
 	// headers are passed in by reference and returned to the calling method
 	carePlan, careTeams, headers, err := s.getCarePlanAndCareTeams("CarePlan/" + id)
@@ -29,6 +23,10 @@ func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhi
 		return nil, err
 	}
 
+	principal, err := auth.PrincipalFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	err = validatePrincipalInCareTeams(principal, careTeams)
 	if err != nil {
 		return nil, err

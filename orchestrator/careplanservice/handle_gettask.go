@@ -14,14 +14,9 @@ import (
 // if the requester is valid, return the Task, else return an error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.Task, error) {
-	// Verify requester is authenticated
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
 	// fetch Task + CareTeam, validate requester is participant of CareTeam
 	var task fhir.Task
-	err = s.fhirClient.Read("Task/"+id, &task, fhirclient.ResponseHeaders(headers))
+	err := s.fhirClient.Read("Task/"+id, &task, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, err
 	}
@@ -39,6 +34,10 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 		}
 	}
 
+	principal, err := auth.PrincipalFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	// Check if the requester is either the task Owner or Requester, if not, they must be a member of the CareTeam
 	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 	if !(isOwner || isRequester) {

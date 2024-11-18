@@ -161,17 +161,35 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			},
 		},
 	}
+	defaultPatient, _ := json.Marshal(&fhir.Patient{
+		Id: to.Ptr("1"),
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("1333333337"),
+			},
+		},
+	})
 	tests := []struct {
-		ctx            context.Context
-		name           string
-		taskToCreate   fhir.Task
-		createdTask    fhir.Task
-		returnedBundle *fhir.Bundle
-		errorFromRead  error
-		expectError    error
+		ctx                        context.Context
+		name                       string
+		taskToCreate               fhir.Task
+		createdTask                fhir.Task
+		returnedBundle             *fhir.Bundle
+		returnedPatientBundle      *fhir.Bundle
+		errorFromPatientBundleRead error
+		errorFromRead              error
+		expectError                error
 	}{
 		{
 			name: "happy flow",
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: defaultPatient,
+					},
+				},
+			},
 		},
 		{
 			name:        "error: not authorised",
@@ -221,6 +239,13 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		},
 		{
 			name: "Task.for contains a logical identifier with BSN",
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: defaultPatient,
+					},
+				},
+			},
 			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
 				task.For = &fhir.Reference{
 					Identifier: &fhir.Identifier{
@@ -229,6 +254,11 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 					},
 				}
 			}),
+		},
+		{
+			name:                       "error: Task.for contains a logical identifier with BSN, search for patient fails",
+			errorFromPatientBundleRead: errors.New("fhir error: Issues searching for patient"),
+			expectError:                errors.New("fhir error: Issues searching for patient"),
 		},
 		{
 			name: "Task.for contains a local reference and a logical identifier with BSN",
@@ -246,6 +276,16 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			if tt.returnedPatientBundle != nil || tt.errorFromPatientBundleRead != nil {
+				mockFHIRClient.EXPECT().Read("Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+					if tt.returnedPatientBundle != nil {
+						reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedPatientBundle))
+					}
+					return tt.errorFromPatientBundleRead
+				})
+			}
+
 			// Create a Task
 			var taskToCreate = deep.Copy(defaultTask)
 			if !deep.Equal(tt.taskToCreate, fhir.Task{}) {

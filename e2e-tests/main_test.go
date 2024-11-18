@@ -37,6 +37,8 @@ func Test_Main(t *testing.T) {
 	const hospitalBaseUrl = "http://hospital-orchestrator:8080"
 	const hospitalURA = 2
 
+	const thirdPartyURA = 3
+
 	const carePlanServiceBaseURL = hospitalBaseUrl + "/cps"
 
 	// Setup Clinic
@@ -55,10 +57,29 @@ func Test_Main(t *testing.T) {
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
 	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 
+	var patient fhir.Patient
+	var task fhir.Task
+	var serviceRequest fhir.ServiceRequest
 	t.Run("EHR using Orchestrator REST API", func(t *testing.T) {
+		t.Log("Creating patient for Task to refer to")
+		{
+			patient = fhir.Patient{
+				Meta: &fhir.Meta{
+					Profile: []string{
+						"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCP-Patient",
+					},
+				},
+				Identifier: []fhir.Identifier{
+					{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
+			}
+			err := hospitalOrcaFHIRClient.Create(patient, &patient)
+			require.NoError(t, err)
+		}
 		t.Run("Hospital EHR creates new Task", func(t *testing.T) {
-			var task fhir.Task
-			var serviceRequest fhir.ServiceRequest
 			t.Log("Creating new Task...")
 			{
 				t.Log("  Creating associated ServiceRequest...")
@@ -205,6 +226,7 @@ func Test_Main(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 					Value:  to.Ptr("1333333337"),
 				},
+				Reference: to.Ptr("Patient/" + *patient.ID),
 			}
 			task.Intent = "order"
 			task.Status = fhir.TaskStatusRequested
@@ -214,5 +236,31 @@ func Test_Main(t *testing.T) {
 			require.Len(t, operationOutcome.Issue, 1)
 			require.Equal(t, "CarePlanService/CreateTask failed: requester must be local care organization in order to create new CarePlan and CareTeam", *operationOutcome.Issue[0].Diagnostics)
 		}
+	})
+	t.Run("Test resource GET authorisation", func(t *testing.T) {
+		// TODO: Negative testing with a third party that has a valid bearer token but no access to the existing CarePlan and CareTeams
+		// Patient
+		var fetchedPatient fhir.Patient
+		err = hospitalOrcaFHIRClient.Read("Patient/"+*patient.ID, &fetchedPatient)
+		require.NoError(t, err)
+		require.Equal(t, *patient.ID, *fetchedPatient.ID)
+		require.Equal(t, *patient.Identifier[0].Value, *fetchedPatient.Identifier[0].Value)
+
+		err = clinicOrcaFHIRClient.Read("Patient/"+*patient.ID, &fetchedPatient)
+		require.NoError(t, err)
+		require.Equal(t, *patient.ID, *fetchedPatient.ID)
+		require.Equal(t, *patient.Identifier[0].Value, *fetchedPatient.Identifier[0].Value)
+
+		// ServiceRequest
+		var fetchedServiceRequest fhir.ServiceRequest
+		err = hospitalOrcaFHIRClient.Read("ServiceRequest/"+*serviceRequest.ID, &fetchedServiceRequest)
+		require.NoError(t, err)
+		require.Equal(t, *serviceRequest.ID, *fetchedServiceRequest.ID)
+		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
+
+		err = clinicOrcaFHIRClient.Read("ServiceRequest/"+*serviceRequest.ID, &fetchedServiceRequest)
+		require.NoError(t, err)
+		require.Equal(t, *serviceRequest.ID, *fetchedServiceRequest.ID)
+		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
 	})
 }

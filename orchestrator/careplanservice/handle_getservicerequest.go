@@ -31,8 +31,8 @@ func (s *Service) handleGetServiceRequest(ctx context.Context, id string, header
 	// If bundle is empty, the user does not have access to the ServiceRequest
 	if len(bundle.Entry) == 0 {
 		return nil, &coolfhir.ErrorWithCode{
-			Message:    "User does not have access to ServiceRequest",
-			StatusCode: http.StatusUnauthorized,
+			Message:    "Participant does not have access to ServiceRequest",
+			StatusCode: http.StatusForbidden,
 		}
 	}
 

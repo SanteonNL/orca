@@ -176,6 +176,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 					Value:  to.Ptr("1333333337"),
 				},
+				//Reference: to.Ptr("Patient/" + *patient.Id),
 			},
 		}
 
@@ -208,6 +209,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 					Value:  to.Ptr("1333333337"),
 				},
+				//Reference: to.Ptr("Patient/" + *patient.Id),
 			},
 		}
 

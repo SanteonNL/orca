@@ -7,7 +7,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
 	"net/url"
 )
 
@@ -15,38 +14,15 @@ import (
 // if the requester is valid, return the Patient, else return an error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleGetPatient(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.Patient, error) {
-	// Verify requester is authenticated
-	_, err := auth.PrincipalFromContext(ctx)
+	bundle, err := s.handleSearchPatient(ctx, url.Values{"_id": []string{id}}, headers)
 	if err != nil {
 		return nil, err
 	}
 
 	var patient fhir.Patient
-	err = s.fhirClient.Read("Patient/"+id, &patient, fhirclient.ResponseHeaders(headers))
+	err = coolfhir.ResourceInBundle(bundle, coolfhir.EntryIsOfType("Patient"), &patient)
 	if err != nil {
 		return nil, err
-	}
-
-	// Get the CarePlan for which the Patient is the subject, get the CareTeams associated with the CarePlan
-	// The search for CarePlan already checks auth for CareTeam, so if we get back a valid CarePlan, we can assume the user has access to the patient
-	// If the user is not part of any of these CareTeams, the search for CarePlan will return an error
-	bundle, err := s.handleSearchCarePlan(ctx, url.Values{"subject-identifier": []string{patientBSNFromIdentifierList(patient.Identifier)}}, headers)
-	if err != nil {
-		return nil, err
-	}
-
-	var carePlans []fhir.CarePlan
-	err = coolfhir.ResourcesInBundle(bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlans)
-	if err != nil {
-		return nil, err
-	}
-
-	// I don't know if this is possible, but worth safeguarding against
-	if len(carePlans) == 0 {
-		return nil, &coolfhir.ErrorWithCode{
-			Message:    "Patient is not part of any CarePlan, can't verify access",
-			StatusCode: http.StatusForbidden,
-		}
 	}
 
 	return &patient, nil
@@ -72,15 +48,15 @@ func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Value
 
 	// It is possible that we have patients that are part of different CarePlans. Create list of query params for each patient ID
 	params := []fhirclient.Option{}
-	BSNs := ""
+	patientRefsSearchString := ""
 	for i, patient := range patients {
 		if i == 0 {
-			BSNs = patientBSNFromIdentifierList(patient.Identifier)
+			patientRefsSearchString = fmt.Sprintf("Patient/%s", *patient.Id)
 		} else {
-			BSNs = fmt.Sprintf("%s,%s", BSNs, patientBSNFromIdentifierList(patient.Identifier))
+			patientRefsSearchString = fmt.Sprintf("%s,Patient/%s", patientRefsSearchString, *patient.Id)
 		}
 	}
-	params = append(params, fhirclient.QueryParam("subject-identifier", BSNs))
+	params = append(params, fhirclient.QueryParam("subject", patientRefsSearchString))
 	params = append(params, fhirclient.QueryParam("_include", "CarePlan:care-team"))
 
 	// Fetch all CarePlans associated with the Patient, get the CareTeams associated with the CarePlans
@@ -116,7 +92,7 @@ func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Value
 		participant := coolfhir.FindMatchingParticipantInCareTeam([]fhir.CareTeam{ct}, principal.Organization.Identifier)
 		if participant != nil {
 			for _, patient := range patients {
-				if patientBSNFromIdentifierList(patient.Identifier) == patientBSNFromIdentifier(cp.Subject.Identifier) {
+				if "Patient/"+*patient.Id == *cp.Subject.Reference {
 					patientRefs = append(patientRefs, "Patient/"+*patient.Id)
 					break
 				}
@@ -127,20 +103,4 @@ func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Value
 	retBundle := filterMatchingResourcesInBundle(bundle, []string{"Patient"}, patientRefs)
 
 	return &retBundle, nil
-}
-
-func patientBSNFromIdentifier(identifier *fhir.Identifier) string {
-	if identifier.System != nil && *identifier.System == "http://fhir.nl/fhir/NamingSystem/bsn" {
-		return fmt.Sprintf("%s|%s", *identifier.System, *identifier.Value)
-	}
-	return ""
-}
-
-func patientBSNFromIdentifierList(identifier []fhir.Identifier) string {
-	for _, id := range identifier {
-		if id.System != nil && *id.System == "http://fhir.nl/fhir/NamingSystem/bsn" {
-			return fmt.Sprintf("%s|%s", *id.System, *id.Value)
-		}
-	}
-	return ""
 }

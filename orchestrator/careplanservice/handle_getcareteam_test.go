@@ -2,18 +2,76 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
+	"net/http"
 	"net/url"
 	"os"
 	"reflect"
 	"testing"
 )
+
+func TestService_handleGetCareTeam(t *testing.T) {
+	carePlan1Raw, _ := os.ReadFile("./testdata/careplan-1.json")
+	var carePlan1 fhir.CarePlan
+	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
+	careTeam2Raw, _ := os.ReadFile("./testdata/careteam-2.json")
+	var careTeam2 fhir.CareTeam
+	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
+
+	tests := []TestStruct[fhir.CareTeam]{
+		{
+			ctx:           auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			name:          "error: CareTeam does not exist",
+			id:            "2",
+			resourceType:  "CareTeam",
+			errorFromRead: errors.New("fhir error: CareTeam not found"),
+			expectedError: errors.New("fhir error: CareTeam not found"),
+		},
+		{
+			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			name:             "error: CareTeam exists, auth, incorrect principal",
+			id:               "2",
+			resourceType:     "CareTeam",
+			returnedResource: &careTeam2,
+			expectedError: &coolfhir.ErrorWithCode{
+				Message:    "Participant is not part of CareTeam",
+				StatusCode: http.StatusForbidden,
+			},
+		},
+		{
+			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name:             "ok: CareTeam exists, auth, correct principal",
+			id:               "2",
+			resourceType:     "CareTeam",
+			returnedResource: &careTeam2,
+			expectedError:    nil,
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a mock FHIR client using the generated mock
+	mockFHIRClient := mock.NewMockClient(ctrl)
+
+	// Create the service with the mock FHIR client
+	service := &Service{
+		fhirClient: mockFHIRClient,
+	}
+
+	for _, tt := range tests {
+		tt.mockClient = mockFHIRClient
+		testHelperHandleGetResource[fhir.CareTeam](t, tt, service.handleGetCareTeam)
+	}
+}
 
 func TestService_handleSearchCareTeam(t *testing.T) {
 	ctrl := gomock.NewController(t)

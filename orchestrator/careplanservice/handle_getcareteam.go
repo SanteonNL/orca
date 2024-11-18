@@ -12,14 +12,14 @@ import (
 // if the requester is valid, return the CareTeam, else return an error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleGetCareTeam(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.CareTeam, error) {
-	// Verify requester is authenticated
-	principal, err := auth.PrincipalFromContext(ctx)
+	// fetch CareTeam, validate requester is participant
+	var careTeam fhir.CareTeam
+	err := s.fhirClient.Read("CareTeam/"+id, &careTeam, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, err
 	}
-	// fetch CareTeam, validate requester is participant
-	var careTeam fhir.CareTeam
-	err = s.fhirClient.Read("CareTeam/"+id, &careTeam, fhirclient.ResponseHeaders(headers))
+
+	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}

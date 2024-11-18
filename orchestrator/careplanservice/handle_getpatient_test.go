@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -15,7 +16,127 @@ import (
 	"testing"
 )
 
-// TODO: Refactor into shared Search tests when other Search CRUD methods are implemented
+func TestService_handleGetPatient(t *testing.T) {
+	carePlan1Raw, _ := os.ReadFile("./testdata/careplan-1.json")
+	var carePlan1 fhir.CarePlan
+	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
+	careTeam2Raw, _ := os.ReadFile("./testdata/careteam-2.json")
+	var careTeam2 fhir.CareTeam
+	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
+
+	patient1Raw, _ := os.ReadFile("./testdata/patient-1.json")
+	var patient1 fhir.Patient
+	_ = json.Unmarshal(patient1Raw, &patient1)
+
+	tests := []TestStruct[fhir.Patient]{
+		{
+			ctx:                        auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name:                       "error: Patient does not exist",
+			id:                         "1",
+			resourceType:               "Patient",
+			errorFromPatientBundleRead: errors.New("fhir error: Patient not found"),
+			expectedError:              errors.New("fhir error: Patient not found"),
+		},
+		{
+			ctx:                   auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name:                  "error: Patient exists, auth, error fetching CarePlan",
+			id:                    "1",
+			resourceType:          "Patient",
+			errorFromCarePlanRead: errors.New("fhir error from fetching Careplan"),
+			expectedError:         errors.New("fhir error from fetching Careplan"),
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: patient1Raw,
+					},
+				},
+			},
+		},
+		{
+			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name:         "error: Patient exists, auth, No CarePlans returned",
+			id:           "1",
+			resourceType: "Patient",
+			returnedCarePlanBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{},
+			},
+			expectedError: errors.New("entry not found in FHIR Bundle"),
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: patient1Raw,
+					},
+				},
+			},
+		},
+		{
+			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			name:         "error: Patient exists, auth, CarePlan and CareTeam returned, not a participant",
+			id:           "1",
+			resourceType: "Patient",
+			returnedCarePlanBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: carePlan1Raw,
+					},
+					{
+						Resource: careTeam2Raw,
+					},
+				},
+			},
+			expectedError: errors.New("entry not found in FHIR Bundle"),
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: patient1Raw,
+					},
+				},
+			},
+		},
+		{
+			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name:         "ok: Patient exists, auth, CarePlan and CareTeam returned, correct principal",
+			id:           "1",
+			resourceType: "Patient",
+			returnedCarePlanBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: carePlan1Raw,
+					},
+					{
+						Resource: careTeam2Raw,
+					},
+				},
+			},
+			expectedError: nil,
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: patient1Raw,
+					},
+				},
+			},
+			returnedResource: &patient1,
+		},
+	}
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	// Create a mock FHIR client using the generated mock
+	mockFHIRClient := mock.NewMockClient(ctrl)
+
+	// Create the service with the mock FHIR client
+	service := &Service{
+		fhirClient: mockFHIRClient,
+	}
+
+	for _, tt := range tests {
+		tt.mockClient = mockFHIRClient
+		testHelperHandleGetResource[fhir.Patient](t, tt, service.handleGetPatient)
+	}
+}
+
 func TestService_handleSearchPatient(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()

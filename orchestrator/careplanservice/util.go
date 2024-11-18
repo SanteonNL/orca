@@ -122,6 +122,7 @@ func handleSearchResource[T any](s *Service, resourceType string, queryParams ur
 
 	return resources, &bundle, nil
 }
+
 func validatePrincipalInCareTeams(principal auth.Principal, careTeams []fhir.CareTeam) error {
 	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
 	if participant == nil {
