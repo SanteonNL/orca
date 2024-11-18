@@ -190,7 +190,21 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdTask fhir.Task
 		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(_ int, entry fhir.BundleEntry) bool {
-			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
+			if entry.Response.Location == nil {
+				return false
+			}
+			// HAPI uses relative Location URLs, Microsoft Azure FHIR uses absolute URLs.
+			createdResourceLocation := *entry.Response.Location
+			createdResourceLocation = strings.TrimPrefix(createdResourceLocation, s.fhirURL.String())
+			// depending on the base URL ending with slash or not, we might end up with a leading slash.
+			// Trim it for deterministic comparison.
+			createdResourceLocation = strings.TrimPrefix(createdResourceLocation, "/")
+			if strings.HasPrefix(createdResourceLocation, "Task/") {
+				// Consistent behavior for easier testing: always pass the relative resource URL to the FHIR client
+				entry.Response.Location = to.Ptr(createdResourceLocation)
+				return true
+			}
+			return false
 		}, &createdTask)
 		if err != nil {
 			return nil, nil, err
