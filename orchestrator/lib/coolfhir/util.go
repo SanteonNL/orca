@@ -199,13 +199,6 @@ func FindMatchingParticipantInCareTeam(careTeams []fhir.CareTeam, principalOrgan
 		for _, participant := range careTeam.Participant {
 			for _, identifier := range principalOrganizationIdentifiers {
 				if IdentifierEquals(participant.Member.Identifier, &identifier) {
-					//valid, err := ValidateCareTeamParticipantPeriod(participant, time.Now())
-					//if err != nil || !valid {
-					//	return nil
-					//}
-					//if !valid {
-					//	return nil
-					//}
 					return &participant
 				}
 			}
