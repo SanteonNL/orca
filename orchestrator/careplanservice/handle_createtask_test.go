@@ -281,6 +281,13 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				b := *bundle
 				b.Entry[2].Response.Location = to.Ptr(fhirBaseUrl.JoinPath("Task/3").String())
 			}),
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: defaultPatient,
+					},
+				},
+			},
 		},
 	}
 
