@@ -2,10 +2,14 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"net/http"
+	"net/url"
+	"slices"
+	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -32,13 +36,24 @@ func (s *Service) writeOperationOutcomeFromError(err error, desc string, httpRes
 }
 
 func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
+	bundle := fhir.Bundle{}
 	var carePlan fhir.CarePlan
 	var careTeams []fhir.CareTeam
 	headers := new(fhirclient.Headers)
-	err := s.fhirClient.Read(carePlanReference, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams), fhirclient.ResponseHeaders(headers))
+
+	carePlanId := strings.TrimPrefix(carePlanReference, "CarePlan/")
+
+	err := s.fhirClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"), fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return fhir.CarePlan{}, nil, nil, err
 	}
+
+	err = coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
+	if err != nil {
+		return fhir.CarePlan{}, nil, nil, err
+	}
+
+	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
 	if len(careTeams) == 0 {
 		return fhir.CarePlan{}, nil, nil, &coolfhir.ErrorWithCode{
 			Message:    "CareTeam not found in bundle",
@@ -49,12 +64,66 @@ func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePl
 	return carePlan, careTeams, headers, nil
 }
 
-func validatePrincipalInCareTeams(ctx context.Context, careTeams []fhir.CareTeam) error {
-	// Verify requester is in CareTeams
-	principal, err := auth.PrincipalFromContext(ctx)
+// handleTaskBasedResourceAuth is a generic function to handle the authorization of a resource based on a Task
+// it will check if the resource is based on a Task, and if so, fetch the Task and in doing so - validate the requester has access to the Task
+// it returns an error if the Task is not found or the requester is not a participant of the CareTeam associated with the Task
+func (s *Service) handleTaskBasedResourceAuth(ctx context.Context, headers *fhirclient.Headers, basedOn []fhir.Reference, resourceType string) error {
+	if len(basedOn) != 1 {
+		return &coolfhir.ErrorWithCode{
+			Message:    fmt.Sprintf("%s has invalid number of BasedOn values", resourceType),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	if basedOn[0].Reference == nil {
+		return &coolfhir.ErrorWithCode{
+			Message:    fmt.Sprintf("%s has invalid BasedOn Reference", resourceType),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+
+	// Fetch the task this questionnaireResponse is based on
+	// As long as we get a task back, we can assume the user has access to the service request
+	if !strings.HasPrefix(*basedOn[0].Reference, "Task/") {
+		return &coolfhir.ErrorWithCode{
+			Message:    fmt.Sprintf("%s BasedOn is not a Task", resourceType),
+			StatusCode: http.StatusInternalServerError,
+		}
+	}
+	taskId := strings.TrimPrefix(*basedOn[0].Reference, "Task/")
+	_, err := s.handleGetTask(ctx, taskId, headers)
 	if err != nil {
 		return err
 	}
+	return nil
+}
+
+// handleSearchResource is a generic function to search for a resource of a given type and return the results
+// it returns a processed list of the required resource type, the full bundle and an error
+func handleSearchResource[T any](s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
+	params := []fhirclient.Option{}
+	for k, v := range queryParams {
+		for _, value := range v {
+			params = append(params, fhirclient.QueryParam(k, value))
+		}
+	}
+
+	params = append(params, fhirclient.ResponseHeaders(headers))
+	var bundle fhir.Bundle
+	err := s.fhirClient.Read(resourceType, &bundle, params...)
+	if err != nil {
+		return nil, &fhir.Bundle{}, err
+	}
+
+	var resources []T
+	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType(resourceType), &resources)
+	if err != nil {
+		return nil, &fhir.Bundle{}, err
+	}
+
+	return resources, &bundle, nil
+}
+
+func validatePrincipalInCareTeams(principal auth.Principal, careTeams []fhir.CareTeam) error {
 	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
 	if participant == nil {
 		return &coolfhir.ErrorWithCode{
@@ -76,4 +145,51 @@ func matchResourceIDs(request *FHIRHandlerRequest, idFromResource *string) error
 		}
 	}
 	return nil
+}
+
+// filterMatchingResourcesInBundle will find all resources in the bundle of the given type with a matching ID and return a new bundle with only those resources
+func filterMatchingResourcesInBundle(bundle *fhir.Bundle, resourceTypes []string, references []string) fhir.Bundle {
+	newBundle := fhir.Bundle{
+		Entry: []fhir.BundleEntry{},
+	}
+
+	operationOutcomeErrors := []fhir.BundleEntry{}
+	for i, entry := range bundle.Entry {
+		var resourceInBundle coolfhir.Resource
+		err := json.Unmarshal(entry.Resource, &resourceInBundle)
+		if err != nil {
+			// We don't want to fail the whole operation if one resource fails to unmarshal
+			log.Error().Msgf("filterMatchingResourcesInBundle: Failed to unmarshal resource: %v", err)
+			operationOutcomeEntry, err := coolfhir.CreateOperationOutcomeBundleEntryFromError(err, "Failed to unmarshal resource")
+			if err != nil {
+				log.Error().Msgf("filterMatchingResourcesInBundle: Failed to marshal operation outcome: %v", err)
+				continue
+			}
+			operationOutcomeErrors = append(operationOutcomeErrors, *operationOutcomeEntry)
+			continue
+		}
+
+		if slices.Contains(resourceTypes, resourceInBundle.Type) {
+			for _, ref := range references {
+				parts := strings.Split(ref, "/")
+				if len(parts) != 2 {
+					log.Error().Msgf("filterMatchingResourcesInBundle: Invalid reference format: %s", ref)
+					operationOutcomeEntry, err := coolfhir.CreateOperationOutcomeBundleEntryFromError(fmt.Errorf("Invalid reference format: %s", ref), "Invalid reference format")
+					if err != nil {
+						log.Error().Msgf("filterMatchingResourcesInBundle: Failed to marshal operation outcome: %v", err)
+						continue
+					}
+					operationOutcomeErrors = append(operationOutcomeErrors, *operationOutcomeEntry)
+					continue
+				}
+				if parts[0] == resourceInBundle.Type && parts[1] == resourceInBundle.ID {
+					newBundle.Entry = append(newBundle.Entry, bundle.Entry[i])
+					break
+				}
+			}
+		}
+	}
+	newBundle.Entry = append(newBundle.Entry, operationOutcomeErrors...)
+
+	return newBundle
 }

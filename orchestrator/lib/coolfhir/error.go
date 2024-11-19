@@ -44,6 +44,25 @@ func BadRequestError(msg string) error {
 	}
 }
 
+// CreateOperationOutcomeBundleEntryFromError creates a BundleEntry with an OperationOutcome based on the given error
+func CreateOperationOutcomeBundleEntryFromError(err error, desc string) (*fhir.BundleEntry, error) {
+	rawOperationOutcome, err := json.Marshal(fhir.OperationOutcome{
+		Issue: []fhir.OperationOutcomeIssue{
+			{
+				Severity:    fhir.IssueSeverityError,
+				Diagnostics: to.Ptr(fmt.Sprintf("%s: %v", desc, err)),
+			},
+		},
+	})
+	if err != nil {
+		log.Error().Msgf("Failed to marshal operation outcome: %v", err)
+		return nil, err
+	}
+	return &fhir.BundleEntry{
+		Resource: rawOperationOutcome,
+	}, nil
+}
+
 // WriteOperationOutcomeFromError writes an OperationOutcome based on the given error as HTTP response.
 // when sent a WriteOperationOutcomeFromError, it will write the contained error code to the header, else it defaults to StatusBadRequest
 func WriteOperationOutcomeFromError(err error, desc string, httpResponse http.ResponseWriter) {

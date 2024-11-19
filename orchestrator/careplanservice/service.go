@@ -288,6 +288,16 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		resource, err = s.handleGetCareTeam(httpRequest.Context(), resourceId, headers)
 	case "Task":
 		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
+	case "Patient":
+		resource, err = s.handleGetPatient(httpRequest.Context(), resourceId, headers)
+	case "Questionnaire":
+		resource, err = s.handleGetQuestionnaire(httpRequest.Context(), resourceId, headers)
+	case "QuestionnaireResponse":
+		resource, err = s.handleGetQuestionnaireResponse(httpRequest.Context(), resourceId, headers)
+	case "ServiceRequest":
+		resource, err = s.handleGetServiceRequest(httpRequest.Context(), resourceId, headers)
+	case "Condition":
+		resource, err = s.handleGetCondition(httpRequest.Context(), resourceId, headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
@@ -321,6 +331,8 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	case "Task":
 		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
+	case "Patient":
+		bundle, err = s.handleSearchPatient(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
