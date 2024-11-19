@@ -46,7 +46,7 @@ func TestService_Proxy(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
+	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
 }
@@ -56,7 +56,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	capturedHost := ""
-	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/SomeResource", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
 	})
@@ -78,7 +78,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Patient")
+	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)
@@ -263,13 +263,13 @@ func TestService_Handle(t *testing.T) {
 		},
 	}, profile.TestProfile{}, orcaPublicURL)
 
-	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		switch method {
 		case http.MethodPost:
 			switch resourceType {
 			case "CarePlan":
-				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					tx.Append(request.bundleEntry())
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("CarePlan"))
 						carePlan := fhir.CarePlan{
@@ -280,8 +280,8 @@ func TestService_Handle(t *testing.T) {
 					}, nil
 				}
 			case "Task":
-				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					tx.Append(request.bundleEntry())
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
@@ -295,8 +295,8 @@ func TestService_Handle(t *testing.T) {
 		case http.MethodPut:
 			switch resourceType {
 			case "Task":
-				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-					tx.Append(request.bundleEntry())
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
@@ -307,7 +307,7 @@ func TestService_Handle(t *testing.T) {
 					}, nil
 				}
 			case "Organization":
-				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 					return nil, errors.New("this fails on purpose")
 				}
 			}

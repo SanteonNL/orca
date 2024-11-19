@@ -67,14 +67,14 @@ type Service struct {
 	maxReadBodySize              int
 	proxy                        *httputil.ReverseProxy
 	allowUnmanagedFHIROperations bool
-	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
+	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
 // It may be executed singular, or be part of a Bundle that causes multiple handlers to be executed.
-// It is provided with a TransactionBuilder to add FHIR resource operations that must be executed on the backing FHIR server.
+// It is provided with a BundleBuilder to add FHIR resource operations that must be executed on the backing FHIR server.
 // The handler itself must not cause side-effects in the FHIR server: those MUST be effectuated through the transaction.
-type FHIRHandler func(http.ResponseWriter, *http.Request, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error)
+type FHIRHandler func(http.ResponseWriter, *http.Request, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
 type FHIRHandlerRequest struct {
 	ResourceId   string
@@ -157,7 +157,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
 // It returns the result Bundle that should be returned to the client, or an error if the transaction failed.
-func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.TransactionBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
+func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
+	if log.Trace().Enabled() {
+		txJson, _ := json.MarshalIndent(tx, "", "  ")
+		log.Trace().Msgf("FHIR Transaction request: %s", txJson)
+	}
 	var txResult fhir.Bundle
 	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		log.Error().Err(err).Msgf("Failed to execute transaction (url=%s)", request.URL.String())
@@ -166,6 +170,10 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.Transact
 	}
 	resultBundle := fhir.Bundle{
 		Type: fhir.BundleTypeTransactionResponse,
+	}
+	if log.Trace().Enabled() {
+		txJson, _ := json.MarshalIndent(txResult, "", "  ")
+		log.Trace().Msgf("FHIR Transaction response: %s", txJson)
 	}
 	var notificationResources []any
 	for entryIdx, resultHandler := range resultHandlers {
@@ -188,7 +196,7 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.Transact
 
 // handleTransactionEntry executes the FHIR operation in the HTTP request. It adds the FHIR operations to be executed to the given transaction Bundle,
 // and returns the function that must be executed after the transaction is committed.
-func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	if request.HttpMethod == http.MethodPost {
 		// We don't allow creation of resources with a specific ID
 		if request.ResourceId != "" {
@@ -202,7 +210,7 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 	return handler(ctx, request, tx)
 }
 
-func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
 
 	err := s.checkAllowUnmanagedOperations()
@@ -210,7 +218,7 @@ func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolf
 		return nil, err
 	}
 
-	tx.Append(request.bundleEntry())
+	tx.AppendEntry(request.bundleEntry())
 	idx := len(tx.Entry) - 1
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var resultResource []byte
@@ -280,6 +288,16 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		resource, err = s.handleGetCareTeam(httpRequest.Context(), resourceId, headers)
 	case "Task":
 		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
+	case "Patient":
+		resource, err = s.handleGetPatient(httpRequest.Context(), resourceId, headers)
+	case "Questionnaire":
+		resource, err = s.handleGetQuestionnaire(httpRequest.Context(), resourceId, headers)
+	case "QuestionnaireResponse":
+		resource, err = s.handleGetQuestionnaireResponse(httpRequest.Context(), resourceId, headers)
+	case "ServiceRequest":
+		resource, err = s.handleGetServiceRequest(httpRequest.Context(), resourceId, headers)
+	case "Condition":
+		resource, err = s.handleGetCondition(httpRequest.Context(), resourceId, headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
@@ -313,6 +331,8 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	case "Task":
 		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
+	case "Patient":
+		bundle, err = s.handleSearchPatient(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
@@ -409,7 +429,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	coolfhir.SendResponse(httpResponse, http.StatusOK, resultBundle)
 }
 
-func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	switch method {
 	case http.MethodPost:
 		switch getResourceType(resourcePath) {
@@ -422,7 +442,7 @@ func (s *Service) defaultHandlerProvider(method string, resourcePath string) fun
 			return s.handleUpdateTask
 		}
 	}
-	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		return s.handleUnmanagedOperation(request, tx)
 	}
 }

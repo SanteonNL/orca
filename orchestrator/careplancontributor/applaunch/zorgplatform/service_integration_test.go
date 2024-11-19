@@ -41,7 +41,8 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 		signingCertificateKey: signCert.PrivateKey.(*rsa.PrivateKey),
 		signingCertificate:    signCert.Certificate,
 		profile: profile.TestProfile{
-			Principal: auth.TestPrincipal1,
+			Principal:        auth.TestPrincipal1,
+			TestCsdDirectory: profile.TestCsdDirectory{},
 		},
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{

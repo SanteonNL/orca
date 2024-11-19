@@ -1,7 +1,6 @@
 package zorgplatform
 
 import (
-	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -11,6 +10,8 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -34,7 +35,6 @@ import (
 )
 
 func TestService(t *testing.T) {
-
 	httpServerMux := http.NewServeMux()
 	httpServer := httptest.NewServer(httpServerMux)
 
@@ -106,29 +106,58 @@ func TestService(t *testing.T) {
 				Key: publicKeyToJWK(signingKeyPair.PublicKey, signKeyName, "0"),
 			},
 		}, nil)
-	keysClient.EXPECT().Sign(gomock.Any(), signKeyName, "0", gomock.Any(), nil).
-		DoAndReturn(func(ctx interface{}, keyName string, keyVersion string, parameters azkeys.SignParameters, options *azkeys.SignOptions) (azkeys.SignResponse, error) {
-			hashed := sha256.Sum256(parameters.Value)
-			signature, err := rsa.SignPKCS1v15(rand.Reader, signingKeyPair, crypto.SHA256, hashed[:])
-			if err != nil {
-				return azkeys.SignResponse{}, err
-			}
-			return azkeys.SignResponse{
-				KeyOperationResult: azkeys.KeyOperationResult{
-					Result: signature,
-				},
-			}, nil
-		})
 
 	zorgplatformHttpServerMux := http.NewServeMux()
 	zorgplatformHttpServer := httptest.NewServer(zorgplatformHttpServerMux)
-	zorgplatformHttpServerMux.Handle("POST /sts", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Handle
-		w.WriteHeader(http.StatusOK)
+	zorgplatformHttpServerMux.Handle("GET /api/Task/b526e773-e1a6-4533-bd00-1360c97e745f", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Get Zorgplatform Workflow Task
+		coolfhir.SendResponse(w, http.StatusOK, map[string]interface{}{
+			"context": map[string]interface{}{
+				"reference": "Encounter/enc-123",
+			},
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/1.0",
+			},
+		})
 	}))
-	zorgplatformHttpServerMux.Handle("POST /api", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// TODO: Handle
-		w.WriteHeader(http.StatusOK)
+	zorgplatformHttpServerMux.Handle("GET /api/Patient", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		coolfhir.SendResponse(w, http.StatusOK, coolfhir.SearchSet().
+			Append(
+				fhir.Patient{
+					Id: to.Ptr("pat-123"),
+				}, nil, nil).
+			Append(
+				fhir.PractitionerRole{
+					Practitioner: &fhir.Reference{
+						Reference: to.Ptr("Practitioner/prac-123"),
+					},
+				}, nil, nil).
+			Append(
+				fhir.Practitioner{
+					Id: to.Ptr("prac-123"),
+				}, nil, nil),
+		)
+	}))
+	zorgplatformHttpServerMux.Handle("GET /api/Encounter", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("_id") == "enc-123" {
+			enc := fhir.Encounter{
+				Subject: &fhir.Reference{
+					Reference: to.Ptr("Patient/pat-123"),
+				},
+				ServiceProvider: &fhir.Reference{
+					Reference: to.Ptr("Organization/org-123"),
+				},
+			}
+			org := fhir.Organization{
+				Id: to.Ptr("org-123"),
+			}
+			coolfhir.SendResponse(w, http.StatusOK, coolfhir.SearchSet().
+				Append(enc, nil, nil).
+				Append(org, nil, nil),
+			)
+			return
+		}
+		coolfhir.SendResponse(w, http.StatusNotFound, nil)
 	}))
 
 	certDER := certificate.Certificate[0]
@@ -142,7 +171,6 @@ func TestService(t *testing.T) {
 	cfg := Config{
 		Enabled:            true,
 		ApiUrl:             zorgplatformHttpServer.URL + "/api",
-		StsUrl:             zorgplatformHttpServer.URL + "/sts",
 		SAMLRequestTimeout: 10 * time.Second,
 		SigningConfig: SigningConfig{
 			Issuer:   "https://partner-application.nl",
@@ -166,8 +194,10 @@ func TestService(t *testing.T) {
 
 	sessionManager := user.NewSessionManager()
 	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.TestProfile{
-		Principal: auth.TestPrincipal1,
+		Principal:        auth.TestPrincipal1,
+		TestCsdDirectory: profile.TestCsdDirectory{},
 	})
+	service.secureTokenService = &stubSecureTokenService{}
 	require.NoError(t, err)
 	service.RegisterHandlers(httpServerMux)
 
@@ -182,46 +212,43 @@ func TestService(t *testing.T) {
 	})
 
 	require.NoError(t, err)
-	//TODO: Below needs to be fixed, the service executes the RequestHcpRst logic, which SHOULD be mocked as it has its own tests
-	// require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
-	require.Equal(t, http.StatusBadRequest, launchHttpResponse.StatusCode)
+	require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
 
-	//TODO: Uncomment when actually fetching this data
-	// t.Run("assert user session is created", func(t *testing.T) {
-	// 	sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
-	// 	require.NotNil(t, sessionData)
-	// })
-	// 	t.Run("check Practitioner is in session", func(t *testing.T) {
-	// 		practitionerRef := sessionData.StringValues["practitioner"]
-	// 		require.NotEmpty(t, practitionerRef)
-	// 		require.IsType(t, fhir.Practitioner{}, sessionData.OtherValues[practitionerRef])
-	// 	})
-	// 	t.Run("check ServiceRequest is in session", func(t *testing.T) {
-	// 		serviceRequestRef := sessionData.StringValues["serviceRequest"]
-	// 		require.NotEmpty(t, serviceRequestRef)
-	// 		require.IsType(t, fhir.ServiceRequest{}, sessionData.OtherValues[serviceRequestRef])
-	// 	})
-	// 	t.Run("check Patient is in session", func(t *testing.T) {
-	// 		patientRef := sessionData.StringValues["patient"]
-	// 		require.NotEmpty(t, patientRef)
-	// 		require.IsType(t, fhir.Patient{}, sessionData.OtherValues[patientRef])
-	// 	})
-	// })
+	t.Run("assert user session", func(t *testing.T) {
+		sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
+		require.NotNil(t, sessionData)
 
-	// t.Run("test invalid SAML response", func(t *testing.T) {
-	// 	invalidSAMLResponse := "invalidSAMLResponse"
-	// 	launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
-	// 		"SAMLResponse": {invalidSAMLResponse},
-	// 	})
-	// 	require.NoError(t, err)
-	// 	require.Equal(t, http.StatusBadRequest, launchHttpResponse.StatusCode)
-	// })
+		t.Run("check Practitioner is in session", func(t *testing.T) {
+			practitionerRef := sessionData.StringValues["practitioner"]
+			require.NotEmpty(t, practitionerRef)
+			require.IsType(t, fhir.Practitioner{}, sessionData.OtherValues[practitionerRef])
+		})
+		t.Run("check ServiceRequest is in session", func(t *testing.T) {
+			serviceRequestRef := sessionData.StringValues["serviceRequest"]
+			require.NotEmpty(t, serviceRequestRef)
+			require.IsType(t, fhir.ServiceRequest{}, sessionData.OtherValues[serviceRequestRef])
+		})
+		t.Run("check Patient is in session", func(t *testing.T) {
+			patientRef := sessionData.StringValues["patient"]
+			require.NotEmpty(t, patientRef)
+			require.IsType(t, fhir.Patient{}, sessionData.OtherValues[patientRef])
+		})
+	})
 
-	// t.Run("test missing SAML response", func(t *testing.T) {
-	// 	launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{})
-	// 	require.NoError(t, err)
-	// 	require.Equal(t, http.StatusBadRequest, launchHttpResponse.StatusCode)
-	// })
+	t.Run("test invalid SAML response", func(t *testing.T) {
+		invalidSAMLResponse := "invalidSAMLResponse"
+		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
+			"SAMLResponse": {invalidSAMLResponse},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, launchHttpResponse.StatusCode)
+	})
+
+	t.Run("test missing SAML response", func(t *testing.T) {
+		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, launchHttpResponse.StatusCode)
+	})
 }
 
 func createSAMLResponse(t *testing.T, encryptionKey *x509.Certificate) string {
@@ -258,4 +285,78 @@ func publicKeyToJWK(key rsa.PublicKey, id string, version string) *azkeys.JSONWe
 		E:   e,
 		KID: (*azkeys.ID)(to.Ptr("https://myvaultname.vault.azure.net/keys/" + id + "/" + version)),
 	}
+}
+
+var _ SecureTokenService = &stubSecureTokenService{}
+
+type stubSecureTokenService struct {
+}
+
+func (s stubSecureTokenService) RequestHcpRst(launchContext LaunchContext) (string, error) {
+	return "stub-at", nil
+}
+
+func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
+	t.Run("Test code 1.0", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/1.0",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.NoError(t, err)
+		require.Len(t, conditionCode.Coding, 1)
+		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+		require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
+		require.Equal(t, "Heart failure (disorder)", *conditionCode.Coding[0].Display)
+	})
+	t.Run("Heart failure", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.1",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.NoError(t, err)
+		require.Len(t, conditionCode.Coding, 1)
+		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+		require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
+		require.Equal(t, "Heart failure (disorder)", *conditionCode.Coding[0].Display)
+	})
+	t.Run("COPD", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.2",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.NoError(t, err)
+		require.Len(t, conditionCode.Coding, 1)
+		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+		require.Equal(t, "13645005", *conditionCode.Coding[0].Code)
+		require.Equal(t, "Chronic obstructive pulmonary disease (disorder)", *conditionCode.Coding[0].Display)
+	})
+	t.Run("Asthma", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.3",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.NoError(t, err)
+		require.Len(t, conditionCode.Coding, 1)
+		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+		require.Equal(t, "195967001", *conditionCode.Coding[0].Code)
+		require.Equal(t, "Asthma (disorder)", *conditionCode.Coding[0].Display)
+	})
+	t.Run("unknown workflow", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/other",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.EqualError(t, err, "unsupported workflow definition: ActivityDefinition/other")
+		require.Nil(t, conditionCode)
+	})
 }

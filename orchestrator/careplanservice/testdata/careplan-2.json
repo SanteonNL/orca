@@ -3,6 +3,13 @@
   "id" : "2",
   "status" : "draft",
   "intent" : "order",
+  "subject" : {
+    "identifier" : {
+      "system" : "http://fhir.nl/fhir/NamingSystem/bsn",
+      "value" : "987654321"
+    },
+    "reference": "Patient/2"
+  },
   "careTeam" : [ {
     "reference" : "CareTeam/999",
     "type" : "CareTeam"

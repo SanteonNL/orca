@@ -4,7 +4,9 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
+	"os"
 	"testing"
 )
 
@@ -27,5 +29,20 @@ func TestConfig_Validate(t *testing.T) {
 		}
 		err := c.Validate()
 		require.EqualError(t, err, "public base URL is not configured")
+	})
+}
+
+func TestLoadConfig(t *testing.T) {
+	t.Run("default log level", func(t *testing.T) {
+		c, err := LoadConfig()
+		require.NoError(t, err)
+		require.Equal(t, zerolog.InfoLevel, c.LogLevel)
+	})
+	t.Run("log level is parsed", func(t *testing.T) {
+		os.Setenv("ORCA_LOGLEVEL", "trace")
+		defer os.Unsetenv("ORCA_LOGLEVEL")
+		c, err := LoadConfig()
+		require.NoError(t, err)
+		require.Equal(t, zerolog.TraceLevel, c.LogLevel)
 	})
 }
