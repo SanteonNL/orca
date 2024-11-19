@@ -118,14 +118,14 @@ export default function EnrollInCpsButton({ className }: Props) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
-        if (!patient || !taskCondition || !serviceRequest) {
+        if (!patient || !patient.id || !taskCondition || !serviceRequest) {
             toast.error("Error: Missing required items for Task creation", { richColors: true })
             throw new Error("Missing required items for Task creation")
         }
 
         const forwardedServiceRequest = await forwardServiceRequest()
 
-        const task = getTask(forwardedServiceRequest, taskCondition)
+        const task = getTask(forwardedServiceRequest, taskCondition, patient)
 
         try {
             return await cpsClient.create({ resourceType: 'Task', body: task });

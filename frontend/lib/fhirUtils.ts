@@ -77,7 +77,7 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
     }
 }
 
-export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, carePlanRef?: Reference): Task => {
+export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, carePlanRef?: Reference): Task => {
 
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task")
@@ -93,7 +93,9 @@ export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condit
 
         //TODO: Not setting this, made by CPS - but should maybe set it for existing
         basedOn: carePlanRef && [carePlanRef],
-        for: serviceRequest.subject,
+        for: {
+            reference: patient.id
+        },
         status: "requested",
         intent: "order",
         reasonCode: {
