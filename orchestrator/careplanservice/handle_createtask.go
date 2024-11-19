@@ -222,17 +222,18 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 // newTaskInExistingCarePlan creates a new Task and references the Task from the CarePlan.activities.
 func (s *Service) newTaskInExistingCarePlan(tx *coolfhir.BundleBuilder, taskBundleEntry fhir.BundleEntry, task fhir.Task, carePlan *fhir.CarePlan) error {
-	carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
-		Reference: &fhir.Reference{
-			Reference: taskBundleEntry.FullUrl,
-			Type:      to.Ptr("Task"),
-		},
-	})
-
 	// TODO: Only if not updated
-	tx.AppendEntry(taskBundleEntry).
-		Update(*carePlan, "CarePlan/"+*carePlan.Id)
-
+	tx.AppendEntry(taskBundleEntry)
+	if len(task.PartOf) == 0 {
+		// Don't add subtasks to CarePlan.activity
+		carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
+			Reference: &fhir.Reference{
+				Reference: taskBundleEntry.FullUrl,
+				Type:      to.Ptr("Task"),
+			},
+		})
+		tx.Update(*carePlan, "CarePlan/"+*carePlan.Id)
+	}
 	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
 		return fmt.Errorf("failed to update CarePlan: %w", err)
 	}
