@@ -476,50 +476,89 @@ func getResourceType(resourcePath string) string {
 }
 
 func (s *Service) ensureSearchParameterExists() {
-	searchParamID := "CarePlan-subject-identifier"
-
-	// Define the SearchParameter
-	searchParam := fhir.SearchParameter{
-		Id:          &searchParamID,
-		Url:         "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
-		Name:        "subject-identifier",
-		Status:      fhir.PublicationStatusActive,
-		Description: "Search CarePlans by subject identifier",
-		Code:        "subject-identifier",
-		Base:        []fhir.ResourceType{fhir.ResourceTypeCarePlan},
-		Type:        fhir.SearchParamTypeToken,
-		Expression:  to.Ptr("CarePlan.subject.identifier"),
-		XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
-		Xpath:       to.Ptr("f:CarePlan/f:subject/f:identifier"),
-		Version:     to.Ptr("1.0"),
-		Publisher:   to.Ptr("Zorg Bij Jou"),
-		Contact: []fhir.ContactDetail{
-			{
-				Name: to.Ptr("Support"),
-				Telecom: []fhir.ContactPoint{
+	type SearchParam struct {
+		SearchParamId string
+		SearchParam   fhir.SearchParameter
+	}
+	params := []SearchParam{
+		{
+			SearchParamId: "CarePlan-subject-identifier",
+			SearchParam: fhir.SearchParameter{
+				Id:          to.Ptr("CarePlan-subject-identifier"),
+				Url:         "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
+				Name:        "subject-identifier",
+				Status:      fhir.PublicationStatusActive,
+				Description: "Search CarePlans by subject identifier",
+				Code:        "subject-identifier",
+				Base:        []fhir.ResourceType{fhir.ResourceTypeCarePlan},
+				Type:        fhir.SearchParamTypeToken,
+				Expression:  to.Ptr("CarePlan.subject.identifier"),
+				XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
+				Xpath:       to.Ptr("f:CarePlan/f:subject/f:identifier"),
+				Version:     to.Ptr("1.0"),
+				Publisher:   to.Ptr("Zorg Bij Jou"),
+				Contact: []fhir.ContactDetail{
 					{
-						System: to.Ptr(fhir.ContactPointSystemEmail),
-						Value:  to.Ptr("support@zorgbijjou.nl"),
+						Name: to.Ptr("Support"),
+						Telecom: []fhir.ContactPoint{
+							{
+								System: to.Ptr(fhir.ContactPointSystemEmail),
+								Value:  to.Ptr("support@zorgbijjou.nl"),
+							},
+						},
 					},
 				},
 			},
 		},
+		{
+			SearchParamId: "Task-output-reference",
+			SearchParam: fhir.SearchParameter{
+				Id:          to.Ptr("Task-output-reference"),
+				Url:         "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-output-reference.json",
+				Name:        "output-reference",
+				Status:      fhir.PublicationStatusActive,
+				Description: "Search Tasks by output references and include outputs when searching Tasks",
+				Code:        "output-reference",
+				Base:        []fhir.ResourceType{fhir.ResourceTypeTask},
+				Type:        fhir.SearchParamTypeReference,
+				Expression:  to.Ptr("Task.output.value.ofType(Reference)"),
+				XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
+				Xpath:       to.Ptr("f:Task/f:output/f:valueReference"),
+			},
+		},
+		{
+			SearchParamId: "Task-input-reference",
+			SearchParam: fhir.SearchParameter{
+				Id:          to.Ptr("Task-input-reference"),
+				Url:         "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-input-reference.json",
+				Name:        "input-reference",
+				Status:      fhir.PublicationStatusActive,
+				Description: "Search Tasks by input references and include inputs when searching Tasks",
+				Code:        "input-reference",
+				Base:        []fhir.ResourceType{fhir.ResourceTypeTask},
+				Type:        fhir.SearchParamTypeReference,
+				Expression:  to.Ptr("Task.input.value.ofType(Reference)"),
+				XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
+				Xpath:       to.Ptr("f:Task/f:input/f:valueReference"),
+			},
+		},
 	}
+	for _, param := range params {
+		// Create a `PreRequestOption` that adds the `If-None-Exist` header to the request
+		addHeaderOption := func(client fhirclient.Client, req *http.Request) {
+			req.Header.Set("If-None-Exist", fmt.Sprintf("url=%s", param.SearchParam.Url))
+		}
 
-	// Create a `PreRequestOption` that adds the `If-None-Exist` header to the request
-	addHeaderOption := func(client fhirclient.Client, req *http.Request) {
-		req.Header.Set("If-None-Exist", fmt.Sprintf("url=%s", searchParam.Url))
-	}
+		log.Info().Msgf("Performing conditional create on %s", param.SearchParamId)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	log.Info().Msgf("Performing conditional create on %s", searchParamID)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	err := s.fhirClient.CreateWithContext(ctx, &searchParam, &searchParam, addHeaderOption)
-	if err != nil {
-		log.Error().Err(err).Msgf("Failed to ensure SearchParameter %s", searchParamID)
-	} else {
-		log.Info().Msgf("Ensured SearchParameter/%s", searchParamID)
+		err := s.fhirClient.CreateWithContext(ctx, &param.SearchParam, &param.SearchParam, addHeaderOption)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to ensure SearchParameter %s", param.SearchParamId)
+		} else {
+			log.Info().Msgf("Ensured SearchParameter/%s", param.SearchParamId)
+		}
 	}
 }
 

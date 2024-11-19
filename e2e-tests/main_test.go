@@ -182,6 +182,19 @@ func Test_Main(t *testing.T) {
 					Update(subTask, "Task/"+*subTask.ID).Bundle()
 				err = hospitalOrcaFHIRClient.Create(responseBundle, &responseBundle, fhirclient.AtPath("/"))
 				require.NoError(t, err)
+
+				// Get QuestionnaireResponse ID from Bundle
+				err = json.Unmarshal(responseBundle.Entry[0].Resource, &questionnaireResponse)
+				require.NoError(t, err)
+
+				// Get QuestionnaireResponse, which will use the custom SearchParameter to verify the user has access
+				var fetchedQuestionnaireResponse fhir.QuestionnaireResponse
+				err = hospitalOrcaFHIRClient.Read("QuestionnaireResponse/"+*questionnaireResponse.ID, &fetchedQuestionnaireResponse)
+				require.NoError(t, err)
+				require.Equal(t, *questionnaireResponse.ID, *fetchedQuestionnaireResponse.ID)
+				require.Equal(t, *questionnaireResponse.Questionnaire, *fetchedQuestionnaireResponse.Questionnaire)
+				require.Equal(t, questionnaireResponse.Status, fetchedQuestionnaireResponse.Status)
+				require.Equal(t, len(questionnaireResponse.Item), len(fetchedQuestionnaireResponse.Item))
 			}
 
 			//t.Log("Filler adding Questionnaire sub-Task...")
