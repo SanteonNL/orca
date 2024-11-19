@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"strings"
 )
 
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -110,11 +111,12 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	if err != nil {
 		return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 	}
+	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
 	tx = tx.AppendEntry(request.bundleEntryWithResource(task))
 	idx := len(tx.Entry) - 1
 	// Update care team
-	_, err = careteamservice.Update(s.fhirClient, *carePlanRef, task, tx)
+	_, err = careteamservice.Update(s.fhirClient, carePlanId, task, tx)
 	if err != nil {
 		return nil, fmt.Errorf("update CareTeam: %w", err)
 	}
