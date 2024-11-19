@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
-import { getCarePlan, getTask } from '@/lib/fhirUtils'
+import { getBsn, getCarePlan, getTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
 import { CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
@@ -118,21 +118,23 @@ export default function EnrollInCpsButton({ className }: Props) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
-        if (!patient || !patient.id || !taskCondition || !serviceRequest) {
+        if (!patient || !getBsn(patient) || !taskCondition || !serviceRequest) {
             toast.error("Error: Missing required items for Task creation", { richColors: true })
             throw new Error("Missing required items for Task creation")
         }
 
-        const forwardedServiceRequest = await forwardServiceRequest()
+        const forwardedServiceRequest = await forwardServiceRequest();
 
-        const task = getTask(forwardedServiceRequest, taskCondition, patient)
+        const taskBundle = getTaskBundle(forwardedServiceRequest, taskCondition, patient);
 
         try {
-            return await cpsClient.create({ resourceType: 'Task', body: task });
+            return await cpsClient.transaction({ body: taskBundle });
         } catch (error) {
-            const msg = `Failed to create Task. Error message: ${error ?? "Not error message found"}`
-            toast.error(msg, { richColors: true })
-            throw new Error(msg)
+            console.debug("Error posting Bundle", taskBundle);
+            console.error(error);
+            const msg = `Failed to execute Task Bundle. Error message: ${JSON.stringify(error) ?? "Not error message found"}`;
+            toast.error(msg, { richColors: true });
+            throw new Error(msg);
         }
     }
 

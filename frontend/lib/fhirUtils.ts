@@ -77,8 +77,40 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
     }
 }
 
-export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, carePlanRef?: Reference): Task => {
+export const getTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, carePlanRef?: Reference): Bundle  & { type: "transaction" } => {
+    return {
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+            {
+                fullUrl: "urn:uuid:patient",
+                resource: {...patient, id: undefined},
+                request: {
+                    method: "PUT",
+                    url: `Patient?identfier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
+                }
+            },
+            {
+                fullUrl: "urn:uuid:serviceRequest",
+                resource: {...serviceRequest, id: undefined, subject: {reference: "urn:uuid:patient"}},
+                request: {
+                    method: "POST",
+                    url: "ServiceRequest"
+                }
+            },
+            {
+                fullUrl: "urn:uuid:task",
+                resource: getBundleTask(serviceRequest, primaryCondition, carePlanRef),
+                request: {
+                    method: "POST",
+                    url: "Task"
+                }
+            }
+        ]
+    }
+}
 
+export const getBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, carePlanRef?: Reference): Task => {
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task")
 
@@ -94,7 +126,7 @@ export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condit
         //TODO: Not setting this, made by CPS - but should maybe set it for existing
         basedOn: carePlanRef && [carePlanRef],
         for: {
-            reference: patient.id
+            reference: "urn:uuid:patient"
         },
         status: "requested",
         intent: "order",
@@ -109,8 +141,8 @@ export const getTask = (serviceRequest: ServiceRequest, primaryCondition: Condit
         },
         focus: {
             display: serviceRequest.code?.coding?.[0].display,
-            type: 'ServiceRequest',
-            reference: "ServiceRequest/" + serviceRequest.id
+            type: "ServiceRequest",
+            reference: "urn:uuid:serviceRequest"
         },
     }
 }
