@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/knadh/koanf/maps"
+	ssi "github.com/nuts-foundation/go-did"
 	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"github.com/nuts-foundation/go-nuts-client/nuts/vcr"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
@@ -16,16 +17,14 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
 	"sync"
 	"time"
 )
 
 const identitiesCacheTTL = 5 * time.Minute
 
-// defaultCredentialMapping maps FHIR identifiers to attributes in Verifiable Credentials according to the Dutch Nuts Profile.
-var defaultCredentialMapping = map[string]string{
-	coolfhir.URANamingSystem: "credentialSubject.organization.ura", // NutsURACredential provides URA attribute
-}
+var uziOtherNameUraRegex = regexp.MustCompile("^[0-9.]+-\\d+-\\d+-S-(\\d+)-00\\.000-\\d+$")
 
 // DutchNutsProfile is the Profile for running the SCP-node using the Nuts, with Dutch Verifiable Credential configuration and code systems.
 // - Authentication: Nuts RFC021 Access Tokens
@@ -48,11 +47,10 @@ func New(config Config) (*DutchNutsProfile, error) {
 		Config:    config,
 		vcrClient: vcrClient,
 		csd: &CsdDirectory{
-			APIClient:                   apiClient,
-			ServiceID:                   config.DiscoveryService,
-			IdentifierCredentialMapping: defaultCredentialMapping,
-			entryCache:                  make(map[string]cacheEntry),
-			cacheMux:                    sync.RWMutex{},
+			APIClient:  apiClient,
+			ServiceID:  config.DiscoveryService,
+			entryCache: make(map[string]cacheEntry),
+			cacheMux:   sync.RWMutex{},
 		},
 	}, nil
 }
@@ -121,14 +119,22 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 	var results []fhir.Identifier
 	for _, asMap := range asMaps {
 		flattenCredential, _ := maps.Flatten(asMap, []string{"credentialSubject"}, ".")
-		for namingSystem, jsonPath := range defaultCredentialMapping {
-			identifierValue, ok := flattenCredential[jsonPath]
-			if !ok {
-				continue
+		var ura string
+		if cred.IsType(ssi.MustParseURI("NutsUraCredential")) {
+			ura, _ = flattenCredential["credentialSubject.organization.ura"].(string)
+		}
+		if cred.IsType(ssi.MustParseURI("UziServerCertificateCredential")) {
+			otherName, ok := flattenCredential["credentialSubject.otherName"].(string)
+			if ok {
+				if match := uziOtherNameUraRegex.FindStringSubmatch(otherName); len(match) > 1 {
+					ura = match[1]
+				}
 			}
+		}
+		if ura != "" {
 			results = append(results, fhir.Identifier{
-				System: &namingSystem,
-				Value:  to.Ptr(fmt.Sprintf("%s", identifierValue)),
+				System: to.Ptr(coolfhir.URANamingSystem),
+				Value:  to.Ptr(ura),
 			})
 		}
 	}
