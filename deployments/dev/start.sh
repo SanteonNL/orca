@@ -60,44 +60,20 @@ function createDID() {
   echo $DID
 }
 
-# Self-issue a NutsUraCredential. It takes:
+# Self-issue a UziServerCertificateCredential, backed by a UZI server certificate. It takes:
 # - Subject ID holding the wallet the VC should be loaded into
 # - The DID of the entity to issue the credential to
-# - The URA number of the entity
-# - The name of the entity
-# - The city of the entity
 function issueUraCredential() {
   SUBJECT=$1
   DID=$2
-  URA=$3
-  NAME=$4
-  CITY=$5
 
-  REQUEST=$(
-  cat << EOF
-{
-  "@context": [
-    "https://www.w3.org/2018/credentials/v1",
-    "https://nuts.nl/credentials/2024"
-  ],
-  "type": "NutsUraCredential",
-  "issuer": "${DID}",
-  "credentialSubject": {
-    "id": "${DID}",
-    "organization": {
-      "ura": "${URA}",
-      "name": "${NAME}",
-      "city": "${CITY}"
-    }
-  },
-  "withStatusList2021Revocation": false
-}
-EOF
-  )
-
-   # Issue VC, read it from the response, load it into own wallet.
-   RESPONSE=$(docker compose exec nutsnode curl -s -X POST -d "$REQUEST" -H "Content-Type: application/json" http://localhost:8081/internal/vcr/v2/issuer/vc)
-   docker compose exec nutsnode curl -s -X POST -d "$RESPONSE" -H "Content-Type: application/json" "http://localhost:8081/internal/vcr/v2/holder/${SUBJECT}/vc"
+  CRED=$(docker run --rm \
+    -v "./uzi-certificate.pem:/uzi-certificate.pem:ro" \
+    -v "./uzi-certificate-key.pem:/uzi-certificate-key.pem:ro" \
+    reinkrul/uzi-did-x509-issuer:local \
+    vc /uzi-certificate.pem /uzi-certificate-key.pem "${DID}")
+  echo $CRED
+  docker compose exec nutsnode curl -s -X POST -d "\"${CRED}\"" -H "Content-Type: application/json" "http://localhost:8081/internal/vcr/v2/holder/${SUBJECT}/vc"
 }
 
 echo "Creating stack for Hospital..."
@@ -119,7 +95,7 @@ echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "hospital" "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
 echo "  Registering on Nuts Discovery Service"
-curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${HOSPITAL_URL}/orca/cpc/fhir/notify\"}}" http://localhost:9081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${HOSPITAL_URL}/orca/cpc/fhir/notify\", \"fhirBaseURL\": \"${HOSPITAL_URL}/orca/cpc/fhir\"}}" http://localhost:9081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
 # TODO: Remove this init when the Questionnaire is provided by the sub-Task.input
 popd
 
@@ -137,29 +113,10 @@ echo "  Creating DID document"
 CLINIC_DID=$(createDID "clinic" http://localhost:8081)
 echo "    Clinic DID: $CLINIC_DID"
 echo "  Self-issuing an NutsUraCredential"
-issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
+issueUraCredential "clinic" "${CLINIC_DID}"
 echo "  Registering on Nuts Discovery Service"
-curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/orca/cpc/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/orca/cpc/fhir/notify\", \"fhirBaseURL\": \"${CLINIC_URL}/orca/cpc/fhir\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
 echo "  Waiting for the FHIR server to be ready"
-popd
-
-echo "Creating stack for Clinic..."
-echo "  Creating devtunnel for Clinic..."
-export CLINIC_URL=$(createTunnel ./clinic 7080)
-echo "  Clinic url is $CLINIC_URL"
-echo "  Starting services"
-pushd clinic
-echo NUTS_URL="${CLINIC_URL}" > .env
-echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
-docker compose --env-file .env pull
-docker compose --env-file .env up --wait --build --remove-orphans
-echo "  Creating DID document"
-CLINIC_DID=$(createDID "clinic" http://localhost:8081)
-echo "    Clinic DID: $CLINIC_DID"
-echo "  Self-issuing an NutsUraCredential"
-issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
-echo "  Registering on Nuts Discovery Service"
-curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/orca/cpc/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
 popd
 
 # open orchestrator demo app
