@@ -108,7 +108,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		if task.For == nil || !coolfhir.ValidateReference(*task.For) {
 			return nil, coolfhir.NewErrorWithCode(fmt.Sprintf("Task.For must be set with a local reference, or a logical identifier, referencing a patient"), http.StatusBadRequest)
 		}
-		// TODO: Re-enable task.For dereferencing logical identifiers to actual patient, when Frontend is fixed.
+		// TODO: INT-450 - Re-enable task.For dereferencing logical identifiers to actual patient, when Frontend is fixed.
 		//if task.For.Reference == nil {
 		//	headers := fhirclient.Headers{}
 		//	patients, _, err := handleSearchResource[fhir.Patient](s, "Patient", map[string][]string{"identifier": {fmt.Sprintf("%s|%s", *task.For.Identifier.System, *task.For.Identifier.Value)}}, &headers)
