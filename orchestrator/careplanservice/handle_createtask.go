@@ -114,11 +114,13 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			if err != nil {
 				return nil, err
 			}
-			if len(patients) == 0 {
-				return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing an existing patient", http.StatusNotFound)
-			}
 
-			task.For.Reference = to.Ptr("Patient/" + *patients[0].Id)
+			if len(patients) == 0 {
+				// TODO: INT-450 - Re-enable task.For dereferencing logical identifiers to actual patient, when Frontend is fixed.
+				//return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing an existing patient", http.StatusNotFound)
+			} else {
+				task.For.Reference = to.Ptr("Patient/" + *patients[0].Id)
+			}
 		}
 		carePlan.Subject = *task.For
 		carePlan.Status = fhir.RequestStatusActive
