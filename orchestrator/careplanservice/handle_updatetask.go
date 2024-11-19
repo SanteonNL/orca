@@ -14,7 +14,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
+func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Info().Msgf("Updating Task: %s", request.RequestUrl)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
@@ -111,7 +111,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 	}
 
-	tx = tx.Append(request.bundleEntryWithResource(task))
+	tx = tx.AppendEntry(request.bundleEntryWithResource(task))
 	idx := len(tx.Entry) - 1
 	// Update care team
 	_, err = careteamservice.Update(s.fhirClient, *carePlanRef, task, tx)

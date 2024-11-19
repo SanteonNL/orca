@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
@@ -24,6 +25,7 @@ type Config struct {
 	CarePlanContributor careplancontributor.Config `koanf:"careplancontributor"`
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
+	LogLevel        zerolog.Level          `koanf:"loglevel"`
 }
 
 func (c Config) Validate() error {
@@ -80,6 +82,7 @@ func LoadConfig() (*Config, error) {
 // DefaultConfig returns sensible, but not complete, default configuration values.
 func DefaultConfig() Config {
 	return Config{
+		LogLevel: zerolog.InfoLevel,
 		Public: InterfaceConfig{
 			Address: ":8080",
 			URL:     "/",

@@ -20,6 +20,12 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
+type SecureTokenService interface {
+	RequestHcpRst(launchContext LaunchContext) (string, error)
+}
+
+var _ SecureTokenService = &Service{}
+
 // RequestHcpRst generates the SAML assertion, signs it, and sends the SOAP request to the Zorgplatform STS
 func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	// Create the SAML assertion

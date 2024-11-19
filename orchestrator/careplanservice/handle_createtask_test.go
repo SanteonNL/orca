@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"net/url"
 	"reflect"
 	"testing"
 
@@ -115,12 +116,14 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 	mockFHIRClient := mock.NewMockClient(ctrl)
 
 	// Create the service with the mock FHIR client
+	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
 		profile: profile.TestProfile{
 			Principal:        auth.TestPrincipal1,
 			TestCsdDirectory: profile.TestCsdDirectory{},
 		},
 		fhirClient: mockFHIRClient,
+		fhirURL:    fhirBaseUrl,
 	}
 
 	scpMeta := &fhir.Meta{
@@ -272,6 +275,13 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				}
 			}),
 		},
+		{
+			name: "Task location in transaction response bundle contains an absolute URL (Microsoft Azure FHIR behavior)",
+			returnedBundle: deep.AlterCopy(defaultReturnedBundle, func(bundle **fhir.Bundle) {
+				b := *bundle
+				b.Entry[2].Response.Location = to.Ptr(fhirBaseUrl.JoinPath("Task/3").String())
+			}),
+		},
 	}
 
 	for _, tt := range tests {
@@ -345,11 +355,13 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 	mockFHIRClient := mock.NewMockClient(ctrl)
 
 	// Create the service with the mock FHIR client
+	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
 		fhirClient: mockFHIRClient,
 		profile: profile.TestProfile{
 			TestCsdDirectory: profile.TestCsdDirectory{},
 		},
+		fhirURL: fhirBaseUrl,
 	}
 
 	tests := []struct {
