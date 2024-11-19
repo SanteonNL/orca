@@ -54,8 +54,6 @@ export default async function AcceptedTaskOverview() {
                 };
             });
         }
-
-        console.log(rows)
     } catch (error) {
         console.error('Error occurred while fetching tasks:', error);
     }
