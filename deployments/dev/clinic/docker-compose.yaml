@@ -9,24 +9,20 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-#    image: nutsfoundation/nuts-node:6.1.0-rc.1
-    image: nutsfoundation/nuts-node:local
+    image: nutsfoundation/nuts-node:6.0.0
     ports:
       - "8081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
       - "../shared_config/policy/:/nuts/config/policy:ro"
       - "../shared_config/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
-      - "../shared_config/truststore.pem:/nuts/config/truststore.pem:ro"
     environment:
       - NUTS_VERBOSITY=debug
       - NUTS_STRICTMODE=false
-      - NUTS_VERBOSITY=debug
       - NUTS_HTTP_INTERNAL_ADDRESS=:8081
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${NUTS_URL}
       - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
-      - NUTS_DIDMETHODS=web
-      - NUTS_TLS_TRUSTSTOREFILE=/nuts/config/truststore.pem
+      - NUTS_VDR_DIDMETHODS=web
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
     environment:
@@ -34,10 +30,10 @@ services:
     ports:
       - "1305:1305"
   orchestrator:
-    #image: ghcr.io/santeonnl/orca_orchestrator:main
-    build:
-      context: ../../../orchestrator
-      dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_orchestrator:main
+    # build:
+    #  context: ../../../orchestrator
+    #  dockerfile: Dockerfile
     ports:
       - "8080"
     environment:

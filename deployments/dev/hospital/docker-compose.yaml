@@ -13,25 +13,21 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-#    image: nutsfoundation/nuts-node:6.1.0-rc.1
-    image: nutsfoundation/nuts-node:local
+    image: nutsfoundation/nuts-node:6.0.0
     ports:
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
       - "../shared_config/policy/:/nuts/config/policy:ro"
       - "../shared_config/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
-      - "../shared_config/truststore.pem:/nuts/config/truststore.pem:ro"
     environment:
       - NUTS_VERBOSITY=debug
       - NUTS_STRICTMODE=false
-      - NUTS_VERBOSITY=debug
       - NUTS_HTTP_INTERNAL_ADDRESS=:8081
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${NUTS_URL}
       - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
       - NUTS_DISCOVERY_SERVER_IDS=dev:HomeMonitoring2024
-      - NUTS_DIDMETHODS=web
-      - NUTS_TLS_TRUSTSTOREFILE=/nuts/config/truststore.pem
+      - NUTS_VDR_DIDMETHODS=web
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
     environment:
@@ -50,10 +46,10 @@ services:
     ports:
       - "3003:3000"
   orchestrator:
-    #image: ghcr.io/santeonnl/orca_orchestrator:main
-    build:
-      context: ../../../orchestrator
-      dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_orchestrator:main
+    # build:
+    #  context: ../../../orchestrator
+    #  dockerfile: Dockerfile
     ports:
       - "8090:8080"
     volumes:
@@ -104,7 +100,7 @@ services:
     image: curlimages/curl:7.87.0
     depends_on:
       - fhirstore
-    entrypoint: ["sh", "-c", "echo 'Starting fhirstore healthcheck...'; while ! curl -I -f -X GET http://fhirstore:8080/fhir/metadata; do echo 'Waiting for fhirstore to be ready...'; sleep 5; done; echo 'fhirstore is up and running.'"]
+    entrypoint: ["sh", "-c", "echo 'Starting fhirstore healthcheck...'; while ! curl -s -f http://fhirstore:8080/fhir/metadata; do echo 'Waiting for fhirstore to be ready...'; sleep 5; done; echo 'fhirstore is up and running.'"]
     
     # Ensure the container exits successfully after the check
     restart: "no"
