@@ -9,12 +9,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const sessionLifetime = 15 * time.Minute
-
 // NewSessionManager creates a new session manager.
 // It uses in-memory storage.
-func NewSessionManager() *SessionManager {
+func NewSessionManager(sessionLifetime time.Duration) *SessionManager {
 	return &SessionManager{
+		sessionLifetime: sessionLifetime,
 		store: &sessionStore{
 			sessions: make(map[string]*Session),
 			mux:      &sync.Mutex{},
@@ -34,7 +33,8 @@ type SessionData struct {
 }
 
 type SessionManager struct {
-	store *sessionStore
+	store           *sessionStore
+	sessionLifetime time.Duration
 }
 
 type sessionStore struct {
@@ -45,8 +45,8 @@ type sessionStore struct {
 // Create creates a new session and sets a session cookie.
 // The given values are stored in the session, which can be retrieved later using Get.
 func (m *SessionManager) Create(response http.ResponseWriter, values SessionData) {
-	id, _ := m.store.create(values)
-	setSessionCookie(id, response)
+	id, _ := m.store.create(values, m.sessionLifetime)
+	setSessionCookie(id, response, m.sessionLifetime)
 }
 
 // Get retrieves the session for the given request.
@@ -87,7 +87,7 @@ func (m *SessionManager) PruneSessions() {
 	m.store.prune()
 }
 
-func (s *sessionStore) create(values SessionData) (string, *Session) {
+func (s *sessionStore) create(values SessionData, sessionLifetime time.Duration) (string, *Session) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	s.prune()
@@ -129,13 +129,13 @@ func (s *sessionStore) destroy(id string) {
 	delete(s.sessions, id)
 }
 
-func setSessionCookie(sessionID string, response http.ResponseWriter) {
+func setSessionCookie(sessionID string, response http.ResponseWriter, lifetime time.Duration) {
 	// TODO: Maybe makes this a __Host or __Secure cookie?
 	cookie := http.Cookie{
 		Name:     "sid",
 		Value:    sessionID,
 		HttpOnly: true,
-		Expires:  time.Now().Add(sessionLifetime),
+		Expires:  time.Now().Add(lifetime),
 	}
 	http.SetCookie(response, &cookie)
 }

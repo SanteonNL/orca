@@ -22,7 +22,7 @@ func Start(config Config) error {
 
 	// Set up dependencies
 	httpHandler := http.NewServeMux()
-	sessionManager := user.NewSessionManager()
+	sessionManager := user.NewSessionManager(config.CarePlanContributor.SessionTimeout)
 
 	if err := config.Validate(); err != nil {
 		return err

@@ -11,7 +11,7 @@ import (
 
 // Test_SessionManager_SessionLifecycle tests the lifecycle of a session. It creates a session, retrieves it, deletes it and verifies that it is deleted.
 func Test_SessionManager_SessionLifecycle(t *testing.T) {
-	sessionManager := NewSessionManager()
+	sessionManager := NewSessionManager(time.Minute)
 	response := httptest.NewRecorder()
 
 	// Create a session
