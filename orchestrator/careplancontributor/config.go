@@ -10,6 +10,7 @@ import (
 
 func DefaultConfig() Config {
 	return Config{
+		Enabled:        true,
 		AppLaunch:      applaunch.DefaultConfig(),
 		SessionTimeout: 15 * time.Minute,
 	}
