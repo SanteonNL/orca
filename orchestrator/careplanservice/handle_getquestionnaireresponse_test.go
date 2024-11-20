@@ -37,93 +37,33 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 		},
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:         "error: QuestionnaireResponse exists, no basedOn",
-			id:           "1",
-			resourceType: "QuestionnaireResponse",
-			returnedResource: &fhir.QuestionnaireResponse{
-				Id: to.Ptr("1"),
-			},
-			expectedError: &coolfhir.ErrorWithCode{
-				Message:    "QuestionnaireResponse has invalid number of BasedOn values",
-				StatusCode: http.StatusInternalServerError,
-			},
-		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:         "error: QuestionnaireResponse exists, invalid basedOn",
-			id:           "1",
-			resourceType: "QuestionnaireResponse",
-			returnedResource: &fhir.QuestionnaireResponse{
-				Id:      to.Ptr("1"),
-				BasedOn: []fhir.Reference{{}},
-			},
-			expectedError: &coolfhir.ErrorWithCode{
-				Message:    "QuestionnaireResponse has invalid BasedOn Reference",
-				StatusCode: http.StatusInternalServerError,
-			},
-		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:         "error: QuestionnaireResponse exists, not based on Task",
-			id:           "1",
-			resourceType: "QuestionnaireResponse",
-			returnedResource: &fhir.QuestionnaireResponse{
-				Id: to.Ptr("1"),
-				BasedOn: []fhir.Reference{
-					{
-						Reference: to.Ptr("SomethingElse/1"),
-					},
-				},
-			},
-			expectedError: &coolfhir.ErrorWithCode{
-				Message:    "QuestionnaireResponse BasedOn is not a Task",
-				StatusCode: http.StatusInternalServerError,
-			},
-		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:         "error: QuestionnaireResponse exists, error fetching task",
 			id:           "1",
 			resourceType: "QuestionnaireResponse",
 			returnedResource: &fhir.QuestionnaireResponse{
 				Id: to.Ptr("1"),
-				BasedOn: []fhir.Reference{
-					{
-						Reference: to.Ptr("Task/1"),
-					},
-				},
 			},
-			returnedTaskId:    "1",
-			errorFromTaskRead: errors.New("fhir error: Task not found"),
-			expectedError:     errors.New("fhir error: Task not found"),
+			errorFromTaskBundleRead: errors.New("fhir error: no response"),
+			expectedError:           errors.New("fhir error: no response"),
 		},
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
-			name:         "error: QuestionnaireResponse exists, fetched task, incorrect principal",
+			name:         "error: QuestionnaireResponse exists, fetched task, incorrect principal (not task onwer or requester)",
 			id:           "1",
 			resourceType: "QuestionnaireResponse",
 			returnedResource: &fhir.QuestionnaireResponse{
 				Id: to.Ptr("1"),
-				BasedOn: []fhir.Reference{
-					{
-						Reference: to.Ptr("Task/1"),
-					},
-				},
 			},
-			returnedTaskId: "1",
-			returnedTask:   &task1,
-			returnedCarePlanBundle: &fhir.Bundle{
+			errorFromCarePlanRead: errors.New("fhir error: no response"),
+			returnedTaskBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{
-						Resource: carePlan1Raw,
-					},
-					{
-						Resource: careTeam2Raw,
+						Resource: task1Raw,
 					},
 				},
 			},
 			expectedError: &coolfhir.ErrorWithCode{
-				Message:    "Participant is not part of CareTeam",
+				Message:    "Participant does not have access to QuestionnaireResponse",
 				StatusCode: http.StatusForbidden,
 			},
 		},
@@ -134,15 +74,15 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 			resourceType: "QuestionnaireResponse",
 			returnedResource: &fhir.QuestionnaireResponse{
 				Id: to.Ptr("1"),
-				BasedOn: []fhir.Reference{
+			},
+			returnedTaskBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
 					{
-						Reference: to.Ptr("Task/1"),
+						Resource: task1Raw,
 					},
 				},
 			},
-			returnedTaskId: "1",
-			returnedTask:   &task1,
-			expectedError:  nil,
+			expectedError: nil,
 		},
 	}
 
