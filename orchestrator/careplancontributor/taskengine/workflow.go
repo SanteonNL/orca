@@ -34,6 +34,14 @@ func DefaultWorkflows() Workflows {
 					},
 				},
 			},
+			// Asthma
+			"http://snomed.info/sct|195967001": {
+				Steps: []WorkflowStep{
+					{
+						QuestionnaireUrl: "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134019",
+					},
+				},
+			},
 			// TODO: what about this?
 			"tmp|fractuur-pols": {
 				Steps: []WorkflowStep{

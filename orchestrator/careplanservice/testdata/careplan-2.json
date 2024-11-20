@@ -1,22 +1,22 @@
 {
   "resourceType" : "CarePlan",
-  "id" : "1",
+  "id" : "2",
   "status" : "draft",
   "intent" : "order",
   "subject" : {
     "identifier" : {
       "system" : "http://fhir.nl/fhir/NamingSystem/bsn",
-      "value" : "123456789"
+      "value" : "987654321"
     },
-    "reference": "Patient/1"
+    "reference": "Patient/2"
   },
   "careTeam" : [ {
-    "reference" : "CareTeam/2",
+    "reference" : "CareTeam/999",
     "type" : "CareTeam"
   } ],
   "activity" : [ {
     "reference" : {
-      "reference" : "Task/3",
+      "reference" : "Task/999",
       "type" : "Task"
     }
   } ]

@@ -158,6 +158,10 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
 // It returns the result Bundle that should be returned to the client, or an error if the transaction failed.
 func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
+	if log.Trace().Enabled() {
+		txJson, _ := json.MarshalIndent(tx, "", "  ")
+		log.Trace().Msgf("FHIR Transaction request: %s", txJson)
+	}
 	var txResult fhir.Bundle
 	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		log.Error().Err(err).Msgf("Failed to execute transaction (url=%s)", request.URL.String())
@@ -166,6 +170,10 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBu
 	}
 	resultBundle := fhir.Bundle{
 		Type: fhir.BundleTypeTransactionResponse,
+	}
+	if log.Trace().Enabled() {
+		txJson, _ := json.MarshalIndent(txResult, "", "  ")
+		log.Trace().Msgf("FHIR Transaction response: %s", txJson)
 	}
 	var notificationResources []any
 	for entryIdx, resultHandler := range resultHandlers {
@@ -280,6 +288,16 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		resource, err = s.handleGetCareTeam(httpRequest.Context(), resourceId, headers)
 	case "Task":
 		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
+	case "Patient":
+		resource, err = s.handleGetPatient(httpRequest.Context(), resourceId, headers)
+	case "Questionnaire":
+		resource, err = s.handleGetQuestionnaire(httpRequest.Context(), resourceId, headers)
+	case "QuestionnaireResponse":
+		resource, err = s.handleGetQuestionnaireResponse(httpRequest.Context(), resourceId, headers)
+	case "ServiceRequest":
+		resource, err = s.handleGetServiceRequest(httpRequest.Context(), resourceId, headers)
+	case "Condition":
+		resource, err = s.handleGetCondition(httpRequest.Context(), resourceId, headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
@@ -313,6 +331,8 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	case "Task":
 		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
+	case "Patient":
+		bundle, err = s.handleSearchPatient(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	default:
 		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
@@ -456,50 +476,131 @@ func getResourceType(resourcePath string) string {
 }
 
 func (s *Service) ensureSearchParameterExists() {
-	searchParamID := "CarePlan-subject-identifier"
-
-	// Define the SearchParameter
-	searchParam := fhir.SearchParameter{
-		Id:          &searchParamID,
-		Url:         "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
-		Name:        "subject-identifier",
-		Status:      fhir.PublicationStatusActive,
-		Description: "Search CarePlans by subject identifier",
-		Code:        "subject-identifier",
-		Base:        []fhir.ResourceType{fhir.ResourceTypeCarePlan},
-		Type:        fhir.SearchParamTypeToken,
-		Expression:  to.Ptr("CarePlan.subject.identifier"),
-		XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
-		Xpath:       to.Ptr("f:CarePlan/f:subject/f:identifier"),
-		Version:     to.Ptr("1.0"),
-		Publisher:   to.Ptr("Zorg Bij Jou"),
-		Contact: []fhir.ContactDetail{
-			{
-				Name: to.Ptr("Support"),
-				Telecom: []fhir.ContactPoint{
+	type SearchParam struct {
+		SearchParamId string
+		SearchParam   fhir.SearchParameter
+	}
+	params := []SearchParam{
+		{
+			SearchParamId: "CarePlan-subject-identifier",
+			SearchParam: fhir.SearchParameter{
+				Id:          to.Ptr("CarePlan-subject-identifier"),
+				Url:         "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
+				Name:        "subject-identifier",
+				Status:      fhir.PublicationStatusActive,
+				Description: "Search CarePlans by subject identifier",
+				Code:        "subject-identifier",
+				Base:        []fhir.ResourceType{fhir.ResourceTypeCarePlan},
+				Type:        fhir.SearchParamTypeToken,
+				Expression:  to.Ptr("CarePlan.subject.identifier"),
+				XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
+				Xpath:       to.Ptr("f:CarePlan/f:subject/f:identifier"),
+				Version:     to.Ptr("1.0"),
+				Publisher:   to.Ptr("Zorg Bij Jou"),
+				Contact: []fhir.ContactDetail{
 					{
-						System: to.Ptr(fhir.ContactPointSystemEmail),
-						Value:  to.Ptr("support@zorgbijjou.nl"),
+						Name: to.Ptr("Support"),
+						Telecom: []fhir.ContactPoint{
+							{
+								System: to.Ptr(fhir.ContactPointSystemEmail),
+								Value:  to.Ptr("support@zorgbijjou.nl"),
+							},
+						},
 					},
 				},
 			},
 		},
+		{
+			SearchParamId: "Task-output-reference",
+			SearchParam: fhir.SearchParameter{
+				Id:          to.Ptr("Task-output-reference"),
+				Url:         "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-output-reference.json",
+				Name:        "output-reference",
+				Status:      fhir.PublicationStatusActive,
+				Description: "Search Tasks by output references and include outputs when searching Tasks",
+				Code:        "output-reference",
+				Base:        []fhir.ResourceType{fhir.ResourceTypeTask},
+				Type:        fhir.SearchParamTypeReference,
+				Expression:  to.Ptr("Task.output.value.ofType(Reference)"),
+				XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
+				Xpath:       to.Ptr("f:Task/f:output/f:valueReference"),
+			},
+		},
+		{
+			SearchParamId: "Task-input-reference",
+			SearchParam: fhir.SearchParameter{
+				Id:          to.Ptr("Task-input-reference"),
+				Url:         "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-input-reference.json",
+				Name:        "input-reference",
+				Status:      fhir.PublicationStatusActive,
+				Description: "Search Tasks by input references and include inputs when searching Tasks",
+				Code:        "input-reference",
+				Base:        []fhir.ResourceType{fhir.ResourceTypeTask},
+				Type:        fhir.SearchParamTypeReference,
+				Expression:  to.Ptr("Task.input.value.ofType(Reference)"),
+				XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
+				Xpath:       to.Ptr("f:Task/f:input/f:valueReference"),
+			},
+		},
 	}
+	for _, param := range params {
+		// Create a `PreRequestOption` that adds the `If-None-Exist` header to the request
+		addHeaderOption := func(client fhirclient.Client, req *http.Request) {
+			req.Header.Set("If-None-Exist", fmt.Sprintf("url=%s", param.SearchParam.Url))
+		}
 
-	// Create a `PreRequestOption` that adds the `If-None-Exist` header to the request
-	addHeaderOption := func(client fhirclient.Client, req *http.Request) {
-		req.Header.Set("If-None-Exist", fmt.Sprintf("url=%s", searchParam.Url))
-	}
+		log.Info().Msgf("Performing conditional create on %s", param.SearchParamId)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
 
-	log.Info().Msgf("Performing conditional create on %s", searchParamID)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
+		err := s.fhirClient.CreateWithContext(ctx, &param.SearchParam, &param.SearchParam, addHeaderOption)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to ensure SearchParameter %s", param.SearchParamId)
+		} else {
+			log.Info().Msgf("Ensured SearchParameter/%s", param.SearchParamId)
 
-	err := s.fhirClient.CreateWithContext(ctx, &searchParam, &searchParam, addHeaderOption)
-	if err != nil {
-		log.Error().Err(err).Msgf("Failed to ensure SearchParameter %s", searchParamID)
-	} else {
-		log.Info().Msgf("Ensured SearchParameter/%s", searchParamID)
+			// Re-index SearchParamters
+			reindexParam := fhir.Parameters{
+				Parameter: []fhir.ParametersParameter{
+					{
+						Name:        param.SearchParam.Name,
+						ValueString: to.Ptr(param.SearchParam.Url),
+					},
+				},
+			}
+
+			requestBody, err := json.Marshal(reindexParam)
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to marshal reindex request for SearchParameter %s", param.SearchParamId)
+				continue
+			}
+
+			req, err := http.NewRequest("POST", s.fhirURL.String()+"/$reindex", strings.NewReader(string(requestBody)))
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to create reindex request for SearchParameter %s", param.SearchParamId)
+				continue
+			}
+			req.Header.Set("Content-Type", "application/fhir+json")
+
+			resp, err := s.profile.HttpClient().Do(req)
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
+				continue
+			}
+			defer resp.Body.Close()
+
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
+				continue
+			}
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				log.Error().Msgf("Failed to reindex SearchParameter %s: %s", param.SearchParamId, string(body))
+				continue
+			} else {
+				log.Info().Msgf("Reindexed SearchParameter/%s", param.SearchParamId)
+			}
+		}
 	}
 }
 

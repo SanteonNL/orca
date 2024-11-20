@@ -93,10 +93,34 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				Type:      to.Ptr(coolfhir.ResourceType(task)),
 			},
 		})
+		carePlan.Category = []fhir.CodeableConcept{
+			{
+				Coding: []fhir.Coding{
+					{
+						System: to.Ptr("http://snomed.info/sct"),
+						Code:   to.Ptr("135411000146103"),
+					},
+				},
+			},
+		}
 
 		// Validate Task.For: identifier (with system and value), and/or reference must be set
 		if task.For == nil || !coolfhir.ValidateReference(*task.For) {
 			return nil, coolfhir.NewErrorWithCode(fmt.Sprintf("Task.For must be set with a local reference, or a logical identifier, referencing a patient"), http.StatusBadRequest)
+		}
+		if task.For.Reference == nil {
+			headers := fhirclient.Headers{}
+			patients, _, err := handleSearchResource[fhir.Patient](s, "Patient", map[string][]string{"identifier": {fmt.Sprintf("%s|%s", *task.For.Identifier.System, *task.For.Identifier.Value)}}, &headers)
+			if err != nil {
+				return nil, err
+			}
+
+			if len(patients) == 0 {
+				// TODO: INT-450 - Re-enable task.For dereferencing logical identifiers to actual patient, when Frontend is fixed.
+				//return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing an existing patient", http.StatusNotFound)
+			} else {
+				task.For.Reference = to.Ptr("Patient/" + *patients[0].Id)
+			}
 		}
 		carePlan.Subject = *task.For
 		carePlan.Status = fhir.RequestStatusActive
@@ -180,7 +204,21 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdTask fhir.Task
 		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(_ int, entry fhir.BundleEntry) bool {
-			return entry.Response.Location != nil && strings.HasPrefix(*entry.Response.Location, "Task/")
+			if entry.Response.Location == nil {
+				return false
+			}
+			// HAPI uses relative Location URLs, Microsoft Azure FHIR uses absolute URLs.
+			createdResourceLocation := *entry.Response.Location
+			createdResourceLocation = strings.TrimPrefix(createdResourceLocation, s.fhirURL.String())
+			// depending on the base URL ending with slash or not, we might end up with a leading slash.
+			// Trim it for deterministic comparison.
+			createdResourceLocation = strings.TrimPrefix(createdResourceLocation, "/")
+			if strings.HasPrefix(createdResourceLocation, "Task/") {
+				// Consistent behavior for easier testing: always pass the relative resource URL to the FHIR client
+				entry.Response.Location = to.Ptr(createdResourceLocation)
+				return true
+			}
+			return false
 		}, &createdTask)
 		if err != nil {
 			return nil, nil, err
@@ -198,17 +236,18 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 // newTaskInExistingCarePlan creates a new Task and references the Task from the CarePlan.activities.
 func (s *Service) newTaskInExistingCarePlan(tx *coolfhir.BundleBuilder, taskBundleEntry fhir.BundleEntry, task fhir.Task, carePlan *fhir.CarePlan) error {
-	carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
-		Reference: &fhir.Reference{
-			Reference: taskBundleEntry.FullUrl,
-			Type:      to.Ptr("Task"),
-		},
-	})
-
 	// TODO: Only if not updated
-	tx.AppendEntry(taskBundleEntry).
-		Update(*carePlan, "CarePlan/"+*carePlan.Id)
-
+	tx.AppendEntry(taskBundleEntry)
+	if len(task.PartOf) == 0 {
+		// Don't add subtasks to CarePlan.activity
+		carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
+			Reference: &fhir.Reference{
+				Reference: taskBundleEntry.FullUrl,
+				Type:      to.Ptr("Task"),
+			},
+		})
+		tx.Update(*carePlan, "CarePlan/"+*carePlan.Id)
+	}
 	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
 		return fmt.Errorf("failed to update CarePlan: %w", err)
 	}

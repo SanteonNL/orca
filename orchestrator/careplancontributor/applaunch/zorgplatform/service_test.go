@@ -115,6 +115,9 @@ func TestService(t *testing.T) {
 			"context": map[string]interface{}{
 				"reference": "Encounter/enc-123",
 			},
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/1.0",
+			},
 		})
 	}))
 	zorgplatformHttpServerMux.Handle("GET /api/Patient", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +192,7 @@ func TestService(t *testing.T) {
 		},
 	}
 
-	sessionManager := user.NewSessionManager()
+	sessionManager := user.NewSessionManager(time.Minute)
 	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.TestProfile{
 		Principal:        auth.TestPrincipal1,
 		TestCsdDirectory: profile.TestCsdDirectory{},
@@ -291,4 +294,69 @@ type stubSecureTokenService struct {
 
 func (s stubSecureTokenService) RequestHcpRst(launchContext LaunchContext) (string, error) {
 	return "stub-at", nil
+}
+
+func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
+	t.Run("Test code 1.0", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/1.0",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.NoError(t, err)
+		require.Len(t, conditionCode.Coding, 1)
+		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+		require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
+		require.Equal(t, "Heart failure (disorder)", *conditionCode.Coding[0].Display)
+	})
+	t.Run("Heart failure", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.1",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.NoError(t, err)
+		require.Len(t, conditionCode.Coding, 1)
+		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+		require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
+		require.Equal(t, "Heart failure (disorder)", *conditionCode.Coding[0].Display)
+	})
+	t.Run("COPD", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.2",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.NoError(t, err)
+		require.Len(t, conditionCode.Coding, 1)
+		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+		require.Equal(t, "13645005", *conditionCode.Coding[0].Code)
+		require.Equal(t, "Chronic obstructive pulmonary disease (disorder)", *conditionCode.Coding[0].Display)
+	})
+	t.Run("Asthma", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.3",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.NoError(t, err)
+		require.Len(t, conditionCode.Coding, 1)
+		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+		require.Equal(t, "195967001", *conditionCode.Coding[0].Code)
+		require.Equal(t, "Asthma (disorder)", *conditionCode.Coding[0].Display)
+	})
+	t.Run("unknown workflow", func(t *testing.T) {
+		task := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/other",
+			},
+		}
+		conditionCode, err := getConditionCodeFromWorkflowTask(task)
+		require.EqualError(t, err, "unsupported workflow definition: ActivityDefinition/other")
+		require.Nil(t, conditionCode)
+	})
 }

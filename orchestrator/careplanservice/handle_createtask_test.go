@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
+	"net/url"
 	"reflect"
 	"testing"
 
@@ -115,12 +116,14 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 	mockFHIRClient := mock.NewMockClient(ctrl)
 
 	// Create the service with the mock FHIR client
+	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
 		profile: profile.TestProfile{
 			Principal:        auth.TestPrincipal1,
 			TestCsdDirectory: profile.TestCsdDirectory{},
 		},
 		fhirClient: mockFHIRClient,
+		fhirURL:    fhirBaseUrl,
 	}
 
 	scpMeta := &fhir.Meta{
@@ -161,17 +164,35 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			},
 		},
 	}
+	defaultPatient, _ := json.Marshal(&fhir.Patient{
+		Id: to.Ptr("1"),
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("1333333337"),
+			},
+		},
+	})
 	tests := []struct {
-		ctx            context.Context
-		name           string
-		taskToCreate   fhir.Task
-		createdTask    fhir.Task
-		returnedBundle *fhir.Bundle
-		errorFromRead  error
-		expectError    error
+		ctx                        context.Context
+		name                       string
+		taskToCreate               fhir.Task
+		createdTask                fhir.Task
+		returnedBundle             *fhir.Bundle
+		returnedPatientBundle      *fhir.Bundle
+		errorFromPatientBundleRead error
+		errorFromRead              error
+		expectError                error
 	}{
 		{
 			name: "happy flow",
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: defaultPatient,
+					},
+				},
+			},
 		},
 		{
 			name:        "error: not authorised",
@@ -221,6 +242,13 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		},
 		{
 			name: "Task.for contains a logical identifier with BSN",
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: defaultPatient,
+					},
+				},
+			},
 			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
 				task.For = &fhir.Reference{
 					Identifier: &fhir.Identifier{
@@ -230,6 +258,12 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				}
 			}),
 		},
+		// TODO: INT-450 - Re-enable task.For dereferencing logical identifiers to actual patient, when Frontend is fixed.
+		//{
+		//	name:                       "error: Task.for contains a logical identifier with BSN, search for patient fails",
+		//	errorFromPatientBundleRead: errors.New("fhir error: Issues searching for patient"),
+		//	expectError:                errors.New("fhir error: Issues searching for patient"),
+		//},
 		{
 			name: "Task.for contains a local reference and a logical identifier with BSN",
 			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
@@ -242,10 +276,34 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				}
 			}),
 		},
+		{
+			name: "Task location in transaction response bundle contains an absolute URL (Microsoft Azure FHIR behavior)",
+			returnedBundle: deep.AlterCopy(defaultReturnedBundle, func(bundle **fhir.Bundle) {
+				b := *bundle
+				b.Entry[2].Response.Location = to.Ptr(fhirBaseUrl.JoinPath("Task/3").String())
+			}),
+			returnedPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: defaultPatient,
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
+			if tt.returnedPatientBundle != nil || tt.errorFromPatientBundleRead != nil {
+				mockFHIRClient.EXPECT().Read("Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+					if tt.returnedPatientBundle != nil {
+						reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedPatientBundle))
+					}
+					return tt.errorFromPatientBundleRead
+				})
+			}
+
 			// Create a Task
 			var taskToCreate = deep.Copy(defaultTask)
 			if !deep.Equal(tt.taskToCreate, fhir.Task{}) {
@@ -305,11 +363,13 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 	mockFHIRClient := mock.NewMockClient(ctrl)
 
 	// Create the service with the mock FHIR client
+	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
 		fhirClient: mockFHIRClient,
 		profile: profile.TestProfile{
 			TestCsdDirectory: profile.TestCsdDirectory{},
 		},
+		fhirURL: fhirBaseUrl,
 	}
 
 	tests := []struct {
