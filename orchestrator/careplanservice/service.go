@@ -558,6 +558,22 @@ func (s *Service) ensureSearchParameterExists() {
 			log.Error().Err(err).Msgf("Failed to ensure SearchParameter %s", param.SearchParamId)
 		} else {
 			log.Info().Msgf("Ensured SearchParameter/%s", param.SearchParamId)
+
+			// Re-index SearchParamters
+			reindexParam := fhir.Parameters{
+				Parameter: []fhir.ParametersParameter{
+					{
+						Name:        param.SearchParam.Name,
+						ValueString: to.Ptr(param.SearchParam.Url),
+					},
+				},
+			}
+			err = s.fhirClient.CreateWithContext(ctx, reindexParam, &reindexParam, addHeaderOption)
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
+			} else {
+				log.Info().Msgf("Reindexed SearchParameter/%s", param.SearchParamId)
+			}
 		}
 	}
 }
