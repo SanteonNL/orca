@@ -39,7 +39,7 @@ func TestProxy(t *testing.T) {
 			}
 			return request
 		},
-	})
+	}, NoopUrlLoggerSanitizer)
 	proxyServer := httptest.NewServer(proxyServerMux)
 	proxyServerMux.HandleFunc("/localfhir/{rest...}", proxy.ServeHTTP)
 

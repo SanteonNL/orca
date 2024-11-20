@@ -34,7 +34,8 @@ func New(
 	config Config,
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
-	sessionManager *user.SessionManager) (*Service, error) {
+	sessionManager *user.SessionManager,
+	strictMode bool) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
@@ -62,6 +63,11 @@ func New(
 		},
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 	}
+	if strictMode {
+		result.urlLoggerSanitizer = coolfhir.FhirUrlLoggerSanitizer
+	} else {
+		result.urlLoggerSanitizer = coolfhir.NoopUrlLoggerSanitizer
+	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
 }
@@ -88,6 +94,7 @@ type Service struct {
 	workflows                     taskengine.Workflows
 	questionnaireLoader           taskengine.QuestionnaireLoader
 	healthdataviewEndpointEnabled bool
+	urlLoggerSanitizer            func(*url.URL) *url.URL
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
