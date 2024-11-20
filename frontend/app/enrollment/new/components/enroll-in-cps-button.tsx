@@ -2,9 +2,9 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
-import { getBsn, getCarePlan, getTaskBundle } from '@/lib/fhirUtils'
+import { findInBundle, getBsn, getCarePlan, getTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
+import { Bundle, CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -45,7 +45,13 @@ export default function EnrollInCpsButton({ className }: Props) {
             throw new Error("Something went wrong with CarePlan creation")
         }
 
-        const task = await createTask(taskCondition)
+        const taskBundle = await createTask(taskCondition)
+        const task = findInBundle('Task', taskBundle as Bundle);
+
+        if (!task) {
+            toast.error("Error: Something went wrong with Task creation", { richColors: true })
+            throw new Error("Something went wrong with Task creation")
+        }
 
         toast.success("Enrollment successfully sent to filler", {
             closeButton: true,
@@ -70,7 +76,7 @@ export default function EnrollInCpsButton({ className }: Props) {
                             </DialogDescription>
                         </DialogHeader>
                         <div className='overflow-auto'>
-                            <JsonView src={task} collapsed={2} />
+                            <JsonView src={taskBundle} collapsed={2} />
                         </div>
                     </DialogContent>
                 </Dialog >

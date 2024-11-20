@@ -52,6 +52,10 @@ export const getBsn = (patient?: Patient) => {
     return patient?.identifier?.find((identifier) => identifier.system === BSN_SYSTEM)?.value;
 }
 
+export const findInBundle = (resourceType: string, bundle?: Bundle) => {
+    return bundle?.entry?.find((entry) => entry.resource?.resourceType === resourceType)?.resource;
+}
+
 export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanName: string): CarePlan => {
     return {
         resourceType: 'CarePlan',
