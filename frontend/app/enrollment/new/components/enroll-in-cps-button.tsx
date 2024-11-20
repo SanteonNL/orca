@@ -2,7 +2,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
-import { findInBundle, getBsn, getCarePlan, getTaskBundle } from '@/lib/fhirUtils'
+import { findInBundle, getBsn, getCarePlan, constructTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
 import { Bundle, CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
@@ -86,39 +86,6 @@ export default function EnrollInCpsButton({ className }: Props) {
         router.push(`/enrollment/task/${task.id}`)
     }
 
-    const forwardServiceRequest = async () => {
-        if (!serviceRequest) {
-            toast.error("Error: Missing ServiceRequest - Cannot forward to CPS", { richColors: true })
-            throw new Error("Missing ServiceRequest - Cannot forward to CPS")
-        }
-
-        if (!cpsClient) {
-            toast.error("Error: CarePlanService not found", { richColors: true })
-            throw new Error("No CPS client found")
-        }
-
-        try {
-            // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
-            // TODO: Properly fix with with bundle refs in INT-288
-            const cleanServiceRequest = { ...serviceRequest };
-            if (cleanServiceRequest.subject?.reference) {
-                delete cleanServiceRequest.subject.reference;
-            }
-            if (cleanServiceRequest.requester?.reference) {
-                delete cleanServiceRequest.requester.reference;
-            }
-            if (cleanServiceRequest.performer?.[0]?.reference) {
-                delete cleanServiceRequest.performer[0].reference;
-            }
-
-            return await cpsClient.create({ resourceType: 'ServiceRequest', body: cleanServiceRequest }) as ServiceRequest
-        } catch (error) {
-            const msg = `Failed to forward ServiceRequest. Error message: ${error ?? "No error message found"}`
-            toast.error(msg, { richColors: true })
-            throw new Error(msg)
-        }
-    }
-
     const createTask = async (taskCondition: Condition) => {
         if (!cpsClient || !ehrClient) {
             toast.error("Error: CarePlanService not found", { richColors: true })
@@ -129,9 +96,17 @@ export default function EnrollInCpsButton({ className }: Props) {
             throw new Error("Missing required items for Task creation")
         }
 
-        const forwardedServiceRequest = await forwardServiceRequest();
+        var taskBundle: Bundle & { type: "transaction"; };
 
-        const taskBundle = getTaskBundle(forwardedServiceRequest, taskCondition, patient);
+        try {
+            taskBundle = constructTaskBundle(serviceRequest, taskCondition, patient);
+        } catch (error) {
+            console.debug("Error constructing taskBundle");
+            console.error(error);
+            const msg = `Failed to construct Task Bundle. Error message: ${JSON.stringify(error) ?? "Not error message found"}`;
+            toast.error(msg, { richColors: true });
+            throw new Error(msg);
+        }
 
         try {
             return await cpsClient.transaction({ body: taskBundle });

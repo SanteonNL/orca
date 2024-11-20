@@ -1,5 +1,5 @@
 import Client from 'fhir-kit-client';
-import { Bundle, CarePlan, Condition, Patient, Questionnaire, Reference, Resource, ServiceRequest, Task } from 'fhir/r4';
+import { Bundle, CarePlan, Condition, Patient, Questionnaire, Resource, ServiceRequest, Task } from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -81,46 +81,46 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
     }
 }
 
-export const getTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, carePlanRef?: Reference): Bundle  & { type: "transaction" } => {
-    return {
-        resourceType: "Bundle",
-        type: "transaction",
-        entry: [
-            {
-                fullUrl: "urn:uuid:patient",
-                resource: {...patient, id: undefined},
-                request: {
-                    method: "POST",
-                    url: "Patient",
-                    ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
-                }
-            },
-            {
-                fullUrl: "urn:uuid:serviceRequest",
-                //FIXME: Check if Patient is the same as in Bundle
-                resource: {...serviceRequest, id: undefined, subject: {reference: "urn:uuid:patient"}},
-                request: {
-                    method: "POST",
-                    url: "ServiceRequest"
-                }
-            },
-            {
-                fullUrl: "urn:uuid:task",
-                resource: getBundleTask(serviceRequest, primaryCondition, carePlanRef),
-                request: {
-                    method: "POST",
-                    url: "Task"
-                }
-            }
-        ]
-    }
+const cleanPatient = (patient: Patient) => {
+    return {...patient, id: undefined};
 }
 
-export const getBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, carePlanRef?: Reference): Task => {
-    const conditionCode = primaryCondition.code?.coding?.[0]
-    if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task")
+const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string) => {
+    // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
+    const cleanedServiceRequest = { ...serviceRequest, id: undefined };
 
-    //TODO: See if the ServiceRequest needs to be included in the Task via input or in a Bundle
+    if (serviceRequest.subject?.identifier?.system === BSN_SYSTEM && serviceRequest.subject?.identifier?.value !== getBsn(patient)) {
+        throw new Error("Subject BSN in service request differs from Patient BSN");
+    }
+
+    if (typeof cleanedServiceRequest.subject !== 'object') {
+        cleanedServiceRequest.subject = {};
+    }
+    cleanedServiceRequest.subject.reference = patientReference;
+
+    if (cleanedServiceRequest.requester?.reference) {
+        delete cleanedServiceRequest.requester.reference;
+    }
+
+    for (const item of cleanedServiceRequest?.reasonReference || []) {
+        if (item?.reference) {
+            delete item.reference;
+        }
+    }
+
+    for (const item of cleanedServiceRequest?.performer || []) {
+        if (item?.reference) {
+            delete item.reference;
+        }
+    }
+
+    return cleanedServiceRequest;
+}
+
+export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: string, serviceRequestReference: string): Task => {
+    const conditionCode = primaryCondition.code?.coding?.[0]
+    if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task");
+
     return {
         resourceType: "Task",
         meta: {
@@ -128,11 +128,8 @@ export const getBundleTask = (serviceRequest: ServiceRequest, primaryCondition: 
                 "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
             ]
         },
-
-        //TODO: Not setting this, made by CPS - but should maybe set it for existing
-        basedOn: carePlanRef && [carePlanRef],
         for: {
-            reference: "urn:uuid:patient"
+            reference: patientReference,
         },
         status: "requested",
         intent: "order",
@@ -148,8 +145,46 @@ export const getBundleTask = (serviceRequest: ServiceRequest, primaryCondition: 
         focus: {
             display: serviceRequest.code?.coding?.[0].display,
             type: "ServiceRequest",
-            reference: "urn:uuid:serviceRequest"
+            reference: serviceRequestReference,
         },
+    }
+}
+
+export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient): Bundle  & { type: "transaction" } => {
+    const cleanedPatient = cleanPatient(patient);
+    const cleanedServiceRequest = cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient");
+    const constructedTask = constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest");
+
+    return {
+        resourceType: "Bundle",
+        type: "transaction",
+        entry: [
+            {
+                fullUrl: "urn:uuid:patient",
+                resource: cleanedPatient,
+                request: {
+                    method: "POST",
+                    url: "Patient",
+                    ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
+                }
+            },
+            {
+                fullUrl: "urn:uuid:serviceRequest",
+                resource: cleanedServiceRequest,
+                request: {
+                    method: "POST",
+                    url: "ServiceRequest"
+                }
+            },
+            {
+                fullUrl: "urn:uuid:task",
+                resource: constructedTask,
+                request: {
+                    method: "POST",
+                    url: "Task"
+                }
+            }
+        ]
     }
 }
 
