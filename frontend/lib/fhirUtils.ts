@@ -87,11 +87,12 @@ export const getTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: 
                 resource: {...patient, id: undefined},
                 request: {
                     method: "PUT",
-                    url: `Patient?identfier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
+                    url: `Patient?identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
                 }
             },
             {
                 fullUrl: "urn:uuid:serviceRequest",
+                //FIXME: Check if Patient is the same as in Bundle
                 resource: {...serviceRequest, id: undefined, subject: {reference: "urn:uuid:patient"}},
                 request: {
                     method: "POST",
