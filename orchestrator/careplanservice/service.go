@@ -568,9 +568,35 @@ func (s *Service) ensureSearchParameterExists() {
 					},
 				},
 			}
-			err = s.fhirClient.CreateWithContext(ctx, reindexParam, &reindexParam, addHeaderOption)
+
+			requestBody, err := json.Marshal(reindexParam)
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to marshal reindex request for SearchParameter %s", param.SearchParamId)
+				continue
+			}
+
+			req, err := http.NewRequest("POST", s.fhirURL.String()+"/$reindex", strings.NewReader(string(requestBody)))
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to create reindex request for SearchParameter %s", param.SearchParamId)
+				continue
+			}
+			req.Header.Set("Content-Type", "application/fhir+json")
+
+			resp, err := s.profile.HttpClient().Do(req)
 			if err != nil {
 				log.Error().Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
+				continue
+			}
+			defer resp.Body.Close()
+
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
+				continue
+			}
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				log.Error().Msgf("Failed to reindex SearchParameter %s: %s", param.SearchParamId, string(body))
+				continue
 			} else {
 				log.Info().Msgf("Reindexed SearchParameter/%s", param.SearchParamId)
 			}
