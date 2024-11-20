@@ -6,7 +6,6 @@ import (
 	"github.com/rs/zerolog"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	koanf "github.com/knadh/koanf/v2"
@@ -87,9 +86,6 @@ func DefaultConfig() Config {
 			Address: ":8080",
 			URL:     "/",
 		},
-		CarePlanContributor: careplancontributor.Config{
-			Enabled:   true,
-			AppLaunch: applaunch.DefaultConfig(),
-		},
+		CarePlanContributor: careplancontributor.DefaultConfig(),
 	}
 }
