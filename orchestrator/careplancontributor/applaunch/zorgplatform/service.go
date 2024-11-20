@@ -377,6 +377,12 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 
 	serviceRequest := &fhir.ServiceRequest{
 		Status: fhir.RequestStatusActive,
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("https://api.zorgplatform.online/fhir/v1"),
+				Value:  to.Ptr(launchContext.WorkflowId),
+			},
+		},
 		Code: &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				// Hardcoded, we only do Telemonitoring for now

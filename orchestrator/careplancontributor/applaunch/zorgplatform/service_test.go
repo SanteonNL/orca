@@ -10,8 +10,6 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +17,9 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
@@ -227,6 +228,11 @@ func TestService(t *testing.T) {
 			serviceRequestRef := sessionData.StringValues["serviceRequest"]
 			require.NotEmpty(t, serviceRequestRef)
 			require.IsType(t, fhir.ServiceRequest{}, sessionData.OtherValues[serviceRequestRef])
+			t.Run("check Workflow-ID identifier is properly set on the ServiceRequest", func(t *testing.T) {
+				serviceRequest := sessionData.OtherValues[serviceRequestRef].(fhir.ServiceRequest)
+				require.Len(t, serviceRequest.Identifier, 1)
+				require.Equal(t, "b526e773-e1a6-4533-bd00-1360c97e745f", *serviceRequest.Identifier[0].Value)
+			})
 		})
 		t.Run("check Patient is in session", func(t *testing.T) {
 			patientRef := sessionData.StringValues["patient"]
