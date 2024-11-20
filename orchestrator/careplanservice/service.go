@@ -222,9 +222,13 @@ func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolf
 	idx := len(tx.Entry) - 1
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var resultResource []byte
-		err := s.fhirClient.Read(*txResult.Entry[idx].Response.Location, &resultResource)
-		if err != nil {
-			return nil, nil, err
+		responseJson, _ := json.Marshal(txResult.Entry[idx].Response)
+		log.Info().Msgf("Unmanaged operation response JSON: %s", string(responseJson))
+		if txResult.Entry[idx].Response != nil && txResult.Entry[idx].Response.Location != nil {
+			err := s.fhirClient.Read(*txResult.Entry[idx].Response.Location, &resultResource)
+			if err != nil {
+				return nil, nil, err
+			}
 		}
 		return &fhir.BundleEntry{
 			Resource: resultResource,
