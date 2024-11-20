@@ -90,8 +90,9 @@ export const getTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: 
                 fullUrl: "urn:uuid:patient",
                 resource: {...patient, id: undefined},
                 request: {
-                    method: "PUT",
-                    url: `Patient?identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
+                    method: "POST",
+                    url: "Patient",
+                    ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
                 }
             },
             {
