@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	"errors"
+	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -9,7 +10,8 @@ import (
 
 func DefaultConfig() Config {
 	return Config{
-		AppLaunch: applaunch.DefaultConfig(),
+		AppLaunch:      applaunch.DefaultConfig(),
+		SessionTimeout: 15 * time.Minute,
 	}
 }
 
@@ -20,6 +22,7 @@ type Config struct {
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
 	Enabled                       bool                  `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
+	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`
 	StaticBearerToken             string
 }
 

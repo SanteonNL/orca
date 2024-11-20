@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/stretchr/testify/require"
@@ -11,7 +12,7 @@ import (
 
 func TestService_handle(t *testing.T) {
 	t.Run("root base URL", func(t *testing.T) {
-		sessionManager := user.NewSessionManager()
+		sessionManager := user.NewSessionManager(time.Minute)
 		service := Service{sessionManager: sessionManager, baseURL: "/", landingUrlPath: "/cpc/"}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir", nil)
@@ -22,7 +23,7 @@ func TestService_handle(t *testing.T) {
 		require.Equal(t, "/cpc/", response.Header().Get("Location"))
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
-		sessionManager := user.NewSessionManager()
+		sessionManager := user.NewSessionManager(time.Minute)
 		service := Service{sessionManager: sessionManager, baseURL: "/orca", landingUrlPath: "/cpc/"}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir", nil)
@@ -33,7 +34,7 @@ func TestService_handle(t *testing.T) {
 		require.Equal(t, "/orca/cpc/", response.Header().Get("Location"))
 	})
 	t.Run("should destroy previous session", func(t *testing.T) {
-		sessionManager := user.NewSessionManager()
+		sessionManager := user.NewSessionManager(time.Minute)
 		service := Service{sessionManager: sessionManager, baseURL: "/orca", landingUrlPath: "/cpc/"}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir", nil)
