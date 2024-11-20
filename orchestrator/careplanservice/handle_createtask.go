@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"strings"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/google/uuid"
-	"net/http"
-	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -97,8 +98,9 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			{
 				Coding: []fhir.Coding{
 					{
-						System: to.Ptr("http://snomed.info/sct"),
-						Code:   to.Ptr("135411000146103"),
+						System:  to.Ptr("http://snomed.info/sct"),
+						Code:    to.Ptr("135411000146103"),
+						Display: to.Ptr("Multidisciplinary care regime"),
 					},
 				},
 			},
