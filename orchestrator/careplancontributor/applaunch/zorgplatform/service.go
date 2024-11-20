@@ -380,7 +380,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Identifier: []fhir.Identifier{
 			{
 				System: to.Ptr("https://api.zorgplatform.online/fhir/v1"),
-				Value:  to.Ptr(launchContext.WorkflowId),
+				Value:  to.Ptr("Task/" + launchContext.WorkflowId),
 			},
 		},
 		Code: &fhir.CodeableConcept{

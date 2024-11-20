@@ -231,7 +231,7 @@ func TestService(t *testing.T) {
 			t.Run("check Workflow-ID identifier is properly set on the ServiceRequest", func(t *testing.T) {
 				serviceRequest := sessionData.OtherValues[serviceRequestRef].(fhir.ServiceRequest)
 				require.Len(t, serviceRequest.Identifier, 1)
-				require.Equal(t, "b526e773-e1a6-4533-bd00-1360c97e745f", *serviceRequest.Identifier[0].Value)
+				require.Equal(t, "Task/b526e773-e1a6-4533-bd00-1360c97e745f", *serviceRequest.Identifier[0].Value)
 			})
 		})
 		t.Run("check Patient is in session", func(t *testing.T) {
