@@ -165,25 +165,27 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 
 func FetchBundleEntry(fhirClient fhirclient.Client, bundle *fhir.Bundle, filter func(i int, entry fhir.BundleEntry) bool, result interface{}) (*fhir.BundleEntry, error) {
 	for i, currentEntry := range bundle.Entry {
-		if currentEntry.Response == nil || currentEntry.Response.Location == nil {
-			log.Error().Msg("entry.Response or entry.Response.Location is nil")
+		if currentEntry.Response == nil {
+			log.Error().Msg("entry.Response is nil")
 			continue
 		}
 		if !filter(i, currentEntry) {
 			continue
 		}
-		headers := new(fhirclient.Headers)
-		var responseData []byte
-		if err := fhirClient.Read(*currentEntry.Response.Location, &responseData, fhirclient.ResponseHeaders(headers)); err != nil {
-			return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", *currentEntry.Response.Location, err))
-		}
-		if result != nil {
-			if err := json.Unmarshal(responseData, result); err != nil {
-				return nil, fmt.Errorf("unmarshal Bundle entry (target=%T): %w", result, err)
-			}
-		}
 		response := currentEntry
-		response.Resource = responseData
+		if response.Resource == nil && currentEntry.Response.Location != nil {
+			headers := new(fhirclient.Headers)
+			var responseData []byte
+			if err := fhirClient.Read(*currentEntry.Response.Location, &responseData, fhirclient.ResponseHeaders(headers)); err != nil {
+				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", *currentEntry.Response.Location, err))
+			}
+			if result != nil {
+				if err := json.Unmarshal(responseData, result); err != nil {
+					return nil, fmt.Errorf("unmarshal Bundle entry (target=%T): %w", result, err)
+				}
+			}
+			response.Resource = responseData
+		}
 		return &response, nil
 	}
 	return nil, ErrEntryNotFound
