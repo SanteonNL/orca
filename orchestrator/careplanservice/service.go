@@ -218,20 +218,14 @@ func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolf
 		return nil, err
 	}
 
-	tx.AppendEntry(request.bundleEntry())
+	requestBundleEntry := request.bundleEntry()
+	tx.AppendEntry(requestBundleEntry)
 	idx := len(tx.Entry) - 1
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
-		entry := txResult.Entry[idx]
-		if entry.Resource == nil && entry.Response.Location != nil {
-			headers := new(fhirclient.Headers)
-			var responseData []byte
-			if err := s.fhirClient.Read(*entry.Response.Location, &responseData, fhirclient.ResponseHeaders(headers)); err != nil {
-				log.Warn().Err(err).Msgf("Failed to retrieve result Bundle entry (resource=%s)", *entry.Response.Location)
-			} else {
-				entry.Resource = responseData
-			}
-		}
-		return &entry, nil, nil
+		result, err := coolfhir.FetchBundleEntry(s.fhirClient, s.fhirURL, &requestBundleEntry, txResult, func(i int, entry fhir.BundleEntry) bool {
+			return i == idx
+		}, nil)
+		return result, nil, err
 	}, nil
 }
 

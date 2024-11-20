@@ -35,7 +35,6 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		bundleData, err := os.ReadFile("testdata/bundles/testbundle-1.json")
 		require.NoError(t, err)
 		testBundle(t, carePlanContributor1, bundleData)
-
 	})
 
 	notificationCounter.Store(0)

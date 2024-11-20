@@ -113,7 +113,8 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
-	tx = tx.AppendEntry(request.bundleEntryWithResource(task))
+	taskBundleEntry := request.bundleEntryWithResource(task)
+	tx = tx.AppendEntry(taskBundleEntry)
 	idx := len(tx.Entry) - 1
 	// Update care team
 	_, err = careteamservice.Update(s.fhirClient, carePlanId, task, tx)
@@ -123,7 +124,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedTask fhir.Task
-		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(currIdx int, entry fhir.BundleEntry) bool {
+		result, err := coolfhir.FetchBundleEntry(s.fhirClient, s.fhirURL, &taskBundleEntry, txResult, func(currIdx int, entry fhir.BundleEntry) bool {
 			return currIdx == idx
 		}, &updatedTask)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {

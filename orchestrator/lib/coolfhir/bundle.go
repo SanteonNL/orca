@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -163,8 +164,8 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 	return resultBundle, nil
 }
 
-func FetchBundleEntry(fhirClient fhirclient.Client, bundle *fhir.Bundle, filter func(i int, entry fhir.BundleEntry) bool, result interface{}) (*fhir.BundleEntry, error) {
-	for i, currentEntry := range bundle.Entry {
+func FetchBundleEntry(fhirClient fhirclient.Client, fhirBaseURL *url.URL, requestBundleEntry *fhir.BundleEntry, responseBundle *fhir.Bundle, filter func(i int, entry fhir.BundleEntry) bool, result interface{}) (*fhir.BundleEntry, error) {
+	for i, currentEntry := range responseBundle.Entry {
 		if currentEntry.Response == nil {
 			log.Error().Msg("entry.Response is nil")
 			continue
@@ -173,18 +174,55 @@ func FetchBundleEntry(fhirClient fhirclient.Client, bundle *fhir.Bundle, filter 
 			continue
 		}
 		response := currentEntry
-		if response.Resource == nil && currentEntry.Response.Location != nil {
-			headers := new(fhirclient.Headers)
-			var responseData []byte
-			if err := fhirClient.Read(*currentEntry.Response.Location, &responseData, fhirclient.ResponseHeaders(headers)); err != nil {
-				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", *currentEntry.Response.Location, err))
-			}
-			if result != nil {
-				if err := json.Unmarshal(responseData, result); err != nil {
-					return nil, fmt.Errorf("unmarshal Bundle entry (target=%T): %w", result, err)
+		// Enrich result with resource from FHIR server
+		if response.Resource == nil {
+			// Microsoft Azure FHIR: when PUT-ing a resource, the response entry might not contain a location.
+			//                       in that case, the location is the same as the request URL.
+			var resourcePath string
+			var requestOptions []fhirclient.Option
+			if currentEntry.Response.Location != nil {
+				resourcePath = *currentEntry.Response.Location
+				// HAPI uses relative Location URLs, Microsoft Azure FHIR uses absolute URLs.
+				resourcePath = strings.TrimPrefix(resourcePath, fhirBaseURL.String())
+				// depending on the base URL ending with slash or not, we might end up with a leading slash.
+				// Trim it for deterministic comparison.
+				resourcePath = strings.TrimPrefix(resourcePath, "/")
+				// Consistent behavior for easier testing and integration: pass the relative resource URL to the FHIR client.
+				// (HAPI uses relative Location URLs, Microsoft Azure FHIR uses absolute URLs.)
+				response.Response.Location = to.Ptr(resourcePath)
+			} else if strings.Contains(requestBundleEntry.Request.Url, "/") {
+				// response.location is not set, might be an upsert with logical identifier.
+				// In this case, it's a literal reference
+				resourcePath = requestBundleEntry.Request.Url
+			} else if strings.Contains(requestBundleEntry.Request.Url, "?") {
+				// response.location is not set, might be an upsert with logical identifier.
+				// In this case, it's a reference with a logical identifier
+				entryRequestUrl, err := url.Parse(requestBundleEntry.Request.Url)
+				if err != nil {
+					return nil, err
+				}
+				resourcePath = entryRequestUrl.Path
+				for key, values := range entryRequestUrl.Query() {
+					for _, value := range values {
+						requestOptions = append(requestOptions, fhirclient.QueryParam(key, value))
+					}
 				}
 			}
-			response.Resource = responseData
+			if resourcePath == "" {
+				responseBundleEntryJson, _ := json.Marshal(currentEntry)
+				log.Error().Msgf("Failed to determine resource path from FHIR transaction response bundle: %s", string(responseBundleEntryJson))
+				return nil, fmt.Errorf("failed to determine resource path for entry %d, see log for more details", i)
+			}
+			var resourceData []byte
+			if err := fhirClient.Read(resourcePath, &resourceData, requestOptions...); err != nil {
+				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", resourcePath, err))
+			}
+			response.Resource = resourceData
+		}
+		if len(response.Resource) != 0 && result != nil {
+			if err := json.Unmarshal(response.Resource, result); err != nil {
+				return nil, fmt.Errorf("unmarshal Bundle entry (target=%T): %w", result, err)
+			}
 		}
 		return &response, nil
 	}
