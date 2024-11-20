@@ -223,9 +223,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdTask fhir.Task
-		result, err := coolfhir.FetchBundleEntry(s.fhirClient, s.fhirURL, &taskBundleEntry, txResult, func(idx int, entry fhir.BundleEntry) bool {
-			return idx == taskEntryIdx
-		}, &createdTask)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
 		if err != nil {
 			return nil, nil, err
 		}

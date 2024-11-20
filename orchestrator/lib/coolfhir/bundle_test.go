@@ -59,21 +59,14 @@ func TestFetchBundleEntry(t *testing.T) {
 	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 
 	t.Run("resource read from response.location (relative URL)", func(t *testing.T) {
-		response := &fhir.Bundle{
-			Type: fhir.BundleTypeTransactionResponse,
-			Entry: []fhir.BundleEntry{
-				{
-					Response: &fhir.BundleEntryResponse{
-						Location: to.Ptr("Task/123"),
-						Status:   "200",
-					},
-				},
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Location: to.Ptr("Task/123"),
+				Status:   "200",
 			},
 		}
 		var actualResult fhir.Task
-		actualEntry, err := FetchBundleEntry(fhirClient, fhirBaseUrl, nil, response, func(_ int, _ fhir.BundleEntry) bool {
-			return true
-		}, &actualResult)
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, nil, responseEntry, &actualResult)
 		require.NoError(t, err)
 		require.Equal(t, "123", *actualResult.Id)
 		require.NotEmpty(t, actualEntry.Resource)
@@ -81,110 +74,75 @@ func TestFetchBundleEntry(t *testing.T) {
 		require.Equal(t, "200", actualEntry.Response.Status)
 	})
 	t.Run("resource read from response.location (absolute URL)", func(t *testing.T) {
-		response := &fhir.Bundle{
-			Type: fhir.BundleTypeTransactionResponse,
-			Entry: []fhir.BundleEntry{
-				{
-					Response: &fhir.BundleEntryResponse{
-						Location: to.Ptr("http://example.com/fhir/Task/123"),
-					},
-				},
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Location: to.Ptr("http://example.com/fhir/Task/123"),
 			},
 		}
 		var actualResult fhir.Task
-		actualEntry, err := FetchBundleEntry(fhirClient, fhirBaseUrl, nil, response, func(_ int, _ fhir.BundleEntry) bool {
-			return true
-		}, &actualResult)
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, nil, responseEntry, &actualResult)
 		require.NoError(t, err)
 		require.Equal(t, "123", *actualResult.Id)
 		require.NotEmpty(t, actualEntry.Resource)
 		require.Equal(t, "Task/123", *actualEntry.Response.Location)
 	})
 	t.Run("resource read from request BundleEntry.request.url, which contains a literal reference (response.location is nil, e.g. PUT in Azure FHIR)", func(t *testing.T) {
-		request := &fhir.BundleEntry{
+		requestEntry := &fhir.BundleEntry{
 			Request: &fhir.BundleEntryRequest{
 				Url: "Task/123",
 			},
 		}
-		response := &fhir.Bundle{
-			Type: fhir.BundleTypeTransactionResponse,
-			Entry: []fhir.BundleEntry{
-				{
-					Response: &fhir.BundleEntryResponse{
-						Status: "200",
-					},
-				},
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Status: "200",
 			},
 		}
 		var actualResult fhir.Task
-		actualEntry, err := FetchBundleEntry(fhirClient, fhirBaseUrl, request, response, func(_ int, _ fhir.BundleEntry) bool {
-			return true
-		}, &actualResult)
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, requestEntry, responseEntry, &actualResult)
 		require.NoError(t, err)
 		require.Equal(t, "123", *actualResult.Id)
 		require.NotEmpty(t, actualEntry.Resource)
 		require.Equal(t, "200", actualEntry.Response.Status)
 	})
 	t.Run("resource read from request BundleEntry.request.url, which contains a logical identifier (response.location is nil, e.g. PUT in Azure FHIR)", func(t *testing.T) {
-		request := &fhir.BundleEntry{
+		requestEntry := &fhir.BundleEntry{
 			Request: &fhir.BundleEntryRequest{
 				Url: "Task?_id=123",
 			},
 		}
-		response := &fhir.Bundle{
-			Type: fhir.BundleTypeTransactionResponse,
-			Entry: []fhir.BundleEntry{
-				{
-					Response: &fhir.BundleEntryResponse{
-						Status: "200",
-					},
-				},
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Status: "200",
 			},
 		}
 		var actualResult fhir.Task
-		actualEntry, err := FetchBundleEntry(fhirClient, fhirBaseUrl, request, response, func(_ int, _ fhir.BundleEntry) bool {
-			return true
-		}, &actualResult)
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, requestEntry, responseEntry, &actualResult)
 		require.NoError(t, err)
 		require.Equal(t, "123", *actualResult.Id)
 		require.NotEmpty(t, actualEntry.Resource)
 		require.Equal(t, "200", actualEntry.Response.Status)
 	})
 	t.Run("resource read from request BundleEntry.request.url, which doesn't contain a local reference nor logical identifier (not supported now)", func(t *testing.T) {
-		request := &fhir.BundleEntry{
+		requestEntry := &fhir.BundleEntry{
 			Request: &fhir.BundleEntryRequest{
 				Url: "Task",
 			},
 		}
-		response := &fhir.Bundle{
-			Type: fhir.BundleTypeTransactionResponse,
-			Entry: []fhir.BundleEntry{
-				{
-					Response: &fhir.BundleEntryResponse{
-						Status: "200",
-					},
-				},
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Status: "200",
 			},
 		}
-		_, err := FetchBundleEntry(fhirClient, fhirBaseUrl, request, response, func(_ int, _ fhir.BundleEntry) bool {
-			return true
-		}, nil)
-		require.EqualError(t, err, "failed to determine resource path for entry 0, see log for more details")
+		_, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, requestEntry, responseEntry, nil)
+		require.EqualError(t, err, "failed to determine resource for transaction response bundle entry, see log for more details")
 	})
 	t.Run("result to unmarshal into is nil", func(t *testing.T) {
-		response := &fhir.Bundle{
-			Type: fhir.BundleTypeTransactionResponse,
-			Entry: []fhir.BundleEntry{
-				{
-					Response: &fhir.BundleEntryResponse{
-						Location: to.Ptr("http://example.com/fhir/Task/123"),
-					},
-				},
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Location: to.Ptr("http://example.com/fhir/Task/123"),
 			},
 		}
-		actualEntry, err := FetchBundleEntry(fhirClient, fhirBaseUrl, nil, response, func(_ int, _ fhir.BundleEntry) bool {
-			return true
-		}, nil)
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, nil, responseEntry, nil)
 		require.NoError(t, err)
 		require.NotNil(t, actualEntry)
 	})
