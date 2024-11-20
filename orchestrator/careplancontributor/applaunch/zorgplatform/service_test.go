@@ -230,8 +230,15 @@ func TestService(t *testing.T) {
 			require.IsType(t, fhir.ServiceRequest{}, sessionData.OtherValues[serviceRequestRef])
 			t.Run("check Workflow-ID identifier is properly set on the ServiceRequest", func(t *testing.T) {
 				serviceRequest := sessionData.OtherValues[serviceRequestRef].(fhir.ServiceRequest)
-				require.Len(t, serviceRequest.Identifier, 1)
-				require.Equal(t, "Task/b526e773-e1a6-4533-bd00-1360c97e745f", *serviceRequest.Identifier[0].Value)
+				var workflowIDIdentifier *fhir.Identifier
+				for _, identifier := range serviceRequest.Identifier {
+					if *identifier.System == "https://api.zorgplatform.online/fhir/v1/Task" {
+						workflowIDIdentifier = &identifier
+						break
+					}
+				}
+				require.NotNil(t, workflowIDIdentifier)
+				require.Equal(t, "b526e773-e1a6-4533-bd00-1360c97e745f", *workflowIDIdentifier.Value)
 			})
 		})
 		t.Run("check Patient is in session", func(t *testing.T) {
