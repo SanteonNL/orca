@@ -38,6 +38,10 @@ func TestLoadConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, zerolog.InfoLevel, c.LogLevel)
 	})
+	t.Run("default careplancontributor.sessiontimeout", func(t *testing.T) {
+		c, _ := LoadConfig()
+		require.Equal(t, 15, int(c.CarePlanContributor.SessionTimeout.Minutes()))
+	})
 	t.Run("log level is parsed", func(t *testing.T) {
 		os.Setenv("ORCA_LOGLEVEL", "trace")
 		defer os.Unsetenv("ORCA_LOGLEVEL")

@@ -192,7 +192,7 @@ func TestService(t *testing.T) {
 		},
 	}
 
-	sessionManager := user.NewSessionManager()
+	sessionManager := user.NewSessionManager(time.Minute)
 	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.TestProfile{
 		Principal:        auth.TestPrincipal1,
 		TestCsdDirectory: profile.TestCsdDirectory{},

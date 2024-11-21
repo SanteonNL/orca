@@ -177,9 +177,11 @@ func TestService_DefaultOperationHandler(t *testing.T) {
 				reflect.ValueOf(resultResource).Elem().Set(reflect.ValueOf(expectedServiceRequestJson))
 				return nil
 			})
+		fhirBaseUrl, _ := url.Parse("http://example.com")
 		service := Service{
 			fhirClient:                   fhirClient,
 			allowUnmanagedFHIROperations: true,
+			fhirURL:                      fhirBaseUrl,
 		}
 
 		resultHandler, err := service.handleUnmanagedOperation(request, tx)

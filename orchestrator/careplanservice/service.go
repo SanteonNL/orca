@@ -218,18 +218,12 @@ func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolf
 		return nil, err
 	}
 
-	tx.AppendEntry(request.bundleEntry())
+	requestBundleEntry := request.bundleEntry()
+	tx.AppendEntry(requestBundleEntry)
 	idx := len(tx.Entry) - 1
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
-		var resultResource []byte
-		err := s.fhirClient.Read(*txResult.Entry[idx].Response.Location, &resultResource)
-		if err != nil {
-			return nil, nil, err
-		}
-		return &fhir.BundleEntry{
-			Resource: resultResource,
-			Response: txResult.Entry[idx].Response,
-		}, nil, nil
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(s.fhirClient, s.fhirURL, &requestBundleEntry, &txResult.Entry[idx], nil)
+		return result, nil, err
 	}, nil
 }
 
@@ -558,6 +552,48 @@ func (s *Service) ensureSearchParameterExists() {
 			log.Error().Err(err).Msgf("Failed to ensure SearchParameter %s", param.SearchParamId)
 		} else {
 			log.Info().Msgf("Ensured SearchParameter/%s", param.SearchParamId)
+
+			// Re-index SearchParamters
+			reindexParam := fhir.Parameters{
+				Parameter: []fhir.ParametersParameter{
+					{
+						Name:        param.SearchParam.Name,
+						ValueString: to.Ptr(param.SearchParam.Url),
+					},
+				},
+			}
+
+			requestBody, err := json.Marshal(reindexParam)
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to marshal reindex request for SearchParameter %s", param.SearchParamId)
+				continue
+			}
+
+			req, err := http.NewRequest("POST", s.fhirURL.String()+"/$reindex", strings.NewReader(string(requestBody)))
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to create reindex request for SearchParameter %s", param.SearchParamId)
+				continue
+			}
+			req.Header.Set("Content-Type", "application/fhir+json")
+
+			resp, err := s.profile.HttpClient().Do(req)
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
+				continue
+			}
+			defer resp.Body.Close()
+
+			if err != nil {
+				log.Error().Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
+				continue
+			}
+			if resp.StatusCode != http.StatusOK {
+				body, _ := io.ReadAll(resp.Body)
+				log.Error().Msgf("Failed to reindex SearchParameter %s: %s", param.SearchParamId, string(body))
+				continue
+			} else {
+				log.Info().Msgf("Reindexed SearchParameter/%s", param.SearchParamId)
+			}
 		}
 	}
 }

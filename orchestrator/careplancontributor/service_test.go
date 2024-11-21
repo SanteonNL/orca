@@ -793,7 +793,7 @@ func TestService_handleGetContext(t *testing.T) {
 }
 
 func createTestSession() (*user.SessionManager, string) {
-	sessionManager := user.NewSessionManager()
+	sessionManager := user.NewSessionManager(time.Minute)
 	sessionHttpResponse := httptest.NewRecorder()
 	sessionManager.Create(sessionHttpResponse, user.SessionData{
 		FHIRLauncher: "test",
