@@ -66,6 +66,8 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	}
 
 	// Resolve the CarePlan
+	var taskEntryIdx = -1
+	var taskBundleEntry fhir.BundleEntry
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
 
@@ -145,6 +147,8 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL)).
 			Create(careTeam, coolfhir.WithFullUrl(careTeamURL)).
 			Create(task, coolfhir.WithFullUrl(taskURL))
+		taskEntryIdx = len(tx.Entry) - 1
+		taskBundleEntry = tx.Entry[taskEntryIdx]
 	} else {
 		// Adding a task to an existing CarePlan
 		carePlanRef, err = basedOn(task)
@@ -194,34 +198,34 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 		// TODO: Manage time-outs properly
 		// Add Task to CarePlan.activities
-		taskBundleEntry := request.bundleEntryWithResource(task)
+		taskBundleEntry = request.bundleEntryWithResource(task)
 		if taskBundleEntry.FullUrl == nil {
 			taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 		}
-		err = s.newTaskInExistingCarePlan(tx, taskBundleEntry, task, &carePlan)
+
+		// TODO: Only if not updated
+		tx.AppendEntry(taskBundleEntry)
+		taskEntryIdx = len(tx.Entry) - 1
+		if len(task.PartOf) == 0 {
+			// Don't add subtasks to CarePlan.activity
+			carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
+				Reference: &fhir.Reference{
+					Reference: taskBundleEntry.FullUrl,
+					Type:      to.Ptr("Task"),
+				},
+			})
+			tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+		}
+		if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
+			return nil, fmt.Errorf("failed to update CarePlan: %w", err)
+		}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("failed to create Task: %w", err)
 	}
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdTask fhir.Task
-		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(_ int, entry fhir.BundleEntry) bool {
-			if entry.Response.Location == nil {
-				return false
-			}
-			// HAPI uses relative Location URLs, Microsoft Azure FHIR uses absolute URLs.
-			createdResourceLocation := *entry.Response.Location
-			createdResourceLocation = strings.TrimPrefix(createdResourceLocation, s.fhirURL.String())
-			// depending on the base URL ending with slash or not, we might end up with a leading slash.
-			// Trim it for deterministic comparison.
-			createdResourceLocation = strings.TrimPrefix(createdResourceLocation, "/")
-			if strings.HasPrefix(createdResourceLocation, "Task/") {
-				// Consistent behavior for easier testing: always pass the relative resource URL to the FHIR client
-				entry.Response.Location = to.Ptr(createdResourceLocation)
-				return true
-			}
-			return false
-		}, &createdTask)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -234,26 +238,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		return result, []any{&createdTask}, nil
 	}, nil
-}
-
-// newTaskInExistingCarePlan creates a new Task and references the Task from the CarePlan.activities.
-func (s *Service) newTaskInExistingCarePlan(tx *coolfhir.BundleBuilder, taskBundleEntry fhir.BundleEntry, task fhir.Task, carePlan *fhir.CarePlan) error {
-	// TODO: Only if not updated
-	tx.AppendEntry(taskBundleEntry)
-	if len(task.PartOf) == 0 {
-		// Don't add subtasks to CarePlan.activity
-		carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
-			Reference: &fhir.Reference{
-				Reference: taskBundleEntry.FullUrl,
-				Type:      to.Ptr("Task"),
-			},
-		})
-		tx.Update(*carePlan, "CarePlan/"+*carePlan.Id)
-	}
-	if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
-		return fmt.Errorf("failed to update CarePlan: %w", err)
-	}
-	return nil
 }
 
 // basedOn returns the CarePlan reference the Task is based on, e.g. CarePlan/123.

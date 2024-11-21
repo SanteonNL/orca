@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -13,6 +14,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -27,6 +29,15 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("This test requires creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
 	notificationEndpoint := setupNotificationEndpoint(t)
 	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
+
+	t.Run("Example bundle 1", func(t *testing.T) {
+		t.Skip("TODO")
+		bundleData, err := os.ReadFile("testdata/bundles/testbundle-1.json")
+		require.NoError(t, err)
+		testBundle(t, carePlanContributor1, bundleData)
+	})
+
+	notificationCounter.Store(0)
 
 	participant1 := fhir.CareTeamParticipant{
 		Member: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
@@ -596,6 +607,18 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	}
 
 }
+
+func testBundle(t *testing.T, fhirClient *fhirclient.BaseClient, data []byte) {
+	var bundle fhir.Bundle
+	err := json.Unmarshal(data, &bundle)
+	require.NoError(t, err)
+
+	err = fhirClient.Create(bundle, &bundle, fhirclient.AtPath("/"))
+	require.NoError(t, err)
+	responseData, _ := json.MarshalIndent(bundle, "  ", "")
+	println(string(responseData))
+}
+
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
