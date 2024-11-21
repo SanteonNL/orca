@@ -118,7 +118,7 @@ func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
 type FHIRHandlerResult func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error)
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	s.proxy = coolfhir.NewProxy(log.Logger, s.fhirURL, basePath, s.transport)
+	s.proxy = coolfhir.NewProxy(log.Logger, s.fhirURL, basePath, s.transport, coolfhir.NoopUrlLoggerSanitizer)
 	baseUrl := s.baseUrl()
 	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
 

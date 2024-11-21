@@ -176,7 +176,7 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 // handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
-	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, basePath+"/ehr/fhir", clientFactory.Client)
+	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, basePath+"/ehr/fhir", clientFactory.Client, coolfhir.NoopUrlLoggerSanitizer)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -336,7 +336,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			StatusCode: http.StatusUnprocessableEntity,
 		}
 	}
-	// TODO: for now, we assume the resource URL is always in the form of <FHIR base url>/<resource type>/<resource id>
+	// TODO: for now, we assume the resource URL is always in the form of <FHIR base url>/<reso urce type>/<resource id>
 	//       Then, we can deduce the FHIR base URL from the resource URL
 	resourceUrlParts := strings.Split(resourceUrl, "/")
 	resourceUrlParts = resourceUrlParts[:len(resourceUrlParts)-2]
