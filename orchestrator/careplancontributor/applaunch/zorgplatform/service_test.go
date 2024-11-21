@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
+	"github.com/stretchr/testify/assert"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -230,15 +231,10 @@ func TestService(t *testing.T) {
 			require.IsType(t, fhir.ServiceRequest{}, sessionData.OtherValues[serviceRequestRef])
 			t.Run("check Workflow-ID identifier is properly set on the ServiceRequest", func(t *testing.T) {
 				serviceRequest := sessionData.OtherValues[serviceRequestRef].(fhir.ServiceRequest)
-				var workflowIDIdentifier *fhir.Identifier
-				for _, identifier := range serviceRequest.Identifier {
-					if *identifier.System == "https://api.zorgplatform.online/fhir/v1/Task" {
-						workflowIDIdentifier = &identifier
-						break
-					}
-				}
-				require.NotNil(t, workflowIDIdentifier)
-				require.Equal(t, "b526e773-e1a6-4533-bd00-1360c97e745f", *workflowIDIdentifier.Value)
+				assert.Contains(t, serviceRequest.Identifier, fhir.Identifier{
+					System: to.Ptr("https://api.zorgplatform.online/fhir/v1/Task"),
+					Value:  to.Ptr("b526e773-e1a6-4533-bd00-1360c97e745f"),
+				})
 			})
 		})
 		t.Run("check Patient is in session", func(t *testing.T) {
