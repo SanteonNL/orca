@@ -177,9 +177,11 @@ func TestService_DefaultOperationHandler(t *testing.T) {
 				reflect.ValueOf(resultResource).Elem().Set(reflect.ValueOf(expectedServiceRequestJson))
 				return nil
 			})
+		fhirBaseUrl, _ := url.Parse("http://example.com")
 		service := Service{
 			fhirClient:                   fhirClient,
 			allowUnmanagedFHIROperations: true,
+			fhirURL:                      fhirBaseUrl,
 		}
 
 		resultHandler, err := service.handleUnmanagedOperation(request, tx)
@@ -221,8 +223,44 @@ func TestService_Handle(t *testing.T) {
 	fhirServerMux := http.NewServeMux()
 	fhirServerMux.HandleFunc("POST /", func(writer http.ResponseWriter, request *http.Request) {
 		capturedRequestBody, _ = io.ReadAll(request.Body)
-		if strings.Contains(string(capturedRequestBody), "THIS-MUST-FAIL") {
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError("this must fail"), "Failed", writer)
+		if strings.Contains(string(capturedRequestBody), "ERROR-NON-FHIR-RESPONSE") {
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		} else if strings.Contains(string(capturedRequestBody), "ERROR-NON-SECURITY-OPERATIONOUTCOME") {
+			writer.Header().Set("Content-Type", "application/fhir+json")
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte(`{
+  "resourceType": "OperationOutcome",
+  "id": "d7ea5021cd736ff022baf52f178dead2",
+  "meta": {
+    "lastUpdated": "2024-11-20T14:31:31.6676701+00:00"
+  },
+  "issue": [
+    {
+      "severity": "error",
+      "code": "processing",
+      "diagnostics": "Transaction failed on 'PUT' for the requested url '/ServiceRequest'."
+    },
+    {
+      "severity": "error",
+      "code": "invalid",
+      "diagnostics": "Found result with Id '4eaffb23-02ab-452c-8ef1-b4c9be7b2425', which did not match the provided Id 'e669F4l0Bk3NJpQzoTzVE0opsQR2iWXR41M6FXkeguZo3'."
+    }
+  ]
+}`))
+			return
+		} else if strings.Contains(string(capturedRequestBody), "ERROR-SECURITY-OPERATIONOUTCOME") {
+			writer.Header().Set("Content-Type", "application/fhir+json")
+			writer.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(writer).Encode(fhir.OperationOutcome{
+				Issue: []fhir.OperationOutcomeIssue{
+					{
+						Severity:    fhir.IssueSeverityError,
+						Code:        fhir.IssueTypeSecurity,
+						Diagnostics: to.Ptr("You are not authorized to perform this operation"),
+					},
+				},
+			})
 			return
 		}
 		writer.Header().Set("Content-Type", "application/fhir+json")
@@ -409,7 +447,7 @@ func TestService_Handle(t *testing.T) {
 
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0]: this fails on purpose")
 		})
-		t.Run("commit fails", func(t *testing.T) {
+		t.Run("commit fails, FHIR server returns non-FHIR response", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
 				Type: fhir.BundleTypeTransaction,
 				Entry: []fhir.BundleEntry{
@@ -418,7 +456,7 @@ func TestService_Handle(t *testing.T) {
 							Method: fhir.HTTPVerbPUT,
 							Url:    "Task",
 						},
-						Resource: json.RawMessage(`{"intent": "THIS-MUST-FAIL"}`),
+						Resource: json.RawMessage(`{"intent": "ERROR-NON-FHIR-RESPONSE"}`),
 					},
 				},
 			}
@@ -428,6 +466,48 @@ func TestService_Handle(t *testing.T) {
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
 
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: upstream FHIR server error")
+			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
+		})
+		t.Run("commit fails, FHIR server returns OperationOutcome", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPUT,
+							Url:    "Task",
+						},
+						Resource: json.RawMessage(`{"intent": "ERROR-NON-SECURITY-OPERATIONOUTCOME"}`),
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			hdrs := new(fhirclient.Headers)
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: OperationOutcome, issues: [processing error] Transaction failed on 'PUT' for the requested url '/ServiceRequest'.; [invalid error] Found result with Id '4eaffb23-02ab-452c-8ef1-b4c9be7b2425', which did not match the provided Id 'e669F4l0Bk3NJpQzoTzVE0opsQR2iWXR41M6FXkeguZo3'.")
+			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
+		})
+		t.Run("commit fails, FHIR server returns OperationOutcome with security issue, which is sanitized", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPUT,
+							Url:    "Task",
+						},
+						Resource: json.RawMessage(`{"intent": "ERROR-SECURITY-OPERATIONOUTCOME"}`),
+					},
+				},
+			}
+			var resultBundle fhir.Bundle
+
+			hdrs := new(fhirclient.Headers)
+			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: OperationOutcome, issues: [processing error] upstream FHIR server error")
 			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 		})
 		t.Run("GET is disallowed", func(t *testing.T) {
