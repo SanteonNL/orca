@@ -19,7 +19,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	log.Info().Msgf("Updating Task: %s", request.RequestUrl)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
-		return nil, fmt.Errorf("invalid %T: %w", task, err)
+		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err.Error()))
 	}
 
 	// Validate fields on updated Task

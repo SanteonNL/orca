@@ -100,12 +100,12 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		var notification coolfhir.SubscriptionNotification
 		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
 			log.Error().Err(err).Msg("Failed to decode notification")
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err.Error()), fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
 		if err := s.handleNotification(request.Context(), &notification); err != nil {
 			log.Error().Err(err).Msg("Failed to handle notification")
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err.Error()), fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
 		writer.WriteHeader(http.StatusOK)
@@ -121,6 +121,13 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 
 		err := s.handleProxyExternalRequestToEHR(writer, request)
 		if err != nil {
+			log.Error().Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
+			// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
+			var operationOutcomeErr fhirclient.OperationOutcomeError
+			if errors.As(err, &operationOutcomeErr) {
+				operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
+				err = operationOutcomeErr
+			}
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
@@ -190,14 +197,14 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	// CarePlan should be provided in X-Scp-Context header
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) != 1 {
-		return errors.New(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
+		return coolfhir.BadRequestError(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
 	}
 	carePlanURL := carePlanURLValue[0]
 	if carePlanURL == "" {
-		return errors.New(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
+		return coolfhir.BadRequestError(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
 	}
 	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
-		return errors.New("invalid CarePlan URL in header")
+		return coolfhir.BadRequestError("invalid CarePlan URL in header")
 	}
 	u, err := url.Parse(carePlanURL)
 	if err != nil {
@@ -205,7 +212,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	}
 	// Verify that the u.Path refers to a careplan
 	if !strings.HasPrefix(u.Path, "/cps/CarePlan/") {
-		return errors.New("specified SCP context header does not refer to a CarePlan")
+		return coolfhir.BadRequestError("specified SCP context header does not refer to a CarePlan")
 	}
 
 	var bundle fhir.Bundle
