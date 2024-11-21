@@ -43,7 +43,7 @@ func TestCreateSAMLAssertion(t *testing.T) {
 	}
 
 	// Generate the assertion
-	assertionElement, err := service.createSAMLAssertion(&launchContext)
+	assertionElement, err := service.createSAMLAssertion(&launchContext, HcpTokenType)
 	require.NoError(t, err)
 
 	// Load expected XML into etree.Document
@@ -173,7 +173,7 @@ func TestService_sign(t *testing.T) {
 		ServiceRequest: fhir.ServiceRequest{},
 	}
 
-	assertion, err := service.createSAMLAssertion(launchContext)
+	assertion, err := service.createSAMLAssertion(launchContext, HcpTokenType)
 	require.NoError(t, err)
 
 	// Call the signing function
@@ -183,17 +183,17 @@ func TestService_sign(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
+func TestService_RequestAccessToken_IntegrationTest(t *testing.T) {
 	//You can test the output (manually for now) with:
 	// xmlsec1 --verify --id-attr:ID urn:oasis:names:tc:SAML:2.0:assertion:Assertion --output /dev/null --trusted-pem ./test-sign-zorgplatform-chain.private.pem --pubkey-pem ./test-sign-zorgplatform.private.pem signed-envelope.xml
 
 	clientCert, err := tls.LoadX509KeyPair("test-tls-zorgplatform.private.pem", "test-tls-zorgplatform.private.pem")
 	if err != nil {
-		t.Skip("Skipping TestService_RequestHcpRst_IntegrationTest as test-tls-zorgplatform.private.pem is not present locally")
+		t.Skip("Skipping TestService_RequestAccessToken_IntegrationTest as test-tls-zorgplatform.private.pem is not present locally")
 	}
 	signCert, err := tls.LoadX509KeyPair("test-sign-zorgplatform.private.pem", "test-sign-zorgplatform.private.pem")
 	if err != nil {
-		t.Skip("Skipping TestService_RequestHcpRst_IntegrationTest as test-sign-zorgplatform.private.pem is not present locally")
+		t.Skip("Skipping TestService_RequestAccessToken_IntegrationTest as test-sign-zorgplatform.private.pem is not present locally")
 	}
 
 	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
@@ -238,7 +238,7 @@ func TestService_RequestHcpRst_IntegrationTest(t *testing.T) {
 		WorkflowId: "workflow-1234",
 		Bsn:        "999999205", // Assuming Bsn is part of LaunchContext
 	}
-	actual, err := service.RequestHcpRst(launchContext)
+	actual, err := service.RequestAccessToken(launchContext, HcpTokenType)
 	require.NoError(t, err)
 	println(actual)
 }

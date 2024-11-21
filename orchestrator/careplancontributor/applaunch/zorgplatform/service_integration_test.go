@@ -22,11 +22,11 @@ import (
 func TestService_FetchContext_IntegrationTest(t *testing.T) {
 	clientCert, err := tls.LoadX509KeyPair("test-tls-zorgplatform.private.pem", "test-tls-zorgplatform.private.pem")
 	if err != nil {
-		t.Skip("Skipping TestService_RequestHcpRst_IntegrationTest as test-tls-zorgplatform.private.pem is not present locally")
+		t.Skip("Skipping TestService_RequestAccessToken_IntegrationTest as test-tls-zorgplatform.private.pem is not present locally")
 	}
 	signCert, err := tls.LoadX509KeyPair("test-sign-zorgplatform.private.pem", "test-sign-zorgplatform.private.pem")
 	if err != nil {
-		t.Skip("Skipping TestService_RequestHcpRst_IntegrationTest as test-sign-zorgplatform.private.pem is not present locally")
+		t.Skip("Skipping TestService_RequestAccessToken_IntegrationTest as test-sign-zorgplatform.private.pem is not present locally")
 	}
 
 	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
@@ -79,7 +79,7 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 		Bsn:        "999999151", // Assuming Bsn is part of LaunchContext
 	}
 
-	accessToken, err := service.RequestHcpRst(launchContext)
+	accessToken, err := service.RequestAccessToken(launchContext, HcpTokenType)
 	require.NoError(t, err)
 	sessionData, err := service.getSessionData(context.Background(), accessToken, launchContext)
 	require.NoError(t, err)
@@ -92,11 +92,11 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 func TestService_FetchApplicationToken_IntegrationTest(t *testing.T) {
 	clientCert, err := tls.LoadX509KeyPair("test-tls-zorgplatform.private.pem", "test-tls-zorgplatform.private.pem")
 	if err != nil {
-		t.Skip("Skipping TestService_RequestHcpRst_IntegrationTest as test-tls-zorgplatform.private.pem is not present locally")
+		t.Skip("Skipping TestService_RequestAccessToken_IntegrationTest as test-tls-zorgplatform.private.pem is not present locally")
 	}
 	signCert, err := tls.LoadX509KeyPair("test-sign-zorgplatform.private.pem", "test-sign-zorgplatform.private.pem")
 	if err != nil {
-		t.Skip("Skipping TestService_RequestHcpRst_IntegrationTest as test-sign-zorgplatform.private.pem is not present locally")
+		t.Skip("Skipping TestService_RequestAccessToken_IntegrationTest as test-sign-zorgplatform.private.pem is not present locally")
 	}
 
 	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
@@ -148,7 +148,7 @@ func TestService_FetchApplicationToken_IntegrationTest(t *testing.T) {
 		Bsn:        "999999151", // Assuming Bsn is part of LaunchContext
 	}
 
-	accessToken, err := service.RequestApplicationToken(launchContext)
+	accessToken, err := service.RequestAccessToken(launchContext, ApplicationTokenType)
 	require.NoError(t, err)
 	require.NotNil(t, accessToken)
 }

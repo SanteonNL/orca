@@ -10,8 +10,6 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +17,9 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
@@ -292,7 +293,7 @@ var _ SecureTokenService = &stubSecureTokenService{}
 type stubSecureTokenService struct {
 }
 
-func (s stubSecureTokenService) RequestHcpRst(launchContext LaunchContext) (string, error) {
+func (s stubSecureTokenService) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
 	return "stub-at", nil
 }
 

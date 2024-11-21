@@ -21,44 +21,23 @@ import (
 )
 
 type SecureTokenService interface {
-	RequestHcpRst(launchContext LaunchContext) (string, error)
+	RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error)
 }
+
+type TokenType string
+
+const (
+	HcpTokenType         TokenType = "HCP"
+	ApplicationTokenType TokenType = "APPLICATION"
+)
 
 var _ SecureTokenService = &Service{}
 
-func (s *Service) RequestApplicationToken(launchContext LaunchContext) (string, error) {
-
-	assertion, err := s.createSAMLAssertionForApplication(&launchContext)
-	if err != nil {
-		return "Failed to create SAML assertion", err
-	}
-
-	// Sign the assertion
-	signedAssertion, err := s.signAssertion(assertion)
-	if err != nil {
-		return "Failed to sign SAML assertion", err
-	}
-
-	// Wrap the signed assertion in a SOAP envelope
-	envelope, err := s.createSOAPEnvelope(signedAssertion)
-	if err != nil {
-		return "Failed to create SOAP envelope", err
-	}
-
-	// Submit the request via mTLS
-	response, err := s.submitSAMLRequest(envelope)
-	if err != nil {
-		return "Failed to submit SAML request", err
-	}
-
-	return s.validateRSTSResponse(response)
-
-}
-
-// RequestHcpRst generates the SAML assertion, signs it, and sends the SOAP request to the Zorgplatform STS
-func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
+// RequestAccessToken generates the SAML assertion, signs it, sends the SOAP request to the Zorgplatform STS and teturns the SAML access token
+func (s *Service) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
 	// Create the SAML assertion
-	assertion, err := s.createSAMLAssertion(&launchContext)
+	assertion, err := s.createSAMLAssertion(&launchContext, tokenType)
+
 	if err != nil {
 		return "Failed to create SAML assertion", err
 	}
@@ -85,7 +64,13 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 }
 
 // createSAMLAssertion builds the SAML assertion
-func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Element, error) {
+func (s *Service) createSAMLAssertion(launchContext *LaunchContext, tokenType TokenType) (*etree.Element, error) {
+
+	// Validate the workflow-id
+	if tokenType != ApplicationTokenType && launchContext.WorkflowId == "" {
+		return nil, fmt.Errorf("workflow ID is required and not provided")
+	}
+
 	assertionID := "_" + uuid.New().String()
 	now := GetCurrentXSDDateTime()
 	notOnOrAfter := FormatXSDDateTime(time.Now().Add(15 * time.Minute))
@@ -124,7 +109,11 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	attribute1.CreateAttr("Name", "urn:oasis:names:tc:xspa:1.0:subject:purposeofuse")
 	attributeValue1 := attribute1.CreateElement("AttributeValue")
 	purposeOfUse := attributeValue1.CreateElement("PurposeOfUse")
-	purposeOfUse.CreateAttr("code", "TREATMENT")
+	purposeCode := "TREATMENT"
+	if tokenType == ApplicationTokenType {
+		purposeCode = "OPERATIONS"
+	}
+	purposeOfUse.CreateAttr("code", purposeCode)
 	purposeOfUse.CreateAttr("codeSystem", "2.16.840.1.113883.3.18.7.1")
 	purposeOfUse.CreateAttr("codeSystemName", "nhin-purpose")
 	purposeOfUse.CreateAttr("displayName", "")
@@ -135,7 +124,11 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	attribute2.CreateAttr("Name", "urn:oasis:names:tc:xacml:2.0:subject:role")
 	attributeValue2 := attribute2.CreateElement("AttributeValue")
 	role := attributeValue2.CreateElement("Role")
-	role.CreateAttr("code", "224609002")
+	roleCode := "224609002"
+	if tokenType == ApplicationTokenType {
+		roleCode = "182777000"
+	}
+	role.CreateAttr("code", roleCode)
 	role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
 	role.CreateAttr("codeSystemName", "SNOMED_CT")
 	role.CreateAttr("displayName", "")
@@ -157,10 +150,12 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	attributeValue4.SetText(s.config.SigningConfig.Issuer)
 
 	// Workflow ID Attribute
-	attribute5 := attributeStatement.CreateElement("Attribute")
-	attribute5.CreateAttr("Name", "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id")
-	attributeValue5 := attribute5.CreateElement("AttributeValue")
-	attributeValue5.SetText(launchContext.WorkflowId)
+	if launchContext.WorkflowId != "" {
+		attribute5 := attributeStatement.CreateElement("Attribute")
+		attribute5.CreateAttr("Name", "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id")
+		attributeValue5 := attribute5.CreateElement("AttributeValue")
+		attributeValue5.SetText(launchContext.WorkflowId)
+	}
 
 	// AuthnStatement
 	authnStatement := assertion.CreateElement("AuthnStatement")
@@ -168,38 +163,6 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	authnContext := authnStatement.CreateElement("AuthnContext")
 	authnContextClassRef := authnContext.CreateElement("AuthnContextClassRef")
 	authnContextClassRef.SetText("urn:oasis:names:tc:SAML:2.0:ac:classes:X509")
-
-	return assertion, nil
-}
-
-func (s *Service) createSAMLAssertionForApplication(launchContext *LaunchContext) (*etree.Element, error) {
-
-	assertion, err := s.createSAMLAssertion(launchContext)
-	if err != nil {
-		return nil, err
-	}
-
-	// Replace the PurposeOfUse attribute in the assertion
-	attrValue := assertion.FindElement(".//Attribute[@Name='urn:oasis:names:tc:xspa:1.0:subject:purposeofuse']//AttributeValue/PurposeOfUse")
-	if attrValue == nil {
-		return nil, fmt.Errorf("PurposeOfUse element not found in assertion")
-	}
-	attrValue.CreateAttr("code", "OPERATIONS")
-
-	// Replace the Role attribute in the assertion
-	roleAttr := assertion.FindElement(".//Attribute[@Name='urn:oasis:names:tc:xacml:2.0:subject:role']//AttributeValue/Role")
-	if roleAttr == nil {
-		return nil, fmt.Errorf("role element not found in assertion")
-	}
-	roleAttr.CreateAttr("code", "182777000")
-
-	//Remove the workflow id if not provided
-	if launchContext.WorkflowId == "" {
-		workflowAttr := assertion.FindElement(".//Attribute[@Name='http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id']")
-		if workflowAttr != nil {
-			workflowAttr.Parent().RemoveChild(workflowAttr)
-		}
-	}
 
 	return assertion, nil
 }
