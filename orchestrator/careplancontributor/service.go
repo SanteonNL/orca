@@ -100,12 +100,12 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		var notification coolfhir.SubscriptionNotification
 		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
 			log.Error().Err(err).Msg("Failed to decode notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err.Error()), fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
 		if err := s.handleNotification(request.Context(), &notification); err != nil {
 			log.Error().Err(err).Msg("Failed to handle notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err.Error()), fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
 		writer.WriteHeader(http.StatusOK)
@@ -197,14 +197,14 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	// CarePlan should be provided in X-Scp-Context header
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) != 1 {
-		return coolfhir.BadRequestError(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
+		return coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
 	}
 	carePlanURL := carePlanURLValue[0]
 	if carePlanURL == "" {
-		return coolfhir.BadRequestError(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
+		return coolfhir.BadRequest(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
 	}
 	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
-		return coolfhir.BadRequestError("invalid CarePlan URL in header")
+		return coolfhir.BadRequest("invalid CarePlan URL in header")
 	}
 	u, err := url.Parse(carePlanURL)
 	if err != nil {
@@ -212,7 +212,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	}
 	// Verify that the u.Path refers to a careplan
 	if !strings.HasPrefix(u.Path, "/cps/CarePlan/") {
-		return coolfhir.BadRequestError("specified SCP context header does not refer to a CarePlan")
+		return coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
 	}
 
 	var bundle fhir.Bundle

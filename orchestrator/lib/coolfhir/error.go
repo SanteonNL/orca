@@ -60,23 +60,17 @@ func NewErrorWithCode(message string, statusCode int) error {
 	}
 }
 
-// WrapErrorWithCode wraps an error with a status code
-func WrapErrorWithCode(err error, statusCode int) error {
+// BadRequestError wraps an error with a status code of 400
+func BadRequestError(err error) error {
 	return &ErrorWithCode{
 		Message:    err.Error(),
-		StatusCode: statusCode,
+		StatusCode: http.StatusBadRequest,
 	}
 }
 
-// BadRequestError wraps an error with a status code of 400
-func BadRequestError(msg string, args ...any) error {
-	if len(args) > 0 {
-		msg = fmt.Errorf(msg, args...).Error()
-	}
-	return &ErrorWithCode{
-		Message:    msg,
-		StatusCode: http.StatusBadRequest,
-	}
+// BadRequest creates an error with a status code of 400
+func BadRequest(msg string, args ...any) error {
+	return BadRequestError(fmt.Errorf(msg, args...))
 }
 
 // CreateOperationOutcomeBundleEntryFromError creates a BundleEntry with an OperationOutcome based on the given error

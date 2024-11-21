@@ -19,7 +19,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	log.Info().Msgf("Updating Task: %s", request.RequestUrl)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
-		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err.Error()))
+		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
 	}
 
 	// Validate fields on updated Task
@@ -53,11 +53,11 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 			}
 		}
 		if task.Id != nil && *taskExisting.Id != *task.Id {
-			return nil, coolfhir.BadRequestError("ID in request URL does not match ID in resource")
+			return nil, coolfhir.BadRequest("ID in request URL does not match ID in resource")
 		}
 	} else {
 		if (task.Id != nil && request.ResourceId != "") && request.ResourceId != *task.Id {
-			return nil, coolfhir.BadRequestError("ID in request URL does not match ID in resource")
+			return nil, coolfhir.BadRequest("ID in request URL does not match ID in resource")
 		}
 		err = s.fhirClient.Read("Task/"+request.ResourceId, &taskExisting)
 		// TODO: If the resource was identified by a concrete ID, and was intended as upsert (create-if-not-exists), this doesn't work yet.
