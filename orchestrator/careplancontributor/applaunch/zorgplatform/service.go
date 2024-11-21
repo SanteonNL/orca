@@ -200,7 +200,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
 
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
-	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, HcpTokenType)
+	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, hcpTokenType)
 
 	if err != nil {
 		log.Error().Err(err).Msg("unable to request access token for HCP ProfessionalService")

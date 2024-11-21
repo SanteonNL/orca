@@ -43,7 +43,7 @@ func TestCreateSAMLAssertion(t *testing.T) {
 	}
 
 	// Generate the assertion
-	assertionElement, err := service.createSAMLAssertion(&launchContext, HcpTokenType)
+	assertionElement, err := service.createSAMLAssertion(&launchContext, hcpTokenType)
 	require.NoError(t, err)
 
 	// Load expected XML into etree.Document
@@ -173,7 +173,7 @@ func TestService_sign(t *testing.T) {
 		ServiceRequest: fhir.ServiceRequest{},
 	}
 
-	assertion, err := service.createSAMLAssertion(launchContext, HcpTokenType)
+	assertion, err := service.createSAMLAssertion(launchContext, hcpTokenType)
 	require.NoError(t, err)
 
 	// Call the signing function
@@ -238,7 +238,7 @@ func TestService_RequestAccessToken_IntegrationTest(t *testing.T) {
 		WorkflowId: "workflow-1234",
 		Bsn:        "999999205", // Assuming Bsn is part of LaunchContext
 	}
-	actual, err := service.RequestAccessToken(launchContext, HcpTokenType)
+	actual, err := service.RequestAccessToken(launchContext, hcpTokenType)
 	require.NoError(t, err)
 	println(actual)
 }

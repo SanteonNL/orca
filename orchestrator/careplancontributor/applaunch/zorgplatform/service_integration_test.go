@@ -79,7 +79,7 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 		Bsn:        "999999151", // Assuming Bsn is part of LaunchContext
 	}
 
-	accessToken, err := service.RequestAccessToken(launchContext, HcpTokenType)
+	accessToken, err := service.RequestAccessToken(launchContext, hcpTokenType)
 	require.NoError(t, err)
 	sessionData, err := service.getSessionData(context.Background(), accessToken, launchContext)
 	require.NoError(t, err)
@@ -148,7 +148,7 @@ func TestService_FetchApplicationToken_IntegrationTest(t *testing.T) {
 		Bsn:        "999999151", // Assuming Bsn is part of LaunchContext
 	}
 
-	accessToken, err := service.RequestAccessToken(launchContext, ApplicationTokenType)
+	accessToken, err := service.RequestAccessToken(launchContext, applicationTokenType)
 	require.NoError(t, err)
 	require.NotNil(t, accessToken)
 }

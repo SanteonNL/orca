@@ -24,12 +24,44 @@ type SecureTokenService interface {
 	RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error)
 }
 
-type TokenType string
+type TokenType struct {
+	Role         func(element *etree.Element)
+	PurposeOfUse func(element *etree.Element)
+}
 
-const (
-	HcpTokenType         TokenType = "HCP"
-	ApplicationTokenType TokenType = "APPLICATION"
-)
+var applicationTokenType = TokenType{
+	Role: func(role *etree.Element) {
+		role.CreateAttr("code", "182777000")
+		role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
+		role.CreateAttr("codeSystemName", "SNOMED_CT")
+		role.CreateAttr("displayName", "")
+		role.CreateAttr("xmlns", "urn:hl7-org:v3")
+	},
+	PurposeOfUse: func(purposeOfUse *etree.Element) {
+		purposeOfUse.CreateAttr("code", "OPERATIONS")
+		purposeOfUse.CreateAttr("codeSystem", "2.16.840.1.113883.3.18.7.1")
+		purposeOfUse.CreateAttr("codeSystemName", "nhin-purpose")
+		purposeOfUse.CreateAttr("displayName", "")
+		purposeOfUse.CreateAttr("xmlns", "urn:hl7-org:v3")
+	},
+}
+
+var hcpTokenType = TokenType{
+	Role: func(role *etree.Element) {
+		role.CreateAttr("code", "224609002")
+		role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
+		role.CreateAttr("codeSystemName", "SNOMED_CT")
+		role.CreateAttr("displayName", "")
+		role.CreateAttr("xmlns", "urn:hl7-org:v3")
+	},
+	PurposeOfUse: func(purposeOfUse *etree.Element) {
+		purposeOfUse.CreateAttr("code", "TREATMENT")
+		purposeOfUse.CreateAttr("codeSystem", "2.16.840.1.113883.3.18.7.1")
+		purposeOfUse.CreateAttr("codeSystemName", "nhin-purpose")
+		purposeOfUse.CreateAttr("displayName", "")
+		purposeOfUse.CreateAttr("xmlns", "urn:hl7-org:v3")
+	},
+}
 
 var _ SecureTokenService = &Service{}
 
@@ -65,12 +97,6 @@ func (s *Service) RequestAccessToken(launchContext LaunchContext, tokenType Toke
 
 // createSAMLAssertion builds the SAML assertion
 func (s *Service) createSAMLAssertion(launchContext *LaunchContext, tokenType TokenType) (*etree.Element, error) {
-
-	// Validate the workflow-id
-	if tokenType != ApplicationTokenType && launchContext.WorkflowId == "" {
-		return nil, fmt.Errorf("workflow ID is required and not provided")
-	}
-
 	assertionID := "_" + uuid.New().String()
 	now := GetCurrentXSDDateTime()
 	notOnOrAfter := FormatXSDDateTime(time.Now().Add(15 * time.Minute))
@@ -109,30 +135,14 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext, tokenType To
 	attribute1.CreateAttr("Name", "urn:oasis:names:tc:xspa:1.0:subject:purposeofuse")
 	attributeValue1 := attribute1.CreateElement("AttributeValue")
 	purposeOfUse := attributeValue1.CreateElement("PurposeOfUse")
-	purposeCode := "TREATMENT"
-	if tokenType == ApplicationTokenType {
-		purposeCode = "OPERATIONS"
-	}
-	purposeOfUse.CreateAttr("code", purposeCode)
-	purposeOfUse.CreateAttr("codeSystem", "2.16.840.1.113883.3.18.7.1")
-	purposeOfUse.CreateAttr("codeSystemName", "nhin-purpose")
-	purposeOfUse.CreateAttr("displayName", "")
-	purposeOfUse.CreateAttr("xmlns", "urn:hl7-org:v3")
+	tokenType.PurposeOfUse(purposeOfUse)
 
 	// Role Attribute
 	attribute2 := attributeStatement.CreateElement("Attribute")
 	attribute2.CreateAttr("Name", "urn:oasis:names:tc:xacml:2.0:subject:role")
 	attributeValue2 := attribute2.CreateElement("AttributeValue")
 	role := attributeValue2.CreateElement("Role")
-	roleCode := "224609002"
-	if tokenType == ApplicationTokenType {
-		roleCode = "182777000"
-	}
-	role.CreateAttr("code", roleCode)
-	role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
-	role.CreateAttr("codeSystemName", "SNOMED_CT")
-	role.CreateAttr("displayName", "")
-	role.CreateAttr("xmlns", "urn:hl7-org:v3")
+	tokenType.Role(role)
 
 	// Resource ID Attribute
 	attribute3 := attributeStatement.CreateElement("Attribute")

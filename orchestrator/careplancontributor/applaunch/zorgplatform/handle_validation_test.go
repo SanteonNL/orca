@@ -225,7 +225,7 @@ func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
 		signingCertificate:    keyPair.Certificate,                  // used by the forger to sign the assertion
 	}
 
-	forgedAssertion, err := s.createSAMLAssertion(launchContext, HcpTokenType)
+	forgedAssertion, err := s.createSAMLAssertion(launchContext, hcpTokenType)
 	require.NoError(t, err)
 	forgedSignedAssertion, err := s.signAssertion(forgedAssertion)
 	require.NoError(t, err)
