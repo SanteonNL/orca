@@ -28,7 +28,7 @@ func TestService_handleGetPatient(t *testing.T) {
 	var patient1 fhir.Patient
 	_ = json.Unmarshal(patient1Raw, &patient1)
 
-	tests := []TestStruct[fhir.Patient]{
+	tests := []GetResourceTestStruct[fhir.Patient]{
 		{
 			ctx:                        auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:                       "error: Patient does not exist",

@@ -26,7 +26,7 @@ func TestService_handleGetCareTeam(t *testing.T) {
 	var careTeam2 fhir.CareTeam
 	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
 
-	tests := []TestStruct[fhir.CareTeam]{
+	tests := []GetResourceTestStruct[fhir.CareTeam]{
 		{
 			ctx:           auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			name:          "error: CareTeam does not exist",

@@ -434,6 +434,16 @@ func (s *Service) defaultHandlerProvider(method string, resourcePath string) fun
 		switch getResourceType(resourcePath) {
 		case "Task":
 			return s.handleUpdateTask
+		case "Questionnaire":
+			return s.handleUpdateQuestionnaire
+		case "QuestionnaireResponse":
+			return s.handleUpdateQuestionnaireResponse
+		case "ServiceRequest":
+			return s.handleUpdateServiceRequest
+		case "Condition":
+			return s.handleUpdateCondition
+		case "Patient":
+			return s.handleUpdatePatient
 		}
 	}
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {

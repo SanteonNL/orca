@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel"
@@ -68,6 +69,7 @@ func Test_Main(t *testing.T) {
 					Profile: []string{
 						"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCP-Patient",
 					},
+					Source: to.Ptr(fmt.Sprintf("http://fhir.nl/fhir/NamingSystem/ura/%d", hospitalURA)),
 				},
 				Identifier: []fhir.Identifier{
 					{
@@ -75,6 +77,7 @@ func Test_Main(t *testing.T) {
 						Value:  to.Ptr("1333333337"),
 					},
 				},
+				Active: to.Ptr(true),
 			}
 			err := hospitalOrcaFHIRClient.Create(patient, &patient)
 			require.NoError(t, err)
@@ -88,6 +91,7 @@ func Test_Main(t *testing.T) {
 						Profile: []string{
 							"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
 						},
+						Source: to.Ptr(fmt.Sprintf("http://fhir.nl/fhir/NamingSystem/ura/%d", hospitalURA)),
 					},
 					Code: &fhir.CodeableConcept{
 						Coding: []fhir.Coding{
@@ -250,9 +254,10 @@ func Test_Main(t *testing.T) {
 			require.Equal(t, "CarePlanService/CreateTask failed: requester must be local care organization in order to create new CarePlan and CareTeam", *operationOutcome.Issue[0].Diagnostics)
 		}
 	})
-	t.Run("Test resource GET authorisation", func(t *testing.T) {
+	t.Run("Test resource GET - UPDATE authorisation", func(t *testing.T) {
 		// TODO: Negative testing with a third party that has a valid bearer token but no access to the existing CarePlan and CareTeams
 		// Patient
+		// Both parties are able to get Patient
 		var fetchedPatient fhir.Patient
 		err = hospitalOrcaFHIRClient.Read("Patient/"+*patient.ID, &fetchedPatient)
 		require.NoError(t, err)
@@ -263,8 +268,16 @@ func Test_Main(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, *patient.ID, *fetchedPatient.ID)
 		require.Equal(t, *patient.Identifier[0].Value, *fetchedPatient.Identifier[0].Value)
+		// Only the hospital is able to update Patient
+		patient.Active = to.Ptr(false)
+		err = clinicOrcaFHIRClient.Update("Patient/"+*patient.ID, patient, &patient)
+		require.Error(t, err)
+
+		err = hospitalOrcaFHIRClient.Update("Patient/"+*patient.ID, patient, &patient)
+		require.NoError(t, err)
 
 		// ServiceRequest
+		// Both parties are able to get ServiceRequest
 		var fetchedServiceRequest fhir.ServiceRequest
 		err = hospitalOrcaFHIRClient.Read("ServiceRequest/"+*serviceRequest.ID, &fetchedServiceRequest)
 		require.NoError(t, err)
@@ -275,5 +288,13 @@ func Test_Main(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, *serviceRequest.ID, *fetchedServiceRequest.ID)
 		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
+
+		// Only the hospital is able to update ServiceRequest
+		serviceRequest.DoNotPerform = to.Ptr(true)
+		err = clinicOrcaFHIRClient.Update("ServiceRequest/"+*serviceRequest.ID, serviceRequest, &serviceRequest)
+		require.Error(t, err)
+
+		err = hospitalOrcaFHIRClient.Update("ServiceRequest/"+*serviceRequest.ID, serviceRequest, &serviceRequest)
+		require.NoError(t, err)
 	})
 }

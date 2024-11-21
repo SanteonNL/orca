@@ -26,7 +26,7 @@ func TestService_handleGetCarePlan(t *testing.T) {
 	var careTeam2 fhir.CareTeam
 	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
 
-	tests := []TestStruct[fhir.CarePlan]{
+	tests := []GetResourceTestStruct[fhir.CarePlan]{
 		{
 			ctx:                    auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:                   "error: CarePlan does not exist",

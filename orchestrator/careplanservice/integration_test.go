@@ -6,6 +6,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
@@ -617,6 +618,352 @@ func testBundle(t *testing.T, fhirClient *fhirclient.BaseClient, data []byte) {
 	require.NoError(t, err)
 	responseData, _ := json.MarshalIndent(bundle, "  ", "")
 	println(string(responseData))
+}
+
+// These tests only test authorization, field validation is handled by unit tests
+func Test_Integration_ResourceAuth(t *testing.T) {
+	// TODO: For now, we must rely on unmanaged operations to create these resources, in the future we should be able to create them through an update on non-existing resource
+	notificationEndpoint := setupNotificationEndpoint(t)
+	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
+
+	org1Ura := coolfhir.URANamingSystem + "/1"
+
+	patient := fhir.Patient{
+		Meta: &fhir.Meta{
+			Source: to.Ptr(org1Ura),
+		},
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("1333333337"),
+			},
+		},
+		Active: to.Ptr(true),
+	}
+	t.Log("Create Patient")
+	{
+		err := carePlanContributor1.Create(patient, &patient)
+		require.NoError(t, err)
+		require.NotNil(t, patient.Id)
+
+		// Attempting to read the patient fails, as the patient is not yet associated with a CarePlan
+		var fetchedPatient fhir.Patient
+		err = carePlanContributor1.Read("Patient/"+*patient.Id, &fetchedPatient)
+		require.Error(t, err)
+	}
+
+	t.Log("Create Task, CarePlan, CareTeam, accept Task - required for auth")
+	{
+		task := fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
+		}
+
+		err := carePlanContributor1.Create(task, &task)
+		require.NoError(t, err)
+
+		updatedTask := deep.Copy(task)
+		updatedTask.Status = fhir.TaskStatusAccepted
+		err = carePlanContributor2.Update("Task/"+*task.Id, updatedTask, &updatedTask)
+		require.NoError(t, err)
+	}
+
+	t.Log("Patient - GET, UPDATE")
+	{
+		// Both organizations should be able to read the patient, as both are part of the CareTeam
+		var fetchedPatient fhir.Patient
+		err := carePlanContributor1.Read("Patient/"+*patient.Id, &fetchedPatient)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(patient, fetchedPatient))
+
+		err = carePlanContributor2.Read("Patient/"+*patient.Id, &fetchedPatient)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(patient, fetchedPatient))
+
+		// Only the organization that created the patient should be able to update it
+		patientUpdate := deep.Copy(patient)
+		patientUpdate.Active = to.Ptr(false)
+		err = carePlanContributor2.Update("Patient/"+*patient.Id, patientUpdate, &patientUpdate)
+		require.Error(t, err)
+
+		err = carePlanContributor1.Update("Patient/"+*patient.Id, patientUpdate, &patientUpdate)
+		require.NoError(t, err)
+
+		err = carePlanContributor1.Read("Patient/"+*patient.Id, &fetchedPatient)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(patientUpdate, fetchedPatient))
+
+		// A third org without access to the CarePlan/CareTeam can't GET or UPDATE the patient
+		err = invalidCarePlanContributor.Read("Patient/"+*patient.Id, &fetchedPatient)
+		require.Error(t, err)
+
+		patientUpdate.Active = to.Ptr(true)
+		err = invalidCarePlanContributor.Update("Patient/"+*patient.Id, patientUpdate, &patientUpdate)
+		require.Error(t, err)
+	}
+
+	t.Log("Condition - CREATE, GET, UPDATE")
+	{
+		condition := fhir.Condition{
+			Meta: &fhir.Meta{
+				Source: to.Ptr(org1Ura),
+			},
+			Subject: fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
+			Language: to.Ptr("Nederlands"),
+		}
+
+		err := carePlanContributor1.Create(condition, &condition)
+		require.NoError(t, err)
+		require.NotNil(t, condition.Id)
+
+		// Both organisations have access to the condition
+		var fetchedCondition fhir.Condition
+		err = carePlanContributor1.Read("Condition/"+*condition.Id, &fetchedCondition)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(condition, fetchedCondition))
+
+		err = carePlanContributor2.Read("Condition/"+*condition.Id, &fetchedCondition)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(condition, fetchedCondition))
+
+		// Only the organisation that created the condition can update it
+		conditionUpdate := deep.Copy(condition)
+		conditionUpdate.Language = to.Ptr("English")
+		err = carePlanContributor2.Update("Condition/"+*condition.Id, conditionUpdate, &conditionUpdate)
+		require.Error(t, err)
+
+		err = carePlanContributor1.Update("Condition/"+*condition.Id, conditionUpdate, &conditionUpdate)
+		require.NoError(t, err)
+		err = carePlanContributor1.Read("Condition/"+*condition.Id, &fetchedCondition)
+		require.True(t, deep.Equal(conditionUpdate, fetchedCondition))
+
+		// A third org without access to the CarePlan/CareTeam can't GET or UPDATE the condition
+		err = invalidCarePlanContributor.Read("Condition/"+*condition.Id, &fetchedCondition)
+		require.Error(t, err)
+
+		conditionUpdate.Language = to.Ptr("Nederlands")
+		err = invalidCarePlanContributor.Update("Condition/"+*condition.Id, conditionUpdate, &conditionUpdate)
+		require.Error(t, err)
+
+	}
+
+	t.Log("Questionnaire - CREATE, GET, UPDATE")
+	{
+		questionnaire := fhir.Questionnaire{
+			Meta: &fhir.Meta{
+				Source: to.Ptr(org1Ura),
+			},
+			Language: to.Ptr("Nederlands"),
+		}
+
+		err := carePlanContributor1.Create(questionnaire, &questionnaire)
+		require.NoError(t, err)
+		require.NotNil(t, questionnaire.Id)
+
+		// Both organisations have access to the questionnaire
+		var fetchedQuestionnaire fhir.Questionnaire
+		err = carePlanContributor1.Read("Questionnaire/"+*questionnaire.Id, &fetchedQuestionnaire)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(questionnaire, fetchedQuestionnaire))
+
+		err = carePlanContributor2.Read("Questionnaire/"+*questionnaire.Id, &fetchedQuestionnaire)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(questionnaire, fetchedQuestionnaire))
+
+		// Only the organisation that created the questionnaire can update it
+		questionnaireUpdate := deep.Copy(questionnaire)
+		questionnaireUpdate.Language = to.Ptr("English")
+		err = carePlanContributor2.Update("Questionnaire/"+*questionnaire.Id, questionnaireUpdate, &questionnaireUpdate)
+		require.Error(t, err)
+
+		err = carePlanContributor1.Update("Questionnaire/"+*questionnaire.Id, questionnaireUpdate, &questionnaireUpdate)
+		require.NoError(t, err)
+		err = carePlanContributor1.Read("Questionnaire/"+*questionnaire.Id, &fetchedQuestionnaire)
+		require.True(t, deep.Equal(questionnaireUpdate, fetchedQuestionnaire))
+
+		// Any authorised party can access questionnaire
+		err = invalidCarePlanContributor.Read("Questionnaire/"+*questionnaire.Id, &fetchedQuestionnaire)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(questionnaireUpdate, fetchedQuestionnaire))
+
+		// The third party cannot update the questionnaire
+		questionnaireUpdate.Language = to.Ptr("Nederlands")
+		err = invalidCarePlanContributor.Update("Questionnaire/"+*questionnaire.Id, questionnaireUpdate, &questionnaireUpdate)
+		require.Error(t, err)
+	}
+
+	t.Log("QuestionnaireResponse - CREATE, GET, UPDATE")
+	{
+		questionnaireResponse := fhir.QuestionnaireResponse{
+			Meta: &fhir.Meta{
+				Source: to.Ptr(org1Ura),
+			},
+			Status: fhir.QuestionnaireResponseStatusInProgress,
+		}
+		err := carePlanContributor1.Create(questionnaireResponse, &questionnaireResponse)
+		require.NoError(t, err)
+
+		// Both organisations do not have access as the questionnaire response is not related to a task
+		var fetchedQuestionnaireResponse fhir.QuestionnaireResponse
+		err = carePlanContributor1.Read("QuestionnaireResponse/"+*questionnaireResponse.Id, &fetchedQuestionnaireResponse)
+		require.Error(t, err)
+
+		err = carePlanContributor2.Read("QuestionnaireResponse/"+*questionnaireResponse.Id, &fetchedQuestionnaireResponse)
+		require.Error(t, err)
+
+		// Manually creating a task with the questionnaire response in the output, this is normally handled by the task filler flow
+		task := fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
+			Output: []fhir.TaskOutput{
+				{
+					Type: fhir.CodeableConcept{
+						Coding: []fhir.Coding{
+							{
+								System: to.Ptr("http://terminology.hl7.org/CodeSystem/task-output-type"),
+								Code:   to.Ptr("Reference"),
+							},
+						},
+					},
+					ValueReference: &fhir.Reference{
+						Reference: to.Ptr("QuestionnaireResponse/" + *questionnaireResponse.Id),
+					},
+				},
+			},
+		}
+		err = carePlanContributor1.Create(task, &task)
+		require.NoError(t, err)
+
+		task.Status = fhir.TaskStatusAccepted
+		err = carePlanContributor2.Update("Task/"+*task.Id, task, &task)
+		require.NoError(t, err)
+
+		err = carePlanContributor1.Read("QuestionnaireResponse/"+*questionnaireResponse.Id, &fetchedQuestionnaireResponse)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(questionnaireResponse, fetchedQuestionnaireResponse))
+
+		err = carePlanContributor2.Read("QuestionnaireResponse/"+*questionnaireResponse.Id, &fetchedQuestionnaireResponse)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(questionnaireResponse, fetchedQuestionnaireResponse))
+
+		// Only the organisation that created the questionnaire response can update it
+		questionnaireResponseUpdate := deep.Copy(questionnaireResponse)
+		questionnaireResponseUpdate.Status = fhir.QuestionnaireResponseStatusCompleted
+		err = carePlanContributor2.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponseUpdate, &questionnaireResponseUpdate)
+		require.Error(t, err)
+
+		err = carePlanContributor1.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponseUpdate, &questionnaireResponseUpdate)
+		require.NoError(t, err)
+		err = carePlanContributor1.Read("QuestionnaireResponse/"+*questionnaireResponse.Id, &fetchedQuestionnaireResponse)
+		require.True(t, deep.Equal(questionnaireResponseUpdate, fetchedQuestionnaireResponse))
+
+		// A third org without access to the CarePlan/CareTeam can't GET or UPDATE the questionnaire response
+		err = invalidCarePlanContributor.Read("QuestionnaireResponse/"+*questionnaireResponse.Id, &fetchedQuestionnaireResponse)
+		require.Error(t, err)
+
+		questionnaireResponseUpdate.Language = to.Ptr("Nederlands")
+		err = invalidCarePlanContributor.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponseUpdate, &questionnaireResponseUpdate)
+		require.Error(t, err)
+	}
+
+	t.Log("ServiceRequest - CREATE, GET, UPDATE")
+	{
+		serviceRequest := fhir.ServiceRequest{
+			Meta: &fhir.Meta{
+				Source: to.Ptr(org1Ura),
+			},
+			Status: fhir.RequestStatusActive,
+		}
+
+		err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
+		require.NoError(t, err)
+
+		// Both organisations can't access the service request as it is not related to a task
+		var fetchedServiceRequest fhir.ServiceRequest
+		err = carePlanContributor1.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
+		require.Error(t, err)
+
+		err = carePlanContributor2.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
+		require.Error(t, err)
+
+		// Manually creating a task with the questionnaire response in the output, this is normally handled by the task filler flow
+		task := fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
+			Focus: &fhir.Reference{
+				Reference: to.Ptr("ServiceRequest/" + *serviceRequest.Id),
+			},
+		}
+		err = carePlanContributor1.Create(task, &task)
+		require.NoError(t, err)
+
+		// Both organisations have access to the service request
+		err = carePlanContributor1.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(serviceRequest, fetchedServiceRequest))
+
+		err = carePlanContributor2.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
+		require.NoError(t, err)
+		require.True(t, deep.Equal(serviceRequest, fetchedServiceRequest))
+
+		// Only the organisation that created the service request can update it
+		serviceRequestUpdate := deep.Copy(serviceRequest)
+		serviceRequestUpdate.Status = fhir.RequestStatusCompleted
+		err = carePlanContributor2.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequestUpdate, &serviceRequestUpdate)
+		require.Error(t, err)
+
+		err = carePlanContributor1.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequestUpdate, &serviceRequestUpdate)
+		require.NoError(t, err)
+		err = carePlanContributor1.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
+		require.True(t, deep.Equal(serviceRequestUpdate, fetchedServiceRequest))
+
+		// A third org without access to the CarePlan/CareTeam can't GET or UPDATE the service request
+		err = invalidCarePlanContributor.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
+		require.Error(t, err)
+
+		serviceRequestUpdate.Status = fhir.RequestStatusActive
+		err = invalidCarePlanContributor.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequestUpdate, &serviceRequestUpdate)
+		require.Error(t, err)
+	}
+
 }
 
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {

@@ -29,7 +29,7 @@ func TestService_handleGetTask(t *testing.T) {
 	var careTeam2 fhir.CareTeam
 	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
 
-	tests := []TestStruct[fhir.Task]{
+	tests := []GetResourceTestStruct[fhir.Task]{
 		{
 			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			name:             "error: Task does not exist",

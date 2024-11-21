@@ -2,17 +2,22 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
+	"net/url"
 	"reflect"
 	"testing"
 )
 
-type TestStruct[T any] struct {
+type GetResourceTestStruct[T any] struct {
 	ctx                    context.Context
 	mockClient             *mock.MockClient
 	name                   string
@@ -35,7 +40,7 @@ type TestStruct[T any] struct {
 	expectedError              error
 }
 
-func testHelperHandleGetResource[T any](t *testing.T, params TestStruct[T], handler func(ctx context.Context, id string, headers *fhirclient.Headers) (*T, error)) {
+func testHelperHandleGetResource[T any](t *testing.T, params GetResourceTestStruct[T], handler func(ctx context.Context, id string, headers *fhirclient.Headers) (*T, error)) {
 	t.Run(fmt.Sprintf("Test %s: %s", params.resourceType, params.name), func(t *testing.T) {
 		if params.returnedCarePlanBundle != nil || params.errorFromCarePlanRead != nil {
 			params.mockClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
@@ -88,4 +93,68 @@ func testHelperHandleGetResource[T any](t *testing.T, params TestStruct[T], hand
 			require.Equal(t, params.returnedResource, got)
 		}
 	})
+}
+
+type HandleUpdateMetaBasedResourceTestStruct[T any] struct {
+	ctx              context.Context
+	mockClient       *mock.MockClient
+	name             string
+	id               string
+	resourceType     string
+	expectedError    error
+	existingResource *T
+	errorFromRead    error
+	request          []func(*T)
+}
+
+func testHelperHandleUpdateMetaBasedResource[T any](t *testing.T, params HandleUpdateMetaBasedResourceTestStruct[T], handler func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)) {
+	t.Run(fmt.Sprintf("Test %s: %s", params.resourceType, params.name), func(t *testing.T) {
+		updateRequest := func(fn ...func(*T)) FHIRHandlerRequest {
+			updatedResource := deep.Copy(params.existingResource)
+			for _, f := range fn {
+				f(updatedResource)
+			}
+			updatedResourceData, _ := json.Marshal(updatedResource)
+			// Get ID from updatedResourceData through unmarshalling
+			type ResourceID struct {
+				Id *string `json:"id,omitempty"`
+			}
+			var resourceId ResourceID
+			_ = json.Unmarshal(updatedResourceData, &resourceId)
+
+			requestUrl, _ := url.Parse(fmt.Sprintf("%s/%s", params.resourceType, params.id))
+			return FHIRHandlerRequest{
+				ResourceData: updatedResourceData,
+				ResourcePath: requestUrl.Path,
+				ResourceId:   *resourceId.Id,
+				RequestUrl:   requestUrl,
+				HttpMethod:   "PUT",
+			}
+		}
+
+		params.mockClient.EXPECT().Read(fmt.Sprintf("%s/%s", params.resourceType, params.id), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *T, option ...fhirclient.Option) error {
+			if params.existingResource != nil {
+				reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.existingResource))
+			}
+			return params.errorFromRead
+		}).AnyTimes()
+
+		request := updateRequest(params.request...)
+		tx := coolfhir.Transaction()
+		result, err := handler(params.ctx, request, tx)
+		if params.expectedError != nil {
+			require.Error(t, err)
+			require.Equal(t, params.expectedError, err)
+		} else {
+			require.NoError(t, err)
+			require.NotNil(t, result)
+			require.Equal(t, 1, len(tx.Entry))
+			require.Equal(t, fmt.Sprintf("%s/%s", params.resourceType, params.id), tx.Entry[0].Request.Url)
+			require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
+		}
+	})
+}
+
+func getOrgRef(principal auth.Principal) string {
+	return fmt.Sprintf("%s/%s", *principal.Organization.Identifier[0].System, *principal.Organization.Identifier[0].Value)
 }
