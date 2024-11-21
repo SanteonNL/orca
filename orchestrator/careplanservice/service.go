@@ -164,9 +164,16 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBu
 	}
 	var txResult fhir.Bundle
 	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
-		log.Error().Err(err).Msgf("Failed to execute transaction (url=%s)", request.URL.String())
-		// We don't want to log errors from the backing FHIR server for security reasons.
-		return nil, coolfhir.NewErrorWithCode("upstream FHIR server error", http.StatusBadGateway)
+		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
+		txResultJson, _ := json.Marshal(tx.Bundle())
+		log.Error().Err(err).Msgf("Failed to execute transaction (url=%s): %s", request.URL.String(), string(txResultJson))
+		var operationOutcomeErr fhirclient.OperationOutcomeError
+		if errors.As(err, &operationOutcomeErr) {
+			operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
+			return nil, operationOutcomeErr
+		} else {
+			return nil, coolfhir.NewErrorWithCode("upstream FHIR server error", http.StatusBadGateway)
+		}
 	}
 	resultBundle := fhir.Bundle{
 		Type: fhir.BundleTypeTransactionResponse,
@@ -200,7 +207,7 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 	if request.HttpMethod == http.MethodPost {
 		// We don't allow creation of resources with a specific ID
 		if request.ResourceId != "" {
-			return nil, coolfhir.BadRequestError("specifying IDs when creating resources isn't allowed")
+			return nil, coolfhir.BadRequest("specifying IDs when creating resources isn't allowed")
 		}
 	}
 	handler := s.handlerProvider(request.HttpMethod, getResourceType(request.ResourcePath))
@@ -353,18 +360,18 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	var bundle fhir.Bundle
 	op := "CarePlanService/CreateBundle"
 	if err := s.readRequest(httpRequest, &bundle); err != nil {
-		coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("invalid Bundle: %w", err), op, httpResponse)
+		coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("invalid Bundle: %w", err), op, httpResponse)
 		return
 	}
 	if bundle.Type != fhir.BundleTypeTransaction {
-		coolfhir.WriteOperationOutcomeFromError(errors.New("only bundleType 'Transaction' is supported"), op, httpResponse)
+		coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("only bundleType 'Transaction' is supported"), op, httpResponse)
 		return
 	}
 	// Validate: Only allow POST/PUT operations in Bundle
 	for _, entry := range bundle.Entry {
 		// TODO: Might have to support DELETE in future
 		if entry.Request == nil || (entry.Request.Method != fhir.HTTPVerbPOST && entry.Request.Method != fhir.HTTPVerbPUT) {
-			coolfhir.WriteOperationOutcomeFromError(errors.New("only write operations are supported in Bundle"), op, httpResponse)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("only write operations are supported in Bundle"), op, httpResponse)
 			return
 		}
 	}
@@ -375,7 +382,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	for entryIdx, entry := range bundle.Entry {
 		// Bundle.entry.request.url must be a relative URL with at most one slash (so Task or Task/1, but not http://example.com/Task or Task/foo/bar)
 		if entry.Request.Url == "" {
-			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url (entry #) is required", entryIdx), op, httpResponse)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("bundle.entry[%d].request.url (entry #) is required", entryIdx), op, httpResponse)
 			return
 		}
 		requestUrl, err := url.Parse(entry.Request.Url)
@@ -384,13 +391,13 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 			return
 		}
 		if requestUrl.IsAbs() {
-			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url (entry #) must be a relative URL", entryIdx), op, httpResponse)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("bundle.entry[%d].request.url (entry #) must be a relative URL", entryIdx), op, httpResponse)
 			return
 		}
 		resourcePath := requestUrl.Path
 		resourcePathParts := strings.Split(resourcePath, "/")
 		if entry.Request == nil || len(resourcePathParts) > 2 {
-			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d].request.url (entry #) has too many paths", entryIdx), op, httpResponse)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("bundle.entry[%d].request.url (entry #) has too many paths", entryIdx), op, httpResponse)
 			return
 		}
 
@@ -408,7 +415,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		}
 		entryResult, err := s.handleTransactionEntry(httpRequest.Context(), fhirRequest, tx)
 		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("bundle.entry[%d]: %w", entryIdx, err), op, httpResponse)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("bundle.entry[%d]: %w", entryIdx, err), op, httpResponse)
 			return
 		}
 		resultHandlers = append(resultHandlers, entryResult)
