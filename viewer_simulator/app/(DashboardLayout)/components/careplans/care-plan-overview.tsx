@@ -34,20 +34,17 @@ export default async function CarePlanOverview() {
         const responseBundle = await response.json() as Bundle;
         const { entry } = responseBundle
 
-        if (!entry || entry.length === 0) return
-
         //map all the resources to their reference as it contains CarePlans, Patients, Tasks and CareTeams
-        const resourceMap = entry.reduce((map, entry: BundleEntry) => {
+        const resourceMap = entry?.reduce((map, entry: BundleEntry) => {
             const resource = entry.resource;
             map.set(`${resource?.resourceType}/${resource?.id}`, resource);
             return map;
         }, new Map<string, any>());
 
-        rows = entry
-            .filter((entry) => entry.resource?.resourceType === "CarePlan")
+        rows = entry?.filter((entry) => entry.resource?.resourceType === "CarePlan")
             .map((entry: any) => entry.resource as CarePlan)
             .map((carePlan: CarePlan) => {
-                const careTeam = carePlan.careTeam?.[0]?.reference ? resourceMap.get(carePlan.careTeam[0].reference) : undefined;
+                const careTeam = carePlan.careTeam?.[0]?.reference ? resourceMap?.get(carePlan.careTeam[0].reference) : undefined;
 
                 if (!careTeam) {
                     console.warn(`No CareTeam found for CarePlan/${carePlan.id}`);
@@ -66,7 +63,7 @@ export default async function CarePlanOverview() {
                         return display + ura;
                     }).join(', ') ?? "Unknown"
                 };
-            });
+            }) || [];
     } catch (error) {
         console.error('Error occurred while fetching tasks:', error);
     }
