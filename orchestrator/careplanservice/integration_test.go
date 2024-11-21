@@ -14,7 +14,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -29,13 +28,6 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("This test requires creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
 	notificationEndpoint := setupNotificationEndpoint(t)
 	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
-
-	t.Run("Example bundle 1", func(t *testing.T) {
-		t.Skip("TODO")
-		bundleData, err := os.ReadFile("testdata/bundles/testbundle-1.json")
-		require.NoError(t, err)
-		testBundle(t, carePlanContributor1, bundleData)
-	})
 
 	notificationCounter.Store(0)
 
@@ -603,7 +595,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|1333333337,http://fhir.nl/fhir/NamingSystem/bsn|12345"))
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 1)
-		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
+		require.Truef(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id), "Expected %s to end with %s", *searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id)
 	}
 
 }
