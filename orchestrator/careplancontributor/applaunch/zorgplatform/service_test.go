@@ -301,7 +301,7 @@ var _ SecureTokenService = &stubSecureTokenService{}
 type stubSecureTokenService struct {
 }
 
-func (s stubSecureTokenService) RequestHcpRst(launchContext LaunchContext) (string, error) {
+func (s stubSecureTokenService) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
 	return "stub-at", nil
 }
 
