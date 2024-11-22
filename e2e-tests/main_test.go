@@ -244,7 +244,7 @@ func Test_Main(t *testing.T) {
 			task.Intent = "order"
 			task.Status = fhir.TaskStatusRequested
 			err := clinicOrcaFHIRClient.Create(task, &task)
-			var operationOutcome fhirclient.OperationOutcome
+			var operationOutcome fhirclient.OperationOutcomeError
 			require.ErrorAs(t, err, &operationOutcome)
 			require.Len(t, operationOutcome.Issue, 1)
 			require.Equal(t, "CarePlanService/CreateTask failed: requester must be local care organization in order to create new CarePlan and CareTeam", *operationOutcome.Issue[0].Diagnostics)
