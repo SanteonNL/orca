@@ -13,11 +13,17 @@ import (
 // NewProxy creates a new FHIR reverse proxy that forwards requests to an upstream FHIR server.
 // It takes the following arguments:
 // - upstreamBaseUrl: the FHIR base URL of the upstream FHIR server to which HTTP requests are forwarded, e.g. http://upstream:8080/fhir
-// - proxyBaseUrl: the base URL of the proxy server, e.g. http://example.com/fhir. It is used to rewrite the request URL, and to rewrite the HTTP response.
-func NewProxy(logger zerolog.Logger, upstreamBaseUrl *url.URL, proxyBaseUrl *url.URL, transport http.RoundTripper) *httputil.ReverseProxy {
+// - proxyBasePath: the base path of the proxy server, e.g. http://example.com/fhir. It is used to rewrite the request URL.
+// - rewriteUrl: the base URL of the proxy server, e.g. http://example.com/fhir. It is used to rewrite URLs in the HTTP response.
+// proxyBasePath and rewriteUrl might differ if the proxy server is behind a reverse proxy, which binds to application to a different path.
+// E.g.:
+//   - if the proxy is on /fhir, and the reverse proxy binds to /, then proxyBasePath = /fhir and rewriteUrl = /.
+//   - if the proxy is on /, and the reverse proxy binds to /fhir, then proxyBasePath = / and rewriteUrl = /fhir.
+//   - if the proxy is on /fhir, and the reverse proxy binds to /app/fhir, then proxyBasePath = /fhir and rewriteUrl = /app/fhir.
+func NewProxy(logger zerolog.Logger, upstreamBaseUrl *url.URL, proxyBasePath string, rewriteUrl *url.URL, transport http.RoundTripper) *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
-			r.Out.URL = upstreamBaseUrl.JoinPath("/", strings.TrimPrefix(r.In.URL.Path, proxyBaseUrl.Path))
+			r.Out.URL = upstreamBaseUrl.JoinPath("/", strings.TrimPrefix(r.In.URL.Path, proxyBasePath))
 			r.Out.URL.RawQuery = r.In.URL.RawQuery
 			r.Out.Host = upstreamBaseUrl.Host
 		},
@@ -29,7 +35,7 @@ func NewProxy(logger zerolog.Logger, upstreamBaseUrl *url.URL, proxyBaseUrl *url
 		},
 		ModifyResponse: func(response *http.Response) error {
 			upstreamUrl := upstreamBaseUrl.String()
-			proxyUrl := proxyBaseUrl.String()
+			proxyUrl := rewriteUrl.String()
 			return pipeline.New().
 				AppendResponseTransformer(pipeline.ResponseBodyRewriter{Old: []byte(upstreamUrl), New: []byte(proxyUrl)}).
 				AppendResponseTransformer(pipeline.ResponseHeaderRewriter{Old: upstreamUrl, New: proxyUrl}).

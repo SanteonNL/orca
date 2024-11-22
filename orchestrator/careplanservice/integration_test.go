@@ -62,11 +62,6 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	// Patient not associated with any CarePlans or CareTeams for negative auth testing
 	var patient2 fhir.Patient
 	err = carePlanContributor1.Create(fhir.Patient{
-		Meta: &fhir.Meta{
-			Profile: []string{
-				"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCP-Patient",
-			},
-		},
 		Identifier: []fhir.Identifier{
 			{
 				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),

@@ -137,7 +137,8 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
-	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.localCarePlanServiceUrl, baseURL.JoinPath("/cps/fhir"), s.scpHttpClient.Transport)
+	proxyBasePath := basePath + "/cps/fhir"
+	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.localCarePlanServiceUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport)
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
@@ -176,7 +177,8 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 // handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
-	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, s.orcaPublicURL.JoinPath(basePath, "/ehr/fhir"), clientFactory.Client)
+	proxyBasePath := basePath + "/ehr/fhir"
+	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -256,7 +258,8 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	if !isValid {
 		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
-	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, s.orcaPublicURL.JoinPath(basePath, "/fhir"), s.transport)
+	proxyBasePath := basePath + "/fhir"
+	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
 	fhirProxy.ServeHTTP(writer, request)
 	return nil
 }
