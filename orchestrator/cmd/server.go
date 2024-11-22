@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
+	"net/http/httputil"
 	"time"
 )
 
@@ -38,16 +39,8 @@ func Start(config Config) error {
 		return fmt.Errorf("failed to create profile: %w", err)
 	}
 	if config.CarePlanContributor.Enabled {
-		carePlanContributor, err := careplancontributor.New(
-			config.CarePlanContributor,
-			activeProfile,
-			config.Public.ParseURL(),
-			sessionManager)
-		if err != nil {
-			return err
-		}
-		services = append(services, carePlanContributor)
 		// App Launches
+		var bgzFhirProxy *httputil.ReverseProxy
 		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, careplancontributor.LandingURL))
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
 			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Public.URL, careplancontributor.LandingURL))
@@ -57,8 +50,19 @@ func Start(config Config) error {
 			if err != nil {
 				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
 			}
+			bgzFhirProxy = service.BgzFhirProxy()
 			services = append(services, service)
 		}
+		//
+		carePlanContributor, err := careplancontributor.New(
+			config.CarePlanContributor,
+			activeProfile,
+			config.Public.ParseURL(),
+			sessionManager, bgzFhirProxy)
+		if err != nil {
+			return err
+		}
+		services = append(services, carePlanContributor)
 
 		// Start session expiration ticker
 		ticker := time.NewTicker(time.Minute)

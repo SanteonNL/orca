@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"fmt"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
@@ -169,6 +170,27 @@ type Service struct {
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+appLaunchUrl, s.handleLaunch)
+}
+
+func (s *Service) BgzFhirProxy() *httputil.ReverseProxy {
+	targetFhirBaseUrl := &url.URL{}
+	return coolfhir.NewProxy(log.Logger, targetFhirBaseUrl, s.baseURL+"/fhir", stsAccessTokenRoundTripper{
+		transport: s.zorgplatformHttpClient.Transport,
+	})
+}
+
+var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
+
+type stsAccessTokenRoundTripper struct {
+	transport http.RoundTripper
+}
+
+func (s stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
+	// Do something to request the access token
+	newHttpRequest := httpRequest.Clone(httpRequest.Context())
+	accessToken := "" // TODO
+	newHttpRequest.Header.Add("Authorization", "Bearer "+accessToken)
+	return s.transport.RoundTrip(newHttpRequest)
 }
 
 func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Request) {

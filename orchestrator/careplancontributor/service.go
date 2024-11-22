@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/http/httputil"
 	"net/url"
 	"strings"
 	"time"
@@ -41,7 +42,8 @@ func New(
 	config Config,
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
-	sessionManager *user.SessionManager) (*Service, error) {
+	sessionManager *user.SessionManager,
+	bgzFhirProxy *httputil.ReverseProxy) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
@@ -61,6 +63,7 @@ func New(
 		profile:                 profile,
 		frontendUrl:             config.FrontendConfig.URL,
 		fhirURL:                 fhirURL,
+		bgzFhirProxy:            bgzFhirProxy,
 		transport:               localFHIRStoreTransport,
 		workflows:               taskengine.DefaultWorkflows(),
 		questionnaireLoader:     taskengine.EmbeddedQuestionnaireLoader{},
@@ -88,6 +91,7 @@ type Service struct {
 	// cpsClientFactory is a factory function that creates a new FHIR client for any CarePlanService.
 	cpsClientFactory func(baseURL *url.URL) fhirclient.Client
 	fhirURL          *url.URL
+	bgzFhirProxy     *httputil.ReverseProxy
 	// transport is used to call the local FHIR store, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
@@ -272,7 +276,9 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 // handleProxyBgzData handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
 func (s Service) handleProxyBgzData(writer http.ResponseWriter, request *http.Request) error {
-
+	if s.bgzFhirProxy == nil {
+		return coolfhir.BadRequest("BgZ API is not supported")
+	}
 	result, err := s.authorizeScpMember(request)
 
 	if err != nil {
@@ -284,12 +290,7 @@ func (s Service) handleProxyBgzData(writer http.ResponseWriter, request *http.Re
 		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
 
-	// The original access_token has been validated, however, we now need to replace the proxy with a BgZ-specific one. We need to proxy the request, but NOT return the BgZ-specific access_token to the requester.
-	// originalAccessToken := request.Header.Get("Authorization")
-	// bgzAccessToken := s.serv
-
-	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
-	fhirProxy.ServeHTTP(writer, request)
+	s.bgzFhirProxy.ServeHTTP(writer, request)
 	return nil
 }
 
