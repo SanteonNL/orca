@@ -28,7 +28,7 @@ import (
 	"time"
 )
 
-var orcaPublicURL, _ = url.Parse("https://example.com/orca")
+var orcaPublicURL, _ = url.Parse("https://example.com/")
 
 func TestService_Proxy_NoHealthdataviewEndpointEnabledFlag_Fails(t *testing.T) {
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server

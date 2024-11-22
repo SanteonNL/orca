@@ -2,6 +2,7 @@ package coolfhir
 
 import (
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"github.com/rs/zerolog"
 	"net/http"
 	"net/http/httputil"
@@ -9,18 +10,30 @@ import (
 	"strings"
 )
 
-func NewProxy(logger zerolog.Logger, targetFHIRBaseURL *url.URL, proxyBasePath string, transport http.RoundTripper) *httputil.ReverseProxy {
+// NewProxy creates a new FHIR reverse proxy that forwards requests to an upstream FHIR server.
+// It takes the following arguments:
+// - upstreamBaseUrl: the FHIR base URL of the upstream FHIR server to which HTTP requests are forwarded, e.g. http://upstream:8080/fhir
+// - proxyBaseUrl: the base URL of the proxy server, e.g. http://example.com/fhir. It is used to rewrite the request URL, and to rewrite the HTTP response.
+func NewProxy(logger zerolog.Logger, upstreamBaseUrl *url.URL, proxyBaseUrl *url.URL, transport http.RoundTripper) *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
-			r.Out.URL = targetFHIRBaseURL.JoinPath("/", strings.TrimPrefix(r.In.URL.Path, proxyBasePath))
+			r.Out.URL = upstreamBaseUrl.JoinPath("/", strings.TrimPrefix(r.In.URL.Path, proxyBaseUrl.Path))
 			r.Out.URL.RawQuery = r.In.URL.RawQuery
-			r.Out.Host = targetFHIRBaseURL.Host
+			r.Out.Host = upstreamBaseUrl.Host
 		},
 		Transport: sanitizingRoundTripper{
 			next: loggingRoundTripper{
 				logger: &logger,
 				next:   transport,
 			},
+		},
+		ModifyResponse: func(response *http.Response) error {
+			upstreamUrl := upstreamBaseUrl.String()
+			proxyUrl := proxyBaseUrl.String()
+			return pipeline.New().
+				AppendResponseTransformer(pipeline.ResponseBodyRewriter{Old: []byte(upstreamUrl), New: []byte(proxyUrl)}).
+				AppendResponseTransformer(pipeline.ResponseHeaderRewriter{Old: upstreamUrl, New: proxyUrl}).
+				Do(response, response.Body)
 		},
 		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
 			logger.Warn().Err(err).Msgf("FHIR request failed (url=%s)", request.URL.String())

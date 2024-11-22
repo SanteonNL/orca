@@ -24,7 +24,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-var orcaPublicURL, _ = url.Parse("https://example.com/orca")
+var orcaPublicURL, _ = url.Parse("https://example.com/")
 
 func TestService_Proxy(t *testing.T) {
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
