@@ -99,12 +99,12 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		var notification coolfhir.SubscriptionNotification
 		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
-			log.Error().Err(err).Msg("Failed to decode notification")
+			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to decode notification")
 			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
 		if err := s.handleNotification(request.Context(), &notification); err != nil {
-			log.Error().Err(err).Msg("Failed to handle notification")
+			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to handle notification")
 			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
@@ -121,7 +121,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 
 		err := s.handleProxyExternalRequestToEHR(writer, request)
 		if err != nil {
-			log.Error().Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
+			log.Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
 			// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 			var operationOutcomeErr fhirclient.OperationOutcomeError
 			if errors.As(err, &operationOutcomeErr) {
@@ -142,7 +142,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
 	mux.HandleFunc(basePath+"/", func(response http.ResponseWriter, request *http.Request) {
-		log.Info().Msgf("Redirecting to %s", s.frontendUrl)
+		log.Info().Ctx(request.Context()).Msgf("Redirecting to %s", s.frontendUrl)
 		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
 	})
 
@@ -321,7 +321,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		}
 	}
 
-	log.Info().Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
+	log.Info().Ctx(ctx).Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
 
 	if focusReference.Reference == nil {
 		return &coolfhir.ErrorWithCode{
@@ -362,7 +362,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			return err
 		}
 	default:
-		log.Info().Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
+		log.Info().Ctx(ctx).Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
 	}
 
 	return nil

@@ -43,7 +43,7 @@ func NewTestServer() *TestAzureKeyVault {
 		if key, ok := result.keys[name]; ok {
 			plainText, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, key, []byte("test"), nil)
 			if err != nil {
-				log.Logger.Error().Err(err).Msg("failed to decrypt")
+				log.Logger.Err(err).Msg("failed to decrypt")
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}

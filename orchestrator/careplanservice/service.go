@@ -53,7 +53,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
 	}
 	s.handlerProvider = s.defaultHandlerProvider
-	s.ensureSearchParameterExists()
+	s.ensureSearchParameterExists(context.Background())
 	return &s, nil
 }
 
@@ -83,6 +83,7 @@ type FHIRHandlerRequest struct {
 	HttpMethod   string
 	RequestUrl   *url.URL
 	FullUrl      string
+	Context      context.Context
 }
 
 func (r FHIRHandlerRequest) bundleEntryWithResource(res any) fhir.BundleEntry {
@@ -160,13 +161,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
 	if log.Trace().Enabled() {
 		txJson, _ := json.MarshalIndent(tx, "", "  ")
-		log.Trace().Msgf("FHIR Transaction request: %s", txJson)
+		log.Trace().Ctx(request.Context()).Msgf("FHIR Transaction request: %s", txJson)
 	}
 	var txResult fhir.Bundle
 	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 		txResultJson, _ := json.Marshal(tx.Bundle())
-		log.Error().Err(err).Msgf("Failed to execute transaction (url=%s): %s", request.URL.String(), string(txResultJson))
+		log.Error().Ctx(request.Context()).Err(err).
+			Msgf("Failed to execute transaction (url=%s): %s", request.URL.String(), string(txResultJson))
 		var operationOutcomeErr fhirclient.OperationOutcomeError
 		if errors.As(err, &operationOutcomeErr) {
 			operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
@@ -180,7 +182,7 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBu
 	}
 	if log.Trace().Enabled() {
 		txJson, _ := json.MarshalIndent(txResult, "", "  ")
-		log.Trace().Msgf("FHIR Transaction response: %s", txJson)
+		log.Trace().Ctx(request.Context()).Msgf("FHIR Transaction response: %s", txJson)
 	}
 	var notificationResources []any
 	for entryIdx, resultHandler := range resultHandlers {
@@ -218,7 +220,7 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 }
 
 func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
+	log.Warn().Ctx(request.Context).Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
 
 	err := s.checkAllowUnmanagedOperations()
 	if err != nil {
@@ -247,6 +249,7 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 		ResourceId:   httpRequest.PathValue("id"),
 		ResourcePath: resourcePath,
 		ResourceData: bodyBytes,
+		Context:      httpRequest.Context(),
 	}
 	result, err := s.handleTransactionEntry(httpRequest.Context(), fhirRequest, tx)
 	if err != nil {
@@ -259,7 +262,7 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 		return
 	}
 	if len(txResult.Entry) != 1 {
-		log.Logger.Error().Msgf("Expected exactly one entry in transaction result (operation=%s), got %d", operationName, len(txResult.Entry))
+		log.Error().Ctx(httpRequest.Context()).Msgf("Expected exactly one entry in transaction result (operation=%s), got %d", operationName, len(txResult.Entry))
 		httpResponse.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -267,7 +270,7 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 	fhirResponse := txResult.Entry[0].Response
 	statusParts := strings.Split(fhirResponse.Status, " ")
 	if statusCode, err = strconv.Atoi(statusParts[0]); err != nil {
-		log.Logger.Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
+		log.Warn().Ctx(httpRequest.Context()).Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
 		statusCode = http.StatusOK
 	}
 	coolfhir.SendResponse(httpResponse, statusCode, txResult.Entry[0].Resource, map[string]string{
@@ -300,7 +303,8 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 	case "Condition":
 		resource, err = s.handleGetCondition(httpRequest.Context(), resourceId, headers)
 	default:
-		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
+		log.Warn().Ctx(httpRequest.Context()).
+			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
@@ -335,7 +339,8 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 	case "Patient":
 		bundle, err = s.handleSearchPatient(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	default:
-		log.Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
+		log.Warn().Ctx(httpRequest.Context()).
+			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
@@ -406,6 +411,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 			RequestUrl:   requestUrl,
 			ResourcePath: resourcePath,
 			ResourceData: entry.Resource,
+			Context:      httpRequest.Context(),
 		}
 		if len(resourcePathParts) == 2 {
 			fhirRequest.ResourceId = resourcePathParts[1]
@@ -464,7 +470,8 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 	notifyCtx, cancel := context.WithTimeout(ctx, subscriberNotificationTimeout)
 	defer cancel()
 	if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
-		log.Error().Err(err).Msgf("Failed to notify subscribers for %T", resource)
+		log.Error().Ctx(ctx).Err(err).
+			Msgf("Failed to notify subscribers for %T", resource)
 	}
 }
 
@@ -476,7 +483,7 @@ func getResourceType(resourcePath string) string {
 	return strings.Split(resourcePath, "/")[0]
 }
 
-func (s *Service) ensureSearchParameterExists() {
+func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 	type SearchParam struct {
 		SearchParamId string
 		SearchParam   fhir.SearchParameter
@@ -550,15 +557,16 @@ func (s *Service) ensureSearchParameterExists() {
 			req.Header.Set("If-None-Exist", fmt.Sprintf("url=%s", param.SearchParam.Url))
 		}
 
-		log.Info().Msgf("Performing conditional create on %s", param.SearchParamId)
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		log.Info().Ctx(ctx).
+			Msgf("Performing conditional create on %s", param.SearchParamId)
+		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
 		err := s.fhirClient.CreateWithContext(ctx, &param.SearchParam, &param.SearchParam, addHeaderOption)
 		if err != nil {
-			log.Error().Err(err).Msgf("Failed to ensure SearchParameter %s", param.SearchParamId)
+			log.Error().Ctx(ctx).Err(err).Msgf("Failed to ensure SearchParameter %s", param.SearchParamId)
 		} else {
-			log.Info().Msgf("Ensured SearchParameter/%s", param.SearchParamId)
+			log.Info().Ctx(ctx).Msgf("Ensured SearchParameter/%s", param.SearchParamId)
 
 			// Re-index SearchParamters
 			reindexParam := fhir.Parameters{
@@ -572,34 +580,36 @@ func (s *Service) ensureSearchParameterExists() {
 
 			requestBody, err := json.Marshal(reindexParam)
 			if err != nil {
-				log.Error().Err(err).Msgf("Failed to marshal reindex request for SearchParameter %s", param.SearchParamId)
+				log.Error().Ctx(ctx).Err(err).
+					Msgf("Failed to marshal reindex request for SearchParameter %s", param.SearchParamId)
 				continue
 			}
 
 			req, err := http.NewRequest("POST", s.fhirURL.String()+"/$reindex", strings.NewReader(string(requestBody)))
 			if err != nil {
-				log.Error().Err(err).Msgf("Failed to create reindex request for SearchParameter %s", param.SearchParamId)
+				log.Error().Ctx(ctx).Err(err).
+					Msgf("Failed to create reindex request for SearchParameter %s", param.SearchParamId)
 				continue
 			}
 			req.Header.Set("Content-Type", "application/fhir+json")
 
 			resp, err := s.profile.HttpClient().Do(req)
 			if err != nil {
-				log.Error().Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
+				log.Error().Ctx(ctx).Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
 				continue
 			}
 			defer resp.Body.Close()
 
 			if err != nil {
-				log.Error().Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
+				log.Error().Ctx(ctx).Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
 				continue
 			}
 			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
-				log.Error().Msgf("Failed to reindex SearchParameter %s: %s", param.SearchParamId, string(body))
+				log.Error().Ctx(ctx).Msgf("Failed to reindex SearchParameter %s: %s", param.SearchParamId, string(body))
 				continue
 			} else {
-				log.Info().Msgf("Reindexed SearchParameter/%s", param.SearchParamId)
+				log.Info().Ctx(ctx).Msgf("Reindexed SearchParameter/%s", param.SearchParamId)
 			}
 		}
 	}

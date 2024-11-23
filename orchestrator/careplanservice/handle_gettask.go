@@ -103,7 +103,7 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 			taskRefs = append(taskRefs, "Task/"+*task.Id)
 		}
 	}
-	retBundle := filterMatchingResourcesInBundle(bundle, []string{"Task"}, taskRefs)
+	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"Task"}, taskRefs)
 
 	return &retBundle, nil
 }

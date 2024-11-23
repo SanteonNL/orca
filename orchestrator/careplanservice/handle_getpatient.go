@@ -100,7 +100,7 @@ func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Value
 		}
 	}
 
-	retBundle := filterMatchingResourcesInBundle(bundle, []string{"Patient"}, patientRefs)
+	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"Patient"}, patientRefs)
 
 	return &retBundle, nil
 }

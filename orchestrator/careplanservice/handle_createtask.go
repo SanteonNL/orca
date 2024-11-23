@@ -20,7 +20,7 @@ import (
 )
 
 func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	log.Info().Msg("Creating Task")
+	log.Info().Ctx(ctx).Msg("Creating Task")
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
@@ -55,12 +55,12 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	// Enrich Task.Requester and Task.Owner with info from CSD (if available), typically to add the organization name
 	// TODO: CSD is queried again later, to get the notification endpoint. We should optimize/cache this. Maybe in the context.Context?
 	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Requester.Identifier); err != nil {
-		log.Info().Err(err).Msgf("Unable to lookup Task.requester in CSD, won't be enriched.")
+		log.Info().Ctx(ctx).Err(err).Msgf("Unable to lookup Task.requester in CSD, won't be enriched.")
 	} else {
 		task.Requester = entity
 	}
 	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Owner.Identifier); err != nil {
-		log.Info().Err(err).Msgf("Unable to lookup Task.owner in CSD, won't be enriched.")
+		log.Info().Ctx(ctx).Err(err).Msgf("Unable to lookup Task.owner in CSD, won't be enriched.")
 	} else {
 		task.Owner = entity
 	}
