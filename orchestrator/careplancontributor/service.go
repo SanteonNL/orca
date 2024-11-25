@@ -34,7 +34,8 @@ func New(
 	config Config,
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
-	sessionManager *user.SessionManager) (*Service, error) {
+	sessionManager *user.SessionManager,
+	strictMode bool) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
@@ -62,6 +63,11 @@ func New(
 		},
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 	}
+	if strictMode {
+		result.urlLoggerSanitizer = coolfhir.FhirUrlLoggerSanitizer
+	} else {
+		result.urlLoggerSanitizer = coolfhir.NoopUrlLoggerSanitizer
+	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
 }
@@ -88,6 +94,7 @@ type Service struct {
 	workflows                     taskengine.Workflows
 	questionnaireLoader           taskengine.QuestionnaireLoader
 	healthdataviewEndpointEnabled bool
+	urlLoggerSanitizer            func(*url.URL) *url.URL
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
@@ -176,7 +183,7 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 // handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
-	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, basePath+"/ehr/fhir", clientFactory.Client)
+	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, basePath+"/ehr/fhir", clientFactory.Client, coolfhir.NoopUrlLoggerSanitizer)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -336,7 +343,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			StatusCode: http.StatusUnprocessableEntity,
 		}
 	}
-	// TODO: for now, we assume the resource URL is always in the form of <FHIR base url>/<resource type>/<resource id>
+	// TODO: for now, we assume the resource URL is always in the form of <FHIR base url>/<reso urce type>/<resource id>
 	//       Then, we can deduce the FHIR base URL from the resource URL
 	resourceUrlParts := strings.Split(resourceUrl, "/")
 	resourceUrlParts = resourceUrlParts[:len(resourceUrlParts)-2]

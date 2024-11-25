@@ -42,7 +42,7 @@ func Start(config Config) error {
 			config.CarePlanContributor,
 			activeProfile,
 			config.Public.ParseURL(),
-			sessionManager)
+			sessionManager, config.StrictMode)
 		if err != nil {
 			return err
 		}

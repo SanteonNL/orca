@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-func NewProxy(logger zerolog.Logger, targetFHIRBaseURL *url.URL, proxyBasePath string, transport http.RoundTripper) *httputil.ReverseProxy {
+func NewProxy(logger zerolog.Logger, targetFHIRBaseURL *url.URL, proxyBasePath string, transport http.RoundTripper, urlLoggerSanitizer func(*url.URL) *url.URL) *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.Out.URL = targetFHIRBaseURL.JoinPath("/", strings.TrimPrefix(r.In.URL.Path, proxyBasePath))
@@ -18,8 +18,9 @@ func NewProxy(logger zerolog.Logger, targetFHIRBaseURL *url.URL, proxyBasePath s
 		},
 		Transport: sanitizingRoundTripper{
 			next: loggingRoundTripper{
-				logger: &logger,
-				next:   transport,
+				logger:             &logger,
+				next:               transport,
+				urlLoggerSanitizer: urlLoggerSanitizer,
 			},
 		},
 		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
@@ -58,8 +59,9 @@ func (s sanitizingRoundTripper) RoundTrip(request *http.Request) (*http.Response
 var _ http.RoundTripper = &loggingRoundTripper{}
 
 type loggingRoundTripper struct {
-	logger *zerolog.Logger
-	next   http.RoundTripper
+	logger             *zerolog.Logger
+	next               http.RoundTripper
+	urlLoggerSanitizer func(*url.URL) *url.URL
 }
 
 func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {

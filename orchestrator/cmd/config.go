@@ -25,6 +25,9 @@ type Config struct {
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
 	LogLevel        zerolog.Level          `koanf:"loglevel"`
+	// StrictMode is a flag that enables strict mode. It enforces safe behavior for production environments,
+	// e.g. prevent logging of personal data.
+	StrictMode bool `koanf:"strictmode"`
 }
 
 func (c Config) Validate() error {
@@ -81,7 +84,8 @@ func LoadConfig() (*Config, error) {
 // DefaultConfig returns sensible, but not complete, default configuration values.
 func DefaultConfig() Config {
 	return Config{
-		LogLevel: zerolog.InfoLevel,
+		LogLevel:   zerolog.InfoLevel,
+		StrictMode: true,
 		Public: InterfaceConfig{
 			Address: ":8080",
 			URL:     "/",
