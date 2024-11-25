@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"slices"
 	"strings"
 
@@ -113,6 +114,11 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	err := cpsClient.Update(ref, primaryTask, primaryTask)
 	if err != nil {
 		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
+	}
+	log.Info().Msgf("Successfully accepted task (ref=%s)", ref)
+	err = ehr.NotifyTaskAccepted(cpsClient, s.kafkaClient, primaryTask)
+	if err != nil {
+		return err
 	}
 	log.Info().Ctx(ctx).Msgf("Successfully accepted Task (ref=%s)", ref)
 	return nil
