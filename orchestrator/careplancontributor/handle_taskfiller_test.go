@@ -394,12 +394,12 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	var task fhir.Task
 	json.Unmarshal(taskBytes, &task)
 	workflow := service.workflows["http://snomed.info/sct|719858009"]["http://snomed.info/sct|13645005"].Start()
-	questionnaire, err := service.questionnaireLoader.Load(workflow.QuestionnaireUrl)
+	questionnaire, err := service.questionnaireLoader.Load(context.Background(), workflow.QuestionnaireUrl)
 	require.NoError(t, err)
 	require.NotNil(t, questionnaire)
 
 	questionnaireRef := "urn:uuid:" + *questionnaire.Id
-	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
+	log.Info().Ctx(context.Background()).Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
 	subtask := service.getSubTask(&primaryTask, questionnaireRef, true)
 
 	expectedSubTaskInput := []fhir.TaskInput{

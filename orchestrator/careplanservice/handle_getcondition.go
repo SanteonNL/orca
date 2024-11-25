@@ -30,7 +30,7 @@ func (s *Service) handleGetCondition(ctx context.Context, id string, headers *fh
 			}
 		}
 	} else {
-		log.Warn().Msg("Condition does not have Patient as subject, can't verify access")
+		log.Warn().Ctx(ctx).Msg("Condition does not have Patient as subject, can't verify access")
 		return nil, &coolfhir.ErrorWithCode{
 			Message:    "Participant does not have access to Condition",
 			StatusCode: http.StatusForbidden,
