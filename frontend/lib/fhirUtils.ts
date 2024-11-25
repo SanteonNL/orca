@@ -82,7 +82,31 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
 }
 
 const cleanPatient = (patient: Patient) => {
-    return {...patient, id: undefined};
+    const cleanedPatient = { ...patient, id: undefined }
+    if (cleanedPatient.contact) {
+        for (const contact of cleanedPatient.contact) {
+            if (contact.organization?.reference) {
+                delete contact.organization.reference;
+            }
+        }
+    }
+
+    if (cleanedPatient.managingOrganization?.reference) {
+        delete cleanedPatient.managingOrganization.reference;
+    }
+
+    if (cleanedPatient.link) {
+        for (const link of cleanedPatient.link) {
+            if (link.other?.reference) {
+                delete link.other.reference;
+            }
+        }
+    }
+    if (cleanedPatient.generalPractitioner?.[0]?.reference) {
+        delete cleanedPatient.generalPractitioner[0].reference;
+    }
+
+    return cleanedPatient;
 }
 
 const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string) => {
@@ -150,7 +174,7 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
     }
 }
 
-export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient): Bundle  & { type: "transaction" } => {
+export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient): Bundle & { type: "transaction" } => {
     const cleanedPatient = cleanPatient(patient);
     const cleanedServiceRequest = cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient");
     const constructedTask = constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest");
