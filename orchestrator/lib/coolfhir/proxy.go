@@ -1,9 +1,11 @@
 package coolfhir
 
 import (
+	"bytes"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"github.com/rs/zerolog"
+	"io"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -82,25 +84,40 @@ type loggingRoundTripper struct {
 }
 
 func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	l.logger.Info().Msgf("Proxying FHIR request: %s %s", request.Method, request.URL.String())
-	if l.logger.Debug().Enabled() {
+	l.logger.Info().Ctx(request.Context()).Msgf("Proxying FHIR request: %s %s", request.Method, request.URL.String())
+	if l.logger.Debug().Ctx(request.Context()).Enabled() {
 		var headers []string
 		for key, values := range request.Header {
 			headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 		}
-		l.logger.Debug().Msgf("Proxy request headers: %s", strings.Join(headers, ", "))
+		l.logger.Debug().Ctx(request.Context()).Msgf("Proxy request headers: %s", strings.Join(headers, ", "))
+	}
+	if l.logger.Trace().Ctx(request.Context()).Enabled() {
+		requestBody, err := io.ReadAll(request.Body)
+		if err != nil {
+			return nil, err
+		}
+		l.logger.Trace().Ctx(request.Context()).Msgf("Proxying FHIR request body: %s", string(requestBody))
+		request.Body = io.NopCloser(bytes.NewReader(requestBody))
 	}
 	response, err := l.next.RoundTrip(request)
 	if err != nil {
 		l.logger.Warn().Err(err).Msgf("Proxied FHIR request failed (url=%s)", request.URL.String())
 	} else {
-		if l.logger.Debug().Enabled() {
-			l.logger.Debug().Msgf("Proxied FHIR request response: %s", response.Status)
+		if l.logger.Debug().Ctx(request.Context()).Enabled() {
 			var headers []string
 			for key, values := range response.Header {
 				headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 			}
-			l.logger.Debug().Msgf("Proxy response headers: %s", strings.Join(headers, ", "))
+			l.logger.Debug().Ctx(request.Context()).Msgf("Proxied FHIR request response: %s, headers: %s", response.Status, strings.Join(headers, ", "))
+		}
+		if l.logger.Trace().Ctx(request.Context()).Enabled() {
+			responseBody, err := io.ReadAll(request.Body)
+			if err != nil {
+				return nil, err
+			}
+			l.logger.Trace().Ctx(request.Context()).Msgf("Proxied FHIR response body: %s", string(responseBody))
+			request.Body = io.NopCloser(bytes.NewReader(responseBody))
 		}
 	}
 	return response, err
