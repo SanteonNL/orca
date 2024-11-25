@@ -112,12 +112,12 @@ func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 			l.logger.Debug().Ctx(request.Context()).Msgf("Proxied FHIR request response: %s, headers: %s", response.Status, strings.Join(headers, ", "))
 		}
 		if l.logger.Trace().Ctx(request.Context()).Enabled() {
-			responseBody, err := io.ReadAll(request.Body)
+			responseBody, err := io.ReadAll(response.Body)
 			if err != nil {
 				return nil, err
 			}
 			l.logger.Trace().Ctx(request.Context()).Msgf("Proxied FHIR response body: %s", string(responseBody))
-			request.Body = io.NopCloser(bytes.NewReader(responseBody))
+			response.Body = io.NopCloser(bytes.NewReader(responseBody))
 		}
 	}
 	return response, err
