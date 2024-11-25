@@ -267,10 +267,11 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 		return coolfhir.BadRequestError(err)
 	}
 
+	log.Debug().Msg("Proxying request to all CareTeam members from CarePlan.participants - proxyBaseUrl: " + proxyBaseUrl.String())
+
 	fhirProxy := coolfhir.NewProxy(log.Logger, proxyBaseUrl, basePath+"/bgz/fhir", s.transport)
 	fhirProxy.ServeHTTP(writer, request)
 
-	//TODO: Figure out how to combine result bundles
 	return nil
 }
 
@@ -289,6 +290,8 @@ func (s Service) handleProxyBgzData(writer http.ResponseWriter, request *http.Re
 	if !result.isMember {
 		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
+
+	log.Debug().Msg("Proxying request to BgZ FHIR API")
 
 	s.bgzFhirProxy.ServeHTTP(writer, request)
 	return nil
@@ -391,7 +394,7 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 			next(response, request)
 			return
 		}
-		http.Error(response, "no session found", http.StatusUnauthorized)
+		http.Error(response, "no session or bearer token found", http.StatusUnauthorized)
 	}
 }
 
