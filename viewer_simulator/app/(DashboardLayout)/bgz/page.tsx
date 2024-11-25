@@ -2,10 +2,9 @@ import React from 'react'
 import PageContainer from '../components/container/PageContainer'
 import { Box, Typography } from '@mui/material'
 import DashboardCard from '../components/shared/DashboardCard'
-import CarePlanOverview from '../components/careplans/care-plan-overview'
+import BgzOverview from '../components/bgz/bgz-overview'
 
 export default function CarePlans() {
-
 
     return (
         <Box sx={{ position: 'relative' }}>
@@ -16,7 +15,7 @@ export default function CarePlans() {
                 <DashboardCard title="Care Plans">
                     <>
                         <Typography sx={{ mb: 2 }}>Use the CarePlanContributer to gather all health care data known about a patient. All organizations that are a member ofthe CareTeam will be queried.</Typography>
-                        <CarePlanOverview />
+                        <BgzOverview />
                     </>
                 </DashboardCard>
             </PageContainer>

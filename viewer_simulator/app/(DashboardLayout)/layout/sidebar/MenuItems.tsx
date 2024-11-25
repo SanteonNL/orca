@@ -41,9 +41,9 @@ const Menuitems = [
   },
   {
     id: uniqueId(),
-    title: "Care Plans",
+    title: "BgZ Data",
     icon: IconCheckupList,
-    href: "/careplans",
+    href: "/bgz",
   },
   {
     navlabel: true,

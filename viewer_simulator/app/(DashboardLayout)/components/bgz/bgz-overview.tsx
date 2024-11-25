@@ -1,9 +1,9 @@
 import React from 'react';
 import { Bundle, BundleEntry, CarePlan, Task } from 'fhir/r4';
-import CarePlanTable from './care-plan-table';
+import CarePlanTable from './bgz-careplan-table';
 import { getBsn } from '@/utils/fhirUtils';
 
-export default async function CarePlanOverview() {
+export default async function BgzOverview() {
 
     if (!process.env.FHIR_BASE_URL) {
         console.error('FHIR_BASE_URL is not defined');
@@ -18,10 +18,8 @@ export default async function CarePlanOverview() {
         if (process.env.FHIR_AUTHORIZATION_TOKEN) {
             requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
         }
-        //TODO: The CPS excludes certain _includes, like for the Patient and Task, working without them (for now?)
-        // const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan?_include=CarePlan:subject&_include=CarePlan:care-team&_include=CarePlan:activity-reference`, {
         const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan?_include=CarePlan:care-team`, {
-            cache: 'no-store',
+            // cache: 'no-store',
             headers: requestHeaders
         });
 
@@ -65,7 +63,12 @@ export default async function CarePlanOverview() {
                 };
             }) || [];
     } catch (error) {
-        console.error('Error occurred while fetching tasks:', error);
+        if (error instanceof Error && 'digest' in error && error.digest === 'DYNAMIC_SERVER_USAGE') {
+            console.error('Error occurred while fetching tasks:', error);
+        } else {
+
+            throw error;
+        }
     }
 
     return (

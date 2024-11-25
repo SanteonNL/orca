@@ -1,7 +1,7 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 
 import { IconEyeSearch } from '@tabler/icons-react';
-import { CarePlan, CareTeam } from 'fhir/r4';
+import { CarePlan, CareTeam, Patient } from 'fhir/r4';
 import { getBsn } from '@/utils/fhirUtils';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
@@ -12,6 +12,9 @@ import Slide from '@mui/material/Slide';
 import { TransitionProps } from '@mui/material/transitions';
 import { Box, IconButton } from '@mui/material';
 import { getBgzData } from './actions';
+import BgzRecordsViewer from '../shared/fhir/BgzRecordsViewer';
+import useBgzStore from '@/store/bgz-store';
+
 
 const Transition = React.forwardRef(function Transition(
     props: TransitionProps & {
@@ -22,10 +25,24 @@ const Transition = React.forwardRef(function Transition(
     return <Slide direction="up" ref={ref} {...props} />;
 });
 
-export default function CarePlanDataViewer({ carePlan, careTeam }: { carePlan: CarePlan, careTeam: CareTeam }) {
+export default function BgzDataViewer({ carePlan, careTeam }: { carePlan: CarePlan, careTeam: CareTeam }) {
     const [open, setOpen] = React.useState(false);
+    const { clearBgzData, setBgzData } = useBgzStore()
 
-    const patient = getBgzData(carePlan, careTeam)
+    useEffect(() => {
+        const fetchData = async () => {
+            clearBgzData()
+            const bgzData = await getBgzData(carePlan, careTeam)
+
+            const pat = bgzData?.entry?.find((entry) => entry.resource?.resourceType === 'Patient')
+            if (pat?.resource) {
+                setBgzData({ patient: pat.resource as Patient })
+            }
+
+        }
+
+        fetchData()
+    }, [carePlan, careTeam, clearBgzData, setBgzData])
 
     const handleClickOpen = async () => {
 
@@ -71,7 +88,7 @@ export default function CarePlanDataViewer({ carePlan, careTeam }: { carePlan: C
                     </Toolbar>
                 </AppBar>
                 <Box sx={{ mt: '80px' }}>
-
+                    <BgzRecordsViewer />
                 </Box>
             </Dialog>
         </React.Fragment>

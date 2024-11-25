@@ -3,13 +3,13 @@ import React from 'react';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { Tooltip } from '@mui/material';
 import { IconEye, IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
-import CarePlanDataViewer from './care-plan-data-viewer';
+import BgzDataViewer from './bgz-data-viewer';
 
 interface Props {
     rows: any[]
 }
 
-export default function CarePlanTable({ rows }: Props) {
+export default function BgzTable({ rows }: Props) {
 
     const columns: GridColDef[] = [
 
@@ -36,7 +36,7 @@ export default function CarePlanTable({ rows }: Props) {
             headerName: 'Medical Records',
             flex: 1,
             renderCell: (params) => {
-                return <CarePlanDataViewer carePlan={params.row.carePlan} careTeam={params.row.careTeam} />
+                return <BgzDataViewer carePlan={params.row.carePlan} careTeam={params.row.careTeam} />
             }
         },
         { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 2 },
