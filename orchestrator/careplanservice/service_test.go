@@ -30,9 +30,18 @@ func TestService_Proxy(t *testing.T) {
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
+	fhirServerMux.HandleFunc("GET /fhir/Success", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{
+			Intent: "order",
+		})
+	})
+	fhirServerMux.HandleFunc("GET /fhir/Fail", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("Fail"), "oops", writer)
+	})
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
 	service, err := New(Config{
+		AllowUnmanagedFHIROperations: true,
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
@@ -46,9 +55,50 @@ func TestService_Proxy(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+	t.Run("ok", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		require.JSONEq(t, `{"resourceType":"Task", "intent":"order", "status":"draft"}`, string(responseData))
+	})
+	t.Run("upstream FHIR server returns FHIR error with operation outcome", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Fail")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		println(string(responseData))
+		require.JSONEq(t, `{
+  "issue": [
+    {
+      "severity": "error",
+      "code": "processing",
+      "diagnostics": "oops failed: Fail"
+    }
+  ],
+  "resourceType": "OperationOutcome"
+}`, string(responseData))
+	})
+	t.Run("disallowed unmanaged FHIR operation", func(t *testing.T) {
+		service, err := New(Config{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirServer.URL + "/fhir",
+			},
+		}, profile.TestProfile{}, orcaPublicURL)
+		require.NoError(t, err)
+		frontServerMux := http.NewServeMux()
+		service.RegisterHandlers(frontServerMux)
+		frontServer := httptest.NewServer(frontServerMux)
+
+		httpClient := frontServer.Client()
+		httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Anything")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		require.Contains(t, string(responseData), "FHIR operation not allowed")
+	})
 }
 
 func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {

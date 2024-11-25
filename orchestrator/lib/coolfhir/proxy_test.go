@@ -32,7 +32,7 @@ func TestProxy(t *testing.T) {
 	proxyServerMux := http.NewServeMux()
 	proxyTransportRequestHeaders := make(http.Header)
 	proxyBaseUrl, _ := url.Parse("http://localhost/localfhir")
-	proxy := NewProxy(log.Logger, upstreamServerURL, "/localfhir", proxyBaseUrl, decoratingRoundTripper{
+	proxy := NewProxy("Test", log.Logger, upstreamServerURL, "/localfhir", proxyBaseUrl, decoratingRoundTripper{
 		inner: http.DefaultTransport,
 		decorator: func(request *http.Request) *http.Request {
 			for name, value := range proxyTransportRequestHeaders {
