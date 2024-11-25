@@ -13,13 +13,22 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/knadh/koanf/providers/env v0.1.0
 	github.com/knadh/koanf/v2 v2.1.1
+	github.com/labstack/echo/v4 v4.11.4
 	github.com/nuts-foundation/go-nuts-client v0.1.7
 	github.com/rs/zerolog v1.33.0
+	github.com/segmentio/kafka-go v0.4.47
 	github.com/stretchr/testify v1.9.0
 	github.com/testcontainers/testcontainers-go v0.31.0
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20241004123003-6f30810f220e
 	go.uber.org/mock v0.4.0
 	golang.org/x/oauth2 v0.21.0
+)
+
+require (
+	github.com/labstack/gommon v0.4.2 // indirect
+	github.com/pierrec/lz4/v4 v4.1.15 // indirect
+	github.com/valyala/bytebufferpool v1.0.0 // indirect
+	github.com/valyala/fasttemplate v1.2.2 // indirect
 )
 
 require (
@@ -85,7 +94,7 @@ require (
 	github.com/multiformats/go-multibase v0.2.0 // indirect
 	github.com/nuts-foundation/go-did v0.14.0
 	github.com/oapi-codegen/oapi-codegen/v2 v2.3.0 // indirect
-	github.com/oapi-codegen/runtime v1.1.1 // indirect
+	github.com/oapi-codegen/runtime v1.1.1
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.0 // indirect
 	github.com/perimeterx/marshmallow v1.1.5 // indirect

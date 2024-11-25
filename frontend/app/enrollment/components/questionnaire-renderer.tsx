@@ -1,17 +1,17 @@
 'use client'
-import { SmartFormsRenderer, useQuestionnaireResponseStore } from '@aehrc/smart-forms-renderer';
-import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
-import { useEffect, useState } from 'react';
-import { Button } from '@/components/ui/button';
-import { ReloadIcon } from "@radix-ui/react-icons";
-import { toast } from 'sonner';
+import {SmartFormsRenderer, useQuestionnaireResponseStore} from '@aehrc/smart-forms-renderer';
+import type {FhirResource, Questionnaire, QuestionnaireResponse, Task} from 'fhir/r4';
+import {useEffect, useState} from 'react';
+import {Button} from '@/components/ui/button';
+import {ReloadIcon} from "@radix-ui/react-icons";
+import {toast} from 'sonner';
 import useCpsClient from '@/hooks/use-cps-client';
 import useTaskProgressStore from '@/lib/store/task-progress-store';
-import { BSN_SYSTEM, findQuestionnaireResponse } from '@/lib/fhirUtils';
-import { Spinner } from '@/components/spinner';
-import { useStepper } from '@/components/stepper';
-import { v4 } from 'uuid';
-import { populateQuestionnaire } from '../../utils/populate';
+import {BSN_SYSTEM, findQuestionnaireResponse} from '@/lib/fhirUtils';
+import {Spinner} from '@/components/spinner';
+import {useStepper} from '@/components/stepper';
+import {v4} from 'uuid';
+import {populateQuestionnaire} from '../../utils/populate';
 import useEnrollmentStore from '@/lib/store/enrollment-store';
 
 interface QuestionnaireRendererPageProps {
@@ -122,6 +122,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
     outputTask.status = "completed"
 
     const patientIdentifier = patient?.identifier?.find(id => id.system === BSN_SYSTEM) || patient?.identifier?.[0]
+    const patientReference = (patient ? 'Patient/' + patient?.id : '')
 
     const bundle: FhirResource & { type: "transaction" } = {
       resourceType: 'Bundle',
@@ -139,7 +140,12 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         },
         {
           fullUrl: questionnaireResponseRef,
-          resource: { ...updatableResponse, subject: { identifier: patientIdentifier } },
+          resource: {
+            ...updatableResponse, subject: {
+              identifier: patientIdentifier,
+              reference: patientReference
+            }
+          },
           request: {
             method: 'PUT',
             url: responseExists ? questionnaireResponseRef : `QuestionnaireResponse?identifier=${encodeURIComponent(`${scpSubTaskIdentifierSystem}|${newId}`)}`

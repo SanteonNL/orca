@@ -2,7 +2,8 @@ package careplancontributor
 
 import (
 	"errors"
-	"time"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
+
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -21,6 +22,7 @@ type Config struct {
 	FrontendConfig                FrontendConfig        `koanf:"frontend"`
 	AppLaunch                     applaunch.Config      `koanf:"applaunch"`
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
+	KafkaConfig                   ehr.KafkaConfig       `koanf:"kafka"`
 	Enabled                       bool                  `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
 	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`
