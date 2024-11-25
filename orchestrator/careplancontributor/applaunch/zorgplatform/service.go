@@ -29,6 +29,7 @@ import (
 
 const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
+const zorgplatformWorkflowNamingSystem = "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"
 
 func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
@@ -375,7 +376,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Status: fhir.RequestStatusActive,
 		Identifier: []fhir.Identifier{
 			{
-				System: to.Ptr("https://api.zorgplatform.online/fhir/v1/Task"),
+				System: to.Ptr(zorgplatformWorkflowNamingSystem),
 				Value:  to.Ptr(launchContext.WorkflowId),
 			},
 		},
@@ -415,6 +416,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 			"serviceRequest": serviceRequestRef,
 			"practitioner":   practitionerRef,
 			"organization":   organizationRef,
+			"task":           "Task?identifier=" + zorgplatformWorkflowNamingSystem + "|" + launchContext.WorkflowId,
 			"accessToken":    accessToken,
 		},
 		OtherValues: map[string]interface{}{
