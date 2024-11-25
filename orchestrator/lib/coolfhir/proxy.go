@@ -25,7 +25,7 @@ import (
 func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, proxyBasePath string, rewriteUrl *url.URL, transport http.RoundTripper) *httputil.ReverseProxy {
 	return &httputil.ReverseProxy{
 		Rewrite: func(r *httputil.ProxyRequest) {
-			r.Out.URL = upstreamBaseUrl.JoinPath("/", strings.TrimPrefix(r.In.URL.Path, proxyBasePath))
+			r.Out.URL = upstreamBaseUrl.JoinPath(strings.TrimPrefix(r.In.URL.Path, proxyBasePath))
 			r.Out.URL.RawQuery = r.In.URL.RawQuery
 			r.Out.Host = upstreamBaseUrl.Host
 		},
@@ -73,6 +73,9 @@ func (s sanitizingRoundTripper) RoundTrip(request *http.Request) (*http.Response
 			nameLC == "authorization" {
 			request.Header.Del(name)
 		}
+	}
+	if request.Method == http.MethodGet {
+		request.Header.Del("Content-Length")
 	}
 	return s.next.RoundTrip(request)
 }
