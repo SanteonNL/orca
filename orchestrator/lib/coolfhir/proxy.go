@@ -33,6 +33,7 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 			next: loggingRoundTripper{
 				logger: &logger,
 				next:   transport,
+				name:   name,
 			},
 		},
 		ModifyResponse: func(response *http.Response) error {

@@ -30,7 +30,9 @@ func TestService_Proxy(t *testing.T) {
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
+	var capturedQuery url.Values
 	fhirServerMux.HandleFunc("GET /fhir/Success", func(writer http.ResponseWriter, request *http.Request) {
+		capturedQuery = request.URL.Query()
 		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{
 			Intent: "order",
 		})
@@ -61,6 +63,12 @@ func TestService_Proxy(t *testing.T) {
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
 		require.JSONEq(t, `{"resourceType":"Task", "intent":"order", "status":"draft"}`, string(responseData))
+	})
+	t.Run("it proxies query parameters", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success?_identifier=foo|bar")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		assert.Equal(t, "foo|bar", capturedQuery.Get("_identifier"))
 	})
 	t.Run("upstream FHIR server returns FHIR error with operation outcome", func(t *testing.T) {
 		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Fail")
