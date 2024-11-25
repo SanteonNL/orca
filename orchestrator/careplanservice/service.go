@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"io"
 	"net/http"
 	"net/http/httputil"
@@ -30,20 +31,21 @@ const basePath = "/cps"
 var subscriberNotificationTimeout = 10 * time.Second
 
 func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Service, error) {
-	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
+	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
 	if err != nil {
 		return nil, err
 	}
+	baseUrl := orcaPublicURL.JoinPath(basePath)
 	s := Service{
 		profile:       profile,
-		fhirURL:       fhirURL,
+		fhirURL:       upstreamFhirBaseUrl,
 		orcaPublicURL: orcaPublicURL,
 		transport:     transport,
 		fhirClient:    fhirClient,
 		subscriptionManager: subscriptions.DerivingManager{
-			FhirBaseURL: orcaPublicURL.JoinPath(basePath),
+			FhirBaseURL: baseUrl,
 			Channels: subscriptions.CsdChannelFactory{
 				Directory:         profile.CsdDirectory(),
 				ChannelHttpClient: profile.HttpClient(),
@@ -52,6 +54,20 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
 		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
 	}
+	s.pipeline = pipeline.New().
+		// Rewrite the upstream FHIR server URL in the response body to the public URL of the CPS instance.
+		// E.g.: http://fhir-server:8080/fhir -> https://example.com/cps)
+		// Required, because Microsoft Azure FHIR doesn't allow overriding the FHIR base URL
+		// (https://github.com/microsoft/fhir-server/issues/3526).
+		AppendResponseTransformer(pipeline.ResponseBodyRewriter{
+			Old: []byte(upstreamFhirBaseUrl.String()),
+			New: []byte(baseUrl.String()),
+		}).
+		// Rewrite the upstream FHIR server URL in the response headers (same as for the response body).
+		AppendResponseTransformer(pipeline.ResponseHeaderRewriter{
+			Old: upstreamFhirBaseUrl.String(),
+			New: baseUrl.String(),
+		})
 	s.handlerProvider = s.defaultHandlerProvider
 	s.ensureSearchParameterExists(context.Background())
 	return &s, nil
@@ -68,6 +84,7 @@ type Service struct {
 	proxy                        *httputil.ReverseProxy
 	allowUnmanagedFHIROperations bool
 	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
+	pipeline                     pipeline.Instance
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
@@ -119,7 +136,7 @@ func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
 type FHIRHandlerResult func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error)
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	s.proxy = coolfhir.NewProxy(log.Logger, s.fhirURL, basePath, s.transport)
+	s.proxy = coolfhir.NewProxy(log.Logger, s.fhirURL, basePath, s.orcaPublicURL.JoinPath(basePath), s.transport)
 	baseUrl := s.baseUrl()
 	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
 
@@ -273,11 +290,13 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 		log.Warn().Ctx(httpRequest.Context()).Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
 		statusCode = http.StatusOK
 	}
-	coolfhir.SendResponse(httpResponse, statusCode, txResult.Entry[0].Resource, map[string]string{
-		// TODO: I won't pretend I tested the other response headers (e.g. Last-Modified or ETag), so we won't set them for now.
-		//       Add them (and test them) when needed.
-		"Location": *fhirResponse.Location,
-	})
+	s.pipeline.
+		PrependResponseTransformer(pipeline.ResponseHeaderSetter{
+			// TODO: I won't pretend I tested the other response headers (e.g. Last-Modified or ETag), so we won't set them for now.
+			//       Add them (and test them) when needed.
+			"Location": {*fhirResponse.Location},
+		}).
+		DoAndWrite(httpResponse, txResult.Entry[0].Resource, statusCode)
 }
 
 func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceId string, resourceType, operationName string) {
@@ -317,11 +336,8 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 		return
 	}
-	hdrs := make(map[string]string)
-	for key, value := range headers.Header {
-		hdrs[key] = value[0]
-	}
-	coolfhir.SendResponse(httpResponse, http.StatusOK, resource, hdrs)
+	s.pipeline.PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers.Header)).
+		DoAndWrite(httpResponse, resource, http.StatusOK)
 }
 
 func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
@@ -353,11 +369,9 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		coolfhir.WriteOperationOutcomeFromError(err, operationName, httpResponse)
 		return
 	}
-	hdrs := make(map[string]string)
-	for key, value := range headers.Header {
-		hdrs[key] = value[0]
-	}
-	coolfhir.SendResponse(httpResponse, http.StatusOK, bundle, hdrs)
+	s.pipeline.
+		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers.Header)).
+		DoAndWrite(httpResponse, bundle, http.StatusOK)
 }
 
 func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.ResponseWriter) {
@@ -433,7 +447,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		return
 	}
 
-	coolfhir.SendResponse(httpResponse, http.StatusOK, resultBundle)
+	s.pipeline.DoAndWrite(httpResponse, resultBundle, http.StatusOK)
 }
 
 func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
