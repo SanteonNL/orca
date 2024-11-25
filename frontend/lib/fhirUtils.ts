@@ -82,7 +82,7 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
 }
 
 const cleanPatient = (patient: Patient) => {
-    return {...patient, id: undefined};
+    return { ...patient, id: undefined };
 }
 
 const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string) => {
@@ -150,7 +150,7 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
     }
 }
 
-export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient): Bundle  & { type: "transaction" } => {
+export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient): Bundle & { type: "transaction" } => {
     const cleanedPatient = cleanPatient(patient);
     const cleanedServiceRequest = cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient");
     const constructedTask = constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest");

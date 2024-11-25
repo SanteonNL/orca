@@ -1,17 +1,15 @@
+"use client"
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
-import { findInBundle, getBsn, getCarePlan, constructTaskBundle } from '@/lib/fhirUtils'
+import { findInBundle, getBsn, constructTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { Bundle, CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
+import { Bundle, Condition } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from 'next/navigation'
-import JsonView from 'react18-json-view';
-import 'react18-json-view/src/style.css';
-import { Spinner } from '@/components/spinner'
+import { cn } from '@/lib/utils'
+import { ArrowRight, LoaderIcon } from 'lucide-react'
 
 interface Props {
     className?: string
@@ -53,36 +51,6 @@ export default function EnrollInCpsButton({ className }: Props) {
             throw new Error("Something went wrong with Task creation")
         }
 
-        toast.success("Enrollment successfully sent to filler", {
-            closeButton: true,
-            important: true,
-            description: new Date().toLocaleDateString(undefined, {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            }),
-            action: (
-                <Dialog>
-                    <DialogTrigger asChild>
-                        <Button variant="outline">View Task</Button>
-                    </DialogTrigger>
-                    <DialogContent className="min-w-[90vw] max-h-[90vh] overflow-y-scroll">
-                        <DialogHeader>
-                            <DialogTitle>Created Task</DialogTitle>
-                            <DialogDescription>
-                                See the results of the created Task below
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className='overflow-auto'>
-                            <JsonView src={taskBundle} collapsed={2} />
-                        </div>
-                    </DialogContent>
-                </Dialog >
-            )
-        })
-
         router.push(`/enrollment/task/${task.id}`)
     }
 
@@ -120,11 +88,10 @@ export default function EnrollInCpsButton({ className }: Props) {
     }
 
     return (
-        <Button className={className} disabled={disabled} onClick={informCps}>
-            {submitted ? <Spinner className='mr-5 text-white' /> : null}
-            <span className='mr-1'>{submitted ? "Sending" : "Send"}</span>
-            Task
-            {serviceRequest?.performer?.[0].display && <span className='ml-1'>to {serviceRequest.performer[0].display}</span>}
+
+        <Button className={cn('bg-primary h-12 text-primary-foreground rounded-full', className)} disabled={disabled} onClick={informCps}>
+            Volgende stap
+            {submitted ? <LoaderIcon className='ml-2 animate-spin' /> : <ArrowRight className="ml-2 h-4 w-4" />}
         </Button>
     )
 }
