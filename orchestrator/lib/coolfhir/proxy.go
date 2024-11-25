@@ -93,9 +93,13 @@ func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 		l.logger.Debug().Ctx(request.Context()).Msgf("Proxy request headers: %s", strings.Join(headers, ", "))
 	}
 	if l.logger.Trace().Ctx(request.Context()).Enabled() {
-		requestBody, err := io.ReadAll(request.Body)
-		if err != nil {
-			return nil, err
+		var requestBody []byte
+		var err error
+		if request.Body != nil {
+			requestBody, err = io.ReadAll(request.Body)
+			if err != nil {
+				return nil, err
+			}
 		}
 		l.logger.Trace().Ctx(request.Context()).Msgf("Proxying FHIR request body: %s", string(requestBody))
 		request.Body = io.NopCloser(bytes.NewReader(requestBody))
