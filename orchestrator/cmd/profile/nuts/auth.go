@@ -34,7 +34,7 @@ func (d DutchNutsProfile) Authenticator(resourceServerURL *url.URL, fn func(writ
 
 		organization, err := claimsToOrganization(userInfo)
 		if err != nil {
-			log.Error().Err(err).Msg("Invalid user info in context")
+			log.Err(err).Msg("Invalid user info in context")
 			http.Error(response, "Unauthorized", http.StatusUnauthorized)
 			return
 		}

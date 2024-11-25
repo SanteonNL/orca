@@ -5,26 +5,49 @@ import "errors"
 var ErrWorkflowNotFound = errors.New("workflow not found")
 
 // Workflows is a map of workflow IDs to workflows.
-type Workflows map[string]Workflow
+// It's a map of a care service (e.g. Telemonitoring, http://snomed.info/sct|719858009),
+// to conditions (e.g. COPD, http://snomed.info/sct|13645005) and their workflows.
+type Workflows map[string]map[string]Workflow
 
 // DefaultWorkflows returns a set of default, embedded workflows.
 func DefaultWorkflows() Workflows {
 	return Workflows{
-		// COPD
-		"2.16.528.1.1007.3.3.21514.ehr.orders|99534756439": Workflow{
-			Steps: []WorkflowStep{
-				{
-					QuestionnaireUrl: "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017",
-				},
-				{
-					QuestionnaireUrl: "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-2--20240902134017",
+		// Telemonitoring
+		"http://snomed.info/sct|719858009": map[string]Workflow{
+			// COPD
+			"http://snomed.info/sct|13645005": {
+				Steps: []WorkflowStep{
+					{
+						QuestionnaireUrl: "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017",
+					},
+					//TODO: Commented out fow now, remove once we provide the Patient resource
+					//{
+					//	QuestionnaireUrl: "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-2--20240902134017",
+					//},
 				},
 			},
-		},
-		"tmp|fractuur-pols": Workflow{
-			Steps: []WorkflowStep{
-				{
-					QuestionnaireUrl: "http://tmp.sharedcareplanning.nl/fhir/Questionnaire/fractuur-pols",
+			// Heart failure
+			"http://snomed.info/sct|84114007": {
+				Steps: []WorkflowStep{
+					{
+						QuestionnaireUrl: "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134018",
+					},
+				},
+			},
+			// Asthma
+			"http://snomed.info/sct|195967001": {
+				Steps: []WorkflowStep{
+					{
+						QuestionnaireUrl: "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134019",
+					},
+				},
+			},
+			// TODO: what about this?
+			"tmp|fractuur-pols": {
+				Steps: []WorkflowStep{
+					{
+						QuestionnaireUrl: "http://tmp.sharedcareplanning.nl/fhir/Questionnaire/fractuur-pols",
+					},
 				},
 			},
 		},

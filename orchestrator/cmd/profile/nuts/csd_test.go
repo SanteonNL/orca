@@ -10,7 +10,10 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/http/httptest"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestCsdDirectory_Lookup(t *testing.T) {
@@ -22,12 +25,19 @@ func TestCsdDirectory_Lookup(t *testing.T) {
 		System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 		Value:  to.Ptr("123"),
 	}
+	otherOwnerURACodingSystem := fhir.Identifier{
+		System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+		Value:  to.Ptr("456"),
+	}
 	const serviceID = "svc-test"
 	const urlEndpointID = "url-endpoint"
 	const mapEndpointID = "map-endpoint"
 	const endpoint = "https://example.com/fhir"
+	const otherEndpoint = "https://example.com/other/fhir"
+	numInvocations := new(atomic.Int32)
 	discoveryServerRouter := http.NewServeMux()
 	discoveryServerRouter.HandleFunc("/internal/discovery/v1/"+serviceID, func(w http.ResponseWriter, r *http.Request) {
+		numInvocations.Add(1)
 		var response []discovery.SearchResult
 		if r.URL.Query().Get("credentialSubject.organization.ura") == *ownerURACodingSystem.Value {
 			response = []discovery.SearchResult{
@@ -44,6 +54,22 @@ func TestCsdDirectory_Lookup(t *testing.T) {
 				},
 			}
 		}
+		if r.URL.Query().Get("credentialSubject.otherName") == "*-S-"+*otherOwnerURACodingSystem.Value+"-00.000*" {
+			response = []discovery.SearchResult{
+				{
+					RegistrationParameters: map[string]interface{}{
+						urlEndpointID: otherEndpoint,
+						mapEndpointID: map[string]interface{}{
+							"address": otherEndpoint,
+						},
+					},
+					Fields: map[string]interface{}{
+						"organization_ura":  "456",
+						"organization_name": "other",
+					},
+				},
+			}
+		}
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		_ = json.NewEncoder(w).Encode(response)
@@ -51,11 +77,10 @@ func TestCsdDirectory_Lookup(t *testing.T) {
 	discoveryServer := httptest.NewServer(discoveryServerRouter)
 	apiClient, _ := discovery.NewClientWithResponses(discoveryServer.URL)
 	directory := CsdDirectory{
-		IdentifierCredentialMapping: map[string]string{
-			"http://fhir.nl/fhir/NamingSystem/ura": "credentialSubject.organization.ura", // URACredential
-		},
-		APIClient: apiClient,
-		ServiceID: serviceID,
+		APIClient:  apiClient,
+		ServiceID:  serviceID,
+		entryCache: make(map[string]cacheEntry),
+		cacheMux:   sync.RWMutex{},
 	}
 	ctx := context.Background()
 	t.Run("LookupEndpoint", func(t *testing.T) {
@@ -66,20 +91,53 @@ func TestCsdDirectory_Lookup(t *testing.T) {
 			require.Equal(t, endpoint, result[0].Address)
 			require.Equal(t, fhir.EndpointStatusActive, result[0].Status)
 		})
+		t.Run("UziServerCertificateCredential", func(t *testing.T) {
+			result, err := directory.LookupEndpoint(ctx, otherOwnerURACodingSystem, urlEndpointID)
+			require.NoError(t, err)
+			require.Len(t, result, 1)
+			require.Equal(t, otherEndpoint, result[0].Address)
+			require.Equal(t, fhir.EndpointStatusActive, result[0].Status)
+		})
+		t.Run("cached", func(t *testing.T) {
+			numInvocations.Store(0)
+			directory.entryCache = map[string]cacheEntry{}
+
+			result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, urlEndpointID)
+			require.NoError(t, err)
+			require.Len(t, result, 1)
+			require.Equal(t, 2, int(numInvocations.Load()))
+			_, _ = directory.LookupEndpoint(ctx, ownerURACodingSystem, urlEndpointID)
+			require.NoError(t, err)
+			require.Len(t, result, 1)
+			require.Equal(t, 2, int(numInvocations.Load()))
+		})
+		t.Run("stale cache", func(t *testing.T) {
+			numInvocations.Store(0)
+			directory.entryCache = map[string]cacheEntry{}
+
+			result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, urlEndpointID)
+			require.NoError(t, err)
+			require.Len(t, result, 1)
+			require.Equal(t, 2, int(numInvocations.Load()))
+			directory.cacheMux.Lock()
+			directory.entryCache[*ownerURACodingSystem.System+"|"+*ownerURACodingSystem.Value] = cacheEntry{
+				created: time.Time{},
+			}
+			directory.cacheMux.Unlock()
+			_, _ = directory.LookupEndpoint(ctx, ownerURACodingSystem, urlEndpointID)
+			require.Equal(t, 4, int(numInvocations.Load()))
+		})
 		t.Run("FHIR CodingSystem not mapped to Verifiable Credential property", func(t *testing.T) {
 			_, err := directory.LookupEndpoint(ctx, ownerUnsupportedCodingSystem, urlEndpointID)
-			require.EqualError(t, err, "no FHIR->Nuts Discovery Service mapping for CodingSystem: custom")
+			require.EqualError(t, err, "identifier.system must be http://fhir.nl/fhir/NamingSystem/ura")
 		})
 		t.Run("non-OK status", func(t *testing.T) {
 			result, err := directory.LookupEndpoint(ctx, ownerURACodingSystem, mapEndpointID)
 			require.NoError(t, err)
 			require.Empty(t, result)
 		})
-		t.Run("unnknown service", func(t *testing.T) {
+		t.Run("unknown service", func(t *testing.T) {
 			directory := CsdDirectory{
-				IdentifierCredentialMapping: map[string]string{
-					"http://fhir.nl/fhir/NamingSystem/ura": "credentialSubject.organization.ura", // URACredential
-				},
 				APIClient: apiClient,
 				ServiceID: "unknown",
 			}

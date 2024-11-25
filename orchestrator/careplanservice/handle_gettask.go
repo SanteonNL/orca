@@ -38,7 +38,6 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 	if err != nil {
 		return nil, err
 	}
-
 	// Check if the requester is either the task Owner or Requester, if not, they must be a member of the CareTeam
 	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 	if !(isOwner || isRequester) {
@@ -47,7 +46,7 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 			return nil, err
 		}
 
-		err = validatePrincipalInCareTeams(ctx, careTeams)
+		err = validatePrincipalInCareTeams(principal, careTeams)
 		if err != nil {
 			return nil, err
 		}
@@ -60,28 +59,19 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 // if the requester is a participant of one of the returned CareTeams, return the whole bundle, else error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
-	params := []fhirclient.Option{}
-	for k, v := range queryParams {
-		for _, value := range v {
-			params = append(params, fhirclient.QueryParam(k, value))
-		}
-	}
-
-	params = append(params, fhirclient.ResponseHeaders(headers))
-	var bundle fhir.Bundle
-	err := s.fhirClient.Read("Task", &bundle, params...)
+	// Verify requester is authenticated
+	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var tasks []fhir.Task
-	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("Task"), &tasks)
+	tasks, bundle, err := handleSearchResource[fhir.Task](s, "Task", queryParams, headers)
 	if err != nil {
 		return nil, err
 	}
 	if len(tasks) == 0 {
 		// If there are no tasks in the bundle there is no point in doing validation, return empty bundle to user
-		return &bundle, nil
+		return &fhir.Bundle{Entry: []fhir.BundleEntry{}}, nil
 	}
 
 	// It is possible that we have tasks based on different CarePlans. Create distinct list of References to be used for checking participant
@@ -95,27 +85,25 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 		}
 	}
 
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
+	taskRefs := make([]string, 0)
 	for ref, _ := range refs {
 		for _, task := range tasks {
 			isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 			if !(isOwner || isRequester) {
 				_, careTeams, _, err := s.getCarePlanAndCareTeams(ref)
 				if err != nil {
-					return nil, err
+					continue
 				}
 
-				err = validatePrincipalInCareTeams(ctx, careTeams)
+				err = validatePrincipalInCareTeams(principal, careTeams)
 				if err != nil {
-					return nil, err
+					continue
 				}
 			}
+			taskRefs = append(taskRefs, "Task/"+*task.Id)
 		}
 	}
+	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"Task"}, taskRefs)
 
-	return &bundle, nil
+	return &retBundle, nil
 }

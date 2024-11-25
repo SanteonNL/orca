@@ -11,7 +11,7 @@ import { IconPlus } from '@tabler/icons-react';
 import { Alert, Grid, MenuItem, Select } from '@mui/material';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Organization } from 'fhir/r4';
+import {Coding, Organization} from 'fhir/r4';
 import {
     getLocalOrganization,
     getTaskPerformerOrganization
@@ -23,6 +23,7 @@ const CreateServiceRequestDialog: React.FC = () => {
     const [open, setOpen] = React.useState(false);
     const [patientFirstName, setPatientFirstName] = useState<string>()
     const [patientLastName, setPatientLastName] = useState<string>()
+    const [patientConditionCode, setPatientConditionCode] = useState<Coding>()
     const [error, setError] = useState<string>()
     const router = useRouter()
 
@@ -37,7 +38,11 @@ const CreateServiceRequestDialog: React.FC = () => {
     const createServiceRequest = async () => {
         const requester = await getLocalOrganization()
         const performer = await getTaskPerformerOrganization()
-        const bundle = createServiceRequestBundle(patientFirstName || "John", patientLastName || "Doe", requester, performer)
+        if (!patientConditionCode) {
+            setError("Please select a condition")
+            return
+        }
+        const bundle = createServiceRequestBundle(patientFirstName || "John", patientLastName || "Doe", patientConditionCode, requester, performer)
 
         const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir`, {
             method: "POST",
@@ -113,6 +118,18 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 <MenuItem value="tele-monitoring">Telemonitoring</MenuItem>
                             </Select>
                         </Grid>
+                        <Grid item xs={12}>
+                            <Select fullWidth onChange={(event) => {
+                                const conditionCode = supportedConditions.find((condition) => condition.code === event.target.value)
+                                if (conditionCode) {
+                                    setPatientConditionCode(conditionCode)
+                                }
+                            }}>
+                                {supportedConditions.map((condition) => (
+                                    <MenuItem key={condition.code} value={condition.code} selected={condition.code === patientConditionCode?.code}>{condition.display}</MenuItem>
+                                ))}
+                            </Select>
+                        </Grid>
                     </Grid>
                 </DialogContent>
                 <DialogActions>
@@ -128,7 +145,26 @@ const CreateServiceRequestDialog: React.FC = () => {
 
 export default CreateServiceRequestDialog
 
-function createServiceRequestBundle(firstName: string, lastName: string, requester: Organization, performer: Organization) {
+// supportedConditions specifies the conditions that can be used in the ServiceRequest: COPD, Asthma, Heart failure
+const supportedConditions : Array<Coding> = [
+    {
+        "system": "http://snomed.info/sct",
+        "code": "84114007",
+        "display": "Heart failure (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "195967001",
+        "display": "Asthma (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "13645005",
+        "display": "Chronic obstructive pulmonary disease (disorder)"
+    }
+]
+
+function createServiceRequestBundle(firstName: string, lastName: string, conditionCode : Coding, requester: Organization, performer: Organization) {
     if (requester.identifier?.length !== 1) {
         throw new Error("Requester must have exactly one identifier")
     }
@@ -340,86 +376,8 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
                         }
                     ],
                     "code": {
-                        "coding": [
-                            {
-                                "system": "http://snomed.info/sct",
-                                "code": "13645005",
-                                "display": "Chronic obstructive lung disease (disorder)"
-                            }
-                        ],
-                        "text": "Chronische obstructieve longaandoening (aandoening)"
-                    },
-                    "subject": {
-                        "type": "Patient",
-                        "reference": "urn:uuid:patient-1",
-                        "identifier": {
-                            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
-                            "value": patientBsn
-                        }
-                    },
-                    "recorder": {
-                        "type": "PractitionerRole",
-                        "reference": "urn:uuid:practitionerrole-1",
-                        "identifier": {
-                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
-                            "value": "uzi-001"
-                        }
-                    }
-                },
-                "request": {
-                    "method": "POST",
-                    "url": "Condition"
-                }
-            },
-            {
-                "fullUrl": "urn:uuid:condition-2",
-                "resource": {
-                    "resourceType": "Condition",
-                    "id": "condition-2",
-                    "identifier": [
-                        {
-                            "system": "http://fhir.nl/fhir/NamingSystem/condition-identifier",
-                            "value": "condition-002"
-                        }
-                    ],
-                    "clinicalStatus": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/condition-clinical",
-                                "code": "active",
-                                "display": "Active"
-                            }
-                        ]
-                    },
-                    "verificationStatus": {
-                        "coding": [
-                            {
-                                "system": "http://terminology.hl7.org/CodeSystem/condition-ver-status",
-                                "code": "confirmed",
-                                "display": "Confirmed"
-                            }
-                        ]
-                    },
-                    "category": [
-                        {
-                            "coding": [
-                                {
-                                    "system": "http://terminology.hl7.org/CodeSystem/condition-category",
-                                    "code": "problem-list-item",
-                                    "display": "Problem List Item"
-                                }
-                            ]
-                        }
-                    ],
-                    "code": {
-                        "coding": [
-                            {
-                                "system": "http://snomed.info/sct",
-                                "code": "84114007",
-                                "display": "Heart failure (disorder)"
-                            }
-                        ],
-                        "text": "Hartfalen (aandoening)"
+                        "coding": [ conditionCode ],
+                        "text": conditionCode.display
                     },
                     "subject": {
                         "type": "Patient",
@@ -478,21 +436,17 @@ function createServiceRequestBundle(firstName: string, lastName: string, request
                             }
                         }
                     ],
-                    "identifier": [{
-                        "system": "2.16.528.1.1007.3.3.21514.ehr.orders",
-                        "value": "99534756439"
-                    }],
                     "code": {
                         "coding": [{
                             "system": "http://snomed.info/sct",
                             "code": "719858009",
-                            "display": "monitoren via telegeneeskunde (regime/therapie)"
-                        }]
+                            "display": "Telehealth monitoring (regime/therapy)"
+                        }],
                     },
                     "reasonReference": [
                         {
                             "type": "Condition",
-                            "display": "Chronische obstructieve longaandoening (aandoening)",
+                            "display": conditionCode.display,
                             "reference": "urn:uuid:condition-1",
                             "identifier": {
                                 "system": "http://fhir.nl/fhir/NamingSystem/condition-identifier",

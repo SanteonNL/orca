@@ -3,8 +3,6 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"net/http"
-
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
@@ -13,6 +11,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"net/http"
+	"time"
 )
 
 func Start(config Config) error {
@@ -22,7 +22,7 @@ func Start(config Config) error {
 
 	// Set up dependencies
 	httpHandler := http.NewServeMux()
-	sessionManager := user.NewSessionManager()
+	sessionManager := user.NewSessionManager(config.CarePlanContributor.SessionTimeout)
 
 	if err := config.Validate(); err != nil {
 		return err
@@ -59,6 +59,14 @@ func Start(config Config) error {
 			}
 			services = append(services, service)
 		}
+
+		// Start session expiration ticker
+		ticker := time.NewTicker(time.Minute)
+		go func() {
+			for range ticker.C {
+				sessionManager.PruneSessions()
+			}
+		}()
 	}
 	if config.CarePlanService.Enabled {
 		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL())

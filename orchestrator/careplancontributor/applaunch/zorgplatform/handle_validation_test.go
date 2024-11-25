@@ -1,32 +1,39 @@
 package zorgplatform
 
 import (
+	"context"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/beevik/etree"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 // This test does not run the expiry checks as the Expires date in the assertion is in the past
 func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.T) {
-	sessionManager := user.NewSessionManager()
+	sessionManager := user.NewSessionManager(time.Minute)
 	s := &Service{
 		sessionManager: sessionManager,
 	}
 
+	ctx := context.Background()
 	assertionXML, err := os.ReadFile("assertion_example.xml")
-	if err != nil {
-		t.Fatalf("Failed to read assertion example XML: %v", err)
-	}
+	require.NoError(t, err)
 	decryptedDocument := etree.NewDocument()
 	err = decryptedDocument.ReadFromBytes(assertionXML)
 	decryptedAssertion := decryptedDocument.FindElement("//Assertion")
 
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name               string
@@ -77,7 +84,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			if tt.expectedError != nil && err != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			// Validate Issuer
@@ -85,15 +92,15 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			if tt.expectedError != nil && err != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 
 			// Extract Practitioner
-			practitioner, err := s.extractPractitioner(decryptedAssertion)
+			practitioner, err := s.extractPractitioner(ctx, decryptedAssertion)
 			if tt.expectedError != nil && err != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				subjectNameId := *practitioner.Identifier[0].Value + "@" + *practitioner.Identifier[0].System
 				assert.Equal(t, tt.expectedSubj, subjectNameId)
 			}
@@ -103,16 +110,16 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			if tt.expectedError != nil && err != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectedBSN, resourceID)
 			}
 
 			// Extract Workflow ID
-			workflowID, err := s.extractWorkflowID(decryptedAssertion)
+			workflowID, err := s.extractWorkflowID(ctx, decryptedAssertion)
 			if tt.expectedError != nil && err != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 				assert.Equal(t, tt.expectedWorkflowId, workflowID)
 			}
 
@@ -123,7 +130,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 }
 
 func TestValidateTokenExpiry(t *testing.T) {
-	sessionManager := user.NewSessionManager()
+	sessionManager := user.NewSessionManager(time.Minute)
 	s := &Service{
 		sessionManager: sessionManager,
 	}
@@ -169,6 +176,7 @@ func TestValidateTokenExpiry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			doc := etree.NewDocument()
+			ctx := context.Background()
 			root := doc.CreateElement("Assertion")
 			timestamp := root.CreateElement("u:Timestamp")
 			created := timestamp.CreateElement("u:Created")
@@ -176,12 +184,55 @@ func TestValidateTokenExpiry(t *testing.T) {
 			expires := timestamp.CreateElement("u:Expires")
 			expires.SetText(tt.expires)
 
-			err := s.validateAssertionExpiry(doc)
+			err := s.validateAssertionExpiry(ctx, doc)
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		})
 	}
+}
+func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
+	sessionManager := user.NewSessionManager(time.Minute)
+
+	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
+	require.NoError(t, err)
+	zorgplatformCertBlock, _ := pem.Decode(zorgplatformCertData)
+	require.NotNil(t, zorgplatformCertBlock)
+	zorgplatformX509Cert, err := x509.ParseCertificate(zorgplatformCertBlock.Bytes)
+	require.NoError(t, err)
+
+	keyPair, err := tls.LoadX509KeyPair("test-certificate.pem", "test-key.pem")
+	require.NoError(t, err)
+
+	launchContext := &LaunchContext{
+		Bsn: "123456789",
+		Practitioner: fhir.Practitioner{
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("urn:oid:2.16.840.1.113883.4.1"),
+					Value:  to.Ptr("999999999"),
+				},
+			},
+		},
+		SubjectNameId:  "Subject",
+		WorkflowId:     "workflow-1234",
+		ServiceRequest: fhir.ServiceRequest{},
+	}
+
+	s := &Service{
+		sessionManager:        sessionManager,
+		zorgplatformCert:      zorgplatformX509Cert,                 // used to verify the signature
+		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey), // used by the forger to sign the assertion
+		signingCertificate:    keyPair.Certificate,                  // used by the forger to sign the assertion
+	}
+
+	forgedAssertion, err := s.createSAMLAssertion(launchContext, hcpTokenType)
+	require.NoError(t, err)
+	forgedSignedAssertion, err := s.signAssertion(forgedAssertion)
+	require.NoError(t, err)
+
+	err = s.validateZorgplatformSignature(forgedSignedAssertion)
+	require.EqualError(t, err, "unable to validate signature: Could not verify certificate against trusted certs")
 }

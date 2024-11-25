@@ -5,20 +5,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"strings"
 )
 
-func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.TransactionBuilder) (FHIRHandlerResult, error) {
-	log.Info().Msgf("Updating Task: %s", request.RequestUrl)
+func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	log.Info().Ctx(ctx).Msgf("Updating Task: %s", request.RequestUrl)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
-		return nil, fmt.Errorf("invalid %T: %w", task, err)
+		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
 	}
 
 	// Validate fields on updated Task
@@ -51,7 +52,13 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, fmt.Errorf("failed to read Task from search result: %w", err)
 			}
 		}
+		if task.Id != nil && *taskExisting.Id != *task.Id {
+			return nil, coolfhir.BadRequest("ID in request URL does not match ID in resource")
+		}
 	} else {
+		if (task.Id != nil && request.ResourceId != "") && request.ResourceId != *task.Id {
+			return nil, coolfhir.BadRequest("ID in request URL does not match ID in resource")
+		}
 		err = s.fhirClient.Read("Task/"+request.ResourceId, &taskExisting)
 		// TODO: If the resource was identified by a concrete ID, and was intended as upsert (create-if-not-exists), this doesn't work yet.
 	}
@@ -68,7 +75,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	if err != nil {
 		return nil, err
 	}
-	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
+	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&taskExisting, principal.Organization.Identifier)
 	isScpSubTask := coolfhir.IsScpSubTask(&task)
 	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester, isScpSubTask) {
 		return nil, errors.New(
@@ -82,25 +89,42 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 			))
 	}
 
+	// Check fields that aren't allowed to be changed: owner, requester, basedOn, partOf, for
+	if !deep.Equal(task.Requester, taskExisting.Requester) {
+		return nil, errors.New("Task.requester cannot be changed")
+	}
+	if !deep.Equal(task.Owner, taskExisting.Owner) {
+		return nil, errors.New("Task.owner cannot be changed")
+	}
+	if !deep.Equal(task.BasedOn, taskExisting.BasedOn) {
+		return nil, errors.New("Task.basedOn cannot be changed")
+	}
+	if !deep.Equal(task.PartOf, taskExisting.PartOf) {
+		return nil, errors.New("Task.partOf cannot be changed")
+	}
+	if !deep.Equal(task.For, taskExisting.For) {
+		return nil, errors.New("Task.for cannot be changed")
+	}
+
 	// Resolve the CarePlan
 	carePlanRef, err := basedOn(task)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 	}
+	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
-	tx = tx.Append(request.bundleEntryWithResource(task))
+	taskBundleEntry := request.bundleEntryWithResource(task)
+	tx = tx.AppendEntry(taskBundleEntry)
 	idx := len(tx.Entry) - 1
 	// Update care team
-	_, err = careteamservice.Update(s.fhirClient, *carePlanRef, task, tx)
+	_, err = careteamservice.Update(s.fhirClient, carePlanId, task, tx)
 	if err != nil {
 		return nil, fmt.Errorf("update CareTeam: %w", err)
 	}
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedTask fhir.Task
-		result, err := coolfhir.FetchBundleEntry(s.fhirClient, txResult, func(currIdx int, entry fhir.BundleEntry) bool {
-			return currIdx == idx
-		}, &updatedTask)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[idx], &updatedTask)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original Task that was sent.

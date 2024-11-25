@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -12,46 +13,56 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-type TransactionBuilder fhir.Bundle
+type BundleBuilder fhir.Bundle
 
-func Transaction() *TransactionBuilder {
-	return &TransactionBuilder{
+func Transaction() *BundleBuilder {
+	return &BundleBuilder{
 		Type: fhir.BundleTypeTransaction,
 	}
 }
 
-func (t *TransactionBuilder) Create(resource interface{}, opts ...BundleEntryOption) *TransactionBuilder {
-	return t.addEntry(resource, ResourceType(resource), fhir.HTTPVerbPOST, opts...)
+func SearchSet() *BundleBuilder {
+	return &BundleBuilder{
+		Type: fhir.BundleTypeSearchset,
+	}
 }
 
-func (t *TransactionBuilder) Update(resource interface{}, path string, opts ...BundleEntryOption) *TransactionBuilder {
-	return t.addEntry(resource, path, fhir.HTTPVerbPUT, opts...)
+func (t *BundleBuilder) Create(resource interface{}, opts ...BundleEntryOption) *BundleBuilder {
+	return t.Append(resource, &fhir.BundleEntryRequest{
+		Method: fhir.HTTPVerbPOST,
+		Url:    ResourceType(resource),
+	}, nil, opts...)
 }
 
-func (t *TransactionBuilder) addEntry(resource interface{}, path string, verb fhir.HTTPVerb, opts ...BundleEntryOption) *TransactionBuilder {
+func (t *BundleBuilder) Update(resource interface{}, path string, opts ...BundleEntryOption) *BundleBuilder {
+	return t.Append(resource, &fhir.BundleEntryRequest{
+		Method: fhir.HTTPVerbPUT,
+		Url:    path,
+	}, nil, opts...)
+}
+
+func (t *BundleBuilder) Append(resource interface{}, request *fhir.BundleEntryRequest, response *fhir.BundleEntryResponse, opts ...BundleEntryOption) *BundleBuilder {
 	data, err := json.Marshal(resource)
 	if err != nil {
 		return t
 	}
 	entry := fhir.BundleEntry{
 		Resource: data,
-		Request: &fhir.BundleEntryRequest{
-			Method: verb,
-			Url:    path,
-		},
+		Request:  request,
+		Response: response,
 	}
 	for _, opt := range opts {
 		opt(&entry)
 	}
-	return t.Append(entry)
+	return t.AppendEntry(entry)
 }
 
-func (t *TransactionBuilder) Append(entry fhir.BundleEntry) *TransactionBuilder {
+func (t *BundleBuilder) AppendEntry(entry fhir.BundleEntry) *BundleBuilder {
 	t.Entry = append(t.Entry, entry)
 	return t
 }
 
-func (t *TransactionBuilder) Bundle() fhir.Bundle {
+func (t *BundleBuilder) Bundle() fhir.Bundle {
 	return fhir.Bundle(*t)
 }
 
@@ -153,28 +164,66 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 	return resultBundle, nil
 }
 
-func FetchBundleEntry(fhirClient fhirclient.Client, bundle *fhir.Bundle, filter func(i int, entry fhir.BundleEntry) bool, result interface{}) (*fhir.BundleEntry, error) {
-	for i, currentEntry := range bundle.Entry {
-		if currentEntry.Response == nil || currentEntry.Response.Location == nil {
-			log.Error().Msg("entry.Response or entry.Response.Location is nil")
-			continue
-		}
-		if !filter(i, currentEntry) {
-			continue
-		}
-		headers := new(fhirclient.Headers)
-		var responseData []byte
-		if err := fhirClient.Read(*currentEntry.Response.Location, &responseData, fhirclient.ResponseHeaders(headers)); err != nil {
-			return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", *currentEntry.Response.Location, err))
-		}
-		if result != nil {
-			if err := json.Unmarshal(responseData, result); err != nil {
-				return nil, fmt.Errorf("unmarshal Bundle entry (target=%T): %w", result, err)
+// NormalizeTransactionBundleResponseEntry normalizes a transaction bundle response entry returned from an upstream FHIR server,
+// so it can be returned to a client, who is agnostic of the upstream FHIR server implementation.
+// It does the following:
+// - Change the response.location property to a relative URL if it was an absolute URL
+// - Read the resource being referenced and unmarshal it into the given result argument (so it can be used for notification).
+// - Set the response.resource property to the read resource
+func NormalizeTransactionBundleResponseEntry(fhirClient fhirclient.Client, fhirBaseURL *url.URL, requestEntry *fhir.BundleEntry, responseEntry *fhir.BundleEntry, result interface{}) (*fhir.BundleEntry, error) {
+	if responseEntry.Response == nil {
+		return nil, errors.New("entry.Response is nil")
+	}
+	resultEntry := *responseEntry
+	// Enrich result with resource from FHIR server
+	if resultEntry.Resource == nil {
+		// Microsoft Azure FHIR: when PUT-ing a resource, the resultEntry entry might not contain a location.
+		//                       in that case, the location is the same as the request URL.
+		var resourcePath string
+		var requestOptions []fhirclient.Option
+		if resultEntry.Response.Location != nil {
+			resourcePath = *resultEntry.Response.Location
+			// HAPI uses relative Location URLs, Microsoft Azure FHIR uses absolute URLs.
+			resourcePath = strings.TrimPrefix(resourcePath, fhirBaseURL.String())
+			// depending on the base URL ending with slash or not, we might end up with a leading slash.
+			// Trim it for deterministic comparison.
+			resourcePath = strings.TrimPrefix(resourcePath, "/")
+			// Consistent behavior for easier testing and integration: pass the relative resource URL to the FHIR client.
+			// (HAPI uses relative Location URLs, Microsoft Azure FHIR uses absolute URLs.)
+			resultEntry.Response.Location = to.Ptr(resourcePath)
+		} else if strings.Contains(requestEntry.Request.Url, "/") {
+			// resultEntry.location is not set, might be an upsert with logical identifier.
+			// In this case, it's a literal reference
+			resourcePath = requestEntry.Request.Url
+		} else if strings.Contains(requestEntry.Request.Url, "?") {
+			// resultEntry.location is not set, might be an upsert with logical identifier.
+			// In this case, it's a reference with a logical identifier
+			entryRequestUrl, err := url.Parse(requestEntry.Request.Url)
+			if err != nil {
+				return nil, err
+			}
+			resourcePath = entryRequestUrl.Path
+			for key, values := range entryRequestUrl.Query() {
+				for _, value := range values {
+					requestOptions = append(requestOptions, fhirclient.QueryParam(key, value))
+				}
 			}
 		}
-		response := currentEntry
-		response.Resource = responseData
-		return &response, nil
+		if resourcePath == "" {
+			responseBundleEntryJson, _ := json.Marshal(responseEntry)
+			log.Error().Msgf("Failed to determine resource path from FHIR transaction resultEntry bundle: %s", string(responseBundleEntryJson))
+			return nil, errors.New("failed to determine resource for transaction response bundle entry, see log for more details")
+		}
+		var resourceData []byte
+		if err := fhirClient.Read(resourcePath, &resourceData, requestOptions...); err != nil {
+			return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", resourcePath, err))
+		}
+		resultEntry.Resource = resourceData
 	}
-	return nil, ErrEntryNotFound
+	if len(resultEntry.Resource) != 0 && result != nil {
+		if err := json.Unmarshal(resultEntry.Resource, result); err != nil {
+			return nil, fmt.Errorf("unmarshal Bundle entry (target=%T): %w", result, err)
+		}
+	}
+	return &resultEntry, nil
 }

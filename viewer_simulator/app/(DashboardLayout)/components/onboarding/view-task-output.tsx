@@ -77,7 +77,7 @@ export default function ViewTaskOutput({ task }: { task: Task }) {
                     </Toolbar>
                 </AppBar>
                 <Box sx={{ mt: '80px' }}>
-                    {!setFetched ?
+                    {!fetched ?
                         (<Loading />) :
                         !questionnaire || !questionnaireResponse ? (
                             <>No Questionnaire or QuestionnaireResponse found</>

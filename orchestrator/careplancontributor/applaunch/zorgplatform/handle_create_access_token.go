@@ -9,20 +9,67 @@ import (
 	"crypto/tls"
 	"encoding/base64"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/beevik/etree"
 	"github.com/google/uuid"
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
-// RequestHcpRst generates the SAML assertion, signs it, and sends the SOAP request to the Zorgplatform STS
-func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
+type SecureTokenService interface {
+	RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error)
+}
+
+type TokenType struct {
+	Role         func(element *etree.Element)
+	PurposeOfUse func(element *etree.Element)
+}
+
+var applicationTokenType = TokenType{
+	Role: func(role *etree.Element) {
+		role.CreateAttr("code", "182777000")
+		role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
+		role.CreateAttr("codeSystemName", "SNOMED_CT")
+		role.CreateAttr("displayName", "")
+		role.CreateAttr("xmlns", "urn:hl7-org:v3")
+	},
+	PurposeOfUse: func(purposeOfUse *etree.Element) {
+		purposeOfUse.CreateAttr("code", "OPERATIONS")
+		purposeOfUse.CreateAttr("codeSystem", "2.16.840.1.113883.3.18.7.1")
+		purposeOfUse.CreateAttr("codeSystemName", "nhin-purpose")
+		purposeOfUse.CreateAttr("displayName", "")
+		purposeOfUse.CreateAttr("xmlns", "urn:hl7-org:v3")
+	},
+}
+
+var hcpTokenType = TokenType{
+	Role: func(role *etree.Element) {
+		role.CreateAttr("code", "224609002")
+		role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
+		role.CreateAttr("codeSystemName", "SNOMED_CT")
+		role.CreateAttr("displayName", "")
+		role.CreateAttr("xmlns", "urn:hl7-org:v3")
+	},
+	PurposeOfUse: func(purposeOfUse *etree.Element) {
+		purposeOfUse.CreateAttr("code", "TREATMENT")
+		purposeOfUse.CreateAttr("codeSystem", "2.16.840.1.113883.3.18.7.1")
+		purposeOfUse.CreateAttr("codeSystemName", "nhin-purpose")
+		purposeOfUse.CreateAttr("displayName", "")
+		purposeOfUse.CreateAttr("xmlns", "urn:hl7-org:v3")
+	},
+}
+
+var _ SecureTokenService = &Service{}
+
+// RequestAccessToken generates the SAML assertion, signs it, sends the SOAP request to the Zorgplatform STS and teturns the SAML access token
+func (s *Service) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
 	// Create the SAML assertion
-	assertion, err := s.createSAMLAssertion(&launchContext)
+	assertion, err := s.createSAMLAssertion(&launchContext, tokenType)
+
 	if err != nil {
 		return "Failed to create SAML assertion", err
 	}
@@ -49,7 +96,7 @@ func (s *Service) RequestHcpRst(launchContext LaunchContext) (string, error) {
 }
 
 // createSAMLAssertion builds the SAML assertion
-func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Element, error) {
+func (s *Service) createSAMLAssertion(launchContext *LaunchContext, tokenType TokenType) (*etree.Element, error) {
 	assertionID := "_" + uuid.New().String()
 	now := GetCurrentXSDDateTime()
 	notOnOrAfter := FormatXSDDateTime(time.Now().Add(15 * time.Minute))
@@ -88,22 +135,14 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	attribute1.CreateAttr("Name", "urn:oasis:names:tc:xspa:1.0:subject:purposeofuse")
 	attributeValue1 := attribute1.CreateElement("AttributeValue")
 	purposeOfUse := attributeValue1.CreateElement("PurposeOfUse")
-	purposeOfUse.CreateAttr("code", "TREATMENT")
-	purposeOfUse.CreateAttr("codeSystem", "2.16.840.1.113883.3.18.7.1")
-	purposeOfUse.CreateAttr("codeSystemName", "nhin-purpose")
-	purposeOfUse.CreateAttr("displayName", "")
-	purposeOfUse.CreateAttr("xmlns", "urn:hl7-org:v3")
+	tokenType.PurposeOfUse(purposeOfUse)
 
 	// Role Attribute
 	attribute2 := attributeStatement.CreateElement("Attribute")
 	attribute2.CreateAttr("Name", "urn:oasis:names:tc:xacml:2.0:subject:role")
 	attributeValue2 := attribute2.CreateElement("AttributeValue")
 	role := attributeValue2.CreateElement("Role")
-	role.CreateAttr("code", "224609002")
-	role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
-	role.CreateAttr("codeSystemName", "SNOMED_CT")
-	role.CreateAttr("displayName", "")
-	role.CreateAttr("xmlns", "urn:hl7-org:v3")
+	tokenType.Role(role)
 
 	// Resource ID Attribute
 	attribute3 := attributeStatement.CreateElement("Attribute")
@@ -121,10 +160,12 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext) (*etree.Elem
 	attributeValue4.SetText(s.config.SigningConfig.Issuer)
 
 	// Workflow ID Attribute
-	attribute5 := attributeStatement.CreateElement("Attribute")
-	attribute5.CreateAttr("Name", "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id")
-	attributeValue5 := attribute5.CreateElement("AttributeValue")
-	attributeValue5.SetText(launchContext.WorkflowId)
+	if launchContext.WorkflowId != "" {
+		attribute5 := attributeStatement.CreateElement("Attribute")
+		attribute5.CreateAttr("Name", "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id")
+		attributeValue5 := attribute5.CreateElement("AttributeValue")
+		attributeValue5.SetText(launchContext.WorkflowId)
+	}
 
 	// AuthnStatement
 	authnStatement := assertion.CreateElement("AuthnStatement")
@@ -343,8 +384,8 @@ func (s *Service) submitSAMLRequest(envelope string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Debug().Msgf("Zorgplatform STS SOAP request: %s", envelope)
-		log.Debug().Msgf("Zorgplatform STS SOAP response: %s", string(responseBody))
+		log.Debug().Ctx(ctx).Msgf("Zorgplatform STS SOAP request: %s", envelope)
+		log.Debug().Ctx(ctx).Msgf("Zorgplatform STS SOAP response: %s", string(responseBody))
 		return "", fmt.Errorf("unexpected response status: %d", resp.StatusCode)
 	}
 
@@ -371,7 +412,10 @@ func (s *Service) validateRSTSResponse(rtst string) (string, error) {
 		return "", fmt.Errorf("failed to serialize RTST assertion: %w", err)
 	}
 
-	//TODO: Assertion MUST be validated here!!!
+	err = s.validateZorgplatformSignature(assertionElement)
+	if err != nil {
+		return "", fmt.Errorf("failed to validate RTST assertion signature: %w", err)
+	}
 
 	// Return the SAML Bearer token value; the base64 encoded <Assertion> element
 	return base64.StdEncoding.EncodeToString([]byte(assertionString)), nil

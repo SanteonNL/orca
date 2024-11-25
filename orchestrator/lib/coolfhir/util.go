@@ -41,6 +41,14 @@ func LogicalReference(refType, system, identifier string) *fhir.Reference {
 	}
 }
 
+// ValidateReference validates that a reference is either a logical reference, a reference to a resource, or both.
+func ValidateReference(reference fhir.Reference) bool {
+	if reference.Reference != nil {
+		return true
+	}
+	return reference.Identifier != nil && reference.Identifier.System != nil && reference.Identifier.Value != nil
+}
+
 func ValidateLogicalReference(reference *fhir.Reference, expectedType string, expectedSystem string) error {
 	if reference == nil {
 		return errors.New("reference cannot be nil")
@@ -277,7 +285,7 @@ func IsScpTask(task *fhir.Task) bool {
 func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource interface{}, additionalHeaders ...map[string]string) {
 	data, err := json.MarshalIndent(resource, "", "  ")
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal response")
+		log.Err(err).Msg("Failed to marshal response")
 		httpStatus = http.StatusInternalServerError
 		data = []byte(`{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"Failed to marshal response"}]}`)
 	}
@@ -291,6 +299,6 @@ func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource int
 	httpResponse.WriteHeader(httpStatus)
 	_, err = httpResponse.Write(data)
 	if err != nil {
-		log.Error().Err(err).Msgf("Failed to write response: %s", string(data))
+		log.Err(err).Msgf("Failed to write response: %s", string(data))
 	}
 }

@@ -2,9 +2,9 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
-import { getCarePlan, getTask } from '@/lib/fhirUtils'
+import { findInBundle, getBsn, getCarePlan, constructTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
+import { Bundle, CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,15 +13,18 @@ import JsonView from 'react18-json-view';
 import 'react18-json-view/src/style.css';
 import { Spinner } from '@/components/spinner'
 
+interface Props {
+    className?: string
+}
+
 /**
  * This button informs the CarePlanService of the new enrollment.
  * 
- * 1. If the CarePlan does not exist yet, it will be created.
- * 2. It will create a Task, referring to the CarePlan and ServiceRequest
+ * It currently always creates a new CarePlan in the CPS
  * 
  * @returns 
  */
-export default function EnrollInCpsButton() {
+export default function EnrollInCpsButton({ className }: Props) {
 
     const { patient, selectedCarePlan, taskCondition, serviceRequest } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
@@ -42,7 +45,13 @@ export default function EnrollInCpsButton() {
             throw new Error("Something went wrong with CarePlan creation")
         }
 
-        const task = await createTask(taskCondition)
+        const taskBundle = await createTask(taskCondition)
+        const task = findInBundle('Task', taskBundle as Bundle);
+
+        if (!task) {
+            toast.error("Error: Something went wrong with Task creation", { richColors: true })
+            throw new Error("Something went wrong with Task creation")
+        }
 
         toast.success("Enrollment successfully sent to filler", {
             closeButton: true,
@@ -67,7 +76,7 @@ export default function EnrollInCpsButton() {
                             </DialogDescription>
                         </DialogHeader>
                         <div className='overflow-auto'>
-                            <JsonView src={task} collapsed={2} />
+                            <JsonView src={taskBundle} collapsed={2} />
                         </div>
                     </DialogContent>
                 </Dialog >
@@ -77,63 +86,45 @@ export default function EnrollInCpsButton() {
         router.push(`/enrollment/task/${task.id}`)
     }
 
-    const forwardServiceRequest = async () => {
-        if (!serviceRequest) {
-            toast.error("Error: Missing ServiceRequest - Cannot forward to CPS", { richColors: true })
-            throw new Error("Missing ServiceRequest - Cannot forward to CPS")
-        }
-
-        if (!cpsClient) {
-            toast.error("Error: CarePlanService not found", { richColors: true })
-            throw new Error("No CPS client found")
-        }
-
-        try {
-            // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
-            // TODO: Properly fix with with bundle refs in INT-288
-            const cleanServiceRequest = { ...serviceRequest };
-            if (cleanServiceRequest.subject?.reference) {
-                delete cleanServiceRequest.subject.reference;
-            }
-            if (cleanServiceRequest.requester?.reference) {
-                delete cleanServiceRequest.requester.reference;
-            }
-            if (cleanServiceRequest.performer?.[0]?.reference) {
-                delete cleanServiceRequest.performer[0].reference;
-            }
-
-            return await cpsClient.create({ resourceType: 'ServiceRequest', body: cleanServiceRequest }) as ServiceRequest
-        } catch (error) {
-            const msg = `Failed to forward ServiceRequest. Error message: ${error ?? "No error message found"}`
-            toast.error(msg, { richColors: true })
-            throw new Error(msg)
-        }
-    }
-
     const createTask = async (taskCondition: Condition) => {
         if (!cpsClient || !ehrClient) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
-        if (!patient || !taskCondition || !serviceRequest) {
+        if (!patient || !getBsn(patient) || !taskCondition || !serviceRequest) {
             toast.error("Error: Missing required items for Task creation", { richColors: true })
             throw new Error("Missing required items for Task creation")
         }
 
-        const forwardedServiceRequest = await forwardServiceRequest()
-
-        const task = getTask(forwardedServiceRequest, taskCondition)
+        var taskBundle: Bundle & { type: "transaction"; };
 
         try {
-            return await cpsClient.create({ resourceType: 'Task', body: task });
+            taskBundle = constructTaskBundle(serviceRequest, taskCondition, patient);
         } catch (error) {
-            const msg = `Failed to create Task. Error message: ${error ?? "Not error message found"}`
-            toast.error(msg, { richColors: true })
-            throw new Error(msg)
+            console.debug("Error constructing taskBundle");
+            console.error(error);
+            const msg = `Failed to construct Task Bundle. Error message: ${JSON.stringify(error) ?? "Not error message found"}`;
+            toast.error(msg, { richColors: true });
+            throw new Error(msg);
+        }
+
+        try {
+            return await cpsClient.transaction({ body: taskBundle });
+        } catch (error) {
+            console.debug("Error posting Bundle", taskBundle);
+            console.error(error);
+            const msg = `Failed to execute Task Bundle. Error message: ${JSON.stringify(error) ?? "Not error message found"}`;
+            toast.error(msg, { richColors: true });
+            throw new Error(msg);
         }
     }
 
     return (
-        <Button disabled={disabled} onClick={informCps}>{submitted && <Spinner className='mr-5 text-white' />}Proceed</Button >
+        <Button className={className} disabled={disabled} onClick={informCps}>
+            {submitted ? <Spinner className='mr-5 text-white' /> : null}
+            <span className='mr-1'>{submitted ? "Sending" : "Send"}</span>
+            Task
+            {serviceRequest?.performer?.[0].display && <span className='ml-1'>to {serviceRequest.performer[0].display}</span>}
+        </Button>
     )
 }

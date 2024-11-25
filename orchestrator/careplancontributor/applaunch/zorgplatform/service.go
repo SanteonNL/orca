@@ -30,10 +30,6 @@ import (
 const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
 
-type HcpRequester interface {
-	RequestHcpRst(launchContext LaunchContext) (string, error)
-}
-
 func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
@@ -124,6 +120,11 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		tlsClientCert = *tlsClientCertPtr
 	}
 
+	cert, err := getCertificate(config.DecryptConfig.SignCertPem)
+	if err != nil {
+		return nil, fmt.Errorf("unable to load Zorgplatform's public signing certificate: %w", err)
+	}
+
 	result := &Service{
 		sessionManager:        sessionManager,
 		config:                config,
@@ -133,6 +134,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
 		decryptCertificate:    decryptCert,
+		zorgplatformCert:      cert,
 		profile:               profile,
 		// performing HTTP requests with Zorgplatform requires mutual TLS
 		zorgplatformHttpClient: &http.Client{
@@ -145,6 +147,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 			},
 		},
 	}
+	result.secureTokenService = result
 	result.registerFhirClientFactory(config)
 	return result, nil
 }
@@ -159,7 +162,9 @@ type Service struct {
 	tlsClientCertificate   *tls.Certificate
 	decryptCertificate     crypto.Suite
 	zorgplatformHttpClient *http.Client
+	zorgplatformCert       *x509.Certificate
 	profile                profile.Provider
+	secureTokenService     SecureTokenService
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -167,7 +172,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Request) {
-	log.Debug().Msg("Handling ChipSoft HiX app launch")
+	log.Debug().Ctx(request.Context()).Msg("Handling ChipSoft HiX app launch")
 	if err := request.ParseForm(); err != nil {
 		http.Error(response, fmt.Errorf("unable to parse form: %w", err).Error(), http.StatusBadRequest)
 		return
@@ -175,38 +180,39 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	samlResponse := request.FormValue("SAMLResponse")
 	if samlResponse == "" {
 		http.Error(response, "SAMLResponse not found in request", http.StatusBadRequest)
+		return
 	}
 
-	launchContext, err := s.parseSamlResponse(samlResponse)
+	launchContext, err := s.parseSamlResponse(request.Context(), samlResponse)
 
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
-		log.Error().Err(err).Msg("unable to validate SAML token")
+		log.Err(err).Ctx(request.Context()).Msg("unable to validate SAML token")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
 
 	// TODO: Remove this debug logging later
-	log.Info().Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
+	log.Info().Ctx(request.Context()).Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
 
 	//TODO: launchContext.Practitioner needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
 	// Cache FHIR resources that don't exist in the EHR in the session,
 	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
 
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
-	accessToken, err := s.RequestHcpRst(launchContext)
+	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, hcpTokenType)
 
 	if err != nil {
-		log.Error().Err(err).Msg("unable to request access token for HCP ProfessionalService")
+		log.Err(err).Ctx(request.Context()).Msg("unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
 
-	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:16])
+	log.Info().Ctx(request.Context()).Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
 	sessionData, err := s.getSessionData(request.Context(), accessToken, launchContext)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to create session data")
+		log.Err(err).Ctx(request.Context()).Msg("unable to create session data")
 		http.Error(response, "Application launch failed.", http.StatusInternalServerError)
 		return
 	}
@@ -216,7 +222,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// Redirect to landing page
 	targetURL, _ := url.Parse(s.baseURL)
 	targetURL = targetURL.JoinPath(s.landingUrlPath)
-	log.Info().Msg("Successfully launched through ChipSoft HiX app launch")
+	log.Info().Ctx(request.Context()).Msg("Successfully launched through ChipSoft HiX app launch")
 	http.Redirect(response, request, targetURL.String(), http.StatusFound)
 }
 
@@ -254,6 +260,12 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	if err = fhirClient.ReadWithContext(ctx, "Task/"+launchContext.WorkflowId, &task); err != nil {
 		return nil, fmt.Errorf("unable to fetch Task resource (id=%s): %w", launchContext.WorkflowId, err)
 	}
+	// Determine service and condition code from the workflow specified by Task.definitionReference.reference (e.g. Telemonitoring, COPD)
+	conditionCode, err := getConditionCodeFromWorkflowTask(task)
+	if err != nil {
+		return nil, err
+	}
+
 	// Search for Encounter, contains Encounter, Organization and Patient
 	if task["context"] == nil {
 		return nil, fmt.Errorf("task.context is not provided")
@@ -298,26 +310,32 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		return nil, fmt.Errorf("unable to find Practitioner resource in Bundle: %w", err)
 	}
 
-	var conditionBundle fhir.Bundle
-	var conditions []map[string]interface{}
+	// var conditionBundle fhir.Bundle
 	//TODO: We assume this is in context as the HCP token is workflow-specific. Double-check with Zorgplatform
-	if err = fhirClient.ReadWithContext(ctx, "Condition", &conditionBundle, fhirclient.QueryParam("subject", "Patient/"+*patient.Id)); err != nil {
-		return nil, fmt.Errorf("unable to fetch Conditions bundle: %w", err)
-	}
-	if err := coolfhir.ResourcesInBundle(&conditionBundle, coolfhir.EntryIsOfType("Condition"), &conditions); err != nil {
-		return nil, fmt.Errorf("unable to find Condition resources in Bundle: %w", err)
+	// var conditions []map[string]interface{}
+	// if err = fhirClient.ReadWithContext(ctx, "Condition", &conditionBundle, fhirclient.QueryParam("subject", "Patient/"+*patient.Id)); err != nil {
+	// 	return nil, fmt.Errorf("unable to fetch Conditions bundle: %w", err)
+	// }
+	// if err := coolfhir.ResourcesInBundle(&conditionBundle, coolfhir.EntryIsOfType("Condition"), &conditions); err != nil {
+	// 	return nil, fmt.Errorf("unable to find Condition resources in Bundle: %w", err)
+	// }
+
+	// if *conditionBundle.Total < 1 {
+	// 	return nil, fmt.Errorf("expected at least one Condition, got %d", conditionBundle.Total)
+	// }
+
+	var reasonReference fhir.Reference
+
+	reason := fhir.Condition{
+		Id:   to.Ptr(uuid.NewString()),
+		Code: conditionCode,
 	}
 
-	var reasonReferences []fhir.Reference
-	var conditionMap = make(map[string]interface{})
-
-	for _, condition := range conditions {
-		ref := "Condition/magic-" + condition["id"].(string)
-		reasonReferences = append(reasonReferences, fhir.Reference{
-			Type:      to.Ptr("Condition"),
-			Reference: to.Ptr(ref),
-		})
-		conditionMap[ref] = condition
+	ref := "Condition/magic-" + *reason.Id
+	reasonReference = fhir.Reference{
+		Type:      to.Ptr("Condition"),
+		Reference: to.Ptr(ref),
+		Display:   to.Ptr(*reason.Code.Text),
 	}
 
 	identities, err := s.profile.Identities(ctx)
@@ -327,60 +345,58 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	if len(identities) == 0 {
 		return nil, fmt.Errorf("no identities found")
 	} else if len(identities) > 1 {
-		log.Warn().Msgf("More than one identity found, using the first one: %v", identities[0])
+		log.Warn().Ctx(ctx).Msgf("More than one identity found, using the first one: %v", identities[0])
 	}
 	localOrgIdentifier := identities[0]
 
-	var conditionText string
-	if len(conditions) > 0 {
-		if code, ok := conditions[0]["code"].(map[string]interface{}); ok {
-			if text, ok := code["text"].(string); ok {
-				conditionText = text
-			} else {
-				log.Warn().Msg("condition code does not contain text - using default hard-coded value")
-			}
-		} else {
-			log.Warn().Msg("condition does not contain code - using default hard-coded value")
+	for _, identifier := range patient.Identifier {
+		if identifier.System != nil && *identifier.System == "http://fhir.nl/fhir/NamingSystem/bsn" {
+			//TODO: overwriting the BSN with the one from the Patient resource, as with test data they can differ, normally we want to throw an error
+			launchContext.Bsn = *identifier.Value
+			break
 		}
-	} else {
-		return nil, fmt.Errorf("no conditions found")
-	}
-	if conditionText == "" {
-		conditionText = "fractuur van pols" //TODO: Hard coded value for demo purposes"
 	}
 
 	// Zorgplatform does not provide a ServiceRequest, so we need to create one based on other resources they do use
+	taskPerformer := fhir.Reference{
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+			Value:  &s.config.TaskPerformerUra,
+		},
+	}
+	// Enrich performer URA with registered name
+	if result, err := s.profile.CsdDirectory().LookupEntity(ctx, *taskPerformer.Identifier); err != nil {
+		log.Warn().Ctx(ctx).Err(err).Msgf("Couldn't resolve performer name (ura: %s)", s.config.TaskPerformerUra)
+	} else {
+		taskPerformer = *result
+	}
+
 	serviceRequest := &fhir.ServiceRequest{
 		Status: fhir.RequestStatusActive,
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("https://api.zorgplatform.online/fhir/v1/Task"),
+				Value:  to.Ptr(launchContext.WorkflowId),
+			},
+		},
 		Code: &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
+				// Hardcoded, we only do Telemonitoring for now
 				{
-					Display: to.Ptr(conditionText),
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("719858009"),
+					Display: to.Ptr("monitoren via telegeneeskunde (regime/therapie)"),
 				},
 			},
 		},
-		Identifier: []fhir.Identifier{
-			{
-				System: to.Ptr("tmp"), //TODO: Hard coded to fractuur-pols for demo purposes. Should be based on the Task
-				Value:  to.Ptr("fractuur-pols"),
-			},
-		},
-		ReasonReference: reasonReferences,
+		ReasonReference: []fhir.Reference{reasonReference},
 		Subject: fhir.Reference{
 			Identifier: &fhir.Identifier{
 				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 				Value:  &launchContext.Bsn,
 			},
 		},
-		Performer: []fhir.Reference{
-			{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  &s.config.TaskPerformerUra,
-				},
-				Display: to.Ptr("Zorg Bij Jou - Service Center"), //TODO: Hard coded value for demo purposes
-			},
-		},
+		Performer: []fhir.Reference{taskPerformer},
 		Requester: &fhir.Reference{
 			Identifier: &localOrgIdentifier,
 		},
@@ -390,19 +406,6 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	serviceRequestRef := "ServiceRequest/magic-" + uuid.NewString()
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	organizationRef := "Organization/magic-" + uuid.NewString()
-
-	otherValues := map[string]interface{}{
-		"Patient/" + *patient.Id: patient, //Zorgplatform only allows for a GET on /Patient, we request by ID
-		practitionerRef:          practitioner,
-		serviceRequestRef:        *serviceRequest,
-		organizationRef:          organization,
-		"launchContext":          launchContext, // Can be used to fetch a new access token after expiration
-	}
-
-	//inject the conditions into the "other" values
-	for k, v := range conditionMap {
-		otherValues[k] = v
-	}
 
 	return &user.SessionData{
 		FHIRLauncher: launcherKey,
@@ -414,8 +417,68 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 			"organization":   organizationRef,
 			"accessToken":    accessToken,
 		},
-		OtherValues: otherValues,
+		OtherValues: map[string]interface{}{
+			"Patient/" + *patient.Id:   patient, //Zorgplatform only allows for a GET on /Patient, we request by ID
+			practitionerRef:            practitioner,
+			serviceRequestRef:          *serviceRequest,
+			organizationRef:            organization,
+			*reasonReference.Reference: reason,
+			"launchContext":            launchContext, // Can be used to fetch a new access token after expiration
+		},
 	}, nil
+}
+
+func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.CodeableConcept, error) {
+	var workflowReference string
+	if definitionRef, ok := task["definitionReference"].(map[string]interface{}); !ok {
+		return nil, fmt.Errorf("Task.definitionReference is missing or invalid")
+	} else if workflowReference, ok = definitionRef["reference"].(string); !ok {
+		return nil, fmt.Errorf("Task.definitionReference.reference is missing or invalid")
+	}
+	prefix := "ActivityDefinition/"
+	if !strings.HasPrefix(workflowReference, prefix) {
+		return nil, fmt.Errorf("Task.definitionReference.reference does is not in the form '%s/<id>': %s", prefix, workflowReference)
+	}
+	// Mapping defined by https://github.com/Zorgbijjou/oid-repository/blob/main/oid-repository.md
+	switch strings.TrimPrefix(workflowReference, prefix) {
+	case "1.0":
+		// Used by Zorgplatform Developer Portal, default to Hartfalen
+		fallthrough
+	case "2.16.840.1.113883.2.4.3.224.2.1":
+		return &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("84114007"),
+					Display: to.Ptr("Heart failure (disorder)"),
+				},
+			},
+			Text: to.Ptr("Heart failure (disorder)"),
+		}, nil
+	case "2.16.840.1.113883.2.4.3.224.2.2":
+		return &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("13645005"),
+					Display: to.Ptr("Chronic obstructive pulmonary disease (disorder)"),
+				},
+			},
+			Text: to.Ptr("Chronic obstructive pulmonary disease (disorder)"),
+		}, nil
+	case "2.16.840.1.113883.2.4.3.224.2.3":
+		return &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("195967001"),
+					Display: to.Ptr("Asthma (disorder)"),
+				},
+			},
+			Text: to.Ptr("Asthma (disorder)"),
+		}, nil
+	}
+	return nil, fmt.Errorf("unsupported workflow definition: %s", workflowReference)
 }
 
 type authHeaderRoundTripper struct {
@@ -426,4 +489,25 @@ type authHeaderRoundTripper struct {
 func (a authHeaderRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	request.Header.Add("Authorization", a.value)
 	return a.inner.RoundTrip(request)
+}
+
+func getCertificate(pemCert string) (*x509.Certificate, error) {
+
+	if pemCert == "" {
+		return nil, fmt.Errorf("no certificate provided")
+	}
+
+	block, _ := pem.Decode([]byte(pemCert))
+	if block == nil {
+		return nil, fmt.Errorf("failed to parse PEM block containing the public key")
+	}
+
+	cert, parseErr := x509.ParseCertificate(block.Bytes)
+	if parseErr != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", parseErr)
+	}
+
+	log.Info().Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
+
+	return cert, nil
 }

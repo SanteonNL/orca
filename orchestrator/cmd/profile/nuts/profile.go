@@ -5,8 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/knadh/koanf/maps"
+	ssi "github.com/nuts-foundation/go-did"
+	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"github.com/nuts-foundation/go-nuts-client/nuts/vcr"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"github.com/rs/zerolog/log"
@@ -14,15 +17,14 @@ import (
 	"net/http"
 	"net/url"
 	"path"
+	"regexp"
+	"sync"
 	"time"
 )
 
 const identitiesCacheTTL = 5 * time.Minute
 
-// defaultCredentialMapping maps FHIR identifiers to attributes in Verifiable Credentials according to the Dutch Nuts Profile.
-var defaultCredentialMapping = map[string]string{
-	coolfhir.URANamingSystem: "credentialSubject.organization.ura", // NutsURACredential provides URA attribute
-}
+var uziOtherNameUraRegex = regexp.MustCompile("^[0-9.]+-\\d+-\\d+-S-(\\d+)-00\\.000-\\d+$")
 
 // DutchNutsProfile is the Profile for running the SCP-node using the Nuts, with Dutch Verifiable Credential configuration and code systems.
 // - Authentication: Nuts RFC021 Access Tokens
@@ -32,6 +34,7 @@ type DutchNutsProfile struct {
 	cachedIdentities      []fhir.Identifier
 	identitiesRefreshedAt time.Time
 	vcrClient             vcr.ClientWithResponsesInterface
+	csd                   csd.Directory
 }
 
 func New(config Config) (*DutchNutsProfile, error) {
@@ -39,9 +42,16 @@ func New(config Config) (*DutchNutsProfile, error) {
 	if err != nil {
 		return nil, err
 	}
+	apiClient, _ := discovery.NewClientWithResponses(config.API.URL)
 	return &DutchNutsProfile{
 		Config:    config,
 		vcrClient: vcrClient,
+		csd: &CsdDirectory{
+			APIClient:  apiClient,
+			ServiceID:  config.DiscoveryService,
+			entryCache: make(map[string]cacheEntry),
+			cacheMux:   sync.RWMutex{},
+		},
 	}, nil
 }
 
@@ -64,7 +74,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, e
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
 		identifiers, err := d.identities(ctx)
 		if err != nil {
-			log.Logger.Warn().Err(err).Msg("Failed to refresh local identities using Nuts node")
+			log.Warn().Ctx(ctx).Err(err).Msg("Failed to refresh local identities using Nuts node")
 			if d.cachedIdentities == nil {
 				// If we don't have a cached value, we can't return anything, so return the error.
 				return nil, fmt.Errorf("failed to load local identities: %w", err)
@@ -93,7 +103,7 @@ func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, er
 	for _, cred := range *response.JSON200 {
 		identifiers, err := d.identifiersFromCredential(cred)
 		if err != nil {
-			log.Logger.Warn().Err(err).Msgf("Failed to extract identifiers from credential: %s", cred.ID)
+			log.Warn().Ctx(ctx).Err(err).Msgf("Failed to extract identifiers from credential: %s", cred.ID)
 			continue
 		}
 		results = append(results, identifiers...)
@@ -109,14 +119,22 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 	var results []fhir.Identifier
 	for _, asMap := range asMaps {
 		flattenCredential, _ := maps.Flatten(asMap, []string{"credentialSubject"}, ".")
-		for namingSystem, jsonPath := range defaultCredentialMapping {
-			identifierValue, ok := flattenCredential[jsonPath]
-			if !ok {
-				continue
+		var ura string
+		if cred.IsType(ssi.MustParseURI("NutsUraCredential")) {
+			ura, _ = flattenCredential["credentialSubject.organization.ura"].(string)
+		}
+		if cred.IsType(ssi.MustParseURI("UziServerCertificateCredential")) {
+			otherName, ok := flattenCredential["credentialSubject.otherName"].(string)
+			if ok {
+				if match := uziOtherNameUraRegex.FindStringSubmatch(otherName); len(match) > 1 {
+					ura = match[1]
+				}
 			}
+		}
+		if ura != "" {
 			results = append(results, fhir.Identifier{
-				System: &namingSystem,
-				Value:  to.Ptr(fmt.Sprintf("%s", identifierValue)),
+				System: to.Ptr(coolfhir.URANamingSystem),
+				Value:  to.Ptr(ura),
 			})
 		}
 	}
