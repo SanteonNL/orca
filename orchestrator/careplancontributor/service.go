@@ -121,7 +121,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 
 		err := s.handleProxyExternalRequestToEHR(writer, request)
 		if err != nil {
-			log.Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
+			log.Err(err).Ctx(request.Context()).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
 			// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 			var operationOutcomeErr fhirclient.OperationOutcomeError
 			if errors.As(err, &operationOutcomeErr) {
