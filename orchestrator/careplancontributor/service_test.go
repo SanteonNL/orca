@@ -21,6 +21,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
@@ -43,7 +44,7 @@ func TestService_Proxy_NoHealthdataviewEndpointEnabledFlag_Fails(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -72,7 +73,7 @@ func TestService_Proxy_NoHeader_Fails(t *testing.T) {
 			BaseURL: fhirServer.URL + "/fhir",
 		},
 		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -111,7 +112,7 @@ func TestService_Proxy_NoCarePlanInHeader_Fails(t *testing.T) {
 			URL: carePlanServiceURL.String(),
 		},
 		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -160,7 +161,7 @@ func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
 			URL: carePlanServiceURL.String(),
 		},
 		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -211,7 +212,7 @@ func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
 			URL: carePlanServiceURL.String(),
 		},
 		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -262,7 +263,7 @@ func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
 			URL: carePlanServiceURL.String(),
 		},
 		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -315,7 +316,7 @@ func TestService_Proxy_Valid(t *testing.T) {
 			URL: carePlanServiceURL.String(),
 		},
 		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -369,7 +370,7 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 			URL: carePlanServiceURL.String(),
 		},
 		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -420,7 +421,7 @@ func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
 			URL: carePlanServiceURL.String(),
 		},
 		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
@@ -492,7 +493,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal1,
-	}, orcaPublicURL, sessionManager)
+	}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -594,7 +595,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
-	}, orcaPublicURL, sessionManager)
+	}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 
 	var capturedFhirBaseUrl string
 	service.cpsClientFactory = func(baseUrl *url.URL) fhirclient.Client {
@@ -672,7 +673,7 @@ func TestService_ProxyToEHR(t *testing.T) {
 	}
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	service, err := New(Config{}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -736,7 +737,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()

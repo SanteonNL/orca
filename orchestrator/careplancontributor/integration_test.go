@@ -1,6 +1,13 @@
 package careplancontributor
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
+	"net/url"
+	"sync/atomic"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -10,11 +17,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"sync/atomic"
-	"testing"
 )
 
 var notificationCounter = new(atomic.Int32)
@@ -167,7 +169,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig.CarePlanService.URL = carePlanServiceURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
 	sessionManager, _ := createTestSession()
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()
