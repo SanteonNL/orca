@@ -2,7 +2,14 @@
   "resourceType" : "CarePlan",
   "id" : "1",
   "status" : "draft",
-  "intent" : "proposal",
+  "intent" : "order",
+  "subject" : {
+    "identifier" : {
+      "system" : "http://fhir.nl/fhir/NamingSystem/bsn",
+      "value" : "123456789"
+    },
+    "reference": "Patient/1"
+  },
   "careTeam" : [ {
     "reference" : "CareTeam/2",
     "type" : "CareTeam"

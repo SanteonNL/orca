@@ -4,13 +4,12 @@ services:
     depends_on:
       - nutsnode
       - orchestrator
-      - fhirstore
     ports:
       - "7080:8080"
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-    image: nutsfoundation/nuts-node:6.0.0-beta.13
+    image: nutsfoundation/nuts-node:6.0.0
     ports:
       - "8081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
@@ -23,7 +22,6 @@ services:
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
       - NUTS_URL=${NUTS_URL}
       - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
-      - NUTS_DISCOVERY_SERVER_IDS=dev:HomeMonitoring2024
       - NUTS_VDR_DIDMETHODS=web
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
@@ -42,18 +40,16 @@ services:
       - ORCA_NUTS_API_URL=http://nutsnode:8081
       - ORCA_NUTS_PUBLIC_URL=${NUTS_URL}
       - ORCA_NUTS_SUBJECT=clinic
-      - ORCA_PUBLIC_URL=/orca
-      - ORCA_CAREPLANSERVICE_ENABLED=true
-      - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
+      - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
+      - ORCA_PUBLIC_URL=${NUTS_URL}/orca
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
-  fhirstore:
-    image: hapiproject/hapi:v7.2.0
-    ports:
-      - "7090:8080"
-    environment:
-      - hapi.fhir.fhir_version=R4
+      - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
+      - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
   viewer:
     image: ghcr.io/santeonnl/orca_viewersimulator:main
     # build:
     #   context: ../../../viewer_simulator
     #   dockerfile: Dockerfile
+    environment:
+      FHIR_BASE_URL: http://orchestrator:8080/cpc/cps/fhir
+      FHIR_AUTHORIZATION_TOKEN: valid

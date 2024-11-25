@@ -7,9 +7,13 @@ export async function GET(req: NextRequest, { params }: { params: { fhirPath: st
         const { fhirPath } = params;
         const fhirPathUrlSegment = Array.isArray(fhirPath) ? fhirPath.join('/') : fhirPath;
 
+        let requestHeaders = new Headers(req.headers)
+        if (process.env.FHIR_AUTHORIZATION_TOKEN) {
+            requestHeaders.set('Authorization', "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
+        }
         const response = await fetch(`${process.env.FHIR_BASE_URL}/${fhirPathUrlSegment}`, {
             method: req.method,
-            headers: req.headers,
+            headers: requestHeaders,
         });
 
         if (!response.ok) {

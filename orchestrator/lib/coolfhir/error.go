@@ -4,11 +4,43 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 )
+
+// SanitizeOperationOutcome removes security-related information from an OperationOutcome, replacing it with a generic message,
+// so that it can be safely returned to the client.
+// It follows the code list from the FHIR specification: https://www.hl7.org/fhir/codesystem-issue-type.html#issue-type-security
+func SanitizeOperationOutcome(in fhir.OperationOutcome) fhir.OperationOutcome {
+	result := in
+	result.Issue = nil
+	for _, issue := range in.Issue {
+		switch issue.Code {
+		case fhir.IssueTypeSecurity:
+			fallthrough
+		case fhir.IssueTypeLogin:
+			fallthrough
+		case fhir.IssueTypeUnknown:
+			fallthrough
+		case fhir.IssueTypeExpired:
+			fallthrough
+		case fhir.IssueTypeForbidden:
+			fallthrough
+		case fhir.IssueTypeSuppressed:
+			result.Issue = append(result.Issue, fhir.OperationOutcomeIssue{
+				Severity:    issue.Severity,
+				Code:        fhir.IssueTypeProcessing,
+				Diagnostics: to.Ptr("upstream FHIR server error"),
+			})
+		default:
+			result.Issue = append(result.Issue, issue)
+		}
+	}
+	return result
+}
 
 // ErrorWithCode is a wrapped error struct that can take an error message as well as an HTTP status code
 type ErrorWithCode struct {
@@ -28,61 +60,67 @@ func NewErrorWithCode(message string, statusCode int) error {
 	}
 }
 
-// WrapErrorWithCode wraps an error with a status code
-func WrapErrorWithCode(err error, statusCode int) error {
+// BadRequestError wraps an error with a status code of 400
+func BadRequestError(err error) error {
 	return &ErrorWithCode{
 		Message:    err.Error(),
-		StatusCode: statusCode,
-	}
-}
-
-// BadRequestError wraps an error with a status code of 400
-func BadRequestError(msg string) error {
-	return &ErrorWithCode{
-		Message:    msg,
 		StatusCode: http.StatusBadRequest,
 	}
 }
 
-func BadRequestErrorF(msg string, args ...interface{}) error {
-	return &ErrorWithCode{
-		Message:    fmt.Errorf(msg, args...).Error(),
-		StatusCode: http.StatusBadRequest,
+// BadRequest creates an error with a status code of 400
+func BadRequest(msg string, args ...any) error {
+	return BadRequestError(fmt.Errorf(msg, args...))
+}
+
+// CreateOperationOutcomeBundleEntryFromError creates a BundleEntry with an OperationOutcome based on the given error
+func CreateOperationOutcomeBundleEntryFromError(err error, desc string) fhir.BundleEntry {
+	rawOperationOutcome, _ := json.Marshal(fhir.OperationOutcome{
+		Issue: []fhir.OperationOutcomeIssue{
+			{
+				Severity:    fhir.IssueSeverityError,
+				Diagnostics: to.Ptr(fmt.Sprintf("%s: %v", desc, err)),
+			},
+		},
+	})
+	return fhir.BundleEntry{
+		Resource: rawOperationOutcome,
 	}
 }
 
 // WriteOperationOutcomeFromError writes an OperationOutcome based on the given error as HTTP response.
 // when sent a WriteOperationOutcomeFromError, it will write the contained error code to the header, else it defaults to StatusBadRequest
 func WriteOperationOutcomeFromError(err error, desc string, httpResponse http.ResponseWriter) {
-	log.Info().Msgf("%s failed: %v", desc, err)
-	diagnostics := fmt.Sprintf("%s failed: %s", desc, err.Error())
+	log.Warn().Msgf("%s failed: %v", desc, err)
 
-	issue := fhir.OperationOutcomeIssue{
-		Severity:    fhir.IssueSeverityError,
-		Code:        fhir.IssueTypeProcessing,
-		Diagnostics: to.Ptr(diagnostics),
-	}
+	statusCode := http.StatusInternalServerError
+	var operationOutcome fhir.OperationOutcome
 
-	outcome := fhir.OperationOutcome{
-		Issue: []fhir.OperationOutcomeIssue{issue},
-	}
-
-	httpResponse.Header().Add("Content-Type", FHIRContentType)
-	var errorWithCode *ErrorWithCode
-	if errors.As(err, &errorWithCode) {
-		httpResponse.WriteHeader(errorWithCode.StatusCode)
+	// Error type: fhirclient.OperationOutcomeError
+	var operationOutcomeErr *fhirclient.OperationOutcomeError
+	if errors.As(err, &operationOutcomeErr) {
+		if operationOutcomeErr.HttpStatusCode > 0 {
+			statusCode = operationOutcomeErr.HttpStatusCode
+		}
+		operationOutcome = operationOutcomeErr.OperationOutcome
 	} else {
-		httpResponse.WriteHeader(http.StatusBadRequest)
-	}
+		// Error type: ErrorWithCode
+		var errorWithCode *ErrorWithCode
+		if errors.As(err, &errorWithCode) {
+			if errorWithCode.StatusCode > 0 {
+				statusCode = errorWithCode.StatusCode
+			}
+		}
 
-	data, err := json.Marshal(outcome)
-	if err != nil {
-		log.Error().Err(err).Msgf("Failed to marshal OperationOutcome: %s", diagnostics)
-		return
+		operationOutcome = fhir.OperationOutcome{
+			Issue: []fhir.OperationOutcomeIssue{
+				{
+					Severity:    fhir.IssueSeverityError,
+					Code:        fhir.IssueTypeProcessing,
+					Diagnostics: to.Ptr(fmt.Sprintf("%s failed: %s", desc, err.Error())),
+				},
+			},
+		}
 	}
-
-	_, err = httpResponse.Write(data)
-	if err != nil {
-		log.Error().Err(err).Msgf("Failed to return OperationOutcome: %s", diagnostics)
-	}
+	SendResponse(httpResponse, statusCode, operationOutcome)
 }

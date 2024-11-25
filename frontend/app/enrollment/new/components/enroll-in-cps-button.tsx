@@ -2,9 +2,9 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
-import { getCarePlan, getTask } from '@/lib/fhirUtils'
+import { findInBundle, getBsn, getCarePlan, constructTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
+import { Bundle, CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -13,17 +13,20 @@ import JsonView from 'react18-json-view';
 import 'react18-json-view/src/style.css';
 import { Spinner } from '@/components/spinner'
 
+interface Props {
+    className?: string
+}
+
 /**
  * This button informs the CarePlanService of the new enrollment.
  * 
- * 1. If the CarePlan does not exist yet, it will be created.
- * 2. It will create a Task, referring to the CarePlan and ServiceRequest
+ * It currently always creates a new CarePlan in the CPS
  * 
  * @returns 
  */
-export default function EnrollInCpsButton() {
+export default function EnrollInCpsButton({ className }: Props) {
 
-    const { patient, selectedCarePlan, shouldCreateNewCarePlan, taskCondition, carePlanConditions, serviceRequest, newCarePlanName } = useEnrollment()
+    const { patient, selectedCarePlan, taskCondition, serviceRequest } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
 
@@ -32,24 +35,23 @@ export default function EnrollInCpsButton() {
     const ehrClient = useEhrClient()
 
     useEffect(() => {
-        setDisabled(submitted || !taskCondition || (!selectedCarePlan && !shouldCreateNewCarePlan) || (shouldCreateNewCarePlan && (!newCarePlanName || !carePlanConditions)))
-    }, [taskCondition, selectedCarePlan, shouldCreateNewCarePlan, newCarePlanName, carePlanConditions, submitted])
+        setDisabled(submitted || !taskCondition)
+    }, [taskCondition, selectedCarePlan, submitted])
 
     const informCps = async () => {
         setSubmitted(true)
-        //FIXME, contrib does not create the CP anymore
-        let carePlan = selectedCarePlan
-
-        if (shouldCreateNewCarePlan) {
-            carePlan = await createNewCarePlan() as CarePlan
-        }
-
-        if (!carePlan || !taskCondition) {
+        if (!taskCondition) {
             toast.error("Error: Something went wrong with CarePlan creation", { richColors: true })
             throw new Error("Something went wrong with CarePlan creation")
         }
 
-        const task = await createTask(carePlan, taskCondition)
+        const taskBundle = await createTask(taskCondition)
+        const task = findInBundle('Task', taskBundle as Bundle);
+
+        if (!task) {
+            toast.error("Error: Something went wrong with Task creation", { richColors: true })
+            throw new Error("Something went wrong with Task creation")
+        }
 
         toast.success("Enrollment successfully sent to filler", {
             closeButton: true,
@@ -64,117 +66,65 @@ export default function EnrollInCpsButton() {
             action: (
                 <Dialog>
                     <DialogTrigger asChild>
-                        <Button variant="outline">View Resources</Button>
+                        <Button variant="outline">View Task</Button>
                     </DialogTrigger>
                     <DialogContent className="min-w-[90vw] max-h-[90vh] overflow-y-scroll">
                         <DialogHeader>
-                            <DialogTitle>Created Resources</DialogTitle>
+                            <DialogTitle>Created Task</DialogTitle>
                             <DialogDescription>
-                                See the results of the created CarePlan and Task below
+                                See the results of the created Task below
                             </DialogDescription>
                         </DialogHeader>
-                        <Tabs className="w-full" defaultValue='careplan'>
-                            <TabsList className="grid w-full grid-cols-2">
-                                <TabsTrigger value="careplan">CarePlan</TabsTrigger>
-                                <TabsTrigger value="task">Task</TabsTrigger>
-                            </TabsList>
-                            <div className='overflow-auto'>
-                                <TabsContent value="careplan">
-                                    <JsonView src={carePlan} collapsed={2} />
-                                </TabsContent>
-                                <TabsContent value="task">
-                                    <JsonView src={task} collapsed={2} />
-                                </TabsContent>
-                            </div>
-                        </Tabs>
+                        <div className='overflow-auto'>
+                            <JsonView src={taskBundle} collapsed={2} />
+                        </div>
                     </DialogContent>
-                </Dialog>
+                </Dialog >
             )
         })
 
         router.push(`/enrollment/task/${task.id}`)
     }
 
-    const createNewCarePlan = async () => {
-        if (!cpsClient) {
-            toast.error("Error: CarePlanService not found", { richColors: true })
-            throw new Error("No CPS client found")
-        }
-        if (!patient || !taskCondition || !serviceRequest || !carePlanConditions) {
-            toast.error("Error: Missing required items for CarePlan creation", { richColors: true })
-            throw new Error("Missing required items for CarePlan creation")
-        }
-
-        const carePlan = getCarePlan(patient, carePlanConditions, newCarePlanName);
-
-        try {
-            return await cpsClient.create({ resourceType: 'CarePlan', body: carePlan })
-        } catch (error) {
-            const msg = `Failed to create CarePlan. Error message: ${error ?? "Not error message found"}`
-            toast.error(msg, { richColors: true })
-            throw new Error(msg)
-        }
-    }
-
-    const forwardServiceRequest = async () => {
-        if (!serviceRequest) {
-            toast.error("Error: Missing ServiceRequest - Cannot forward to CPS", { richColors: true })
-            throw new Error("Missing ServiceRequest - Cannot forward to CPS")
-        }
-
-        if (!cpsClient) {
-            toast.error("Error: CarePlanService not found", { richColors: true })
-            throw new Error("No CPS client found")
-        }
-
-        try {
-            // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
-            // TODO: Properly fix with with bundle refs in INT-288
-            const cleanServiceRequest = { ...serviceRequest };
-            if (cleanServiceRequest.subject?.reference) {
-                delete cleanServiceRequest.subject.reference;
-            }
-            if (cleanServiceRequest.requester?.reference) {
-                delete cleanServiceRequest.requester.reference;
-            }
-            if (cleanServiceRequest.performer?.[0]?.reference) {
-                delete cleanServiceRequest.performer[0].reference;
-            }
-
-            return await cpsClient.create({ resourceType: 'ServiceRequest', body: cleanServiceRequest }) as ServiceRequest
-        } catch (error) {
-            const msg = `Failed to forward ServiceRequest. Error message: ${error ?? "No error message found"}`
-            toast.error(msg, { richColors: true })
-            throw new Error(msg)
-        }
-    }
-
-    const createTask = async (carePlan: CarePlan, taskCondition: Condition) => {
+    const createTask = async (taskCondition: Condition) => {
         if (!cpsClient || !ehrClient) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
-        if (!patient || !taskCondition || !serviceRequest || !carePlan) {
+        if (!patient || !getBsn(patient) || !taskCondition || !serviceRequest) {
             toast.error("Error: Missing required items for Task creation", { richColors: true })
             throw new Error("Missing required items for Task creation")
         }
 
-        const forwardedServiceRequest = await forwardServiceRequest()
-
-        const task = getTask(carePlan, forwardedServiceRequest, taskCondition)
+        var taskBundle: Bundle & { type: "transaction"; };
 
         try {
-            return await cpsClient.create({ resourceType: 'Task', body: task });
+            taskBundle = constructTaskBundle(serviceRequest, taskCondition, patient);
         } catch (error) {
-            const msg = `Failed to create Task. Error message: ${error ?? "Not error message found"}`
-            toast.error(msg, { richColors: true })
-            throw new Error(msg)
+            console.debug("Error constructing taskBundle");
+            console.error(error);
+            const msg = `Failed to construct Task Bundle. Error message: ${JSON.stringify(error) ?? "Not error message found"}`;
+            toast.error(msg, { richColors: true });
+            throw new Error(msg);
+        }
+
+        try {
+            return await cpsClient.transaction({ body: taskBundle });
+        } catch (error) {
+            console.debug("Error posting Bundle", taskBundle);
+            console.error(error);
+            const msg = `Failed to execute Task Bundle. Error message: ${JSON.stringify(error) ?? "Not error message found"}`;
+            toast.error(msg, { richColors: true });
+            throw new Error(msg);
         }
     }
 
     return (
-        <Button disabled={disabled} onClick={informCps}>{submitted && <Spinner className='mr-5 text-white' />}Proceed</Button >
+        <Button className={className} disabled={disabled} onClick={informCps}>
+            {submitted ? <Spinner className='mr-5 text-white' /> : null}
+            <span className='mr-1'>{submitted ? "Sending" : "Send"}</span>
+            Task
+            {serviceRequest?.performer?.[0].display && <span className='ml-1'>to {serviceRequest.performer[0].display}</span>}
+        </Button>
     )
-
-
 }

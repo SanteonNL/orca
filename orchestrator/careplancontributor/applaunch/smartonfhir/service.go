@@ -1,6 +1,7 @@
 package smartonfhir
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -104,28 +105,28 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 	state := request.URL.Query().Get("state")
 	code := request.URL.Query().Get("code")
 
-	tokenResponse, err := s.appLaunchRedirectLogic(state, code)
+	tokenResponse, err := s.appLaunchRedirectLogic(request.Context(), state, code)
 	if err != nil {
 		return
 	}
 
 	// accessToken := tokenResponse["access_token"]
 
-	log.Info().Msgf("SMART App Launch succeeded, got the following response\n%v", tokenResponse)
+	log.Info().Ctx(request.Context()).Msgf("SMART App Launch succeeded, got the following response\n%v", tokenResponse)
 
 	// 1) Extract the type of launch that is being performed, for example an enrollment, or a data view
 	// 2) switch type - call the apropriate service to handle the request
 	// TODO: Need to provide "patient", "serviceRequest", "practitioner" in the "values" map
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: fhirLauncherKey,
-		Values: map[string]string{
+		StringValues: map[string]string{
 			"access_token": tokenResponse["access_token"].(string),
 		},
 	})
 	http.Redirect(response, request, s.landingUrlPath, http.StatusFound)
 }
 
-func (s *Service) appLaunchRedirectLogic(state string, code string) (map[string]interface{}, error) {
+func (s *Service) appLaunchRedirectLogic(ctx context.Context, state string, code string) (map[string]interface{}, error) {
 	s.mu.Lock()
 	tokenEndpoint, ok := s.stateToTokenUrlMap[state]
 	s.mu.Unlock()
@@ -142,7 +143,7 @@ func (s *Service) appLaunchRedirectLogic(state string, code string) (map[string]
 
 	resp, err := http.PostForm(tokenEndpoint, data)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to exchange authorization code for access token")
+		log.Error().Ctx(ctx).Err(err).Msg("Failed to exchange authorization code for access token")
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -153,7 +154,7 @@ func (s *Service) appLaunchRedirectLogic(state string, code string) (map[string]
 
 	var tokenResponse map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
-		log.Error().Err(err).Msg("Failed to decode token response")
+		log.Error().Ctx(ctx).Err(err).Msg("Failed to decode token response")
 		return nil, err
 	}
 

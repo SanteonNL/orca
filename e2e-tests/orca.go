@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, cpsFhirBaseUrl string, fhirStoreURL string) *url.URL {
+func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, cpsFhirBaseUrl string, fhirStoreURL string, allowUnmanagedFHIROperations bool) *url.URL {
 	image := os.Getenv("ORCHESTRATOR_IMAGE")
 	pullImage := false
 	if image == "" {
@@ -30,15 +30,18 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			Consumers: []testcontainers.LogConsumer{&testcontainers.StdoutLogConsumer{}},
 		},
 		Env: map[string]string{
-			"ORCA_NUTS_API_URL":                            "http://nutsnode:8081",
-			"ORCA_NUTS_PUBLIC_URL":                         "http://nutsnode:8080",
-			"ORCA_NUTS_SUBJECT":                            nutsSubject,
-			"ORCA_CAREPLANSERVICE_ENABLED":                 strconv.FormatBool(cpsEnabled),
-			"ORCA_CAREPLANSERVICE_FHIR_URL":                fhirStoreURL,
-			"ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL": cpsFhirBaseUrl,
-			"ORCA_CAREPLANCONTRIBUTOR_FHIR_URL":            fhirStoreURL,
-			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":             "true",
-			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":   "valid",
+			"ORCA_PUBLIC_URL":                                   "http://" + containerName + ":8080",
+			"ORCA_NUTS_API_URL":                                 "http://nutsnode:8081",
+			"ORCA_NUTS_PUBLIC_URL":                              "http://nutsnode:8080",
+			"ORCA_NUTS_SUBJECT":                                 nutsSubject,
+			"ORCA_NUTS_DISCOVERYSERVICE":                        "dev:HomeMonitoring2024",
+			"ORCA_CAREPLANSERVICE_ENABLED":                      strconv.FormatBool(cpsEnabled),
+			"ORCA_CAREPLANSERVICE_FHIR_URL":                     fhirStoreURL,
+			"ORCA_CAREPLANSERVICE_ALLOWUNMANAGEDFHIROPERATIONS": strconv.FormatBool(allowUnmanagedFHIROperations),
+			"ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL":      cpsFhirBaseUrl,
+			"ORCA_CAREPLANCONTRIBUTOR_FHIR_URL":                 fhirStoreURL,
+			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":                  "true",
+			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":        "valid",
 		},
 		Files: []testcontainers.ContainerFile{
 			{

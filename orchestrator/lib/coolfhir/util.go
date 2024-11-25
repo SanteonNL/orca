@@ -6,8 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
+	"strconv"
+
+	"github.com/rs/zerolog/log"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+
 	"net/http"
 	"time"
 )
@@ -35,19 +41,12 @@ func LogicalReference(refType, system, identifier string) *fhir.Reference {
 	}
 }
 
-func FirstIdentifier(identifiers []fhir.Identifier, predicate func(fhir.Identifier) bool) *fhir.Identifier {
-	for _, identifier := range identifiers {
-		if predicate(identifier) {
-			return &identifier
-		}
+// ValidateReference validates that a reference is either a logical reference, a reference to a resource, or both.
+func ValidateReference(reference fhir.Reference) bool {
+	if reference.Reference != nil {
+		return true
 	}
-	return nil
-}
-
-func FilterNamingSystem(system string) func(fhir.Identifier) bool {
-	return func(ident fhir.Identifier) bool {
-		return ident.System != nil && *ident.System == system
-	}
+	return reference.Identifier != nil && reference.Identifier.System != nil && reference.Identifier.Value != nil
 }
 
 func ValidateLogicalReference(reference *fhir.Reference, expectedType string, expectedSystem string) error {
@@ -123,9 +122,9 @@ func ValidateTaskRequiredFields(task fhir.Task) error {
 	return nil
 }
 
-// ValidateTaskOwnerAndRequester checks the owner and requester of a task against the supplied principal
+// IsIdentifierTaskOwnerAndRequester checks the owner and requester of a task against the supplied principal
 // returns 2 booleans, isOwner, and isRequester
-func ValidateTaskOwnerAndRequester(task *fhir.Task, principalOrganizationIdentifier []fhir.Identifier) (bool, bool) {
+func IsIdentifierTaskOwnerAndRequester(task *fhir.Task, principalOrganizationIdentifier []fhir.Identifier) (bool, bool) {
 	isOwner := false
 	if task.Owner != nil {
 		for _, identifier := range principalOrganizationIdentifier {
@@ -145,6 +144,19 @@ func ValidateTaskOwnerAndRequester(task *fhir.Task, principalOrganizationIdentif
 		}
 	}
 	return isOwner, isRequester
+}
+
+func IsScpSubTask(task *fhir.Task) bool {
+	if task == nil {
+		return false
+	}
+	if len(task.PartOf) == 0 {
+		return false
+	}
+	if task.Meta == nil {
+		return false
+	}
+	return slices.Contains(task.Meta.Profile, SCPTaskProfile)
 }
 
 func validateIdentifier(identifierField string, identifier *fhir.Identifier) error {
@@ -253,5 +265,40 @@ func HttpMethodToVerb(method string) fhir.HTTPVerb {
 		return fhir.HTTPVerbHEAD
 	default:
 		return 0
+	}
+}
+
+func IsScpTask(task *fhir.Task) bool {
+	if task.Meta == nil {
+		return false
+	}
+
+	for _, profile := range task.Meta.Profile {
+		if profile == SCPTaskProfile {
+			return true
+		}
+	}
+
+	return false
+}
+
+func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource interface{}, additionalHeaders ...map[string]string) {
+	data, err := json.MarshalIndent(resource, "", "  ")
+	if err != nil {
+		log.Err(err).Msg("Failed to marshal response")
+		httpStatus = http.StatusInternalServerError
+		data = []byte(`{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"Failed to marshal response"}]}`)
+	}
+	httpResponse.Header().Set("Content-Type", FHIRContentType)
+	httpResponse.Header().Set("Content-Length", strconv.Itoa(len(data)))
+	for _, hdrs := range additionalHeaders {
+		for key, value := range hdrs {
+			httpResponse.Header().Add(key, value)
+		}
+	}
+	httpResponse.WriteHeader(httpStatus)
+	_, err = httpResponse.Write(data)
+	if err != nil {
+		log.Err(err).Msgf("Failed to write response: %s", string(data))
 	}
 }

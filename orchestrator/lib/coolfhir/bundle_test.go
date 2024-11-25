@@ -2,16 +2,17 @@ package coolfhir
 
 import (
 	"encoding/json"
+	"errors"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"go.uber.org/mock/gomock"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 
-	"io"
-
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"go.uber.org/mock/gomock"
 )
 
 func TestTransactionBuilder(t *testing.T) {
@@ -35,99 +36,114 @@ func TestTransactionBuilder(t *testing.T) {
 	require.Equal(t, "task2", task2["id"])
 }
 
-func TestExecuteTransactionAndRespondWithEntry(t *testing.T) {
-	t.Run("ok", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		tx := Transaction().Create(fhir.CarePlan{Id: to.Ptr("careplan1")})
-		fhirBundleResult := fhir.Bundle{
-			Entry: []fhir.BundleEntry{
-				{
-					Response: &fhir.BundleEntryResponse{
-						Location: to.Ptr("CarePlan/careplan1"),
-					},
-				},
-				{
-					Response: &fhir.BundleEntryResponse{
-						Location: to.Ptr("Task/task1"),
-					},
-				},
+func TestFetchBundleEntry(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	fhirClient := mock.NewMockClient(ctrl)
+	fhirClient.EXPECT().Read("Task/123", gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, data *[]byte, opts ...interface{}) error {
+		*data, _ = json.Marshal(fhir.Task{
+			Id: to.Ptr("123"),
+		})
+		return nil
+	}).AnyTimes()
+	fhirClient.EXPECT().Read("Task", gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, data *[]byte, opts ...interface{}) error {
+		httpRequest := httptest.NewRequest("GET", "http://example.com/fhir/Task", nil)
+		opts[0].(fhirclient.PreRequestOption)(fhirClient, httpRequest)
+		if httpRequest.URL.Query()["_id"][0] == "123" {
+			*data, _ = json.Marshal(fhir.Task{
+				Id: to.Ptr("123"),
+			})
+			return nil
+		}
+		return errors.New("not found")
+	}).AnyTimes()
+	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
+
+	t.Run("resource read from response.location (relative URL)", func(t *testing.T) {
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Location: to.Ptr("Task/123"),
+				Status:   "200",
 			},
 		}
-		fhirCreatedTask := fhir.Task{
-			Id:     to.Ptr("task1"),
-			Intent: "order",
-			Status: fhir.TaskStatusCompleted,
+		var actualResult fhir.Task
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, nil, responseEntry, &actualResult)
+		require.NoError(t, err)
+		require.Equal(t, "123", *actualResult.Id)
+		require.NotEmpty(t, actualEntry.Resource)
+		require.Equal(t, "Task/123", *actualEntry.Response.Location)
+		require.Equal(t, "200", actualEntry.Response.Status)
+	})
+	t.Run("resource read from response.location (absolute URL)", func(t *testing.T) {
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Location: to.Ptr("http://example.com/fhir/Task/123"),
+			},
 		}
-
-		t.Run("provide result struct", func(t *testing.T) {
-			fhirClient := mock.NewMockClient(ctrl)
-			fhirClient.EXPECT().Create(tx.Bundle(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ fhir.Bundle, result *fhir.Bundle, _ interface{}) error {
-					*result = fhirBundleResult
-					return nil
-				})
-			fhirClient.EXPECT().Read("Task/task1", gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ string, result *fhir.Task, _ interface{}) error {
-					*result = fhirCreatedTask
-					return nil
-				})
-
-			var result fhir.Task
-			httpResponse := httptest.NewRecorder()
-			err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
-				return *entry.Response.Location == "Task/task1"
-			}, httpResponse, &result)
-
-			require.NoError(t, err)
-			require.Equal(t, fhirCreatedTask, result)
-			responseData, _ := io.ReadAll(httpResponse.Body)
-			require.JSONEq(t, `{"id":"task1", "intent":"order", "resourceType":"Task", "status":"completed"}`, string(responseData))
-		})
-		t.Run("caller not interested in result", func(t *testing.T) {
-			fhirClient := mock.NewMockClient(ctrl)
-			fhirClient.EXPECT().Create(tx.Bundle(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ fhir.Bundle, result *fhir.Bundle, _ interface{}) error {
-					*result = fhirBundleResult
-					return nil
-				})
-			fhirClient.EXPECT().Read("Task/task1", gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ string, result *map[string]interface{}, _ interface{}) error {
-					*result = map[string]interface{}{
-						"id": "task1",
-					}
-					return nil
-				})
-
-			httpResponse := httptest.NewRecorder()
-			err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
-				return *entry.Response.Location == "Task/task1"
-			}, httpResponse, nil)
-
-			require.NoError(t, err)
-			responseData, _ := io.ReadAll(httpResponse.Body)
-			require.JSONEq(t, `{"id":"task1"}`, string(responseData))
-		})
-
-		t.Run("caller not interested in setting the response", func(t *testing.T) {
-			fhirClient := mock.NewMockClient(ctrl)
-			fhirClient.EXPECT().Create(tx.Bundle(), gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ fhir.Bundle, result *fhir.Bundle, _ interface{}) error {
-					*result = fhirBundleResult
-					return nil
-				})
-			fhirClient.EXPECT().Read("Task/task1", gomock.Any(), gomock.Any()).
-				DoAndReturn(func(_ string, result *fhir.Task, _ interface{}) error {
-					*result = fhirCreatedTask
-					return nil
-				})
-
-			var result fhir.Task
-			err := ExecuteTransactionAndRespondWithEntry(fhirClient, tx.Bundle(), func(entry fhir.BundleEntry) bool {
-				return *entry.Response.Location == "Task/task1"
-			}, nil, &result)
-
-			require.NoError(t, err)
-			require.Equal(t, fhirCreatedTask, result)
-		})
+		var actualResult fhir.Task
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, nil, responseEntry, &actualResult)
+		require.NoError(t, err)
+		require.Equal(t, "123", *actualResult.Id)
+		require.NotEmpty(t, actualEntry.Resource)
+		require.Equal(t, "Task/123", *actualEntry.Response.Location)
+	})
+	t.Run("resource read from request BundleEntry.request.url, which contains a literal reference (response.location is nil, e.g. PUT in Azure FHIR)", func(t *testing.T) {
+		requestEntry := &fhir.BundleEntry{
+			Request: &fhir.BundleEntryRequest{
+				Url: "Task/123",
+			},
+		}
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Status: "200",
+			},
+		}
+		var actualResult fhir.Task
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, requestEntry, responseEntry, &actualResult)
+		require.NoError(t, err)
+		require.Equal(t, "123", *actualResult.Id)
+		require.NotEmpty(t, actualEntry.Resource)
+		require.Equal(t, "200", actualEntry.Response.Status)
+	})
+	t.Run("resource read from request BundleEntry.request.url, which contains a logical identifier (response.location is nil, e.g. PUT in Azure FHIR)", func(t *testing.T) {
+		requestEntry := &fhir.BundleEntry{
+			Request: &fhir.BundleEntryRequest{
+				Url: "Task?_id=123",
+			},
+		}
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Status: "200",
+			},
+		}
+		var actualResult fhir.Task
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, requestEntry, responseEntry, &actualResult)
+		require.NoError(t, err)
+		require.Equal(t, "123", *actualResult.Id)
+		require.NotEmpty(t, actualEntry.Resource)
+		require.Equal(t, "200", actualEntry.Response.Status)
+	})
+	t.Run("resource read from request BundleEntry.request.url, which doesn't contain a local reference nor logical identifier (not supported now)", func(t *testing.T) {
+		requestEntry := &fhir.BundleEntry{
+			Request: &fhir.BundleEntryRequest{
+				Url: "Task",
+			},
+		}
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Status: "200",
+			},
+		}
+		_, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, requestEntry, responseEntry, nil)
+		require.EqualError(t, err, "failed to determine resource for transaction response bundle entry, see log for more details")
+	})
+	t.Run("result to unmarshal into is nil", func(t *testing.T) {
+		responseEntry := &fhir.BundleEntry{
+			Response: &fhir.BundleEntryResponse{
+				Location: to.Ptr("http://example.com/fhir/Task/123"),
+			},
+		}
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, nil, responseEntry, nil)
+		require.NoError(t, err)
+		require.NotNil(t, actualEntry)
 	})
 }

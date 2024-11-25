@@ -2,6 +2,9 @@ package cmd
 
 import (
 	"errors"
+	"fmt"
+	"github.com/rs/zerolog"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
@@ -21,21 +24,18 @@ type Config struct {
 	CarePlanContributor careplancontributor.Config `koanf:"careplancontributor"`
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
+	LogLevel        zerolog.Level          `koanf:"loglevel"`
 }
 
 func (c Config) Validate() error {
-	_, err := url.Parse(c.Nuts.API.URL)
-	if c.Nuts.OwnSubject == "" {
-		return errors.New("invalid/empty Nuts subject")
+	if err := c.Nuts.Validate(); err != nil {
+		return fmt.Errorf("invalid Nuts configuration: %w", err)
 	}
-	if err != nil || c.Nuts.API.URL == "" {
-		return errors.New("invalid Nuts API URL")
+	if c.Public.URL == "" {
+		return errors.New("public base URL is not configured")
 	}
-	if c.Nuts.Public.URL == "" {
-		return errors.New("invalid/empty Nuts public URL")
-	}
-	_, err = url.Parse(c.Public.URL)
-	if err != nil || c.Public.URL == "" {
+	_, err := url.Parse(c.Public.URL)
+	if err != nil {
 		return errors.New("invalid public base URL")
 	}
 	if err := c.CarePlanContributor.Validate(); err != nil {
@@ -81,12 +81,11 @@ func LoadConfig() (*Config, error) {
 // DefaultConfig returns sensible, but not complete, default configuration values.
 func DefaultConfig() Config {
 	return Config{
+		LogLevel: zerolog.InfoLevel,
 		Public: InterfaceConfig{
 			Address: ":8080",
 			URL:     "/",
 		},
-		CarePlanContributor: careplancontributor.Config{
-			Enabled: true,
-		},
+		CarePlanContributor: careplancontributor.DefaultConfig(),
 	}
 }

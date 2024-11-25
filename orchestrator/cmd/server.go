@@ -3,15 +3,16 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
-	"net/http"
-
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"net/http"
+	"time"
 )
 
 func Start(config Config) error {
@@ -21,7 +22,7 @@ func Start(config Config) error {
 
 	// Set up dependencies
 	httpHandler := http.NewServeMux()
-	sessionManager := user.NewSessionManager()
+	sessionManager := user.NewSessionManager(config.CarePlanContributor.SessionTimeout)
 
 	if err := config.Validate(); err != nil {
 		return err
@@ -51,6 +52,21 @@ func Start(config Config) error {
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
 			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Public.URL, careplancontributor.LandingURL))
 		}
+		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
+			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, careplancontributor.LandingURL, activeProfile)
+			if err != nil {
+				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
+			}
+			services = append(services, service)
+		}
+
+		// Start session expiration ticker
+		ticker := time.NewTicker(time.Minute)
+		go func() {
+			for range ticker.C {
+				sessionManager.PruneSessions()
+			}
+		}()
 	}
 	if config.CarePlanService.Enabled {
 		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL())

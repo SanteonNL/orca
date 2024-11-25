@@ -1,18 +1,19 @@
 package user
 
 import (
-	"github.com/google/uuid"
 	"net/http"
 	"sync"
 	"time"
-)
 
-const sessionLifetime = 15 * time.Minute
+	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
+)
 
 // NewSessionManager creates a new session manager.
 // It uses in-memory storage.
-func NewSessionManager() *SessionManager {
+func NewSessionManager(sessionLifetime time.Duration) *SessionManager {
 	return &SessionManager{
+		sessionLifetime: sessionLifetime,
 		store: &sessionStore{
 			sessions: make(map[string]*Session),
 			mux:      &sync.Mutex{},
@@ -27,11 +28,13 @@ type Session struct {
 
 type SessionData struct {
 	FHIRLauncher string
-	Values       map[string]string
+	StringValues map[string]string
+	OtherValues  map[string]interface{}
 }
 
 type SessionManager struct {
-	store *sessionStore
+	store           *sessionStore
+	sessionLifetime time.Duration
 }
 
 type sessionStore struct {
@@ -42,8 +45,8 @@ type sessionStore struct {
 // Create creates a new session and sets a session cookie.
 // The given values are stored in the session, which can be retrieved later using Get.
 func (m *SessionManager) Create(response http.ResponseWriter, values SessionData) {
-	id, _ := m.store.create(values)
-	setSessionCookie(id, response)
+	id, _ := m.store.create(values, m.sessionLifetime)
+	setSessionCookie(id, response, m.sessionLifetime)
 }
 
 // Get retrieves the session for the given request.
@@ -61,10 +64,40 @@ func (m *SessionManager) Get(request *http.Request) *SessionData {
 	return &session.Data
 }
 
-func (s *sessionStore) create(values SessionData) (string, *Session) {
+func (m *SessionManager) Destroy(response http.ResponseWriter, request *http.Request) {
+	sessionID := getSessionCookie(request)
+	if sessionID != "" {
+		m.store.destroy(sessionID)
+	} else {
+		log.Warn().Ctx(request.Context()).Msg("No session to destroy")
+	}
+	cookie := http.Cookie{
+		Name:     "sid",
+		Value:    "",
+		HttpOnly: true,
+		Expires:  time.Now().Add(-time.Minute),
+	}
+	http.SetCookie(response, &cookie)
+}
+
+// PruneSessions removes expired sessions.
+func (m *SessionManager) PruneSessions() {
+	m.store.mux.Lock()
+	defer m.store.mux.Unlock()
+	m.store.prune()
+}
+
+func (s *sessionStore) create(values SessionData, sessionLifetime time.Duration) (string, *Session) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	s.prune()
+	// prevent nil derefs later on
+	if values.OtherValues == nil {
+		values.OtherValues = make(map[string]interface{})
+	}
+	if values.StringValues == nil {
+		values.StringValues = make(map[string]string)
+	}
 	result := &Session{
 		Data:    values,
 		Expires: time.Now().Add(sessionLifetime),
@@ -89,13 +122,20 @@ func (s *sessionStore) prune() {
 	}
 }
 
-func setSessionCookie(sessionID string, response http.ResponseWriter) {
+func (s *sessionStore) destroy(id string) {
+	log.Info().Msgf("Destroying user session (id=%s)", id)
+	s.mux.Lock()
+	defer s.mux.Unlock()
+	delete(s.sessions, id)
+}
+
+func setSessionCookie(sessionID string, response http.ResponseWriter, lifetime time.Duration) {
 	// TODO: Maybe makes this a __Host or __Secure cookie?
 	cookie := http.Cookie{
 		Name:     "sid",
 		Value:    sessionID,
 		HttpOnly: true,
-		Expires:  time.Now().Add(sessionLifetime),
+		Expires:  time.Now().Add(lifetime),
 	}
 	http.SetCookie(response, &cookie)
 }
@@ -106,4 +146,8 @@ func getSessionCookie(request *http.Request) string {
 		return ""
 	}
 	return cookie.Value
+}
+
+func (m *SessionManager) SessionCount() int {
+	return len(m.store.sessions)
 }

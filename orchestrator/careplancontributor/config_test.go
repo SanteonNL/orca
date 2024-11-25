@@ -1,6 +1,7 @@
 package careplancontributor
 
 import (
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -15,5 +16,12 @@ func TestConfig_Validate(t *testing.T) {
 			Enabled: true,
 		}.Validate()
 		require.EqualError(t, err, "careplancontributor.careplanservice.url is not configured")
+	})
+}
+
+func TestDefaultConfig(t *testing.T) {
+	t.Run("validate healthDataView Endpoint is disabled by default", func(t *testing.T) {
+		config := DefaultConfig()
+		assert.False(t, config.HealthDataViewEndpointEnabled)
 	})
 }

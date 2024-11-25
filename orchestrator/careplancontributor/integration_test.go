@@ -7,6 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
@@ -23,14 +24,26 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	carePlanServiceURL, httpService, cpcURL := setupIntegrationTest(t, notificationEndpoint)
 
 	dataHolderTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
-	dataRequesterTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/1")
-	invalidCareplanTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/2")
+	invalidCareplanTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/999")
 	noXSCPHeaderTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")
-	// Test principal is not part of the care team
-	invalidTestPrincipalTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, carePlanServiceURL.String()+"/CarePlan/1")
 
 	cpsDataHolder := fhirclient.New(carePlanServiceURL, &http.Client{Transport: dataHolderTransport}, nil)
-	cpsDataRequester := fhirclient.New(carePlanServiceURL, &http.Client{Transport: dataRequesterTransport}, nil)
+
+	// Create Patient that Task will be related to
+	var patient fhir.Patient
+	t.Log("Creating Patient")
+	{
+		patient = fhir.Patient{
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
+		}
+		err := cpsDataHolder.Create(patient, &patient)
+		require.NoError(t, err)
+	}
 
 	var carePlan fhir.CarePlan
 	var task fhir.Task
@@ -41,6 +54,15 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 			Intent:    "order",
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
 		}
 
 		err := cpsDataHolder.Create(task, &task)
@@ -58,10 +80,13 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
 		})
 	}
+
+	cpsDataRequester := fhirclient.New(carePlanServiceURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
+
 	t.Log("Reading task before accepted - Fails")
 	{
 		var fetchedTask fhir.Task
-		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: dataRequesterTransport}, nil)
+		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.Error(t, err)
 	}
@@ -77,11 +102,19 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
 			require.Equal(t, fhir.TaskStatusAccepted, updatedTask.Status)
 		})
+
+		// Getting patient
+		var fetchedPatient fhir.Patient
+		err = cpsDataRequester.Read("Patient/"+*patient.Id, &fetchedPatient)
+		require.NoError(t, err)
+		require.Equal(t, updatedTask.For.Identifier.System, fetchedPatient.Identifier[0].System)
+		require.Equal(t, updatedTask.For.Identifier.Value, fetchedPatient.Identifier[0].Value)
+		require.Equal(t, *updatedTask.For.Reference, "Patient/"+*fetchedPatient.Id)
 	}
 	t.Log("Reading task after accepted")
 	{
 		var fetchedTask fhir.Task
-		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: dataRequesterTransport}, nil)
+		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.NoError(t, err)
 	}
@@ -101,7 +134,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	}
 	t.Log("Reading task after accepted - invalid principal - Fails")
 	{
-		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: invalidTestPrincipalTransport}, nil)
+		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 		var fetchedTask fhir.Task
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.Error(t, err)
@@ -113,6 +146,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
+	config.AllowUnmanagedFHIROperations = true
 
 	activeProfile := profile.TestProfile{
 		Principal:        auth.TestPrincipal1,
@@ -131,6 +165,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.CarePlanService.URL = carePlanServiceURL.String()
+	cpcConfig.HealthDataViewEndpointEnabled = true
 	sessionManager, _ := createTestSession()
 	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager)
 	require.NoError(t, err)

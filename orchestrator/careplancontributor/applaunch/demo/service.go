@@ -1,12 +1,13 @@
 package demo
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
-	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/rs/zerolog/log"
 )
 
 const fhirLauncherKey = "demo"
@@ -81,9 +82,17 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	if !ok {
 		return
 	}
+
+	//Destroy the previous session if found
+	session := s.sessionManager.Get(request)
+	if session != nil {
+		log.Debug().Ctx(request.Context()).Msg("Demo launch performed and previous session found - Destroying previous session")
+		s.sessionManager.Destroy(response, request)
+	}
+
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: fhirLauncherKey,
-		Values:       values,
+		StringValues: values,
 	})
 	// Redirect to landing page
 	targetURL, _ := url.Parse(s.baseURL)

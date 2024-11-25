@@ -34,11 +34,19 @@ func (s SubscriptionNotification) GetFocus() (*fhir.Reference, error) {
 
 // CreateSubscriptionNotification creates a SubscriptionNotification according to https://santeonnl.github.io/shared-care-planning/Bundle-notification-msc-01.json.html
 func CreateSubscriptionNotification(baseURL *url.URL, timestamp time.Time, subscription fhir.Reference, eventNumber int, focus fhir.Reference) SubscriptionNotification {
+	// call non-exported function to aid test assertion
+	return createSubscriptionNotification(baseURL, timestamp, subscription, eventNumber, focus, uuid.NewString(), uuid.NewString())
+}
+
+func createSubscriptionNotification(baseURL *url.URL, timestamp time.Time, subscription fhir.Reference, eventNumber int,
+	focus fhir.Reference, resourceId string, resourceEntryId string) SubscriptionNotification {
+	// INT-396: The focus reference should be an absolute URL
+	focus.Reference = to.Ptr(baseURL.JoinPath(*focus.Reference).String())
 	meta := fhir.Meta{
 		Profile: []string{"http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification-r4"},
 	}
 	params := fhir.Parameters{
-		Id:   to.Ptr(uuid.NewString()),
+		Id:   to.Ptr(resourceEntryId),
 		Meta: &meta,
 		Parameter: []fhir.ParametersParameter{
 			{
@@ -74,7 +82,7 @@ func CreateSubscriptionNotification(baseURL *url.URL, timestamp time.Time, subsc
 	}
 	parametersJSON, _ := json.Marshal(params)
 	return SubscriptionNotification(fhir.Bundle{
-		Id:        to.Ptr(uuid.NewString()),
+		Id:        to.Ptr(resourceId),
 		Meta:      &meta,
 		Type:      fhir.BundleTypeHistory,
 		Timestamp: to.Ptr(timestamp.Format(time.RFC3339)),

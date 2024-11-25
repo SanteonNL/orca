@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -28,6 +29,8 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	notificationEndpoint := setupNotificationEndpoint(t)
 	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
 
+	notificationCounter.Store(0)
+
 	participant1 := fhir.CareTeamParticipant{
 		Member: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 		Period: &fhir.Period{Start: to.Ptr("2021-01-01T00:00:00Z")},
@@ -44,11 +47,35 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		},
 	}
 
+	// Create patient, this will be used as the subject of the CarePlan
+	patient := fhir.Patient{
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("1333333337"),
+			},
+		},
+	}
+	err := carePlanContributor1.Create(patient, &patient)
+	require.NoError(t, err)
+
+	// Patient not associated with any CarePlans or CareTeams for negative auth testing
+	var patient2 fhir.Patient
+	err = carePlanContributor1.Create(fhir.Patient{
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("12345"),
+			},
+		},
+	}, &patient2)
+	require.NoError(t, err)
+
 	var carePlan fhir.CarePlan
-	var task fhir.Task
+	var primaryTask fhir.Task
 	t.Log("Creating Task - CarePlan does not exist")
 	{
-		task = fhir.Task{
+		primaryTask = fhir.Task{
 			BasedOn: []fhir.Reference{
 				{
 					Type:      to.Ptr("CarePlan"),
@@ -60,9 +87,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 			Meta: &fhir.Meta{
-				Profile: []string{
-					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
-				},
+				Profile: []string{coolfhir.SCPTaskProfile},
 			},
 			Focus: &fhir.Reference{
 				Identifier: &fhir.Identifier{
@@ -73,22 +98,20 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			},
 		}
 
-		err := carePlanContributor1.Create(task, &task)
+		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
 		require.Equal(t, 0, int(notificationCounter.Load()))
 	}
 
 	t.Log("Creating Task - No BasedOn, requester is not care organization so creation fails")
 	{
-		task = fhir.Task{
+		primaryTask = fhir.Task{
 			Intent:    "order",
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 			Meta: &fhir.Meta{
-				Profile: []string{
-					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
-				},
+				Profile: []string{coolfhir.SCPTaskProfile},
 			},
 			Focus: &fhir.Reference{
 				Identifier: &fhir.Identifier{
@@ -99,21 +122,106 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			},
 		}
 
-		err := carePlanContributor2.Create(task, &task)
+		err := carePlanContributor2.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
+	}
+
+	t.Log("Creating Task - No BasedOn, no Task.For so primaryTask creation fails")
+	{
+		primaryTask = fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			Focus: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			},
+		}
+
+		err := carePlanContributor1.Create(primaryTask, &primaryTask)
+		require.Error(t, err)
+	}
+
+	t.Log("Creating Task - Task is created through upsert (PUT on non-existing resource)")
+	{
+		primaryTask = fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			Focus: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+				//Reference: to.Ptr("Patient/" + *patient.Id),
+			},
+		}
+
+		err := carePlanContributor1.Update("Task", primaryTask, &primaryTask, fhirclient.QueryParam("_id", "123"))
+		require.NoError(t, err)
+		notificationCounter.Store(0)
+		// Resolve created CarePlan through Task.basedOn
+		require.NoError(t, carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan))
+	}
+
+	t.Log("Create Subtask")
+	{
+		subTask := fhir.Task{
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: primaryTask.Owner,
+			Owner:     primaryTask.Requester,
+			BasedOn: []fhir.Reference{
+				{
+					Type:      to.Ptr("CarePlan"),
+					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+				},
+			},
+			PartOf: []fhir.Reference{
+				{
+					Type:      to.Ptr("Task"),
+					Reference: to.Ptr("Task/" + *primaryTask.Id),
+				},
+			},
+		}
+		err := carePlanContributor2.Create(subTask, &subTask)
+		require.NoError(t, err)
+		notificationCounter.Store(0)
+		// INT-440: CarePlan.activity should not contain subtasks
+		require.NoError(t, carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan))
+		require.Len(t, carePlan.Activity, 1)
 	}
 
 	t.Log("Creating Task - No BasedOn, new CarePlan and CareTeam are created")
 	{
-		task = fhir.Task{
+		primaryTask = fhir.Task{
 			Intent:    "order",
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 			Meta: &fhir.Meta{
-				Profile: []string{
-					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
-				},
+				Profile: []string{coolfhir.SCPTaskProfile},
 			},
 			Focus: &fhir.Reference{
 				Identifier: &fhir.Identifier{
@@ -122,21 +230,33 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 					Value:  to.Ptr("99534756439"),
 				},
 			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+				//Reference: to.Ptr("Patient/" + *patient.Id),
+			},
 		}
 
-		err := carePlanContributor1.Create(task, &task)
+		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.NoError(t, err)
-		err = carePlanContributor1.Read(*task.BasedOn[0].Reference, &carePlan)
+		err = carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
 
+		t.Run("Check CarePlan properties", func(t *testing.T) {
+			require.Equal(t, fhir.CarePlanIntentOrder, carePlan.Intent)
+			require.Equal(t, fhir.RequestStatusActive, carePlan.Status)
+			require.Equal(t, *primaryTask.For, carePlan.Subject)
+		})
 		t.Run("Check Task properties", func(t *testing.T) {
-			require.NotNil(t, task.Id)
-			require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
+			require.NotNil(t, primaryTask.Id)
+			require.Equal(t, "CarePlan/"+*carePlan.Id, *primaryTask.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
 		})
 		t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
 			require.Len(t, carePlan.Activity, 1)
 			require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
-			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
+			require.Equal(t, "Task/"+*primaryTask.Id, *carePlan.Activity[0].Reference.Reference)
 		})
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
@@ -150,19 +270,11 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("Search CarePlan")
 	{
 		var searchResult fhir.Bundle
-		err := carePlanContributor1.Read("CarePlan", &searchResult, fhirclient.QueryParam("_id", *carePlan.Id))
+		err := carePlanContributor1.Read("CarePlan", &searchResult, fhirclient.QueryParam("_id", *carePlan.Id), fhirclient.QueryParam("_include", "CarePlan:care-team"))
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 2, "Expected 1 CarePlan and 1 CareTeam")
 		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "CarePlan/"+*carePlan.Id))
 		require.True(t, strings.HasSuffix(*searchResult.Entry[1].FullUrl, *carePlan.CareTeam[0].Reference))
-	}
-
-	t.Log("Search Subtasks")
-	{
-		var searchResult fhir.Bundle
-		err := carePlanContributor1.Read("Task", &searchResult, fhirclient.QueryParam("part-of", "Task/"+*task.Id))
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 1, "Expected 1 subtask")
 	}
 
 	t.Log("Read CarePlan - Not in participants")
@@ -193,7 +305,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("Read Task")
 	{
 		var fetchedTask fhir.Task
-		err := carePlanContributor1.Read("Task/"+*task.Id, &fetchedTask)
+		err := carePlanContributor1.Read("Task/"+*primaryTask.Id, &fetchedTask)
 		require.NoError(t, err)
 		require.NotNil(t, fetchedTask.Id)
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
@@ -202,7 +314,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("Read Task - Non-creating referenced party")
 	{
 		var fetchedTask fhir.Task
-		err := carePlanContributor2.Read("Task/"+*task.Id, &fetchedTask)
+		err := carePlanContributor2.Read("Task/"+*primaryTask.Id, &fetchedTask)
 		require.NoError(t, err)
 		require.NotNil(t, fetchedTask.Id)
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
@@ -210,7 +322,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("Read Task - Not in participants")
 	{
 		var fetchedTask fhir.Task
-		err := invalidCarePlanContributor.Read("Task/"+*task.Id, &fetchedTask)
+		err := invalidCarePlanContributor.Read("Task/"+*primaryTask.Id, &fetchedTask)
 		require.Error(t, err)
 	}
 	t.Log("Read Task - Does not exist")
@@ -219,11 +331,11 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		err := carePlanContributor1.Read("Task/999", &fetchedTask)
 		require.Error(t, err)
 	}
-	previousTask := task
+	previousTask := primaryTask
 
 	t.Log("Creating Task - Invalid status Accepted")
 	{
-		task = fhir.Task{
+		primaryTask = fhir.Task{
 			BasedOn: []fhir.Reference{
 				{
 					Type:      to.Ptr("CarePlan"),
@@ -236,14 +348,14 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
 
-		err := carePlanContributor1.Create(task, &task)
+		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
 		require.Equal(t, 0, int(notificationCounter.Load()))
 	}
 
 	t.Log("Creating Task - Invalid status Draft")
 	{
-		task = fhir.Task{
+		primaryTask = fhir.Task{
 			BasedOn: []fhir.Reference{
 				{
 					Type:      to.Ptr("CarePlan"),
@@ -256,14 +368,14 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
 
-		err := carePlanContributor1.Create(task, &task)
+		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
 		require.Equal(t, 0, int(notificationCounter.Load()))
 	}
 
 	t.Log("Creating Task - Existing CarePlan")
 	{
-		task = fhir.Task{
+		primaryTask = fhir.Task{
 			BasedOn: []fhir.Reference{
 				{
 					Type:      to.Ptr("CarePlan"),
@@ -274,22 +386,25 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Status:    fhir.TaskStatusRequested,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
 		}
 
-		err := carePlanContributor1.Create(task, &task)
+		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.NoError(t, err)
 		err = carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan)
 		require.NoError(t, err)
 
 		t.Run("Check Task properties", func(t *testing.T) {
-			require.NotNil(t, task.Id)
-			require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
+			require.NotNil(t, primaryTask.Id)
+			require.Equal(t, "CarePlan/"+*carePlan.Id, *primaryTask.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
 		})
 		t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
 			require.Len(t, carePlan.Activity, 2)
 			for _, activity := range carePlan.Activity {
 				require.Equal(t, "Task", *activity.Reference.Type)
-				require.Equal(t, true, "Task/"+*task.Id == *activity.Reference.Reference || "Task/"+*previousTask.Id == *activity.Reference.Reference)
+				require.Equal(t, true, "Task/"+*primaryTask.Id == *activity.Reference.Reference || "Task/"+*previousTask.Id == *activity.Reference.Reference)
 			}
 		})
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
@@ -306,16 +421,18 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		var searchResult fhir.Bundle
 		err := carePlanContributor1.Read("CareTeam", &searchResult)
 		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 1, "Expected 1 team")
+		require.Len(t, searchResult.Entry, 2, "Expected 1 team")
 	}
 
 	t.Log("Accepting Task")
 	{
-		task.Status = fhir.TaskStatusAccepted
+		primaryTask.Status = fhir.TaskStatusAccepted
 		var updatedTask fhir.Task
-		err := carePlanContributor2.Update("Task/"+*task.Id, task, &updatedTask)
+		// Note: use FHIR search instead of specifying ID to test support for updating resources identified by logical identifiers
+		err := carePlanContributor2.Update("Task", primaryTask, &updatedTask, fhirclient.QueryParam("_id", *primaryTask.Id))
+		//err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.NoError(t, err)
-		task = updatedTask
+		primaryTask = updatedTask
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -332,27 +449,27 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 	t.Log("Invalid state transition - Accepted -> Completed")
 	{
-		task.Status = fhir.TaskStatusCompleted
+		primaryTask.Status = fhir.TaskStatusCompleted
 		var updatedTask fhir.Task
-		err := carePlanContributor1.Update("Task/"+*task.Id, task, &updatedTask)
+		err := carePlanContributor1.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.Error(t, err)
 	}
 
 	t.Log("Invalid state transition - Accepted -> In-progress, Requester")
 	{
-		task.Status = fhir.TaskStatusInProgress
+		primaryTask.Status = fhir.TaskStatusInProgress
 		var updatedTask fhir.Task
-		err := carePlanContributor1.Update("Task/"+*task.Id, task, &updatedTask)
+		err := carePlanContributor1.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.Error(t, err)
 	}
 
 	t.Log("Valid state transition - Accepted -> In-progress, Owner")
 	{
-		task.Status = fhir.TaskStatusInProgress
+		primaryTask.Status = fhir.TaskStatusInProgress
 		var updatedTask fhir.Task
-		err := carePlanContributor2.Update("Task/"+*task.Id, task, &updatedTask)
+		err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.NoError(t, err)
-		task = updatedTask
+		primaryTask = updatedTask
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -369,11 +486,11 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 	t.Log("Complete Task")
 	{
-		task.Status = fhir.TaskStatusCompleted
+		primaryTask.Status = fhir.TaskStatusCompleted
 		var updatedTask fhir.Task
-		err := carePlanContributor2.Update("Task/"+*task.Id, task, &updatedTask)
+		err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.NoError(t, err)
-		task = updatedTask
+		primaryTask = updatedTask
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -388,7 +505,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		})
 	}
 
-	t.Log("Creating Task - participant is part of CareTeam and is able to create a task in an existing CarePlan")
+	t.Log("Creating Task - participant is part of CareTeam and is able to create a primaryTask in an existing CarePlan")
 	{
 		newTask := fhir.Task{
 			BasedOn: []fhir.Reference{
@@ -402,9 +519,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 			Meta: &fhir.Meta{
-				Profile: []string{
-					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
-				},
+				Profile: []string{coolfhir.SCPTaskProfile},
 			},
 			Focus: &fhir.Reference{
 				Identifier: &fhir.Identifier{
@@ -421,7 +536,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.NoError(t, err)
 
 		t.Run("Check Task properties", func(t *testing.T) {
-			require.NotNil(t, task.Id)
+			require.NotNil(t, primaryTask.Id)
 			require.Equal(t, "CarePlan/"+*carePlan.Id, *newTask.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
 		})
 		t.Run("Check that CarePlan.activities contains the Task", func(t *testing.T) {
@@ -430,7 +545,72 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			require.Equal(t, "Task/"+*newTask.Id, *carePlan.Activity[2].Reference.Reference)
 		})
 	}
+
+	// TODO: Will move this into new integ test once Update methods have been implemented
+	t.Log("GET patient")
+	{
+		// Get existing patient
+		var fetchedPatient fhir.Patient
+		err = carePlanContributor1.Read("Patient/"+*patient.Id, &fetchedPatient)
+		require.NoError(t, err)
+		require.True(t, coolfhir.IdentifierEquals(&patient.Identifier[0], &fetchedPatient.Identifier[0]))
+
+		// Get non-existing patient
+		err = carePlanContributor1.Read("Patient/999", &fetchedPatient)
+		require.Error(t, err)
+
+		// Search for existing patient - by ID
+		var searchResult fhir.Bundle
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("_id", *patient.Id))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 1)
+		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
+
+		// Search for existing patient - by BSN
+		searchResult = fhir.Bundle{}
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|1333333337"))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 1)
+		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
+
+		// Get existing patient - no access
+		searchResult = fhir.Bundle{}
+		err = carePlanContributor1.Read("Patient/"+*patient2.Id, &fetchedPatient)
+		require.Error(t, err)
+
+		// Search for existing patient - by ID - no access
+		searchResult = fhir.Bundle{}
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("_id", *patient2.Id))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 0)
+
+		// Search for existing patient - by BSN - no access
+		searchResult = fhir.Bundle{}
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|12345"))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 0)
+
+		searchResult = fhir.Bundle{}
+		// Search for patients, one with access one without
+		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|1333333337,http://fhir.nl/fhir/NamingSystem/bsn|12345"))
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 1)
+		require.Truef(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id), "Expected %s to end with %s", *searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id)
+	}
+
 }
+
+func testBundle(t *testing.T, fhirClient *fhirclient.BaseClient, data []byte) {
+	var bundle fhir.Bundle
+	err := json.Unmarshal(data, &bundle)
+	require.NoError(t, err)
+
+	err = fhirClient.Create(bundle, &bundle, fhirclient.AtPath("/"))
+	require.NoError(t, err)
+	responseData, _ := json.MarshalIndent(bundle, "  ", "")
+	println(string(responseData))
+}
+
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
@@ -440,6 +620,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhircli
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
+	config.AllowUnmanagedFHIROperations = true
 	service, err := New(config, activeProfile, orcaPublicURL)
 	require.NoError(t, err)
 
