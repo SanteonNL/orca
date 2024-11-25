@@ -8,6 +8,7 @@ import (
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -57,6 +58,7 @@ func New(
 		transport:               localFHIRStoreTransport,
 		workflows:               taskengine.DefaultWorkflows(),
 		questionnaireLoader:     taskengine.EmbeddedQuestionnaireLoader{},
+		kafkaClient:             ehr.NewClient(config.KafkaConfig),
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
@@ -88,6 +90,7 @@ type Service struct {
 	workflows                     taskengine.Workflows
 	questionnaireLoader           taskengine.QuestionnaireLoader
 	healthdataviewEndpointEnabled bool
+	kafkaClient                   ehr.KafkaClient
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
