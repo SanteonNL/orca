@@ -170,6 +170,7 @@ func (f fhirClientProxy) sanitizeRequestHeaders(header http.Header) http.Header 
 			nameLC == "referer" ||
 			nameLC == "cookie" ||
 			nameLC == "user-agent" ||
+			nameLC == "accept-encoding" ||
 			nameLC == "authorization" {
 			continue
 		}
