@@ -98,6 +98,14 @@ func TestProxy(t *testing.T) {
 			responseData, _ := io.ReadAll(httpResponse.Body)
 			assert.Contains(t, string(responseData), "Request body is required for POST requests")
 		})
+		t.Run("invalid JSON in request body", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("POST", proxyServer.URL+"/localfhir/DoPost", bytes.NewReader([]byte(`{invalid json}`)))
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			assert.Contains(t, string(responseData), "Request body isn't valid JSON")
+		})
 	})
 	t.Run("PUT request", func(t *testing.T) {
 		t.Run("ok", func(t *testing.T) {
