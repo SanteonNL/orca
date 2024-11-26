@@ -15,10 +15,13 @@ import (
 	"strings"
 )
 
+// HttpProxy is an interface for a simple HTTP proxy that forwards requests to an upstream server.
+// It's there so NewProxy can maintain compatibility with httputil.ReverseProxy
 type HttpProxy interface {
 	ServeHTTP(writer http.ResponseWriter, request *http.Request)
 }
 
+// responseStatus is a FHIR client option that captures the HTTP response status code.
 func responseStatus(status *int) fhirclient.PostRequestOption {
 	return func(_ fhirclient.Client, r *http.Response) error {
 		*status = r.StatusCode
@@ -26,16 +29,16 @@ func responseStatus(status *int) fhirclient.PostRequestOption {
 	}
 }
 
-var _ HttpProxy = &FhirClientProxy{}
+var _ HttpProxy = &fhirClientProxy{}
 
-type FhirClientProxy struct {
+type fhirClientProxy struct {
 	client          fhirclient.Client
 	proxyBasePath   string
 	proxyBaseUrl    *url.URL
 	upstreamBaseUrl *url.URL
 }
 
-func (f FhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, request *http.Request) {
+func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, request *http.Request) {
 	outRequestUrl := f.upstreamBaseUrl.JoinPath(strings.TrimPrefix(request.URL.Path, f.proxyBasePath))
 	var responseStatusCode int
 	var headers fhirclient.Headers
@@ -58,14 +61,14 @@ func (f FhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 		})
 		return
 	}
-	var responseData []byte
+	responseResource := make(map[string]interface{})
 	switch request.Method {
 	case http.MethodGet:
-		err = f.client.ReadWithContext(request.Context(), outRequestUrl.Path, &responseData, params...)
+		err = f.client.ReadWithContext(request.Context(), outRequestUrl.Path, &responseResource, params...)
 	case http.MethodPost:
-		err = f.client.CreateWithContext(request.Context(), requestData, &responseData, params...)
+		err = f.client.CreateWithContext(request.Context(), requestData, &responseResource, params...)
 	case http.MethodPut:
-		err = f.client.UpdateWithContext(request.Context(), outRequestUrl.Path, requestData, &responseData, params...)
+		err = f.client.UpdateWithContext(request.Context(), outRequestUrl.Path, requestData, &responseResource, params...)
 	default:
 		SendResponse(httpResponseWriter, http.StatusMethodNotAllowed, BadRequest("Method not allowed: %s", request.Method))
 		return
@@ -94,7 +97,7 @@ func (f FhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 	pipeline.New().
 		AppendResponseTransformer(pipeline.ResponseBodyRewriter{Old: []byte(upstreamUrl), New: []byte(proxyUrl)}).
 		AppendResponseTransformer(pipeline.ResponseHeaderRewriter{Old: upstreamUrl, New: proxyUrl}).
-		DoAndWrite(httpResponseWriter, responseData, responseStatusCode)
+		DoAndWrite(httpResponseWriter, responseResource, responseStatusCode)
 }
 
 // NewProxy creates a new FHIR reverse proxy that forwards requests to an upstream FHIR server.
@@ -115,69 +118,12 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 			next:   transport,
 		},
 	}
-	return &FhirClientProxy{
+	return &fhirClientProxy{
 		client:          fhirclient.New(upstreamBaseUrl, httpClient, nil),
 		proxyBasePath:   proxyBasePath,
 		proxyBaseUrl:    rewriteUrl,
 		upstreamBaseUrl: upstreamBaseUrl,
 	}
-
-	//return &httputil.ReverseProxy{
-	//	Rewrite: func(r *httputil.ProxyRequest) {
-	//		r.Out.URL = upstreamBaseUrl.JoinPath(strings.TrimPrefix(r.In.URL.Path, proxyBasePath))
-	//		r.Out.URL.RawQuery = r.In.URL.RawQuery
-	//		r.Out.Host = "" // upstreamBaseUrl.Host
-	//	},
-	//	Transport: sanitizingRoundTripper{
-	//		next: loggingRoundTripper{
-	//			logger: &logger,
-	//			next:   transport,
-	//			name:   name,
-	//		},
-	//	},
-	//	ModifyResponse: func(response *http.Response) error {
-	//		upstreamUrl := upstreamBaseUrl.String()
-	//		proxyUrl := rewriteUrl.String()
-	//		return pipeline.New().
-	//			AppendResponseTransformer(pipeline.ResponseBodyRewriter{Old: []byte(upstreamUrl), New: []byte(proxyUrl)}).
-	//			AppendResponseTransformer(pipeline.ResponseHeaderRewriter{Old: upstreamUrl, New: proxyUrl}).
-	//			Do(response, response.Body)
-	//	},
-	//	ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
-	//		logger.Warn().Err(err).Msgf("%s request failed (url=%s)", name, request.URL.String())
-	//		SendResponse(writer, http.StatusBadGateway, &ErrorWithCode{
-	//			Message:    "FHIR request failed: " + err.Error(),
-	//			StatusCode: http.StatusBadGateway,
-	//		})
-	//	},
-	//}
-}
-
-var _ http.RoundTripper = &sanitizingRoundTripper{}
-
-type sanitizingRoundTripper struct {
-	next http.RoundTripper
-}
-
-func (s sanitizingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	// Header sanitizing is loosely inspired by:
-	// - https://www.rfc-editor.org/rfc/rfc7231
-	// - https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/header_sanitizing
-	for name, _ := range request.Header {
-		nameLC := strings.ToLower(name)
-		if strings.HasPrefix(nameLC, "x-") ||
-			nameLC == "referer" ||
-			nameLC == "cookie" ||
-			nameLC == "user-agent" ||
-			nameLC == "authorization" {
-			request.Header.Del(name)
-		}
-	}
-	// TODO: Do we need this, maybe it was added by curl?
-	if request.Method == http.MethodGet {
-		request.Header.Del("Content-Length")
-	}
-	return s.next.RoundTrip(request)
 }
 
 var _ http.RoundTripper = &loggingRoundTripper{}

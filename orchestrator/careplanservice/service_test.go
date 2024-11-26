@@ -116,6 +116,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	capturedHost := ""
 	fhirServerMux.HandleFunc("GET /fhir/SomeResource", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write([]byte(`{"resourceType":"Task"}`))
 		capturedHost = request.Host
 	})
 	fhirServer := httptest.NewServer(fhirServerMux)
