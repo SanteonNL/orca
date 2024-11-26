@@ -1,9 +1,11 @@
 package coolfhir
 
 import (
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -23,6 +25,7 @@ func TestProxy(t *testing.T) {
 		capturedQueryParams = request.URL.Query()
 		capturedCookies = request.Cookies()
 		capturedHeaders = request.Header
+		writer.Write([]byte(`{"resourceType":"Patient"}`))
 	})
 	upstreamServer := httptest.NewServer(upstreamServerMux)
 	upstreamServerURL, _ := url.Parse(upstreamServer.URL)
@@ -44,6 +47,14 @@ func TestProxy(t *testing.T) {
 	proxyServer := httptest.NewServer(proxyServerMux)
 	proxyServerMux.HandleFunc("/localfhir/{rest...}", proxy.ServeHTTP)
 
+	t.Run("fhirclient", func(t *testing.T) {
+		baseUrl, _ := url.Parse(proxyServer.URL + "/localfhir")
+		client := fhirclient.New(baseUrl, http.DefaultClient, nil)
+		var patient fhir.Patient
+		err := client.Read("Patient", &patient, fhirclient.QueryParam("_id", "1"))
+		require.NoError(t, err)
+		require.Equal(t, "1", capturedQueryParams.Get("_id"))
+	})
 	t.Run("base request", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient", nil)
 		httpResponse, err := proxyServer.Client().Do(httpRequest)

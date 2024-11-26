@@ -27,7 +27,7 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 		Rewrite: func(r *httputil.ProxyRequest) {
 			r.Out.URL = upstreamBaseUrl.JoinPath(strings.TrimPrefix(r.In.URL.Path, proxyBasePath))
 			r.Out.URL.RawQuery = r.In.URL.RawQuery
-			r.Out.Host = upstreamBaseUrl.Host
+			r.Out.Host = "" // upstreamBaseUrl.Host
 		},
 		Transport: sanitizingRoundTripper{
 			next: loggingRoundTripper{
@@ -45,7 +45,7 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 				Do(response, response.Body)
 		},
 		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
-			logger.Warn().Err(err).Msgf("%s proxy FHIR request failed (url=%s)", name, request.URL.String())
+			logger.Warn().Err(err).Msgf("%s request failed (url=%s)", name, request.URL.String())
 			SendResponse(writer, http.StatusBadGateway, &ErrorWithCode{
 				Message:    "FHIR request failed: " + err.Error(),
 				StatusCode: http.StatusBadGateway,
