@@ -8,7 +8,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"io"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -81,7 +80,7 @@ type Service struct {
 	profile                      profile.Provider
 	subscriptionManager          subscriptions.Manager
 	maxReadBodySize              int
-	proxy                        *httputil.ReverseProxy
+	proxy                        coolfhir.HttpProxy
 	allowUnmanagedFHIROperations bool
 	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	pipeline                     pipeline.Instance

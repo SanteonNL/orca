@@ -544,7 +544,7 @@ func TestService_Handle(t *testing.T) {
 			hdrs := new(fhirclient.Headers)
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: OperationOutcome, issues: [processing error] Transaction failed on 'PUT' for the requested url '/ServiceRequest'.; [invalid error] Found result with Id '4eaffb23-02ab-452c-8ef1-b4c9be7b2425', which did not match the provided Id 'e669F4l0Bk3NJpQzoTzVE0opsQR2iWXR41M6FXkeguZo3'.")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Transaction failed on 'PUT' for the requested url '/ServiceRequest'.; [invalid error] Found result with Id '4eaffb23-02ab-452c-8ef1-b4c9be7b2425', which did not match the provided Id 'e669F4l0Bk3NJpQzoTzVE0opsQR2iWXR41M6FXkeguZo3'.")
 			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 		})
 		t.Run("commit fails, FHIR server returns OperationOutcome with security issue, which is sanitized", func(t *testing.T) {
@@ -565,7 +565,7 @@ func TestService_Handle(t *testing.T) {
 			hdrs := new(fhirclient.Headers)
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: OperationOutcome, issues: [processing error] upstream FHIR server error")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] upstream FHIR server error")
 			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 		})
 		t.Run("GET is disallowed", func(t *testing.T) {
