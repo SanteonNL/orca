@@ -2,6 +2,7 @@ package coolfhir
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -52,27 +53,77 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 			params = append(params, fhirclient.QueryParam(key, value))
 		}
 	}
-	// LimitReader 10mb to prevent DoS attacks
-	requestData, err := io.ReadAll(io.LimitReader(request.Body, 10*1024*1024))
-	if err != nil {
-		SendResponse(httpResponseWriter, http.StatusBadRequest, &ErrorWithCode{
-			Message:    "Failed to read request body: " + err.Error(),
-			StatusCode: http.StatusBadRequest,
-		})
+	// Read the request body, making sure it's valid JSON
+	var err error
+	var requestResource map[string]interface{}
+	if request.Body != nil {
+		// LimitReader 10mb to prevent DoS attacks
+		requestData, err := io.ReadAll(io.LimitReader(request.Body, 10*1024*1024))
+		if err != nil {
+			WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
+				OperationOutcome: fhir.OperationOutcome{
+					Issue: []fhir.OperationOutcomeIssue{
+						{
+							Severity:    fhir.IssueSeverityError,
+							Code:        fhir.IssueTypeStructure,
+							Diagnostics: to.Ptr("Couldn't read request body: " + err.Error()),
+						},
+					},
+				},
+				HttpStatusCode: http.StatusBadRequest,
+			}, "FHIR request", httpResponseWriter)
+			return
+		}
+		if len(requestData) > 0 {
+			requestResource = make(map[string]interface{})
+			if err := json.Unmarshal(requestData, &requestResource); err != nil {
+				WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
+					OperationOutcome: fhir.OperationOutcome{
+						Issue: []fhir.OperationOutcomeIssue{
+							{
+								Severity:    fhir.IssueSeverityError,
+								Code:        fhir.IssueTypeStructure,
+								Diagnostics: to.Ptr("Request body isn't valid JSON: " + err.Error()),
+							},
+						},
+					},
+					HttpStatusCode: http.StatusBadRequest,
+				}, "FHIR request", httpResponseWriter)
+				return
+			}
+		}
+	}
+	if requestResource == nil && (request.Method == http.MethodPost || request.Method == http.MethodPut) {
+		WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
+			OperationOutcome: fhir.OperationOutcome{
+				Issue: []fhir.OperationOutcomeIssue{
+					{
+						Severity:    fhir.IssueSeverityError,
+						Code:        fhir.IssueTypeStructure,
+						Diagnostics: to.Ptr("Request body is required for POST and PUT requests"),
+					},
+				},
+			},
+			HttpStatusCode: http.StatusBadRequest,
+		}, "FHIR request", httpResponseWriter)
 		return
 	}
+
 	responseResource := make(map[string]interface{})
+
+	// Execute the request
 	switch request.Method {
 	case http.MethodGet:
 		err = f.client.ReadWithContext(request.Context(), outRequestUrl.Path, &responseResource, params...)
 	case http.MethodPost:
-		err = f.client.CreateWithContext(request.Context(), requestData, &responseResource, params...)
+		err = f.client.CreateWithContext(request.Context(), requestResource, &responseResource, params...)
 	case http.MethodPut:
-		err = f.client.UpdateWithContext(request.Context(), outRequestUrl.Path, requestData, &responseResource, params...)
+		err = f.client.UpdateWithContext(request.Context(), outRequestUrl.Path, requestResource, &responseResource, params...)
 	default:
 		SendResponse(httpResponseWriter, http.StatusMethodNotAllowed, BadRequest("Method not allowed: %s", request.Method))
 		return
 	}
+
 	if err != nil {
 		// Make sure we always return a FHIR OperationOutcome in case of an error
 		if !errors.As(err, &fhirclient.OperationOutcomeError{}) {

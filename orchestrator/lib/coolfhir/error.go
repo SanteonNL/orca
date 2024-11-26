@@ -48,7 +48,7 @@ type ErrorWithCode struct {
 	StatusCode int
 }
 
-func (e *ErrorWithCode) Error() string {
+func (e ErrorWithCode) Error() string {
 	return e.Message
 }
 
@@ -106,7 +106,7 @@ func WriteOperationOutcomeFromError(err error, desc string, httpResponse http.Re
 	} else {
 		// Error type: ErrorWithCode
 		var errorWithCode = new(ErrorWithCode)
-		if errors.As(err, &errorWithCode) {
+		if errors.As(err, errorWithCode) || errors.As(err, &errorWithCode) {
 			if errorWithCode.StatusCode > 0 {
 				statusCode = errorWithCode.StatusCode
 			}

@@ -1,6 +1,7 @@
 package coolfhir
 
 import (
+	"bytes"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,23 @@ func TestProxy(t *testing.T) {
 	var capturedQueryParams url.Values
 	var capturedCookies []*http.Cookie
 	var capturedHeaders http.Header
-	upstreamServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
+	upstreamServerMux.HandleFunc("GET /fhir/DoGet", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+		writer.Write([]byte(`{"resourceType":"Patient"}`))
+	})
+	upstreamServerMux.HandleFunc("POST /fhir/DoPost", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusCreated)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+		writer.Write([]byte(`{"resourceType":"Patient"}`))
+	})
+	upstreamServerMux.HandleFunc("PUT /fhir/DoPut", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
 		capturedQueryParams = request.URL.Query()
@@ -51,12 +68,28 @@ func TestProxy(t *testing.T) {
 		baseUrl, _ := url.Parse(proxyServer.URL + "/localfhir")
 		client := fhirclient.New(baseUrl, http.DefaultClient, nil)
 		var patient fhir.Patient
-		err := client.Read("Patient", &patient, fhirclient.QueryParam("_id", "1"))
+		err := client.Read("DoGet", &patient, fhirclient.QueryParam("_id", "1"))
 		require.NoError(t, err)
 		require.Equal(t, "1", capturedQueryParams.Get("_id"))
 	})
-	t.Run("base request", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient", nil)
+	t.Run("GET request", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
+		httpResponse, err := proxyServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		assert.Empty(t, capturedQueryParams)
+		assert.Empty(t, capturedCookies)
+	})
+	t.Run("POST request", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("POST", proxyServer.URL+"/localfhir/DoPost", bytes.NewReader([]byte(`{"resourceType":"Patient"}`)))
+		httpResponse, err := proxyServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusCreated, httpResponse.StatusCode)
+		assert.Empty(t, capturedQueryParams)
+		assert.Empty(t, capturedCookies)
+	})
+	t.Run("PUT request", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("PUT", proxyServer.URL+"/localfhir/DoPut", bytes.NewReader([]byte(`{"resourceType":"Patient"}`)))
 		httpResponse, err := proxyServer.Client().Do(httpRequest)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, httpResponse.StatusCode)
@@ -64,14 +97,14 @@ func TestProxy(t *testing.T) {
 		assert.Empty(t, capturedCookies)
 	})
 	t.Run("Host header is rewritten to upstream server hostname", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient", nil)
+		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
 		httpResponse, err := proxyServer.Client().Do(httpRequest)
 		require.NoError(t, err)
 		assert.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		assert.Equal(t, upstreamServerURL.Host, capturedHost)
 	})
 	t.Run("query parameters are retained", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient?_search=foo:bar", nil)
+		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet?_search=foo:bar", nil)
 		httpResponse, err := proxyServer.Client().Do(httpRequest)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
@@ -80,7 +113,7 @@ func TestProxy(t *testing.T) {
 	})
 	t.Run("cookies are not retained", func(t *testing.T) {
 		// Cookies could contain sensitive information (session tokens), so they should not be proxied
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient", nil)
+		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
 		httpRequest.AddCookie(&http.Cookie{
 			Name:  "sid",
 			Value: "test",
@@ -91,7 +124,7 @@ func TestProxy(t *testing.T) {
 		assert.Empty(t, capturedCookies)
 	})
 	t.Run("request headers are proxied", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient", nil)
+		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
 		httpRequest.Header.Set("Accept", "application/fhir+json")
 		httpResponse, err := proxyServer.Client().Do(httpRequest)
 		require.NoError(t, err)
@@ -99,7 +132,7 @@ func TestProxy(t *testing.T) {
 		assert.Equal(t, "application/fhir+json", capturedHeaders.Get("Accept"))
 	})
 	t.Run("request headers are sanitized", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient", nil)
+		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
 		// There can be numerous X-headers that can contain information that should not be proxied by default (e.g. internal infrastructure details)
 		httpRequest.Header.Set("X-Request-Id", "custom-client")
 		// User agent can convey privacy-sensitive information about the client that should not be proxied
@@ -121,7 +154,7 @@ func TestProxy(t *testing.T) {
 		// Authorization header from the proxied request should not be proxied,
 		// but if the http.Client used for proxying sets it, the latter one should be proxied
 		// (used for authentication).
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/Patient", nil)
+		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
 		httpRequest.Header.Set("Authorization", "Bearer test")
 		defer func() {
 			proxyTransportRequestHeaders = make(http.Header)
