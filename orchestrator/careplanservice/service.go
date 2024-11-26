@@ -565,9 +565,16 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 		},
 	}
 	for _, param := range params {
-		// Create a `PreRequestOption` that adds the `If-None-Exist` header to the request
-		addHeaderOption := func(client fhirclient.Client, req *http.Request) {
-			req.Header.Set("If-None-Exist", fmt.Sprintf("url=%s", param.SearchParam.Url))
+
+		// Check if param exists before creating
+		existingParamBundle := fhir.Bundle{}
+		err := s.fhirClient.Read("SearchParameter", &existingParamBundle, fhirclient.QueryParam("name", param.SearchParam.Name))
+		if err != nil {
+			log.Error().Ctx(ctx).Err(err).Msgf("Failed to read SearchParameter %s, attempting create", param.SearchParamId)
+		}
+		if len(existingParamBundle.Entry) > 0 {
+			log.Info().Ctx(ctx).Msgf("SearchParameter/%s already exists, skipping creation", param.SearchParamId)
+			continue
 		}
 
 		log.Info().Ctx(ctx).
@@ -575,7 +582,7 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
-		err := s.fhirClient.CreateWithContext(ctx, &param.SearchParam, &param.SearchParam, addHeaderOption)
+		err = s.fhirClient.CreateWithContext(ctx, &param.SearchParam, &param.SearchParam)
 		if err != nil {
 			log.Error().Ctx(ctx).Err(err).Msgf("Failed to ensure SearchParameter %s", param.SearchParamId)
 		} else {
