@@ -140,59 +140,63 @@ func TestProxy(t *testing.T) {
 		assert.Equal(t, "foo:bar", capturedQueryParams.Get("_search"))
 		assert.Empty(t, capturedCookies)
 	})
-	t.Run("cookies are not retained", func(t *testing.T) {
-		// Cookies could contain sensitive information (session tokens), so they should not be proxied
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
-		httpRequest.AddCookie(&http.Cookie{
-			Name:  "sid",
-			Value: "test",
+	t.Run("headers", func(t *testing.T) {
+		t.Run("request headers are proxied", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
+			httpRequest.Header.Set("Accept", "application/fhir+json")
+			httpRequest.Header.Set("CustomHeader", "should be there")
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Equal(t, "application/fhir+json", capturedHeaders.Get("Accept"))
+			assert.Equal(t, "should be there", capturedHeaders.Get("CustomHeader"))
 		})
-		httpResponse, err := proxyServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-		assert.Empty(t, capturedCookies)
-	})
-	t.Run("request headers are proxied", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
-		httpRequest.Header.Set("Accept", "application/fhir+json")
-		httpResponse, err := proxyServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-		assert.Equal(t, "application/fhir+json", capturedHeaders.Get("Accept"))
-	})
-	t.Run("request headers are sanitized", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
-		// There can be numerous X-headers that can contain information that should not be proxied by default (e.g. internal infrastructure details)
-		httpRequest.Header.Set("X-Request-Id", "custom-client")
-		// User agent can convey privacy-sensitive information about the client that should not be proxied
-		httpRequest.Header.Set("User-Agent", "test")
-		// Referer can contain sensitive information about the client's browsing history that should not be proxied
-		httpRequest.Header.Set("Referer", "test")
-		// Authorization header can contain sensitive information that should not be proxied.
-		httpRequest.Header.Set("Authorization", "Bearer test")
+		t.Run("cookies are not retained", func(t *testing.T) {
+			// Cookies could contain sensitive information (session tokens), so they should not be proxied
+			httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
+			httpRequest.AddCookie(&http.Cookie{
+				Name:  "sid",
+				Value: "test",
+			})
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Empty(t, capturedCookies)
+		})
+		t.Run("request headers are sanitized", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
+			// There can be numerous X-headers that can contain information that should not be proxied by default (e.g. internal infrastructure details)
+			httpRequest.Header.Set("X-Request-Id", "custom-client")
+			// User agent can convey privacy-sensitive information about the client that should not be proxied
+			httpRequest.Header.Set("User-Agent", "test")
+			// Referer can contain sensitive information about the client's browsing history that should not be proxied
+			httpRequest.Header.Set("Referer", "test")
+			// Authorization header can contain sensitive information that should not be proxied.
+			httpRequest.Header.Set("Authorization", "Bearer test")
 
-		httpResponse, err := proxyServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-		assert.NotEqual(t, "custom-client", capturedHeaders.Get("User-Agent"))
-		assert.Empty(t, capturedHeaders.Get("X-Request-Id"))
-		assert.Empty(t, capturedHeaders.Get("Referer"))
-		assert.Empty(t, capturedHeaders.Get("Authorization"))
-	})
-	t.Run("authorization header from passed http.Client is proxied", func(t *testing.T) {
-		// Authorization header from the proxied request should not be proxied,
-		// but if the http.Client used for proxying sets it, the latter one should be proxied
-		// (used for authentication).
-		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
-		httpRequest.Header.Set("Authorization", "Bearer test")
-		defer func() {
-			proxyTransportRequestHeaders = make(http.Header)
-		}()
-		proxyTransportRequestHeaders.Set("Authorization", "Bearer set-by-proxy-client")
-		httpResponse, err := proxyServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-		assert.Equal(t, "Bearer set-by-proxy-client", capturedHeaders.Get("Authorization"))
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.NotEqual(t, "custom-client", capturedHeaders.Get("User-Agent"))
+			assert.Empty(t, capturedHeaders.Get("X-Request-Id"))
+			assert.Empty(t, capturedHeaders.Get("Referer"))
+			assert.Empty(t, capturedHeaders.Get("Authorization"))
+		})
+		t.Run("authorization header from passed http.Client is proxied", func(t *testing.T) {
+			// Authorization header from the proxied request should not be proxied,
+			// but if the http.Client used for proxying sets it, the latter one should be proxied
+			// (used for authentication).
+			httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
+			httpRequest.Header.Set("Authorization", "Bearer test")
+			defer func() {
+				proxyTransportRequestHeaders = make(http.Header)
+			}()
+			proxyTransportRequestHeaders.Set("Authorization", "Bearer set-by-proxy-client")
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Equal(t, "Bearer set-by-proxy-client", capturedHeaders.Get("Authorization"))
+		})
 	})
 }
 

@@ -6,7 +6,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.12.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.1.0
-	github.com/SanteonNL/go-fhir-client v0.2.11
+	github.com/SanteonNL/go-fhir-client v0.2.12
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.0.0-20240805130644-8b92f1cbf865
 	github.com/beevik/etree v1.2.0
 	github.com/braineet/saml v0.4.15

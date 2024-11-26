@@ -22,14 +22,6 @@ type HttpProxy interface {
 	ServeHTTP(writer http.ResponseWriter, request *http.Request)
 }
 
-// responseStatus is a FHIR client option that captures the HTTP response status code.
-func responseStatus(status *int) fhirclient.PostRequestOption {
-	return func(_ fhirclient.Client, r *http.Response) error {
-		*status = r.StatusCode
-		return nil
-	}
-}
-
 var _ HttpProxy = &fhirClientProxy{}
 
 type fhirClientProxy struct {
@@ -44,8 +36,9 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 	var responseStatusCode int
 	var headers fhirclient.Headers
 	params := []fhirclient.Option{
+		fhirclient.RequestHeaders(f.sanitizeRequestHeaders(request.Header)),
 		fhirclient.ResponseHeaders(&headers),
-		responseStatus(&responseStatusCode),
+		fhirclient.ResponseStatusCode(&responseStatusCode),
 		fhirclient.AtUrl(outRequestUrl),
 	}
 	for key, values := range request.URL.Query() {
@@ -164,6 +157,25 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 		AppendResponseTransformer(pipeline.ResponseBodyRewriter{Old: []byte(upstreamUrl), New: []byte(proxyUrl)}).
 		AppendResponseTransformer(pipeline.ResponseHeaderRewriter{Old: upstreamUrl, New: proxyUrl}).
 		DoAndWrite(httpResponseWriter, responseResource, responseStatusCode)
+}
+
+func (f fhirClientProxy) sanitizeRequestHeaders(header http.Header) http.Header {
+	result := make(http.Header)
+	// Header sanitizing is loosely inspired by:
+	// - https://www.rfc-editor.org/rfc/rfc7231
+	// - https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/header_sanitizing
+	for name, values := range header {
+		nameLC := strings.ToLower(name)
+		if strings.HasPrefix(nameLC, "x-") ||
+			nameLC == "referer" ||
+			nameLC == "cookie" ||
+			nameLC == "user-agent" ||
+			nameLC == "authorization" {
+			continue
+		}
+		result[name] = values
+	}
+	return result
 }
 
 // NewProxy creates a new FHIR reverse proxy that forwards requests to an upstream FHIR server.
