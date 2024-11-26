@@ -28,9 +28,7 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 			r.Out.URL.RawQuery = r.In.URL.RawQuery
 			r.Out.Host = "" // upstreamBaseUrl.Host
 		},
-		Transport: sanitizingRoundTripper{
-			next: transport,
-		},
+		Transport: transport,
 		//Transport: sanitizingRoundTripper{
 		//	next: loggingRoundTripper{
 		//		logger: &logger,
