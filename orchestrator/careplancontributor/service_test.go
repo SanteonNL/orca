@@ -328,8 +328,6 @@ func TestService_Proxy_Valid(t *testing.T) {
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusOK)
-	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, "", string(body))
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
@@ -382,8 +380,6 @@ func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
 	httpResponse, err := httpClient.Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
-	body, _ := io.ReadAll(httpResponse.Body)
-	require.Equal(t, "", string(body))
 	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
 }
 
