@@ -16,6 +16,27 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
+var _ error = TaskRejection{}
+
+// TaskRejection is an error type that is used when a Task can't be processed by the Task Filler, and isn't retryable.
+// Reasons are: invalid Task, missing Task.partOf, unsupported service or condition code, etc.
+// It should NOT be used for transient errors, like network issues: in that case, the Task should be retried.
+type TaskRejection struct {
+	Reason       string
+	ReasonDetail error
+}
+
+func (t TaskRejection) FormatReason() string {
+	if t.ReasonDetail != nil {
+		return fmt.Sprintf("%s: %s", t.Reason, t.ReasonDetail.Error())
+	}
+	return t.Reason
+}
+
+func (t TaskRejection) Error() string {
+	return "task rejected by filler: " + t.FormatReason()
+}
+
 func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 	log.Info().Ctx(ctx).Msgf("Running handleTaskFillerCreateOrUpdate for Task %s", *task.Id)
 
@@ -25,13 +46,18 @@ func (s *Service) handleTaskFillerCreateOrUpdate(ctx context.Context, cpsClient 
 	}
 
 	if err := s.isValidTask(task); err != nil {
-		log.Error().Ctx(ctx).Msgf("Task invalid - skipping: %v", err)
-		return fmt.Errorf("task is not valid - skipping: %w", err)
+		return TaskRejection{
+			Reason:       "Task is not valid",
+			ReasonDetail: err,
+		}
 	}
 
 	partOfRef, err := s.partOf(task, false)
 	if err != nil {
-		return fmt.Errorf("failed to extract Task.partOf: %w", err)
+		return TaskRejection{
+			Reason:       "expected a subTask - failed to extract Task.partOf",
+			ReasonDetail: err,
+		}
 	}
 
 	// If partOfRef is nil, handle the task as a primary task - no need to create follow-up subtasks for newly created Tasks
@@ -84,11 +110,17 @@ func (s *Service) handleTaskFillerUpdate(ctx context.Context, cpsClient fhirclie
 
 	if err := s.isValidTask(task); err != nil {
 		log.Warn().Ctx(ctx).Err(err).Msg("Task invalid - skipping")
-		return fmt.Errorf("task is not valid - skipping: %w", err)
+		return &TaskRejection{
+			Reason:       "Task is not valid",
+			ReasonDetail: err,
+		}
 	}
 
 	if _, err := s.partOf(task, true); err != nil {
-		return fmt.Errorf("expected a subTask - failed to extract Task.partOf for Task/%s: %w", *task.Id, err)
+		return &TaskRejection{
+			Reason:       "expected a subTask - failed to extract Task.partOf for Task" + *task.Id,
+			ReasonDetail: err,
+		}
 	}
 
 	log.Info().Ctx(ctx).Msg("SubTask.status is completed - processing")
@@ -165,10 +197,9 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 }
 
 func (s *Service) createSubTaskOrFinishPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, isPrimaryTask bool, localOrgIdentifiers []fhir.Identifier) error {
-	// TODO: INT-300 Reject Task if we can't execute it, or if it's invalid
 	// TODO: We only support task.Focus with a literal reference for now, so no logical identifiers
 	if task.Focus == nil || task.Focus.Reference == nil {
-		return errors.New("task.Focus or task.Focus.Reference is nil")
+		return &TaskRejection{Reason: "task.Focus or task.Focus.Reference is nil"}
 	}
 
 	// Look up primary Task: workflow selection works on primary Task.reasonCode/reasonReference
@@ -179,19 +210,23 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(ctx context.Context, cpsClien
 		// TODO: Doesn't support nested subtasks for now
 		primaryTaskRef, err := s.partOf(task, true)
 		if err != nil {
-			return err
+			return &TaskRejection{Reason: err.Error()}
 		}
 		err = cpsClient.Read(*primaryTaskRef, primaryTask)
 		if err != nil {
-			return fmt.Errorf("failed to fetch primary Task of subtask (subtask.id=%s, primarytask.ref=%s): %w", *task.Id, *primaryTaskRef, err)
+			return &TaskRejection{
+				Reason:       "Processing failed",
+				ReasonDetail: fmt.Errorf("failed to fetch primary Task of subtask (subtask.id=%s, primarytask.ref=%s): %w", *task.Id, *primaryTaskRef, err),
+			}
 		}
 	}
 
 	var questionnaire *fhir.Questionnaire
 	workflow, err := s.selectWorkflow(cpsClient, primaryTask)
 	if err != nil {
-		// TODO: INT-300 Reject Task if we can't execute it, or if it's invalid
-		return err
+		return &TaskRejection{
+			Reason: err.Error(),
+		}
 	}
 	if workflow != nil {
 		var nextStep *taskengine.WorkflowStep
@@ -212,7 +247,10 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(ctx context.Context, cpsClien
 					var fetchedQuestionnaire fhir.Questionnaire
 					if err := s.fetchQuestionnaireByID(ctx, cpsClient, questionnaireURL, &fetchedQuestionnaire); err != nil {
 						// TODO: why return an error here, and not for the rest?
-						return fmt.Errorf("failed to fetch questionnaire: %w", err)
+						return &TaskRejection{
+							Reason:       "Failed to fetch questionnaire",
+							ReasonDetail: err,
+						}
 					}
 					nextStep, err = workflow.Proceed(*fetchedQuestionnaire.Url)
 					if err != nil {
@@ -229,7 +267,10 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(ctx context.Context, cpsClien
 			log.Debug().Ctx(ctx).Msgf("Found next step in workflow. Finding Questionnaire by url: %s", nextStep.QuestionnaireUrl)
 			questionnaire, err = s.questionnaireLoader.Load(ctx, nextStep.QuestionnaireUrl)
 			if err != nil {
-				log.Error().Ctx(ctx).Err(err).Msgf("Failed to load questionnaire: %s", nextStep.QuestionnaireUrl)
+				return &TaskRejection{
+					Reason:       "Failed to load questionnaire: " + nextStep.QuestionnaireUrl,
+					ReasonDetail: err,
+				}
 			}
 		}
 
@@ -239,8 +280,11 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(ctx context.Context, cpsClien
 	if questionnaire == nil {
 
 		if task.PartOf == nil {
+			// TODO: reject here: nothing more to do
 			log.Info().Ctx(ctx).Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as accepted")
-			return nil
+			return &TaskRejection{
+				Reason: "Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as accepted",
+			}
 		}
 
 		// TODO: Only accept main task is in status 'requested'

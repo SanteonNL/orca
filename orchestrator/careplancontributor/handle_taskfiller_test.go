@@ -90,7 +90,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					},
 				}
 			}),
-			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference matches multiple workflows (http://snomed.info/sct|13645005, http://snomed.info/sct|84114007) for service http://snomed.info/sct|719858009"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: Task.reasonCode or Task.reasonReference matches multiple workflows (http://snomed.info/sct|13645005, http://snomed.info/sct|84114007) for service http://snomed.info/sct|719858009"),
 		},
 		{
 			name: "primary task, duplicate reasonCodes (but fine, since they're the same)",
@@ -125,14 +125,14 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.Requester = nil
 			}),
-			expectedError: errors.New("task is not valid - skipping: validation errors: Task.requester is required but not provided"),
+			expectedError: errors.New("task rejected by filler: Task is not valid: validation errors: Task.requester is required but not provided"),
 		},
 		{
 			name: "error: primary task, without Owner",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.Owner = nil
 			}),
-			expectedError: errors.New("task is not valid - skipping: validation errors: Task.owner is required but not provided"),
+			expectedError: errors.New("task rejected by filler: Task is not valid: validation errors: Task.owner is required but not provided"),
 		},
 		{
 			name: "primary task, status=received, should not process",
@@ -193,21 +193,21 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			serviceRequest: deep.AlterCopy(serviceRequest, func(sr *fhir.ServiceRequest) {
 				sr.Code.Coding[0].Code = to.Ptr("UnknownServiceCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: ServiceRequest.code does not match any offered services"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code does not match any offered services"),
 		},
 		{
-			name: "error: primary task, unknown codition for requested service (primary Task.reasonCode or reasonReference is not supported)",
+			name: "error: primary task, unknown condition for requested service (primary Task.reasonCode or reasonReference is not supported)",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonCode.Coding[0].Code = to.Ptr("UnknownConditionCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference does not match any workflow for service http://snomed.info/sct|719858009"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: Task.reasonCode or Task.reasonReference does not match any workflow for service http://snomed.info/sct|719858009"),
 		},
 		{
 			name: "error: primary task, without basedOn",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.BasedOn = nil
 			}),
-			expectedError: errors.New("task is not valid - skipping: validation errors: Task.basedOn is required but not provided"),
+			expectedError: errors.New("task rejected by filler: Task is not valid: validation errors: Task.basedOn is required but not provided"),
 		},
 		{
 			name:             "subtask status=completed, primary task should be accepted",
