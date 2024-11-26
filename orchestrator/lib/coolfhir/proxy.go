@@ -46,7 +46,7 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 		},
 		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
 			logger.Warn().Err(err).Msgf("%s proxy FHIR request failed (url=%s)", name, request.URL.String())
-			SendResponse(writer, http.StatusBadGateway, ErrorWithCode{
+			SendResponse(writer, http.StatusBadGateway, &ErrorWithCode{
 				Message:    "FHIR request failed: " + err.Error(),
 				StatusCode: http.StatusBadGateway,
 			})
@@ -74,6 +74,7 @@ func (s sanitizingRoundTripper) RoundTrip(request *http.Request) (*http.Response
 			request.Header.Del(name)
 		}
 	}
+	// TODO: Do we need this, maybe it was added by curl?
 	if request.Method == http.MethodGet {
 		request.Header.Del("Content-Length")
 	}
@@ -89,13 +90,13 @@ type loggingRoundTripper struct {
 }
 
 func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	l.logger.Info().Ctx(request.Context()).Msgf("%s proxying FHIR request: %s %s", l.name, request.Method, request.URL.String())
+	l.logger.Info().Ctx(request.Context()).Msgf("%s request: %s %s", l.name, request.Method, request.URL.String())
 	if l.logger.Debug().Ctx(request.Context()).Enabled() {
 		var headers []string
 		for key, values := range request.Header {
 			headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 		}
-		l.logger.Debug().Ctx(request.Context()).Msgf("%s proxy FHIR request headers: %s", l.name, strings.Join(headers, ", "))
+		l.logger.Debug().Ctx(request.Context()).Msgf("%s request headers: %s", l.name, strings.Join(headers, ", "))
 	}
 	if l.logger.Trace().Ctx(request.Context()).Enabled() {
 		var requestBody []byte
@@ -106,26 +107,26 @@ func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 				return nil, err
 			}
 		}
-		l.logger.Trace().Ctx(request.Context()).Msgf("%s proxy FHIR request body: %s", l.name, string(requestBody))
+		l.logger.Trace().Ctx(request.Context()).Msgf("%s request body: %s", l.name, string(requestBody))
 		request.Body = io.NopCloser(bytes.NewReader(requestBody))
 	}
 	response, err := l.next.RoundTrip(request)
 	if err != nil {
-		l.logger.Warn().Err(err).Msgf("%s proxied FHIR request failed (url=%s)", l.name, request.URL.String())
+		l.logger.Warn().Err(err).Msgf("%s request failed (url=%s)", l.name, request.URL.String())
 	} else {
 		if l.logger.Debug().Ctx(request.Context()).Enabled() {
 			var headers []string
 			for key, values := range response.Header {
 				headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 			}
-			l.logger.Debug().Ctx(request.Context()).Msgf("%s proxied FHIR response: %s, headers: %s", l.name, response.Status, strings.Join(headers, ", "))
+			l.logger.Debug().Ctx(request.Context()).Msgf("%s response: %s, headers: %s", l.name, response.Status, strings.Join(headers, ", "))
 		}
 		if l.logger.Trace().Ctx(request.Context()).Enabled() {
 			responseBody, err := io.ReadAll(response.Body)
 			if err != nil {
 				return nil, err
 			}
-			l.logger.Trace().Ctx(request.Context()).Msgf("%s proxied FHIR response body: %s", l.name, string(responseBody))
+			l.logger.Trace().Ctx(request.Context()).Msgf("%s response body: %s", l.name, string(responseBody))
 			response.Body = io.NopCloser(bytes.NewReader(responseBody))
 		}
 	}

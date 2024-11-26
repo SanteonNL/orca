@@ -7,6 +7,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
@@ -107,6 +108,12 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 			return nil, nil, fmt.Errorf("unable to get credential for Azure FHIR API client: %w", err)
 		}
 		httpClient := NewAzureHTTPClient(credential, scopes)
+		oldTransport := httpClient.Transport
+		httpClient.Transport = loggingRoundTripper{
+			name:   "Azure-FHIR",
+			logger: &log.Logger,
+			next:   oldTransport,
+		}
 		transport = httpClient.Transport
 		fhirClient = fhirclient.New(fhirURL, httpClient, fhirClientConfig)
 	case Default:

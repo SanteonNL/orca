@@ -136,7 +136,7 @@ func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
 type FHIRHandlerResult func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error)
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	s.proxy = coolfhir.NewProxy("CPS->FHIR", log.Logger, s.fhirURL, basePath, s.orcaPublicURL.JoinPath(basePath), s.transport)
+	s.proxy = coolfhir.NewProxy("CPS->FHIR proxy", log.Logger, s.fhirURL, basePath, s.orcaPublicURL.JoinPath(basePath), s.transport)
 	baseUrl := s.baseUrl()
 	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
 
@@ -354,8 +354,8 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
 	case "Patient":
 		bundle, err = s.handleSearchPatient(httpRequest.Context(), httpRequest.URL.Query(), headers)
-	case "ServiceRequest":
-		_, bundle, err = handleSearchResource[fhir.Patient](s, "ServiceRequest", httpRequest.URL.Query(), headers)
+	//case "ServiceRequest":
+	//	_, bundle, err = handleSearchResource[fhir.Patient](s, "ServiceRequest", httpRequest.URL.Query(), headers)
 	default:
 		log.Warn().Ctx(httpRequest.Context()).
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
