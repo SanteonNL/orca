@@ -30,12 +30,15 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 			r.Out.Host = "" // upstreamBaseUrl.Host
 		},
 		Transport: sanitizingRoundTripper{
-			next: loggingRoundTripper{
-				logger: &logger,
-				next:   transport,
-				name:   name,
-			},
+			next: transport,
 		},
+		//Transport: sanitizingRoundTripper{
+		//	next: loggingRoundTripper{
+		//		logger: &logger,
+		//		next:   transport,
+		//		name:   name,
+		//	},
+		//},
 		ModifyResponse: func(response *http.Response) error {
 			upstreamUrl := upstreamBaseUrl.String()
 			proxyUrl := rewriteUrl.String()
