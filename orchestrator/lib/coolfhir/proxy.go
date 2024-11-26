@@ -164,6 +164,7 @@ func (f fhirClientProxy) sanitizeRequestHeaders(header http.Header) http.Header 
 	// Header sanitizing is loosely inspired by:
 	// - https://www.rfc-editor.org/rfc/rfc7231
 	// - https://www.envoyproxy.io/docs/envoy/latest/configuration/http/http_conn_man/header_sanitizing
+	// - httputil.ReverseProxy: remove hop-by-hop headers
 	for name, values := range header {
 		nameLC := strings.ToLower(name)
 		if strings.HasPrefix(nameLC, "x-") ||
@@ -171,7 +172,16 @@ func (f fhirClientProxy) sanitizeRequestHeaders(header http.Header) http.Header 
 			nameLC == "cookie" ||
 			nameLC == "user-agent" ||
 			nameLC == "accept-encoding" ||
-			nameLC == "authorization" {
+			nameLC == "authorization" ||
+			nameLC == "connection" ||
+			nameLC == "proxy-connection" ||
+			nameLC == "keep-alive" ||
+			nameLC == "proxy-authenticate" ||
+			nameLC == "proxy-authorization" ||
+			nameLC == "te" ||
+			nameLC == "trailer" ||
+			nameLC == "transfer-encoding" ||
+			nameLC == "upgrade" {
 			continue
 		}
 		result[name] = values
