@@ -58,7 +58,22 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 	var requestResource map[string]interface{}
 	if request.Body != nil {
 		// LimitReader 10mb to prevent DoS attacks
-		requestData, err := io.ReadAll(io.LimitReader(request.Body, 10*1024*1024))
+		requestData, err := io.ReadAll(io.LimitReader(request.Body, 10*1024*1024+1))
+		if len(requestData) > 10*1024*1024 {
+			WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
+				OperationOutcome: fhir.OperationOutcome{
+					Issue: []fhir.OperationOutcomeIssue{
+						{
+							Severity:    fhir.IssueSeverityError,
+							Code:        fhir.IssueTypeStructure,
+							Diagnostics: to.Ptr("Request body is too large"),
+						},
+					},
+				},
+				HttpStatusCode: http.StatusRequestEntityTooLarge,
+			}, "FHIR request", httpResponseWriter)
+			return
+		}
 		if err != nil {
 			WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
 				OperationOutcome: fhir.OperationOutcome{
@@ -100,7 +115,7 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 					{
 						Severity:    fhir.IssueSeverityError,
 						Code:        fhir.IssueTypeStructure,
-						Diagnostics: to.Ptr("Request body is required for POST and PUT requests"),
+						Diagnostics: to.Ptr("Request body is required for " + request.Method + " requests"),
 					},
 				},
 			},

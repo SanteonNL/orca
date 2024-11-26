@@ -7,6 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -81,20 +82,40 @@ func TestProxy(t *testing.T) {
 		assert.Empty(t, capturedCookies)
 	})
 	t.Run("POST request", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("POST", proxyServer.URL+"/localfhir/DoPost", bytes.NewReader([]byte(`{"resourceType":"Patient"}`)))
-		httpResponse, err := proxyServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusCreated, httpResponse.StatusCode)
-		assert.Empty(t, capturedQueryParams)
-		assert.Empty(t, capturedCookies)
+		t.Run("ok", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("POST", proxyServer.URL+"/localfhir/DoPost", bytes.NewReader([]byte(`{"resourceType":"Patient"}`)))
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusCreated, httpResponse.StatusCode)
+			assert.Empty(t, capturedQueryParams)
+			assert.Empty(t, capturedCookies)
+		})
+		t.Run("missing request body", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("POST", proxyServer.URL+"/localfhir/DoPost", nil)
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			assert.Contains(t, string(responseData), "Request body is required for POST requests")
+		})
 	})
 	t.Run("PUT request", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("PUT", proxyServer.URL+"/localfhir/DoPut", bytes.NewReader([]byte(`{"resourceType":"Patient"}`)))
-		httpResponse, err := proxyServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		assert.Equal(t, http.StatusOK, httpResponse.StatusCode)
-		assert.Empty(t, capturedQueryParams)
-		assert.Empty(t, capturedCookies)
+		t.Run("ok", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("PUT", proxyServer.URL+"/localfhir/DoPut", bytes.NewReader([]byte(`{"resourceType":"Patient"}`)))
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Empty(t, capturedQueryParams)
+			assert.Empty(t, capturedCookies)
+		})
+		t.Run("missing request body", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("PUT", proxyServer.URL+"/localfhir/DoPut", nil)
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			assert.Contains(t, string(responseData), "Request body is required for PUT requests")
+		})
 	})
 	t.Run("Host header is rewritten to upstream server hostname", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
