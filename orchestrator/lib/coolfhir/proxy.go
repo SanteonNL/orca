@@ -3,7 +3,6 @@ package coolfhir
 import (
 	"bytes"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"github.com/rs/zerolog"
 	"io"
 	"net/http"
@@ -39,14 +38,14 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 		//		name:   name,
 		//	},
 		//},
-		ModifyResponse: func(response *http.Response) error {
-			upstreamUrl := upstreamBaseUrl.String()
-			proxyUrl := rewriteUrl.String()
-			return pipeline.New().
-				AppendResponseTransformer(pipeline.ResponseBodyRewriter{Old: []byte(upstreamUrl), New: []byte(proxyUrl)}).
-				AppendResponseTransformer(pipeline.ResponseHeaderRewriter{Old: upstreamUrl, New: proxyUrl}).
-				Do(response, response.Body)
-		},
+		//ModifyResponse: func(response *http.Response) error {
+		//	upstreamUrl := upstreamBaseUrl.String()
+		//	proxyUrl := rewriteUrl.String()
+		//	return pipeline.New().
+		//		AppendResponseTransformer(pipeline.ResponseBodyRewriter{Old: []byte(upstreamUrl), New: []byte(proxyUrl)}).
+		//		AppendResponseTransformer(pipeline.ResponseHeaderRewriter{Old: upstreamUrl, New: proxyUrl}).
+		//		Do(response, response.Body)
+		//},
 		ErrorHandler: func(writer http.ResponseWriter, request *http.Request, err error) {
 			logger.Warn().Err(err).Msgf("%s request failed (url=%s)", name, request.URL.String())
 			SendResponse(writer, http.StatusBadGateway, &ErrorWithCode{
