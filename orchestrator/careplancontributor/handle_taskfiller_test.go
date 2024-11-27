@@ -171,6 +171,12 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			}),
 		},
 		{
+			name: "primary task, status=ready, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusReady
+			}),
+		},
+		{
 			name: "primary task, status=failed, should not process",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.Status = fhir.TaskStatusFailed
@@ -367,7 +373,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					Times(tt.numBundlesPosted)
 			}
 
-			err := service.handleTaskFillerCreateOrUpdate(ctx, mockFHIRClient, &notifiedTask)
+			err := service.handleTaskNotification(ctx, mockFHIRClient, &notifiedTask)
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
 			} else {
@@ -380,7 +386,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	}
 }
 
-func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
+func TestService_getSubTask(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -400,7 +406,7 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 
 	questionnaireRef := "urn:uuid:" + *questionnaire.Id
 	log.Info().Ctx(context.Background()).Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
-	subtask := service.getSubTask(&primaryTask, questionnaireRef, true)
+	subtask := service.getSubTask(&primaryTask, questionnaireRef)
 
 	expectedSubTaskInput := []fhir.TaskInput{
 		{
