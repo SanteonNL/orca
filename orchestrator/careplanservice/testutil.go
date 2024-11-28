@@ -69,7 +69,7 @@ func testHelperHandleGetResource[T any](t *testing.T, params TestStruct[T], hand
 				return params.errorFromPatientBundleRead
 			})
 		}
-		if (params.returnedResource != nil || params.errorFromRead != nil) && params.resourceType != "CarePlan" && params.resourceType != "Patient" {
+		if (params.returnedResource != nil || params.errorFromRead != nil) && params.resourceType != "CarePlan" {
 			params.mockClient.EXPECT().Read(params.resourceType+"/"+params.id, gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
 				if params.returnedResource != nil {
 					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedResource))
