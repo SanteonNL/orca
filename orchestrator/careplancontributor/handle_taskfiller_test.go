@@ -292,8 +292,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			service := &Service{
-				workflows:           taskengine.DefaultWorkflows(),
-				questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+				workflows: taskengine.DefaultWorkflows(),
 				cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 					return mockFHIRClient
 				},
@@ -386,8 +385,7 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		workflows:           taskengine.DefaultWorkflows(),
-		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+		workflows: taskengine.DefaultWorkflows(),
 	}
 
 	taskBytes, _ := json.Marshal(primaryTask)
@@ -404,7 +402,7 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 		})
 	workflowStep := workflow.Start()
 	require.NoError(t, err)
-	questionnaire, err := service.questionnaireLoader.Load(context.Background(), workflowStep.QuestionnaireUrl)
+	questionnaire, err := service.workflows.QuestionnaireLoader().Load(context.Background(), workflowStep.QuestionnaireUrl)
 	require.NoError(t, err)
 	require.NotNil(t, questionnaire)
 

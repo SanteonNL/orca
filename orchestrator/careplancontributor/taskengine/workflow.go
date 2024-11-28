@@ -14,6 +14,7 @@ type WorkflowProvider interface {
 	// Provide returns the workflow for a given service and condition.
 	// If no workflow is found, an error is returned.
 	Provide(ctx context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) (*Workflow, error)
+	QuestionnaireLoader() QuestionnaireLoader
 }
 
 var _ WorkflowProvider = MemoryWorkflowProvider{}
@@ -22,6 +23,10 @@ var _ WorkflowProvider = MemoryWorkflowProvider{}
 // It's a map of a care service (e.g. Telemonitoring, http://snomed.info/sct|719858009),
 // to conditions (e.g. COPD, http://snomed.info/sct|13645005) and their workflows.
 type MemoryWorkflowProvider map[string]map[string]Workflow
+
+func (m MemoryWorkflowProvider) QuestionnaireLoader() QuestionnaireLoader {
+	return EmbeddedQuestionnaireLoader{}
+}
 
 func (m MemoryWorkflowProvider) Provide(_ context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) (*Workflow, error) {
 	if serviceCode.System == nil || serviceCode.Code == nil || conditionCode.System == nil || conditionCode.Code == nil {
