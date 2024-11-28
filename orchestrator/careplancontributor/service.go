@@ -40,7 +40,7 @@ func New(
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 
 	fhirClientConfig := coolfhir.Config()
-	localFHIRStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	localFHIRStoreTransport, localFhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,9 @@ func New(
 		frontendUrl:             config.FrontendConfig.URL,
 		fhirURL:                 fhirURL,
 		transport:               localFHIRStoreTransport,
-		workflows:               taskengine.DefaultWorkflows(),
+		workflows: taskengine.FhirApiWorkflowProvider{
+			Client: localFhirClient,
+		},
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},

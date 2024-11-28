@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	taskengineTest "github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine/test"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -147,6 +148,9 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 	config.AllowUnmanagedFHIROperations = true
+
+	fhirClient := fhirclient.New(fhirBaseURL, http.DefaultClient, nil)
+	taskengineTest.LoadQuestionnairesAndHealthcareSevices(t, fhirClient)
 
 	activeProfile := profile.TestProfile{
 		Principal:        auth.TestPrincipal1,
