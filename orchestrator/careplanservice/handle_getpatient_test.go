@@ -7,10 +7,12 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
+	"net/http"
 	"net/url"
 	"os"
 	"reflect"
@@ -31,27 +33,29 @@ func TestService_handleGetPatient(t *testing.T) {
 
 	tests := []TestStruct[fhir.Patient]{
 		{
-			ctx:                        auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:                       "error: Patient does not exist",
-			id:                         "1",
-			resourceType:               "Patient",
-			errorFromPatientBundleRead: errors.New("fhir error: Patient not found"),
-			expectedError:              errors.New("fhir error: Patient not found"),
+			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name:         "error: Patient does not exist",
+			id:           "1",
+			resourceType: "Patient",
+			errorFromRead: fhirclient.OperationOutcomeError{
+				HttpStatusCode: http.StatusNotFound,
+			},
+			expectedError: fhirclient.OperationOutcomeError{
+				HttpStatusCode: http.StatusNotFound,
+			},
 		},
 		{
-			ctx:                   auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:                  "error: Patient exists, auth, error fetching CarePlan",
-			id:                    "1",
-			resourceType:          "Patient",
-			errorFromCarePlanRead: errors.New("fhir error from fetching Careplan"),
-			expectedError:         errors.New("fhir error from fetching Careplan"),
-			returnedPatientBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1Raw,
-					},
-				},
+			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			name:         "error: Patient exists, auth, error fetching CarePlan",
+			id:           "1",
+			resourceType: "Patient",
+			errorFromCarePlanRead: fhirclient.OperationOutcomeError{
+				HttpStatusCode: http.StatusNotFound,
 			},
+			expectedError: fhirclient.OperationOutcomeError{
+				HttpStatusCode: http.StatusNotFound,
+			},
+			returnedResource: &patient1,
 		},
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
@@ -61,14 +65,11 @@ func TestService_handleGetPatient(t *testing.T) {
 			returnedCarePlanBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{},
 			},
-			expectedError: errors.New("entry not found in FHIR Bundle"),
-			returnedPatientBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1Raw,
-					},
-				},
+			expectedError: &coolfhir.ErrorWithCode{
+				Message:    "Participant does not have access to Patient",
+				StatusCode: http.StatusForbidden,
 			},
+			returnedResource: &patient1,
 		},
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
@@ -85,14 +86,11 @@ func TestService_handleGetPatient(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("entry not found in FHIR Bundle"),
-			returnedPatientBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1Raw,
-					},
-				},
+			expectedError: &coolfhir.ErrorWithCode{
+				Message:    "Participant does not have access to Patient",
+				StatusCode: http.StatusForbidden,
 			},
+			returnedResource: &patient1,
 		},
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
@@ -109,14 +107,7 @@ func TestService_handleGetPatient(t *testing.T) {
 					},
 				},
 			},
-			expectedError: nil,
-			returnedPatientBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1Raw,
-					},
-				},
-			},
+			expectedError:    nil,
 			returnedResource: &patient1,
 		},
 	}
