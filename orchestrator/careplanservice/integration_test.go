@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"bytes"
 	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -14,6 +15,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -29,6 +31,41 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	notificationEndpoint := setupNotificationEndpoint(t)
 	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
 
+	t.Run("non-normative integration tests", func(t *testing.T) {
+		runNonNormativeIntegrationTests(t, carePlanContributor1, carePlanContributor2, invalidCarePlanContributor)
+	})
+	t.Run("normative integration tests", func(t *testing.T) {
+		// Flow:
+		//  1. Task Placer creates new Task: 			Bundle-cps-bundle-01.json
+		//  2. Task Filler asks for more information:	Bundle-cps-bundle-02.json
+		var primaryTask fhir.Task
+		t.Log("Task Placer creates new Task: Bundle-cps-bundle-01.json")
+		{
+			requestData, err := os.ReadFile("testdata/scp/Bundle-cps-bundle-01.json")
+			require.NoError(t, err)
+			// TODO: this shouldn't be necessary, see INT-458
+			requestData = bytes.ReplaceAll(requestData, []byte("{{cps-base-url}}"), []byte("http://example.com/fhir"))
+
+			var bundle fhir.Bundle
+			err = carePlanContributor1.Create(requestData, &bundle, fhirclient.AtPath("/"))
+			require.NoError(t, err)
+
+			require.NoError(t, coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("Task"), &primaryTask))
+		}
+		t.Log("Task Filler asks for more information: Bundle-cps-bundle-02.json")
+		{
+			requestData, err := os.ReadFile("testdata/scp/Bundle-cps-bundle-02.json")
+			require.NoError(t, err)
+			requestData = bytes.ReplaceAll(requestData, []byte("cps-careplan-01"), []byte(*primaryTask.Id))
+
+			var bundle fhir.Bundle
+			err = carePlanContributor2.Create(requestData, &bundle, fhirclient.AtPath("/"))
+			require.NoError(t, err)
+		}
+	})
+}
+
+func runNonNormativeIntegrationTests(t *testing.T, carePlanContributor1 *fhirclient.BaseClient, carePlanContributor2 *fhirclient.BaseClient, invalidCarePlanContributor *fhirclient.BaseClient) {
 	notificationCounter.Store(0)
 
 	participant1 := fhir.CareTeamParticipant{
