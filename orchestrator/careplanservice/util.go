@@ -97,18 +97,14 @@ func (s *Service) handleTaskBasedResourceAuth(ctx context.Context, headers *fhir
 	return nil
 }
 
-// getPatientsRequesterHasAuthorisationTo will go through a list of patients and return the ones the requester has access to
-func (s *Service) getPatientsRequesterHasAuthorisationTo(ctx context.Context, patients []fhir.Patient) ([]fhir.Patient, error) {
+// filterAuthorizedPatients will go through a list of patients and return the ones the requester has access to
+func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.Patient) ([]fhir.Patient, error) {
 	params := []fhirclient.Option{}
-	patientRefsSearchString := ""
+	patientRefs := make([]string, len(patients))
 	for i, patient := range patients {
-		if i == 0 {
-			patientRefsSearchString = fmt.Sprintf("Patient/%s", *patient.Id)
-		} else {
-			patientRefsSearchString = fmt.Sprintf("%s,Patient/%s", patientRefsSearchString, *patient.Id)
-		}
+		patientRefs[i] = fmt.Sprintf("Patient/%s", *patient.Id)
 	}
-	params = append(params, fhirclient.QueryParam("subject", patientRefsSearchString))
+	params = append(params, fhirclient.QueryParam("subject", strings.Join(patientRefs, ",")))
 	params = append(params, fhirclient.QueryParam("_include", "CarePlan:care-team"))
 
 	// Fetch all CarePlans associated with the Patient, get the CareTeams associated with the CarePlans

@@ -20,7 +20,7 @@ func (s *Service) handleGetPatient(ctx context.Context, id string, headers *fhir
 		return nil, err
 	}
 
-	authorisedPatients, err := s.getPatientsRequesterHasAuthorisationTo(ctx, []fhir.Patient{patient})
+	authorisedPatients, err := s.filterAuthorizedPatients(ctx, []fhir.Patient{patient})
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Value
 		return &fhir.Bundle{Entry: []fhir.BundleEntry{}}, nil
 	}
 
-	authorisedPatients, err := s.getPatientsRequesterHasAuthorisationTo(ctx, patients)
+	authorisedPatients, err := s.filterAuthorizedPatients(ctx, patients)
 	if err != nil {
 		return nil, err
 	}
