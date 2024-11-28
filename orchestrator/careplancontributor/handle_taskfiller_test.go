@@ -75,7 +75,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			numBundlesPosted: 1, // One subtask should be created
 		},
 		{
-			name: "error: primary task, multiple reasonCodes match",
+			name: "error: primary task, multiple workflow matches",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonCode = &fhir.CodeableConcept{
 					Coding: []fhir.Coding{
@@ -90,7 +90,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					},
 				}
 			}),
-			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference matches multiple workflows (http://snomed.info/sct|13645005, http://snomed.info/sct|84114007) for service http://snomed.info/sct|719858009"),
+			expectedError: errors.New("failed to process new primary Task: ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one"),
 		},
 		{
 			name: "primary task, duplicate reasonCodes (but fine, since they're the same)",
@@ -193,14 +193,14 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			serviceRequest: deep.AlterCopy(serviceRequest, func(sr *fhir.ServiceRequest) {
 				sr.Code.Coding[0].Code = to.Ptr("UnknownServiceCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: ServiceRequest.code does not match any offered services"),
+			expectedError: errors.New("failed to process new primary Task: ServiceRequest.code and Task.reason.code does not match any workflows"),
 		},
 		{
 			name: "error: primary task, unknown codition for requested service (primary Task.reasonCode or reasonReference is not supported)",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonCode.Coding[0].Code = to.Ptr("UnknownConditionCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference does not match any workflow for service http://snomed.info/sct|719858009"),
+			expectedError: errors.New("failed to process new primary Task: ServiceRequest.code and Task.reason.code does not match any workflows"),
 		},
 		{
 			name: "error: primary task, without basedOn",
@@ -393,8 +393,18 @@ func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
 	taskBytes, _ := json.Marshal(primaryTask)
 	var task fhir.Task
 	json.Unmarshal(taskBytes, &task)
-	workflow := service.workflows["http://snomed.info/sct|719858009"]["http://snomed.info/sct|13645005"].Start()
-	questionnaire, err := service.questionnaireLoader.Load(context.Background(), workflow.QuestionnaireUrl)
+	workflow, err := service.workflows.Provide(context.Background(),
+		fhir.Coding{
+			System: to.Ptr("http://snomed.info/sct"),
+			Code:   to.Ptr("719858009"),
+		},
+		fhir.Coding{
+			System: to.Ptr("http://snomed.info/sct"),
+			Code:   to.Ptr("13645005"),
+		})
+	workflowStep := workflow.Start()
+	require.NoError(t, err)
+	questionnaire, err := service.questionnaireLoader.Load(context.Background(), workflowStep.QuestionnaireUrl)
 	require.NoError(t, err)
 	require.NotNil(t, questionnaire)
 

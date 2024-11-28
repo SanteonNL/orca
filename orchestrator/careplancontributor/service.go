@@ -85,7 +85,7 @@ type Service struct {
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
 	transport                     http.RoundTripper
-	workflows                     taskengine.Workflows
+	workflows                     taskengine.WorkflowProvider
 	questionnaireLoader           taskengine.QuestionnaireLoader
 	healthdataviewEndpointEnabled bool
 }
