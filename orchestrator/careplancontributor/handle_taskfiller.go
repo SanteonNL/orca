@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"slices"
+	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -188,7 +188,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(ctx context.Context, cpsClien
 	}
 
 	var questionnaire *fhir.Questionnaire
-	workflow, err := s.selectWorkflow(cpsClient, primaryTask)
+	workflow, err := s.selectWorkflow(ctx, cpsClient, primaryTask)
 	if err != nil {
 		// TODO: INT-300 Reject Task if we can't execute it, or if it's invalid
 		return err
@@ -227,7 +227,7 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(ctx context.Context, cpsClien
 		// TODO: If we can't perform the next step, we should mark the primary task as failed?
 		if nextStep != nil {
 			log.Debug().Ctx(ctx).Msgf("Found next step in workflow. Finding Questionnaire by url: %s", nextStep.QuestionnaireUrl)
-			questionnaire, err = s.questionnaireLoader.Load(ctx, nextStep.QuestionnaireUrl)
+			questionnaire, err = s.workflows.QuestionnaireLoader().Load(ctx, nextStep.QuestionnaireUrl)
 			if err != nil {
 				log.Error().Ctx(ctx).Err(err).Msgf("Failed to load questionnaire: %s", nextStep.QuestionnaireUrl)
 			}
@@ -278,38 +278,17 @@ func (s *Service) createSubTaskOrFinishPrimaryTask(ctx context.Context, cpsClien
 // selectWorkflow determines the workflow to use based on the Task's focus, and reasonCode or reasonReference.
 // It first selects the type of service, from the Task.focus (ServiceRequest), and then selects the workflow based on the Task.reasonCode or Task.reasonReference.
 // If it finds no, or multiple, matching workflows, it returns an error.
-func (s *Service) selectWorkflow(cpsClient fhirclient.Client, task *fhir.Task) (*taskengine.Workflow, error) {
-	var matchedServiceCodes []string
+func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) (*taskengine.Workflow, error) {
 	// Determine service code from Task.focus
 	var serviceRequest fhir.ServiceRequest
 	if err := cpsClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
 		return nil, fmt.Errorf("failed to fetch ServiceRequest (path=%s): %w", *task.Focus.Reference, err)
 	}
-	for _, coding := range serviceRequest.Code.Coding {
-		if coding.System == nil || coding.Code == nil {
-			continue
-		}
-		key := fmt.Sprintf("%s|%s", *coding.System, *coding.Code)
-		_, exists := s.workflows[key]
-		if exists {
-			matchedServiceCodes = append(matchedServiceCodes, key)
-		}
-	}
-	if len(matchedServiceCodes) == 0 {
-		return nil, errors.New("ServiceRequest.code does not match any offered services")
-	} else if len(matchedServiceCodes) > 1 {
-		return nil, fmt.Errorf("ServiceRequest.code matches multiple services, need to choose one: %s", strings.Join(matchedServiceCodes, ", "))
-	}
-	service := s.workflows[matchedServiceCodes[0]]
-	// Determine workflow based on Task.reasonCode or Task.reasonReference
-	var candidateCodes []fhir.Coding
+
+	// Determine reason codes from Task.reasonCode and Task.reasonReference
+	var taskReasonCodes []fhir.Coding
 	if task.ReasonCode != nil {
-		for _, coding := range task.ReasonCode.Coding {
-			if coding.System == nil || coding.Code == nil {
-				continue
-			}
-			candidateCodes = append(candidateCodes, coding)
-		}
+		taskReasonCodes = task.ReasonCode.Coding
 	}
 	if task.ReasonReference != nil && task.ReasonReference.Reference != nil {
 		var condition fhir.Condition
@@ -320,30 +299,46 @@ func (s *Service) selectWorkflow(cpsClient fhirclient.Client, task *fhir.Task) (
 			if coding.System == nil || coding.Code == nil {
 				continue
 			}
-			candidateCodes = append(candidateCodes, coding)
+			var present bool
+			for _, taskReasonCode := range taskReasonCodes {
+				if taskReasonCode.System == coding.System && taskReasonCode.Code == coding.Code {
+					present = true
+					break
+				}
+			}
+			if !present {
+				taskReasonCodes = append(taskReasonCodes, coding)
+			}
 		}
 	}
-	// find matching workflow
-	var matchedCodes []string
-	var matchedWorkflow *taskengine.Workflow
-	for _, coding := range candidateCodes {
-		key := fmt.Sprintf("%s|%s", *coding.System, *coding.Code)
-		if slices.Contains(matchedCodes, key) {
-			// duplicate code, doesn't matter
+	taskReasonCodes = slices.Deduplicate(taskReasonCodes, func(a, b fhir.Coding) bool {
+		return *a.System == *b.System && *a.Code == *b.Code
+	})
+
+	var matchedWorkflows []*taskengine.Workflow
+	for _, serviceCoding := range serviceRequest.Code.Coding {
+		if serviceCoding.System == nil || serviceCoding.Code == nil {
 			continue
 		}
-		workflow, exists := service[key]
-		if exists {
-			matchedCodes = append(matchedCodes, key)
-			matchedWorkflow = &workflow
+		for _, reasonCoding := range taskReasonCodes {
+			workflow, err := s.workflows.Provide(ctx, serviceCoding, reasonCoding)
+			if errors.Is(err, taskengine.ErrWorkflowNotFound) {
+				log.Debug().Ctx(ctx).Msgf("No workflow found (service=%s|%s, condition=%s|%s)",
+					*serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code)
+				continue
+			} else if err != nil {
+				// Other error occurred
+				return nil, fmt.Errorf("workflow lookup (service=%s|%s, condition=%s|%s): %w", *serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, err)
+			}
+			matchedWorkflows = append(matchedWorkflows, workflow)
 		}
 	}
-	if len(matchedCodes) == 0 {
-		return nil, fmt.Errorf("Task.reasonCode or Task.reasonReference does not match any workflow for service %s", matchedServiceCodes[0])
-	} else if len(matchedCodes) > 1 {
-		return nil, fmt.Errorf("Task.reasonCode or Task.reasonReference matches multiple workflows (%s) for service %s", strings.Join(matchedCodes, ", "), matchedServiceCodes[0])
+	if len(matchedWorkflows) == 0 {
+		return nil, errors.New("ServiceRequest.code and Task.reason.code does not match any workflows")
+	} else if len(matchedWorkflows) > 1 {
+		return nil, errors.New("ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one")
 	}
-	return matchedWorkflow, nil
+	return matchedWorkflows[0], nil
 }
 
 // getSubTask creates a new subtask providing the questionnaire reference as Task.input.valueReference
