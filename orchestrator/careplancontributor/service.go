@@ -19,6 +19,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -66,7 +67,6 @@ func New(
 		bgzFhirProxy:            bgzFhirProxy,
 		transport:               localFHIRStoreTransport,
 		workflows:               taskengine.DefaultWorkflows(),
-		questionnaireLoader:     taskengine.EmbeddedQuestionnaireLoader{},
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
@@ -96,8 +96,7 @@ type Service struct {
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
 	transport                     http.RoundTripper
-	workflows                     taskengine.Workflows
-	questionnaireLoader           taskengine.QuestionnaireLoader
+	workflows                     taskengine.WorkflowProvider
 	healthdataviewEndpointEnabled bool
 }
 
@@ -181,7 +180,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
-	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.localCarePlanServiceUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport)
+	carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", log.Logger, s.localCarePlanServiceUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport)
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
@@ -221,7 +220,7 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
 	proxyBasePath := basePath + "/ehr/fhir"
-	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client)
+	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", log.Logger, clientFactory.BaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -250,7 +249,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
 
-	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
+	fhirProxy := coolfhir.NewProxy("External CPC->EHR FHIR proxy", log.Logger, s.fhirURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
 	fhirProxy.ServeHTTP(writer, request)
 	return nil
 }
@@ -282,7 +281,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 	log.Debug().Msg("Proxying request to all CareTeam members from CarePlan.participants - proxyBaseUrl: " + proxyBaseUrl.String())
 
-	fhirProxy := coolfhir.NewProxy(log.Logger, proxyBaseUrl, basePath+"/bgz/fhir", s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
+	fhirProxy := coolfhir.NewProxy("All External CPC Members->EHR FHIR proxy", log.Logger, proxyBaseUrl, basePath+"/bgz/fhir", s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
 	fhirProxy.ServeHTTP(writer, request)
 
 	return nil
@@ -480,8 +479,14 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		}
 
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
-		err = s.handleTaskFillerCreateOrUpdate(ctx, fhirClient, &task)
-		if err != nil {
+		err = s.handleTaskNotification(ctx, fhirClient, &task)
+		rejection := new(TaskRejection)
+		if errors.As(err, &rejection) || errors.As(err, rejection) {
+			if err := s.rejectTask(ctx, fhirClient, task, *rejection); err != nil {
+				// TODO: what to do here?
+				log.Err(err).Ctx(ctx).Msgf("Failed to reject task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+			}
+		} else if err != nil {
 			return err
 		}
 	default:
@@ -489,4 +494,13 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	}
 
 	return nil
+}
+
+func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {
+	log.Info().Ctx(ctx).Msgf("Rejecting task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+	task.Status = fhir.TaskStatusRejected
+	task.StatusReason = &fhir.CodeableConcept{
+		Text: to.Ptr(rejection.FormatReason()),
+	}
+	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, nil)
 }

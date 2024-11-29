@@ -1,5 +1,5 @@
 import Client from 'fhir-kit-client';
-import { Bundle, CarePlan, Condition, Patient, Questionnaire, Resource, ServiceRequest, Task } from 'fhir/r4';
+import { Bundle, CarePlan, Condition, Patient, Questionnaire, Reference, Resource, ServiceRequest, Task } from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -236,4 +236,24 @@ export function getPatientAddress(patient?: Patient) {
     if (!address) return "Unknown address"
 
     return `${address.line?.join(", ")}, ${address.postalCode} ${address.city}`
+}
+
+export default function organizationName(reference?: Reference) {
+
+    if (!reference) {
+        return "No Organization Reference found"
+    }
+
+    const displayName = reference.display;
+
+    // If the identifier has no system or value, simply return the displayName, or "unknown" if no displayName is present.
+    if (!reference.identifier || !reference.identifier.system || !reference.identifier.value) {
+        return displayName || "unknown"
+    }
+
+    const isUraIdentifier = reference.identifier.system === 'http://fhir.nl/fhir/NamingSystem/ura'
+    const identifierValue = isUraIdentifier ?
+        `URA ${reference.identifier.value}` : `${reference.identifier.system}: ${reference.identifier.value}`;
+
+    return displayName ? `${displayName} (${identifierValue})` : identifierValue
 }

@@ -1,17 +1,15 @@
-import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+"use client"
 import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
 import { findInBundle, getBsn, constructTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { Bundle, CarePlan, Condition, Questionnaire, ServiceRequest } from 'fhir/r4'
+import { Bundle, Condition } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useRouter } from 'next/navigation'
-import JsonView from 'react18-json-view';
-import 'react18-json-view/src/style.css';
+import { ArrowRight, LoaderIcon } from 'lucide-react'
 import { Spinner } from '@/components/spinner'
+import { Button, createTheme, ThemeProvider } from '@mui/material'
 
 interface Props {
     className?: string
@@ -26,7 +24,7 @@ interface Props {
  */
 export default function EnrollInCpsButton({ className }: Props) {
 
-    const { patient, selectedCarePlan, taskCondition, serviceRequest } = useEnrollment()
+    const { patient, selectedCarePlan, taskCondition, serviceRequest, loading } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
 
@@ -35,8 +33,16 @@ export default function EnrollInCpsButton({ className }: Props) {
     const ehrClient = useEhrClient()
 
     useEffect(() => {
-        setDisabled(submitted || !taskCondition)
-    }, [taskCondition, selectedCarePlan, submitted])
+        setDisabled(submitted || !taskCondition || loading)
+    }, [taskCondition, selectedCarePlan, submitted, loading])
+
+    const theme = createTheme({
+        palette: {
+            primary: {
+                main: '#1c6268',
+            },
+        },
+    });
 
     const informCps = async () => {
         setSubmitted(true)
@@ -52,36 +58,6 @@ export default function EnrollInCpsButton({ className }: Props) {
             toast.error("Error: Something went wrong with Task creation", { richColors: true })
             throw new Error("Something went wrong with Task creation")
         }
-
-        toast.success("Enrollment successfully sent to filler", {
-            closeButton: true,
-            important: true,
-            description: new Date().toLocaleDateString(undefined, {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit'
-            }),
-            action: (
-                <Dialog>
-                    <DialogTrigger asChild>
-                        <Button variant="outline">View Task</Button>
-                    </DialogTrigger>
-                    <DialogContent className="min-w-[90vw] max-h-[90vh] overflow-y-scroll">
-                        <DialogHeader>
-                            <DialogTitle>Created Task</DialogTitle>
-                            <DialogDescription>
-                                See the results of the created Task below
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className='overflow-auto'>
-                            <JsonView src={taskBundle} collapsed={2} />
-                        </div>
-                    </DialogContent>
-                </Dialog >
-            )
-        })
 
         router.push(`/enrollment/task/${task.id}`)
     }
@@ -120,11 +96,13 @@ export default function EnrollInCpsButton({ className }: Props) {
     }
 
     return (
-        <Button className={className} disabled={disabled} onClick={informCps}>
-            {submitted ? <Spinner className='mr-5 text-white' /> : null}
-            <span className='mr-1'>{submitted ? "Sending" : "Send"}</span>
-            Task
-            {serviceRequest?.performer?.[0].display && <span className='ml-1'>to {serviceRequest.performer[0].display}</span>}
-        </Button>
+
+        <ThemeProvider theme={theme}>
+            <Button variant='contained' disabled={disabled} onClick={informCps}>
+                {submitted && <Spinner className='h-6 mr-2 text-inherit' />}
+                Volgende stap
+                <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+        </ThemeProvider>
     )
 }
