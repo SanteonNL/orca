@@ -47,12 +47,28 @@ func New(
 		return nil, err
 	}
 	var questionnaireFhirClient fhirclient.Client
-	if config.QuestionnaireFHIR.BaseURL == "" {
+	if config.TaskFiller.QuestionnaireFHIR.BaseURL == "" {
 		// Questionnaire FHIR API not configured, use FHIR API holding EHR data
 		questionnaireFhirClient = localFhirClient
 	} else {
-		_, questionnaireFhirClient, err = coolfhir.NewAuthRoundTripper(config.QuestionnaireFHIR, coolfhir.Config())
+		_, questionnaireFhirClient, err = coolfhir.NewAuthRoundTripper(config.TaskFiller.QuestionnaireFHIR, coolfhir.Config())
+		if err != nil {
+			return nil, err
+		}
 	}
+	// Load Questionnaire-related resources for the Task Filler Engine from the configured URLs into the Questionnaire FHIR API
+	go func(ctx context.Context) {
+		if len(config.TaskFiller.QuestionnaireSyncURLs) > 0 {
+			log.Info().Ctx(ctx).Msgf("Synchronizing Questionnaires from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
+			for _, u := range config.TaskFiller.QuestionnaireSyncURLs {
+				if _, err := coolfhir.ImportResources(ctx, questionnaireFhirClient, []string{"Questionnaire", "HealthcareService"}, u); err != nil {
+					log.Error().Ctx(ctx).Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
+				} else {
+					log.Debug().Ctx(ctx).Msgf("Successfully synchronized Task Filler Questionnaire resources (url=%s)", u)
+				}
+			}
+		}
+	}(context.Background())
 
 	httpClient := profile.HttpClient()
 	result := &Service{

@@ -25,3 +25,18 @@ func TestDefaultConfig(t *testing.T) {
 		assert.False(t, config.HealthDataViewEndpointEnabled)
 	})
 }
+
+func TestTaskFillerEngineConfig_Validate(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		err := TaskFillerConfig{
+			QuestionnaireSyncURLs: []string{"http://example.com", "https://example.com", "file://example.com"},
+		}.Validate()
+		require.NoError(t, err)
+	})
+	t.Run("invalid URL", func(t *testing.T) {
+		err := TaskFillerConfig{
+			QuestionnaireSyncURLs: []string{"ftp://example.com"},
+		}.Validate()
+		require.EqualError(t, err, "questionnairesyncurls must be http, https or file URLs")
+	})
+}
