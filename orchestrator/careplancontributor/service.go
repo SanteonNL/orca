@@ -13,6 +13,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -358,8 +359,14 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		}
 
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
-		err = s.handleTaskFillerCreateOrUpdate(ctx, fhirClient, &task)
-		if err != nil {
+		err = s.handleTaskNotification(ctx, fhirClient, &task)
+		rejection := new(TaskRejection)
+		if errors.As(err, &rejection) || errors.As(err, rejection) {
+			if err := s.rejectTask(ctx, fhirClient, task, *rejection); err != nil {
+				// TODO: what to do here?
+				log.Err(err).Ctx(ctx).Msgf("Failed to reject task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+			}
+		} else if err != nil {
 			return err
 		}
 	default:
@@ -367,4 +374,13 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	}
 
 	return nil
+}
+
+func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {
+	log.Info().Ctx(ctx).Msgf("Rejecting task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+	task.Status = fhir.TaskStatusRejected
+	task.StatusReason = &fhir.CodeableConcept{
+		Text: to.Ptr(rejection.FormatReason()),
+	}
+	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, nil)
 }

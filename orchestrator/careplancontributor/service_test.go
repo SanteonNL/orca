@@ -467,6 +467,12 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write(responseData)
 	})
+	var capturedTaskUpdate fhir.Task
+	carePlanServiceMux.HandleFunc("PUT /cps/Task/2", func(writer http.ResponseWriter, request *http.Request) {
+		rawJson, _ := io.ReadAll(request.Body)
+		_ = json.Unmarshal(rawJson, &capturedTaskUpdate)
+		writer.WriteHeader(http.StatusOK)
+	})
 	carePlanServiceMux.HandleFunc("GET /cps/Task/3", func(writer http.ResponseWriter, request *http.Request) {
 		rawJson, _ := os.ReadFile("./testdata/task-3.json")
 		var data fhir.Task
@@ -550,7 +556,14 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+		// processed OK: Task was invalid, but it was rejected. So the notification itself succeeded
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		// check rejection
+		assert.NotNil(t, capturedTaskUpdate.Id)
+		assert.Equal(t, "2", *capturedTaskUpdate.Id)
+		assert.Equal(t, fhir.TaskStatusRejected, capturedTaskUpdate.Status)
+		assert.Equal(t, "Task is not valid: validation errors: Task.Focus is required but not provided", *capturedTaskUpdate.StatusReason.Text)
+
 	})
 	t.Run("invalid notification", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader("invalid"))
