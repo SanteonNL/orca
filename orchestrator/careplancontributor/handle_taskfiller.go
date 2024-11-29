@@ -83,7 +83,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		}
 
 		log.Info().Ctx(ctx).Msg("Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
-		err = s.createSubTaskOrFinishPrimaryTask(ctx, cpsClient, task, task, identities)
+		err = s.createSubTaskOrAcceptPrimaryTask(ctx, cpsClient, task, task, identities)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
@@ -115,7 +115,7 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 		}
 	}
 
-	return s.createSubTaskOrFinishPrimaryTask(ctx, cpsClient, task, primaryTask, identities)
+	return s.createSubTaskOrAcceptPrimaryTask(ctx, cpsClient, task, primaryTask, identities)
 
 }
 
@@ -177,8 +177,7 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 	// TODO: We only support task.Focus with a literal reference for now, so no logical identifiers
 	if task.Focus == nil {
 		errs = append(errs, "Task.Focus is required but not provided")
-	}
-	if task.Focus.Reference == nil {
+	} else if task.Focus.Reference == nil {
 		errs = append(errs, "Task.Focus.reference is required but not provided")
 	}
 
@@ -189,7 +188,7 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 	return nil
 }
 
-func (s *Service) createSubTaskOrFinishPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, primaryTask *fhir.Task, localOrgIdentifiers []fhir.Identifier) error {
+func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, primaryTask *fhir.Task, localOrgIdentifiers []fhir.Identifier) error {
 	// Look up primary Task: workflow selection works on primary Task.reasonCode/reasonReference
 	isPrimaryTask := *task.Id == *primaryTask.Id
 

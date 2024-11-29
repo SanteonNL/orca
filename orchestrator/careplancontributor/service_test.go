@@ -562,7 +562,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		assert.NotNil(t, capturedTaskUpdate.Id)
 		assert.Equal(t, "2", *capturedTaskUpdate.Id)
 		assert.Equal(t, fhir.TaskStatusRejected, capturedTaskUpdate.Status)
-		assert.Equal(t, "task.Focus or task.Focus.Reference is nil", *capturedTaskUpdate.StatusReason.Text)
+		assert.Equal(t, "Task is not valid: validation errors: Task.Focus is required but not provided", *capturedTaskUpdate.StatusReason.Text)
 
 	})
 	t.Run("invalid notification", func(t *testing.T) {
