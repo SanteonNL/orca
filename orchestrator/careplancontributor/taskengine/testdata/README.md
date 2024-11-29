@@ -1,0 +1,1 @@
+The files in this directory are taken from https://github.com/Zorgbijjou/scp-homemonitoring

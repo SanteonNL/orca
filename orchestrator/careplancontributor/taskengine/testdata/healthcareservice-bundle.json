@@ -4,10 +4,6 @@
   "type": "batch",
   "entry": [
     {
-      "request": {
-        "method": "POST",
-        "url": "HealthcareService"
-      },
       "resource": {
         "resourceType": "HealthcareService",
         "id": "zbj-healthcareservice-telemonitoring",
@@ -109,6 +105,10 @@
             ]
           }
         ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "HealthcareService?identifier=urn:uuid:91a9be09-eb97-4c0f-9a61-27a1985ae38b"
       }
     }
   ]
