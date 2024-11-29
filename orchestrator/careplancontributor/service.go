@@ -239,6 +239,8 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 
 	result, err := s.authorizeScpMember(request)
 
+	proxyBasePath := basePath + "/ehr/fhir"
+
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to authorize SCP member")
 		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusBadRequest)
@@ -248,7 +250,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
 
-	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.transport)
+	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, basePath+"/fhir", s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
 	fhirProxy.ServeHTTP(writer, request)
 	return nil
 }
@@ -256,6 +258,8 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 // proxyToAllCareTeamMembers is a convenience façade method that can be used proxy the request to all CPC nodes localized from the Shared CarePlan.participants.
 func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request *http.Request) error {
 	result, err := s.authorizeScpMember(request)
+
+	proxyBasePath := basePath + "/ehr/fhir"
 
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to authorize SCP member")
@@ -278,7 +282,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 	log.Debug().Msg("Proxying request to all CareTeam members from CarePlan.participants - proxyBaseUrl: " + proxyBaseUrl.String())
 
-	fhirProxy := coolfhir.NewProxy(log.Logger, proxyBaseUrl, basePath+"/bgz/fhir", s.transport)
+	fhirProxy := coolfhir.NewProxy(log.Logger, proxyBaseUrl, basePath+"/bgz/fhir", s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
 	fhirProxy.ServeHTTP(writer, request)
 
 	return nil
@@ -313,14 +317,14 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	// CarePlan should be provided in X-Scp-Context header
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) != 1 {
-		return nil, fmt.Errorf("%s header must only contain one value", carePlanURLHeaderKey)
+		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
 	}
 	carePlanURL := carePlanURLValue[0]
 	if carePlanURL == "" {
-		return nil, fmt.Errorf("%s header value must be set", carePlanURLHeaderKey)
+		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
 	}
 	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
-		return nil, errors.New("invalid CarePlan URL in header")
+		return nil, coolfhir.BadRequest("invalid CarePlan URL in header")
 	}
 	u, err := url.Parse(carePlanURL)
 	if err != nil {
@@ -328,7 +332,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 	// Verify that the u.Path refers to a careplan
 	if !strings.HasPrefix(u.Path, "/cps/CarePlan/") {
-		return nil, errors.New("specified SCP context header does not refer to a CarePlan")
+		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
 	}
 
 	var bundle fhir.Bundle
@@ -368,18 +372,16 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
 
-	isMember, err := coolfhir.ValidateCareTeamParticipantPeriod(*participant, time.Now())
+	isValid, err := coolfhir.ValidateCareTeamParticipantPeriod(*participant, time.Now())
 	if err != nil {
 		return nil, err
 	}
 
-	if !isValid {
-		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
-	}
-	proxyBasePath := basePath + "/fhir"
-	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
-	fhirProxy.ServeHTTP(writer, request)
-	return nil
+	return &ScpValidationResult{
+		isMember:  isValid,
+		carePlan:  &carePlan,
+		careTeams: &careTeams,
+	}, nil
 }
 
 func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
