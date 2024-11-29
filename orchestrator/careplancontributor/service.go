@@ -59,12 +59,12 @@ func New(
 	// Load Questionnaire-related resources for the Task Filler Engine from the configured URLs into the Questionnaire FHIR API
 	go func(ctx context.Context) {
 		if len(config.TaskFiller.QuestionnaireSyncURLs) > 0 {
-			log.Info().Ctx(ctx).Msgf("Synchronizing Questionnaires from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
+			log.Info().Ctx(ctx).Msgf("Synchronizing Task Filler Questionnaires resources from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
 			for _, u := range config.TaskFiller.QuestionnaireSyncURLs {
-				if _, err := coolfhir.ImportResources(ctx, questionnaireFhirClient, []string{"Questionnaire", "HealthcareService"}, u); err != nil {
+				if err := coolfhir.ImportResources(ctx, questionnaireFhirClient, []string{"Questionnaire", "HealthcareService"}, u); err != nil {
 					log.Error().Ctx(ctx).Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
 				} else {
-					log.Debug().Ctx(ctx).Msgf("Successfully synchronized Task Filler Questionnaire resources (url=%s)", u)
+					log.Debug().Ctx(ctx).Msgf("Synchronized Task Filler Questionnaire resources (url=%s)", u)
 				}
 			}
 		}

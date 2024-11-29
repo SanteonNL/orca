@@ -41,23 +41,28 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL":      cpsFhirBaseUrl,
 			"ORCA_CAREPLANCONTRIBUTOR_FHIR_URL":                 fhirStoreURL,
 			// HAPI FHIR can only store Questionnaires in the default partition.
-			"ORCA_CAREPLANCONTRIBUTOR_QUESTIONNAIREFHIR_URL": questionnaireFhirStoreUrl,
-			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":               "true",
-			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":     "valid",
+			"ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL": questionnaireFhirStoreUrl,
+			"ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS": "file:///config/fhir/healthcareservices.json, file:///config/fhir/questionnaires.json",
+			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":                          "true",
+			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":                "valid",
 		},
 		Files: []testcontainers.ContainerFile{
+			// Questionnaire and HealthcareService bundles required by Task Filler Engine
 			{
-				HostFilePath:      "config/nuts/discovery/homemonitoring.json",
-				ContainerFilePath: "/nuts/discovery/homemonitoring.json",
+				HostFilePath:      "../orchestrator/careplancontributor/taskengine/test/healthcareservice-bundle.json",
+				ContainerFilePath: "/config/fhir/healthcareservices.json",
 				FileMode:          0444,
 			},
 			{
-				HostFilePath:      "config/nuts/policy/homemonitoring.json",
-				ContainerFilePath: "/nuts/policy/homemonitoring.json",
+				HostFilePath:      "../orchestrator/careplancontributor/taskengine/test/questionnaire-bundle.json",
+				ContainerFilePath: "/config/fhir/questionnaires.json",
 				FileMode:          0444,
 			},
 		},
 		WaitingFor: wait.ForHTTP("/health"),
+	}
+	if questionnaireFhirStoreUrl != "" {
+		delete(req.Env, "ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS")
 	}
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,

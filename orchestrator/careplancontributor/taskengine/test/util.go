@@ -14,11 +14,11 @@ import "embed"
 var fs embed.FS
 
 func LoadQuestionnairesAndHealthcareSevices(t *testing.T, client fhirclient.Client) {
-	var healthcareService fhir.HealthcareService
-	data, err := fs.ReadFile("healthcareservice-telemonitoring.json")
+	var healthcareServiceBundle fhir.Bundle
+	data, err := fs.ReadFile("healthcareservice-bundle.json")
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal(data, &healthcareService))
-	require.NoError(t, client.Create(healthcareService, &healthcareService))
+	require.NoError(t, json.Unmarshal(data, &healthcareServiceBundle))
+	require.NoError(t, client.Create(healthcareServiceBundle, &healthcareServiceBundle, fhirclient.AtPath("/")))
 
 	var questionnaireBundle fhir.Bundle
 	data, err = fs.ReadFile("questionnaire-bundle.json")

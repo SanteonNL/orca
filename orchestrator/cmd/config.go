@@ -63,19 +63,44 @@ func (i InterfaceConfig) ParseURL() *url.URL {
 
 // LoadConfig loads the configuration from the environment.
 func LoadConfig() (*Config, error) {
-	k := koanf.New(".")
-	err := k.Load(env.Provider("ORCA_", ".", func(s string) string {
-		return strings.Replace(strings.ToLower(strings.TrimPrefix(s, "ORCA_")), "_", ".", -1)
-	}), nil)
+	result := DefaultConfig()
+	err := loadConfigInto(&result)
 	if err != nil {
 		return nil, err
 	}
-
-	result := DefaultConfig()
-	if err := k.Unmarshal("", &result); err != nil {
-		return nil, err
-	}
 	return &result, nil
+}
+
+func loadConfigInto(target any) error {
+	k := koanf.New(".")
+	err := k.Load(env.ProviderWithValue("ORCA_", ".", func(key string, value string) (string, interface{}) {
+		key = strings.Replace(strings.ToLower(strings.TrimPrefix(key, "ORCA_")), "_", ".", -1)
+		if len(value) == 0 {
+			return key, nil
+		}
+		sliceValues := splitWithEscaping(value, ",", "\\")
+		for i, s := range sliceValues {
+			sliceValues[i] = strings.TrimSpace(s)
+		}
+		var parsedValue any = sliceValues
+		if len(sliceValues) == 1 {
+			parsedValue = sliceValues[0]
+		}
+		return key, parsedValue
+	}), nil)
+	if err != nil {
+		return err
+	}
+	return k.Unmarshal("", target)
+}
+
+func splitWithEscaping(s, separator, escape string) []string {
+	s = strings.ReplaceAll(s, escape+separator, "\x00")
+	tokens := strings.Split(s, separator)
+	for i, token := range tokens {
+		tokens[i] = strings.ReplaceAll(token, "\x00", separator)
+	}
+	return tokens
 }
 
 // DefaultConfig returns sensible, but not complete, default configuration values.
