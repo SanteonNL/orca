@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, cpsFhirBaseUrl string, fhirStoreURL string, allowUnmanagedFHIROperations bool) *url.URL {
+func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, cpsFhirBaseUrl string, fhirStoreURL string, questionnaireFhirStoreUrl string, allowUnmanagedFHIROperations bool) *url.URL {
 	image := os.Getenv("ORCHESTRATOR_IMAGE")
 	pullImage := false
 	if image == "" {
@@ -40,8 +40,10 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_CAREPLANSERVICE_ALLOWUNMANAGEDFHIROPERATIONS": strconv.FormatBool(allowUnmanagedFHIROperations),
 			"ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL":      cpsFhirBaseUrl,
 			"ORCA_CAREPLANCONTRIBUTOR_FHIR_URL":                 fhirStoreURL,
-			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":                  "true",
-			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":        "valid",
+			// HAPI FHIR can only store Questionnaires in the default partition.
+			"ORCA_CAREPLANCONTRIBUTOR_QUESTIONNAIREFHIR_URL": questionnaireFhirStoreUrl,
+			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":               "true",
+			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":     "valid",
 		},
 		Files: []testcontainers.ContainerFile{
 			{

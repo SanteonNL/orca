@@ -39,11 +39,21 @@ func New(
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 
-	fhirClientConfig := coolfhir.Config()
-	localFHIRStoreTransport, localFhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	// Initialize FHIR clients:
+	// - FHIR API holding EHR data
+	// - FHIR API holding Questionnaires and HealthcareServices
+	localFhirStoreTransport, localFhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
 	if err != nil {
 		return nil, err
 	}
+	var questionnaireFhirClient fhirclient.Client
+	if config.QuestionnaireFHIR.BaseURL == "" {
+		// Questionnaire FHIR API not configured, use FHIR API holding EHR data
+		questionnaireFhirClient = localFhirClient
+	} else {
+		_, questionnaireFhirClient, err = coolfhir.NewAuthRoundTripper(config.QuestionnaireFHIR, coolfhir.Config())
+	}
+
 	httpClient := profile.HttpClient()
 	result := &Service{
 		config:                  config,
@@ -54,9 +64,9 @@ func New(
 		profile:                 profile,
 		frontendUrl:             config.FrontendConfig.URL,
 		fhirURL:                 fhirURL,
-		transport:               localFHIRStoreTransport,
+		transport:               localFhirStoreTransport,
 		workflows: taskengine.FhirApiWorkflowProvider{
-			Client: localFhirClient,
+			Client: questionnaireFhirClient,
 		},
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())

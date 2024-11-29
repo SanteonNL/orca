@@ -20,6 +20,7 @@ func Test_Main(t *testing.T) {
 	// Setup HAPI FHIR server
 	hapiBaseURL := setupHAPI(t, dockerNetwork.Name)
 	hapiFhirClient := fhirclient.New(hapiBaseURL, http.DefaultClient, nil)
+	require.NoError(t, loadQuestionnaireData(hapiFhirClient), "Failed to load Questionnaire and HealthcareService data into HAPI FHIR")
 	// Setup Nuts node
 	_, nutsInternalURL := setupNutsNode(t, dockerNetwork.Name)
 	orcaHttpClient := &http.Client{
@@ -44,7 +45,7 @@ func Test_Main(t *testing.T) {
 	// Setup Clinic
 	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir/notify", false)
 	require.NoError(t, err)
-	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, carePlanServiceBaseURL, clinicFHIRStoreURL, true)
+	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, carePlanServiceBaseURL, clinicFHIRStoreURL, hapiBaseURL.String(), true)
 	clinicOrcaFHIRClient := fhirclient.New(clinicOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 
 	// Setup Hospital
@@ -53,7 +54,7 @@ func Test_Main(t *testing.T) {
 	// This is why the hospital, running the CPS, stores its data in the default partition.
 	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir/notify", true)
 	require.NoError(t, err)
-	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, carePlanServiceBaseURL, hospitalFHIRStoreURL, true)
+	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, carePlanServiceBaseURL, hospitalFHIRStoreURL, hapiBaseURL.String(), true)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
 	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 

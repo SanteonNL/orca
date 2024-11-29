@@ -17,10 +17,16 @@ func DefaultConfig() Config {
 }
 
 type Config struct {
-	CarePlanService               CarePlanServiceConfig `koanf:"careplanservice"`
-	FrontendConfig                FrontendConfig        `koanf:"frontend"`
-	AppLaunch                     applaunch.Config      `koanf:"applaunch"`
-	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
+	CarePlanService CarePlanServiceConfig `koanf:"careplanservice"`
+	FrontendConfig  FrontendConfig        `koanf:"frontend"`
+	AppLaunch       applaunch.Config      `koanf:"applaunch"`
+	// FHIR contains the configuration to connect to the FHIR API holding EHR data,
+	// to be made available through the CarePlanContributor.
+	FHIR coolfhir.ClientConfig `koanf:"fhir"`
+	// QuestionnaireFHIR contains the configuration to connect to the FHIR API holding Questionnaires and HealthcareServices,
+	// used to negotiate FHIR Tasks. It might be a different FHIR API than the one holding EHR data,
+	// also because HAPI doesn't allow storing Questionnaires in partitions.
+	QuestionnaireFHIR             coolfhir.ClientConfig `koanf:"questionnairefhir"`
 	Enabled                       bool                  `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
 	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`
