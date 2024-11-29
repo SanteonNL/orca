@@ -1,78 +1,32 @@
 "use client"
-import { Step, StepItem, Stepper, useStepper } from '@/components/stepper'
+import React, { useEffect } from 'react'
 import useTaskProgressStore from '@/lib/store/task-progress-store'
 import { useParams } from 'next/navigation'
+import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
-import { useEffect, useState } from 'react'
-import { Spinner } from '@/components/spinner'
-import StepperFooter from '../components/stepper-footer'
-import { Task } from 'fhir/r4'
-import EnrollmentDetailsView from '../../components/enrollment-details-view'
 
-export default function TaskEnrollmentView() {
-
+export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
-    const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
-    const [steps, setSteps] = useState<StepItem[]>([
-        { label: "Awaiting Confirmation", description: "Checking if more information is needed..." },
-        { label: "Completion", description: "Completion overview" },
-    ])
-    const [content, setContent] = useState<JSX.Element[]>([
-        <>
-            <Spinner />
-        </>,
-        <>
-            <EnrollmentDetailsView key="enrollment-status-component" />
-            <StepperFooter />
-        </>,
-    ])
+    const { loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
 
     useEffect(() => {
-        setSelectedTaskId(taskId as string)
-    }, [setSelectedTaskId, taskId])
+        if (taskId) {
+            //TODO: Currently we only have one Questionnaire per enrollment flow. But we support multiple. The UX for multiple still needs to be made. When it's there, this is the place to add it
+            const selectedTaskId = Array.isArray(taskId) ? taskId[0] : taskId;
+            setSelectedTaskId(selectedTaskId);
+        }
+    }, [taskId, setSelectedTaskId])
 
+    if (loading || !initialized) return <Loading />
 
-    // This useEffect is responsible for setting the steps and content of the stepper based on the subtasks
-    useEffect(() => {
+    if (!subTasks || !subTasks.length || !taskToQuestionnaireMap || !subTasks?.[0].id || !taskToQuestionnaireMap[subTasks[0].id]) {
+        return <></>
+    }
 
-        if (!subTasks || !taskToQuestionnaireMap) return
-
-        setSteps([
-            ...subTasks.map((task: Task) => {
-                return { label: taskToQuestionnaireMap[task.id || ""]?.title || task.id, description: "Subtask Questionnaire" }
-            }),
-            { label: "Completion", description: "Completion overview" },
-        ])
-
-        setContent([
-            ...subTasks.map((task: Task) => {
-                return (
-                    <QuestionnaireRenderer
-                        key={task.id}
-                        questionnaire={taskToQuestionnaireMap[task.id || ""]}
-                        inputTask={task}
-                    />
-                )
-            }),
-            <>
-                <EnrollmentDetailsView key="enrollment-status-component" />
-                <StepperFooter />
-            </>
-        ])
-    }, [subTasks, taskToQuestionnaireMap])
-
-
-    if (loading || !initialized) return <Spinner />
-    if (!task) return <>Failed to find Task, cannot continue!</>
     return (
-        <Stepper className='mb-12' initialStep={0} steps={steps} onClickStep={(step, setStep) => setStep(step)}>
-            {steps.map((stepProps, index) => {
-                return (
-                    <Step key={stepProps.label} {...stepProps}>
-                        {content[index]}
-                    </Step>
-                )
-            })}
-        </Stepper>
+        <QuestionnaireRenderer
+            questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
+            inputTask={subTasks[0]}
+        />
     )
 }

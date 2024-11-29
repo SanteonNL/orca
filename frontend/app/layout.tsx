@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
-import { Nunito } from "next/font/google";
+import { Roboto } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 
-const nunito = Nunito({ subsets: ["latin"] });
+const font = Roboto({
+  subsets: ["latin"],
+  weight: "400"
+});
 
 export const metadata: Metadata = {
   title: "ORCA Frontend",
@@ -15,9 +18,10 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+
   return (
     <html lang="en">
-      <body className={nunito.className}>
+      <body className={font.className}>
         <main className="h-screen w-screen">
           {children}
           <Toaster />

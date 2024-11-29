@@ -1,5 +1,4 @@
 "use client"
-import { Button } from '@/components/ui/button'
 import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
 import { findInBundle, getBsn, constructTaskBundle } from '@/lib/fhirUtils'
@@ -8,8 +7,9 @@ import { Bundle, Condition } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
 import { useRouter } from 'next/navigation'
-import { cn } from '@/lib/utils'
 import { ArrowRight, LoaderIcon } from 'lucide-react'
+import { Spinner } from '@/components/spinner'
+import { Button, createTheme, ThemeProvider } from '@mui/material'
 
 interface Props {
     className?: string
@@ -24,7 +24,7 @@ interface Props {
  */
 export default function EnrollInCpsButton({ className }: Props) {
 
-    const { patient, selectedCarePlan, taskCondition, serviceRequest } = useEnrollment()
+    const { patient, selectedCarePlan, taskCondition, serviceRequest, loading } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
 
@@ -33,8 +33,16 @@ export default function EnrollInCpsButton({ className }: Props) {
     const ehrClient = useEhrClient()
 
     useEffect(() => {
-        setDisabled(submitted || !taskCondition)
-    }, [taskCondition, selectedCarePlan, submitted])
+        setDisabled(submitted || !taskCondition || loading)
+    }, [taskCondition, selectedCarePlan, submitted, loading])
+
+    const theme = createTheme({
+        palette: {
+            primary: {
+                main: '#1c6268',
+            },
+        },
+    });
 
     const informCps = async () => {
         setSubmitted(true)
@@ -89,9 +97,12 @@ export default function EnrollInCpsButton({ className }: Props) {
 
     return (
 
-        <Button className={cn('bg-primary h-12 text-primary-foreground rounded-full', className)} disabled={disabled} onClick={informCps}>
-            Volgende stap
-            {submitted ? <LoaderIcon className='ml-2 animate-spin' /> : <ArrowRight className="ml-2 h-4 w-4" />}
-        </Button>
+        <ThemeProvider theme={theme}>
+            <Button variant='contained' disabled={disabled} onClick={informCps}>
+                {submitted && <Spinner className='h-6 mr-2 text-inherit' />}
+                Volgende stap
+                <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+        </ThemeProvider>
     )
 }
