@@ -60,7 +60,7 @@ func (s *Service) handleSearchCareTeam(ctx context.Context, queryParams url.Valu
 		}
 		careTeamRefs = append(careTeamRefs, "CareTeam/"+*ct.Id)
 	}
-	retBundle := filterMatchingResourcesInBundle(bundle, []string{"CareTeam"}, careTeamRefs)
+	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"CareTeam"}, careTeamRefs)
 
 	return &retBundle, nil
 }

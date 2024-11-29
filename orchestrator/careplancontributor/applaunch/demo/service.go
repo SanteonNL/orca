@@ -86,7 +86,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	//Destroy the previous session if found
 	session := s.sessionManager.Get(request)
 	if session != nil {
-		log.Debug().Msg("Demo launch performed and previous session found - Destroying previous session")
+		log.Debug().Ctx(request.Context()).Msg("Demo launch performed and previous session found - Destroying previous session")
 		s.sessionManager.Destroy(response, request)
 	}
 

@@ -7,6 +7,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
@@ -261,6 +262,13 @@ func TestService_handleSearchPatient(t *testing.T) {
 			name:        "Patient returned, careplan and careteam returned, correct principal",
 			queryParams: url.Values{},
 			returnedBundle: &fhir.Bundle{
+				Link: []fhir.BundleLink{
+					{
+						Relation: "self",
+						Url:      "http://example.com/fhir/Patient?some-query-params",
+					},
+				},
+				Timestamp: to.Ptr("2021-09-01T12:00:00Z"),
 				Entry: []fhir.BundleEntry{
 					{
 						Resource: patient1,
@@ -278,6 +286,13 @@ func TestService_handleSearchPatient(t *testing.T) {
 				},
 			},
 			expectedBundle: &fhir.Bundle{
+				Link: []fhir.BundleLink{
+					{
+						Relation: "self",
+						Url:      "http://example.com/fhir/Patient?some-query-params",
+					},
+				},
+				Timestamp: to.Ptr("2021-09-01T12:00:00Z"),
 				Entry: []fhir.BundleEntry{
 					{
 						Resource: patient1,

@@ -18,8 +18,8 @@ import (
 )
 
 // Writes an OperationOutcome based on the given error as HTTP response.
-func (s *Service) writeOperationOutcomeFromError(err error, desc string, httpResponse http.ResponseWriter) {
-	log.Info().Msgf("%s failed: %v", desc, err)
+func (s *Service) writeOperationOutcomeFromError(ctx context.Context, err error, desc string, httpResponse http.ResponseWriter) {
+	log.Info().Ctx(ctx).Msgf("%s failed: %v", desc, err)
 	diagnostics := fmt.Sprintf("%s failed: %s", desc, err.Error())
 
 	issue := fhir.OperationOutcomeIssue{
@@ -148,24 +148,19 @@ func matchResourceIDs(request *FHIRHandlerRequest, idFromResource *string) error
 }
 
 // filterMatchingResourcesInBundle will find all resources in the bundle of the given type with a matching ID and return a new bundle with only those resources
-func filterMatchingResourcesInBundle(bundle *fhir.Bundle, resourceTypes []string, references []string) fhir.Bundle {
-	newBundle := fhir.Bundle{
-		Entry: []fhir.BundleEntry{},
-	}
-
-	operationOutcomeErrors := []fhir.BundleEntry{}
-	for i, entry := range bundle.Entry {
+// To populate the 'total' field, the function will count the number of matching resources that
+func filterMatchingResourcesInBundle(ctx context.Context, bundle *fhir.Bundle, resourceTypes []string, references []string) fhir.Bundle {
+	newBundle := *bundle
+	j := 0
+	for _, entry := range newBundle.Entry {
 		var resourceInBundle coolfhir.Resource
 		err := json.Unmarshal(entry.Resource, &resourceInBundle)
 		if err != nil {
-			// We don't want to fail the whole operation if one resource fails to unmarshal
-			log.Error().Msgf("filterMatchingResourcesInBundle: Failed to unmarshal resource: %v", err)
-			operationOutcomeEntry, err := coolfhir.CreateOperationOutcomeBundleEntryFromError(err, "Failed to unmarshal resource")
-			if err != nil {
-				log.Error().Msgf("filterMatchingResourcesInBundle: Failed to marshal operation outcome: %v", err)
-				continue
-			}
-			operationOutcomeErrors = append(operationOutcomeErrors, *operationOutcomeEntry)
+			// We don't want to fail the whole operation if one resource fails to unmarshal.
+			// Replace result bundle entry with an OperationOutcome to inform the client something went wrong.
+			log.Error().Ctx(ctx).Msgf("filterMatchingResourcesInBundle: Failed to unmarshal resource: %v", err)
+			newBundle.Entry[j] = coolfhir.CreateOperationOutcomeBundleEntryFromError(err, "Failed to unmarshal resource")
+			j++
 			continue
 		}
 
@@ -173,23 +168,20 @@ func filterMatchingResourcesInBundle(bundle *fhir.Bundle, resourceTypes []string
 			for _, ref := range references {
 				parts := strings.Split(ref, "/")
 				if len(parts) != 2 {
-					log.Error().Msgf("filterMatchingResourcesInBundle: Invalid reference format: %s", ref)
-					operationOutcomeEntry, err := coolfhir.CreateOperationOutcomeBundleEntryFromError(fmt.Errorf("Invalid reference format: %s", ref), "Invalid reference format")
-					if err != nil {
-						log.Error().Msgf("filterMatchingResourcesInBundle: Failed to marshal operation outcome: %v", err)
-						continue
-					}
-					operationOutcomeErrors = append(operationOutcomeErrors, *operationOutcomeEntry)
+					// Replace result bundle entry with an OperationOutcome, since we couldn't resolve it
+					log.Error().Ctx(ctx).Msgf("filterMatchingResourcesInBundle: Invalid reference format: %s", ref)
+					newBundle.Entry[j] = coolfhir.CreateOperationOutcomeBundleEntryFromError(fmt.Errorf("Invalid reference format: %s", ref), "Invalid reference format")
+					j++
 					continue
 				}
 				if parts[0] == resourceInBundle.Type && parts[1] == resourceInBundle.ID {
-					newBundle.Entry = append(newBundle.Entry, bundle.Entry[i])
+					newBundle.Entry[j] = entry
+					j++
 					break
 				}
 			}
 		}
 	}
-	newBundle.Entry = append(newBundle.Entry, operationOutcomeErrors...)
-
+	newBundle.Entry = newBundle.Entry[:j]
 	return newBundle
 }

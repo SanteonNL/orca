@@ -74,7 +74,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, e
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
 		identifiers, err := d.identities(ctx)
 		if err != nil {
-			log.Logger.Warn().Err(err).Msg("Failed to refresh local identities using Nuts node")
+			log.Warn().Ctx(ctx).Err(err).Msg("Failed to refresh local identities using Nuts node")
 			if d.cachedIdentities == nil {
 				// If we don't have a cached value, we can't return anything, so return the error.
 				return nil, fmt.Errorf("failed to load local identities: %w", err)
@@ -103,7 +103,7 @@ func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, er
 	for _, cred := range *response.JSON200 {
 		identifiers, err := d.identifiersFromCredential(cred)
 		if err != nil {
-			log.Logger.Warn().Err(err).Msgf("Failed to extract identifiers from credential: %s", cred.ID)
+			log.Warn().Ctx(ctx).Err(err).Msgf("Failed to extract identifiers from credential: %s", cred.ID)
 			continue
 		}
 		results = append(results, identifiers...)

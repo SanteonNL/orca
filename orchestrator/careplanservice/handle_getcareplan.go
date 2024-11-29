@@ -89,7 +89,7 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 			}
 		}
 	}
-	retBundle := filterMatchingResourcesInBundle(bundle, []string{"CarePlan", "CareTeam"}, filterRefs)
+	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"CarePlan", "CareTeam"}, filterRefs)
 
 	return &retBundle, nil
 }

@@ -1,6 +1,7 @@
 package zorgplatform
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -25,6 +26,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 		sessionManager: sessionManager,
 	}
 
+	ctx := context.Background()
 	assertionXML, err := os.ReadFile("assertion_example.xml")
 	require.NoError(t, err)
 	decryptedDocument := etree.NewDocument()
@@ -94,7 +96,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			}
 
 			// Extract Practitioner
-			practitioner, err := s.extractPractitioner(decryptedAssertion)
+			practitioner, err := s.extractPractitioner(ctx, decryptedAssertion)
 			if tt.expectedError != nil && err != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
@@ -113,7 +115,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			}
 
 			// Extract Workflow ID
-			workflowID, err := s.extractWorkflowID(decryptedAssertion)
+			workflowID, err := s.extractWorkflowID(ctx, decryptedAssertion)
 			if tt.expectedError != nil && err != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
@@ -174,6 +176,7 @@ func TestValidateTokenExpiry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			doc := etree.NewDocument()
+			ctx := context.Background()
 			root := doc.CreateElement("Assertion")
 			timestamp := root.CreateElement("u:Timestamp")
 			created := timestamp.CreateElement("u:Created")
@@ -181,7 +184,7 @@ func TestValidateTokenExpiry(t *testing.T) {
 			expires := timestamp.CreateElement("u:Expires")
 			expires.SetText(tt.expires)
 
-			err := s.validateAssertionExpiry(doc)
+			err := s.validateAssertionExpiry(ctx, doc)
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {

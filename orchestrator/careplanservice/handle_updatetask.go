@@ -16,7 +16,7 @@ import (
 )
 
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	log.Info().Msgf("Updating Task: %s", request.RequestUrl)
+	log.Info().Ctx(ctx).Msgf("Updating Task: %s", request.RequestUrl)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))

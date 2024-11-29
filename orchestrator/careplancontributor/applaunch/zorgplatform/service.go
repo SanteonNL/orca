@@ -194,7 +194,7 @@ func (s stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.
 }
 
 func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Request) {
-	log.Debug().Msg("Handling ChipSoft HiX app launch")
+	log.Debug().Ctx(request.Context()).Msg("Handling ChipSoft HiX app launch")
 	if err := request.ParseForm(); err != nil {
 		http.Error(response, fmt.Errorf("unable to parse form: %w", err).Error(), http.StatusBadRequest)
 		return
@@ -205,17 +205,17 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	launchContext, err := s.parseSamlResponse(samlResponse)
+	launchContext, err := s.parseSamlResponse(request.Context(), samlResponse)
 
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
-		log.Error().Err(err).Msg("unable to validate SAML token")
+		log.Err(err).Ctx(request.Context()).Msg("unable to validate SAML token")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
 
 	// TODO: Remove this debug logging later
-	log.Info().Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
+	log.Info().Ctx(request.Context()).Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
 
 	//TODO: launchContext.Practitioner needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
 	// Cache FHIR resources that don't exist in the EHR in the session,
@@ -225,16 +225,16 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, hcpTokenType)
 
 	if err != nil {
-		log.Error().Err(err).Msg("unable to request access token for HCP ProfessionalService")
+		log.Err(err).Ctx(request.Context()).Msg("unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
 
-	log.Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
+	log.Info().Ctx(request.Context()).Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
 	sessionData, err := s.getSessionData(request.Context(), accessToken, launchContext)
 	if err != nil {
-		log.Error().Err(err).Msg("unable to create session data")
+		log.Err(err).Ctx(request.Context()).Msg("unable to create session data")
 		http.Error(response, "Application launch failed.", http.StatusInternalServerError)
 		return
 	}
@@ -244,7 +244,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// Redirect to landing page
 	targetURL, _ := url.Parse(s.baseURL)
 	targetURL = targetURL.JoinPath(s.landingUrlPath)
-	log.Info().Msg("Successfully launched through ChipSoft HiX app launch")
+	log.Info().Ctx(request.Context()).Msg("Successfully launched through ChipSoft HiX app launch")
 	http.Redirect(response, request, targetURL.String(), http.StatusFound)
 }
 
@@ -367,7 +367,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	if len(identities) == 0 {
 		return nil, fmt.Errorf("no identities found")
 	} else if len(identities) > 1 {
-		log.Warn().Msgf("More than one identity found, using the first one: %v", identities[0])
+		log.Warn().Ctx(ctx).Msgf("More than one identity found, using the first one: %v", identities[0])
 	}
 	localOrgIdentifier := identities[0]
 
@@ -388,7 +388,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	}
 	// Enrich performer URA with registered name
 	if result, err := s.profile.CsdDirectory().LookupEntity(ctx, *taskPerformer.Identifier); err != nil {
-		log.Warn().Err(err).Msgf("Couldn't resolve performer name (ura: %s)", s.config.TaskPerformerUra)
+		log.Warn().Ctx(ctx).Err(err).Msgf("Couldn't resolve performer name (ura: %s)", s.config.TaskPerformerUra)
 	} else {
 		taskPerformer = *result
 	}

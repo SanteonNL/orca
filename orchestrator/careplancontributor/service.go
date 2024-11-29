@@ -110,13 +110,13 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		var notification coolfhir.SubscriptionNotification
 		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
-			log.Error().Err(err).Msg("Failed to decode notification")
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to decode notification")
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
 		if err := s.handleNotification(request.Context(), &notification); err != nil {
-			log.Error().Err(err).Msg("Failed to handle notification")
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to handle notification")
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
 			return
 		}
 		writer.WriteHeader(http.StatusOK)
@@ -164,6 +164,13 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 
 		err := s.handleProxyExternalRequestToEHR(writer, request)
 		if err != nil {
+			log.Err(err).Ctx(request.Context()).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
+			// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
+			var operationOutcomeErr fhirclient.OperationOutcomeError
+			if errors.As(err, &operationOutcomeErr) {
+				operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
+				err = operationOutcomeErr
+			}
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
@@ -173,12 +180,13 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
-	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.localCarePlanServiceUrl, basePath+"/cps/fhir", s.scpHttpClient.Transport)
+	proxyBasePath := basePath + "/cps/fhir"
+	carePlanServiceProxy := coolfhir.NewProxy(log.Logger, s.localCarePlanServiceUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport)
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
 	mux.HandleFunc(basePath+"/", func(response http.ResponseWriter, request *http.Request) {
-		log.Info().Msgf("Redirecting to %s", s.frontendUrl)
+		log.Info().Ctx(request.Context()).Msgf("Redirecting to %s", s.frontendUrl)
 		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
 	})
 
@@ -212,7 +220,8 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 // handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
-	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, basePath+"/ehr/fhir", clientFactory.Client)
+	proxyBasePath := basePath + "/ehr/fhir"
+	proxy := coolfhir.NewProxy(log.Logger, clientFactory.BaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -364,11 +373,13 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, err
 	}
 
-	return &ScpValidationResult{
-		isMember:  isMember,
-		carePlan:  &carePlan,
-		careTeams: &careTeams,
-	}, nil
+	if !isValid {
+		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
+	}
+	proxyBasePath := basePath + "/fhir"
+	fhirProxy := coolfhir.NewProxy(log.Logger, s.fhirURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
+	fhirProxy.ServeHTTP(writer, request)
+	return nil
 }
 
 func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
@@ -431,7 +442,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		}
 	}
 
-	log.Info().Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
+	log.Info().Ctx(ctx).Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
 
 	if focusReference.Reference == nil {
 		return &coolfhir.ErrorWithCode{
@@ -472,7 +483,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			return err
 		}
 	default:
-		log.Info().Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
+		log.Info().Ctx(ctx).Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
 	}
 
 	return nil
