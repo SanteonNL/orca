@@ -276,4 +276,71 @@ func Test_Main(t *testing.T) {
 		require.Equal(t, *serviceRequest.ID, *fetchedServiceRequest.ID)
 		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
 	})
+	t.Run("Task Filler doesn't support the ServiceRequest code, and rejects the Task", func(t *testing.T) {
+		unsupportedServiceRequest := fhir.ServiceRequest{
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Code: &fhir.CodeableConcept{
+				Coding: []fhir.Coding{
+					{
+						System: to.Ptr("http://snomed.info/sct"),
+						Code:   to.Ptr("1234"), // not supported by Task Filler
+					},
+				},
+			},
+		}
+		err := hospitalOrcaFHIRClient.Create(unsupportedServiceRequest, &unsupportedServiceRequest)
+		require.NoError(t, err)
+
+		unsupportedTask := fhir.Task{
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Requester: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(URANamingSystem),
+					Value:  to.Ptr(strconv.Itoa(hospitalURA)),
+				},
+			},
+			Owner: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(URANamingSystem),
+					Value:  to.Ptr(strconv.Itoa(clinicURA)),
+				},
+			},
+			Focus: &fhir.Reference{
+				Reference: to.Ptr("ServiceRequest/" + *unsupportedServiceRequest.ID),
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
+			ReasonCode: &fhir.CodeableConcept{
+				Coding: []fhir.Coding{
+					{
+						System: to.Ptr("http://snomed.info/sct"),
+						Code:   to.Ptr("13645005"), // COPD
+					},
+				},
+			},
+			Intent: "order",
+			Status: fhir.TaskStatusRequested,
+		}
+		err = hospitalOrcaFHIRClient.Create(unsupportedTask, &unsupportedTask)
+		require.NoError(t, err)
+
+		t.Run("assert Task is rejected", func(t *testing.T) {
+			var rejectedTask fhir.Task
+			err = hospitalOrcaFHIRClient.Read("Task/"+*unsupportedTask.ID, &rejectedTask)
+			require.NoError(t, err)
+			require.Equal(t, fhir.TaskStatusRejected, rejectedTask.Status)
+		})
+	})
 }

@@ -75,7 +75,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			numBundlesPosted: 1, // One subtask should be created
 		},
 		{
-			name: "error: primary task, multiple reasonCodes match",
+			name: "error: primary task, multiple workflow matches",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonCode = &fhir.CodeableConcept{
 					Coding: []fhir.Coding{
@@ -90,7 +90,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					},
 				}
 			}),
-			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference matches multiple workflows (http://snomed.info/sct|13645005, http://snomed.info/sct|84114007) for service http://snomed.info/sct|719858009"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one"),
 		},
 		{
 			name: "primary task, duplicate reasonCodes (but fine, since they're the same)",
@@ -125,14 +125,14 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.Requester = nil
 			}),
-			expectedError: errors.New("task is not valid - skipping: validation errors: Task.requester is required but not provided"),
+			expectedError: errors.New("task rejected by filler: Task is not valid: validation errors: Task.requester is required but not provided"),
 		},
 		{
 			name: "error: primary task, without Owner",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.Owner = nil
 			}),
-			expectedError: errors.New("task is not valid - skipping: validation errors: Task.owner is required but not provided"),
+			expectedError: errors.New("task rejected by filler: Task is not valid: validation errors: Task.owner is required but not provided"),
 		},
 		{
 			name: "primary task, status=received, should not process",
@@ -171,6 +171,12 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			}),
 		},
 		{
+			name: "primary task, status=ready, should not process",
+			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
+				t.Status = fhir.TaskStatusReady
+			}),
+		},
+		{
 			name: "primary task, status=failed, should not process",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.Status = fhir.TaskStatusFailed
@@ -193,21 +199,21 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			serviceRequest: deep.AlterCopy(serviceRequest, func(sr *fhir.ServiceRequest) {
 				sr.Code.Coding[0].Code = to.Ptr("UnknownServiceCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: ServiceRequest.code does not match any offered services"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows"),
 		},
 		{
-			name: "error: primary task, unknown codition for requested service (primary Task.reasonCode or reasonReference is not supported)",
+			name: "error: primary task, unknown condition for requested service (primary Task.reasonCode or reasonReference is not supported)",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonCode.Coding[0].Code = to.Ptr("UnknownConditionCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: Task.reasonCode or Task.reasonReference does not match any workflow for service http://snomed.info/sct|719858009"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows"),
 		},
 		{
 			name: "error: primary task, without basedOn",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.BasedOn = nil
 			}),
-			expectedError: errors.New("task is not valid - skipping: validation errors: Task.basedOn is required but not provided"),
+			expectedError: errors.New("task rejected by filler: Task is not valid: validation errors: Task.basedOn is required but not provided"),
 		},
 		{
 			name:             "subtask status=completed, primary task should be accepted",
@@ -292,8 +298,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			service := &Service{
-				workflows:           taskengine.DefaultWorkflows(),
-				questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+				workflows: taskengine.DefaultWorkflows(),
 				cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 					return mockFHIRClient
 				},
@@ -367,7 +372,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					Times(tt.numBundlesPosted)
 			}
 
-			err := service.handleTaskFillerCreateOrUpdate(ctx, mockFHIRClient, &notifiedTask)
+			err := service.handleTaskNotification(ctx, mockFHIRClient, &notifiedTask)
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
 			} else {
@@ -380,27 +385,36 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	}
 }
 
-func TestService_createSubTaskEnrollmentCriteria(t *testing.T) {
+func TestService_getSubTask(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		workflows:           taskengine.DefaultWorkflows(),
-		questionnaireLoader: taskengine.EmbeddedQuestionnaireLoader{},
+		workflows: taskengine.DefaultWorkflows(),
 	}
 
 	taskBytes, _ := json.Marshal(primaryTask)
 	var task fhir.Task
 	json.Unmarshal(taskBytes, &task)
-	workflow := service.workflows["http://snomed.info/sct|719858009"]["http://snomed.info/sct|13645005"].Start()
-	questionnaire, err := service.questionnaireLoader.Load(context.Background(), workflow.QuestionnaireUrl)
+	workflow, err := service.workflows.Provide(context.Background(),
+		fhir.Coding{
+			System: to.Ptr("http://snomed.info/sct"),
+			Code:   to.Ptr("719858009"),
+		},
+		fhir.Coding{
+			System: to.Ptr("http://snomed.info/sct"),
+			Code:   to.Ptr("13645005"),
+		})
+	workflowStep := workflow.Start()
+	require.NoError(t, err)
+	questionnaire, err := service.workflows.QuestionnaireLoader().Load(context.Background(), workflowStep.QuestionnaireUrl)
 	require.NoError(t, err)
 	require.NotNil(t, questionnaire)
 
 	questionnaireRef := "urn:uuid:" + *questionnaire.Id
 	log.Info().Ctx(context.Background()).Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
-	subtask := service.getSubTask(&primaryTask, questionnaireRef, true)
+	subtask := service.getSubTask(&primaryTask, questionnaireRef)
 
 	expectedSubTaskInput := []fhir.TaskInput{
 		{
