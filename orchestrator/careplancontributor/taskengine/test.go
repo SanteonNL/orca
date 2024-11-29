@@ -35,7 +35,7 @@ func DefaultTestWorkflowProvider() TestWorkflowProvider {
 			"http://snomed.info/sct|13645005": {
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: "zbj-questionnaire-telemonitoring-heartfailure-enrollment",
+						QuestionnaireUrl: "NOT SUPPORTED",
 					},
 				},
 			},
@@ -43,7 +43,7 @@ func DefaultTestWorkflowProvider() TestWorkflowProvider {
 			"http://snomed.info/sct|84114007": {
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: "NOT SUPPORTED",
+						QuestionnaireUrl: "zbj-questionnaire-telemonitoring-heartfailure-enrollment",
 					},
 				},
 			},

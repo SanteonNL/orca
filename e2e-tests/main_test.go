@@ -126,7 +126,7 @@ func Test_Main(t *testing.T) {
 					Coding: []fhir.Coding{
 						{
 							System: to.Ptr("http://snomed.info/sct"),
-							Code:   to.Ptr("13645005"), // COPD
+							Code:   to.Ptr("84114007"), // Heart failure
 						},
 					},
 				}
