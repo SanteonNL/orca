@@ -57,7 +57,6 @@ func New(
 		fhirURL:                 fhirURL,
 		transport:               localFHIRStoreTransport,
 		workflows:               taskengine.DefaultWorkflows(),
-		questionnaireLoader:     taskengine.EmbeddedQuestionnaireLoader{},
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
@@ -86,8 +85,7 @@ type Service struct {
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
 	transport                     http.RoundTripper
-	workflows                     taskengine.Workflows
-	questionnaireLoader           taskengine.QuestionnaireLoader
+	workflows                     taskengine.WorkflowProvider
 	healthdataviewEndpointEnabled bool
 }
 
