@@ -298,7 +298,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			service := &Service{
-				workflows: taskengine.DefaultWorkflows(),
+				workflows: taskengine.DefaultTestWorkflowProvider(),
 				cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 					return mockFHIRClient
 				},
@@ -391,7 +391,7 @@ func TestService_getSubTask(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		workflows: taskengine.DefaultWorkflows(),
+		workflows: taskengine.DefaultTestWorkflowProvider(),
 	}
 
 	taskBytes, _ := json.Marshal(primaryTask)

@@ -605,7 +605,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
 	}, orcaPublicURL, sessionManager)
-	service.workflows = taskengine.DefaultWorkflows()
+	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
 	service.cpsClientFactory = func(baseUrl *url.URL) fhirclient.Client {
