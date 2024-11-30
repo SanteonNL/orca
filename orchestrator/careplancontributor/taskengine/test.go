@@ -25,6 +25,11 @@ func LoadTestQuestionnairesAndHealthcareSevices(t *testing.T, client fhirclient.
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &questionnaireBundle))
 	require.NoError(t, client.Create(questionnaireBundle, &questionnaireBundle, fhirclient.AtPath("/")))
+
+	data, err = testdata.FS.ReadFile("copd-asthma-questionnaire-bundle.json")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(data, &questionnaireBundle))
+	require.NoError(t, client.Create(questionnaireBundle, &questionnaireBundle, fhirclient.AtPath("/")))
 }
 
 func DefaultTestWorkflowProvider() TestWorkflowProvider {
@@ -35,7 +40,7 @@ func DefaultTestWorkflowProvider() TestWorkflowProvider {
 			"http://snomed.info/sct|13645005": {
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: "NOT SUPPORTED",
+						QuestionnaireUrl: "questionnaire-copd",
 					},
 				},
 			},
@@ -51,7 +56,7 @@ func DefaultTestWorkflowProvider() TestWorkflowProvider {
 			"http://snomed.info/sct|195967001": {
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: "NOT SUPPORTED",
+						QuestionnaireUrl: "questionnaire-asthma",
 					},
 				},
 			},
@@ -89,14 +94,25 @@ type TestQuestionnaireLoader struct {
 }
 
 func (t TestQuestionnaireLoader) Load(ctx context.Context, url string) (*fhir.Questionnaire, error) {
-	var questionnaireBundle fhir.Bundle
+	var normativeQuestionnaireBundle fhir.Bundle
 	data, err := testdata.FS.ReadFile("questionnaire-bundle.json")
+	if err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal(data, &normativeQuestionnaireBundle); err != nil {
+		return nil, err
+	}
+
+	var questionnaireBundle fhir.Bundle
+	data, err = testdata.FS.ReadFile("copd-asthma-questionnaire-bundle.json")
 	if err != nil {
 		return nil, err
 	}
 	if err := json.Unmarshal(data, &questionnaireBundle); err != nil {
 		return nil, err
 	}
+	questionnaireBundle.Entry = append(questionnaireBundle.Entry, normativeQuestionnaireBundle.Entry...)
+
 	var result fhir.Questionnaire
 	if err := coolfhir.ResourceInBundle(&questionnaireBundle, coolfhir.EntryHasID(url), &result); err != nil {
 		return nil, err
