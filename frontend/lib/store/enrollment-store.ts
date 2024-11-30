@@ -64,7 +64,7 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     },
 }));
 
-const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: boolean | undefined) => void) => {
+const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
 
     let launchContext: LaunchContext;
 
@@ -76,9 +76,9 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
     } else {
         //TODO: We can remove this when going live, this is useful during development
         launchContext = {
-            "patient": "Patient/2",
-            "serviceRequest": "ServiceRequest/4",
-            "practitioner": "Practitioner/7"
+            "patient": "Patient/4",
+            "serviceRequest": "ServiceRequest/6",
+            "practitioner": "Practitioner/8"
         }
 
     }
@@ -88,7 +88,7 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
     return launchContext;
 };
 
-const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: boolean | undefined) => void) => {
+const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
     const { launchContext } = get();
 
     if (!launchContext) throw new Error("Unable to fetch EHR resources without LaunchContext")
@@ -127,10 +127,7 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
 
 const fetchCarePlans = async (
     get: () => StoreState,
-    set: (
-        partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>),
-        replace?: boolean | undefined
-    ) => void
+    set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void
 ) => {
     const { patient } = get();
 
@@ -158,9 +155,10 @@ const useEnrollment = () => {
 
     useEffect(() => {
         if (!initialized) {
+            setTimeout(() => fetchAllResources(), 2000);
             fetchAllResources();
         }
-    }, []);
+    }, [fetchAllResources, initialized]);
 
     return store;
 };

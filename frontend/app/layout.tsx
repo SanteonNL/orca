@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Roboto } from "next/font/google";
 import "./globals.css";
-import Navbar from "../components/navbar";
 import { Toaster } from "@/components/ui/sonner";
 
-const inter = Inter({ subsets: ["latin"] });
+const font = Roboto({
+  subsets: ["latin"],
+  weight: "400"
+});
 
 export const metadata: Metadata = {
   title: "ORCA Frontend",
@@ -16,11 +18,11 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+
   return (
     <html lang="en">
-      <body className={inter.className}>
-        <Navbar />
-        <main className="p-4 md:p-10 h-full mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <body className={font.className}>
+        <main className="h-screen w-screen">
           {children}
           <Toaster />
         </main>
