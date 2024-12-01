@@ -382,5 +382,5 @@ func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task 
 	task.StatusReason = &fhir.CodeableConcept{
 		Text: to.Ptr(rejection.FormatReason()),
 	}
-	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, nil)
+	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
 }
