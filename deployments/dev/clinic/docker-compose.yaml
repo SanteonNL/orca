@@ -47,6 +47,8 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ADDRESSES="Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;"
   viewer:
 #    image: ghcr.io/santeonnl/orca_viewersimulator:main
     build:
@@ -55,3 +57,42 @@ services:
     environment:
       FHIR_BASE_URL: http://orchestrator:8080/cpc/cps/fhir
       FHIR_AUTHORIZATION_TOKEN: valid
+  eventhubs-emulator:
+    container_name: "eventhubs-emulator"
+    image: "mcr.microsoft.com/azure-messaging/eventhubs-emulator:latest"
+    volumes:
+      - "./config/eventhubs-emulator.json:/Eventhubs_Emulator/ConfigFiles/Config.json"
+    ports:
+      - "5672:5672"
+    environment:
+      BLOB_SERVER: azurite
+      METADATA_SERVER: azurite
+      ACCEPT_EULA: "Y"
+    depends_on:
+      - azurite
+    networks:
+      care-professionals-dev:
+        aliases:
+          - "eventhubs-emulator"
+          - "eventhubs-emulator.servicebus.windows.net"
+  azurite:
+    container_name: "azurite"
+    image: "mcr.microsoft.com/azure-storage/azurite:latest"
+    volumes:
+      - azurite:/data
+    ports:
+      - "10000:10000"
+      - "10001:10001"
+      - "10002:10002"
+    networks:
+      care-professionals-dev:
+        aliases:
+          - "azurite"
+
+networks:
+  eh-emulator:
+  care-professionals-dev:
+    driver: bridge
+
+volumes:
+  azurite:
