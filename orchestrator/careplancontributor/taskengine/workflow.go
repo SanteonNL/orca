@@ -1,17 +1,49 @@
 package taskengine
 
-import "errors"
+import (
+	"context"
+	"errors"
+	"fmt"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+)
 
 var ErrWorkflowNotFound = errors.New("workflow not found")
 
-// Workflows is a map of workflow IDs to workflows.
+// WorkflowProvider provides workflows (a set of questionnaires required for accepting a Task) to the Task Filler.
+type WorkflowProvider interface {
+	// Provide returns the workflow for a given service and condition.
+	// If no workflow is found, an error is returned.
+	Provide(ctx context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) (*Workflow, error)
+	QuestionnaireLoader() QuestionnaireLoader
+}
+
+var _ WorkflowProvider = MemoryWorkflowProvider{}
+
+// MemoryWorkflowProvider is an in-memory WorkflowProvider.
 // It's a map of a care service (e.g. Telemonitoring, http://snomed.info/sct|719858009),
 // to conditions (e.g. COPD, http://snomed.info/sct|13645005) and their workflows.
-type Workflows map[string]map[string]Workflow
+type MemoryWorkflowProvider map[string]map[string]Workflow
+
+func (m MemoryWorkflowProvider) QuestionnaireLoader() QuestionnaireLoader {
+	return EmbeddedQuestionnaireLoader{}
+}
+
+func (m MemoryWorkflowProvider) Provide(_ context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) (*Workflow, error) {
+	if serviceCode.System == nil || serviceCode.Code == nil || conditionCode.System == nil || conditionCode.Code == nil {
+		return nil, errors.New("serviceCode and conditionCode must have a system and code")
+	}
+	if workflows, ok := m[*serviceCode.System+"|"+*serviceCode.Code]; ok {
+		if workflow, ok := workflows[*conditionCode.System+"|"+*conditionCode.Code]; ok {
+			return &workflow, nil
+		}
+		return nil, errors.Join(ErrWorkflowNotFound, fmt.Errorf("condition code does not match any conditions (service=%s|%s, condition=%s|%s)", *serviceCode.System, *serviceCode.Code, *conditionCode.System, *conditionCode.Code))
+	}
+	return nil, errors.Join(ErrWorkflowNotFound, errors.New("service code does not match any offered services"))
+}
 
 // DefaultWorkflows returns a set of default, embedded workflows.
-func DefaultWorkflows() Workflows {
-	return Workflows{
+func DefaultWorkflows() MemoryWorkflowProvider {
+	return MemoryWorkflowProvider{
 		// Telemonitoring
 		"http://snomed.info/sct|719858009": map[string]Workflow{
 			// COPD

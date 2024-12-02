@@ -1,4 +1,14 @@
 'use client'
+import {
+    useQuestionnaireResponseStore,
+    BaseRenderer,
+    useBuildForm,
+    useRendererQueryClient
+} from '@aehrc/smart-forms-renderer';
+import type {FhirResource, Questionnaire, QuestionnaireResponse, Task} from 'fhir/r4';
+import {useEffect, useState} from 'react';
+import {ReloadIcon} from "@radix-ui/react-icons";
+import {toast} from 'sonner';
 import {SmartFormsRenderer, useQuestionnaireResponseStore} from '@aehrc/smart-forms-renderer';
 import type {FhirResource, Questionnaire, QuestionnaireResponse, Task} from 'fhir/r4';
 import {useEffect, useState} from 'react';
@@ -13,6 +23,10 @@ import {useStepper} from '@/components/stepper';
 import {v4} from 'uuid';
 import {populateQuestionnaire} from '../../utils/populate';
 import useEnrollmentStore from '@/lib/store/enrollment-store';
+import {useRouter} from 'next/navigation';
+import {QueryClientProvider} from '@tanstack/react-query';
+import {Button, createTheme, ThemeProvider} from '@mui/material';
+import Loading from '../loading';
 
 interface QuestionnaireRendererPageProps {
   questionnaire: Questionnaire;
@@ -33,6 +47,7 @@ const LoadingOverlay = () => (
 function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const { inputTask, questionnaire } = props;
   const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
+    const responseIsValid = useQuestionnaireResponseStore.use.responseIsValid();
 
   const { patient, practitioner } = useEnrollmentStore()
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -45,6 +60,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
   const cpsClient = useCpsClient()
   const { onSubTaskSubmit } = useTaskProgressStore()
+    const router = useRouter()
 
   useEffect(() => {
     if (shouldScroll) {
@@ -158,7 +174,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       body: bundle
     });
 
-    onSubTaskSubmit(() => setStep(activeStep + 1))
+      onSubTaskSubmit(router.push(`/enrollment/success`))
   }
 
   useEffect(() => {
@@ -185,22 +201,53 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
   }, [initialized, patient, practitioner, questionnaire, prePopulated])
 
-  if (!questionnaire) {
-    return <div>Loading...</div>
+    const queryClient = useRendererQueryClient();
+
+    // This hook builds the form based on the questionnaire
+    const isBuilding = useBuildForm(questionnaire);
+
+    const theme = createTheme({
+        palette: {
+            primary: {
+                main: '#1c6268',
+            },
+        },
+        components: {
+            MuiGrid: {
+                styleOverrides: {
+                    root: {
+                        '& .MuiGrid-item': {
+                            marginBottom: '5px',
+                        }
+
+                    },
+                },
+            }
+        }
+    });
+
+    if (!questionnaire || isBuilding) {
+        return <Loading/>
   }
 
   return (
     <div className="margin-y">
-      {isSubmitting && <LoadingOverlay />}
+        <ThemeProvider theme={theme}>
+            <QueryClientProvider client={queryClient}>
+                <BaseRenderer/>
+            </QueryClientProvider>
 
-      <SmartFormsRenderer
-        terminologyServerUrl={`${window.location.origin}${process.env.NEXT_PUBLIC_BASE_PATH ?? "/" + process.env.NEXT_PUBLIC_BASE_PATH}/api/terminology`}
-        questionnaire={questionnaire}
-        questionnaireResponse={prevQuestionnaireResponse}
-      />
-      <Button size="sm" disabled={isSubmitting} onClick={submitQuestionnaireResponse} className="float-right">
-        {isSubmitting && <Spinner className='mr-1 text-white' />}Next
-      </Button>
+            <div className='flex gap-3 mt-5'>
+                <Button variant='text' onClick={router.back}>
+                    Terug
+                </Button>
+                <Button variant='contained' disabled={isSubmitting || !responseIsValid}
+                        onClick={submitQuestionnaireResponse}>
+                    {isSubmitting && <Spinner className='h-6 mr-2 text-inherit'/>}
+                    Verzoek versturen
+                </Button>
+            </div>
+        </ThemeProvider>
     </div>
   );
 }

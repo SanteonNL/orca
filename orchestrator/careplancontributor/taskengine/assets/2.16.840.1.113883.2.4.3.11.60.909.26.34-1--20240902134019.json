@@ -24,7 +24,6 @@
       "linkId": "1",
       "text": "Asthma Details",
       "type": "group",
-      "required": true,
       "item": [
         {
           "linkId": "1.1",
