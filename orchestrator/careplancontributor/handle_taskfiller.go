@@ -4,9 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
-	"slices"
+	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
