@@ -88,7 +88,18 @@ services:
       care-professionals-dev:
         aliases:
           - "azurite"
-
+  init-azurite:
+    container_name: "init-azurite"
+    image: mcr.microsoft.com/azure-cli:latest
+    command: >
+      bash -c "az storage container create --name leases --connection-string \"DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;\" && sleep 999999999"
+    networks:
+      care-professionals-dev:
+        aliases:
+          - "init-azurite"
+    depends_on:
+      azurite:
+        condition: service_started
 networks:
   eh-emulator:
   care-professionals-dev:
