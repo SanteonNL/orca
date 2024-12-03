@@ -150,18 +150,18 @@ func Test_Main(t *testing.T) {
 
 				var subTask fhir.Task
 				// Assert subtask with Questionnaire
-				var questionnaire fhir.Questionnaire
+				var questionnaireRef string
 				{
 					require.NoError(t, json.Unmarshal(searchResult.Entry[0].Resource, &subTask))
 					require.Len(t, subTask.Input, 1, "Expected 1 input")
 					require.NotNil(t, subTask.Input[0].ValueReference, "Expected input valueReference")
 					require.NotNil(t, subTask.Input[0].ValueReference.Reference, "Expected input valueReference reference")
-					questionnaireRef := *subTask.Input[0].ValueReference.Reference
+					questionnaireRef = *subTask.Input[0].ValueReference.Reference
 					require.True(t, strings.HasPrefix(questionnaireRef, "Questionnaire/"), "Expected input valueReference reference to start with 'Questionnaire/'")
-					err = hospitalOrcaFHIRClient.Read(questionnaireRef, &questionnaire)
+					err = hospitalOrcaFHIRClient.Read(questionnaireRef, &questionnaireRef)
 					require.NoError(t, err)
 				}
-				questionnaireResponse := questionnaireResponseTo(questionnaire)
+				questionnaireResponse := questionnaireResponseTo(questionnaireRef)
 				subTask.Status = fhir.TaskStatusCompleted
 				subTask.Output = append(subTask.Output, fhir.TaskOutput{
 					Type: fhir.CodeableConcept{

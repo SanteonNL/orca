@@ -5,15 +5,15 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func questionnaireResponseTo(questionnaire fhir.Questionnaire) fhir.QuestionnaireResponse {
+func questionnaireResponseTo(questionnaireUrl string) fhir.QuestionnaireResponse {
 	// TODO: This Response doesn't really fulfill the Questionnaire
-	return questionnaireResponseTelemonitoring1InclusionCriteria(questionnaire)
+	return questionnaireResponseTelemonitoring1InclusionCriteria(questionnaireUrl)
 
 }
 
-func questionnaireResponseTelemonitoring1InclusionCriteria(questionnaire fhir.Questionnaire) fhir.QuestionnaireResponse {
+func questionnaireResponseTelemonitoring1InclusionCriteria(questionnaireUrl string) fhir.QuestionnaireResponse {
 	return fhir.QuestionnaireResponse{
-		Questionnaire: questionnaire.Url,
+		Questionnaire: to.Ptr(questionnaireUrl),
 		Status:        fhir.QuestionnaireResponseStatusCompleted,
 		Item: []fhir.QuestionnaireResponseItem{
 			{
