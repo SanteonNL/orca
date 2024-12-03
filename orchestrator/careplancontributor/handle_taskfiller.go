@@ -229,11 +229,13 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 							ReasonDetail: err,
 						}
 					}
-					nextStep, err = workflow.Proceed(*fetchedQuestionnaire.Url)
-					if err != nil {
-						log.Error().Ctx(ctx).Err(err).Msgf("Unable to determine next questionnaire (previous URL=%s)", *fetchedQuestionnaire.Url)
-					} else {
-						break
+					if fetchedQuestionnaire.Url != nil {
+						nextStep, err = workflow.Proceed(*fetchedQuestionnaire.Url)
+						if err != nil {
+							log.Error().Ctx(ctx).Err(err).Msgf("Unable to determine next questionnaire (previous URL=%s)", *fetchedQuestionnaire.Url)
+						} else {
+							break
+						}
 					}
 				}
 			}
