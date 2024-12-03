@@ -3,9 +3,10 @@ package taskengine
 import (
 	"context"
 	"errors"
+	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/url"
+	"strings"
 )
 
 var ErrWorkflowNotFound = errors.New("workflow not found")
@@ -36,17 +37,22 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 	if err := f.searchHealthcareService(ctx, serviceCode, conditionCode); err != nil {
 		return nil, err
 	}
-	questionnaireUrl := f.Client.Path("Questionnaire")
-	questionnaireUrl.RawQuery = url.Values{
-		"context": []string{
-			"focus$" + *serviceCode.System + "|" + *serviceCode.Code,
-			"focus$" + *conditionCode.System + "|" + *conditionCode.Code,
-		},
-	}.Encode()
+
+	var questionnaireBundle fhir.Bundle
+	if err := f.Client.Read("Questionnaire", &questionnaireBundle,
+		fhirclient.QueryParam("context-type-value", *serviceCode.System+"|"+*serviceCode.Code),
+		fhirclient.QueryParam("context-type-value", *conditionCode.System+"|"+*conditionCode.Code),
+	); err != nil {
+		return nil, err
+	}
+	// TODO: Might want to support multiple questionnaires in future
+	if len(questionnaireBundle.Entry) != 1 {
+		return nil, errors.Join(ErrWorkflowNotFound, fmt.Errorf("expected 1 questionnaire, got %d", len(questionnaireBundle.Entry)))
+	}
 	return &Workflow{
 		Steps: []WorkflowStep{
 			{
-				QuestionnaireUrl: questionnaireUrl.String(),
+				QuestionnaireUrl: *questionnaireBundle.Entry[0].FullUrl,
 			},
 		},
 	}, nil
@@ -84,9 +90,9 @@ func (w Workflow) Start() WorkflowStep {
 	return w.Steps[0]
 }
 
-func (w Workflow) Proceed(previousQuestionnaireUrl string) (*WorkflowStep, error) {
+func (w Workflow) Proceed(previousQuestionnaireRef string) (*WorkflowStep, error) {
 	for i, step := range w.Steps {
-		if step.QuestionnaireUrl == previousQuestionnaireUrl {
+		if strings.HasSuffix(step.QuestionnaireUrl, previousQuestionnaireRef) {
 			if i+1 < len(w.Steps) {
 				return &w.Steps[i+1], nil
 			} else {

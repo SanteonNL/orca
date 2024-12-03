@@ -10,6 +10,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"strings"
 	"testing"
 )
 
@@ -40,7 +41,7 @@ func DefaultTestWorkflowProvider() TestWorkflowProvider {
 			"http://snomed.info/sct|13645005": {
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: "questionnaire-copd",
+						QuestionnaireUrl: "http://example.com/fhir/Questionnaire/questionnaire-copd",
 					},
 				},
 			},
@@ -48,7 +49,7 @@ func DefaultTestWorkflowProvider() TestWorkflowProvider {
 			"http://snomed.info/sct|84114007": {
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: "zbj-questionnaire-telemonitoring-heartfailure-enrollment",
+						QuestionnaireUrl: "http://example.com/fhir/Questionnaire/zbj-questionnaire-telemonitoring-heartfailure-enrollment",
 					},
 				},
 			},
@@ -56,7 +57,7 @@ func DefaultTestWorkflowProvider() TestWorkflowProvider {
 			"http://snomed.info/sct|195967001": {
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: "questionnaire-asthma",
+						QuestionnaireUrl: "http://example.com/fhir/Questionnaire/questionnaire-asthma",
 					},
 				},
 			},
@@ -93,7 +94,7 @@ var _ QuestionnaireLoader = TestQuestionnaireLoader{}
 type TestQuestionnaireLoader struct {
 }
 
-func (t TestQuestionnaireLoader) Load(ctx context.Context, url string) (*fhir.Questionnaire, error) {
+func (t TestQuestionnaireLoader) Load(ctx context.Context, u string) (*fhir.Questionnaire, error) {
 	var normativeQuestionnaireBundle fhir.Bundle
 	data, err := testdata.FS.ReadFile("questionnaire-bundle.json")
 	if err != nil {
@@ -113,8 +114,9 @@ func (t TestQuestionnaireLoader) Load(ctx context.Context, url string) (*fhir.Qu
 	}
 	questionnaireBundle.Entry = append(questionnaireBundle.Entry, normativeQuestionnaireBundle.Entry...)
 
+	id := u[strings.LastIndex(u, "/")+1:] // Take ID of the FHIR resource from the URL
 	var result fhir.Questionnaire
-	if err := coolfhir.ResourceInBundle(&questionnaireBundle, coolfhir.EntryHasID(url), &result); err != nil {
+	if err := coolfhir.ResourceInBundle(&questionnaireBundle, coolfhir.EntryHasID(id), &result); err != nil {
 		return nil, err
 	}
 	return &result, nil
