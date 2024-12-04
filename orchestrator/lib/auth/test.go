@@ -60,6 +60,40 @@ var TestPrincipal3 = &Principal{
 	},
 }
 
+var SCPTestHospitalXPrincipal = &Principal{
+	Organization: fhir.Organization{
+		Name: to.Ptr("Hospital X"),
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr(coolfhir.URANamingSystem),
+				Value:  to.Ptr("URA-1"),
+			},
+		},
+		Address: []fhir.Address{
+			{
+				City: to.Ptr("Nieuwegein"),
+			},
+		},
+	},
+}
+
+var SCPTestMSCPrincipal = &Principal{
+	Organization: fhir.Organization{
+		Name: to.Ptr("Medical Service Centre"),
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr(coolfhir.URANamingSystem),
+				Value:  to.Ptr("URA-2"),
+			},
+		},
+		Address: []fhir.Address{
+			{
+				City: to.Ptr("Utrecht"),
+			},
+		},
+	},
+}
+
 // AuthenticatedTestRoundTripper returns a RoundTripper that adds a X-Userinfo header to the request
 // with static user information. This is useful for testing purposes.
 func AuthenticatedTestRoundTripper(underlying http.RoundTripper, principal *Principal, xSCPContext string) http.RoundTripper {

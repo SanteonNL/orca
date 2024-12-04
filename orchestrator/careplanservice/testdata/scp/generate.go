@@ -9,10 +9,17 @@ import (
 	"strconv"
 )
 
+// This can be modified to download files from a branch, if you want the files from prod this can be set to an empty string
+const branchName = "/branches/update-examples-and-capabilitystatement"
+
 func main() {
 	files := []string{
-		"https://santeonnl.github.io/shared-care-planning/Bundle-cps-bundle-01.json",
-		"https://santeonnl.github.io/shared-care-planning/Bundle-cps-bundle-02.json",
+		"https://build.fhir.org/ig/SanteonNL/shared-care-planning" + branchName + "/Task-cps-task-01.json",
+		"https://build.fhir.org/ig/SanteonNL/shared-care-planning" + branchName + "/Bundle-hospitalx-bundle-01.json",
+		"https://build.fhir.org/ig/SanteonNL/shared-care-planning" + branchName + "/Task-cps-task-02.json",
+		"https://build.fhir.org/ig/SanteonNL/shared-care-planning" + branchName + "/QuestionnaireResponse-cps-qr-telemonitoring-enrollment-criteria.json",
+		// TODO: Don't think this is needed
+		//"https://build.fhir.org/ig/SanteonNL/shared-care-planning" + branchName + "/Subscription-cps-sub-medicalservicecentre.json",
 	}
 	for _, fileURL := range files {
 		httpResponse, err := http.Get(fileURL)

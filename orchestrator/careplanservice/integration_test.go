@@ -29,39 +29,126 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
 	t.Log("This test requires creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
 	notificationEndpoint := setupNotificationEndpoint(t)
-	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
 
 	t.Run("non-normative integration tests", func(t *testing.T) {
+		carePlanServiceURL, httpService := setupIntegrationTest(t, notificationEndpoint, auth.TestPrincipal1)
+		transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
+		transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")
+		transport3 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, "")
+
+		carePlanContributor1 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport1}, nil)
+		carePlanContributor2 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport2}, nil)
+		invalidCarePlanContributor := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport3}, nil)
+
 		runNonNormativeIntegrationTests(t, carePlanContributor1, carePlanContributor2, invalidCarePlanContributor)
 	})
 	t.Run("normative integration tests", func(t *testing.T) {
+		carePlanServiceURL, httpService := setupIntegrationTest(t, notificationEndpoint, auth.SCPTestHospitalXPrincipal)
+		hospitalTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.SCPTestHospitalXPrincipal, "")
+		mscTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.SCPTestMSCPrincipal, "")
+
+		hospitalClient := fhirclient.New(carePlanServiceURL, &http.Client{Transport: hospitalTransport}, nil)
+		mscClient := fhirclient.New(carePlanServiceURL, &http.Client{Transport: mscTransport}, nil)
+
 		// Flow:
 		//  1. Task Placer creates new Task: 			Bundle-cps-bundle-01.json
 		//  2. Task Filler asks for more information:	Bundle-cps-bundle-02.json
+
+		var existingResourcesBundle fhir.Bundle
+		var serviceRequest fhir.ServiceRequest
+		var patient fhir.Patient
+		var organisations []fhir.Organization
+		var practitioner fhir.Practitioner
+		var practitionerRole fhir.PractitionerRole
+		var conditions []fhir.Condition
+		var healthcareService fhir.HealthcareService
+		t.Log("Create 'existing' resources on Task Placer")
+		{
+			// Create existing resources using bundle
+			requestData, err := os.ReadFile("testdata/scp/Bundle-hospitalx-bundle-01.json")
+			require.NoError(t, err)
+
+			err = hospitalClient.Create(requestData, &existingResourcesBundle, fhirclient.AtPath("/"))
+			require.NoError(t, err)
+
+			require.NoError(t, coolfhir.ResourceInBundle(&existingResourcesBundle, coolfhir.EntryIsOfType("Patient"), &patient))
+			require.NoError(t, coolfhir.ResourceInBundle(&existingResourcesBundle, coolfhir.EntryIsOfType("ServiceRequest"), &serviceRequest))
+			require.NoError(t, coolfhir.ResourcesInBundle(&existingResourcesBundle, coolfhir.EntryIsOfType("Organization"), &organisations))
+			require.NoError(t, coolfhir.ResourceInBundle(&existingResourcesBundle, coolfhir.EntryIsOfType("Practitioner"), &practitioner))
+			require.NoError(t, coolfhir.ResourceInBundle(&existingResourcesBundle, coolfhir.EntryIsOfType("PractitionerRole"), &practitionerRole))
+			require.NoError(t, coolfhir.ResourcesInBundle(&existingResourcesBundle, coolfhir.EntryIsOfType("Condition"), &conditions))
+			require.NoError(t, coolfhir.ResourceInBundle(&existingResourcesBundle, coolfhir.EntryIsOfType("HealthcareService"), &healthcareService))
+
+			require.Equal(t, len(organisations), 2)
+			require.Equal(t, len(conditions), 2)
+		}
+
 		var primaryTask fhir.Task
-		t.Log("Task Placer creates new Task: Bundle-cps-bundle-01.json")
+		var carePlan fhir.CarePlan
+		var careTeams []fhir.CareTeam
+		t.Log("1.03.1 Task creation - Initiation of a task for telemonitoring : Task-cps-task-01.json")
 		{
-			requestData, err := os.ReadFile("testdata/scp/Bundle-cps-bundle-01.json")
+			requestData, err := os.ReadFile("testdata/scp/Task-cps-task-01.json")
 			require.NoError(t, err)
-			// TODO: this shouldn't be necessary, see INT-458
-			requestData = bytes.ReplaceAll(requestData, []byte("{{cps-base-url}}"), []byte("http://example.com/fhir"))
+			requestData = bytes.ReplaceAll(requestData, []byte("urn:uuid:hospitalx-patient-patrick"), []byte("Patient/"+*patient.Id))
+			requestData = bytes.ReplaceAll(requestData, []byte("urn:uuid:cps-servicerequest-telemonitoring"), []byte("ServiceRequest/"+*serviceRequest.Id))
 
-			var bundle fhir.Bundle
-			err = carePlanContributor1.Create(requestData, &bundle, fhirclient.AtPath("/"))
+			err = hospitalClient.Create(requestData, &primaryTask)
 			require.NoError(t, err)
 
-			require.NoError(t, coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("Task"), &primaryTask))
+			// Validate that a CarePlan and CareTeam have been created, with the patient as the subject
+			require.NotNil(t, primaryTask.BasedOn)
+			err = hospitalClient.Read(*primaryTask.BasedOn[0].Reference, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams))
+			require.NoError(t, err)
+			require.NotNil(t, carePlan.Id)
+			require.Equal(t, "Patient/"+*patient.Id, *carePlan.Subject.Reference)
+			require.Len(t, careTeams, 1)
 		}
-		t.Log("Task Filler asks for more information: Bundle-cps-bundle-02.json")
+
+		// TODO: validate if necessary, it shouldn't be since notifications/subscriptions are handled automatically
+		//t.Log("1.03.2 Bundle - Bundle to initiate telemonitoring : Subscription-cps-sub-medicalservicecentre.json")
+		//{
+		//	requestData, err := os.ReadFile("testdata/scp/Subscription-cps-sub-medicalservicecentre.json")
+		//	require.NoError(t, err)
+		//
+		//	var res fhir.Subscription
+		//	err = carePlanContributor1.Create(requestData, &res)
+		//	require.NoError(t, err)
+		//}
+
+		var questionnaireResponse fhir.QuestionnaireResponse
+		t.Log("1.26.1 QuestionnaireResponse for telemonitoring enrollment criteria - Extra information for telemonitoring : QuestionnaireResponse-cps-qr-telemonitoring-enrollment-criteria.json")
 		{
-			requestData, err := os.ReadFile("testdata/scp/Bundle-cps-bundle-02.json")
+			requestData, err := os.ReadFile("testdata/scp/QuestionnaireResponse-cps-qr-telemonitoring-enrollment-criteria.json")
 			require.NoError(t, err)
-			requestData = bytes.ReplaceAll(requestData, []byte("cps-careplan-01"), []byte(*primaryTask.Id))
 
-			var bundle fhir.Bundle
-			err = carePlanContributor2.Create(requestData, &bundle, fhirclient.AtPath("/"))
+			requestData = bytes.ReplaceAll(requestData, []byte("{{patient1id}}"), []byte(*patient.Id))
+
+			err = mscClient.Create(requestData, &questionnaireResponse)
 			require.NoError(t, err)
 		}
+
+		// Create subtask after QuestionnaireResponse, as the subtask requires the QuestionnaireResponse
+		var task2 fhir.Task
+		t.Log("1.22.1 (sub-)Task 2 creation - Ask for extra information for telemonitoring : Task-cps-task-02.json")
+		{
+			requestData, err := os.ReadFile("testdata/scp/Task-cps-task-02.json")
+			require.NoError(t, err)
+
+			requestData = bytes.ReplaceAll(requestData, []byte("{{patient1id}}"), []byte(*patient.Id))
+			requestData = bytes.ReplaceAll(requestData, []byte("{{task1id}}"), []byte(*primaryTask.Id))
+			requestData = bytes.ReplaceAll(requestData, []byte("{{careplan1id}}"), []byte(*carePlan.Id))
+			requestData = bytes.ReplaceAll(requestData, []byte("urn:uuid:msc-questionnaire-telemonitoring-enrollment-criteria"), []byte("QuestionnaireResponse/"+*questionnaireResponse.Id))
+
+			err = mscClient.Create(requestData, &task2)
+			require.NoError(t, err)
+
+			// Validate that the Task has been created
+			require.NotNil(t, task2.Id)
+			require.Equal(t, "Task/"+*primaryTask.Id, *task2.PartOf[0].Reference)
+			require.Equal(t, task2.Owner.Identifier, primaryTask.Requester.Identifier)
+		}
+
 	})
 }
 
@@ -648,10 +735,10 @@ func testBundle(t *testing.T, fhirClient *fhirclient.BaseClient, data []byte) {
 	println(string(responseData))
 }
 
-func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {
+func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL, activeProfilePrincipal *auth.Principal) (*url.URL, *httptest.Server) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
-		Principal:        auth.TestPrincipal1,
+		Principal:        activeProfilePrincipal,
 		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
 	}
 	config := DefaultConfig()
@@ -667,14 +754,16 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhircli
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
 
-	transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
-	transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")
-	transport3 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, "")
+	//transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
+	//transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")
+	//transport3 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, "")
 
-	carePlanContributor1 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport1}, nil)
-	carePlanContributor2 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport2}, nil)
-	carePlanContributor3 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport3}, nil)
-	return carePlanContributor1, carePlanContributor2, carePlanContributor3
+	return carePlanServiceURL, httpService
+
+	//carePlanContributor1 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport1}, nil)
+	//carePlanContributor2 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport2}, nil)
+	//carePlanContributor3 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport3}, nil)
+	//return carePlanContributor1, carePlanContributor2, carePlanContributor3
 }
 
 func assertCareTeam(t *testing.T, fhirClient fhirclient.Client, careTeamRef string, expectedMembers ...fhir.CareTeamParticipant) {
