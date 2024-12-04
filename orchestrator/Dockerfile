@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM golang:1.23.2-alpine AS build
+FROM golang:1.23.3-alpine AS build
 
 LABEL maintainer="info@reinkrul.nl"
 
@@ -13,10 +13,14 @@ RUN go mod download && go mod verify
 COPY . .
 
 RUN mkdir /app
-RUN go build -o /app/bin .
+# RUN go build -o /app/bin .
+## Needed for github.com/confluentinc/confluent-kafka-go/v2
+ENV CGO_ENABLED=1
+RUN apk add musl-dev librdkafka-dev gcc
+RUN go build -ldflags="-extldflags=-static" -tags musl -o /app/bin .
 
 # ## Deploy
-FROM gcr.io/distroless/base-debian11:debug  
+FROM gcr.io/distroless/base-debian11:debug
 # Connect to shell via /busybox/sh
 
 COPY --from=build /app/bin /app/bin

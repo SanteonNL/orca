@@ -136,7 +136,8 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	log.Info().Msgf("Successfully accepted task (ref=%s)", ref)
 	err = ehr.NotifyTaskAccepted(cpsClient, s.kafkaClient, primaryTask)
 	if err != nil {
-		return err
+		log.Warn().Ctx(ctx).Msgf("Accepted Task with an error in the notification (ref=%s): %w", ref, err)
+		return nil
 	}
 	log.Info().Ctx(ctx).Msgf("Successfully accepted Task (ref=%s)", ref)
 	return nil

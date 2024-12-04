@@ -47,6 +47,10 @@ func New(
 		return nil, err
 	}
 	httpClient := profile.HttpClient()
+	kafkaClient, err := ehr.NewClient(config.KafkaConfig)
+	if err != nil {
+		return nil, err
+	}
 	result := &Service{
 		config:                  config,
 		orcaPublicURL:           orcaPublicURL,
@@ -58,7 +62,7 @@ func New(
 		fhirURL:                 fhirURL,
 		transport:               localFHIRStoreTransport,
 		workflows:               taskengine.DefaultWorkflows(),
-		kafkaClient:             ehr.NewClient(config.KafkaConfig),
+		kafkaClient:             kafkaClient,
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},

@@ -48,7 +48,9 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENABLED=true
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ADDRESSES="Endpoint=sb://localhost;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;"
+      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_TOPIC=orca-patient-enrollment-events
+      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENDPOINT=eventhubs-emulator:9092
+      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_CONNECTIONSTRING=Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
   viewer:
 #    image: ghcr.io/santeonnl/orca_viewersimulator:main
     build:
@@ -64,17 +66,13 @@ services:
       - "./config/eventhubs-emulator.json:/Eventhubs_Emulator/ConfigFiles/Config.json"
     ports:
       - "5672:5672"
+      - "9092:9092"
     environment:
       BLOB_SERVER: azurite
       METADATA_SERVER: azurite
       ACCEPT_EULA: "Y"
     depends_on:
       - azurite
-    networks:
-      care-professionals-dev:
-        aliases:
-          - "eventhubs-emulator"
-          - "eventhubs-emulator.servicebus.windows.net"
   azurite:
     container_name: "azurite"
     image: "mcr.microsoft.com/azure-storage/azurite:latest"
@@ -84,26 +82,13 @@ services:
       - "10000:10000"
       - "10001:10001"
       - "10002:10002"
-    networks:
-      care-professionals-dev:
-        aliases:
-          - "azurite"
   init-azurite:
     container_name: "init-azurite"
     image: mcr.microsoft.com/azure-cli:latest
     command: >
       bash -c "az storage container create --name leases --connection-string \"DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;\" && sleep 999999999"
-    networks:
-      care-professionals-dev:
-        aliases:
-          - "init-azurite"
     depends_on:
       azurite:
         condition: service_started
-networks:
-  eh-emulator:
-  care-professionals-dev:
-    driver: bridge
-
 volumes:
   azurite:
