@@ -3,6 +3,9 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
@@ -10,10 +13,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"net/http"
-	"net/http/httputil"
-	"time"
 )
 
 func Start(config Config) error {
@@ -40,7 +41,7 @@ func Start(config Config) error {
 	}
 	if config.CarePlanContributor.Enabled {
 		// App Launches
-		var bgzFhirProxy *httputil.ReverseProxy
+		var bgzFhirProxy coolfhir.HttpProxy
 		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, careplancontributor.LandingURL))
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
 			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Public.URL, careplancontributor.LandingURL))

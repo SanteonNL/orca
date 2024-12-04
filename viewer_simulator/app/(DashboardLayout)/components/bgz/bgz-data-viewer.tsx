@@ -14,6 +14,7 @@ import { Box, IconButton } from '@mui/material';
 import { getBgzData } from './actions';
 import BgzRecordsViewer from '../shared/fhir/BgzRecordsViewer';
 import useBgzStore from '@/store/bgz-store';
+import Loading from '@/app/loading';
 
 
 const Transition = React.forwardRef(function Transition(
@@ -27,26 +28,21 @@ const Transition = React.forwardRef(function Transition(
 
 export default function BgzDataViewer({ carePlan, careTeam }: { carePlan: CarePlan, careTeam: CareTeam }) {
     const [open, setOpen] = React.useState(false);
-    const { clearBgzData, setBgzData } = useBgzStore()
-
-    useEffect(() => {
-        const fetchData = async () => {
-            clearBgzData()
-            const bgzData = await getBgzData(carePlan, careTeam)
-
-            const pat = bgzData?.entry?.find((entry) => entry.resource?.resourceType === 'Patient')
-            if (pat?.resource) {
-                setBgzData({ patient: pat.resource as Patient })
-            }
-
-        }
-
-        fetchData()
-    }, [carePlan, careTeam, clearBgzData, setBgzData])
+    const { clearBgzData, setBgzData, loaded, setLoaded } = useBgzStore()
 
     const handleClickOpen = async () => {
-
         setOpen(true);
+
+        clearBgzData()
+        const bgzData = await getBgzData(carePlan, careTeam)
+
+        const pat = bgzData?.entry?.find((entry) => entry.resource?.resourceType === 'Patient')
+        console.log(`Received Patient: ${JSON.stringify(pat)}`)
+        if (pat?.resource) {
+            setBgzData({ patient: pat.resource as Patient })
+        }
+        setLoaded(true)
+
 
     };
 
@@ -57,7 +53,7 @@ export default function BgzDataViewer({ carePlan, careTeam }: { carePlan: CarePl
     if (!carePlan) return <></>
 
     return (
-        <React.Fragment>
+        <>
             <IconButton
                 edge="start"
                 color="inherit"
@@ -88,9 +84,9 @@ export default function BgzDataViewer({ carePlan, careTeam }: { carePlan: CarePl
                     </Toolbar>
                 </AppBar>
                 <Box sx={{ mt: '80px' }}>
-                    <BgzRecordsViewer />
+                    {loaded ? <BgzRecordsViewer /> : <Loading />}
                 </Box>
             </Dialog>
-        </React.Fragment>
+        </>
     );
 }

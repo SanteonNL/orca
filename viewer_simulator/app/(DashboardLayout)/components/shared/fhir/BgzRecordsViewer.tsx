@@ -18,7 +18,7 @@ export default function BgzRecordsViewer() {
     return (
         <Grid spacing={3}>
             <Grid item xs={12}>
-                <PatientView patient={patient} />
+                {patient && <PatientView patient={patient} />}
             </Grid>
             {allergyIntolerances.map((allergyIntolerance) => (
                 <Grid item xs={12} md={6} key={allergyIntolerance.id}>

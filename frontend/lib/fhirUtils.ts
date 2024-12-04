@@ -102,8 +102,12 @@ const cleanPatient = (patient: Patient) => {
             }
         }
     }
-    if (cleanedPatient.generalPractitioner?.[0]?.reference) {
-        delete cleanedPatient.generalPractitioner[0].reference;
+    if (cleanedPatient.generalPractitioner) {
+        for (const practitioner of cleanedPatient.generalPractitioner) {
+            if (practitioner.reference) {
+                delete practitioner.reference;
+            }
+        }
     }
 
     return cleanedPatient;

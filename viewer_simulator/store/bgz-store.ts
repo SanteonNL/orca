@@ -11,7 +11,9 @@ interface BgzState {
     coverages: Coverage[]
     consents: Consent[];
     observations: Observation[];
+    loaded: boolean;
     setBgzData: (data: Partial<BgzState>) => void;
+    setLoaded: (loaded: boolean) => void;
     clearBgzData: () => void;
 }
 
@@ -25,7 +27,9 @@ const useBgzStore = create<BgzState>((set) => ({
     coverages: [],
     consents: [],
     observations: [],
+    loaded: false,
     setBgzData: (data) => set((state) => ({ ...state, ...data })),
+    setLoaded: (loaded) => set({ loaded }),
     clearBgzData: () => set({
         patient: undefined,
         allergyIntolerances: [],
@@ -36,6 +40,7 @@ const useBgzStore = create<BgzState>((set) => ({
         coverages: [],
         consents: [],
         observations: [],
+        loaded: false,
     }),
 }));
 

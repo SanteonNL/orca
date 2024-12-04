@@ -2,6 +2,7 @@ import React from 'react';
 import { Bundle, BundleEntry, CarePlan, Task } from 'fhir/r4';
 import CarePlanTable from './bgz-careplan-table';
 import { getBsn } from '@/utils/fhirUtils';
+import { headers } from 'next/headers'
 
 export default async function BgzOverview() {
 
@@ -9,6 +10,9 @@ export default async function BgzOverview() {
         console.error('FHIR_BASE_URL is not defined');
         return <>FHIR_BASE_URL is not defined</>;
     }
+
+    // prevent ssr from pre-rendering the page, as it won't be able to fetch resources from process.env.FHIR_BASE_URL
+    const headersList = headers()
 
     let rows: any[] = [];
 
