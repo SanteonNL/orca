@@ -9,7 +9,7 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-    image: nutsfoundation/nuts-node:6.0.0
+    image: nutsfoundation/nuts-node:master
     ports:
       - "8081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
@@ -43,7 +43,7 @@ services:
       - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
       - ORCA_PUBLIC_URL=${NUTS_URL}/orca
       # Note: clinic re-uses the FHIR store of the Hospital, so we don't need to start a second one making things even slower
-      - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}/fhir
+      - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=${HOSPITAL_URL}/fhir
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
