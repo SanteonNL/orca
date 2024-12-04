@@ -47,9 +47,9 @@ services:
       - "3003:3000"
   orchestrator:
     image: ghcr.io/santeonnl/orca_orchestrator:main
-    # build:
-    #  context: ../../../orchestrator
-    #  dockerfile: Dockerfile
+    build:
+      context: ../../../orchestrator
+      dockerfile: Dockerfile
     ports:
       - "8090:8080"
     volumes:
