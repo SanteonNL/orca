@@ -158,8 +158,7 @@ func Test_Main(t *testing.T) {
 					require.NotNil(t, subTask.Input[0].ValueReference.Reference, "Expected input valueReference reference")
 					questionnaireRef = *subTask.Input[0].ValueReference.Reference
 					require.True(t, strings.HasPrefix(questionnaireRef, "Questionnaire/"), "Expected input valueReference reference to start with 'Questionnaire/'")
-					err = hospitalOrcaFHIRClient.Read(questionnaireRef, &questionnaireRef)
-					require.NoError(t, err)
+					require.NoError(t, hospitalOrcaFHIRClient.Read(questionnaireRef, &fhir.Questionnaire{}))
 				}
 				questionnaireResponse := questionnaireResponseTo(questionnaireRef)
 				subTask.Status = fhir.TaskStatusCompleted
