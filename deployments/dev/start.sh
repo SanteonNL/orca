@@ -129,6 +129,7 @@ export CLINIC_URL=$(createTunnel ./clinic 7080)
 echo "  Clinic url is $CLINIC_URL"
 echo "  Starting services"
 pushd clinic
+echo HOSPITAL_URL="${HOSPITAL_URL}" > .env # required for hacking into Hospital's FHIR API, for storing Questionnaires
 echo NUTS_URL="${CLINIC_URL}" > .env
 echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
 docker compose --env-file .env pull

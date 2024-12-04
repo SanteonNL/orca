@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -604,6 +605,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
 	}, orcaPublicURL, sessionManager)
+	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
 	service.cpsClientFactory = func(baseUrl *url.URL) fhirclient.Client {

@@ -40,11 +40,37 @@ func New(
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 
-	fhirClientConfig := coolfhir.Config()
-	localFHIRStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	// Initialize FHIR clients:
+	// - FHIR API holding EHR data
+	// - FHIR API holding Questionnaires and HealthcareServices
+	localFhirStoreTransport, localFhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
 	if err != nil {
 		return nil, err
 	}
+	var questionnaireFhirClient fhirclient.Client
+	if config.TaskFiller.QuestionnaireFHIR.BaseURL == "" {
+		// Questionnaire FHIR API not configured, use FHIR API holding EHR data
+		questionnaireFhirClient = localFhirClient
+	} else {
+		_, questionnaireFhirClient, err = coolfhir.NewAuthRoundTripper(config.TaskFiller.QuestionnaireFHIR, coolfhir.Config())
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Load Questionnaire-related resources for the Task Filler Engine from the configured URLs into the Questionnaire FHIR API
+	go func(ctx context.Context) {
+		if len(config.TaskFiller.QuestionnaireSyncURLs) > 0 {
+			log.Info().Ctx(ctx).Msgf("Synchronizing Task Filler Questionnaires resources from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
+			for _, u := range config.TaskFiller.QuestionnaireSyncURLs {
+				if err := coolfhir.ImportResources(ctx, questionnaireFhirClient, []string{"Questionnaire", "HealthcareService"}, u); err != nil {
+					log.Error().Ctx(ctx).Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
+				} else {
+					log.Debug().Ctx(ctx).Msgf("Synchronized Task Filler Questionnaire resources (url=%s)", u)
+				}
+			}
+		}
+	}(context.Background())
+
 	httpClient := profile.HttpClient()
 	result := &Service{
 		config:                  config,
@@ -55,8 +81,10 @@ func New(
 		profile:                 profile,
 		frontendUrl:             config.FrontendConfig.URL,
 		fhirURL:                 fhirURL,
-		transport:               localFHIRStoreTransport,
-		workflows:               taskengine.DefaultWorkflows(),
+		transport:               localFhirStoreTransport,
+		workflows: taskengine.FhirApiWorkflowProvider{
+			Client: questionnaireFhirClient,
+		},
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},

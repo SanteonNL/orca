@@ -9,7 +9,7 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-    image: nutsfoundation/nuts-node:6.0.0
+    image: nutsfoundation/nuts-node:master
     ports:
       - "8081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
@@ -30,10 +30,10 @@ services:
     ports:
       - "1305:1305"
   orchestrator:
-    image: ghcr.io/santeonnl/orca_orchestrator:main
-    # build:
-    #  context: ../../../orchestrator
-    #  dockerfile: Dockerfile
+    #image: ghcr.io/santeonnl/orca_orchestrator:main
+    build:
+      context: ../../../orchestrator
+      dockerfile: Dockerfile
     ports:
       - "8080"
     environment:
@@ -42,9 +42,17 @@ services:
       - ORCA_NUTS_SUBJECT=clinic
       - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
       - ORCA_PUBLIC_URL=${NUTS_URL}/orca
+      # Note: clinic re-uses the FHIR store of the Hospital, so we don't need to start a second one making things even slower
+      - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=${HOSPITAL_URL}/fhir
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json
+    volumes:
+      # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
+      # used by the Task Filler Engine
+      - "../../../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json:/config/fhir/healthcareservices.json:ro"
+      - "../../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
   viewer:
     image: ghcr.io/santeonnl/orca_viewersimulator:main
     # build:

@@ -13,7 +13,7 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-    image: nutsfoundation/nuts-node:6.0.0
+    image: nutsfoundation/nuts-node:master
     ports:
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
@@ -47,7 +47,7 @@ services:
       - "3003:3000"
   orchestrator:
     image: ghcr.io/santeonnl/orca_orchestrator:main
-    # build:
+    #build:
     #  context: ../../../orchestrator
     #  dockerfile: Dockerfile
     ports:
@@ -69,6 +69,7 @@ services:
       - ORCA_CAREPLANSERVICE_ALLOWUNMANAGEDFHIROPERATIONS=true
       - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
       - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://fhirstore:8080/fhir
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=${HOSPITAL_URL}/frontend/enrollment/new
       - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=true
@@ -96,7 +97,8 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
       - hapi.fhir.allow_external_references=true
-  # The HAPI image has no binaries such as curl, so we use the curl image to perform the health check  
+      - hapi.fhir.server_address=${HOSPITAL_URL}/fhir
+  # The HAPI image has no binaries such as curl, so we use the curl image to perform the health check
   fhirstore-healthcheck:
     image: curlimages/curl:7.87.0
     depends_on:

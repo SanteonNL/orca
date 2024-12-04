@@ -38,6 +38,7 @@ func setupNutsNode(t *testing.T, dockerNetworkName string) (string, string) {
 			"NUTS_POLICY_DIRECTORY":                "/nuts/policy/",
 			"NUTS_DISCOVERY_DEFINITIONS_DIRECTORY": "/nuts/discovery/",
 			"NUTS_DISCOVERY_SERVER_IDS":            "dev:HomeMonitoring2024",
+			"NUTS_DIDMETHODS":                      "web",
 		},
 		Files: []testcontainers.ContainerFile{
 			{
