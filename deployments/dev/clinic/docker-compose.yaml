@@ -30,10 +30,10 @@ services:
     ports:
       - "1305:1305"
   orchestrator:
-    image: ghcr.io/santeonnl/orca_orchestrator:main
-    # build:
-    #  context: ../../../orchestrator
-    #  dockerfile: Dockerfile
+    # image: ghcr.io/santeonnl/orca_orchestrator:main
+    build:
+     context: ../../../orchestrator
+     dockerfile: Dockerfile
     ports:
       - "3030:8080"
     environment:
@@ -43,13 +43,17 @@ services:
       - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
       - ORCA_PUBLIC_URL=${NUTS_URL}/orca
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
+      - ORCA_LOGLEVEL=debug
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
   viewer:
-    image: ghcr.io/santeonnl/orca_viewersimulator:main
-    # build:
-    #   context: ../../../viewer_simulator
-    #   dockerfile: Dockerfile
+    # image: ghcr.io/santeonnl/orca_viewersimulator:main
+    build:
+      context: ../../../viewer_simulator
+      dockerfile: Dockerfile
     environment:
+      ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL: ${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       FHIR_BASE_URL: http://orchestrator:8080/cpc/cps/fhir
+      FHIR_AGGREGATE_URL: http://orchestrator:8080/cpc/aggregate/bgz/fhir
       FHIR_AUTHORIZATION_TOKEN: valid
+      NEXT_ALLOWED_ORIGINS: localhost:7080
