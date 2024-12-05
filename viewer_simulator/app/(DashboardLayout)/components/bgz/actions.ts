@@ -58,7 +58,7 @@ async function fetchBgzData(path: string, resourceType: string, carePlan: CarePl
 
     if (!response.ok) {
         console.error(`Failed to fetch ${path}: ${response.statusText}`);
-        throw new Error(`Failed to fetch ${resourceType}: ${response.statusText}`);
+        // throw new Error(`Failed to fetch ${resourceType}: ${response.statusText}`);
     }
 
     const result = await response.json() as Bundle
