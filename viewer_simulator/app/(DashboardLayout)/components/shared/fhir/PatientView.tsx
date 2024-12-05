@@ -14,12 +14,7 @@ import {
     useTheme,
     styled
 } from '@mui/material';
-
-interface PatientViewProps {
-    patient: Patient;
-    practitioners?: Practitioner[];
-    practitionerRoles?: PractitionerRole[];
-}
+import useBgzStore from '@/store/bgz-store';
 
 const StyledCard = styled(Card)(({ theme }) => ({
     backgroundColor: theme.palette.background.paper,
@@ -92,9 +87,12 @@ const DataItem = ({ label, value }: { label: string; value: string | undefined }
     </ListItem>
 );
 
-export const PatientView: React.FC<PatientViewProps> = ({ patient }) => {
+export const PatientView = () => {
+    const { patient } = useBgzStore();
     const [tabValue, setTabValue] = useState(0);
     const theme = useTheme();
+
+    if (!patient) return <div>Patient niet gevonden</div>;
 
     const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
         setTabValue(newValue);
@@ -113,7 +111,7 @@ export const PatientView: React.FC<PatientViewProps> = ({ patient }) => {
         return `${name.given?.join(' ') || ''} ${name.family || ''}`.trim();
     };
 
-    const getFormattedAddress = (address: fhir4.Address) => {
+    const getFormattedAddress = (address: fhir3.Address) => {
         const parts = [];
         if (address.line) parts.push(...address.line);
         if (address.city) parts.push(address.city);

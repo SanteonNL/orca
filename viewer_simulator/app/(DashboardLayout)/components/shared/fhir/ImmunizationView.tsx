@@ -1,32 +1,40 @@
 import React from 'react';
-import { Immunization } from 'fhir/r4';
-import { Card, CardContent, CardHeader, Typography, List, ListItem, ListItemText } from '@mui/material';
+import { Card, CardContent, Typography, List, ListItem, ListItemText } from '@mui/material';
+import useBgzStore from '@/store/bgz-store';
 
-interface ImmunizationViewProps {
-  immunization: Immunization;
-}
+export const ImmunizationView = () => {
 
-export const ImmunizationView: React.FC<ImmunizationViewProps> = ({ immunization }) => {
+  const { immunizations } = useBgzStore();
+
   return (
-    <Card>
-      <CardHeader title="Immunization" />
-      <CardContent>
-        <List>
-          <ListItem>
-            <ListItemText primary="Vaccine" secondary={immunization.vaccineCode?.text || 'N/A'} />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="Status" secondary={immunization.status || 'N/A'} />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="Date" secondary={immunization.occurrenceDateTime || 'N/A'} />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="Route" secondary={immunization.route?.text || 'N/A'} />
-          </ListItem>
-        </List>
-      </CardContent>
-    </Card>
+    <List>
+      {immunizations.map((immunization, index) => (
+        <Card key={index} style={{ marginBottom: '1rem' }}>
+          <CardContent>
+            <Typography variant="h6" component="h3">
+              {immunization.vaccineCode?.text || `Vaccinatie ${index + 1}`}
+            </Typography>
+            <Typography component="p" variant="body1" color="text.primary">
+              <strong>Status:</strong> {immunization.status === 'completed' ? 'Voltooid' : immunization.status}
+            </Typography>
+            <Typography component="p" variant="body1" color="text.primary">
+              <strong>Datum:</strong> {new Date(immunization?.date || '').toLocaleDateString('nl-NL')}
+            </Typography>
+            <Typography variant="body1" component="p">
+              <strong>Opmerking:</strong> {immunization.note?.[0]?.text || 'Geen opmerkingen'}
+            </Typography>
+            <Typography component="p" variant="body1" color="text.primary">
+              <strong>Niet gegeven:</strong> {immunization.notGiven ? 'Ja' : 'Nee'}
+            </Typography>
+            <Typography component="p" variant="body1" color="text.primary">
+              <strong>Patiënt:</strong> {immunization.patient?.display}
+            </Typography>
+            <Typography component="p" variant="body1" color="text.primary">
+              <strong>Auteur:</strong> {immunization.note?.[0]?.authorReference?.display}
+            </Typography>
+          </CardContent>
+        </Card>
+      ))}
+    </List>
   );
 };
-

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import React from 'react'
 
 import { IconEyeSearch } from '@tabler/icons-react';
 import { CarePlan, CareTeam, Patient } from 'fhir/r4';
@@ -28,22 +28,16 @@ const Transition = React.forwardRef(function Transition(
 
 export default function BgzDataViewer({ carePlan, careTeam }: { carePlan: CarePlan, careTeam: CareTeam }) {
     const [open, setOpen] = React.useState(false);
-    const { clearBgzData, setBgzData, loaded, setLoaded } = useBgzStore()
+    const { addBgzData, clearBgzData, loaded, setLoaded } = useBgzStore()
 
     const handleClickOpen = async () => {
         setOpen(true);
-
         clearBgzData()
         const bgzData = await getBgzData(carePlan, careTeam)
 
-        const pat = bgzData?.entry?.find((entry) => entry.resource?.resourceType === 'Patient')
-        console.log(`Received Patient: ${JSON.stringify(pat)}`)
-        if (pat?.resource) {
-            setBgzData({ patient: pat.resource as Patient })
-        }
+        // console.log('bgzData', JSON.stringify(bgzData, null, 2))
+        addBgzData(bgzData)
         setLoaded(true)
-
-
     };
 
     const handleClose = () => {

@@ -1,65 +1,129 @@
-import { Grid } from '@mui/material'
 import React from 'react'
+import { Box, Tabs, Tab } from '@mui/material'
 import { PatientView } from './PatientView'
-import { AllergyIntoleranceView } from './AllergyIntoleranceView'
-import { ConditionView } from './ConditionView'
-import { MedicationStatementView } from './MedicationStatementView'
+import { AppointmentView } from './AppointmentView'
 import { ImmunizationView } from './ImmunizationView'
-import { ProcedureView } from './ProcedureView'
-import { CoverageView } from './CoverageView'
-import { ConsentView } from './ConsentView'
+import { NutritionOrderView } from './NutritionOrderView'
+import { ImmunizationRecommendationView } from './ImmunizationRecommendationView'
+import { DeviceRequestView } from './DeviceRequestView'
 import { ObservationView } from './ObservationView'
+import { FlagView } from './FlagView'
+import { ProcedureView } from './ProcedureView'
+import { ConditionView } from './ConditionView'
+import { ConsentView } from './ConsentView'
+import { EncounterView } from './EncounterView'
+import { ProcedureRequestView } from './ProcedureRequestView'
+import { DeviceUseStatementView } from './DeviceUseStatementView'
+import { MedicationRequestView } from './MedicationRequestView'
+import { CoverageView } from './CoverageView'
 import useBgzStore from '@/store/bgz-store'
 
-export default function BgzRecordsViewer() {
+interface TabPanelProps {
+    children?: React.ReactNode;
+    index: number;
+    value: number;
+}
 
-    const { patient, allergyIntolerances, conditions, consents, coverages, immunizations, medicationStatements, observations, procedures } = useBgzStore()
+function CustomTabPanel(props: TabPanelProps) {
+    const { children, value, index, ...other } = props;
 
     return (
-        <Grid spacing={3}>
-            <Grid item xs={12}>
-                {patient && <PatientView patient={patient} />}
-            </Grid>
-            {allergyIntolerances.map((allergyIntolerance) => (
-                <Grid item xs={12} md={6} key={allergyIntolerance.id}>
-                    <AllergyIntoleranceView allergyIntolerance={allergyIntolerance} />
-                </Grid>
-            ))}
-            {conditions.map((condition) => (
-                <Grid item xs={12} md={6} key={condition.id}>
-                    <ConditionView condition={condition} />
-                </Grid>
-            ))}
-            {medicationStatements.map((medicationStatement) => (
-                <Grid item xs={12} md={6} key={medicationStatement.id}>
-                    <MedicationStatementView medicationStatement={medicationStatement} />
-                </Grid>
-            ))}
-            {immunizations.map((immunization) => (
-                <Grid item xs={12} md={6} key={immunization.id}>
-                    <ImmunizationView immunization={immunization} />
-                </Grid>
-            ))}
-            {procedures.map((procedure) => (
-                <Grid item xs={12} md={6} key={procedure.id}>
-                    <ProcedureView procedure={procedure} />
-                </Grid>
-            ))}
-            {coverages.map((coverage) => (
-                <Grid item xs={12} md={6} key={coverage.id}>
-                    <CoverageView coverage={coverage} />
-                </Grid>
-            ))}
-            {consents.map((consent) => (
-                <Grid item xs={12} md={6} key={consent.id}>
-                    <ConsentView consent={consent} />
-                </Grid>
-            ))}
-            {observations.map((observation) => (
-                <Grid item xs={12} md={6} key={observation.id}>
-                    <ObservationView observation={observation} />
-                </Grid>
-            ))}
-        </Grid>
-    )
+        <div
+            role="tabpanel"
+            hidden={value !== index}
+            id={`simple-tabpanel-${index}`}
+            aria-labelledby={`simple-tab-${index}`}
+            {...other}
+        >
+            {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+        </div>
+    );
+}
+
+function a11yProps(index: number) {
+    return {
+        id: `simple-tab-${index}`,
+        'aria-controls': `simple-tabpanel-${index}`,
+    };
+}
+
+export default function BgzRecordsViewer() {
+    const [value, setValue] = React.useState(0);
+
+    const handleChange = (event: React.SyntheticEvent, newValue: number) => {
+        setValue(newValue);
+    };
+
+    return (
+        <Box sx={{ width: '100%' }}>
+            <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                <Tabs value={value} onChange={handleChange} variant="scrollable" scrollButtons="auto">
+                    <Tab label="Patient" {...a11yProps(0)} />
+                    <Tab label="Appointments" {...a11yProps(1)} />
+                    <Tab label="Immunizations" {...a11yProps(2)} />
+                    <Tab label="Nutrition Orders" {...a11yProps(3)} />
+                    <Tab label="Immunization Recommendations" {...a11yProps(4)} />
+                    <Tab label="Device Requests" {...a11yProps(5)} />
+                    <Tab label="Observations" {...a11yProps(6)} />
+                    <Tab label="Flags" {...a11yProps(7)} />
+                    <Tab label="Procedures" {...a11yProps(8)} />
+                    <Tab label="Conditions" {...a11yProps(9)} />
+                    <Tab label="Consents" {...a11yProps(10)} />
+                    <Tab label="Encounters" {...a11yProps(11)} />
+                    <Tab label="Procedure Requests" {...a11yProps(12)} />
+                    <Tab label="Device Use Statements" {...a11yProps(13)} />
+                    <Tab label="Medication Requests" {...a11yProps(14)} />
+                    <Tab label="Coverages" {...a11yProps(15)} />
+                </Tabs>
+            </Box>
+            <CustomTabPanel value={value} index={0}>
+                <PatientView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={1}>
+                <AppointmentView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={2}>
+                <ImmunizationView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={3}>
+                <NutritionOrderView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={4}>
+                <ImmunizationRecommendationView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={5}>
+                <DeviceRequestView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={6}>
+                <ObservationView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={7}>
+                <FlagView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={8}>
+                <ProcedureView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={9}>
+                <ConditionView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={10}>
+                <ConsentView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={11}>
+                <EncounterView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={12}>
+                <ProcedureRequestView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={13}>
+                <DeviceUseStatementView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={14}>
+                <MedicationRequestView />
+            </CustomTabPanel>
+            <CustomTabPanel value={value} index={15}>
+                <CoverageView />
+            </CustomTabPanel>
+        </Box>
+    );
 }

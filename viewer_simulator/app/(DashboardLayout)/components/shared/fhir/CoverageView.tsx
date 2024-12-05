@@ -1,32 +1,45 @@
 import React from 'react';
-import { Coverage } from 'fhir/r4';
-import { Card, CardContent, CardHeader, Typography, List, ListItem, ListItemText } from '@mui/material';
+import { Card, CardContent, Typography, List, ListItem, ListItemText } from '@mui/material';
+import useBgzStore from '@/store/bgz-store';
 
-interface CoverageViewProps {
-  coverage: Coverage;
-}
+export const CoverageView = () => {
+  const { coverages } = useBgzStore();
 
-export const CoverageView: React.FC<CoverageViewProps> = ({ coverage }) => {
   return (
     <Card>
-      <CardHeader title="Insurance Information" />
       <CardContent>
+        <Typography variant="h5" component="h2" gutterBottom>
+          Insurance Information
+        </Typography>
         <List>
-          <ListItem>
-            <ListItemText primary="Status" secondary={coverage.status || 'N/A'} />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="Type" secondary={coverage.type?.text || 'N/A'} />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="Beneficiary" secondary={coverage.beneficiary?.display || 'N/A'} />
-          </ListItem>
-          <ListItem>
-            <ListItemText primary="Payor" secondary={coverage.payor?.[0]?.display || 'N/A'} />
-          </ListItem>
+          {coverages.map((coverage, index) => (
+            <ListItem key={index}>
+              <ListItemText
+                primary={`Coverage ${index + 1}`}
+                secondary={
+                  <>
+                    <Typography variant="body1" component="p" color="text.primary">
+                      <strong>Status:</strong> {coverage.status || 'N/A'}
+                    </Typography>
+                    <br />
+                    <Typography variant="body1" component="p" color="text.primary">
+                      <strong>Type:</strong> {coverage.type?.text || 'N/A'}
+                    </Typography>
+                    <br />
+                    <Typography variant="body1" component="p" color="text.primary">
+                      <strong>Beneficiary:</strong> {coverage.beneficiary?.display || 'N/A'}
+                    </Typography>
+                    <br />
+                    <Typography variant="body1" component="p" color="text.primary">
+                      <strong>Payor:</strong> {coverage.payor?.[0]?.display || 'N/A'}
+                    </Typography>
+                  </>
+                }
+              />
+            </ListItem>
+          ))}
         </List>
       </CardContent>
     </Card>
   );
 };
-
