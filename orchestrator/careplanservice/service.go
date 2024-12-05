@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"io"
 	"net/http"
@@ -33,6 +34,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	globals.CarePlanServiceFhirClient = fhirClient
 	if err != nil {
 		return nil, err
 	}

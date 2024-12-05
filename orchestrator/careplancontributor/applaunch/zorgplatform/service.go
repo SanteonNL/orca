@@ -8,6 +8,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"net/http"
 	"net/url"
 	"os"
@@ -126,14 +127,6 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		return nil, fmt.Errorf("unable to load Zorgplatform's public signing certificate: %w", err)
 	}
 
-	//TODO:
-	fhirClientConfig := coolfhir.Config()
-	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.CpsFhirConfig, fhirClientConfig)
-
-	if err != nil {
-		return nil, fmt.Errorf("unable to create FHIR client: %w", err)
-	}
-
 	result := &Service{
 		sessionManager:        sessionManager,
 		config:                config,
@@ -145,8 +138,6 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		decryptCertificate:    decryptCert,
 		zorgplatformCert:      cert,
 		profile:               profile,
-		cpsTransport:          transport,
-		cpsFhirClient:         fhirClient,
 		// performing HTTP requests with Zorgplatform requires mutual TLS
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
@@ -177,7 +168,6 @@ type Service struct {
 	profile                profile.Provider
 	secureTokenService     SecureTokenService
 	cpsTransport           http.RoundTripper
-	cpsFhirClient          fhirclient.Client
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -238,25 +228,25 @@ func (s stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.
 
 	// TODO: group requests
 	var carePlan fhir.CarePlan
-	err := s.zpfService.cpsFhirClient.ReadWithContext(httpRequest.Context(), localCarePlanRef, &carePlan)
+	err := s.zpfService.cpsFhirClient().ReadWithContext(httpRequest.Context(), localCarePlanRef, &carePlan)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch CarePlan resource: %w", err)
 	}
 
 	var task fhir.Task
-	err = s.zpfService.cpsFhirClient.ReadWithContext(httpRequest.Context(), *carePlan.Activity[0].Reference.Reference, &task)
+	err = s.zpfService.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Activity[0].Reference.Reference, &task)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
 	}
 
 	var patient fhir.Patient
-	err = s.zpfService.cpsFhirClient.ReadWithContext(httpRequest.Context(), *carePlan.Subject.Reference, &patient)
+	err = s.zpfService.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Subject.Reference, &patient)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
 	}
 
 	var serviceRequest fhir.ServiceRequest
-	err = s.zpfService.cpsFhirClient.ReadWithContext(httpRequest.Context(), *task.Focus.Reference, &serviceRequest)
+	err = s.zpfService.cpsFhirClient().ReadWithContext(httpRequest.Context(), *task.Focus.Reference, &serviceRequest)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err)
 	}
@@ -567,6 +557,10 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 			"launchContext":            launchContext, // Can be used to fetch a new access token after expiration
 		},
 	}, nil
+}
+
+func (s *Service) cpsFhirClient() fhirclient.Client {
+	return globals.CarePlanServiceFhirClient
 }
 
 func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.CodeableConcept, error) {
