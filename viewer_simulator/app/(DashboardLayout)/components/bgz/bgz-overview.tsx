@@ -22,7 +22,7 @@ export default async function BgzOverview() {
         if (process.env.FHIR_AUTHORIZATION_TOKEN) {
             requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
         }
-        const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan?_include=CarePlan:care-team`, {
+        const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan?_sort=-_lastUpdated&_count=100&_include=CarePlan:care-team`, {
             // cache: 'no-store',
             headers: requestHeaders
         });
@@ -43,6 +43,7 @@ export default async function BgzOverview() {
             return map;
         }, new Map<string, any>());
 
+
         rows = entry?.filter((entry) => entry.resource?.resourceType === "CarePlan")
             .map((entry: any) => entry.resource as CarePlan)
             .map((carePlan: CarePlan) => {
@@ -51,6 +52,7 @@ export default async function BgzOverview() {
                 if (!careTeam) {
                     console.warn(`No CareTeam found for CarePlan/${carePlan.id}`);
                 }
+
                 return {
                     id: careTeam.id,
                     bsn: getBsn(carePlan),
