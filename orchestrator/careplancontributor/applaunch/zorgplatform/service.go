@@ -575,7 +575,9 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 		return nil, fmt.Errorf("Task.definitionReference.reference does is not in the form '%s/<id>': %s", prefix, workflowReference)
 	}
 	// Mapping defined by https://github.com/Zorgbijjou/oid-repository/blob/main/oid-repository.md
-	switch strings.TrimPrefix(workflowReference, prefix) {
+	p := strings.TrimPrefix(workflowReference, prefix)
+	p = strings.TrimPrefix(p, "urn:oid:")
+	switch p {
 	case "1.0":
 		// Used by Zorgplatform Developer Portal, default to Hartfalen
 		fallthrough
