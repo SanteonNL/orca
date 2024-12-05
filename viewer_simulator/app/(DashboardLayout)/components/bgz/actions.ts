@@ -1,5 +1,6 @@
 "use server"
-import { Appointment, Bundle, CarePlan, CareTeam, Condition, Consent, Coverage, DeviceRequest, DeviceUseStatement, Encounter, Flag, Immunization, ImmunizationRecommendation, MedicationRequest, NutritionOrder, Observation, Patient, Procedure, ProcedureRequest } from "fhir/r3";
+import { Appointment, Bundle, Condition, Consent, Coverage, DeviceRequest, DeviceUseStatement, Encounter, Flag, Immunization, ImmunizationRecommendation, MedicationRequest, NutritionOrder, Observation, Patient, Procedure, ProcedureRequest } from "fhir/r3";
+import { CarePlan, CareTeam } from "fhir/r4";
 
 export async function getBgzData(carePlan: CarePlan, careTeam: CareTeam) {
 
