@@ -63,6 +63,9 @@ func TestService_Proxy(t *testing.T) {
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
 		require.JSONEq(t, `{"resourceType":"Task", "intent":"order", "status":"draft"}`, string(responseData))
+		t.Run("caching is allowed", func(t *testing.T) {
+			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
+		})
 	})
 	t.Run("it proxies query parameters", func(t *testing.T) {
 		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success?_identifier=foo|bar")

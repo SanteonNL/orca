@@ -97,6 +97,9 @@ func TestService_ExternalCPCProxyToEHR(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedCarePlanSearchRequestUrl)
+		t.Run("caching is allowed", func(t *testing.T) {
+			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
+		})
 	})
 	t.Run("upstream FHIR server returns 404 for resource", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient/100", nil)
@@ -455,6 +458,10 @@ func TestService_ProxyToEHR(t *testing.T) {
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)
 
+	t.Run("caching is not allowed", func(t *testing.T) {
+		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
+	})
+
 	// Logout and attempt to get the patient again
 	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/logout", nil)
 
@@ -520,6 +527,10 @@ func TestService_ProxyToCPS(t *testing.T) {
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, carePlanServiceURL.Host, capturedHost)
 	require.Equal(t, "foo:bar", capturedQueryParams.Get("_search"))
+
+	t.Run("caching is not allowed", func(t *testing.T) {
+		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
+	})
 
 	// Logout and attempt to get the patient again
 	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/logout", nil)
