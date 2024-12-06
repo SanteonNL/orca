@@ -149,6 +149,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceType := request.PathValue("type")
 		s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	}))
+	// Searching for a resource via POST
+	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		resourceType := request.PathValue("type")
+		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
+	}))
 	// Updating a resource by ID
 	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
@@ -165,11 +170,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
-	}))
-	// Handle search
-	mux.HandleFunc("GET "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-		resourceType := request.PathValue("type")
-		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Get"+resourceType)
 	}))
 }
 
@@ -343,17 +343,24 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
 	headers := new(fhirclient.Headers)
 
+	// Parse URL-encoded parameters from the request body
+	if err := httpRequest.ParseForm(); err != nil {
+		http.Error(httpResponse, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	queryParams := httpRequest.PostForm
+
 	var bundle *fhir.Bundle
 	var err error
 	switch resourceType {
 	case "CarePlan":
-		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), queryParams, headers)
 	case "CareTeam":
-		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), queryParams, headers)
 	case "Task":
-		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchTask(httpRequest.Context(), queryParams, headers)
 	case "Patient":
-		bundle, err = s.handleSearchPatient(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchPatient(httpRequest.Context(), queryParams, headers)
 	default:
 		log.Warn().Ctx(httpRequest.Context()).
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
