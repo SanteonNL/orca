@@ -1,6 +1,10 @@
 package zorgplatform
 
-import "time"
+import (
+	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+)
 
 func DefaultConfig() Config {
 	return Config{
@@ -10,14 +14,15 @@ func DefaultConfig() Config {
 }
 
 type Config struct {
-	Enabled            bool          `koanf:"enabled"`
-	ApiUrl             string        `koanf:"apiurl"`             //The FHIR API URL
-	StsUrl             string        `koanf:"stsurl"`             //The SAML STS URL
-	BaseUrl            string        `koanf:"baseurl"`            //The base URL of zorgplatform, can be either their acc or prd URL
-	SAMLRequestTimeout time.Duration `koanf:"samlrequesttimeout"` //The timeout for the SAML request, e.g. 10s, 100ms etc
-	SigningConfig      SigningConfig `koanf:"sign"`
-	DecryptConfig      DecryptConfig `koanf:"decrypt"`
-	TaskPerformerUra   string        `koanf:"taskperformerura"`
+	Enabled            bool                  `koanf:"enabled"`
+	ApiUrl             string                `koanf:"apiurl"`             //The FHIR API URL
+	StsUrl             string                `koanf:"stsurl"`             //The SAML STS URL
+	BaseUrl            string                `koanf:"baseurl"`            //The base URL of zorgplatform, can be either their acc or prd URL
+	SAMLRequestTimeout time.Duration         `koanf:"samlrequesttimeout"` //The timeout for the SAML request, e.g. 10s, 100ms etc
+	SigningConfig      SigningConfig         `koanf:"sign"`
+	DecryptConfig      DecryptConfig         `koanf:"decrypt"`
+	TaskPerformerUra   string                `koanf:"taskperformerura"`
+	CpsFhirConfig      coolfhir.ClientConfig `koanf:"cpsfhirendpoint"` //TODO: Remove direct access to CPS FHIR and request data via the CPC
 
 	AzureConfig    AzureConfig    `koanf:"azure"`
 	X509FileConfig X509FileConfig `koanf:"x509"`

@@ -6,6 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
@@ -17,10 +22,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
-	"strings"
-	"time"
 )
 
 const basePath = "/cpc"
@@ -31,11 +32,17 @@ const carePlanURLHeaderKey = "X-Scp-Context"
 
 const CarePlanServiceOAuth2Scope = "careplanservice"
 
+type ScpValidationResult struct {
+	carePlan  *fhir.CarePlan
+	careTeams *[]fhir.CareTeam
+}
+
 func New(
 	config Config,
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
-	sessionManager *user.SessionManager) (*Service, error) {
+	sessionManager *user.SessionManager,
+	bgzFhirProxy coolfhir.HttpProxy) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
@@ -81,6 +88,7 @@ func New(
 		profile:                 profile,
 		frontendUrl:             config.FrontendConfig.URL,
 		fhirURL:                 fhirURL,
+		bgzFhirProxy:            bgzFhirProxy,
 		transport:               localFhirStoreTransport,
 		workflows: taskengine.FhirApiWorkflowProvider{
 			Client: questionnaireFhirClient,
@@ -109,6 +117,7 @@ type Service struct {
 	// cpsClientFactory is a factory function that creates a new FHIR client for any CarePlanService.
 	cpsClientFactory func(baseURL *url.URL) fhirclient.Client
 	fhirURL          *url.URL
+	bgzFhirProxy     coolfhir.HttpProxy
 	// transport is used to call the local FHIR store, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
@@ -137,6 +146,40 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		writer.WriteHeader(http.StatusOK)
 	}))
+	// The BgZ aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
+	mux.HandleFunc(fmt.Sprintf("GET %s/aggregate/bgz/fhir/{rest...}", basePath), s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+		if !s.healthdataviewEndpointEnabled {
+			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
+				Message:    "health data view proxy endpoint is disabled",
+				StatusCode: http.StatusMethodNotAllowed,
+			}, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+
+		err := s.proxyToAllCareTeamMembers(writer, request)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+	}))
+	// BgZ-specific endpoints. Similar to `GET %s/fhir/{rest...}` but the proxied request requires to have a workflow-specific Access Token that must be created by orca
+	//TODO: FIX --> Returns unauthorized for dev server
+	// mux.HandleFunc(fmt.Sprintf("GET %s/bgz/fhir/{rest...}", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(fmt.Sprintf("GET %s/bgz/fhir/{rest...}", basePath), func(writer http.ResponseWriter, request *http.Request) {
+		if !s.healthdataviewEndpointEnabled {
+			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
+				Message:    "health data view proxy endpoint is disabled",
+				StatusCode: http.StatusMethodNotAllowed,
+			}, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+
+		err := s.handleProxyBgzData(writer, request)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+	})
 	mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		if !s.healthdataviewEndpointEnabled {
 			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
@@ -222,28 +265,118 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 // handleProxyExternalRequestToEHR handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
 // This is typically used by remote parties to retrieve patient data from the local EHR.
 func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, request *http.Request) error {
+
+	_, err := s.authorizeScpMember(request)
+
+	if err != nil {
+		return err
+	}
+
+	proxyBasePath := basePath + "/fhir"
+	fhirProxy := coolfhir.NewProxy("External CPC->EHR FHIR proxy", log.Logger, s.fhirURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport, true)
+	fhirProxy.ServeHTTP(writer, request)
+	return nil
+}
+
+// proxyToAllCareTeamMembers is a convenience façade method that can be used proxy the request to all CPC nodes localized from the Shared CarePlan.participants.
+func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request *http.Request) error {
+
+	//TODO: Enable below when the logic is fixed
+	// result, err := s.authorizeScpMember(request)
+
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("Failed to authorize SCP member")
+	// 	return coolfhir.BadRequestError(err)
+	// }
+
+	// if !result.isMember {
+	// 	return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
+	// }
+
+	//TODO: We currently have a 1-on-1 relation between the EHR and viewer. Should query all CarePlan.participants
+	// carePlanURLValue := request.Header[carePlanURLHeaderKey]
+
+	//TODO: This URL should come from localization based on each participants URA number - for now fixate it to the hospital url
+	carePlanURLValue := request.Header[carePlanURLHeaderKey]
+	if len(carePlanURLValue) != 1 {
+		return coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
+	}
+
+	log.Debug().Msg("Handling BgZ FHIR API request carePlanURL: " + carePlanURLValue[0])
+
+	upstreamServerUrl, err := url.Parse(strings.Replace(s.config.CarePlanService.URL, "/cps", basePath+"/bgz/fhir", 1))
+	proxyBasePath := basePath + "/aggregate/bgz/fhir/"
+
+	if err != nil {
+		return coolfhir.BadRequestError(err)
+	}
+
+	log.Debug().Msg("Proxying request to all CareTeam members from CarePlan.participants - proxyBaseUrl: " + upstreamServerUrl.String())
+
+	fhirProxy := coolfhir.NewProxy("All External CPC Members->EHR FHIR proxy", log.Logger, upstreamServerUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport, true)
+
+	fhirProxy.ServeHTTP(writer, request)
+
+	return nil
+}
+
+// handleProxyBgzData handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
+func (s Service) handleProxyBgzData(writer http.ResponseWriter, request *http.Request) error {
+
+	log.Debug().Msg("Handling BgZ FHIR API request for url: " + request.URL.String())
+
+	for key, values := range request.Header {
+		for _, value := range values {
+			log.Debug().Msgf("Header key: %s, value: %s", key, value)
+		}
+	}
+
+	if s.bgzFhirProxy == nil {
+		return coolfhir.BadRequest("BgZ API is not supported")
+	}
+
+	//TODO: Enable below when the logic is fixed
+	// result, err := s.authorizeScpMember(request)
+
+	// if err != nil {
+	// 	log.Error().Err(err).Msg("Failed to authorize SCP member")
+	// 	return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusBadRequest)
+	// }
+
+	// if !result.isMember {
+	// 	return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
+	// }
+
+	log.Debug().Msg("Proxying request to BgZ FHIR API")
+
+	s.bgzFhirProxy.ServeHTTP(writer, request)
+	return nil
+}
+
+// TODO: Fix the logic in this method, it doesn't work as intended
+func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult, error) {
 	// Authorize requester before proxying FHIR request
 	// Data holder must verify that the requester is part of the CareTeam by checking the URA
 	// Validate by retrieving the CarePlan from CPS, use URA in provided token to validate against CareTeam
 	// CarePlan should be provided in X-Scp-Context header
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) != 1 {
-		return coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
+		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
 	}
 	carePlanURL := carePlanURLValue[0]
 	if carePlanURL == "" {
-		return coolfhir.BadRequest(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
+		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
 	}
 	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
-		return coolfhir.BadRequest("invalid CarePlan URL in header")
+		return nil, coolfhir.BadRequest("invalid CarePlan URL in header. Got: " + carePlanURL + " expected: " + s.localCarePlanServiceUrl.String())
 	}
 	u, err := url.Parse(carePlanURL)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// Verify that the u.Path refers to a careplan
-	if !strings.HasPrefix(u.Path, "/cps/CarePlan/") {
-		return coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
+	if !strings.Contains(u.Path, "/CarePlan") {
+		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
 	}
 
 	var bundle fhir.Bundle
@@ -252,46 +385,53 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.localCarePlanServiceUrl.String())
 	err = s.cpsClientFactory(s.localCarePlanServiceUrl).Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"))
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if len(bundle.Entry) == 0 {
-		return coolfhir.NewErrorWithCode("CarePlan not found", http.StatusNotFound)
+		return nil, coolfhir.NewErrorWithCode("CarePlan not found", http.StatusNotFound)
 	}
 
 	var careTeams []fhir.CareTeam
 	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if len(careTeams) == 0 {
-		return coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
+		return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
+	}
+
+	var carePlan fhir.CarePlan
+	err = coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
+
+	if err != nil {
+		return nil, err
 	}
 
 	// Validate CareTeam participants against requester
 	principal, err := auth.PrincipalFromContext(request.Context())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// get the CareTeamParticipant, then check that it is active
 	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
 	if participant == nil {
-		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
+		return nil, coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
+
 	isValid, err := coolfhir.ValidateCareTeamParticipantPeriod(*participant, time.Now())
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	if !isValid {
-		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
+		return nil, coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
-	proxyBasePath := basePath + "/fhir"
-	fhirProxy := coolfhir.NewProxy("External CPC->EHR FHIR proxy", log.Logger, s.fhirURL, proxyBasePath,
-		s.orcaPublicURL.JoinPath(proxyBasePath), s.transport, true)
-	fhirProxy.ServeHTTP(writer, request)
-	return nil
+	return &ScpValidationResult{
+		carePlan:  &carePlan,
+		careTeams: &careTeams,
+	}, nil
 }
 
 func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
@@ -317,7 +457,7 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 			next(response, request)
 			return
 		}
-		http.Error(response, "no session found", http.StatusUnauthorized)
+		http.Error(response, "no session or bearer token found", http.StatusUnauthorized)
 	}
 }
 

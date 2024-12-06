@@ -82,7 +82,35 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
 }
 
 const cleanPatient = (patient: Patient) => {
-    return { ...patient, id: undefined };
+    const cleanedPatient = { ...patient, id: undefined }
+    if (cleanedPatient.contact) {
+        for (const contact of cleanedPatient.contact) {
+            if (contact.organization?.reference) {
+                delete contact.organization.reference;
+            }
+        }
+    }
+
+    if (cleanedPatient.managingOrganization?.reference) {
+        delete cleanedPatient.managingOrganization.reference;
+    }
+
+    if (cleanedPatient.link) {
+        for (const link of cleanedPatient.link) {
+            if (link.other?.reference) {
+                delete link.other.reference;
+            }
+        }
+    }
+    if (cleanedPatient.generalPractitioner) {
+        for (const practitioner of cleanedPatient.generalPractitioner) {
+            if (practitioner.reference) {
+                delete practitioner.reference;
+            }
+        }
+    }
+
+    return cleanedPatient;
 }
 
 const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string) => {

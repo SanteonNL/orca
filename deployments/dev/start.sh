@@ -144,25 +144,6 @@ curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\"
 echo "  Waiting for the FHIR server to be ready"
 popd
 
-echo "Creating stack for Clinic..."
-echo "  Creating devtunnel for Clinic..."
-export CLINIC_URL=$(createTunnel ./clinic 7080)
-echo "  Clinic url is $CLINIC_URL"
-echo "  Starting services"
-pushd clinic
-echo NUTS_URL="${CLINIC_URL}" > .env
-echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
-docker compose --env-file .env pull
-docker compose --env-file .env up --wait --build --remove-orphans
-echo "  Creating DID document"
-CLINIC_DID=$(createDID "clinic" http://localhost:8081)
-echo "    Clinic DID: $CLINIC_DID"
-echo "  Self-issuing an NutsUraCredential"
-issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
-echo "  Registering on Nuts Discovery Service"
-curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirNotificationURL\": \"${CLINIC_URL}/orca/cpc/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
-popd
-
 # open orchestrator demo app
 open "${HOSPITAL_URL}/ehr/"
 open "${CLINIC_URL}/viewer/"

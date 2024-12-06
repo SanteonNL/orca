@@ -17,7 +17,7 @@ export default async function AcceptedTaskOverview() {
         if (process.env.FHIR_AUTHORIZATION_TOKEN) {
             requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
         }
-        const response = await fetch(`${process.env.FHIR_BASE_URL}/Task`, {
+        const response = await fetch(`${process.env.FHIR_BASE_URL}/Task?_sort=-_lastUpdated&_count=100`, {
             cache: 'no-store',
             headers: requestHeaders
         });

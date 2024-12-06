@@ -1,4 +1,4 @@
-import { Questionnaire, QuestionnaireResponse, Task } from "fhir/r4"
+import { CarePlan, Questionnaire, QuestionnaireResponse, Task } from "fhir/r4"
 
 export const fetchQuestionnaire = async (task?: Task) => {
     if (!task || !task.input) return
@@ -42,4 +42,12 @@ export const fetchQuestionnaireResponse = async (task?: Task, questionnaire?: Qu
     }
 
     return await questionnaireResponseResp.json() as QuestionnaireResponse
+}
+
+export function getBsn(carePlan?: CarePlan) {
+    const identifier = carePlan?.subject?.identifier;
+    if (identifier?.system === 'http://fhir.nl/fhir/NamingSystem/bsn') {
+        return identifier.value;
+    }
+    return "Unknown";
 }
