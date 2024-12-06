@@ -137,7 +137,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		writer.WriteHeader(http.StatusOK)
 	}))
-	mux.HandleFunc(fmt.Sprintf("GET %s/fhir/{rest...}", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		if !s.healthdataviewEndpointEnabled {
 			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
 				Message:    "health data view proxy endpoint is disabled",
