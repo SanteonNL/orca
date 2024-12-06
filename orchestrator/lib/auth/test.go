@@ -73,12 +73,15 @@ func AuthenticatedTestRoundTripper(underlying http.RoundTripper, principal *Prin
 
 	data, _ := json.Marshal(principal.Organization)
 	bearerToken := base64.StdEncoding.EncodeToString(data)
+	headers := map[string]string{
+		"Authorization": "Bearer " + bearerToken,
+	}
+	if xSCPContext != "" {
+		headers["X-SCP-Context"] = xSCPContext
+	}
 	return headerDecoratorRoundTripper{
-		inner: underlying,
-		header: map[string]string{
-			"Authorization": "Bearer " + bearerToken,
-			"X-SCP-Context": xSCPContext,
-		},
+		inner:  underlying,
+		header: headers,
 	}
 }
 
