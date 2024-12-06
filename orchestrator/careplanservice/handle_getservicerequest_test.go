@@ -26,7 +26,7 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 	var careTeam2 fhir.CareTeam
 	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
 
-	tests := []TestStruct[fhir.ServiceRequest]{
+	tests := []TestHandleGetStruct[fhir.ServiceRequest]{
 		{
 			ctx:           auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:          "error: ServiceRequest does not exist",
