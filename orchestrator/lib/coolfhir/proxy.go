@@ -30,6 +30,7 @@ type fhirClientProxy struct {
 	proxyBasePath   string
 	proxyBaseUrl    *url.URL
 	upstreamBaseUrl *url.URL
+	allowCaching    bool
 }
 
 func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, request *http.Request) {
@@ -154,10 +155,19 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 	}
 	upstreamUrl := f.upstreamBaseUrl.String()
 	proxyUrl := f.proxyBaseUrl.String()
-	pipeline.New().
+	pipe := pipeline.New().
 		AppendResponseTransformer(pipeline.ResponseBodyRewriter{Old: []byte(upstreamUrl), New: []byte(proxyUrl)}).
-		AppendResponseTransformer(pipeline.ResponseHeaderRewriter{Old: upstreamUrl, New: proxyUrl}).
-		DoAndWrite(httpResponseWriter, responseResource, responseStatusCode)
+		AppendResponseTransformer(pipeline.ResponseHeaderRewriter{Old: upstreamUrl, New: proxyUrl})
+	if f.allowCaching {
+		pipe = pipe.AppendResponseTransformer(pipeline.ResponseHeaderSetter{
+			"Cache-Control": {"must-understand, private"},
+		})
+	} else {
+		pipe = pipe.AppendResponseTransformer(pipeline.ResponseHeaderSetter{
+			"Cache-Control": {"no-store"},
+		})
+	}
+	pipe.DoAndWrite(httpResponseWriter, responseResource, responseStatusCode)
 }
 
 func (f fhirClientProxy) sanitizeRequestHeaders(header http.Header) http.Header {
@@ -195,12 +205,14 @@ func (f fhirClientProxy) sanitizeRequestHeaders(header http.Header) http.Header 
 // - upstreamBaseUrl: the FHIR base URL of the upstream FHIR server to which HTTP requests are forwarded, e.g. http://upstream:8080/fhir
 // - proxyBasePath: the base path of the proxy server, e.g. http://example.com/fhir. It is used to rewrite the request URL.
 // - rewriteUrl: the base URL of the proxy server, e.g. http://example.com/fhir. It is used to rewrite URLs in the HTTP response.
+// - allowCaching: controls Cache-Control header directives of HTTP responses.
 // proxyBasePath and rewriteUrl might differ if the proxy server is behind a reverse proxy, which binds to application to a different path.
 // E.g.:
 //   - if the proxy is on /fhir, and the reverse proxy binds to /, then proxyBasePath = /fhir and rewriteUrl = /.
 //   - if the proxy is on /, and the reverse proxy binds to /fhir, then proxyBasePath = / and rewriteUrl = /fhir.
 //   - if the proxy is on /fhir, and the reverse proxy binds to /app/fhir, then proxyBasePath = /fhir and rewriteUrl = /app/fhir.
-func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, proxyBasePath string, rewriteUrl *url.URL, transport http.RoundTripper) HttpProxy {
+func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, proxyBasePath string, rewriteUrl *url.URL,
+	transport http.RoundTripper, allowCaching bool) HttpProxy {
 	httpClient := &http.Client{
 		Transport: &loggingRoundTripper{
 			name:   name,
@@ -213,6 +225,7 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 		proxyBasePath:   proxyBasePath,
 		proxyBaseUrl:    rewriteUrl,
 		upstreamBaseUrl: upstreamBaseUrl,
+		allowCaching:    allowCaching,
 	}
 }
 

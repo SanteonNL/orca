@@ -8,11 +8,12 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/globals"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/globals"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -184,7 +185,7 @@ func (s *Service) BgzFhirProxy() coolfhir.HttpProxy {
 	return coolfhir.NewProxy("App->EHR (BGZ)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, stsAccessTokenRoundTripper{
 		transport:  s.zorgplatformHttpClient.Transport,
 		zpfService: s,
-	})
+	}, true)
 }
 
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}

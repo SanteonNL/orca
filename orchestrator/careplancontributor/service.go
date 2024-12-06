@@ -47,11 +47,37 @@ func New(
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 
-	fhirClientConfig := coolfhir.Config()
-	localFHIRStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	// Initialize FHIR clients:
+	// - FHIR API holding EHR data
+	// - FHIR API holding Questionnaires and HealthcareServices
+	localFhirStoreTransport, localFhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
 	if err != nil {
 		return nil, err
 	}
+	var questionnaireFhirClient fhirclient.Client
+	if config.TaskFiller.QuestionnaireFHIR.BaseURL == "" {
+		// Questionnaire FHIR API not configured, use FHIR API holding EHR data
+		questionnaireFhirClient = localFhirClient
+	} else {
+		_, questionnaireFhirClient, err = coolfhir.NewAuthRoundTripper(config.TaskFiller.QuestionnaireFHIR, coolfhir.Config())
+		if err != nil {
+			return nil, err
+		}
+	}
+	// Load Questionnaire-related resources for the Task Filler Engine from the configured URLs into the Questionnaire FHIR API
+	go func(ctx context.Context) {
+		if len(config.TaskFiller.QuestionnaireSyncURLs) > 0 {
+			log.Info().Ctx(ctx).Msgf("Synchronizing Task Filler Questionnaires resources from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
+			for _, u := range config.TaskFiller.QuestionnaireSyncURLs {
+				if err := coolfhir.ImportResources(ctx, questionnaireFhirClient, []string{"Questionnaire", "HealthcareService"}, u); err != nil {
+					log.Error().Ctx(ctx).Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
+				} else {
+					log.Debug().Ctx(ctx).Msgf("Synchronized Task Filler Questionnaire resources (url=%s)", u)
+				}
+			}
+		}
+	}(context.Background())
+
 	httpClient := profile.HttpClient()
 	result := &Service{
 		config:                  config,
@@ -63,8 +89,10 @@ func New(
 		frontendUrl:             config.FrontendConfig.URL,
 		fhirURL:                 fhirURL,
 		bgzFhirProxy:            bgzFhirProxy,
-		transport:               localFHIRStoreTransport,
-		workflows:               taskengine.DefaultWorkflows(),
+		transport:               localFhirStoreTransport,
+		workflows: taskengine.FhirApiWorkflowProvider{
+			Client: questionnaireFhirClient,
+		},
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
@@ -152,7 +180,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
-	mux.HandleFunc(fmt.Sprintf("GET %s/fhir/{rest...}", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		if !s.healthdataviewEndpointEnabled {
 			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
 				Message:    "health data view proxy endpoint is disabled",
@@ -180,7 +208,8 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
-	carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", log.Logger, s.localCarePlanServiceUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport)
+	carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", log.Logger, s.localCarePlanServiceUrl,
+		proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, false)
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
@@ -220,7 +249,8 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
 	proxyBasePath := basePath + "/ehr/fhir"
-	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", log.Logger, clientFactory.BaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client)
+	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", log.Logger, clientFactory.BaseURL, proxyBasePath,
+		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -243,7 +273,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	}
 
 	proxyBasePath := basePath + "/fhir"
-	fhirProxy := coolfhir.NewProxy("External CPC->EHR FHIR proxy", log.Logger, s.fhirURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
+	fhirProxy := coolfhir.NewProxy("External CPC->EHR FHIR proxy", log.Logger, s.fhirURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport, true)
 	fhirProxy.ServeHTTP(writer, request)
 	return nil
 }
@@ -283,7 +313,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 	log.Debug().Msg("Proxying request to all CareTeam members from CarePlan.participants - proxyBaseUrl: " + upstreamServerUrl.String())
 
-	fhirProxy := coolfhir.NewProxy("All External CPC Members->EHR FHIR proxy", log.Logger, upstreamServerUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
+	fhirProxy := coolfhir.NewProxy("All External CPC Members->EHR FHIR proxy", log.Logger, upstreamServerUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport, true)
 
 	fhirProxy.ServeHTTP(writer, request)
 
@@ -398,7 +428,6 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	if !isValid {
 		return nil, coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
-
 	return &ScpValidationResult{
 		carePlan:  &carePlan,
 		careTeams: &careTeams,
@@ -524,5 +553,5 @@ func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task 
 	task.StatusReason = &fhir.CodeableConcept{
 		Text: to.Ptr(rejection.FormatReason()),
 	}
-	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, nil)
+	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
 }

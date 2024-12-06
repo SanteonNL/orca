@@ -1,18 +1,19 @@
 ## Configuration
 Use the following environment variables to configure the orchestrator:
 
-General configuration:
+
+### General configuration
 - `ORCA_PUBLIC_BASEURL` (required): base URL of the public endpoints.
 - `ORCA_PUBLIC_ADDRESS` (required): address the public endpoints bind to (default: `:8080`).
 - `ORCA_LOGLEVEL`: log level, can be `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `panic`, or `disabled` (default: `info`).
 
-Required configuration for Nuts:
+#### Required configuration for Nuts
 - `ORCA_NUTS_PUBLIC_URL`: public URL of the Nuts, used for informing OAuth2 clients of the URL of the OAuth2 Authorization Server, e.g. `http://example.com/nuts`.
 - `ORCA_NUTS_API_URL`: address of the Nuts node API to use, e.g. `http://nutsnode:8081`.
 - `ORCA_NUTS_SUBJECT`: Nuts subject of the local party, as it was created in/by the Nuts node.
 - `ORCA_NUTS_DISCOVERYSERVICE`: ID of the Nuts Discovery Service that is used for CSD lookups (finding (local) care organizations and looking up their endpoints).
 
-Configuration for Care Plan Contributor functionality:
+### Care Plan Contributor configuration
 - `ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL`: FHIR base URL of the CarePlan service.
 - `ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN`: Secures the EHR-facing endpoints with a static HTTP Bearer token. Only intended for development and testing purposes, since they're unpractical to change often.
 - `ORCA_CAREPLANCONTRIBUTOR_FHIR_URL`: Base URL of the FHIR API the CPC uses for storage.
@@ -25,12 +26,18 @@ Configuration for Care Plan Contributor functionality:
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_FHIRPROXYURL`: Enable FHIR proxy for demo purposes on `/demo/fhirproxy`, which proxies requests to this URL.
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
-- `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
-- `ORCA_CAREPLANSERVICE_FHIR_URL`: Base URL of the FHIR API the CPS uses for storage.
-- `ORCA_CAREPLANSERVICE_FHIR_AUTH_TYPE`: Authentication type for the CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
-- `ORCA_CAREPLANSERVICE_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
 
-Configuration to enable Care Plan Service functionality:
+### Care Plan Contributor Task Filler configuration
+The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
+These FHIR resources can be read from a different FHIR API than configured in `ORCA_CAREPLANCONTRIBUTOR_FHIR` by setting 
+`ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_FHIR_URL`, `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_FHIR_AUTH_TYPE` and `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_FHIR_AUTH_SCOPES`.
+
+If you want to automatically load FHIR HealthcareService and Questionnaire resources into the FHIR API on startup,
+you can configure the Task Filler to do so by setting `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS`.
+It takes a list (separated by commas) of URLs to fetch the FHIR Bundles from, that will be loaded into the FHIR API.
+The bundles may only contain Questionnaire and HealthcareService resources.
+
+### Care Plan Service configuration
 - `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
 - `ORCA_CAREPLANSERVICE_FHIR_URL`: Base URL of the FHIR API the CPS uses for storage.
 - `ORCA_CAREPLANSERVICE_FHIR_AUTH_TYPE`: Authentication type for the CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
