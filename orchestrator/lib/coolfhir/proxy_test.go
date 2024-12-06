@@ -29,6 +29,14 @@ func TestProxy(t *testing.T) {
 		capturedHeaders = request.Header
 		writer.Write([]byte(`{"resourceType":"Patient"}`))
 	})
+	upstreamServerMux.HandleFunc("/fhir/InvalidJsonResponse", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+		writer.Write([]byte(`this is not JSON`))
+	})
 	upstreamServerMux.HandleFunc("POST /fhir/DoPost", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusCreated)
 		capturedHost = request.Host
@@ -61,7 +69,7 @@ func TestProxy(t *testing.T) {
 			}
 			return request
 		},
-	})
+	}, false)
 	proxyServer := httptest.NewServer(proxyServerMux)
 	proxyServerMux.HandleFunc("/localfhir/{rest...}", proxy.ServeHTTP)
 
@@ -73,6 +81,26 @@ func TestProxy(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "1", capturedQueryParams.Get("_id"))
 	})
+	t.Run("cache headers", func(t *testing.T) {
+		t.Run("no caching", func(t *testing.T) {
+			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/DoGet")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
+		})
+		t.Run("private caching only", func(t *testing.T) {
+			proxy.(*fhirClientProxy).allowCaching = true
+			t.Cleanup(func() {
+				proxy.(*fhirClientProxy).allowCaching = false
+			})
+			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/DoGet")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
+			assert.Empty(t, httpResponse.Header.Get("Pragma"))
+		})
+	})
+
 	t.Run("GET request", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
 		httpResponse, err := proxyServer.Client().Do(httpRequest)
