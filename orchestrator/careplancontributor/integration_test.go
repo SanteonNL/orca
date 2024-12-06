@@ -22,8 +22,6 @@ import (
 var notificationCounter = new(atomic.Int32)
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
-	//TODO: Fix test when logic is fixed
-	t.Skip("Fix test when logic is fixed")
 	notificationEndpoint := setupNotificationEndpoint(t)
 	carePlanServiceURL, httpService, cpcURL := setupIntegrationTest(t, notificationEndpoint)
 

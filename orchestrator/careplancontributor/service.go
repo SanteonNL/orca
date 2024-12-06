@@ -33,7 +33,6 @@ const carePlanURLHeaderKey = "X-Scp-Context"
 const CarePlanServiceOAuth2Scope = "careplanservice"
 
 type ScpValidationResult struct {
-	isMember  bool
 	carePlan  *fhir.CarePlan
 	careTeams *[]fhir.CareTeam
 }
@@ -237,19 +236,13 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 // This is typically used by remote parties to retrieve patient data from the local EHR.
 func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, request *http.Request) error {
 
-	result, err := s.authorizeScpMember(request)
-
-	proxyBasePath := basePath + "/ehr/fhir"
+	_, err := s.authorizeScpMember(request)
 
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to authorize SCP member")
-		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusBadRequest)
+		return err
 	}
 
-	if !result.isMember {
-		return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
-	}
-
+	proxyBasePath := basePath + "/fhir"
 	fhirProxy := coolfhir.NewProxy("External CPC->EHR FHIR proxy", log.Logger, s.fhirURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport)
 	fhirProxy.ServeHTTP(writer, request)
 	return nil
@@ -353,7 +346,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 	// Verify that the u.Path refers to a careplan
 	if !strings.Contains(u.Path, "/CarePlan") {
-		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan. Got: " + u.Path)
+		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
 	}
 
 	var bundle fhir.Bundle
@@ -379,7 +372,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 
 	var carePlan fhir.CarePlan
-	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
+	err = coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
 
 	if err != nil {
 		return nil, err
@@ -402,8 +395,11 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, err
 	}
 
+	if !isValid {
+		return nil, coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
+	}
+
 	return &ScpValidationResult{
-		isMember:  isValid,
 		carePlan:  &carePlan,
 		careTeams: &careTeams,
 	}, nil
