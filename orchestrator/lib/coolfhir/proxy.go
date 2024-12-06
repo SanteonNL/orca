@@ -135,6 +135,10 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 	if err != nil {
 		// Make sure we always return a FHIR OperationOutcome in case of an error
 		if !errors.As(err, &fhirclient.OperationOutcomeError{}) {
+			// Don't return a status 200 OK from the upstream server if processing the result failed. E.g., server returned 200 OK with non-JSON.
+			if responseStatusCode >= 200 && responseStatusCode <= 299 {
+				responseStatusCode = http.StatusBadGateway
+			}
 			err = fhirclient.OperationOutcomeError{
 				OperationOutcome: fhir.OperationOutcome{
 					Issue: []fhir.OperationOutcomeIssue{
