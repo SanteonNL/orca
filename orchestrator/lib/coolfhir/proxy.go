@@ -5,15 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strings"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"io"
-	"net/http"
-	"net/url"
-	"strings"
 )
 
 // HttpProxy is an interface for a simple HTTP proxy that forwards requests to an upstream server.
@@ -177,7 +178,7 @@ func (f fhirClientProxy) sanitizeRequestHeaders(header http.Header) http.Header 
 	// - httputil.ReverseProxy: remove hop-by-hop headers
 	for name, values := range header {
 		nameLC := strings.ToLower(name)
-		if strings.HasPrefix(nameLC, "x-") ||
+		if strings.HasPrefix(nameLC, "x-") && nameLC != "x-scp-context" ||
 			nameLC == "referer" ||
 			nameLC == "cookie" ||
 			nameLC == "user-agent" ||

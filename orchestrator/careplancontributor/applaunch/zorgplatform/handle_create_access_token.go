@@ -25,11 +25,16 @@ type SecureTokenService interface {
 }
 
 type TokenType struct {
+	Type         string
 	Role         func(element *etree.Element)
 	PurposeOfUse func(element *etree.Element)
 }
 
+const TOKEN_TYPE_APPLICATION = "application"
+const TOKEN_TYPE_HCP = "hcp"
+
 var applicationTokenType = TokenType{
+	Type: TOKEN_TYPE_APPLICATION,
 	Role: func(role *etree.Element) {
 		role.CreateAttr("code", "182777000")
 		role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
@@ -47,6 +52,7 @@ var applicationTokenType = TokenType{
 }
 
 var hcpTokenType = TokenType{
+	Type: TOKEN_TYPE_HCP,
 	Role: func(role *etree.Element) {
 		role.CreateAttr("code", "224609002")
 		role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
@@ -115,7 +121,16 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext, tokenType To
 	// Subject
 	subject := assertion.CreateElement("Subject")
 	nameID := subject.CreateElement("NameID")
-	nameID.SetText(*launchContext.Practitioner.Identifier[0].Value + "@" + *launchContext.Practitioner.Identifier[0].System)
+
+	switch tokenType.Type {
+	case TOKEN_TYPE_APPLICATION:
+		nameID.SetText(s.config.SigningConfig.Issuer)
+	case TOKEN_TYPE_HCP:
+		nameID.SetText(*launchContext.Practitioner.Identifier[0].Value + "@" + *launchContext.Practitioner.Identifier[0].System)
+	default:
+		return nil, fmt.Errorf("unknown token type: " + tokenType.Type)
+	}
+
 	subjectConfirmation := subject.CreateElement("SubjectConfirmation")
 	subjectConfirmation.CreateAttr("Method", "urn:oasis:names:tc:SAML:2.0:cm:bearer")
 

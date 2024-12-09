@@ -22,6 +22,8 @@ require (
 	golang.org/x/oauth2 v0.21.0
 )
 
+require github.com/creack/pty v1.1.20 // indirect
+
 require (
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.9.0 // indirect
