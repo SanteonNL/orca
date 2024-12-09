@@ -32,7 +32,7 @@
     "cmdk": "^1.0.4",
     "fhir-kit-client": "^1.9.2",
     "lucide-react": "^0.461.0",
-    "next": "15.0.3",
+    "next": "15.0.4",
     "next-themes": "^0.4.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
