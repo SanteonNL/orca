@@ -274,13 +274,8 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	}
 
 	log.Debug().Ctx(httpRequest.Context()).Msgf("Found workflowId identifier: %s", *workflowIdIdentifier.Value)
-	var bsnIdentifier *fhir.Identifier
-	for _, identifier := range patient.Identifier {
-		if identifier.System != nil && *identifier.System == "http://fhir.nl/fhir/NamingSystem/bsn" {
-			bsnIdentifier = &identifier
-			break
-		}
-	}
+
+	bsnIdentifier := coolfhir.FilterFirstIdentifier(&patient.Identifier, "http://fhir.nl/fhir/NamingSystem/bsn")
 	if bsnIdentifier == nil {
 		log.Error().Ctx(httpRequest.Context()).Msg("Identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
 		return nil, fmt.Errorf("identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
