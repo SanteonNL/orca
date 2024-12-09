@@ -12,16 +12,28 @@ import (
 	"strings"
 )
 
+// BundleSet represents a set of FHIR bundles associated with a task.
 type BundleSet struct {
 	Id      string
 	task    string
 	Bundles []fhir.Bundle `json:"bundles"`
 }
 
+// addBundle adds one or more FHIR bundles to the BundleSet.
 func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 	b.Bundles = append(b.Bundles, bundle...)
 }
 
+// NotifyTaskAccepted handles the notification process when a task is accepted.
+// It fetches related FHIR resources and sends the data to Kafka.
+//
+// Parameters:
+//   - cpsClient: The FHIR client used to fetch resources.
+//   - kafkaClient: The Kafka client used to send messages.
+//   - task: The FHIR task that was accepted.
+//
+// Returns:
+//   - error: An error if the notification process fails.
 func NotifyTaskAccepted(cpsClient fhirclient.Client, kafkaClient KafkaClient, task *fhir.Task) error {
 	ref := "Task/" + *task.Id
 	log.Info().Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
@@ -41,10 +53,6 @@ func NotifyTaskAccepted(cpsClient fhirclient.Client, kafkaClient KafkaClient, ta
 	err = cpsClient.Read("Task",
 		&bundle,
 		fhirclient.QueryParam("_id", *task.Id),
-		//fhirclient.QueryParam("_include", "Task:focus"),
-		//fhirclient.QueryParam("_include", "Task:patient"),
-		//fhirclient.QueryParam("_include", "Task:requester"),
-		//fhirclient.QueryParam("_include", "Task:owner"),
 		fhirclient.QueryParam("_revinclude", "Task:part-of"),
 	)
 	if err != nil {
@@ -96,6 +104,13 @@ func NotifyTaskAccepted(cpsClient fhirclient.Client, kafkaClient KafkaClient, ta
 	return sendBundle(bundles, kafkaClient)
 }
 
+// findForReferences extracts patient references from a list of tasks.
+//
+// Parameters:
+//   - tasks: A list of FHIR tasks.
+//
+// Returns:
+//   - []string: A list of patient references.
 func findForReferences(tasks []fhir.Task) []string {
 	var patientForRefs []string
 	for _, task := range tasks {
@@ -110,6 +125,13 @@ func findForReferences(tasks []fhir.Task) []string {
 	return patientForRefs
 }
 
+// findFocusReferences extracts focus references from a list of tasks.
+//
+// Parameters:
+//   - tasks: A list of FHIR tasks.
+//
+// Returns:
+//   - []string: A list of focus references.
 func findFocusReferences(tasks []fhir.Task) []string {
 	var focusRefs []string
 	for _, task := range tasks {
@@ -123,6 +145,14 @@ func findFocusReferences(tasks []fhir.Task) []string {
 	}
 	return focusRefs
 }
+
+// findBasedOnReferences extracts based-on references from a list of tasks.
+//
+// Parameters:
+//   - tasks: A list of FHIR tasks.
+//
+// Returns:
+//   - []string: A list of based-on references.
 func findBasedOnReferences(tasks []fhir.Task) []string {
 	var basedOnRefs []string
 	for _, task := range tasks {
@@ -140,6 +170,15 @@ func findBasedOnReferences(tasks []fhir.Task) []string {
 	return basedOnRefs
 }
 
+// fetchRefs fetches FHIR bundles for a list of references.
+//
+// Parameters:
+//   - cpsClient: The FHIR client used to fetch resources.
+//   - refs: A list of references to fetch.
+//
+// Returns:
+//   - *[]fhir.Bundle: A list of fetched FHIR bundles.
+//   - error: An error if the fetch process fails.
 func fetchRefs(cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
 	var bundels []fhir.Bundle
 	var refTypeMap = make(map[string][]string)
@@ -165,6 +204,12 @@ func fetchRefs(cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, erro
 	return &bundels, nil
 }
 
+// putMapListValue adds a value to a map of lists.
+//
+// Parameters:
+//   - refTypeMap: The map to update.
+//   - refType: The key for the map.
+//   - refId: The value to add to the list.
 func putMapListValue(refTypeMap map[string][]string, refType string, refId string) {
 	values := refTypeMap[refType]
 	if values == nil {
@@ -175,6 +220,13 @@ func putMapListValue(refTypeMap map[string][]string, refType string, refId strin
 	refTypeMap[refType] = values
 }
 
+// findQuestionnaireInputs extracts questionnaire input references from a list of tasks.
+//
+// Parameters:
+//   - tasks: A list of FHIR tasks.
+//
+// Returns:
+//   - []string: A list of questionnaire input references.
 func findQuestionnaireInputs(tasks []fhir.Task) []string {
 	var questionnaireRefs []string
 	for _, task := range tasks {
@@ -183,6 +235,13 @@ func findQuestionnaireInputs(tasks []fhir.Task) []string {
 	return questionnaireRefs
 }
 
+// findQuestionnaireOutputs extracts questionnaire output references from a list of tasks.
+//
+// Parameters:
+//   - tasks: A list of FHIR tasks.
+//
+// Returns:
+//   - []string: A list of questionnaire output references.
 func findQuestionnaireOutputs(tasks []fhir.Task) []string {
 	var questionnaireResponseRefs []string
 	for _, task := range tasks {
@@ -191,6 +250,13 @@ func findQuestionnaireOutputs(tasks []fhir.Task) []string {
 	return questionnaireResponseRefs
 }
 
+// fetchTaskOutputs extracts questionnaire response references from a task's outputs.
+//
+// Parameters:
+//   - task: A FHIR task.
+//
+// Returns:
+//   - []string: A list of questionnaire response references.
 func fetchTaskOutputs(task fhir.Task) []string {
 	var questionnaireResponseRefs []string
 	if task.Output != nil {
@@ -210,6 +276,14 @@ func fetchTaskOutputs(task fhir.Task) []string {
 	return questionnaireResponseRefs
 }
 
+// isOfOutputType checks if a task output is of a specific type.
+//
+// Parameters:
+//   - output: The task output to check.
+//   - typeName: The type name to check against.
+//
+// Returns:
+//   - bool: True if the output is of the specified type, false otherwise.
 func isOfOutputType(output fhir.TaskOutput, typeName string) bool {
 	matchesType := false
 	if output.ValueReference.Type != nil {
@@ -219,6 +293,15 @@ func isOfOutputType(output fhir.TaskOutput, typeName string) bool {
 	}
 	return matchesType
 }
+
+// isOfInputType checks if a task input is of a specific type.
+//
+// Parameters:
+//   - input: The task input to check.
+//   - typeName: The type name to check against.
+//
+// Returns:
+//   - bool: True if the input is of the specified type, false otherwise.
 func isOfInputType(input fhir.TaskInput, typeName string) bool {
 	matchesType := false
 	if input.ValueReference.Type != nil {
@@ -229,6 +312,13 @@ func isOfInputType(input fhir.TaskInput, typeName string) bool {
 	return matchesType
 }
 
+// fetchTaskInputs extracts questionnaire references from a task's inputs.
+//
+// Parameters:
+//   - task: A FHIR task.
+//
+// Returns:
+//   - []string: A list of questionnaire references.
 func fetchTaskInputs(task fhir.Task) []string {
 	var questionnaireRefs []string
 	if task.Input != nil {
@@ -248,6 +338,14 @@ func fetchTaskInputs(task fhir.Task) []string {
 	return questionnaireRefs
 }
 
+// sendBundle sends a BundleSet to Kafka.
+//
+// Parameters:
+//   - set: The BundleSet to send.
+//   - kafkaClient: The Kafka client used to send the message.
+//
+// Returns:
+//   - error: An error if the send process fails.
 func sendBundle(set BundleSet, kafkaClient KafkaClient) error {
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
