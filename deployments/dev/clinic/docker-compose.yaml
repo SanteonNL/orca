@@ -45,7 +45,6 @@ services:
       # Note: clinic re-uses the FHIR store of the Hospital, so we don't need to start a second one making things even slower
       - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=${HOSPITAL_URL}/fhir
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
-      - ORCA_LOGLEVEL=debug
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json
@@ -62,6 +61,6 @@ services:
     environment:
       ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL: ${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       FHIR_BASE_URL: http://orchestrator:8080/cpc/cps/fhir
-      FHIR_AGGREGATE_URL: http://orchestrator:8080/cpc/aggregate/bgz/fhir
+      FHIR_AGGREGATE_URL: http://orchestrator:8080/cpc/aggregate/fhir
       FHIR_AUTHORIZATION_TOKEN: valid
       NEXT_ALLOWED_ORIGINS: localhost:7080

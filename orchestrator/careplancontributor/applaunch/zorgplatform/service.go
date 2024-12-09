@@ -168,40 +168,44 @@ type Service struct {
 	zorgplatformCert       *x509.Certificate
 	profile                profile.Provider
 	secureTokenService     SecureTokenService
-	cpsTransport           http.RoundTripper
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+appLaunchUrl, s.handleLaunch)
 }
 
-func (s *Service) BgzFhirProxy() coolfhir.HttpProxy {
+func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 	targetFhirBaseUrl, _ := url.Parse(s.config.ApiUrl)
 
-	proxyBasePath := "/cpc/bgz/fhir"
+	proxyBasePath := "/cpc/fhir"
 
 	rewriteUrl, _ := url.Parse(s.baseURL + proxyBasePath)
 
-	return coolfhir.NewProxy("App->EHR (BGZ)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, stsAccessTokenRoundTripper{
-		transport:  s.zorgplatformHttpClient.Transport,
-		zpfService: s,
+	return coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
+		transport:          s.zorgplatformHttpClient.Transport,
+		cpsFhirClient:      s.cpsFhirClient,
+		secureTokenService: s.secureTokenService,
 	}, true)
 }
 
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
 
 type stsAccessTokenRoundTripper struct {
-	transport  http.RoundTripper
-	zpfService *Service
+	transport          http.RoundTripper
+	cpsFhirClient      func() fhirclient.Client
+	secureTokenService SecureTokenService
 }
 
-func (s stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
+func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
+	log.Debug().Ctx(httpRequest.Context()).Msg("Handling Zorgplatform STS access token request")
+
 	// Do something to request the access token
 	newHttpRequest := httpRequest.Clone(httpRequest.Context())
 
 	//TODO: Check if we can update the CarePlan.basedOn to point to the service request
 	carePlanReference := httpRequest.Header.Get("X-Scp-Context")
 	if carePlanReference == "" {
+		log.Error().Ctx(httpRequest.Context()).Msg("Missing X-Scp-Context header")
 		return nil, fmt.Errorf("missing X-Scp-Context header")
 	}
 
@@ -219,6 +223,7 @@ func (s stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.
 	// carePlanReference = strings.TrimPrefix(urlRef.Path, "/CarePlan/")
 	startIndex := strings.Index(urlRef.String(), "/CarePlan")
 	if startIndex == -1 {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to find CarePlan reference in URL: %s", urlRef.String())
 		return nil, fmt.Errorf("unable to find CarePlan reference in URL: %s", urlRef.String())
 	}
 
@@ -229,26 +234,30 @@ func (s stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.
 
 	// TODO: group requests
 	var carePlan fhir.CarePlan
-	err := s.zpfService.cpsFhirClient().ReadWithContext(httpRequest.Context(), localCarePlanRef, &carePlan)
+	err := s.cpsFhirClient().ReadWithContext(httpRequest.Context(), localCarePlanRef, &carePlan)
 	if err != nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch CarePlan resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch CarePlan resource: %w", err)
 	}
 
 	var task fhir.Task
-	err = s.zpfService.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Activity[0].Reference.Reference, &task)
+	err = s.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Activity[0].Reference.Reference, &task)
 	if err != nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch Task resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
 	}
 
 	var patient fhir.Patient
-	err = s.zpfService.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Subject.Reference, &patient)
+	err = s.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Subject.Reference, &patient)
 	if err != nil {
-		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch Patient resource: %v", err)
+		return nil, fmt.Errorf("unable to fetch Patient resource: %w", err)
 	}
 
 	var serviceRequest fhir.ServiceRequest
-	err = s.zpfService.cpsFhirClient().ReadWithContext(httpRequest.Context(), *task.Focus.Reference, &serviceRequest)
+	err = s.cpsFhirClient().ReadWithContext(httpRequest.Context(), *task.Focus.Reference, &serviceRequest)
 	if err != nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch ServiceRequest resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err)
 	}
 
@@ -262,6 +271,7 @@ func (s stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.
 
 	//TODO: Cache/Map the careplan to its workflow id in case a token expires
 	if workflowIdIdentifier == nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Identifier with system %s not found", zorgplatformWorkflowIdSystem)
 		return nil, fmt.Errorf("identifier with system %s not found", zorgplatformWorkflowIdSystem)
 	}
 
@@ -274,6 +284,7 @@ func (s stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.
 		}
 	}
 	if bsnIdentifier == nil {
+		log.Error().Ctx(httpRequest.Context()).Msg("Identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
 		return nil, fmt.Errorf("identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
 	}
 
@@ -290,9 +301,10 @@ func (s stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.
 	}
 
 	//TODO: Cache the token for re-use
-	accessToken, err := s.zpfService.secureTokenService.RequestAccessToken(launchContext, applicationTokenType)
+	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, applicationTokenType)
 
 	if err != nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to request access token for Zorgplatform: %v", err)
 		return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
 	}
 

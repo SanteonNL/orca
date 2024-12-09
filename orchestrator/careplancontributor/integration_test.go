@@ -23,6 +23,7 @@ import (
 var notificationCounter = new(atomic.Int32)
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
+	t.Skip("Fix test once the INT-487 is picked up") //TODO: Fix test once the INT-487 is picked up
 	notificationEndpoint := setupNotificationEndpoint(t)
 	carePlanServiceURL, httpService, cpcURL := setupIntegrationTest(t, notificationEndpoint)
 

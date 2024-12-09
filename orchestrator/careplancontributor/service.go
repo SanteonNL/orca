@@ -42,7 +42,7 @@ func New(
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager,
-	bgzFhirProxy coolfhir.HttpProxy) (*Service, error) {
+	ehrFhirProxy coolfhir.HttpProxy) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
@@ -88,7 +88,7 @@ func New(
 		profile:                 profile,
 		frontendUrl:             config.FrontendConfig.URL,
 		fhirURL:                 fhirURL,
-		bgzFhirProxy:            bgzFhirProxy,
+		ehrFhirProxy:            ehrFhirProxy,
 		transport:               localFhirStoreTransport,
 		workflows: taskengine.FhirApiWorkflowProvider{
 			Client: questionnaireFhirClient,
@@ -117,7 +117,7 @@ type Service struct {
 	// cpsClientFactory is a factory function that creates a new FHIR client for any CarePlanService.
 	cpsClientFactory func(baseURL *url.URL) fhirclient.Client
 	fhirURL          *url.URL
-	bgzFhirProxy     coolfhir.HttpProxy
+	ehrFhirProxy     coolfhir.HttpProxy
 	// transport is used to call the local FHIR store, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
@@ -136,25 +136,18 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		var notification coolfhir.SubscriptionNotification
 		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
 			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to decode notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), "CarePlanContributer/Notify", writer)
 			return
 		}
 		if err := s.handleNotification(request.Context(), &notification); err != nil {
 			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to handle notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), "CarePlanContributer/Notify", writer)
 			return
 		}
 		writer.WriteHeader(http.StatusOK)
 	}))
 	// The BgZ aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
-	mux.HandleFunc(fmt.Sprintf("GET %s/aggregate/bgz/fhir/{rest...}", basePath), s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
-		if !s.healthdataviewEndpointEnabled {
-			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
-				Message:    "health data view proxy endpoint is disabled",
-				StatusCode: http.StatusMethodNotAllowed,
-			}, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
+	mux.HandleFunc("GET "+basePath+"/aggregate/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 
 		err := s.proxyToAllCareTeamMembers(writer, request)
 		if err != nil {
@@ -162,25 +155,9 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	}))
-	// BgZ-specific endpoints. Similar to `GET %s/fhir/{rest...}` but the proxied request requires to have a workflow-specific Access Token that must be created by orca
 	//TODO: FIX --> Returns unauthorized for dev server
-	// mux.HandleFunc(fmt.Sprintf("GET %s/bgz/fhir/{rest...}", basePath), s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-	mux.HandleFunc(fmt.Sprintf("GET %s/bgz/fhir/{rest...}", basePath), func(writer http.ResponseWriter, request *http.Request) {
-		if !s.healthdataviewEndpointEnabled {
-			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
-				Message:    "health data view proxy endpoint is disabled",
-				StatusCode: http.StatusMethodNotAllowed,
-			}, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-
-		err := s.handleProxyBgzData(writer, request)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-	})
-	mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	// mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
 		if !s.healthdataviewEndpointEnabled {
 			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
 				Message:    "health data view proxy endpoint is disabled",
@@ -201,7 +178,7 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
-	}))
+	})
 	//
 	// FE/Session Authorized Endpoints
 	//
@@ -266,33 +243,24 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 // This is typically used by remote parties to retrieve patient data from the local EHR.
 func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, request *http.Request) error {
 
-	_, err := s.authorizeScpMember(request)
-
-	if err != nil {
-		return err
+	if s.ehrFhirProxy == nil {
+		return coolfhir.BadRequest("EHR API is not supported")
 	}
 
-	proxyBasePath := basePath + "/fhir"
-	fhirProxy := coolfhir.NewProxy("External CPC->EHR FHIR proxy", log.Logger, s.fhirURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport, true)
-	fhirProxy.ServeHTTP(writer, request)
+	log.Ctx(request.Context()).Debug().Msg("Handling external FHIR API request")
+
+	// _, err := s.authorizeScpMember(request)
+
+	// if err != nil {
+	// 	return err
+	// }
+
+	s.ehrFhirProxy.ServeHTTP(writer, request)
 	return nil
 }
 
 // proxyToAllCareTeamMembers is a convenience façade method that can be used proxy the request to all CPC nodes localized from the Shared CarePlan.participants.
 func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request *http.Request) error {
-
-	//TODO: Enable below when the logic is fixed
-	// result, err := s.authorizeScpMember(request)
-
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("Failed to authorize SCP member")
-	// 	return coolfhir.BadRequestError(err)
-	// }
-
-	// if !result.isMember {
-	// 	return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
-	// }
-
 	//TODO: We currently have a 1-on-1 relation between the EHR and viewer. Should query all CarePlan.participants
 	// carePlanURLValue := request.Header[carePlanURLHeaderKey]
 
@@ -304,8 +272,8 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 	log.Debug().Msg("Handling BgZ FHIR API request carePlanURL: " + carePlanURLValue[0])
 
-	upstreamServerUrl, err := url.Parse(strings.Replace(s.config.CarePlanService.URL, "/cps", basePath+"/bgz/fhir", 1))
-	proxyBasePath := basePath + "/aggregate/bgz/fhir/"
+	upstreamServerUrl, err := url.Parse(strings.Replace(s.config.CarePlanService.URL, "/cps", basePath+"/fhir", 1))
+	proxyBasePath := basePath + "/aggregate/fhir/"
 
 	if err != nil {
 		return coolfhir.BadRequestError(err)
@@ -317,39 +285,6 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 	fhirProxy.ServeHTTP(writer, request)
 
-	return nil
-}
-
-// handleProxyBgzData handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
-func (s Service) handleProxyBgzData(writer http.ResponseWriter, request *http.Request) error {
-
-	log.Debug().Msg("Handling BgZ FHIR API request for url: " + request.URL.String())
-
-	for key, values := range request.Header {
-		for _, value := range values {
-			log.Debug().Msgf("Header key: %s, value: %s", key, value)
-		}
-	}
-
-	if s.bgzFhirProxy == nil {
-		return coolfhir.BadRequest("BgZ API is not supported")
-	}
-
-	//TODO: Enable below when the logic is fixed
-	// result, err := s.authorizeScpMember(request)
-
-	// if err != nil {
-	// 	log.Error().Err(err).Msg("Failed to authorize SCP member")
-	// 	return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusBadRequest)
-	// }
-
-	// if !result.isMember {
-	// 	return coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
-	// }
-
-	log.Debug().Msg("Proxying request to BgZ FHIR API")
-
-	s.bgzFhirProxy.ServeHTTP(writer, request)
 	return nil
 }
 
@@ -457,7 +392,7 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 			next(response, request)
 			return
 		}
-		http.Error(response, "no session or bearer token found", http.StatusUnauthorized)
+		http.Error(response, "no session found", http.StatusUnauthorized)
 	}
 }
 
