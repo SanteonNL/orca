@@ -103,7 +103,7 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 			}
 		}
 	}
-	if requestResource == nil && (request.Method == http.MethodPost || request.Method == http.MethodPut) {
+	if requestResource == nil && (request.Method == http.MethodPost || request.Method == http.MethodPut) && !strings.HasSuffix(request.URL.Path, "/_search") {
 		WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
 			OperationOutcome: fhir.OperationOutcome{
 				Issue: []fhir.OperationOutcomeIssue{
@@ -129,7 +129,7 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 		if strings.HasSuffix(request.URL.Path, "/_search") {
 			values, err := url.ParseQuery(string(requestData))
 			if err == nil {
-				err = f.client.SearchWithContext(request.Context(), outRequestUrl.Path, values, &responseResource, params...)
+				err = f.client.SearchWithContext(request.Context(), strings.TrimSuffix(outRequestUrl.Path, "/_search"), values, &responseResource, params...)
 			}
 		} else {
 			err = f.client.CreateWithContext(request.Context(), requestResource, &responseResource, params...)

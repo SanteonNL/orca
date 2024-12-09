@@ -80,6 +80,12 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 			require.Equal(t, "Task", *carePlan.Activity[0].Reference.Type)
 			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
 		})
+		t.Run("Search for task by ID", func(t *testing.T) {
+			var fetchedBundle fhir.Bundle
+			err := cpsDataHolder.Search("Task", url.Values{"_id": {*task.Id}}, &fetchedBundle)
+			require.NoError(t, err)
+			require.Len(t, fetchedBundle.Entry, 1)
+		})
 	}
 
 	cpsDataRequester := fhirclient.New(carePlanServiceURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
@@ -116,29 +122,54 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	{
 		var fetchedTask fhir.Task
 		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
+
+		// Read
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.NoError(t, err)
+		// Search
+		var fetchedBundle fhir.Bundle
+		err = cpsDataHolder.Search("Task", url.Values{"_id": {*task.Id}}, &fetchedBundle)
+		require.NoError(t, err)
+		require.Len(t, fetchedBundle.Entry, 1)
 	}
 	t.Log("Reading task after accepted - header references non-existent careplan - Fails")
 	{
 		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: invalidCareplanTransport}, nil)
 		var fetchedTask fhir.Task
+		// Read
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.Error(t, err)
+		// Search
+		var fetchedBundle fhir.Bundle
+		err = cpcDataRequester.Search("Task", url.Values{"_id": {*task.Id}}, &fetchedBundle)
+		require.Error(t, err)
+		require.Len(t, fetchedBundle.Entry, 0)
 	}
 	t.Log("Reading task after accepted - no xSCP header - Fails")
 	{
 		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: noXSCPHeaderTransport}, nil)
 		var fetchedTask fhir.Task
+		// Read
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.Error(t, err)
+		// Search
+		var fetchedBundle fhir.Bundle
+		err = cpcDataRequester.Search("Task", url.Values{"_id": {*task.Id}}, &fetchedBundle)
+		require.Error(t, err)
+		require.Len(t, fetchedBundle.Entry, 0)
 	}
 	t.Log("Reading task after accepted - invalid principal - Fails")
 	{
 		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 		var fetchedTask fhir.Task
+		// Read
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.Error(t, err)
+		// Search
+		var fetchedBundle fhir.Bundle
+		err = cpcDataRequester.Search("Task", url.Values{"_id": {*task.Id}}, &fetchedBundle)
+		require.Error(t, err)
+		require.Len(t, fetchedBundle.Entry, 0)
 	}
 }
 
