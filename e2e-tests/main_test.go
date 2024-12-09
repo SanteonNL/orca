@@ -8,6 +8,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -144,7 +145,7 @@ func Test_Main(t *testing.T) {
 			t.Log("Responding to Task Questionnaire")
 			{
 				var searchResult fhir.Bundle
-				err = hospitalOrcaFHIRClient.Read("Task", &searchResult, fhirclient.QueryParam("part-of", "Task/"+*task.ID))
+				err = hospitalOrcaFHIRClient.Search("Task", url.Values{"part-of": {"Task/" + *task.ID}}, &searchResult)
 				require.NoError(t, err)
 				require.Len(t, searchResult.Entry, 1, "Expected 1 subtask")
 

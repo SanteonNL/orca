@@ -30,7 +30,7 @@ func TestService_handleGetCondition(t *testing.T) {
 	var patient1 fhir.Patient
 	_ = json.Unmarshal(patient1Raw, &patient1)
 
-	tests := []TestStruct[fhir.Condition]{
+	tests := []TestHandleGetStruct[fhir.Condition]{
 		{
 			ctx:           auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:          "error: Condition does not exist",

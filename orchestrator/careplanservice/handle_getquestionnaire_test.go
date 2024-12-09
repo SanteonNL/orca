@@ -12,7 +12,7 @@ import (
 )
 
 func TestService_handleGetQuestionnaire(t *testing.T) {
-	tests := []TestStruct[fhir.Questionnaire]{
+	tests := []TestHandleGetStruct[fhir.Questionnaire]{
 		{
 			ctx:           auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:          "error: Questionnaire does not exist",

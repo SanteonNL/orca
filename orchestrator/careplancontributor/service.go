@@ -127,22 +127,24 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 		var notification coolfhir.SubscriptionNotification
 		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
 			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to decode notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributor/Notify"), writer)
 			return
 		}
 		if err := s.handleNotification(request.Context(), &notification); err != nil {
 			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to handle notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributer/Notify"), writer)
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), fmt.Sprintf("CarePlanContributor/Notify"), writer)
 			return
 		}
 		writer.WriteHeader(http.StatusOK)
 	}))
-	mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+
+	// The code to GET or POST/_search are the same, so we can use the same handler for both
+	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if !s.healthdataviewEndpointEnabled {
 			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
 				Message:    "health data view proxy endpoint is disabled",
 				StatusCode: http.StatusMethodNotAllowed,
-			}, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			}, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 
@@ -155,10 +157,12 @@ func (s Service) RegisterHandlers(mux *http.ServeMux) {
 				operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
 				err = operationOutcomeErr
 			}
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
-	}))
+	})
+	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
+	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	//
 	// FE/Session Authorized Endpoints
 	//
@@ -250,7 +254,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	// TODO: Discuss changes to this validation with team
 	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
 	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.localCarePlanServiceUrl.String())
-	err = s.cpsClientFactory(s.localCarePlanServiceUrl).Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"))
+	err = s.cpsClientFactory(s.localCarePlanServiceUrl).Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle)
 	if err != nil {
 		return err
 	}
