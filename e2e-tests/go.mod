@@ -5,7 +5,7 @@ go 1.23
 toolchain go1.23.2
 
 require (
-	github.com/SanteonNL/go-fhir-client v0.2.10
+	github.com/SanteonNL/go-fhir-client v0.2.13
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.33.0
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20241004115431-5fbe087ad50c
