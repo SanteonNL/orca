@@ -10,7 +10,7 @@ require (
 	github.com/lestrrat-go/jwx/v2 v2.0.21
 	github.com/rs/zerolog v1.32.0
 	github.com/samply/golang-fhir-models/fhir-models v0.3.2
-	github.com/stretchr/testify v1.9.0
+	github.com/stretchr/testify v1.10.0
 	golang.org/x/oauth2 v0.20.0
 )
 
