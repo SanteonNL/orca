@@ -41,7 +41,7 @@ func Start(config Config) error {
 	}
 	if config.CarePlanContributor.Enabled {
 		// App Launches
-		var bgzFhirProxy coolfhir.HttpProxy
+		var ehrFhirProxy coolfhir.HttpProxy
 		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, careplancontributor.LandingURL))
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
 			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Public.URL, careplancontributor.LandingURL))
@@ -51,7 +51,7 @@ func Start(config Config) error {
 			if err != nil {
 				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
 			}
-			bgzFhirProxy = service.BgzFhirProxy()
+			ehrFhirProxy = service.EhrFhirProxy()
 			services = append(services, service)
 		}
 		//
@@ -59,7 +59,8 @@ func Start(config Config) error {
 			config.CarePlanContributor,
 			activeProfile,
 			config.Public.ParseURL(),
-			sessionManager, bgzFhirProxy)
+			sessionManager,
+			ehrFhirProxy)
 		if err != nil {
 			return err
 		}

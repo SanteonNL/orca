@@ -211,28 +211,26 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 
 	log.Debug().Ctx(httpRequest.Context()).Msgf("Found SCP context: %s", carePlanReference)
 	//TODO: Replace with CPC to CPS call - using direct acces to the CPS Store - until thr auth part is clear
-	urlRef, _ := url.Parse(carePlanReference)
-	query := urlRef.Query()
 
+	// // carePlanReference = strings.TrimPrefix(urlRef.Path, "/CarePlan/")
+	startIndex := strings.Index(carePlanReference, "/CarePlan")
+	if startIndex == -1 {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to find CarePlan reference in URL: %s", carePlanReference)
+		return nil, fmt.Errorf("unable to find CarePlan reference in URL: %s", carePlanReference)
+	}
+
+	localCarePlanRef := carePlanReference[startIndex:]
+	// localCarePlanRef = strings.ReplaceAll(localCarePlanRef, "%3F", "?")
+
+	log.Debug().Ctx(httpRequest.Context()).Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
+
+	// TODO: group requests, something like:
 	// ?_include=CarePlan:activity-reference&_include:iterate=Task:focus
 	// query.Add("_include", "CarePlan:activity-reference")
 	// //TODO: This is a tmp solution, but if it's not that temporary, not all FHIR servers support chaining
 	// query.Add("_include:iterate", "Task:focus") //chain the Task.focus from the joined CarePlan.activity-references
-	urlRef.RawQuery = query.Encode()
+	// urlRef.RawQuery = query.Encode()
 
-	// carePlanReference = strings.TrimPrefix(urlRef.Path, "/CarePlan/")
-	startIndex := strings.Index(urlRef.String(), "/CarePlan")
-	if startIndex == -1 {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to find CarePlan reference in URL: %s", urlRef.String())
-		return nil, fmt.Errorf("unable to find CarePlan reference in URL: %s", urlRef.String())
-	}
-
-	localCarePlanRef := urlRef.String()[startIndex:]
-	localCarePlanRef = strings.ReplaceAll(localCarePlanRef, "%3F", "?")
-
-	log.Debug().Ctx(httpRequest.Context()).Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
-
-	// TODO: group requests
 	var carePlan fhir.CarePlan
 	err := s.cpsFhirClient().ReadWithContext(httpRequest.Context(), localCarePlanRef, &carePlan)
 	if err != nil {
