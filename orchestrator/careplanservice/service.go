@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"io"
 	"net/http"
@@ -33,6 +34,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	globals.CarePlanServiceFhirClient = fhirClient
 	if err != nil {
 		return nil, err
 	}
@@ -290,12 +292,18 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 		log.Warn().Ctx(httpRequest.Context()).Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
 		statusCode = http.StatusOK
 	}
+	var headers = map[string][]string{}
+	if fhirResponse.Location != nil {
+		headers["Location"] = []string{*fhirResponse.Location}
+	}
+	if fhirResponse.Etag != nil {
+		headers["ETag"] = []string{*fhirResponse.Etag}
+	}
+	if fhirResponse.LastModified != nil {
+		headers["Last-Modified"] = []string{*fhirResponse.LastModified}
+	}
 	s.pipeline.
-		PrependResponseTransformer(pipeline.ResponseHeaderSetter{
-			// TODO: I won't pretend I tested the other response headers (e.g. Last-Modified or ETag), so we won't set them for now.
-			//       Add them (and test them) when needed.
-			"Location": {*fhirResponse.Location},
-		}).
+		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
 		DoAndWrite(httpResponse, txResult.Entry[0].Resource, statusCode)
 }
 

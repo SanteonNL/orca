@@ -2,12 +2,13 @@ package coolfhir
 
 import (
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"testing"
-	"time"
 )
 
 func TestValidateLogicalReference(t *testing.T) {
@@ -656,6 +657,172 @@ func TestValidateReference(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equalf(t, tt.want, ValidateReference(tt.args.reference), "ValidateReference(%v)", tt.args.reference)
+		})
+	}
+}
+
+func TestFilterIdentifier(t *testing.T) {
+	type args struct {
+		identifiers *[]fhir.Identifier
+		system      string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *[]fhir.Identifier
+	}{
+		{
+			name: "nil identifiers",
+			args: args{
+				identifiers: nil,
+				system:      "http://example.com",
+			},
+			want: &[]fhir.Identifier{},
+		},
+		{
+			name: "no matching identifiers",
+			args: args{
+				identifiers: &[]fhir.Identifier{
+					{
+						System: to.Ptr("http://example.org"),
+						Value:  to.Ptr("123"),
+					},
+				},
+				system: "http://example.com",
+			},
+			want: &[]fhir.Identifier{},
+		},
+		{
+			name: "one matching identifier",
+			args: args{
+				identifiers: &[]fhir.Identifier{
+					{
+						System: to.Ptr("http://example.com"),
+						Value:  to.Ptr("123"),
+					},
+					{
+						System: to.Ptr("http://example.org"),
+						Value:  to.Ptr("456"),
+					},
+				},
+				system: "http://example.com",
+			},
+			want: &[]fhir.Identifier{
+				{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+			},
+		},
+		{
+			name: "multiple matching identifiers",
+			args: args{
+				identifiers: &[]fhir.Identifier{
+					{
+						System: to.Ptr("http://example.com"),
+						Value:  to.Ptr("123"),
+					},
+					{
+						System: to.Ptr("http://example.com"),
+						Value:  to.Ptr("456"),
+					},
+				},
+				system: "http://example.com",
+			},
+			want: &[]fhir.Identifier{
+				{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("123"),
+				},
+				{
+					System: to.Ptr("http://example.com"),
+					Value:  to.Ptr("456"),
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, FilterIdentifier(tt.args.identifiers, tt.args.system), "FilterIdentifier(%v, %v)", tt.args.identifiers, tt.args.system)
+		})
+	}
+}
+
+func TestFilterFirstIdentifier(t *testing.T) {
+	type args struct {
+		identifiers *[]fhir.Identifier
+		system      string
+	}
+	tests := []struct {
+		name string
+		args args
+		want *fhir.Identifier
+	}{
+		{
+			name: "nil identifiers",
+			args: args{
+				identifiers: nil,
+				system:      "http://example.com",
+			},
+			want: nil,
+		},
+		{
+			name: "no matching identifiers",
+			args: args{
+				identifiers: &[]fhir.Identifier{
+					{
+						System: to.Ptr("http://example.org"),
+						Value:  to.Ptr("123"),
+					},
+				},
+				system: "http://example.com",
+			},
+			want: nil,
+		},
+		{
+			name: "one matching identifier",
+			args: args{
+				identifiers: &[]fhir.Identifier{
+					{
+						System: to.Ptr("http://example.com"),
+						Value:  to.Ptr("123"),
+					},
+					{
+						System: to.Ptr("http://example.org"),
+						Value:  to.Ptr("456"),
+					},
+				},
+				system: "http://example.com",
+			},
+			want: &fhir.Identifier{
+				System: to.Ptr("http://example.com"),
+				Value:  to.Ptr("123"),
+			},
+		},
+		{
+			name: "multiple matching identifiers",
+			args: args{
+				identifiers: &[]fhir.Identifier{
+					{
+						System: to.Ptr("http://example.com"),
+						Value:  to.Ptr("123"),
+					},
+					{
+						System: to.Ptr("http://example.com"),
+						Value:  to.Ptr("456"),
+					},
+				},
+				system: "http://example.com",
+			},
+			want: &fhir.Identifier{
+				System: to.Ptr("http://example.com"),
+				Value:  to.Ptr("123"),
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, FilterFirstIdentifier(tt.args.identifiers, tt.args.system), "FilterFirstIdentifier(%v, %v)", tt.args.identifiers, tt.args.system)
 		})
 	}
 }

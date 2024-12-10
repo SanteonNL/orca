@@ -16,7 +16,7 @@ export default function EnrollmentLayout({ children }: { children: React.ReactNo
         ? <span className='font-medium'>Verzoek controleren</span>
         : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Verzoek controleren</a>
 
-    const title = service ? `${service} Instellen` : "Instellen"
+    const title = service ? `${service} instellen` : "Instellen"
 
     return (
         <div className="w-full h-full">
