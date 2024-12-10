@@ -2,16 +2,17 @@ package coolfhir
 
 import (
 	"bytes"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/rs/zerolog/log"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func TestProxy(t *testing.T) {
@@ -241,6 +242,8 @@ func TestProxy(t *testing.T) {
 		})
 		t.Run("request headers are sanitized", func(t *testing.T) {
 			httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
+			// SCP uses this header to pass context information, which should be to other CPCs
+			httpRequest.Header.Set("X-Scp-Context", "https://unit.test/fhir/CarePlan/123")
 			// There can be numerous X-headers that can contain information that should not be proxied by default (e.g. internal infrastructure details)
 			httpRequest.Header.Set("X-Request-Id", "custom-client")
 			// User agent can convey privacy-sensitive information about the client that should not be proxied
@@ -254,6 +257,7 @@ func TestProxy(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 			assert.NotEqual(t, "custom-client", capturedHeaders.Get("User-Agent"))
+			assert.Equal(t, capturedHeaders.Get("X-Scp-Context"), "https://unit.test/fhir/CarePlan/123")
 			assert.Empty(t, capturedHeaders.Get("X-Request-Id"))
 			assert.Empty(t, capturedHeaders.Get("Referer"))
 			assert.Empty(t, capturedHeaders.Get("Authorization"))
