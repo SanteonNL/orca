@@ -54,6 +54,14 @@ func TestProxy(t *testing.T) {
 		capturedHeaders = request.Header
 		writer.Write([]byte(`{"resourceType":"Patient"}`))
 	})
+	upstreamServerMux.HandleFunc("GET /fhir/InvalidJsonResponse", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+		writer.Write([]byte(`this is not JSON`))
+	})
 	upstreamServer := httptest.NewServer(upstreamServerMux)
 	upstreamServerURL, _ := url.Parse(upstreamServer.URL)
 	upstreamServerURL.Path = "/fhir"
@@ -82,6 +90,15 @@ func TestProxy(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, "1", capturedQueryParams.Get("_id"))
 	})
+	t.Run("upstream error", func(t *testing.T) {
+		t.Run("invalid FHIR response (not valid JSON)", func(t *testing.T) {
+			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/InvalidJsonResponse")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadGateway, httpResponse.StatusCode)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			assert.Contains(t, string(responseData), "FHIR response unmarshal failed")
+		})
+	})
 	t.Run("cache headers", func(t *testing.T) {
 		t.Run("no caching", func(t *testing.T) {
 			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/DoGet")
@@ -101,7 +118,6 @@ func TestProxy(t *testing.T) {
 			assert.Empty(t, httpResponse.Header.Get("Pragma"))
 		})
 	})
-
 	t.Run("GET request", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
 		httpResponse, err := proxyServer.Client().Do(httpRequest)
