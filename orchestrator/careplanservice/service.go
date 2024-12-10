@@ -143,14 +143,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
 
 	// Binding to actual routing
-	// Handle bundle
-	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != basePath+"/" {
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("invalid path"), "CarePlanService/POST", httpResponse)
-			return
-		}
-		s.handleBundle(request, httpResponse)
-	}))
 	// Creating a resource
 	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
@@ -160,6 +152,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
+	}))
+	// Handle bundle
+	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != basePath+"/" {
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("invalid path"), "CarePlanService/POST", httpResponse)
+			return
+		}
+		s.handleBundle(request, httpResponse)
 	}))
 	// Updating a resource by ID
 	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
@@ -355,6 +355,13 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 
 func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
 	headers := new(fhirclient.Headers)
+
+	// Ensure the Content-Type header is set correctly
+	contentType := httpRequest.Header.Get("Content-Type")
+	if strings.Contains(contentType, ",") {
+		contentType = strings.Split(contentType, ",")[0]
+		httpRequest.Header.Set("Content-Type", contentType)
+	}
 
 	// Parse URL-encoded parameters from the request body
 	if err := httpRequest.ParseForm(); err != nil {
@@ -659,6 +666,7 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 // checkAllowUnmanagedOperations checks if unmanaged operations are allowed. It errors if they are not.
 func (s *Service) checkAllowUnmanagedOperations() error {
 	if !s.allowUnmanagedFHIROperations {
+		log.Info().Msgf("FAIL3")
 		return &coolfhir.ErrorWithCode{
 			Message:    "FHIR operation not allowed",
 			StatusCode: http.StatusMethodNotAllowed,
