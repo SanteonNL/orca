@@ -50,7 +50,10 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_KAFKA_TOPIC=orca-patient-enrollment-events
       - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENDPOINT=eventhubs-emulator:9092
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_CONNECTIONSTRING=Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_MECHANISM=PLAIN
+      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SECURITY_PROTOCOL=SASL_PLAINTEXT
+      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_USERNAME=$ConnectionString
+      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_PASSWORD=Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
   viewer:
 #    image: ghcr.io/santeonnl/orca_viewersimulator:main
     build:

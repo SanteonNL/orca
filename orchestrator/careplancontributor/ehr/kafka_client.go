@@ -20,7 +20,10 @@ type KafkaConfig struct {
 	Enabled          bool   `koanf:"enabled"`
 	Topic            string `koanf:"topic"`
 	Endpoint         string `koanf:"endpoint"`
-	ConnectionString string `koanf:"connectionstring"`
+	saslMechanism    string `koanf:"sasl_mechanism" default:"PLAIN"`
+	saslUsername     string `koanf:"sasl_username" default:"$ConnectionString"`
+	saslPassword     string `koanf:"sasl_password"`
+	securityProtocol string `koanf:"security_protocol" default:"SASL_PLAINTEXT"`
 }
 
 // KafkaClient is an interface that defines the method for submitting messages.
@@ -66,14 +69,13 @@ func NewClient(config KafkaConfig) (KafkaClient, error) {
 	var kafkaClient KafkaClient
 	if config.Enabled {
 		endpoint := config.Endpoint
-		connectionString := config.ConnectionString
-		log.Infof("KafkaClientImpl, connecting to %s, using connectionString %s", endpoint, connectionString)
+		log.Infof("KafkaClientImpl, connecting to %s", endpoint)
 		producer, err := kafka.NewProducer(&kafka.ConfigMap{
 			"bootstrap.servers": endpoint,
-			"sasl.mechanisms":   "PLAIN",
-			"security.protocol": "SASL_PLAINTEXT",
-			"sasl.username":     "$ConnectionString",
-			"sasl.password":     connectionString,
+			"sasl.mechanisms":   config.saslMechanism,
+			"security.protocol": config.securityProtocol,
+			"sasl.username":     config.saslUsername,
+			"sasl.password":     config.saslPassword,
 		})
 		if err != nil {
 			return nil, err
