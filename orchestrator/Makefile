@@ -6,6 +6,7 @@ install-tools:
 
 gen-mocks:
 	mockgen -destination=lib/coolfhir/client_mock.go -package=coolfhir -source=lib/coolfhir/client.go
+	mockgen -destination=careplancontributor/ehr/kafka_client_mock.go -package=ehr -source=careplancontributor/ehr/kafka_client.go
 
 load-fhir-testdata:
 	curl -X POST -H "Content-Type: application/json" -d @initialize_hopital_data_bundle.json http://localhost:9090/fhir

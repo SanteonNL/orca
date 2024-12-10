@@ -38,10 +38,10 @@ func NotifyTaskAccepted(cpsClient fhirclient.Client, kafkaClient KafkaClient, ta
 	ref := "Task/" + *task.Id
 	log.Info().Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
 	uid, err := uuid.NewUUID()
-	id := uid.URN()
 	if err != nil {
 		return err
 	}
+	id := uid.URN()
 	bundles := BundleSet{
 		Id:   id,
 		task: ref,
@@ -117,7 +117,7 @@ func findForReferences(tasks []fhir.Task) []string {
 		if task.For != nil {
 			patientReference := task.For.Reference
 			if patientReference != nil {
-				log.Info().Msgf("Found patientReference %s", patientReference)
+				log.Info().Msgf("Found patientReference %s", *patientReference)
 				patientForRefs = append(patientForRefs, *patientReference)
 			}
 		}
@@ -138,7 +138,7 @@ func findFocusReferences(tasks []fhir.Task) []string {
 		if task.Focus != nil {
 			focusReference := task.Focus.Reference
 			if focusReference != nil {
-				log.Info().Msgf("Found focusReference %s", focusReference)
+				log.Info().Msgf("Found focusReference %s", *focusReference)
 				focusRefs = append(focusRefs, *focusReference)
 			}
 		}
@@ -161,7 +161,7 @@ func findBasedOnReferences(tasks []fhir.Task) []string {
 			for _, reference := range basedOnReferences {
 				basedOnReference := reference.Reference
 				if basedOnReference != nil {
-					log.Info().Msgf("Found basedOnReference %s", basedOnReference)
+					log.Info().Msgf("Found basedOnReference %s", *basedOnReference)
 					basedOnRefs = append(basedOnRefs, *basedOnReference)
 				}
 			}
