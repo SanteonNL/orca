@@ -144,6 +144,15 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)
+
+	// Test POST edge cases
+	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/_search", "application/fhir+json", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+
+	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/1/_search", "application/fhir+json", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 }
 
 type OperationOutcomeWithResourceType struct {

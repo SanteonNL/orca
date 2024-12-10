@@ -159,7 +159,7 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 
 // handleSearchResource is a generic function to search for a resource of a given type and return the results
 // it returns a processed list of the required resource type, the full bundle and an error
-func handleSearchResource[T any](s *Service, ctx context.Context, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
+func handleSearchResource[T any](ctx context.Context, s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
 	form := url.Values{}
 	for k, v := range queryParams {
 		for _, value := range v {

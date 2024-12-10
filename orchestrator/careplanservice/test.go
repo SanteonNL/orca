@@ -9,7 +9,6 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
 	"net/url"
-	"reflect"
 	"testing"
 )
 
@@ -53,41 +52,41 @@ type TestHandleSearchStruct[T any] struct {
 func testHelperHandleGetResource[T any](t *testing.T, params TestHandleGetStruct[T], handler func(ctx context.Context, id string, headers *fhirclient.Headers) (*T, error)) {
 	t.Run(fmt.Sprintf("Test %s: %s", params.resourceType, params.name), func(t *testing.T) {
 		if params.returnedCarePlanBundle != nil || params.errorFromCarePlanRead != nil {
-			params.mockClient.EXPECT().Search("CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, searchParams url.Values, result interface{}, option ...fhirclient.Option) error {
+			params.mockClient.EXPECT().Search("CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, searchParams url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
 				if params.returnedCarePlanBundle != nil {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedCarePlanBundle))
+					*result = *params.returnedCarePlanBundle
 				}
 				return params.errorFromCarePlanRead
 			})
 		}
 		if params.returnedTaskBundle != nil || params.errorFromTaskBundleRead != nil {
-			params.mockClient.EXPECT().Search("Task", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, searchParams url.Values, result interface{}, option ...fhirclient.Option) error {
+			params.mockClient.EXPECT().Search("Task", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, searchParams url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
 				if params.returnedTaskBundle != nil {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedTaskBundle))
+					*result = *params.returnedTaskBundle
 				}
 				return params.errorFromTaskBundleRead
 			})
 		}
 		if params.returnedTask != nil || params.errorFromTaskRead != nil {
-			params.mockClient.EXPECT().Read("Task/"+params.returnedTaskId, gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+			params.mockClient.EXPECT().Read("Task/"+params.returnedTaskId, gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Task, option ...fhirclient.Option) error {
 				if params.returnedTask != nil {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedTask))
+					*result = *params.returnedTask
 				}
 				return params.errorFromTaskRead
 			})
 		}
 		if params.returnedPatientBundle != nil || params.errorFromPatientBundleRead != nil {
-			params.mockClient.EXPECT().Search("Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, searchParams url.Values, result interface{}, option ...fhirclient.Option) error {
+			params.mockClient.EXPECT().Search("Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, searchParams url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
 				if params.returnedPatientBundle != nil {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedPatientBundle))
+					*result = *params.returnedPatientBundle
 				}
 				return params.errorFromPatientBundleRead
 			})
 		}
 		if (params.returnedResource != nil || params.errorFromRead != nil) && params.resourceType != "CarePlan" {
-			params.mockClient.EXPECT().Read(params.resourceType+"/"+params.id, gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+			params.mockClient.EXPECT().Read(params.resourceType+"/"+params.id, gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *T, option ...fhirclient.Option) error {
 				if params.returnedResource != nil {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedResource))
+					*result = *params.returnedResource
 				}
 				return params.errorFromRead
 			})
@@ -108,18 +107,18 @@ func testHelperHandleGetResource[T any](t *testing.T, params TestHandleGetStruct
 func testHelperHandleSearchResource[T any](t *testing.T, params TestHandleSearchStruct[T], handler func(ctx context.Context, searchParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error)) {
 	t.Run(fmt.Sprintf("Test %s: %s", params.resourceType, params.name), func(t *testing.T) {
 		if params.returnedCarePlanBundle != nil || params.errorFromCarePlanRead != nil {
-			params.mockClient.EXPECT().Search("CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, searchParams url.Values, result interface{}, option ...fhirclient.Option) error {
+			params.mockClient.EXPECT().Search("CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, searchParams url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
 				if params.returnedCarePlanBundle != nil {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedCarePlanBundle))
+					*result = *params.returnedCarePlanBundle
 				}
 				return params.errorFromCarePlanRead
 			})
 		}
 
 		if params.returnedBundle != nil || params.errorFromSearch != nil {
-			params.mockClient.EXPECT().Search(params.resourceType, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(resourceType string, searchParams url.Values, result interface{}, option ...fhirclient.Option) error {
+			params.mockClient.EXPECT().Search(params.resourceType, gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(resourceType string, searchParams url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
 				if params.returnedBundle != nil {
-					reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*params.returnedBundle))
+					*result = *params.returnedBundle
 				}
 				return params.errorFromSearch
 			})

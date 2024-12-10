@@ -141,7 +141,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
 
 	// Binding to actual routing
+	// Handle bundle
 	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != basePath+"/" {
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("invalid path"), "CarePlanService/POST", httpResponse)
+			return
+		}
 		s.handleBundle(request, httpResponse)
 	}))
 	// Creating a resource
@@ -345,7 +350,7 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 
 	// Parse URL-encoded parameters from the request body
 	if err := httpRequest.ParseForm(); err != nil {
-		http.Error(httpResponse, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
+		coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("failed to parse form: %w", err), operationName, httpResponse)
 		return
 	}
 	queryParams := httpRequest.PostForm

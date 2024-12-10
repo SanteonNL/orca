@@ -65,7 +65,7 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 		return nil, err
 	}
 
-	tasks, bundle, err := handleSearchResource[fhir.Task](s, ctx, "Task", queryParams, headers)
+	tasks, bundle, err := handleSearchResource[fhir.Task](ctx, s, "Task", queryParams, headers)
 	if err != nil {
 		return nil, err
 	}

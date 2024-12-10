@@ -21,6 +21,7 @@ func TestProxy(t *testing.T) {
 	var capturedQueryParams url.Values
 	var capturedCookies []*http.Cookie
 	var capturedHeaders http.Header
+	var capturedBody []byte
 	upstreamServerMux.HandleFunc("GET /fhir/DoGet", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
@@ -44,6 +45,24 @@ func TestProxy(t *testing.T) {
 		capturedCookies = request.Cookies()
 		capturedHeaders = request.Header
 		writer.Write([]byte(`{"resourceType":"Patient"}`))
+	})
+	upstreamServerMux.HandleFunc("POST /fhir/DoPost/_search", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+		capturedBody, _ = io.ReadAll(request.Body)
+		writer.Write([]byte(`{"resourceType":"Patient"}`))
+	})
+	upstreamServerMux.HandleFunc("POST /fhir/DoPost/1/_search", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+		capturedBody, _ = io.ReadAll(request.Body)
+		writer.Write([]byte(`{"msg":"still performs a search"}`))
 	})
 	upstreamServerMux.HandleFunc("PUT /fhir/DoPut", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
@@ -109,7 +128,7 @@ func TestProxy(t *testing.T) {
 		assert.Empty(t, capturedQueryParams)
 		assert.Empty(t, capturedCookies)
 	})
-	t.Run("POST request", func(t *testing.T) {
+	t.Run("POST request - Create", func(t *testing.T) {
 		t.Run("ok", func(t *testing.T) {
 			httpRequest, _ := http.NewRequest("POST", proxyServer.URL+"/localfhir/DoPost", bytes.NewReader([]byte(`{"resourceType":"Patient"}`)))
 			httpResponse, err := proxyServer.Client().Do(httpRequest)
@@ -133,6 +152,35 @@ func TestProxy(t *testing.T) {
 			assert.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 			responseData, _ := io.ReadAll(httpResponse.Body)
 			assert.Contains(t, string(responseData), "Request body isn't valid JSON")
+		})
+	})
+	t.Run("POST request - Search", func(t *testing.T) {
+		t.Run("ok", func(t *testing.T) {
+			searchParams := url.Values{
+				"foo": {"bar"},
+			}
+			httpRequest, _ := http.NewRequest("POST", proxyServer.URL+"/localfhir/DoPost/_search", bytes.NewReader([]byte(searchParams.Encode())))
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Empty(t, capturedQueryParams)
+			assert.Empty(t, capturedCookies)
+			assert.Equal(t, "foo=bar", string(capturedBody))
+		})
+		t.Run("no request body", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("POST", proxyServer.URL+"/localfhir/DoPost/_search", nil)
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Empty(t, capturedBody)
+		})
+		t.Run("invalid combination of ID and search fails", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("POST", proxyServer.URL+"/localfhir/DoPost/1/_search", bytes.NewReader([]byte(`foo=bar`)))
+			httpResponse, err := proxyServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			assert.Contains(t, string(responseData), "still performs a search")
 		})
 	})
 	t.Run("PUT request", func(t *testing.T) {

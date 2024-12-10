@@ -52,7 +52,7 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 		queryParams.Add("_include", "CarePlan:care-team")
 	}
 
-	carePlans, bundle, err := handleSearchResource[fhir.CarePlan](s, ctx, "CarePlan", queryParams, headers)
+	carePlans, bundle, err := handleSearchResource[fhir.CarePlan](ctx, s, "CarePlan", queryParams, headers)
 	if err != nil {
 		return nil, err
 	}
