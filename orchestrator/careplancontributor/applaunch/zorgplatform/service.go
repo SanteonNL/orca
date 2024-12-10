@@ -13,6 +13,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/SanteonNL/orca/orchestrator/globals"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -29,6 +31,7 @@ import (
 
 const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
+const zorgplatformWorkflowIdSystem = "https://api.zorgplatform.online/fhir/v1/Task"
 
 func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
@@ -169,6 +172,140 @@ type Service struct {
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+appLaunchUrl, s.handleLaunch)
+}
+
+func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
+	targetFhirBaseUrl, _ := url.Parse(s.config.ApiUrl)
+
+	proxyBasePath := "/cpc/fhir"
+
+	rewriteUrl, _ := url.Parse(s.baseURL + proxyBasePath)
+
+	return coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
+		transport:          s.zorgplatformHttpClient.Transport,
+		cpsFhirClient:      s.cpsFhirClient,
+		secureTokenService: s.secureTokenService,
+	}, true)
+}
+
+var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
+
+type stsAccessTokenRoundTripper struct {
+	transport          http.RoundTripper
+	cpsFhirClient      func() fhirclient.Client
+	secureTokenService SecureTokenService
+}
+
+func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
+	log.Debug().Ctx(httpRequest.Context()).Msg("Handling Zorgplatform STS access token request")
+
+	// Do something to request the access token
+	newHttpRequest := httpRequest.Clone(httpRequest.Context())
+
+	//TODO: Check if we can update the CarePlan.basedOn to point to the service request
+	carePlanReference := httpRequest.Header.Get("X-Scp-Context")
+	if carePlanReference == "" {
+		log.Error().Ctx(httpRequest.Context()).Msg("Missing X-Scp-Context header")
+		return nil, fmt.Errorf("missing X-Scp-Context header")
+	}
+
+	log.Debug().Ctx(httpRequest.Context()).Msgf("Found SCP context: %s", carePlanReference)
+	//TODO: Replace with CPC to CPS call - using direct acces to the CPS Store - until thr auth part is clear
+
+	// // carePlanReference = strings.TrimPrefix(urlRef.Path, "/CarePlan/")
+	startIndex := strings.Index(carePlanReference, "/CarePlan")
+	if startIndex == -1 {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to find CarePlan reference in URL: %s", carePlanReference)
+		return nil, fmt.Errorf("unable to find CarePlan reference in URL: %s", carePlanReference)
+	}
+
+	localCarePlanRef := carePlanReference[startIndex:]
+	// localCarePlanRef = strings.ReplaceAll(localCarePlanRef, "%3F", "?")
+
+	log.Debug().Ctx(httpRequest.Context()).Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
+
+	// TODO: group requests, something like:
+	// ?_include=CarePlan:activity-reference&_include:iterate=Task:focus
+	// query.Add("_include", "CarePlan:activity-reference")
+	// //TODO: This is a tmp solution, but if it's not that temporary, not all FHIR servers support chaining
+	// query.Add("_include:iterate", "Task:focus") //chain the Task.focus from the joined CarePlan.activity-references
+	// urlRef.RawQuery = query.Encode()
+
+	var carePlan fhir.CarePlan
+	err := s.cpsFhirClient().ReadWithContext(httpRequest.Context(), localCarePlanRef, &carePlan)
+	if err != nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch CarePlan resource: %v", err)
+		return nil, fmt.Errorf("unable to fetch CarePlan resource: %w", err)
+	}
+
+	var task fhir.Task
+	err = s.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Activity[0].Reference.Reference, &task)
+	if err != nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch Task resource: %v", err)
+		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
+	}
+
+	var patient fhir.Patient
+	err = s.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Subject.Reference, &patient)
+	if err != nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch Patient resource: %v", err)
+		return nil, fmt.Errorf("unable to fetch Patient resource: %w", err)
+	}
+
+	var serviceRequest fhir.ServiceRequest
+	err = s.cpsFhirClient().ReadWithContext(httpRequest.Context(), *task.Focus.Reference, &serviceRequest)
+	if err != nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch ServiceRequest resource: %v", err)
+		return nil, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err)
+	}
+
+	var workflowIdIdentifier *fhir.Identifier
+	for _, identifier := range serviceRequest.Identifier {
+		if identifier.System != nil && *identifier.System == zorgplatformWorkflowIdSystem {
+			workflowIdIdentifier = &identifier
+			break
+		}
+	}
+
+	//TODO: Cache/Map the careplan to its workflow id in case a token expires
+	if workflowIdIdentifier == nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Identifier with system %s not found", zorgplatformWorkflowIdSystem)
+		return nil, fmt.Errorf("identifier with system %s not found", zorgplatformWorkflowIdSystem)
+	}
+
+	log.Debug().Ctx(httpRequest.Context()).Msgf("Found workflowId identifier: %s", *workflowIdIdentifier.Value)
+
+	bsnIdentifier := coolfhir.FilterFirstIdentifier(&patient.Identifier, "http://fhir.nl/fhir/NamingSystem/bsn")
+	if bsnIdentifier == nil {
+		log.Error().Ctx(httpRequest.Context()).Msg("Identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
+		return nil, fmt.Errorf("identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
+	}
+
+	bsn := *bsnIdentifier.Value
+
+	//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
+	if bsn == "999911120" {
+		bsn = "999999151"
+	}
+
+	launchContext := LaunchContext{
+		WorkflowId: *workflowIdIdentifier.Value,
+		Bsn:        bsn,
+	}
+
+	//TODO: Cache the token for re-use
+	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, applicationTokenType)
+
+	if err != nil {
+		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to request access token for Zorgplatform: %v", err)
+		return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
+	}
+
+	log.Debug().Ctx(httpRequest.Context()).Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
+
+	newHttpRequest.Header.Add("Accept", "application/fhir+json")
+	newHttpRequest.Header.Add("Authorization", "SAML "+accessToken)
+	return s.transport.RoundTrip(newHttpRequest)
 }
 
 func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Request) {
@@ -375,7 +512,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Status: fhir.RequestStatusActive,
 		Identifier: []fhir.Identifier{
 			{
-				System: to.Ptr("https://api.zorgplatform.online/fhir/v1/Task"),
+				System: to.Ptr(zorgplatformWorkflowIdSystem),
 				Value:  to.Ptr(launchContext.WorkflowId),
 			},
 		},
@@ -428,6 +565,10 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	}, nil
 }
 
+func (s *Service) cpsFhirClient() fhirclient.Client {
+	return globals.CarePlanServiceFhirClient
+}
+
 func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.CodeableConcept, error) {
 	var workflowReference string
 	if definitionRef, ok := task["definitionReference"].(map[string]interface{}); !ok {
@@ -440,7 +581,9 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 		return nil, fmt.Errorf("Task.definitionReference.reference does is not in the form '%s/<id>': %s", prefix, workflowReference)
 	}
 	// Mapping defined by https://github.com/Zorgbijjou/oid-repository/blob/main/oid-repository.md
-	switch strings.TrimPrefix(workflowReference, prefix) {
+	p := strings.TrimPrefix(workflowReference, prefix)
+	p = strings.TrimPrefix(p, "urn:oid:")
+	switch p {
 	case "1.0":
 		// Used by Zorgplatform Developer Portal, default to Hartfalen
 		fallthrough
@@ -493,16 +636,57 @@ func (a authHeaderRoundTripper) RoundTrip(request *http.Request) (*http.Response
 
 func getCertificate(pemCert string) (*x509.Certificate, error) {
 
-	if pemCert == "" {
-		return nil, fmt.Errorf("no certificate provided")
-	}
-
 	block, _ := pem.Decode([]byte(pemCert))
+
 	if block == nil {
-		return nil, fmt.Errorf("failed to parse PEM block containing the public key")
+
+		log.Warn().Msg("Zorgplatform certificate could not be decoded by environment variable, falling back to hardcoded certificate")
+
+		//TODO: We do not want a hard coded key in the code, should be able to load from config - fix issue
+		//TODO: Fallback to hardcoded certificate - for some reason the certificate cannot be decoded on Docker Desktop OSX from the env var
+		pemCert = `-----BEGIN CERTIFICATE-----
+MIIGpTCCBY2gAwIBAgIJAJ7SiMwCRCiBMA0GCSqGSIb3DQEBCwUAMIG0MQswCQYD
+VQQGEwJVUzEQMA4GA1UECBMHQXJpem9uYTETMBEGA1UEBxMKU2NvdHRzZGFsZTEa
+MBgGA1UEChMRR29EYWRkeS5jb20sIEluYy4xLTArBgNVBAsTJGh0dHA6Ly9jZXJ0
+cy5nb2RhZGR5LmNvbS9yZXBvc2l0b3J5LzEzMDEGA1UEAxMqR28gRGFkZHkgU2Vj
+dXJlIENlcnRpZmljYXRlIEF1dGhvcml0eSAtIEcyMB4XDTI0MDcwMzE2MDMyNFoX
+DTI1MDgwNDE2MDMyNFowIDEeMBwGA1UEAwwVKi56b3JncGxhdGZvcm0ub25saW5l
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAptpmGW3pOURCzuF1+oyP
+vIW8bGEjPLyRzMfn29WhNFj8HrkH7+tQCaNE3aL1TTcskwAZEsXTxC9pGAbuqGrU
+Ukc8TIDX/Ze6W9CnT/bUYfYl43hLXmmdElxdCtYZAcJtbIeR3bSR1hqdH0w3T/Ob
+Q8bDl5TXGX6IPPf/vZ/tBsv/886brz+bXSwArSzNwVBqvVW+EpSyWnDm45/oXzbE
+N9Sl7kRzlUuzMDH+GWGNRGOItBfIfixRp4NiopBt7WYBw/lOaUvjYH+GsC46fZzT
+Xu0gwzkw8/AqJRyS0OkYGmddEswUizBIPH6OLmjPskpqc6WrsoL2VipcaA+hr0Fz
+ZwIDAQABo4IDSzCCA0cwDAYDVR0TAQH/BAIwADAdBgNVHSUEFjAUBggrBgEFBQcD
+AQYIKwYBBQUHAwIwDgYDVR0PAQH/BAQDAgWgMDkGA1UdHwQyMDAwLqAsoCqGKGh0
+dHA6Ly9jcmwuZ29kYWRkeS5jb20vZ2RpZzJzMS0yNDM0MS5jcmwwXQYDVR0gBFYw
+VDBIBgtghkgBhv1tAQcXATA5MDcGCCsGAQUFBwIBFitodHRwOi8vY2VydGlmaWNh
+dGVzLmdvZGFkZHkuY29tL3JlcG9zaXRvcnkvMAgGBmeBDAECATB2BggrBgEFBQcB
+AQRqMGgwJAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3NwLmdvZGFkZHkuY29tLzBABggr
+BgEFBQcwAoY0aHR0cDovL2NlcnRpZmljYXRlcy5nb2RhZGR5LmNvbS9yZXBvc2l0
+b3J5L2dkaWcyLmNydDAfBgNVHSMEGDAWgBRAwr0njsw0gzCiM9f7bLPwtCyAzjA1
+BgNVHREELjAsghUqLnpvcmdwbGF0Zm9ybS5vbmxpbmWCE3pvcmdwbGF0Zm9ybS5v
+bmxpbmUwHQYDVR0OBBYEFPZefQaBIVcTvBQ6Q7aL5Xs9z+OrMIIBfQYKKwYBBAHW
+eQIEAgSCAW0EggFpAWcAdgAS8U40vVNyTIQGGcOPP3oT+Oe1YoeInG0wBYTr5YYm
+OgAAAZB5Vh7tAAAEAwBHMEUCIQDdEs3O/Bh0XyB/bNCDYHnGsvy2uvIqLGLUyXcI
+zi97pwIgWUdyVuJi9r6l0iVFJpNiHIl/7OdG6v7F1ppRsRQ4gFwAdQB9WR4S4Xgq
+exxhZ3xe/fjQh1wUoE6VnrkDL9kOjC55uAAAAZB5Vh/1AAAEAwBGMEQCIBZ0Y+G1
+jNdhFJXKRwhWkkIhRmCKPuBN/U596oL7Yta7AiAZ9hEqvZw8qqWckQR5M0He2rgF
+WE9w3frfzuYNd9OsGAB2AMz7D2qFcQll/pWbU87psnwi6YVcDZeNtql+VMD+TA2w
+AAABkHlWIKkAAAQDAEcwRQIhAKI5arrZ02GLep/gElJGSxNJp4HepzjXJC5dF9N7
+5et3AiAqQHOYLY1u8xWl45guYPxpBiSKf+bKxhyZYPCN1wRQEzANBgkqhkiG9w0B
+AQsFAAOCAQEAGFpFlsmdTCsiSEgwSHW1NPgeZV0EkiS7wz52iuLdphheoIY9xw44
+iPNrUknBcP9gfoMpUmMGKelwDdauUitEsHQYo2cFATJvIGyMkK5hxcldZdmjgehi
+8tXl7/3gH3R2f6CPOEUbG/+Tlc50cdN0o4jd/qZlfMjDo9odblOVHe4oOlnJYugB
+KLh5Cy6PjY6n28xqStJFd2Aximzius46N1XC1XjtMCpwUov+wrf3/CkDTc7dWSU3
+yBBl3pbBMYkf2wjOBGWWXcRuK+Tldk1nA0SI0zRRlzjgi4mD74fXdUwtr8Chsh9u
+U6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
+-----END CERTIFICATE-----`
+		block, _ = pem.Decode([]byte(pemCert))
 	}
 
 	cert, parseErr := x509.ParseCertificate(block.Bytes)
+
 	if parseErr != nil {
 		return nil, fmt.Errorf("failed to parse certificate: %w", parseErr)
 	}
