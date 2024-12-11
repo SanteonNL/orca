@@ -2,16 +2,17 @@ package coolfhir
 
 import (
 	"bytes"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/rs/zerolog/log"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/rs/zerolog/log"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func TestProxy(t *testing.T) {
@@ -29,6 +30,14 @@ func TestProxy(t *testing.T) {
 		capturedHeaders = request.Header
 		writer.Write([]byte(`{"resourceType":"Patient"}`))
 	})
+	upstreamServerMux.HandleFunc("/fhir/InvalidJsonResponse", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+		writer.Write([]byte(`this is not JSON`))
+	})
 	upstreamServerMux.HandleFunc("POST /fhir/DoPost", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusCreated)
 		capturedHost = request.Host
@@ -44,6 +53,14 @@ func TestProxy(t *testing.T) {
 		capturedCookies = request.Cookies()
 		capturedHeaders = request.Header
 		writer.Write([]byte(`{"resourceType":"Patient"}`))
+	})
+	upstreamServerMux.HandleFunc("GET /fhir/InvalidJsonResponse", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+		writer.Write([]byte(`this is not JSON`))
 	})
 	upstreamServer := httptest.NewServer(upstreamServerMux)
 	upstreamServerURL, _ := url.Parse(upstreamServer.URL)
@@ -61,7 +78,7 @@ func TestProxy(t *testing.T) {
 			}
 			return request
 		},
-	})
+	}, false)
 	proxyServer := httptest.NewServer(proxyServerMux)
 	proxyServerMux.HandleFunc("/localfhir/{rest...}", proxy.ServeHTTP)
 
@@ -72,6 +89,34 @@ func TestProxy(t *testing.T) {
 		err := client.Read("DoGet", &patient, fhirclient.QueryParam("_id", "1"))
 		require.NoError(t, err)
 		require.Equal(t, "1", capturedQueryParams.Get("_id"))
+	})
+	t.Run("upstream error", func(t *testing.T) {
+		t.Run("invalid FHIR response (not valid JSON)", func(t *testing.T) {
+			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/InvalidJsonResponse")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadGateway, httpResponse.StatusCode)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			assert.Contains(t, string(responseData), "FHIR response unmarshal failed")
+		})
+	})
+	t.Run("cache headers", func(t *testing.T) {
+		t.Run("no caching", func(t *testing.T) {
+			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/DoGet")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
+		})
+		t.Run("private caching only", func(t *testing.T) {
+			proxy.(*fhirClientProxy).allowCaching = true
+			t.Cleanup(func() {
+				proxy.(*fhirClientProxy).allowCaching = false
+			})
+			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/DoGet")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
+			assert.Empty(t, httpResponse.Header.Get("Pragma"))
+		})
 	})
 	t.Run("GET request", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
@@ -165,6 +210,8 @@ func TestProxy(t *testing.T) {
 		})
 		t.Run("request headers are sanitized", func(t *testing.T) {
 			httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)
+			// SCP uses this header to pass context information, which should be to other CPCs
+			httpRequest.Header.Set("X-Scp-Context", "https://unit.test/fhir/CarePlan/123")
 			// There can be numerous X-headers that can contain information that should not be proxied by default (e.g. internal infrastructure details)
 			httpRequest.Header.Set("X-Request-Id", "custom-client")
 			// User agent can convey privacy-sensitive information about the client that should not be proxied
@@ -178,6 +225,7 @@ func TestProxy(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 			assert.NotEqual(t, "custom-client", capturedHeaders.Get("User-Agent"))
+			assert.Equal(t, capturedHeaders.Get("X-Scp-Context"), "https://unit.test/fhir/CarePlan/123")
 			assert.Empty(t, capturedHeaders.Get("X-Request-Id"))
 			assert.Empty(t, capturedHeaders.Get("Referer"))
 			assert.Empty(t, capturedHeaders.Get("Authorization"))

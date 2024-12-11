@@ -229,13 +229,11 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 							ReasonDetail: err,
 						}
 					}
-					if fetchedQuestionnaire.Url != nil {
-						nextStep, err = workflow.Proceed(*fetchedQuestionnaire.Url)
-						if err != nil {
-							log.Error().Ctx(ctx).Err(err).Msgf("Unable to determine next questionnaire (previous URL=%s)", *fetchedQuestionnaire.Url)
-						} else {
-							break
-						}
+					nextStep, err = workflow.Proceed(*item.ValueReference.Reference)
+					if err != nil {
+						log.Error().Ctx(ctx).Err(err).Msgf("Unable to determine next questionnaire (previous URL=%s)", *fetchedQuestionnaire.Url)
+					} else {
+						break
 					}
 				}
 			}
@@ -243,7 +241,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 
 		// TODO: If we can't perform the next step, we should mark the primary task as failed?
 		if nextStep != nil {
-			log.Debug().Ctx(ctx).Msgf("Found next step in workflow. Finding Questionnaire by url: %s", nextStep.QuestionnaireUrl)
+			log.Debug().Ctx(ctx).Msgf("Found next step in workflow, loading questionnaire (url=%s)", nextStep.QuestionnaireUrl)
 			questionnaire, err = s.workflows.QuestionnaireLoader().Load(ctx, nextStep.QuestionnaireUrl)
 			if err != nil {
 				return &TaskRejection{

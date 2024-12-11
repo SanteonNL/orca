@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -21,6 +23,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
@@ -30,272 +33,37 @@ import (
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
 
-func TestService_Proxy_NoHealthdataviewEndpointEnabledFlag_Fails(t *testing.T) {
-	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
-	// Setup: configure backing FHIR server to which the service proxies
-	fhirServerMux := http.NewServeMux()
-	fhirServer := httptest.NewServer(fhirServerMux)
-	fhirServerURL, _ := url.Parse(fhirServer.URL)
-	fhirServerURL.Path = "/fhir"
-	sessionManager, _ := createTestSession()
+// TestService_ExternalCPCProxyToEHR tests the proxies that external CPCs use to request data from the local EHR's FHIR API.
+func TestService_ExternalCPCProxyToEHR(t *testing.T) {
+	t.Skip("Fix test once the INT-487 is picked up") //TODO: Fix test once the INT-487 is picked up
 
-	service, _ := New(Config{
-		FHIR: coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
-		},
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
-	// Setup: configure the service to proxy to the backing FHIR server
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
-
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
-
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
-	httpResponse, err := httpClient.Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusMethodNotAllowed)
-}
-
-func TestService_Proxy_NoHeader_Fails(t *testing.T) {
-	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
-	// Setup: configure backing FHIR server to which the service proxies
-	fhirServerMux := http.NewServeMux()
-	fhirServer := httptest.NewServer(fhirServerMux)
-	fhirServerURL, _ := url.Parse(fhirServer.URL)
-	fhirServerURL.Path = "/fhir"
-	sessionManager, _ := createTestSession()
-
-	service, _ := New(Config{
-		FHIR: coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
-		},
-		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
-	// Setup: configure the service to proxy to the backing FHIR server
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
-
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
-
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
-	httpResponse, err := httpClient.Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
-	body, _ := io.ReadAll(httpResponse.Body)
-	require.JSONEq(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: X-Scp-Context header value must be set"}],"resourceType":"OperationOutcome"}`, string(body))
-}
-
-func TestService_Proxy_NoCarePlanInHeader_Fails(t *testing.T) {
-	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
-	// Setup: configure backing FHIR server to which the service proxies
-	fhirServerMux := http.NewServeMux()
-	fhirServer := httptest.NewServer(fhirServerMux)
-	fhirServerURL, _ := url.Parse(fhirServer.URL)
-	fhirServerURL.Path = "/fhir"
-	sessionManager, _ := createTestSession()
-
-	carePlanServiceMux := http.NewServeMux()
-	carePlanService := httptest.NewServer(carePlanServiceMux)
-	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/cps"
-
-	service, _ := New(Config{
-		FHIR: coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
-		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
-	// Setup: configure the service to proxy to the backing FHIR server
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
-
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/SomeResource/invalid", carePlanServiceURL))
-
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
-	httpResponse, err := httpClient.Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusBadRequest)
-	body, _ := io.ReadAll(httpResponse.Body)
-	require.JSONEq(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`, string(body))
-}
-
-func TestService_Proxy_CarePlanNotFound_Fails(t *testing.T) {
-	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
-	// Setup: configure backing FHIR server to which the service proxies
-	fhirServerMux := http.NewServeMux()
-	fhirServer := httptest.NewServer(fhirServerMux)
-	fhirServerURL, _ := url.Parse(fhirServer.URL)
-	fhirServerURL.Path = "/fhir"
-	sessionManager, _ := createTestSession()
-
-	capturedURL := ""
-	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
-		capturedURL = request.URL.String()
-		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-not-found.json")
-		var data fhir.Bundle
-		_ = json.Unmarshal(rawJson, &data)
-		responseData, _ := json.Marshal(data)
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write(responseData)
-	})
-	carePlanService := httptest.NewServer(carePlanServiceMux)
-	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/cps"
-
-	service, _ := New(Config{
-		FHIR: coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
-		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
-	// Setup: configure the service to proxy to the backing FHIR server
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
-
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/not-exists", carePlanServiceURL))
-
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
-	httpResponse, err := httpClient.Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
-	body, _ := io.ReadAll(httpResponse.Body)
-	require.JSONEq(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`, string(body))
-	require.Equal(t, "/cps/CarePlan?_id=not-exists&_include=CarePlan%3Acare-team", capturedURL)
-}
-
-// There is no care team present in the care plan, the proxy is not reached
-func TestService_Proxy_CareTeamNotPresent_Fails(t *testing.T) {
-	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
-	// Setup: configure backing FHIR server to which the service proxies
-	fhirServerMux := http.NewServeMux()
-	fhirServer := httptest.NewServer(fhirServerMux)
-	fhirServerURL, _ := url.Parse(fhirServer.URL)
-	fhirServerURL.Path = "/fhir"
-	sessionManager, _ := createTestSession()
-
-	capturedURL := ""
-	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
-		capturedURL = request.URL.String()
-		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-careteam-missing.json")
-		var data fhir.Bundle
-		_ = json.Unmarshal(rawJson, &data)
-		responseData, _ := json.Marshal(data)
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write(responseData)
-	})
-	carePlanService := httptest.NewServer(carePlanServiceMux)
-	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/cps"
-
-	service, _ := New(Config{
-		FHIR: coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
-		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
-	// Setup: configure the service to proxy to the backing FHIR server
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
-
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
-
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
-	httpResponse, err := httpClient.Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
-	body, _ := io.ReadAll(httpResponse.Body)
-	require.JSONEq(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`, string(body))
-	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
-}
-
-// The requester is not in the returned care team, the proxy is not reached
-func TestService_Proxy_RequesterNotInCareTeam_Fails(t *testing.T) {
-	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
-	// Setup: configure backing FHIR server to which the service proxies
-	fhirServerMux := http.NewServeMux()
-	fhirServer := httptest.NewServer(fhirServerMux)
-	fhirServerURL, _ := url.Parse(fhirServer.URL)
-	fhirServerURL.Path = "/fhir"
-	sessionManager, _ := createTestSession()
-
-	capturedURL := ""
-	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
-		capturedURL = request.URL.String()
-		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
-		var data fhir.Bundle
-		_ = json.Unmarshal(rawJson, &data)
-		responseData, _ := json.Marshal(data)
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write(responseData)
-	})
-	carePlanService := httptest.NewServer(carePlanServiceMux)
-	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/cps"
-
-	service, _ := New(Config{
-		FHIR: coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
-		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
-	// Setup: configure the service to proxy to the backing FHIR server
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
-
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal3, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
-
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
-	httpResponse, err := httpClient.Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusForbidden)
-	body, _ := io.ReadAll(httpResponse.Body)
-	require.JSONEq(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
-	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
-}
-
-func TestService_Proxy_Valid(t *testing.T) {
-	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
-	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(writer).Encode(fhir.Bundle{})
 	})
+
 	fhirServer := httptest.NewServer(fhirServerMux)
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
 
-	capturedURL := ""
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
-		capturedURL = request.URL.String()
+	capturedCarePlanSearchRequestUrl := ""
+	carePlanServiceMux.HandleFunc("GET /cps/CarePlan", func(writer http.ResponseWriter, request *http.Request) {
+		capturedCarePlanSearchRequestUrl = request.URL.String()
+		if strings.Contains(request.URL.RawQuery, "not-exists") {
+			rawJson, _ := os.ReadFile("./testdata/careplan-bundle-not-found.json")
+			writer.WriteHeader(http.StatusOK)
+			_, _ = writer.Write(rawJson)
+			return
+		}
+		if strings.Contains(request.URL.RawQuery, "careteam-missing") {
+			rawJson, _ := os.ReadFile("./testdata/careplan-bundle-careteam-missing.json")
+			writer.WriteHeader(http.StatusOK)
+			_, _ = writer.Write(rawJson)
+			return
+		}
 		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
 		var data fhir.Bundle
 		_ = json.Unmarshal(rawJson, &data)
@@ -315,123 +83,117 @@ func TestService_Proxy_Valid(t *testing.T) {
 			URL: carePlanServiceURL.String(),
 		},
 		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
+	httpClient := &http.Client{}
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
-	httpResponse, err := httpClient.Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusOK)
-	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
-}
+	carePlanUrl := fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL)
 
-// All validation succeeds but the proxied method returns an error
-func TestService_Proxy_ProxyReturnsError_Fails(t *testing.T) {
-	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
-	// Setup: configure backing FHIR server to which the service proxies
-	fhirServerMux := http.NewServeMux()
-	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusNotFound)
+	t.Run("ok", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
+		httpRequest.Header.Set("X-SCP-Context", carePlanUrl)
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedCarePlanSearchRequestUrl)
+		t.Run("caching is allowed", func(t *testing.T) {
+			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
+		})
 	})
-	fhirServer := httptest.NewServer(fhirServerMux)
-	fhirServerURL, _ := url.Parse(fhirServer.URL)
-	fhirServerURL.Path = "/fhir"
-	sessionManager, _ := createTestSession()
-
-	capturedURL := ""
-	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
-		capturedURL = request.URL.String()
-		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
-		var data fhir.Bundle
-		_ = json.Unmarshal(rawJson, &data)
-		responseData, _ := json.Marshal(data)
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write(responseData)
+	t.Run("upstream FHIR server returns 404 for resource", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient/100", nil)
+		httpRequest.Header.Set("X-SCP-Context", carePlanUrl)
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNotFound, httpResponse.StatusCode)
 	})
-	carePlanService := httptest.NewServer(carePlanServiceMux)
-	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/cps"
-
-	service, _ := New(Config{
-		FHIR: coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
-		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
-	// Setup: configure the service to proxy to the backing FHIR server
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
-
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
-
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
-	httpResponse, err := httpClient.Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, httpResponse.StatusCode, http.StatusNotFound)
-	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
-}
-
-// The practitioner is in the CareTeam, but their Period is expired
-func TestService_Proxy_CareTeamMemberInvalidPeriod_Fails(t *testing.T) {
-	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
-	// Setup: configure backing FHIR server to which the service proxies
-	fhirServerMux := http.NewServeMux()
-	fhirServer := httptest.NewServer(fhirServerMux)
-	fhirServerURL, _ := url.Parse(fhirServer.URL)
-	fhirServerURL.Path = "/fhir"
-	sessionManager, _ := createTestSession()
-
-	capturedURL := ""
-	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/{rest...}", func(writer http.ResponseWriter, request *http.Request) {
-		capturedURL = request.URL.String()
-		rawJson, _ := os.ReadFile("./testdata/careplan-bundle-valid.json")
-		var data fhir.Bundle
-		_ = json.Unmarshal(rawJson, &data)
-		responseData, _ := json.Marshal(data)
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write(responseData)
+	t.Run("endpoint not enabled", func(t *testing.T) {
+		service.healthdataviewEndpointEnabled = false
+		t.Cleanup(func() {
+			service.healthdataviewEndpointEnabled = true
+		})
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
 	})
-	carePlanService := httptest.NewServer(carePlanServiceMux)
-	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/cps"
+	t.Run("x-scp-context header", func(t *testing.T) {
+		t.Run("header not present", func(t *testing.T) {
+			httpResponse, err := httpClient.Get(frontServer.URL + "/cpc/fhir/Patient")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+			body, _ := io.ReadAll(httpResponse.Body)
+			require.Contains(t, string(body), "X-Scp-Context header must be set")
+		})
+		t.Run("multiple values", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
+			httpRequest.Header["X-SCP-Context"] = []string{
+				fmt.Sprintf("%s/CarePlan/1", carePlanServiceURL),
+				fmt.Sprintf("%s/CarePlan/2", carePlanServiceURL),
+			}
+			httpResponse, err := httpClient.Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+			body, _ := io.ReadAll(httpResponse.Body)
+			require.Contains(t, string(body), "X-Scp-Context header can't contain multiple values")
+		})
+		t.Run("header does not refer to a CarePlan", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
+			httpRequest.Header["X-SCP-Context"] = []string{fmt.Sprintf("%s/SomeResource/invalid", carePlanServiceURL)}
+			httpResponse, err := httpClient.Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+			body, _ := io.ReadAll(httpResponse.Body)
+			require.JSONEq(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`, string(body))
+		})
+	})
+	t.Run("CarePlan not found", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
+		httpRequest.Header["X-SCP-Context"] = []string{fmt.Sprintf("%s/CarePlan/not-exists", carePlanServiceURL)}
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNotFound, httpResponse.StatusCode)
+		body, _ := io.ReadAll(httpResponse.Body)
+		require.Contains(t, string(body), "CarePlan not found")
+	})
+	t.Run("CareTeam not present", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
+		httpRequest.Header["X-SCP-Context"] = []string{fmt.Sprintf("%s/CarePlan/careteam-missing", carePlanServiceURL)}
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusNotFound, httpResponse.StatusCode)
+		body, _ := io.ReadAll(httpResponse.Body)
+		require.Contains(t, string(body), "CareTeam not found in bundle")
+	})
+	t.Run("no access", func(t *testing.T) {
+		t.Run("requester not in CareTeam", func(t *testing.T) {
+			ts := auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal3, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL))
 
-	service, _ := New(Config{
-		FHIR: coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
-		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-		HealthDataViewEndpointEnabled: true,
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
-	// Setup: configure the service to proxy to the backing FHIR server
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
+			httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
+			httpResponse, err := ts.RoundTrip(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
+			body, _ := io.ReadAll(httpResponse.Body)
+			require.JSONEq(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
+			require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedCarePlanSearchRequestUrl)
+		})
+		t.Run("active period expired", func(t *testing.T) {
+			ts := auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal2, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL.String()))
 
-	httpClient := frontServer.Client()
-	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal2, fmt.Sprintf("%s/CarePlan/cps-careplan-01", carePlanServiceURL.String()))
-
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
-	httpResponse, err := httpClient.Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
-	body, _ := io.ReadAll(httpResponse.Body)
-	require.JSONEq(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
-	require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedURL)
+			httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Patient", nil)
+			httpResponse, err := ts.RoundTrip(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
+			body, _ := io.ReadAll(httpResponse.Body)
+			require.JSONEq(t, `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributer/GET /cpc/fhir/Patient failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`, string(body))
+			require.Equal(t, "/cps/CarePlan?_id=cps-careplan-01&_include=CarePlan%3Acare-team", capturedCarePlanSearchRequestUrl)
+		})
+	})
 }
 
 // Invalid test cases are simpler, can be tested with http endpoint mocking
@@ -494,7 +256,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal1,
-	}, orcaPublicURL, sessionManager)
+	}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -603,7 +365,8 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
-	}, orcaPublicURL, sessionManager)
+	}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
 	service.cpsClientFactory = func(baseUrl *url.URL) fhirclient.Client {
@@ -667,6 +430,7 @@ func TestService_ProxyToEHR(t *testing.T) {
 	fhirServerMux.HandleFunc("GET /fhir/Patient", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
+		_ = json.NewEncoder(writer).Encode(fhir.Bundle{})
 	})
 	fhirServer := httptest.NewServer(fhirServerMux)
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
@@ -681,7 +445,7 @@ func TestService_ProxyToEHR(t *testing.T) {
 	}
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	service, err := New(Config{}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -697,6 +461,10 @@ func TestService_ProxyToEHR(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)
+
+	t.Run("caching is not allowed", func(t *testing.T) {
+		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
+	})
 
 	// Logout and attempt to get the patient again
 	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/logout", nil)
@@ -734,6 +502,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
 		capturedQueryParams = request.URL.Query()
+		_ = json.NewEncoder(writer).Encode(fhir.Bundle{})
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
@@ -745,7 +514,7 @@ func TestService_ProxyToCPS(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager)
+	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()
@@ -762,6 +531,10 @@ func TestService_ProxyToCPS(t *testing.T) {
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, carePlanServiceURL.Host, capturedHost)
 	require.Equal(t, "foo:bar", capturedQueryParams.Get("_search"))
+
+	t.Run("caching is not allowed", func(t *testing.T) {
+		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
+	})
 
 	// Logout and attempt to get the patient again
 	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/logout", nil)

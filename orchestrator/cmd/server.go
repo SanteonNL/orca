@@ -3,6 +3,9 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
@@ -10,9 +13,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"net/http"
-	"time"
 )
 
 func Start(config Config) error {
@@ -38,16 +40,8 @@ func Start(config Config) error {
 		return fmt.Errorf("failed to create profile: %w", err)
 	}
 	if config.CarePlanContributor.Enabled {
-		carePlanContributor, err := careplancontributor.New(
-			config.CarePlanContributor,
-			activeProfile,
-			config.Public.ParseURL(),
-			sessionManager)
-		if err != nil {
-			return err
-		}
-		services = append(services, carePlanContributor)
 		// App Launches
+		var ehrFhirProxy coolfhir.HttpProxy
 		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, careplancontributor.LandingURL))
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
 			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Public.URL, careplancontributor.LandingURL))
@@ -57,8 +51,20 @@ func Start(config Config) error {
 			if err != nil {
 				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
 			}
+			ehrFhirProxy = service.EhrFhirProxy()
 			services = append(services, service)
 		}
+		//
+		carePlanContributor, err := careplancontributor.New(
+			config.CarePlanContributor,
+			activeProfile,
+			config.Public.ParseURL(),
+			sessionManager,
+			ehrFhirProxy)
+		if err != nil {
+			return err
+		}
+		services = append(services, carePlanContributor)
 
 		// Start session expiration ticker
 		ticker := time.NewTicker(time.Minute)

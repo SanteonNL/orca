@@ -49,4 +49,39 @@ func TestLoadConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, zerolog.TraceLevel, c.LogLevel)
 	})
+	t.Run("slices", func(t *testing.T) {
+		type sliceContainer struct {
+			Slice []string `koanf:"slice"`
+		}
+		t.Run("empty", func(t *testing.T) {
+			os.Setenv("ORCA_SLICE", "")
+			target := sliceContainer{}
+			require.NoError(t, loadConfigInto(&target))
+			require.Empty(t, target.Slice)
+		})
+		t.Run("single", func(t *testing.T) {
+			os.Setenv("ORCA_SLICE", "foo")
+			target := sliceContainer{}
+			require.NoError(t, loadConfigInto(&target))
+			require.Equal(t, []string{"foo"}, target.Slice)
+		})
+		t.Run("multiple", func(t *testing.T) {
+			os.Setenv("ORCA_SLICE", "foo,bar")
+			target := sliceContainer{}
+			require.NoError(t, loadConfigInto(&target))
+			require.Equal(t, []string{"foo", "bar"}, target.Slice)
+		})
+		t.Run("with escaped comma", func(t *testing.T) {
+			os.Setenv("ORCA_SLICE", "foo\\,bar")
+			target := sliceContainer{}
+			require.NoError(t, loadConfigInto(&target))
+			require.Equal(t, []string{"foo,bar"}, target.Slice)
+		})
+		t.Run("spaces are trimmed", func(t *testing.T) {
+			os.Setenv("ORCA_SLICE", " foo , bar ")
+			target := sliceContainer{}
+			require.NoError(t, loadConfigInto(&target))
+			require.Equal(t, []string{"foo", "bar"}, target.Slice)
+		})
+	})
 }
