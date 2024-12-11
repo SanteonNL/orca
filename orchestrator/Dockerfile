@@ -4,6 +4,9 @@ FROM golang:1.23.4-alpine AS build
 
 LABEL maintainer="info@reinkrul.nl"
 
+## Needed for github.com/confluentinc/confluent-kafka-go/v2
+RUN apk add musl-dev librdkafka-dev gcc
+
 ENV GO111MODULE on
 ENV GOPATH /
 
@@ -16,7 +19,6 @@ RUN mkdir /app
 # RUN go build -o /app/bin .
 ## Needed for github.com/confluentinc/confluent-kafka-go/v2
 ENV CGO_ENABLED=1
-RUN apk add musl-dev librdkafka-dev gcc
 RUN go build -ldflags="-extldflags=-static" -tags musl -o /app/bin .
 
 # ## Deploy

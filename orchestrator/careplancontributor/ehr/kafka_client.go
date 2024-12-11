@@ -17,13 +17,21 @@ import (
 //   - Endpoint: The Kafka broker endpoint.
 //   - ConnectionString: The connection string used for authentication.
 type KafkaConfig struct {
-	Enabled          bool   `koanf:"enabled"`
-	Topic            string `koanf:"topic"`
-	Endpoint         string `koanf:"endpoint"`
-	saslMechanism    string `koanf:"sasl_mechanism" default:"PLAIN"`
-	saslUsername     string `koanf:"sasl_username" default:"$ConnectionString"`
-	saslPassword     string `koanf:"sasl_password"`
-	securityProtocol string `koanf:"security_protocol" default:"SASL_PLAINTEXT"`
+	Enabled  bool           `koanf:"enabled" default:"false"`
+	Topic    string         `koanf:"topic"`
+	Endpoint string         `koanf:"endpoint"`
+	Sasl     SaslConfig     `koanf:"sasl"`
+	Security SecurityConfig `koanf:"security"`
+}
+
+type SaslConfig struct {
+	Mechanism string `koanf:"mechanism" default:"PLAIN"`
+	Username  string `koanf:"username" default:"$ConnectionString"`
+	Password  string `koanf:"password"`
+}
+
+type SecurityConfig struct {
+	Protocol string `koanf:"protocol" default:"SASL_PLAINTEXT"`
 }
 
 // KafkaClient is an interface that defines the method for submitting messages.
@@ -69,13 +77,18 @@ func NewClient(config KafkaConfig) (KafkaClient, error) {
 	var kafkaClient KafkaClient
 	if config.Enabled {
 		endpoint := config.Endpoint
-		log.Infof("KafkaClientImpl, connecting to %s", endpoint)
+		log.Infof("KafkaClientImpl, connecting to %s, Mechanism: %s, protocol: %s, username: %s, password: %s",
+			endpoint,
+			config.Sasl.Mechanism,
+			config.Security.Protocol,
+			config.Sasl.Username,
+			config.Sasl.Password)
 		producer, err := kafka.NewProducer(&kafka.ConfigMap{
 			"bootstrap.servers": endpoint,
-			"sasl.mechanisms":   config.saslMechanism,
-			"security.protocol": config.securityProtocol,
-			"sasl.username":     config.saslUsername,
-			"sasl.password":     config.saslPassword,
+			"sasl.mechanisms":   config.Sasl.Mechanism,
+			"sasl.username":     config.Sasl.Username,
+			"sasl.password":     config.Sasl.Password,
+			"security.protocol": config.Security.Protocol,
 		})
 		if err != nil {
 			return nil, err
