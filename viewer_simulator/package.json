@@ -28,7 +28,7 @@
     "fhir-kit-client": "^1.9.2",
     "fhir-react": "^1.0.0",
     "lodash": "4.17.21",
-    "next": "^14.2.4",
+    "next": "^15.1.0",
     "react": "^18.3.1",
     "react-apexcharts": "1.4.1",
     "react-dom": "^18.3.1",
