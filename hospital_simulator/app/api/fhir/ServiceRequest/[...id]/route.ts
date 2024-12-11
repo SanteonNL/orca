@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+type Params = Promise<{ id: string }>
+
+export async function PATCH(req: NextRequest, { params }: { params: Params }) {
     try {
         const fhirBaseUrl = process.env.FHIR_BASE_URL;
 
