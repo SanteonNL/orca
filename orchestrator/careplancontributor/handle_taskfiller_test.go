@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 
 	"net/url"
 	"testing"
@@ -297,11 +298,13 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
+			notifierMock := ehr.NewMockNotifier(ctrl)
 			service := &Service{
 				workflows: taskengine.DefaultWorkflows(),
 				cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 					return mockFHIRClient
 				},
+				notifier: notifierMock,
 			}
 			if tt.mock != nil {
 				tt.mock(mockFHIRClient)
@@ -344,7 +347,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					*result = primaryTask
 					return nil
 				}).AnyTimes()
-
+			notifierMock.EXPECT().NotifyTaskAccepted(mockFHIRClient, gomock.Any()).AnyTimes()
 			var capturedTx fhir.Bundle
 			if tt.numBundlesPosted > 0 {
 				mockFHIRClient.EXPECT().

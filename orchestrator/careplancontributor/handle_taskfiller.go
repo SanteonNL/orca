@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 	"strings"
 
@@ -134,9 +133,9 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
 	}
 	log.Info().Msgf("Successfully accepted task (ref=%s)", ref)
-	err = ehr.NotifyTaskAccepted(cpsClient, s.kafkaClient, primaryTask)
+	err = s.notifier.NotifyTaskAccepted(cpsClient, primaryTask)
 	if err != nil {
-		log.Warn().Ctx(ctx).Msgf("Accepted Task with an error in the notification (ref=%s): %w", ref, err)
+		log.Warn().Ctx(ctx).Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
 		return nil
 	}
 	log.Info().Ctx(ctx).Msgf("Successfully accepted Task (ref=%s)", ref)
@@ -147,7 +146,7 @@ func (s *Service) fetchQuestionnaireByID(ctx context.Context, cpsClient fhirclie
 	log.Debug().Ctx(ctx).Msg("Fetching Questionnaire by ID")
 	err := cpsClient.Read(ref, &questionnaire)
 	if err != nil {
-		return fmt.Errorf("failed to fetch Questionnaire: %w", err)
+		return fmt.Errorf("failed to fetch Questionnaire: %s", err.Error())
 	}
 	return nil
 }

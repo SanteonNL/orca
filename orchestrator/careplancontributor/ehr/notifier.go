@@ -12,6 +12,18 @@ import (
 	"strings"
 )
 
+type Notifier interface {
+	NotifyTaskAccepted(cpsClient fhirclient.Client, task *fhir.Task) error
+}
+
+type notifier struct {
+	kafkaClient KafkaClient
+}
+
+func NewNotifier(kafkaClient KafkaClient) Notifier {
+	return &notifier{kafkaClient}
+}
+
 // BundleSet represents a set of FHIR bundles associated with a task.
 type BundleSet struct {
 	Id      string
@@ -28,13 +40,12 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 // It fetches related FHIR resources and sends the data to Kafka.
 //
 // Parameters:
-//   - cpsClient: The FHIR client used to fetch resources.
-//   - kafkaClient: The Kafka client used to send messages.
 //   - task: The FHIR task that was accepted.
 //
 // Returns:
 //   - error: An error if the notification process fails.
-func NotifyTaskAccepted(cpsClient fhirclient.Client, kafkaClient KafkaClient, task *fhir.Task) error {
+func (n *notifier) NotifyTaskAccepted(cpsClient fhirclient.Client, task *fhir.Task) error {
+
 	ref := "Task/" + *task.Id
 	log.Info().Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
 	uid, err := uuid.NewUUID()
@@ -101,7 +112,7 @@ func NotifyTaskAccepted(cpsClient fhirclient.Client, kafkaClient KafkaClient, ta
 	}
 	bundles.addBundle(*result...)
 
-	return sendBundle(bundles, kafkaClient)
+	return sendBundle(bundles, n.kafkaClient)
 }
 
 // findForReferences extracts patient references from a list of tasks.

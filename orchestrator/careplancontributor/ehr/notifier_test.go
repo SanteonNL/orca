@@ -239,8 +239,9 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			if tt.setupMocks != nil {
 				tt.setupMocks(mockFHIRClient, mockKafkaClient)
 			}
+			notifier := NewNotifier(mockKafkaClient)
 
-			err := NotifyTaskAccepted(mockFHIRClient, mockKafkaClient, &tt.task)
+			err := notifier.NotifyTaskAccepted(mockFHIRClient, &tt.task)
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
 			} else {

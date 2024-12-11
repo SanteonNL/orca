@@ -62,7 +62,7 @@ func New(
 		fhirURL:                 fhirURL,
 		transport:               localFHIRStoreTransport,
 		workflows:               taskengine.DefaultWorkflows(),
-		kafkaClient:             kafkaClient,
+		notifier:                ehr.NewNotifier(kafkaClient),
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
@@ -93,7 +93,7 @@ type Service struct {
 	transport                     http.RoundTripper
 	workflows                     taskengine.WorkflowProvider
 	healthdataviewEndpointEnabled bool
-	kafkaClient                   ehr.KafkaClient
+	notifier                      ehr.Notifier
 }
 
 func (s Service) RegisterHandlers(mux *http.ServeMux) {
