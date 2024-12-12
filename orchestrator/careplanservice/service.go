@@ -666,7 +666,6 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 // checkAllowUnmanagedOperations checks if unmanaged operations are allowed. It errors if they are not.
 func (s *Service) checkAllowUnmanagedOperations() error {
 	if !s.allowUnmanagedFHIROperations {
-		log.Info().Msgf("FAIL3")
 		return &coolfhir.ErrorWithCode{
 			Message:    "FHIR operation not allowed",
 			StatusCode: http.StatusMethodNotAllowed,

@@ -253,11 +253,11 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 
 	log.Ctx(request.Context()).Debug().Msg("Handling external FHIR API request")
 
-	// _, err := s.authorizeScpMember(request)
+	_, err := s.authorizeScpMember(request)
 
-	// if err != nil {
-	// 	return err
-	// }
+	if err != nil {
+		return err
+	}
 
 	s.ehrFhirProxy.ServeHTTP(writer, request)
 	return nil
