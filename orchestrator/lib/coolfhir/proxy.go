@@ -51,9 +51,10 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 	// Read the request body, making sure it's valid JSON
 	var err error
 	var requestResource map[string]interface{}
+	var requestData []byte
 	if request.Body != nil {
 		// LimitReader 10mb to prevent DoS attacks
-		requestData, err := io.ReadAll(io.LimitReader(request.Body, 10*1024*1024+1))
+		requestData, err = io.ReadAll(io.LimitReader(request.Body, 10*1024*1024+1))
 		if len(requestData) > 10*1024*1024 {
 			WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
 				OperationOutcome: fhir.OperationOutcome{
@@ -84,7 +85,7 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 			}, "FHIR request", httpResponseWriter)
 			return
 		}
-		if len(requestData) > 0 {
+		if len(requestData) > 0 && !strings.HasSuffix(request.URL.Path, "/_search") {
 			requestResource = make(map[string]interface{})
 			if err := json.Unmarshal(requestData, &requestResource); err != nil {
 				WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
@@ -103,7 +104,7 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 			}
 		}
 	}
-	if requestResource == nil && (request.Method == http.MethodPost || request.Method == http.MethodPut) {
+	if requestResource == nil && (request.Method == http.MethodPost || request.Method == http.MethodPut) && !strings.HasSuffix(request.URL.Path, "/_search") {
 		WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
 			OperationOutcome: fhir.OperationOutcome{
 				Issue: []fhir.OperationOutcomeIssue{
@@ -126,7 +127,14 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 	case http.MethodGet:
 		err = f.client.ReadWithContext(request.Context(), outRequestUrl.Path, &responseResource, params...)
 	case http.MethodPost:
-		err = f.client.CreateWithContext(request.Context(), requestResource, &responseResource, params...)
+		if strings.HasSuffix(request.URL.Path, "/_search") {
+			values, err := url.ParseQuery(string(requestData))
+			if err == nil {
+				err = f.client.SearchWithContext(request.Context(), strings.TrimSuffix(outRequestUrl.Path, "/_search"), values, &responseResource, params...)
+			}
+		} else {
+			err = f.client.CreateWithContext(request.Context(), requestResource, &responseResource, params...)
+		}
 	case http.MethodPut:
 		err = f.client.UpdateWithContext(request.Context(), outRequestUrl.Path, requestResource, &responseResource, params...)
 	default:

@@ -31,13 +31,13 @@ func TestService_Proxy(t *testing.T) {
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	var capturedQuery url.Values
-	fhirServerMux.HandleFunc("GET /fhir/Success", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/Success/1", func(writer http.ResponseWriter, request *http.Request) {
 		capturedQuery = request.URL.Query()
 		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{
 			Intent: "order",
 		})
 	})
-	fhirServerMux.HandleFunc("GET /fhir/Fail", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/Fail/1", func(writer http.ResponseWriter, request *http.Request) {
 		coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("Fail"), "oops", writer)
 	})
 	fhirServer := httptest.NewServer(fhirServerMux)
@@ -58,7 +58,7 @@ func TestService_Proxy(t *testing.T) {
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
 	t.Run("ok", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
@@ -68,13 +68,13 @@ func TestService_Proxy(t *testing.T) {
 		})
 	})
 	t.Run("it proxies query parameters", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success?_identifier=foo|bar")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1?_identifier=foo|bar")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		assert.Equal(t, "foo|bar", capturedQuery.Get("_identifier"))
 	})
 	t.Run("upstream FHIR server returns FHIR error with operation outcome", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Fail")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Fail/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
@@ -104,7 +104,7 @@ func TestService_Proxy(t *testing.T) {
 		httpClient := frontServer.Client()
 		httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Anything")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Anything/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
@@ -117,7 +117,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	capturedHost := ""
-	fhirServerMux.HandleFunc("GET /fhir/SomeResource", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/SomeResource/1", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write([]byte(`{"resourceType":"Task"}`))
 		capturedHost = request.Host
@@ -140,10 +140,19 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource")
+	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource/1")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)
+
+	// Test POST edge cases
+	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/_search", "application/fhir+json", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+
+	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/1/_search", "application/fhir+json", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 }
 
 type OperationOutcomeWithResourceType struct {

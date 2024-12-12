@@ -123,7 +123,9 @@ const fetchSubTasks = async (taskId: string) => {
     const subTaskBundle = await cpsClient.search({
         resourceType: 'Task',
         searchParams: { "part-of": `Task/${taskId}` },
-        headers: { "Cache-Control": "no-cache" }
+        headers: { "Cache-Control": "no-cache" },
+        // @ts-ignore
+        options: { postSearch: true }
     }) as Bundle<Task>
     return await fetchAllBundlePages(cpsClient, subTaskBundle)
 }
