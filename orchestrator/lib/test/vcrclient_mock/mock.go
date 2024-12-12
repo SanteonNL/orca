@@ -23,6 +23,7 @@ import (
 type MockClientWithResponsesInterface struct {
 	ctrl     *gomock.Controller
 	recorder *MockClientWithResponsesInterfaceMockRecorder
+	isgomock struct{}
 }
 
 // MockClientWithResponsesInterfaceMockRecorder is the mock recorder for MockClientWithResponsesInterface.
@@ -43,10 +44,10 @@ func (m *MockClientWithResponsesInterface) EXPECT() *MockClientWithResponsesInte
 }
 
 // CreateVPWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateVPWithBodyWithResponse(arg0 context.Context, arg1 string, arg2 io.Reader, arg3 ...vcr.RequestEditorFn) (*vcr.CreateVPResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateVPWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...vcr.RequestEditorFn) (*vcr.CreateVPResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, contentType, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateVPWithBodyWithResponse", varargs...)
@@ -56,17 +57,17 @@ func (m *MockClientWithResponsesInterface) CreateVPWithBodyWithResponse(arg0 con
 }
 
 // CreateVPWithBodyWithResponse indicates an expected call of CreateVPWithBodyWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateVPWithBodyWithResponse(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateVPWithBodyWithResponse(ctx, contentType, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, contentType, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVPWithBodyWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).CreateVPWithBodyWithResponse), varargs...)
 }
 
 // CreateVPWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateVPWithResponse(arg0 context.Context, arg1 vcr.CreateVPRequest, arg2 ...vcr.RequestEditorFn) (*vcr.CreateVPResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateVPWithResponse(ctx context.Context, body vcr.CreateVPRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.CreateVPResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "CreateVPWithResponse", varargs...)
@@ -76,17 +77,17 @@ func (m *MockClientWithResponsesInterface) CreateVPWithResponse(arg0 context.Con
 }
 
 // CreateVPWithResponse indicates an expected call of CreateVPWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateVPWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateVPWithResponse(ctx, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateVPWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).CreateVPWithResponse), varargs...)
 }
 
 // GetCredentialsInWalletWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) GetCredentialsInWalletWithResponse(arg0 context.Context, arg1 string, arg2 ...vcr.RequestEditorFn) (*vcr.GetCredentialsInWalletResponse, error) {
+func (m *MockClientWithResponsesInterface) GetCredentialsInWalletWithResponse(ctx context.Context, subjectID string, reqEditors ...vcr.RequestEditorFn) (*vcr.GetCredentialsInWalletResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, subjectID}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "GetCredentialsInWalletWithResponse", varargs...)
@@ -96,17 +97,17 @@ func (m *MockClientWithResponsesInterface) GetCredentialsInWalletWithResponse(ar
 }
 
 // GetCredentialsInWalletWithResponse indicates an expected call of GetCredentialsInWalletWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) GetCredentialsInWalletWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) GetCredentialsInWalletWithResponse(ctx, subjectID any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, subjectID}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCredentialsInWalletWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).GetCredentialsInWalletWithResponse), varargs...)
 }
 
 // IssueVCWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) IssueVCWithBodyWithResponse(arg0 context.Context, arg1 string, arg2 io.Reader, arg3 ...vcr.RequestEditorFn) (*vcr.IssueVCResponse, error) {
+func (m *MockClientWithResponsesInterface) IssueVCWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...vcr.RequestEditorFn) (*vcr.IssueVCResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, contentType, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "IssueVCWithBodyWithResponse", varargs...)
@@ -116,17 +117,17 @@ func (m *MockClientWithResponsesInterface) IssueVCWithBodyWithResponse(arg0 cont
 }
 
 // IssueVCWithBodyWithResponse indicates an expected call of IssueVCWithBodyWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) IssueVCWithBodyWithResponse(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) IssueVCWithBodyWithResponse(ctx, contentType, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, contentType, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueVCWithBodyWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).IssueVCWithBodyWithResponse), varargs...)
 }
 
 // IssueVCWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) IssueVCWithResponse(arg0 context.Context, arg1 vcr.IssueVCRequest, arg2 ...vcr.RequestEditorFn) (*vcr.IssueVCResponse, error) {
+func (m *MockClientWithResponsesInterface) IssueVCWithResponse(ctx context.Context, body vcr.IssueVCRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.IssueVCResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "IssueVCWithResponse", varargs...)
@@ -136,17 +137,17 @@ func (m *MockClientWithResponsesInterface) IssueVCWithResponse(arg0 context.Cont
 }
 
 // IssueVCWithResponse indicates an expected call of IssueVCWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) IssueVCWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) IssueVCWithResponse(ctx, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IssueVCWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).IssueVCWithResponse), varargs...)
 }
 
 // ListTrustedWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) ListTrustedWithResponse(arg0 context.Context, arg1 string, arg2 ...vcr.RequestEditorFn) (*vcr.ListTrustedResponse, error) {
+func (m *MockClientWithResponsesInterface) ListTrustedWithResponse(ctx context.Context, credentialType string, reqEditors ...vcr.RequestEditorFn) (*vcr.ListTrustedResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, credentialType}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ListTrustedWithResponse", varargs...)
@@ -156,17 +157,17 @@ func (m *MockClientWithResponsesInterface) ListTrustedWithResponse(arg0 context.
 }
 
 // ListTrustedWithResponse indicates an expected call of ListTrustedWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) ListTrustedWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) ListTrustedWithResponse(ctx, credentialType any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, credentialType}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListTrustedWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).ListTrustedWithResponse), varargs...)
 }
 
 // ListUntrustedWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) ListUntrustedWithResponse(arg0 context.Context, arg1 string, arg2 ...vcr.RequestEditorFn) (*vcr.ListUntrustedResponse, error) {
+func (m *MockClientWithResponsesInterface) ListUntrustedWithResponse(ctx context.Context, credentialType string, reqEditors ...vcr.RequestEditorFn) (*vcr.ListUntrustedResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, credentialType}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ListUntrustedWithResponse", varargs...)
@@ -176,17 +177,17 @@ func (m *MockClientWithResponsesInterface) ListUntrustedWithResponse(arg0 contex
 }
 
 // ListUntrustedWithResponse indicates an expected call of ListUntrustedWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) ListUntrustedWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) ListUntrustedWithResponse(ctx, credentialType any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, credentialType}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListUntrustedWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).ListUntrustedWithResponse), varargs...)
 }
 
 // LoadVCWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) LoadVCWithBodyWithResponse(arg0 context.Context, arg1, arg2 string, arg3 io.Reader, arg4 ...vcr.RequestEditorFn) (*vcr.LoadVCResponse, error) {
+func (m *MockClientWithResponsesInterface) LoadVCWithBodyWithResponse(ctx context.Context, subjectID, contentType string, body io.Reader, reqEditors ...vcr.RequestEditorFn) (*vcr.LoadVCResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2, arg3}
-	for _, a := range arg4 {
+	varargs := []any{ctx, subjectID, contentType, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "LoadVCWithBodyWithResponse", varargs...)
@@ -196,17 +197,17 @@ func (m *MockClientWithResponsesInterface) LoadVCWithBodyWithResponse(arg0 conte
 }
 
 // LoadVCWithBodyWithResponse indicates an expected call of LoadVCWithBodyWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) LoadVCWithBodyWithResponse(arg0, arg1, arg2, arg3 any, arg4 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) LoadVCWithBodyWithResponse(ctx, subjectID, contentType, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2, arg3}, arg4...)
+	varargs := append([]any{ctx, subjectID, contentType, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadVCWithBodyWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).LoadVCWithBodyWithResponse), varargs...)
 }
 
 // LoadVCWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) LoadVCWithResponse(arg0 context.Context, arg1 string, arg2 vc.VerifiableCredential, arg3 ...vcr.RequestEditorFn) (*vcr.LoadVCResponse, error) {
+func (m *MockClientWithResponsesInterface) LoadVCWithResponse(ctx context.Context, subjectID string, body vc.VerifiableCredential, reqEditors ...vcr.RequestEditorFn) (*vcr.LoadVCResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, subjectID, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "LoadVCWithResponse", varargs...)
@@ -216,17 +217,17 @@ func (m *MockClientWithResponsesInterface) LoadVCWithResponse(arg0 context.Conte
 }
 
 // LoadVCWithResponse indicates an expected call of LoadVCWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) LoadVCWithResponse(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) LoadVCWithResponse(ctx, subjectID, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, subjectID, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LoadVCWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).LoadVCWithResponse), varargs...)
 }
 
 // RemoveCredentialFromWalletWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) RemoveCredentialFromWalletWithResponse(arg0 context.Context, arg1, arg2 string, arg3 ...vcr.RequestEditorFn) (*vcr.RemoveCredentialFromWalletResponse, error) {
+func (m *MockClientWithResponsesInterface) RemoveCredentialFromWalletWithResponse(ctx context.Context, subjectID, id string, reqEditors ...vcr.RequestEditorFn) (*vcr.RemoveCredentialFromWalletResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, subjectID, id}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "RemoveCredentialFromWalletWithResponse", varargs...)
@@ -236,17 +237,17 @@ func (m *MockClientWithResponsesInterface) RemoveCredentialFromWalletWithRespons
 }
 
 // RemoveCredentialFromWalletWithResponse indicates an expected call of RemoveCredentialFromWalletWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) RemoveCredentialFromWalletWithResponse(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) RemoveCredentialFromWalletWithResponse(ctx, subjectID, id any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, subjectID, id}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveCredentialFromWalletWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).RemoveCredentialFromWalletWithResponse), varargs...)
 }
 
 // ResolveVCWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) ResolveVCWithResponse(arg0 context.Context, arg1 string, arg2 ...vcr.RequestEditorFn) (*vcr.ResolveVCResponse, error) {
+func (m *MockClientWithResponsesInterface) ResolveVCWithResponse(ctx context.Context, id string, reqEditors ...vcr.RequestEditorFn) (*vcr.ResolveVCResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, id}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "ResolveVCWithResponse", varargs...)
@@ -256,17 +257,17 @@ func (m *MockClientWithResponsesInterface) ResolveVCWithResponse(arg0 context.Co
 }
 
 // ResolveVCWithResponse indicates an expected call of ResolveVCWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) ResolveVCWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) ResolveVCWithResponse(ctx, id any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, id}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveVCWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).ResolveVCWithResponse), varargs...)
 }
 
 // RevokeVCWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) RevokeVCWithResponse(arg0 context.Context, arg1 string, arg2 ...vcr.RequestEditorFn) (*vcr.RevokeVCResponse, error) {
+func (m *MockClientWithResponsesInterface) RevokeVCWithResponse(ctx context.Context, id string, reqEditors ...vcr.RequestEditorFn) (*vcr.RevokeVCResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, id}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "RevokeVCWithResponse", varargs...)
@@ -276,17 +277,17 @@ func (m *MockClientWithResponsesInterface) RevokeVCWithResponse(arg0 context.Con
 }
 
 // RevokeVCWithResponse indicates an expected call of RevokeVCWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) RevokeVCWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) RevokeVCWithResponse(ctx, id any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, id}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeVCWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).RevokeVCWithResponse), varargs...)
 }
 
 // SearchIssuedVCsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) SearchIssuedVCsWithResponse(arg0 context.Context, arg1 *vcr.SearchIssuedVCsParams, arg2 ...vcr.RequestEditorFn) (*vcr.SearchIssuedVCsResponse, error) {
+func (m *MockClientWithResponsesInterface) SearchIssuedVCsWithResponse(ctx context.Context, params *vcr.SearchIssuedVCsParams, reqEditors ...vcr.RequestEditorFn) (*vcr.SearchIssuedVCsResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, params}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "SearchIssuedVCsWithResponse", varargs...)
@@ -296,17 +297,17 @@ func (m *MockClientWithResponsesInterface) SearchIssuedVCsWithResponse(arg0 cont
 }
 
 // SearchIssuedVCsWithResponse indicates an expected call of SearchIssuedVCsWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) SearchIssuedVCsWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) SearchIssuedVCsWithResponse(ctx, params any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, params}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchIssuedVCsWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).SearchIssuedVCsWithResponse), varargs...)
 }
 
 // SearchVCsWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) SearchVCsWithBodyWithResponse(arg0 context.Context, arg1 string, arg2 io.Reader, arg3 ...vcr.RequestEditorFn) (*vcr.SearchVCsResponse, error) {
+func (m *MockClientWithResponsesInterface) SearchVCsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...vcr.RequestEditorFn) (*vcr.SearchVCsResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, contentType, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "SearchVCsWithBodyWithResponse", varargs...)
@@ -316,17 +317,17 @@ func (m *MockClientWithResponsesInterface) SearchVCsWithBodyWithResponse(arg0 co
 }
 
 // SearchVCsWithBodyWithResponse indicates an expected call of SearchVCsWithBodyWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) SearchVCsWithBodyWithResponse(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) SearchVCsWithBodyWithResponse(ctx, contentType, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, contentType, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchVCsWithBodyWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).SearchVCsWithBodyWithResponse), varargs...)
 }
 
 // SearchVCsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) SearchVCsWithResponse(arg0 context.Context, arg1 vcr.SearchVCRequest, arg2 ...vcr.RequestEditorFn) (*vcr.SearchVCsResponse, error) {
+func (m *MockClientWithResponsesInterface) SearchVCsWithResponse(ctx context.Context, body vcr.SearchVCRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.SearchVCsResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "SearchVCsWithResponse", varargs...)
@@ -336,17 +337,17 @@ func (m *MockClientWithResponsesInterface) SearchVCsWithResponse(arg0 context.Co
 }
 
 // SearchVCsWithResponse indicates an expected call of SearchVCsWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) SearchVCsWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) SearchVCsWithResponse(ctx, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchVCsWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).SearchVCsWithResponse), varargs...)
 }
 
 // TrustIssuerWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) TrustIssuerWithBodyWithResponse(arg0 context.Context, arg1 string, arg2 io.Reader, arg3 ...vcr.RequestEditorFn) (*vcr.TrustIssuerResponse, error) {
+func (m *MockClientWithResponsesInterface) TrustIssuerWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...vcr.RequestEditorFn) (*vcr.TrustIssuerResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, contentType, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "TrustIssuerWithBodyWithResponse", varargs...)
@@ -356,17 +357,17 @@ func (m *MockClientWithResponsesInterface) TrustIssuerWithBodyWithResponse(arg0 
 }
 
 // TrustIssuerWithBodyWithResponse indicates an expected call of TrustIssuerWithBodyWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) TrustIssuerWithBodyWithResponse(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) TrustIssuerWithBodyWithResponse(ctx, contentType, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, contentType, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrustIssuerWithBodyWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).TrustIssuerWithBodyWithResponse), varargs...)
 }
 
 // TrustIssuerWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) TrustIssuerWithResponse(arg0 context.Context, arg1 vcr.CredentialIssuer, arg2 ...vcr.RequestEditorFn) (*vcr.TrustIssuerResponse, error) {
+func (m *MockClientWithResponsesInterface) TrustIssuerWithResponse(ctx context.Context, body vcr.CredentialIssuer, reqEditors ...vcr.RequestEditorFn) (*vcr.TrustIssuerResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "TrustIssuerWithResponse", varargs...)
@@ -376,17 +377,17 @@ func (m *MockClientWithResponsesInterface) TrustIssuerWithResponse(arg0 context.
 }
 
 // TrustIssuerWithResponse indicates an expected call of TrustIssuerWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) TrustIssuerWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) TrustIssuerWithResponse(ctx, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TrustIssuerWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).TrustIssuerWithResponse), varargs...)
 }
 
 // UntrustIssuerWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) UntrustIssuerWithBodyWithResponse(arg0 context.Context, arg1 string, arg2 io.Reader, arg3 ...vcr.RequestEditorFn) (*vcr.UntrustIssuerResponse, error) {
+func (m *MockClientWithResponsesInterface) UntrustIssuerWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...vcr.RequestEditorFn) (*vcr.UntrustIssuerResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, contentType, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "UntrustIssuerWithBodyWithResponse", varargs...)
@@ -396,17 +397,17 @@ func (m *MockClientWithResponsesInterface) UntrustIssuerWithBodyWithResponse(arg
 }
 
 // UntrustIssuerWithBodyWithResponse indicates an expected call of UntrustIssuerWithBodyWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) UntrustIssuerWithBodyWithResponse(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) UntrustIssuerWithBodyWithResponse(ctx, contentType, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, contentType, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UntrustIssuerWithBodyWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).UntrustIssuerWithBodyWithResponse), varargs...)
 }
 
 // UntrustIssuerWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) UntrustIssuerWithResponse(arg0 context.Context, arg1 vcr.CredentialIssuer, arg2 ...vcr.RequestEditorFn) (*vcr.UntrustIssuerResponse, error) {
+func (m *MockClientWithResponsesInterface) UntrustIssuerWithResponse(ctx context.Context, body vcr.CredentialIssuer, reqEditors ...vcr.RequestEditorFn) (*vcr.UntrustIssuerResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "UntrustIssuerWithResponse", varargs...)
@@ -416,17 +417,17 @@ func (m *MockClientWithResponsesInterface) UntrustIssuerWithResponse(arg0 contex
 }
 
 // UntrustIssuerWithResponse indicates an expected call of UntrustIssuerWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) UntrustIssuerWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) UntrustIssuerWithResponse(ctx, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UntrustIssuerWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).UntrustIssuerWithResponse), varargs...)
 }
 
 // VerifyVCWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) VerifyVCWithBodyWithResponse(arg0 context.Context, arg1 string, arg2 io.Reader, arg3 ...vcr.RequestEditorFn) (*vcr.VerifyVCResponse, error) {
+func (m *MockClientWithResponsesInterface) VerifyVCWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...vcr.RequestEditorFn) (*vcr.VerifyVCResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, contentType, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "VerifyVCWithBodyWithResponse", varargs...)
@@ -436,17 +437,17 @@ func (m *MockClientWithResponsesInterface) VerifyVCWithBodyWithResponse(arg0 con
 }
 
 // VerifyVCWithBodyWithResponse indicates an expected call of VerifyVCWithBodyWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVCWithBodyWithResponse(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVCWithBodyWithResponse(ctx, contentType, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, contentType, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyVCWithBodyWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).VerifyVCWithBodyWithResponse), varargs...)
 }
 
 // VerifyVCWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) VerifyVCWithResponse(arg0 context.Context, arg1 vcr.VCVerificationRequest, arg2 ...vcr.RequestEditorFn) (*vcr.VerifyVCResponse, error) {
+func (m *MockClientWithResponsesInterface) VerifyVCWithResponse(ctx context.Context, body vcr.VCVerificationRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.VerifyVCResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "VerifyVCWithResponse", varargs...)
@@ -456,17 +457,17 @@ func (m *MockClientWithResponsesInterface) VerifyVCWithResponse(arg0 context.Con
 }
 
 // VerifyVCWithResponse indicates an expected call of VerifyVCWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVCWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVCWithResponse(ctx, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyVCWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).VerifyVCWithResponse), varargs...)
 }
 
 // VerifyVPWithBodyWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) VerifyVPWithBodyWithResponse(arg0 context.Context, arg1 string, arg2 io.Reader, arg3 ...vcr.RequestEditorFn) (*vcr.VerifyVPResponse, error) {
+func (m *MockClientWithResponsesInterface) VerifyVPWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...vcr.RequestEditorFn) (*vcr.VerifyVPResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1, arg2}
-	for _, a := range arg3 {
+	varargs := []any{ctx, contentType, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "VerifyVPWithBodyWithResponse", varargs...)
@@ -476,17 +477,17 @@ func (m *MockClientWithResponsesInterface) VerifyVPWithBodyWithResponse(arg0 con
 }
 
 // VerifyVPWithBodyWithResponse indicates an expected call of VerifyVPWithBodyWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVPWithBodyWithResponse(arg0, arg1, arg2 any, arg3 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVPWithBodyWithResponse(ctx, contentType, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1, arg2}, arg3...)
+	varargs := append([]any{ctx, contentType, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyVPWithBodyWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).VerifyVPWithBodyWithResponse), varargs...)
 }
 
 // VerifyVPWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) VerifyVPWithResponse(arg0 context.Context, arg1 vcr.VPVerificationRequest, arg2 ...vcr.RequestEditorFn) (*vcr.VerifyVPResponse, error) {
+func (m *MockClientWithResponsesInterface) VerifyVPWithResponse(ctx context.Context, body vcr.VPVerificationRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.VerifyVPResponse, error) {
 	m.ctrl.T.Helper()
-	varargs := []any{arg0, arg1}
-	for _, a := range arg2 {
+	varargs := []any{ctx, body}
+	for _, a := range reqEditors {
 		varargs = append(varargs, a)
 	}
 	ret := m.ctrl.Call(m, "VerifyVPWithResponse", varargs...)
@@ -496,8 +497,8 @@ func (m *MockClientWithResponsesInterface) VerifyVPWithResponse(arg0 context.Con
 }
 
 // VerifyVPWithResponse indicates an expected call of VerifyVPWithResponse.
-func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVPWithResponse(arg0, arg1 any, arg2 ...any) *gomock.Call {
+func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVPWithResponse(ctx, body any, reqEditors ...any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	varargs := append([]any{arg0, arg1}, arg2...)
+	varargs := append([]any{ctx, body}, reqEditors...)
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyVPWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).VerifyVPWithResponse), varargs...)
 }
