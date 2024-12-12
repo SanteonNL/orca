@@ -21,8 +21,8 @@ github.com/AzureAD/microsoft-authentication-library-for-go v1.2.2/go.mod h1:wP83
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
-github.com/SanteonNL/go-fhir-client v0.2.15 h1:C0DltsW/JP0qlxvndFd3OScE6de4pufXTbO0zy3aPbk=
-github.com/SanteonNL/go-fhir-client v0.2.15/go.mod h1:CcU6J3vgxsdjTWry0s2BAJcV6SvdaRTsry9ixR7zqc4=
+github.com/SanteonNL/go-fhir-client v0.2.16 h1:XwNxJXiGU7QPjkTGIbXeME7ZNYBbrSBIKqCZB5/uv5A=
+github.com/SanteonNL/go-fhir-client v0.2.16/go.mod h1:CcU6J3vgxsdjTWry0s2BAJcV6SvdaRTsry9ixR7zqc4=
 github.com/SanteonNL/nuts-policy-enforcement-point v0.0.0-20240805130644-8b92f1cbf865 h1:luArkUx6tzRw/t6bI0kB1FdUJIqukSEanJeEIP9613I=
 github.com/SanteonNL/nuts-policy-enforcement-point v0.0.0-20240805130644-8b92f1cbf865/go.mod h1:mLVFlPbfU6lbrE/TeUQOpDC53aTC/PyOGYgPIR0S1Yw=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
