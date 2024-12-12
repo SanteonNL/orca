@@ -126,7 +126,7 @@ type Service struct {
 	healthdataviewEndpointEnabled bool
 }
 
-func (s Service) RegisterHandlers(mux *http.ServeMux) {
+func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	baseURL := s.orcaPublicURL.JoinPath(basePath)
 	s.profile.RegisterHTTPHandlers(basePath, baseURL, mux)
 	//
@@ -299,13 +299,13 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	// Validate by retrieving the CarePlan from CPS, use URA in provided token to validate against CareTeam
 	// CarePlan should be provided in X-Scp-Context header
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
-	if len(carePlanURLValue) != 1 {
-		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
+	if len(carePlanURLValue) == 0 {
+		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header must be set", carePlanURLHeaderKey))
+	}
+	if len(carePlanURLValue) > 1 {
+		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header can't contain multiple values", carePlanURLHeaderKey))
 	}
 	carePlanURL := carePlanURLValue[0]
-	if carePlanURL == "" {
-		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header value must be set", carePlanURLHeaderKey))
-	}
 	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
 		return nil, coolfhir.BadRequest("invalid CarePlan URL in header. Got: " + carePlanURL + " expected: " + s.localCarePlanServiceUrl.String())
 	}
