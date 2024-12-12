@@ -170,7 +170,7 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext, tokenType To
 	// Workflow ID Attribute
 	if launchContext.WorkflowId != "" {
 		attribute5 := attributeStatement.CreateElement("Attribute")
-		attribute5.CreateAttr("Name", zorgplatformWorkflowNamingSystem)
+		attribute5.CreateAttr("Name", zorgplatformWorkflowIdSystem)
 		attributeValue5 := attribute5.CreateElement("AttributeValue")
 		attributeValue5.SetText(launchContext.WorkflowId)
 	}
