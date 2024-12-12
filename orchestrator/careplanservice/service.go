@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -704,6 +705,14 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 		if strings.HasPrefix(lowerCaseRef, "https://") {
 			// OK
 			// TODO: Check if it's a child of a registered FHIR base URL
+			parsedRef, err := url.Parse(reference)
+			if err != nil {
+				// weird
+				return err
+			}
+			if slices.Contains(strings.Split(parsedRef.Path, "/"), "..") {
+				return coolfhir.BadRequest(fmt.Sprintf("literal reference is URL with parent path segment '..' (path=%s)", path))
+			}
 		}
 	}
 	return nil

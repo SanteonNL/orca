@@ -719,6 +719,13 @@ func TestService_validateLiteralReferences(t *testing.T) {
 		err := (&Service{}).validateLiteralReferences(context.Background(), resource)
 		require.EqualError(t, err, "literal reference is URL with scheme http://, only https:// is allowed (path=focus.reference)")
 	})
+	t.Run("parent directory traversal isn't allowed", func(t *testing.T) {
+		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
+			s.Focus.Reference = to.Ptr("https://example.com/fhir/../secret-page")
+		})
+		err := (&Service{}).validateLiteralReferences(context.Background(), resource)
+		require.EqualError(t, err, "literal reference is URL with parent path segment '..' (path=focus.reference)")
+	})
 }
 
 func Test_collectLiteralReferences(t *testing.T) {
