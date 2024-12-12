@@ -22,6 +22,7 @@ import (
 type MockKeysClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockKeysClientMockRecorder
+	isgomock struct{}
 }
 
 // MockKeysClientMockRecorder is the mock recorder for MockKeysClient.
@@ -90,6 +91,7 @@ func (mr *MockKeysClientMockRecorder) Sign(ctx, name, version, parameters, optio
 type MockCertificatesClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockCertificatesClientMockRecorder
+	isgomock struct{}
 }
 
 // MockCertificatesClientMockRecorder is the mock recorder for MockCertificatesClient.
