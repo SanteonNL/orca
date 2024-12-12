@@ -25,11 +25,15 @@ type SecureTokenService interface {
 }
 
 type TokenType struct {
+	Subject      func(element *etree.Element, launchContext *LaunchContext, applicationIssuer string)
 	Role         func(element *etree.Element)
 	PurposeOfUse func(element *etree.Element)
 }
 
 var applicationTokenType = TokenType{
+	Subject: func(element *etree.Element, launchContext *LaunchContext, applicationIssuer string) {
+		element.SetText(applicationIssuer)
+	},
 	Role: func(role *etree.Element) {
 		role.CreateAttr("code", "182777000")
 		role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
@@ -47,6 +51,9 @@ var applicationTokenType = TokenType{
 }
 
 var hcpTokenType = TokenType{
+	Subject: func(element *etree.Element, launchContext *LaunchContext, applicationIssuer string) {
+		element.SetText(*launchContext.Practitioner.Identifier[0].Value + "@" + *launchContext.Practitioner.Identifier[0].System)
+	},
 	Role: func(role *etree.Element) {
 		role.CreateAttr("code", "224609002")
 		role.CreateAttr("codeSystem", "2.16.840.1.113883.6.96")
@@ -115,7 +122,8 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext, tokenType To
 	// Subject
 	subject := assertion.CreateElement("Subject")
 	nameID := subject.CreateElement("NameID")
-	nameID.SetText(*launchContext.Practitioner.Identifier[0].Value + "@" + *launchContext.Practitioner.Identifier[0].System)
+	tokenType.Subject(nameID, launchContext, s.config.SigningConfig.Issuer)
+
 	subjectConfirmation := subject.CreateElement("SubjectConfirmation")
 	subjectConfirmation.CreateAttr("Method", "urn:oasis:names:tc:SAML:2.0:cm:bearer")
 

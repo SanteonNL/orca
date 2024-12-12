@@ -41,7 +41,7 @@ func (s *Service) handleSearchCareTeam(ctx context.Context, queryParams url.Valu
 		return nil, err
 	}
 
-	careTeams, bundle, err := handleSearchResource[fhir.CareTeam](s, "CareTeam", queryParams, headers)
+	careTeams, bundle, err := handleSearchResource[fhir.CareTeam](ctx, s, "CareTeam", queryParams, headers)
 	if err != nil {
 		return nil, err
 	}

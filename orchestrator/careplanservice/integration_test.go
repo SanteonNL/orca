@@ -25,7 +25,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
-	t.Log("This test requires creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
+	t.Log("This test creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
 	notificationEndpoint := setupNotificationEndpoint(t)
 	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
 
@@ -211,6 +211,12 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		// INT-440: CarePlan.activity should not contain subtasks
 		require.NoError(t, carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan))
 		require.Len(t, carePlan.Activity, 1)
+
+		// Search for parent task using part-of
+		var searchResult fhir.Bundle
+		err = carePlanContributor1.Search("Task", url.Values{"part-of": {*subTask.PartOf[0].Reference}}, &searchResult)
+		require.NoError(t, err)
+		require.Len(t, searchResult.Entry, 1)
 	}
 
 	t.Log("Creating Task - No BasedOn, new CarePlan and CareTeam are created")
@@ -270,7 +276,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("Search CarePlan")
 	{
 		var searchResult fhir.Bundle
-		err := carePlanContributor1.Read("CarePlan", &searchResult, fhirclient.QueryParam("_id", *carePlan.Id), fhirclient.QueryParam("_include", "CarePlan:care-team"))
+		err := carePlanContributor1.Search("CarePlan", url.Values{"_id": {*carePlan.Id}, "_include": {"CarePlan:care-team"}}, &searchResult)
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 2, "Expected 1 CarePlan and 1 CareTeam")
 		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "CarePlan/"+*carePlan.Id))
@@ -419,7 +425,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	t.Log("Care Team Search")
 	{
 		var searchResult fhir.Bundle
-		err := carePlanContributor1.Read("CareTeam", &searchResult)
+		err := carePlanContributor1.Search("CareTeam", url.Values{}, &searchResult)
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 2, "Expected 1 team")
 	}
@@ -561,14 +567,14 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 		// Search for existing patient - by ID
 		var searchResult fhir.Bundle
-		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("_id", *patient.Id))
+		err = carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id}}, &searchResult)
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 1)
 		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
 
 		// Search for existing patient - by BSN
 		searchResult = fhir.Bundle{}
-		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|1333333337"))
+		err = carePlanContributor1.Search("Patient", url.Values{"identifier": {"http://fhir.nl/fhir/NamingSystem/bsn|1333333337"}}, &searchResult)
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 1)
 		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
@@ -580,19 +586,19 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 		// Search for existing patient - by ID - no access
 		searchResult = fhir.Bundle{}
-		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("_id", *patient2.Id))
+		err = carePlanContributor1.Search("Patient", url.Values{"_id": {*patient2.Id}}, &searchResult)
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 0)
 
 		// Search for existing patient - by BSN - no access
 		searchResult = fhir.Bundle{}
-		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|12345"))
+		err = carePlanContributor1.Search("Patient", url.Values{"identifier": {"http://fhir.nl/fhir/NamingSystem/bsn|12345"}}, &searchResult)
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 0)
 
 		searchResult = fhir.Bundle{}
 		// Search for patients, one with access one without
-		err = carePlanContributor1.Read("Patient", &searchResult, fhirclient.QueryParam("identifier", "http://fhir.nl/fhir/NamingSystem/bsn|1333333337,http://fhir.nl/fhir/NamingSystem/bsn|12345"))
+		err = carePlanContributor1.Search("Patient", url.Values{"identifier": {"http://fhir.nl/fhir/NamingSystem/bsn|1333333337,http://fhir.nl/fhir/NamingSystem/bsn|12345"}}, &searchResult)
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 1)
 		require.Truef(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id), "Expected %s to end with %s", *searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id)

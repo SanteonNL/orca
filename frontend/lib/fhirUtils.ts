@@ -1,5 +1,5 @@
 import Client from 'fhir-kit-client';
-import { Bundle, CarePlan, Condition, Patient, Questionnaire, Resource, ServiceRequest, Task } from 'fhir/r4';
+import { Bundle, CarePlan, Condition, Patient, Questionnaire, Reference, Resource, ServiceRequest, Task } from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -82,7 +82,35 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
 }
 
 const cleanPatient = (patient: Patient) => {
-    return {...patient, id: undefined};
+    const cleanedPatient = { ...patient, id: undefined }
+    if (cleanedPatient.contact) {
+        for (const contact of cleanedPatient.contact) {
+            if (contact.organization?.reference) {
+                delete contact.organization.reference;
+            }
+        }
+    }
+
+    if (cleanedPatient.managingOrganization?.reference) {
+        delete cleanedPatient.managingOrganization.reference;
+    }
+
+    if (cleanedPatient.link) {
+        for (const link of cleanedPatient.link) {
+            if (link.other?.reference) {
+                delete link.other.reference;
+            }
+        }
+    }
+    if (cleanedPatient.generalPractitioner) {
+        for (const practitioner of cleanedPatient.generalPractitioner) {
+            if (practitioner.reference) {
+                delete practitioner.reference;
+            }
+        }
+    }
+
+    return cleanedPatient;
 }
 
 const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string) => {
@@ -150,7 +178,7 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
     }
 }
 
-export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient): Bundle  & { type: "transaction" } => {
+export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient): Bundle & { type: "transaction" } => {
     const cleanedPatient = cleanPatient(patient);
     const cleanedServiceRequest = cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient");
     const constructedTask = constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest");
@@ -212,4 +240,24 @@ export function getPatientAddress(patient?: Patient) {
     if (!address) return "Unknown address"
 
     return `${address.line?.join(", ")}, ${address.postalCode} ${address.city}`
+}
+
+export default function organizationName(reference?: Reference) {
+
+    if (!reference) {
+        return "No Organization Reference found"
+    }
+
+    const displayName = reference.display;
+
+    // If the identifier has no system or value, simply return the displayName, or "unknown" if no displayName is present.
+    if (!reference.identifier || !reference.identifier.system || !reference.identifier.value) {
+        return displayName || "unknown"
+    }
+
+    const isUraIdentifier = reference.identifier.system === 'http://fhir.nl/fhir/NamingSystem/ura'
+    const identifierValue = isUraIdentifier ?
+        `URA ${reference.identifier.value}` : `${reference.identifier.system}: ${reference.identifier.value}`;
+
+    return displayName ? `${displayName} (${identifierValue})` : identifierValue
 }

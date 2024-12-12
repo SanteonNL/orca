@@ -37,6 +37,16 @@ const Menuitems = [
   },
   {
     navlabel: true,
+    subheader: "View BGZ Data",
+  },
+  {
+    id: uniqueId(),
+    title: "BgZ Data",
+    icon: IconCheckupList,
+    href: "/bgz",
+  },
+  {
+    navlabel: true,
     subheader: "Auth",
   },
   {

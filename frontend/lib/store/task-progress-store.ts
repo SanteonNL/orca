@@ -10,6 +10,7 @@ interface StoreState {
     loading: boolean
     error?: string
     task?: Task
+    currentStep: number
     primaryTaskCompleted?: boolean
     selectedTaskId?: string
     subTasks?: Task[]
@@ -17,6 +18,7 @@ interface StoreState {
     questionnaireToResponseMap?: Record<string, Questionnaire>
     setSelectedTaskId: (taskId: string) => void
     setTask: (task?: Task) => void
+    nextStep: () => void
     setSubTasks: (subTasks: Task[]) => void
     onSubTaskSubmit: (callback: any) => void
     fetchAllResources: () => Promise<void>
@@ -26,6 +28,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     initialized: false,
     loading: false,
     task: undefined,
+    currentStep: 0,
     primaryTaskCompleted: false,
     subTasks: undefined,
     taskToQuestionnaireMap: undefined,
@@ -35,6 +38,9 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     },
     setTask: (task?: Task) => {
         set({ task });
+    },
+    nextStep: () => {
+        set({ currentStep: get().currentStep + 1 })//todo: limit to the number of tasks
     },
     setSubTasks: (subTasks: Task[]) => {
         set({ subTasks })
@@ -91,7 +97,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     },
 }));
 
-const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: boolean | undefined) => void) => {
+const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
     const tmpMap: Record<string, Questionnaire> = {};
     await Promise.all(subTasks.map(async (task: Task) => {
         if (task.input && task.input.length > 0) {
@@ -117,7 +123,9 @@ const fetchSubTasks = async (taskId: string) => {
     const subTaskBundle = await cpsClient.search({
         resourceType: 'Task',
         searchParams: { "part-of": `Task/${taskId}` },
-        headers: { "Cache-Control": "no-cache" }
+        headers: { "Cache-Control": "no-cache" },
+        // @ts-ignore
+        options: { postSearch: true }
     }) as Bundle<Task>
     return await fetchAllBundlePages(cpsClient, subTaskBundle)
 }

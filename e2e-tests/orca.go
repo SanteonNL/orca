@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, cpsFhirBaseUrl string, fhirStoreURL string, allowUnmanagedFHIROperations bool) *url.URL {
+func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, cpsFhirBaseUrl string, fhirStoreURL string, questionnaireFhirStoreUrl string, allowUnmanagedFHIROperations bool) *url.URL {
 	image := os.Getenv("ORCHESTRATOR_IMAGE")
 	pullImage := false
 	if image == "" {
@@ -40,22 +40,29 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_CAREPLANSERVICE_ALLOWUNMANAGEDFHIROPERATIONS": strconv.FormatBool(allowUnmanagedFHIROperations),
 			"ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL":      cpsFhirBaseUrl,
 			"ORCA_CAREPLANCONTRIBUTOR_FHIR_URL":                 fhirStoreURL,
-			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":                  "true",
-			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":        "valid",
+			// HAPI FHIR can only store Questionnaires in the default partition.
+			"ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL": questionnaireFhirStoreUrl,
+			"ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS": "file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json",
+			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":                          "true",
+			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":                "valid",
 		},
 		Files: []testcontainers.ContainerFile{
+			// Questionnaire and HealthcareService bundles required by Task Filler Engine
 			{
-				HostFilePath:      "config/nuts/discovery/homemonitoring.json",
-				ContainerFilePath: "/nuts/discovery/homemonitoring.json",
+				HostFilePath:      "../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json",
+				ContainerFilePath: "/config/fhir/healthcareservices.json",
 				FileMode:          0444,
 			},
 			{
-				HostFilePath:      "config/nuts/policy/homemonitoring.json",
-				ContainerFilePath: "/nuts/policy/homemonitoring.json",
+				HostFilePath:      "../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json",
+				ContainerFilePath: "/config/fhir/questionnaires.json",
 				FileMode:          0444,
 			},
 		},
 		WaitingFor: wait.ForHTTP("/health"),
+	}
+	if questionnaireFhirStoreUrl == "" {
+		delete(req.Env, "ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS")
 	}
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
 		ContainerRequest: req,

@@ -8,6 +8,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"testing"
@@ -30,6 +31,7 @@ func Test_Main(t *testing.T) {
 	}
 
 	const clinicFHIRStoreURL = "http://fhirstore:8080/fhir/clinic"
+	const clinicQuestionnaireFHIRStoreURL = "http://fhirstore:8080/fhir/DEFAULT" // HAPI only allows Questionnaires in the default partition
 	const clinicBaseUrl = "http://clinic-orchestrator:8080"
 	const clinicURA = 1
 
@@ -37,14 +39,12 @@ func Test_Main(t *testing.T) {
 	const hospitalBaseUrl = "http://hospital-orchestrator:8080"
 	const hospitalURA = 2
 
-	const thirdPartyURA = 3
-
 	const carePlanServiceBaseURL = hospitalBaseUrl + "/cps"
 
 	// Setup Clinic
 	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir/notify", false)
 	require.NoError(t, err)
-	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, carePlanServiceBaseURL, clinicFHIRStoreURL, true)
+	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, carePlanServiceBaseURL, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 	clinicOrcaFHIRClient := fhirclient.New(clinicOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 
 	// Setup Hospital
@@ -53,7 +53,7 @@ func Test_Main(t *testing.T) {
 	// This is why the hospital, running the CPS, stores its data in the default partition.
 	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir/notify", true)
 	require.NoError(t, err)
-	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, carePlanServiceBaseURL, hospitalFHIRStoreURL, true)
+	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, carePlanServiceBaseURL, hospitalFHIRStoreURL, "", true)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
 	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
 
@@ -127,7 +127,7 @@ func Test_Main(t *testing.T) {
 					Coding: []fhir.Coding{
 						{
 							System: to.Ptr("http://snomed.info/sct"),
-							Code:   to.Ptr("13645005"), // COPD
+							Code:   to.Ptr("84114007"), // Heart failure
 						},
 					},
 				}
@@ -145,24 +145,23 @@ func Test_Main(t *testing.T) {
 			t.Log("Responding to Task Questionnaire")
 			{
 				var searchResult fhir.Bundle
-				err = hospitalOrcaFHIRClient.Read("Task", &searchResult, fhirclient.QueryParam("part-of", "Task/"+*task.ID))
+				err = hospitalOrcaFHIRClient.Search("Task", url.Values{"part-of": {"Task/" + *task.ID}}, &searchResult)
 				require.NoError(t, err)
 				require.Len(t, searchResult.Entry, 1, "Expected 1 subtask")
 
 				var subTask fhir.Task
 				// Assert subtask with Questionnaire
-				var questionnaire fhir.Questionnaire
+				var questionnaireRef string
 				{
 					require.NoError(t, json.Unmarshal(searchResult.Entry[0].Resource, &subTask))
 					require.Len(t, subTask.Input, 1, "Expected 1 input")
 					require.NotNil(t, subTask.Input[0].ValueReference, "Expected input valueReference")
 					require.NotNil(t, subTask.Input[0].ValueReference.Reference, "Expected input valueReference reference")
-					questionnaireRef := *subTask.Input[0].ValueReference.Reference
+					questionnaireRef = *subTask.Input[0].ValueReference.Reference
 					require.True(t, strings.HasPrefix(questionnaireRef, "Questionnaire/"), "Expected input valueReference reference to start with 'Questionnaire/'")
-					err = hospitalOrcaFHIRClient.Read(questionnaireRef, &questionnaire)
-					require.NoError(t, err)
+					require.NoError(t, hospitalOrcaFHIRClient.Read(questionnaireRef, &fhir.Questionnaire{}))
 				}
-				questionnaireResponse := questionnaireResponseTo(questionnaire)
+				questionnaireResponse := questionnaireResponseTo(questionnaireRef)
 				subTask.Status = fhir.TaskStatusCompleted
 				subTask.Output = append(subTask.Output, fhir.TaskOutput{
 					Type: fhir.CodeableConcept{
@@ -275,5 +274,72 @@ func Test_Main(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, *serviceRequest.ID, *fetchedServiceRequest.ID)
 		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
+	})
+	t.Run("Task Filler doesn't support the ServiceRequest code, and rejects the Task", func(t *testing.T) {
+		unsupportedServiceRequest := fhir.ServiceRequest{
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Code: &fhir.CodeableConcept{
+				Coding: []fhir.Coding{
+					{
+						System: to.Ptr("http://snomed.info/sct"),
+						Code:   to.Ptr("1234"), // not supported by Task Filler
+					},
+				},
+			},
+		}
+		err := hospitalOrcaFHIRClient.Create(unsupportedServiceRequest, &unsupportedServiceRequest)
+		require.NoError(t, err)
+
+		unsupportedTask := fhir.Task{
+			Meta: &fhir.Meta{
+				Profile: []string{
+					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
+				},
+			},
+			Requester: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(URANamingSystem),
+					Value:  to.Ptr(strconv.Itoa(hospitalURA)),
+				},
+			},
+			Owner: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr(URANamingSystem),
+					Value:  to.Ptr(strconv.Itoa(clinicURA)),
+				},
+			},
+			Focus: &fhir.Reference{
+				Reference: to.Ptr("ServiceRequest/" + *unsupportedServiceRequest.ID),
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
+			ReasonCode: &fhir.CodeableConcept{
+				Coding: []fhir.Coding{
+					{
+						System: to.Ptr("http://snomed.info/sct"),
+						Code:   to.Ptr("13645005"), // COPD
+					},
+				},
+			},
+			Intent: "order",
+			Status: fhir.TaskStatusRequested,
+		}
+		err = hospitalOrcaFHIRClient.Create(unsupportedTask, &unsupportedTask)
+		require.NoError(t, err)
+
+		t.Run("assert Task is rejected", func(t *testing.T) {
+			var rejectedTask fhir.Task
+			err = hospitalOrcaFHIRClient.Read("Task/"+*unsupportedTask.ID, &rejectedTask)
+			require.NoError(t, err)
+			require.Equal(t, fhir.TaskStatusRejected, rejectedTask.Status)
+		})
 	})
 }

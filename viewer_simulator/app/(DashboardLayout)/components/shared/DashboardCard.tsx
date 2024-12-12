@@ -1,4 +1,4 @@
-import React from "react";
+import React, { JSX } from "react";
 import { Card, CardContent, Typography, Stack, Box } from "@mui/material";
 
 type Props = {

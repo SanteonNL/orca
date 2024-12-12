@@ -327,7 +327,7 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 	t.Run("Heart failure", func(t *testing.T) {
 		task := map[string]interface{}{
 			"definitionReference": map[string]interface{}{
-				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.1",
+				"reference": "ActivityDefinition/urn:oid:2.16.840.1.113883.2.4.3.224.2.1",
 			},
 		}
 		conditionCode, err := getConditionCodeFromWorkflowTask(task)
@@ -340,7 +340,7 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 	t.Run("COPD", func(t *testing.T) {
 		task := map[string]interface{}{
 			"definitionReference": map[string]interface{}{
-				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.2",
+				"reference": "ActivityDefinition/urn:oid:2.16.840.1.113883.2.4.3.224.2.2",
 			},
 		}
 		conditionCode, err := getConditionCodeFromWorkflowTask(task)
@@ -353,7 +353,7 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 	t.Run("Asthma", func(t *testing.T) {
 		task := map[string]interface{}{
 			"definitionReference": map[string]interface{}{
-				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.3",
+				"reference": "ActivityDefinition/urn:oid:2.16.840.1.113883.2.4.3.224.2.3",
 			},
 		}
 		conditionCode, err := getConditionCodeFromWorkflowTask(task)

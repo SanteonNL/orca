@@ -1,7 +1,7 @@
-import { Bundle, CarePlan, Condition, Patient, Practitioner, ServiceRequest } from 'fhir/r4';
+import { CarePlan, Condition, Patient, Practitioner, ServiceRequest } from 'fhir/r4';
 import { useEffect } from 'react';
 import { create } from 'zustand';
-import { BSN_SYSTEM, createCpsClient, createEhrClient, fetchAllBundlePages, getBsn } from '../fhirUtils';
+import { createEhrClient } from '../fhirUtils';
 
 interface LaunchContext {
     patient: string
@@ -15,7 +15,6 @@ interface StoreState {
     patient?: Patient
     practitioner?: Practitioner
     serviceRequest?: ServiceRequest
-    carePlans?: CarePlan[]
     selectedCarePlan?: CarePlan | null
     taskCondition?: Condition
     loading: boolean
@@ -32,7 +31,6 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     patient: undefined,
     practitioner: undefined,
     serviceRequest: undefined,
-    carePlans: undefined,
     selectedCarePlan: undefined,
     taskCondition: undefined,
     loading: false,
@@ -53,7 +51,6 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
 
                 await fetchLaunchContext(set);
                 await fetchEhrResources(get, set);
-                await fetchCarePlans(get, set);
 
                 set({ initialized: true, loading: false });
             }
@@ -64,7 +61,7 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     },
 }));
 
-const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: boolean | undefined) => void) => {
+const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
 
     let launchContext: LaunchContext;
 
@@ -76,9 +73,9 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
     } else {
         //TODO: We can remove this when going live, this is useful during development
         launchContext = {
-            "patient": "Patient/2",
-            "serviceRequest": "ServiceRequest/4",
-            "practitioner": "Practitioner/7"
+            "patient": "Patient/4",
+            "serviceRequest": "ServiceRequest/6",
+            "practitioner": "Practitioner/8"
         }
 
     }
@@ -88,7 +85,7 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
     return launchContext;
 };
 
-const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: boolean | undefined) => void) => {
+const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
     const { launchContext } = get();
 
     if (!launchContext) throw new Error("Unable to fetch EHR resources without LaunchContext")
@@ -125,32 +122,6 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
     return patient;
 };
 
-const fetchCarePlans = async (
-    get: () => StoreState,
-    set: (
-        partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>),
-        replace?: boolean | undefined
-    ) => void
-) => {
-    const { patient } = get();
-
-    const bsn = getBsn(patient)
-    if (!bsn) throw new Error(`No BSN identifier found for Patient / ${patient?.id}`);
-
-    const cpsClient = createCpsClient()
-
-    const initialBundle = await cpsClient.search({
-        resourceType: 'CarePlan',
-        searchParams: {
-            'subject-identifier': `${BSN_SYSTEM}| ${bsn} `,
-            '_count': 100
-        }
-    }) as Bundle<CarePlan>;
-
-    const carePlans = await fetchAllBundlePages(cpsClient, initialBundle);
-    set({ carePlans });
-};
-
 const useEnrollment = () => {
     const store = useEnrollmentStore();
     const initialized = useEnrollmentStore(state => state.initialized);
@@ -158,9 +129,10 @@ const useEnrollment = () => {
 
     useEffect(() => {
         if (!initialized) {
+            setTimeout(() => fetchAllResources(), 2000);
             fetchAllResources();
         }
-    }, []);
+    }, [fetchAllResources, initialized]);
 
     return store;
 };

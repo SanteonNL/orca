@@ -238,7 +238,70 @@ func TestService_RequestAccessToken_IntegrationTest(t *testing.T) {
 		WorkflowId: "workflow-1234",
 		Bsn:        "999999205", // Assuming Bsn is part of LaunchContext
 	}
-	actual, err := service.RequestAccessToken(launchContext, hcpTokenType)
+
+	//Request an HCP token
+	hcpToken, err := service.RequestAccessToken(launchContext, hcpTokenType)
 	require.NoError(t, err)
-	println(actual)
+	require.NotEmpty(t, hcpToken)
+
+	//Request an application token
+	applicationToken, err := service.RequestAccessToken(launchContext, applicationTokenType)
+	require.NoError(t, err)
+	require.NotEmpty(t, applicationToken)
+}
+
+func TestCreateSAMLAssertion_DifferentTokenTypes(t *testing.T) {
+	expectedHcpSubject := "999999999@urn:oid:2.16.840.1.113883.4.1"
+	expectedAppSubject := "application@urn:oid:2.16.840.1.113883.4.1"
+	expectedHcpPurposeOfUse := "TREATMENT"
+	expectedAppPurposeOfUse := "OPERATIONS"
+	expectedHcpRole := "224609002"
+	expectedAppRole := "182777000"
+
+	service := &Service{
+		config: Config{
+			BaseUrl: "https://zorgplatform.online",
+			SigningConfig: SigningConfig{
+				Issuer:   expectedAppSubject,
+				Audience: "https://zorgplatform.online/sts",
+			},
+		},
+	}
+
+	launchContext := LaunchContext{
+		Practitioner: fhir.Practitioner{Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("urn:oid:2.16.840.1.113883.4.1"),
+				Value:  to.Ptr("999999999"),
+			},
+		}},
+		WorkflowId: "workflow-1234",
+		Bsn:        "999999205",
+	}
+
+	// Generate the HCP token assertion
+	hcpAssertion, err := service.createSAMLAssertion(&launchContext, hcpTokenType)
+	require.NoError(t, err)
+
+	// Generate the Application token assertion
+	appAssertion, err := service.createSAMLAssertion(&launchContext, applicationTokenType)
+	require.NoError(t, err)
+
+	// Verify that the Subject elements match the expected values
+	hcpSubject := hcpAssertion.FindElement("Subject/NameID").Text()
+	appSubject := appAssertion.FindElement("Subject/NameID").Text()
+	assert.Equal(t, expectedHcpSubject, hcpSubject)
+	assert.Equal(t, expectedAppSubject, appSubject)
+
+	// Verify that the PurposeOfUse elements match the expected values
+	hcpPurposeOfUse := hcpAssertion.FindElement("AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xspa:1.0:subject:purposeofuse']/AttributeValue/PurposeOfUse").SelectAttrValue("code", "")
+	appPurposeOfUse := appAssertion.FindElement("AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xspa:1.0:subject:purposeofuse']/AttributeValue/PurposeOfUse").SelectAttrValue("code", "")
+	assert.Equal(t, expectedHcpPurposeOfUse, hcpPurposeOfUse)
+	assert.Equal(t, expectedAppPurposeOfUse, appPurposeOfUse)
+
+	// Verify that the Role elements match the expected values
+	hcpRole := hcpAssertion.FindElement("AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xacml:2.0:subject:role']/AttributeValue/Role").SelectAttrValue("code", "")
+	appRole := appAssertion.FindElement("AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xacml:2.0:subject:role']/AttributeValue/Role").SelectAttrValue("code", "")
+	assert.Equal(t, expectedHcpRole, hcpRole)
+	assert.Equal(t, expectedAppRole, appRole)
 }

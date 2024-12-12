@@ -48,7 +48,7 @@ type ErrorWithCode struct {
 	StatusCode int
 }
 
-func (e *ErrorWithCode) Error() string {
+func (e ErrorWithCode) Error() string {
 	return e.Message
 }
 
@@ -97,16 +97,16 @@ func WriteOperationOutcomeFromError(err error, desc string, httpResponse http.Re
 	var operationOutcome fhir.OperationOutcome
 
 	// Error type: fhirclient.OperationOutcomeError
-	var operationOutcomeErr *fhirclient.OperationOutcomeError
-	if errors.As(err, &operationOutcomeErr) {
+	var operationOutcomeErr = new(fhirclient.OperationOutcomeError)
+	if errors.As(err, operationOutcomeErr) || errors.As(err, &operationOutcomeErr) {
 		if operationOutcomeErr.HttpStatusCode > 0 {
 			statusCode = operationOutcomeErr.HttpStatusCode
 		}
 		operationOutcome = operationOutcomeErr.OperationOutcome
 	} else {
 		// Error type: ErrorWithCode
-		var errorWithCode *ErrorWithCode
-		if errors.As(err, &errorWithCode) {
+		var errorWithCode = new(ErrorWithCode)
+		if errors.As(err, errorWithCode) || errors.As(err, &errorWithCode) {
 			if errorWithCode.StatusCode > 0 {
 				statusCode = errorWithCode.StatusCode
 			}

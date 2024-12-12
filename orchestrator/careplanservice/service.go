@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"io"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"strconv"
 	"strings"
@@ -34,6 +34,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
+	globals.CarePlanServiceFhirClient = fhirClient
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +82,7 @@ type Service struct {
 	profile                      profile.Provider
 	subscriptionManager          subscriptions.Manager
 	maxReadBodySize              int
-	proxy                        *httputil.ReverseProxy
+	proxy                        coolfhir.HttpProxy
 	allowUnmanagedFHIROperations bool
 	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	pipeline                     pipeline.Instance
@@ -136,18 +137,29 @@ func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
 type FHIRHandlerResult func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error)
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	s.proxy = coolfhir.NewProxy(log.Logger, s.fhirURL, basePath, s.orcaPublicURL.JoinPath(basePath), s.transport)
+	s.proxy = coolfhir.NewProxy("CPS->FHIR proxy", log.Logger, s.fhirURL, basePath,
+		s.orcaPublicURL.JoinPath(basePath), s.transport, true)
 	baseUrl := s.baseUrl()
 	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
 
 	// Binding to actual routing
-	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-		s.handleBundle(request, httpResponse)
-	}))
 	// Creating a resource
 	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
+	}))
+	// Searching for a resource via POST
+	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		resourceType := request.PathValue("type")
+		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
+	}))
+	// Handle bundle
+	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != basePath+"/" {
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("invalid path"), "CarePlanService/POST", httpResponse)
+			return
+		}
+		s.handleBundle(request, httpResponse)
 	}))
 	// Updating a resource by ID
 	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
@@ -165,11 +177,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
-	}))
-	// Handle search
-	mux.HandleFunc("GET "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-		resourceType := request.PathValue("type")
-		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Get"+resourceType)
 	}))
 }
 
@@ -290,12 +297,18 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 		log.Warn().Ctx(httpRequest.Context()).Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
 		statusCode = http.StatusOK
 	}
+	var headers = map[string][]string{}
+	if fhirResponse.Location != nil {
+		headers["Location"] = []string{*fhirResponse.Location}
+	}
+	if fhirResponse.Etag != nil {
+		headers["ETag"] = []string{*fhirResponse.Etag}
+	}
+	if fhirResponse.LastModified != nil {
+		headers["Last-Modified"] = []string{*fhirResponse.LastModified}
+	}
 	s.pipeline.
-		PrependResponseTransformer(pipeline.ResponseHeaderSetter{
-			// TODO: I won't pretend I tested the other response headers (e.g. Last-Modified or ETag), so we won't set them for now.
-			//       Add them (and test them) when needed.
-			"Location": {*fhirResponse.Location},
-		}).
+		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
 		DoAndWrite(httpResponse, txResult.Entry[0].Resource, statusCode)
 }
 
@@ -343,17 +356,31 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
 	headers := new(fhirclient.Headers)
 
+	// Ensure the Content-Type header is set correctly
+	contentType := httpRequest.Header.Get("Content-Type")
+	if strings.Contains(contentType, ",") {
+		contentType = strings.Split(contentType, ",")[0]
+		httpRequest.Header.Set("Content-Type", contentType)
+	}
+
+	// Parse URL-encoded parameters from the request body
+	if err := httpRequest.ParseForm(); err != nil {
+		coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("failed to parse form: %w", err), operationName, httpResponse)
+		return
+	}
+	queryParams := httpRequest.PostForm
+
 	var bundle *fhir.Bundle
 	var err error
 	switch resourceType {
 	case "CarePlan":
-		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), queryParams, headers)
 	case "CareTeam":
-		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), queryParams, headers)
 	case "Task":
-		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchTask(httpRequest.Context(), queryParams, headers)
 	case "Patient":
-		bundle, err = s.handleSearchPatient(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchPatient(httpRequest.Context(), queryParams, headers)
 	default:
 		log.Warn().Ctx(httpRequest.Context()).
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
@@ -566,9 +593,16 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 		},
 	}
 	for _, param := range params {
-		// Create a `PreRequestOption` that adds the `If-None-Exist` header to the request
-		addHeaderOption := func(client fhirclient.Client, req *http.Request) {
-			req.Header.Set("If-None-Exist", fmt.Sprintf("url=%s", param.SearchParam.Url))
+
+		// Check if param exists before creating
+		existingParamBundle := fhir.Bundle{}
+		err := s.fhirClient.Read("SearchParameter", &existingParamBundle, fhirclient.QueryParam("name", param.SearchParam.Name))
+		if err != nil {
+			log.Error().Ctx(ctx).Err(err).Msgf("Failed to read SearchParameter %s, attempting create", param.SearchParamId)
+		}
+		if len(existingParamBundle.Entry) > 0 {
+			log.Info().Ctx(ctx).Msgf("SearchParameter/%s already exists, skipping creation", param.SearchParamId)
+			continue
 		}
 
 		log.Info().Ctx(ctx).
@@ -576,7 +610,7 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		defer cancel()
 
-		err := s.fhirClient.CreateWithContext(ctx, &param.SearchParam, &param.SearchParam, addHeaderOption)
+		err = s.fhirClient.CreateWithContext(ctx, &param.SearchParam, &param.SearchParam)
 		if err != nil {
 			log.Error().Ctx(ctx).Err(err).Msgf("Failed to ensure SearchParameter %s", param.SearchParamId)
 		} else {
@@ -632,6 +666,7 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 // checkAllowUnmanagedOperations checks if unmanaged operations are allowed. It errors if they are not.
 func (s *Service) checkAllowUnmanagedOperations() error {
 	if !s.allowUnmanagedFHIROperations {
+		log.Info().Msgf("FAIL3")
 		return &coolfhir.ErrorWithCode{
 			Message:    "FHIR operation not allowed",
 			StatusCode: http.StatusMethodNotAllowed,

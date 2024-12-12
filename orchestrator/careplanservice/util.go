@@ -35,7 +35,7 @@ func (s *Service) writeOperationOutcomeFromError(ctx context.Context, err error,
 	coolfhir.SendResponse(httpResponse, http.StatusBadRequest, outcome)
 }
 
-func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
+func (s *Service) getCarePlanAndCareTeams(ctx context.Context, carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
 	bundle := fhir.Bundle{}
 	var carePlan fhir.CarePlan
 	var careTeams []fhir.CareTeam
@@ -43,7 +43,7 @@ func (s *Service) getCarePlanAndCareTeams(carePlanReference string) (fhir.CarePl
 
 	carePlanId := strings.TrimPrefix(carePlanReference, "CarePlan/")
 
-	err := s.fhirClient.Read("CarePlan", &bundle, fhirclient.QueryParam("_id", carePlanId), fhirclient.QueryParam("_include", "CarePlan:care-team"), fhirclient.ResponseHeaders(headers))
+	err := s.fhirClient.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return fhir.CarePlan{}, nil, nil, err
 	}
@@ -97,19 +97,78 @@ func (s *Service) handleTaskBasedResourceAuth(ctx context.Context, headers *fhir
 	return nil
 }
 
-// handleSearchResource is a generic function to search for a resource of a given type and return the results
-// it returns a processed list of the required resource type, the full bundle and an error
-func handleSearchResource[T any](s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
-	params := []fhirclient.Option{}
-	for k, v := range queryParams {
-		for _, value := range v {
-			params = append(params, fhirclient.QueryParam(k, value))
+// filterAuthorizedPatients will go through a list of patients and return the ones the requester has access to
+func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.Patient) ([]fhir.Patient, error) {
+	params := url.Values{}
+	patientRefs := make([]string, len(patients))
+	for i, patient := range patients {
+		patientRefs[i] = fmt.Sprintf("Patient/%s", *patient.Id)
+	}
+	params.Add("subject", strings.Join(patientRefs, ","))
+	params.Add("_include", "CarePlan:care-team")
+
+	// Fetch all CarePlans associated with the Patient, get the CareTeams associated with the CarePlans
+	// Get the CarePlan for which the Patient is the subject, get the CareTeams associated with the CarePlan
+	var verificationBundle fhir.Bundle
+	err := s.fhirClient.Search("CarePlan", params, &verificationBundle)
+	if err != nil {
+		return nil, err
+	}
+
+	var careTeams []fhir.CareTeam
+	err = coolfhir.ResourcesInBundle(&verificationBundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
+	if err != nil {
+		return nil, err
+	}
+	var carePlans []fhir.CarePlan
+	err = coolfhir.ResourcesInBundle(&verificationBundle, coolfhir.EntryIsOfType("CarePlan"), &carePlans)
+	if err != nil {
+		return nil, err
+	}
+
+	retPatients := make([]fhir.Patient, 0)
+
+	principal, err := auth.PrincipalFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// Iterate through each CareTeam to see if the requester is a participant, if not, remove any patients from the bundle that are part of the CareTeam
+	for _, cp := range carePlans {
+		var ct fhir.CareTeam
+		for _, c := range careTeams {
+			if *cp.CareTeam[0].Reference == fmt.Sprintf("CareTeam/%s", *c.Id) {
+				ct = c
+				break
+			}
+		}
+
+		participant := coolfhir.FindMatchingParticipantInCareTeam([]fhir.CareTeam{ct}, principal.Organization.Identifier)
+		if participant != nil {
+			for _, patient := range patients {
+				if "Patient/"+*patient.Id == *cp.Subject.Reference {
+					retPatients = append(retPatients, patient)
+					break
+				}
+			}
 		}
 	}
 
-	params = append(params, fhirclient.ResponseHeaders(headers))
+	return retPatients, nil
+}
+
+// handleSearchResource is a generic function to search for a resource of a given type and return the results
+// it returns a processed list of the required resource type, the full bundle and an error
+func handleSearchResource[T any](ctx context.Context, s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
+	form := url.Values{}
+	for k, v := range queryParams {
+		for _, value := range v {
+			form.Add(k, value)
+		}
+	}
+
 	var bundle fhir.Bundle
-	err := s.fhirClient.Read(resourceType, &bundle, params...)
+	err := s.fhirClient.Search(resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, &fhir.Bundle{}, err
 	}

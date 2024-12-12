@@ -30,9 +30,20 @@ func TestService_Proxy(t *testing.T) {
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
+	var capturedQuery url.Values
+	fhirServerMux.HandleFunc("GET /fhir/Success/1", func(writer http.ResponseWriter, request *http.Request) {
+		capturedQuery = request.URL.Query()
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{
+			Intent: "order",
+		})
+	})
+	fhirServerMux.HandleFunc("GET /fhir/Fail/1", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("Fail"), "oops", writer)
+	})
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
 	service, err := New(Config{
+		AllowUnmanagedFHIROperations: true,
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
@@ -46,9 +57,59 @@ func TestService_Proxy(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+	t.Run("ok", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		require.JSONEq(t, `{"resourceType":"Task", "intent":"order", "status":"draft"}`, string(responseData))
+		t.Run("caching is allowed", func(t *testing.T) {
+			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
+		})
+	})
+	t.Run("it proxies query parameters", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1?_identifier=foo|bar")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		assert.Equal(t, "foo|bar", capturedQuery.Get("_identifier"))
+	})
+	t.Run("upstream FHIR server returns FHIR error with operation outcome", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Fail/1")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		println(string(responseData))
+		require.JSONEq(t, `{
+  "issue": [
+    {
+      "severity": "error",
+      "code": "processing",
+      "diagnostics": "oops failed: Fail"
+    }
+  ],
+  "resourceType": "OperationOutcome"
+}`, string(responseData))
+	})
+	t.Run("disallowed unmanaged FHIR operation", func(t *testing.T) {
+		service, err := New(Config{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirServer.URL + "/fhir",
+			},
+		}, profile.TestProfile{}, orcaPublicURL)
+		require.NoError(t, err)
+		frontServerMux := http.NewServeMux()
+		service.RegisterHandlers(frontServerMux)
+		frontServer := httptest.NewServer(frontServerMux)
+
+		httpClient := frontServer.Client()
+		httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Anything/1")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		require.Contains(t, string(responseData), "FHIR operation not allowed")
+	})
 }
 
 func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
@@ -56,8 +117,9 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	capturedHost := ""
-	fhirServerMux.HandleFunc("GET /fhir/SomeResource", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/SomeResource/1", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write([]byte(`{"resourceType":"Task"}`))
 		capturedHost = request.Host
 	})
 	fhirServer := httptest.NewServer(fhirServerMux)
@@ -78,10 +140,19 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource")
+	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource/1")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)
+
+	// Test POST edge cases
+	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/_search", "application/fhir+json", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+
+	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/1/_search", "application/fhir+json", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 }
 
 type OperationOutcomeWithResourceType struct {
@@ -486,7 +557,7 @@ func TestService_Handle(t *testing.T) {
 			hdrs := new(fhirclient.Headers)
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: OperationOutcome, issues: [processing error] Transaction failed on 'PUT' for the requested url '/ServiceRequest'.; [invalid error] Found result with Id '4eaffb23-02ab-452c-8ef1-b4c9be7b2425', which did not match the provided Id 'e669F4l0Bk3NJpQzoTzVE0opsQR2iWXR41M6FXkeguZo3'.")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Transaction failed on 'PUT' for the requested url '/ServiceRequest'.; [invalid error] Found result with Id '4eaffb23-02ab-452c-8ef1-b4c9be7b2425', which did not match the provided Id 'e669F4l0Bk3NJpQzoTzVE0opsQR2iWXR41M6FXkeguZo3'.")
 			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 		})
 		t.Run("commit fails, FHIR server returns OperationOutcome with security issue, which is sanitized", func(t *testing.T) {
@@ -507,7 +578,7 @@ func TestService_Handle(t *testing.T) {
 			hdrs := new(fhirclient.Headers)
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: OperationOutcome, issues: [processing error] upstream FHIR server error")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] upstream FHIR server error")
 			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 		})
 		t.Run("GET is disallowed", func(t *testing.T) {

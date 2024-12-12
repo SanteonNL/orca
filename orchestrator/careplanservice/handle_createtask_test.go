@@ -258,12 +258,11 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				}
 			}),
 		},
-		// TODO: INT-450 - Re-enable task.For dereferencing logical identifiers to actual patient, when Frontend is fixed.
-		//{
-		//	name:                       "error: Task.for contains a logical identifier with BSN, search for patient fails",
-		//	errorFromPatientBundleRead: errors.New("fhir error: Issues searching for patient"),
-		//	expectError:                errors.New("fhir error: Issues searching for patient"),
-		//},
+		{
+			name:                       "error: Task.for contains a logical identifier with BSN, search for patient fails",
+			errorFromPatientBundleRead: errors.New("fhir error: Issues searching for patient"),
+			expectError:                errors.New("fhir error: Issues searching for patient"),
+		},
 		{
 			name: "Task.for contains a local reference and a logical identifier with BSN",
 			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
@@ -296,7 +295,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			if tt.returnedPatientBundle != nil || tt.errorFromPatientBundleRead != nil {
-				mockFHIRClient.EXPECT().Read("Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().Search("Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 					if tt.returnedPatientBundle != nil {
 						reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedPatientBundle))
 					}

@@ -2,11 +2,11 @@ package careplanservice
 
 import (
 	"context"
-	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/http"
 	"net/url"
 )
 
@@ -14,15 +14,21 @@ import (
 // if the requester is valid, return the Patient, else return an error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleGetPatient(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.Patient, error) {
-	bundle, err := s.handleSearchPatient(ctx, url.Values{"_id": []string{id}}, headers)
+	var patient fhir.Patient
+	err := s.fhirClient.Read("Patient/"+id, &patient, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, err
 	}
 
-	var patient fhir.Patient
-	err = coolfhir.ResourceInBundle(bundle, coolfhir.EntryIsOfType("Patient"), &patient)
+	authorisedPatients, err := s.filterAuthorizedPatients(ctx, []fhir.Patient{patient})
 	if err != nil {
 		return nil, err
+	}
+	if len(authorisedPatients) == 0 {
+		return nil, &coolfhir.ErrorWithCode{
+			Message:    "Participant does not have access to Patient",
+			StatusCode: http.StatusForbidden,
+		}
 	}
 
 	return &patient, nil
@@ -32,12 +38,12 @@ func (s *Service) handleGetPatient(ctx context.Context, id string, headers *fhir
 // if the requester is a participant of one of the returned CareTeams, return the whole bundle, else error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
-	principal, err := auth.PrincipalFromContext(ctx)
+	_, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	patients, bundle, err := handleSearchResource[fhir.Patient](s, "Patient", queryParams, headers)
+	patients, bundle, err := handleSearchResource[fhir.Patient](ctx, s, "Patient", queryParams, headers)
 	if err != nil {
 		return nil, err
 	}
@@ -46,58 +52,14 @@ func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Value
 		return &fhir.Bundle{Entry: []fhir.BundleEntry{}}, nil
 	}
 
-	// It is possible that we have patients that are part of different CarePlans. Create list of query params for each patient ID
-	params := []fhirclient.Option{}
-	patientRefsSearchString := ""
-	for i, patient := range patients {
-		if i == 0 {
-			patientRefsSearchString = fmt.Sprintf("Patient/%s", *patient.Id)
-		} else {
-			patientRefsSearchString = fmt.Sprintf("%s,Patient/%s", patientRefsSearchString, *patient.Id)
-		}
-	}
-	params = append(params, fhirclient.QueryParam("subject", patientRefsSearchString))
-	params = append(params, fhirclient.QueryParam("_include", "CarePlan:care-team"))
-
-	// Fetch all CarePlans associated with the Patient, get the CareTeams associated with the CarePlans
-	// Get the CarePlan for which the Patient is the subject, get the CareTeams associated with the CarePlan
-	var verificationBundle fhir.Bundle
-	err = s.fhirClient.Read("CarePlan", &verificationBundle, params...)
+	authorisedPatients, err := s.filterAuthorizedPatients(ctx, patients)
 	if err != nil {
 		return nil, err
 	}
 
-	var careTeams []fhir.CareTeam
-	err = coolfhir.ResourcesInBundle(&verificationBundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
-	if err != nil {
-		return nil, err
-	}
-	var carePlans []fhir.CarePlan
-	err = coolfhir.ResourcesInBundle(&verificationBundle, coolfhir.EntryIsOfType("CarePlan"), &carePlans)
-	if err != nil {
-		return nil, err
-	}
-
-	patientRefs := make([]string, 0)
-
-	// Iterate through each CareTeam to see if the requester is a participant, if not, remove any patients from the bundle that are part of the CareTeam
-	for _, cp := range carePlans {
-		var ct fhir.CareTeam
-		for _, c := range careTeams {
-			if *cp.CareTeam[0].Reference == fmt.Sprintf("CareTeam/%s", *c.Id) {
-				ct = c
-				break
-			}
-		}
-		participant := coolfhir.FindMatchingParticipantInCareTeam([]fhir.CareTeam{ct}, principal.Organization.Identifier)
-		if participant != nil {
-			for _, patient := range patients {
-				if "Patient/"+*patient.Id == *cp.Subject.Reference {
-					patientRefs = append(patientRefs, "Patient/"+*patient.Id)
-					break
-				}
-			}
-		}
+	var patientRefs []string
+	for _, patient := range authorisedPatients {
+		patientRefs = append(patientRefs, "Patient/"+*patient.Id)
 	}
 
 	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"Patient"}, patientRefs)
