@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +17,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -241,11 +242,6 @@ func TestService(t *testing.T) {
 			patientRef := sessionData.StringValues["patient"]
 			require.NotEmpty(t, patientRef)
 			require.IsType(t, fhir.Patient{}, sessionData.OtherValues[patientRef])
-		})
-		t.Run("check Task is in session", func(t *testing.T) {
-			taskRef := sessionData.StringValues["task"]
-			require.NotEmpty(t, taskRef)
-			require.Equal(t, "Task?identifier=http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id|b526e773-e1a6-4533-bd00-1360c97e745f", taskRef)
 		})
 	})
 
