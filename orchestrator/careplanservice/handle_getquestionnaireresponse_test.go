@@ -26,7 +26,7 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 	var careTeam2 fhir.CareTeam
 	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
 
-	tests := []TestStruct[fhir.QuestionnaireResponse]{
+	tests := []TestHandleGetStruct[fhir.QuestionnaireResponse]{
 		{
 			ctx:           auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name:          "error: QuestionnaireResponse does not exist",

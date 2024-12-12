@@ -295,7 +295,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			if tt.returnedPatientBundle != nil || tt.errorFromPatientBundleRead != nil {
-				mockFHIRClient.EXPECT().Read("Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().Search("Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 					if tt.returnedPatientBundle != nil {
 						reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedPatientBundle))
 					}

@@ -43,7 +43,7 @@ func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Value
 		return nil, err
 	}
 
-	patients, bundle, err := handleSearchResource[fhir.Patient](s, "Patient", queryParams, headers)
+	patients, bundle, err := handleSearchResource[fhir.Patient](ctx, s, "Patient", queryParams, headers)
 	if err != nil {
 		return nil, err
 	}

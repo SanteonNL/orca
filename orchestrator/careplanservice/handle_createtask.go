@@ -114,7 +114,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 		if task.For.Reference == nil {
 			headers := fhirclient.Headers{}
-			patients, _, err := handleSearchResource[fhir.Patient](s, "Patient", map[string][]string{"identifier": {fmt.Sprintf("%s|%s", *task.For.Identifier.System, *task.For.Identifier.Value)}}, &headers)
+			patients, _, err := handleSearchResource[fhir.Patient](ctx, s, "Patient", map[string][]string{"identifier": {fmt.Sprintf("%s|%s", *task.For.Identifier.System, *task.For.Identifier.Value)}}, &headers)
 			if err != nil {
 				return nil, err
 			}
