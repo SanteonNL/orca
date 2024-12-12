@@ -10,6 +10,7 @@
 package ehr
 
 import (
+	context "context"
 	reflect "reflect"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -41,15 +42,15 @@ func (m *MockNotifier) EXPECT() *MockNotifierMockRecorder {
 }
 
 // NotifyTaskAccepted mocks base method.
-func (m *MockNotifier) NotifyTaskAccepted(cpsClient fhirclient.Client, task *fhir.Task) error {
+func (m *MockNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "NotifyTaskAccepted", cpsClient, task)
+	ret := m.ctrl.Call(m, "NotifyTaskAccepted", ctx, cpsClient, task)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // NotifyTaskAccepted indicates an expected call of NotifyTaskAccepted.
-func (mr *MockNotifierMockRecorder) NotifyTaskAccepted(cpsClient, task any) *gomock.Call {
+func (mr *MockNotifierMockRecorder) NotifyTaskAccepted(ctx, cpsClient, task any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyTaskAccepted", reflect.TypeOf((*MockNotifier)(nil).NotifyTaskAccepted), cpsClient, task)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NotifyTaskAccepted", reflect.TypeOf((*MockNotifier)(nil).NotifyTaskAccepted), ctx, cpsClient, task)
 }

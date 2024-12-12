@@ -1,6 +1,7 @@
 package ehr
 
 import (
+	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -8,6 +9,7 @@ import (
 )
 
 func TestKafkaClient_SubmitMessage(t *testing.T) {
+	ctx := context.Background()
 	tests := []struct {
 		name          string
 		config        *KafkaConfig
@@ -36,7 +38,7 @@ func TestKafkaClient_SubmitMessage(t *testing.T) {
 				return
 			}
 
-			err = client.SubmitMessage(tt.key, tt.value)
+			err = client.SubmitMessage(ctx, tt.key, tt.value)
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
 			} else {

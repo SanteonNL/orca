@@ -347,7 +347,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					*result = primaryTask
 					return nil
 				}).AnyTimes()
-			notifierMock.EXPECT().NotifyTaskAccepted(mockFHIRClient, gomock.Any()).AnyTimes()
+			notifierMock.EXPECT().NotifyTaskAccepted(ctx, mockFHIRClient, gomock.Any()).AnyTimes()
 			var capturedTx fhir.Bundle
 			if tt.numBundlesPosted > 0 {
 				mockFHIRClient.EXPECT().

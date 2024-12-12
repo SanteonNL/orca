@@ -10,6 +10,7 @@
 package ehr
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "go.uber.org/mock/gomock"
@@ -39,15 +40,15 @@ func (m *MockKafkaClient) EXPECT() *MockKafkaClientMockRecorder {
 }
 
 // SubmitMessage mocks base method.
-func (m *MockKafkaClient) SubmitMessage(key, value string) error {
+func (m *MockKafkaClient) SubmitMessage(ctx context.Context, key, value string) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubmitMessage", key, value)
+	ret := m.ctrl.Call(m, "SubmitMessage", ctx, key, value)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // SubmitMessage indicates an expected call of SubmitMessage.
-func (mr *MockKafkaClientMockRecorder) SubmitMessage(key, value any) *gomock.Call {
+func (mr *MockKafkaClientMockRecorder) SubmitMessage(ctx, key, value any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitMessage", reflect.TypeOf((*MockKafkaClient)(nil).SubmitMessage), key, value)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubmitMessage", reflect.TypeOf((*MockKafkaClient)(nil).SubmitMessage), ctx, key, value)
 }

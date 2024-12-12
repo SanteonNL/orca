@@ -1,6 +1,7 @@
 package ehr
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -13,7 +14,7 @@ import (
 )
 
 type Notifier interface {
-	NotifyTaskAccepted(cpsClient fhirclient.Client, task *fhir.Task) error
+	NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error
 }
 
 type notifier struct {
@@ -44,10 +45,10 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 //
 // Returns:
 //   - error: An error if the notification process fails.
-func (n *notifier) NotifyTaskAccepted(cpsClient fhirclient.Client, task *fhir.Task) error {
+func (n *notifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 
 	ref := "Task/" + *task.Id
-	log.Info().Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
+	log.Info().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
 	uid, err := uuid.NewUUID()
 	if err != nil {
 		return err
@@ -73,24 +74,24 @@ func (n *notifier) NotifyTaskAccepted(cpsClient fhirclient.Client, task *fhir.Ta
 	var tasks []fhir.Task
 	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("Task"), &tasks)
 
-	patientForRefs := findForReferences(tasks)
-	log.Info().Msgf("Found %d patientForRefs", len(patientForRefs))
+	patientForRefs := findForReferences(ctx, tasks)
+	log.Info().Ctx(ctx).Msgf("Found %d patientForRefs", len(patientForRefs))
 	result, err := fetchRefs(cpsClient, patientForRefs)
 	if err != nil {
 		return err
 	}
 	bundles.addBundle(*result...)
 
-	focusRefs := findFocusReferences(tasks)
-	log.Info().Msgf("Found %d focusRefs", len(focusRefs))
+	focusRefs := findFocusReferences(ctx, tasks)
+	log.Info().Ctx(ctx).Msgf("Found %d focusRefs", len(focusRefs))
 	result, err = fetchRefs(cpsClient, focusRefs)
 	if err != nil {
 		return err
 	}
 	bundles.addBundle(*result...)
 
-	basedOnRefs := findBasedOnReferences(tasks)
-	log.Info().Msgf("Found %d basedOnRefs", len(basedOnRefs))
+	basedOnRefs := findBasedOnReferences(ctx, tasks)
+	log.Info().Ctx(ctx).Msgf("Found %d basedOnRefs", len(basedOnRefs))
 	result, err = fetchRefs(cpsClient, basedOnRefs)
 	if err != nil {
 		return err
@@ -98,7 +99,7 @@ func (n *notifier) NotifyTaskAccepted(cpsClient fhirclient.Client, task *fhir.Ta
 	bundles.addBundle(*result...)
 
 	questionnaireRefs := findQuestionnaireInputs(tasks)
-	log.Info().Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
+	log.Info().Ctx(ctx).Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
 	result, err = fetchRefs(cpsClient, questionnaireRefs)
 	if err != nil {
 		return err
@@ -112,7 +113,7 @@ func (n *notifier) NotifyTaskAccepted(cpsClient fhirclient.Client, task *fhir.Ta
 	}
 	bundles.addBundle(*result...)
 
-	return sendBundle(bundles, n.kafkaClient)
+	return sendBundle(ctx, bundles, n.kafkaClient)
 }
 
 // findForReferences extracts patient references from a list of tasks.
@@ -122,13 +123,13 @@ func (n *notifier) NotifyTaskAccepted(cpsClient fhirclient.Client, task *fhir.Ta
 //
 // Returns:
 //   - []string: A list of patient references.
-func findForReferences(tasks []fhir.Task) []string {
+func findForReferences(ctx context.Context, tasks []fhir.Task) []string {
 	var patientForRefs []string
 	for _, task := range tasks {
 		if task.For != nil {
 			patientReference := task.For.Reference
 			if patientReference != nil {
-				log.Info().Msgf("Found patientReference %s", *patientReference)
+				log.Info().Ctx(ctx).Msgf("Found patientReference %s", *patientReference)
 				patientForRefs = append(patientForRefs, *patientReference)
 			}
 		}
@@ -143,13 +144,13 @@ func findForReferences(tasks []fhir.Task) []string {
 //
 // Returns:
 //   - []string: A list of focus references.
-func findFocusReferences(tasks []fhir.Task) []string {
+func findFocusReferences(ctx context.Context, tasks []fhir.Task) []string {
 	var focusRefs []string
 	for _, task := range tasks {
 		if task.Focus != nil {
 			focusReference := task.Focus.Reference
 			if focusReference != nil {
-				log.Info().Msgf("Found focusReference %s", *focusReference)
+				log.Info().Ctx(ctx).Msgf("Found focusReference %s", *focusReference)
 				focusRefs = append(focusRefs, *focusReference)
 			}
 		}
@@ -164,7 +165,7 @@ func findFocusReferences(tasks []fhir.Task) []string {
 //
 // Returns:
 //   - []string: A list of based-on references.
-func findBasedOnReferences(tasks []fhir.Task) []string {
+func findBasedOnReferences(ctx context.Context, tasks []fhir.Task) []string {
 	var basedOnRefs []string
 	for _, task := range tasks {
 		if task.Focus != nil {
@@ -172,7 +173,7 @@ func findBasedOnReferences(tasks []fhir.Task) []string {
 			for _, reference := range basedOnReferences {
 				basedOnReference := reference.Reference
 				if basedOnReference != nil {
-					log.Info().Msgf("Found basedOnReference %s", *basedOnReference)
+					log.Info().Ctx(ctx).Msgf("Found basedOnReference %s", *basedOnReference)
 					basedOnRefs = append(basedOnRefs, *basedOnReference)
 				}
 			}
@@ -357,17 +358,17 @@ func fetchTaskInputs(task fhir.Task) []string {
 //
 // Returns:
 //   - error: An error if the send process fails.
-func sendBundle(set BundleSet, kafkaClient KafkaClient) error {
+func sendBundle(ctx context.Context, set BundleSet, kafkaClient KafkaClient) error {
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
 		return err
 	}
-	log.Info().Msgf("Sending set for task (ref=%s) to Kafka", set.task)
-	err = kafkaClient.SubmitMessage(set.Id, string(jsonData))
+	log.Info().Ctx(ctx).Msgf("Sending set for task (ref=%s) to Kafka", set.task)
+	err = kafkaClient.SubmitMessage(ctx, set.Id, string(jsonData))
 	if err != nil {
 		return err
 	}
 
-	log.Info().Msgf("Successfully send task (ref=%s) to Kafka", set.task)
+	log.Info().Ctx(ctx).Msgf("Successfully send task (ref=%s) to Kafka", set.task)
 	return nil
 }

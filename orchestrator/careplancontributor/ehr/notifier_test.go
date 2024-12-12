@@ -1,6 +1,7 @@
 package ehr
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -14,6 +15,7 @@ import (
 )
 
 func TestNotifyTaskAccepted(t *testing.T) {
+	ctx := context.Background()
 	taskId := uuid.NewString()
 	patientId := uuid.NewString()
 	focusReqId := uuid.NewString()
@@ -137,7 +139,7 @@ func TestNotifyTaskAccepted(t *testing.T) {
 					return nil
 				}).AnyTimes()
 				mockKafkaClient.EXPECT().
-					SubmitMessage(gomock.Any(), gomock.Any()).
+					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
 					Return(nil)
 			},
 		},
@@ -221,7 +223,7 @@ func TestNotifyTaskAccepted(t *testing.T) {
 					return nil
 				}).AnyTimes()
 				mockKafkaClient.EXPECT().
-					SubmitMessage(gomock.Any(), gomock.Any()).
+					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
 					Return(errors.New("kafka error"))
 			},
 			expectedError: errors.New("kafka error"),
@@ -241,7 +243,7 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			}
 			notifier := NewNotifier(mockKafkaClient)
 
-			err := notifier.NotifyTaskAccepted(mockFHIRClient, &tt.task)
+			err := notifier.NotifyTaskAccepted(ctx, mockFHIRClient, &tt.task)
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
 			} else {
