@@ -136,6 +136,44 @@ func (mr *MockClientMockRecorder) ReadWithContext(ctx, path, target any, opts ..
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReadWithContext", reflect.TypeOf((*MockClient)(nil).ReadWithContext), varargs...)
 }
 
+// Search mocks base method.
+func (m *MockClient) Search(resourceType string, query url.Values, target any, opts ...fhirclient.Option) error {
+	m.ctrl.T.Helper()
+	varargs := []any{resourceType, query, target}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "Search", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Search indicates an expected call of Search.
+func (mr *MockClientMockRecorder) Search(resourceType, query, target any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{resourceType, query, target}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Search", reflect.TypeOf((*MockClient)(nil).Search), varargs...)
+}
+
+// SearchWithContext mocks base method.
+func (m *MockClient) SearchWithContext(ctx context.Context, resourceType string, query url.Values, target any, opts ...fhirclient.Option) error {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, resourceType, query, target}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SearchWithContext", varargs...)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SearchWithContext indicates an expected call of SearchWithContext.
+func (mr *MockClientMockRecorder) SearchWithContext(ctx, resourceType, query, target any, opts ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, resourceType, query, target}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchWithContext", reflect.TypeOf((*MockClient)(nil).SearchWithContext), varargs...)
+}
+
 // Update mocks base method.
 func (m *MockClient) Update(path string, resource, result any, opts ...fhirclient.Option) error {
 	m.ctrl.T.Helper()
