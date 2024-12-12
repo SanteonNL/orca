@@ -21,6 +21,10 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
 	}
+	// Check we're only allowing secure external literal references
+	if err := s.validateLiteralReferences(ctx, &task); err != nil {
+		return nil, err
+	}
 
 	// Validate fields on updated Task
 	err := coolfhir.ValidateTaskRequiredFields(task)

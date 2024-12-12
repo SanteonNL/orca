@@ -542,6 +542,19 @@ func Test_handleUpdateTask(t *testing.T) {
 		require.EqualError(t, err, "Task.requester cannot be changed")
 		require.Empty(t, tx.Entry)
 	})
+	t.Run("error: unsecure external literal reference", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.For = &fhir.Reference{
+				Reference: to.Ptr("http://example.com/Patient/1"),
+			}
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "literal reference is URL with scheme http://, only https:// is allowed (path=for.reference)")
+		require.Empty(t, tx.Entry)
+	})
 	t.Run("error: change Task.owner (not allowed)", func(t *testing.T) {
 		request := updateRequest(func(task *fhir.Task) {
 			task.Owner = &fhir.Reference{
