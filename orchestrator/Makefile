@@ -1,7 +1,7 @@
 .PHONY: gen-api gen-mocks
 
 install-tools:
-	go install go.uber.org/mock/mockgen@v0.4.0
+	go install go.uber.org/mock/mockgen@v0.5.0
 	go install github.com/vektra/mockery/v2@v2.43.2
 
 gen-mocks:
@@ -12,3 +12,4 @@ load-fhir-testdata:
 
 careplancontributor.applaunch-demo:
 	open "http://localhost:8080/demo-app-launch?patient=Patient/1&serviceRequest=ServiceRequest/2&practitioner=PractitionerRole/3&iss=http://localhost:9090/fhir"
+
