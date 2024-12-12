@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"errors"
 	"strings"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
@@ -25,6 +26,7 @@ type Config struct {
 	// to be made available through the CarePlanContributor.
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
 	TaskFiller                    TaskFillerConfig      `koanf:"taskfiller"`
+	KafkaConfig                   ehr.KafkaConfig       `koanf:"kafka"`
 	Enabled                       bool                  `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
 	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`
