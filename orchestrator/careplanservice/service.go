@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -673,4 +674,67 @@ func (s *Service) checkAllowUnmanagedOperations() error {
 		}
 	}
 	return nil
+}
+
+// validateLiteralReferences validates the literal references in the given resource.
+// Literal references may be an external URL, but they MUST use HTTPS and be a child of a FHIR base URL
+// registered in the CSD. This prevents unsafe external references (e.g. accidentally exchanging resources over HTTP),
+// and gives more confidence that the resource can safely be fetched by SCP-nodes.
+func (s *Service) validateLiteralReferences(ctx context.Context, resource any) error {
+	// Literal references are "reference" fields that contain a string. This can be anywhere in the resource,
+	// so we need to recursively search for them.
+	resourceAsJson, err := json.Marshal(resource)
+	if err != nil {
+		// would be very weird
+		return err
+	}
+	resourceAsMap := make(map[string]interface{})
+	err = json.Unmarshal(resourceAsJson, &resourceAsMap)
+	if err != nil {
+		// would be very weird
+		return err
+	}
+
+	literalReferences := make(map[string]string)
+	collectLiteralReferences(resourceAsMap, []string{}, literalReferences)
+	for path, reference := range literalReferences {
+		lowerCaseRef := strings.ToLower(reference)
+		if strings.HasPrefix(lowerCaseRef, "http://") {
+			return coolfhir.BadRequest(fmt.Sprintf("literal reference is URL with scheme http://, only https:// is allowed (path=%s)", path))
+		}
+		if strings.HasPrefix(lowerCaseRef, "https://") {
+			// OK
+			// TODO: Check if it's a child of a registered FHIR base URL
+			parsedRef, err := url.Parse(reference)
+			if err != nil {
+				// weird
+				return err
+			}
+			if slices.Contains(strings.Split(parsedRef.Path, "/"), "..") {
+				return coolfhir.BadRequest(fmt.Sprintf("literal reference is URL with parent path segment '..' (path=%s)", path))
+			}
+			if len(parsedRef.Query()) > 0 {
+				return coolfhir.BadRequest("literal reference is URL with query parameters")
+			}
+		}
+	}
+	return nil
+}
+
+func collectLiteralReferences(resource any, path []string, result map[string]string) {
+	switch r := resource.(type) {
+	case map[string]interface{}:
+		for key, value := range r {
+			collectLiteralReferences(value, append(path, key), result)
+		}
+	case []interface{}:
+		for i, value := range r {
+			collectLiteralReferences(value, append(path, fmt.Sprintf("#%d", i)), result)
+		}
+	case string:
+		if len(path) > 0 && path[len(path)-1] == "reference" {
+			// We found a literal reference
+			result[strings.Join(path, ".")] = r
+		}
+	}
 }

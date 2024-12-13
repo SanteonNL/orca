@@ -212,6 +212,15 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			expectError: errors.New("task.Intent must be 'order'"),
 		},
 		{
+			name: "error: unsecure literal reference",
+			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
+				task.Focus = &fhir.Reference{
+					Reference: to.Ptr("http://example.com/fhir/Patient/1"),
+				}
+			}),
+			expectError: errors.New("literal reference is URL with scheme http://, only https:// is allowed (path=focus.reference)"),
+		},
+		{
 			name: "error: not an SCP Task",
 			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
 				task.Meta = nil
