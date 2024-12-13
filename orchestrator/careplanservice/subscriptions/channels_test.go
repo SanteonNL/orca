@@ -80,11 +80,8 @@ func TestRestHookChannel_Notify(t *testing.T) {
 
 func TestInProcessChannelFactory_Create(t *testing.T) {
 	t.Run("local identity, in-process channel can be used", func(t *testing.T) {
-		prof := profile.TestProfile{
-			Principal: auth.TestPrincipal1,
-		}
 		factory := InProcessChannelFactory{
-			Profile: prof,
+			Profile: profile.Test(),
 		}
 
 		channel, err := factory.Create(context.Background(), auth.TestPrincipal1.Organization.Identifier[0])

@@ -49,7 +49,7 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.TestProfile{}, orcaPublicURL)
+	}, profile.Test(), orcaPublicURL)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -97,7 +97,7 @@ func TestService_Proxy(t *testing.T) {
 			FHIR: coolfhir.ClientConfig{
 				BaseURL: fhirServer.URL + "/fhir",
 			},
-		}, profile.TestProfile{}, orcaPublicURL)
+		}, profile.Test(), orcaPublicURL)
 		require.NoError(t, err)
 		frontServerMux := http.NewServeMux()
 		service.RegisterHandlers(frontServerMux)
@@ -132,7 +132,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 			BaseURL: fhirServer.URL + "/fhir",
 		},
 		AllowUnmanagedFHIROperations: true,
-	}, profile.TestProfile{}, orcaPublicURL)
+	}, profile.Test(), orcaPublicURL)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -171,7 +171,7 @@ func TestService_ErrorHandling(t *testing.T) {
 				BaseURL: "http://localhost",
 			},
 		},
-		profile.TestProfile{},
+		profile.Test(),
 		orcaPublicURL)
 	require.NoError(t, err)
 	serverMux := http.NewServeMux()
@@ -372,7 +372,7 @@ func TestService_Handle(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.TestProfile{}, orcaPublicURL)
+	}, profile.Test(), orcaPublicURL)
 
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		switch method {
@@ -708,23 +708,44 @@ func TestService_validateLiteralReferences(t *testing.T) {
 	err = json.Unmarshal(resourceJson, &resource)
 	require.NoError(t, err)
 
+	prof := profile.TestProfile{
+		CSD: profile.TestCsdDirectory{Endpoint: "https://example.com/fhir"},
+	}
+	service := &Service{profile: prof}
+
 	t.Run("ok", func(t *testing.T) {
-		err = (&Service{}).validateLiteralReferences(context.Background(), resource)
+		err = service.validateLiteralReferences(context.Background(), resource)
 		require.NoError(t, err)
 	})
 	t.Run("http:// is not allowed", func(t *testing.T) {
 		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 			s.Focus.Reference = to.Ptr("http://example.com")
 		})
-		err := (&Service{}).validateLiteralReferences(context.Background(), resource)
+		err := service.validateLiteralReferences(context.Background(), resource)
 		require.EqualError(t, err, "literal reference is URL with scheme http://, only https:// is allowed (path=focus.reference)")
 	})
 	t.Run("parent directory traversal isn't allowed", func(t *testing.T) {
 		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 			s.Focus.Reference = to.Ptr("https://example.com/fhir/../secret-page")
 		})
-		err := (&Service{}).validateLiteralReferences(context.Background(), resource)
+		err := service.validateLiteralReferences(context.Background(), resource)
 		require.EqualError(t, err, "literal reference is URL with parent path segment '..' (path=focus.reference)")
+	})
+	t.Run("registered base URL", func(t *testing.T) {
+		t.Run("path differs", func(t *testing.T) {
+			resource := deep.AlterCopy(resource, func(s *fhir.Task) {
+				s.Focus.Reference = to.Ptr("https://example.com/alternate/secret-page")
+			})
+			err = service.validateLiteralReferences(context.Background(), resource)
+			require.EqualError(t, err, "literal reference is not a child of a registered FHIR base URL (path=focus.reference)")
+		})
+		t.Run("path differs, check trailing slash normalization", func(t *testing.T) {
+			resource := deep.AlterCopy(resource, func(s *fhir.Task) {
+				s.Focus.Reference = to.Ptr("https://example.com/fhirPatient/not-allowed")
+			})
+			err = service.validateLiteralReferences(context.Background(), resource)
+			require.EqualError(t, err, "literal reference is not a child of a registered FHIR base URL (path=focus.reference)")
+		})
 	})
 }
 
@@ -739,9 +760,9 @@ func Test_collectLiteralReferences(t *testing.T) {
 
 	assert.Equal(t, map[string]string{
 		"focus.reference":     "urn:uuid:cps-servicerequest-telemonitoring",
-		"for.reference":       "https://example.com/Patient/1",
-		"partOf.#0.reference": "https://example.com/CarePlan/1",
-		"partOf.#1.reference": "https://example.com/CarePlan/2",
+		"for.reference":       "https://example.com/fhir/Patient/1",
+		"partOf.#0.reference": "https://example.com/fhir/CarePlan/1",
+		"partOf.#1.reference": "https://example.com/fhir/CarePlan/2",
 		"partOf.#2.reference": "CarePlan/3",
 	}, actualRefs)
 }

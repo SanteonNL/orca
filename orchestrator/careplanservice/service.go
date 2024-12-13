@@ -695,6 +695,16 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 		return err
 	}
 
+	// Make a list of allowed FHIR base URLs, normalize them to all make them end with a slash
+	fhirBaseURLs, err := s.profile.CsdDirectory().LookupEndpoint(ctx, nil, profile.FHIRBaseURLEndpointName)
+	if err != nil {
+		return fmt.Errorf("unable to list registered FHIR base URLs for validation: %w", err)
+	}
+	var allowedBaseURLs []string
+	for _, fhirBaseURL := range fhirBaseURLs {
+		allowedBaseURLs = append(allowedBaseURLs, strings.TrimSuffix(fhirBaseURL.Address, "/")+"/")
+	}
+
 	literalReferences := make(map[string]string)
 	collectLiteralReferences(resourceAsMap, []string{}, literalReferences)
 	for path, reference := range literalReferences {
@@ -703,8 +713,6 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 			return coolfhir.BadRequest(fmt.Sprintf("literal reference is URL with scheme http://, only https:// is allowed (path=%s)", path))
 		}
 		if strings.HasPrefix(lowerCaseRef, "https://") {
-			// OK
-			// TODO: Check if it's a child of a registered FHIR base URL
 			parsedRef, err := url.Parse(reference)
 			if err != nil {
 				// weird
@@ -715,6 +723,17 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 			}
 			if len(parsedRef.Query()) > 0 {
 				return coolfhir.BadRequest("literal reference is URL with query parameters")
+			}
+			// Check if the reference is a child of a registered FHIR base URL
+			isRegisteredBaseUrl := false
+			for _, allowedBaseURL := range allowedBaseURLs {
+				if strings.HasPrefix(parsedRef.String(), allowedBaseURL) {
+					isRegisteredBaseUrl = true
+					break
+				}
+			}
+			if !isRegisteredBaseUrl {
+				return coolfhir.BadRequest(fmt.Sprintf("literal reference is not a child of a registered FHIR base URL (path=%s)", path))
 			}
 		}
 	}

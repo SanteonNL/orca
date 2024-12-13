@@ -14,7 +14,6 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 )
@@ -40,10 +39,7 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 		tlsClientCertificate:  &clientCert,
 		signingCertificateKey: signCert.PrivateKey.(*rsa.PrivateKey),
 		signingCertificate:    signCert.Certificate,
-		profile: profile.TestProfile{
-			Principal:        auth.TestPrincipal1,
-			TestCsdDirectory: profile.TestCsdDirectory{},
-		},
+		profile:               profile.Test(),
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
@@ -110,9 +106,7 @@ func TestService_FetchApplicationToken_IntegrationTest(t *testing.T) {
 		tlsClientCertificate:  &clientCert,
 		signingCertificateKey: signCert.PrivateKey.(*rsa.PrivateKey),
 		signingCertificate:    signCert.Certificate,
-		profile: profile.TestProfile{
-			Principal: auth.TestPrincipal1,
-		},
+		profile:               profile.Test(),
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{

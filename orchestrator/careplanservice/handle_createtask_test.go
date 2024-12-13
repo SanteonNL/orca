@@ -118,10 +118,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 	// Create the service with the mock FHIR client
 	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
-		profile: profile.TestProfile{
-			Principal:        auth.TestPrincipal1,
-			TestCsdDirectory: profile.TestCsdDirectory{},
-		},
+		profile:    profile.Test(),
 		fhirClient: mockFHIRClient,
 		fhirURL:    fhirBaseUrl,
 	}
@@ -374,10 +371,8 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
 		fhirClient: mockFHIRClient,
-		profile: profile.TestProfile{
-			TestCsdDirectory: profile.TestCsdDirectory{},
-		},
-		fhirURL: fhirBaseUrl,
+		profile:    profile.Test(),
+		fhirURL:    fhirBaseUrl,
 	}
 
 	tests := []struct {

@@ -25,14 +25,14 @@
     "reference": "urn:uuid:cps-servicerequest-telemonitoring"
   },
   "for": {
-    "reference": "https://example.com/Patient/1"
+    "reference": "https://example.com/fhir/Patient/1"
   },
   "partOf": [
     {
-      "reference": "https://example.com/CarePlan/1"
+      "reference": "https://example.com/fhir/CarePlan/1"
     },
     {
-      "reference": "https://example.com/CarePlan/2"
+      "reference": "https://example.com/fhir/CarePlan/2"
     },
     {
       "reference": "CarePlan/3"

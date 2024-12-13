@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
 	"os"
@@ -461,6 +462,7 @@ func Test_handleUpdateTask(t *testing.T) {
 	fhirClient := mock.NewMockClient(ctrl)
 	service := &Service{
 		fhirClient: fhirClient,
+		profile:    profile.Test(),
 	}
 	fhirClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
 		*result = carePlanBundle
@@ -637,6 +639,7 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 	// Create the service with the mock FHIR client
 	service := &Service{
 		fhirClient: mockFHIRClient,
+		profile:    profile.Test(),
 	}
 
 	updateTaskAcceptedData, _ := os.ReadFile("./testdata/task-update-accepted.json")

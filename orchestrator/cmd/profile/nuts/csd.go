@@ -40,8 +40,15 @@ type cacheEntry struct {
 // LookupEndpoint searches for endpoints of the given owner, with the given endpointName in the given Discovery Service.
 // It queries the Nuts Discovery Service, translating the owner's identifier to a credential attribute (see IdentifierCredentialMapping).
 // The endpoint is retrieved from the Nuts Discovery Service registration's registrationParameters, identified by endpointName.
-func (n *CsdDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
-	response, err := n.find(ctx, owner)
+// If the owner is nil, it will search for all endpoints in the Discovery Service.
+func (n *CsdDirectory) LookupEndpoint(ctx context.Context, owner *fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
+	var response *discovery.SearchPresentationsResponse
+	var err error
+	if owner == nil {
+		response, err = n.doSearch(ctx, discovery.SearchPresentationsParams{})
+	} else {
+		response, err = n.find(ctx, *owner)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -138,6 +145,9 @@ func (n *CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discov
 				"credentialSubject.organization.ura": *owner.Value,
 			},
 		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	// Cache the entry
