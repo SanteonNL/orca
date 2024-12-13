@@ -48,7 +48,7 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 func (n *notifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 
 	ref := "Task/" + *task.Id
-	log.Info().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
+	log.Debug().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
 	uid, err := uuid.NewUUID()
 	if err != nil {
 		return err
@@ -75,7 +75,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.
 	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("Task"), &tasks)
 
 	patientForRefs := findForReferences(ctx, tasks)
-	log.Info().Ctx(ctx).Msgf("Found %d patientForRefs", len(patientForRefs))
+	log.Debug().Ctx(ctx).Msgf("Found %d patientForRefs", len(patientForRefs))
 	result, err := fetchRefs(cpsClient, patientForRefs)
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.
 	bundles.addBundle(*result...)
 
 	focusRefs := findFocusReferences(ctx, tasks)
-	log.Info().Ctx(ctx).Msgf("Found %d focusRefs", len(focusRefs))
+	log.Debug().Ctx(ctx).Msgf("Found %d focusRefs", len(focusRefs))
 	result, err = fetchRefs(cpsClient, focusRefs)
 	if err != nil {
 		return err
@@ -91,7 +91,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.
 	bundles.addBundle(*result...)
 
 	basedOnRefs := findBasedOnReferences(ctx, tasks)
-	log.Info().Ctx(ctx).Msgf("Found %d basedOnRefs", len(basedOnRefs))
+	log.Debug().Ctx(ctx).Msgf("Found %d basedOnRefs", len(basedOnRefs))
 	result, err = fetchRefs(cpsClient, basedOnRefs)
 	if err != nil {
 		return err
@@ -99,7 +99,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.
 	bundles.addBundle(*result...)
 
 	questionnaireRefs := findQuestionnaireInputs(tasks)
-	log.Info().Ctx(ctx).Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
+	log.Debug().Ctx(ctx).Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
 	result, err = fetchRefs(cpsClient, questionnaireRefs)
 	if err != nil {
 		return err
@@ -129,7 +129,7 @@ func findForReferences(ctx context.Context, tasks []fhir.Task) []string {
 		if task.For != nil {
 			patientReference := task.For.Reference
 			if patientReference != nil {
-				log.Info().Ctx(ctx).Msgf("Found patientReference %s", *patientReference)
+				log.Debug().Ctx(ctx).Msgf("Found patientReference %s", *patientReference)
 				patientForRefs = append(patientForRefs, *patientReference)
 			}
 		}
@@ -150,7 +150,7 @@ func findFocusReferences(ctx context.Context, tasks []fhir.Task) []string {
 		if task.Focus != nil {
 			focusReference := task.Focus.Reference
 			if focusReference != nil {
-				log.Info().Ctx(ctx).Msgf("Found focusReference %s", *focusReference)
+				log.Debug().Ctx(ctx).Msgf("Found focusReference %s", *focusReference)
 				focusRefs = append(focusRefs, *focusReference)
 			}
 		}
@@ -173,7 +173,7 @@ func findBasedOnReferences(ctx context.Context, tasks []fhir.Task) []string {
 			for _, reference := range basedOnReferences {
 				basedOnReference := reference.Reference
 				if basedOnReference != nil {
-					log.Info().Ctx(ctx).Msgf("Found basedOnReference %s", *basedOnReference)
+					log.Debug().Ctx(ctx).Msgf("Found basedOnReference %s", *basedOnReference)
 					basedOnRefs = append(basedOnRefs, *basedOnReference)
 				}
 			}
@@ -363,12 +363,13 @@ func sendBundle(ctx context.Context, set BundleSet, kafkaClient KafkaClient) err
 	if err != nil {
 		return err
 	}
-	log.Info().Ctx(ctx).Msgf("Sending set for task (ref=%s) to Kafka", set.task)
+	log.Debug().Ctx(ctx).Msgf("Sending set for task (ref=%s) to Kafka", set.task)
 	err = kafkaClient.SubmitMessage(ctx, set.Id, string(jsonData))
 	if err != nil {
+		log.Warn().Ctx(ctx).Msgf("Sending set for task (ref=%s) to Kafka failed, error: %s", set.task, err.Error())
 		return err
 	}
 
-	log.Info().Ctx(ctx).Msgf("Successfully send task (ref=%s) to Kafka", set.task)
+	log.Debug().Ctx(ctx).Msgf("Successfully send task (ref=%s) to Kafka", set.task)
 	return nil
 }

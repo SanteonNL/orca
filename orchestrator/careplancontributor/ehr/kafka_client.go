@@ -153,21 +153,22 @@ func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient) (KafkaClient,
 // Returns:
 //   - error: An error if the message could not be produced.
 func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
-	log.Info().Ctx(ctx).Msgf("SubmitMessage, submitting key %s", key)
+	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitting key %s", key)
 	record := kgo.KeyStringRecord(key, value)
 	record.Topic = k.topic
 	sync := k.client.ProduceSync(ctx, record)
 	for _, s := range sync {
 		if s.Err != nil {
-			log.Info().Ctx(ctx).Msgf("Error during submission %s", s.Err.Error())
+			log.Error().Ctx(ctx).Msgf("Error during submission %s", s.Err.Error())
 			return s.Err
 		}
 	}
 	err := k.client.Flush(ctx)
 	if err != nil {
+		log.Error().Ctx(ctx).Msgf("kafka flush failed %s", err.Error())
 		return err
 	}
-	log.Info().Ctx(ctx).Msgf("SubmitMessage, submitted key %s", key)
+	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitted key %s", key)
 	return nil
 }
 
@@ -183,9 +184,10 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 //   - error: An error if the file could not be written.
 func (k *NoopClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
 	name := "/tmp/" + strings.ReplaceAll(key, ":", "_") + ".json"
-	log.Info().Ctx(ctx).Msgf("NoopClientImpl, write to file: %s", name)
+	log.Debug().Ctx(ctx).Msgf("NoopClientImpl, write to file: %s", name)
 	err := os.WriteFile(name, []byte(value), 0644)
 	if err != nil {
+		log.Warn().Ctx(ctx).Msgf("NoopClientImpl, failed to write to file: %s, err: %s", name, err.Error())
 		return err
 	}
 	return nil
