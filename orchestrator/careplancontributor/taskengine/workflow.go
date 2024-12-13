@@ -5,7 +5,10 @@ import (
 	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/http"
+	"net/url"
 	"strings"
 )
 
@@ -80,6 +83,93 @@ func (f FhirApiWorkflowProvider) QuestionnaireLoader() QuestionnaireLoader {
 	return FhirApiQuestionnaireLoader{
 		client: f.Client,
 	}
+}
+
+var _ WorkflowProvider = &MemoryWorkflowProvider{}
+var _ QuestionnaireLoader = &MemoryWorkflowProvider{}
+
+// MemoryWorkflowProvider is a WorkflowProvider that uses in-memory FHIR resources to provide workflows.
+// To use this provider, you must first load the resources using LoadBundle.
+type MemoryWorkflowProvider struct {
+	questionnaires     []fhir.Questionnaire
+	healthcareServices []fhir.HealthcareService
+}
+
+func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl string) error {
+	var bundle fhir.Bundle
+	parsedBundleUrl, err := url.Parse(bundleUrl)
+	if err != nil {
+		return err
+	}
+	client := fhirclient.New(parsedBundleUrl, http.DefaultClient, nil)
+	if err := client.ReadWithContext(ctx, "", &bundle, fhirclient.AtUrl(parsedBundleUrl)); err != nil {
+		return err
+	}
+
+	var questionnaires []fhir.Questionnaire
+	if err := coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("Questionnaire"), &questionnaires); err != nil {
+		return fmt.Errorf("could not extract questionnaires from bundle: %w", err)
+	}
+	e.questionnaires = append(e.questionnaires, questionnaires...)
+
+	var healthcareServices []fhir.HealthcareService
+	if err := coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("HealthcareService"), &healthcareServices); err != nil {
+		return fmt.Errorf("could not extract healthcare services from bundle: %w", err)
+	}
+	e.healthcareServices = append(e.healthcareServices, healthcareServices...)
+	return nil
+}
+
+func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) (*Workflow, error) {
+	// Mimicks Questionnaire and HealthcareService search like it's done in FhirApiWorkflowProvider, but just in-memory filtering.
+	supported := false
+	for _, healthcareService := range e.healthcareServices {
+		if coolfhir.ContainsCoding(serviceCode, healthcareService.Category...) && coolfhir.ContainsCoding(conditionCode, healthcareService.Type...) {
+			supported = true
+			break
+		}
+	}
+	if !supported {
+		return nil, ErrWorkflowNotFound
+	}
+	for _, questionnaire := range e.questionnaires {
+		matchesServiceCode := false
+		matchesConditionCode := false
+		for _, usageContext := range questionnaire.UseContext {
+			if usageContext.ValueCodeableConcept == nil {
+				continue
+			}
+			if coolfhir.ContainsCoding(serviceCode, *usageContext.ValueCodeableConcept) {
+				matchesServiceCode = true
+			}
+			if coolfhir.ContainsCoding(conditionCode, *usageContext.ValueCodeableConcept) {
+				matchesConditionCode = true
+			}
+		}
+		if matchesServiceCode && matchesConditionCode {
+			return &Workflow{
+				Steps: []WorkflowStep{
+					{
+						QuestionnaireUrl: *questionnaire.Id,
+					},
+				},
+			}, nil
+		}
+	}
+	return nil, ErrWorkflowNotFound
+}
+
+func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl string) (*fhir.Questionnaire, error) {
+	for _, questionnaire := range e.questionnaires {
+		if *questionnaire.Id == questionnaireUrl {
+			return &questionnaire, nil
+		}
+	}
+	return nil, errors.New("questionnaire not found")
+}
+
+func (e *MemoryWorkflowProvider) QuestionnaireLoader() QuestionnaireLoader {
+	return e
 }
 
 type Workflow struct {
