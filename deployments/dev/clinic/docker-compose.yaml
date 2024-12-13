@@ -61,10 +61,10 @@ services:
       - "../../../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json:/config/fhir/healthcareservices.json:ro"
       - "../../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
   viewer:
-#    image: ghcr.io/santeonnl/orca_viewersimulator:main
-    build:
-       context: ../../../viewer_simulator
-       dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_orchestrator:main
+    # build:
+    #  context: ../../../orchestrator
+    #  dockerfile: Dockerfile
     environment:
       ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL: ${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       FHIR_BASE_URL: http://orchestrator:8080/cpc/cps/fhir
