@@ -49,11 +49,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 
 	ref := "Task/" + *task.Id
 	log.Debug().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
-	uid, err := uuid.NewUUID()
-	if err != nil {
-		return err
-	}
-	id := uid.URN()
+	id := uuid.NewString()
 	bundles := BundleSet{
 		Id:   id,
 		task: ref,
@@ -62,7 +58,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 	bundle := fhir.Bundle{}
 
 	// All resources other than tasks are not returned.
-	err = cpsClient.Read("Task",
+	err := cpsClient.Read("Task",
 		&bundle,
 		fhirclient.QueryParam("_id", *task.Id),
 		fhirclient.QueryParam("_revinclude", "Task:part-of"),
