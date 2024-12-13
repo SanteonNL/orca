@@ -7,6 +7,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"slices"
@@ -348,7 +349,7 @@ func sendBundle(ctx context.Context, set BundleSet, kafkaClient KafkaClient) err
 	err = kafkaClient.SubmitMessage(ctx, set.Id, string(jsonData))
 	if err != nil {
 		log.Warn().Ctx(ctx).Msgf("Sending set for task (ref=%s) to Kafka failed, error: %s", set.task, err.Error())
-		return err
+		return errors.Wrap(err, "failed to send task to Kafka")
 	}
 
 	log.Debug().Ctx(ctx).Msgf("Successfully send task (ref=%s) to Kafka", set.task)
