@@ -95,6 +95,8 @@ type MemoryWorkflowProvider struct {
 	healthcareServices []fhir.HealthcareService
 }
 
+// LoadBundle fetches the FHIR Bundle from the given URL and adds the contained Questionnaires and HealthcareServices to the provider.
+// They can then be used to provide workflows.
 func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl string) error {
 	var bundle fhir.Bundle
 	parsedBundleUrl, err := url.Parse(bundleUrl)
