@@ -1,4 +1,4 @@
-@startuml  msc-notification-bus
+@startuml  clinic-notification-bus
 
 skinparam roundcorner 20
 skinparam defaultFontName Arial
@@ -14,7 +14,7 @@ box ORCA #acd1e9
     participant "Task manager" as manager
 end box
 
-box MSC #f0a1a1
+box Clinic #f0a1a1
     participant "Care Profs" as careprofs
 end box
 
@@ -47,7 +47,7 @@ loop until satisfied
     manager -> manager: evaluate
 end loop
 end group
-group MSC notification
+group Clinic notification
 manager -> CPC2: update Task[main]
 activate careprofs
 manager -> manager: unpack Task[main]
