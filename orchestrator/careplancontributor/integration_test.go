@@ -1,9 +1,9 @@
 package careplancontributor
 
 import (
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/http/httptest"
-	"net/http/httputil"
 	"net/url"
 	"sync/atomic"
 	"testing"
@@ -23,7 +23,6 @@ import (
 var notificationCounter = new(atomic.Int32)
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
-	t.Skip("Fix test once the INT-487 is picked up") //TODO: Fix test once the INT-487 is picked up
 	notificationEndpoint := setupNotificationEndpoint(t)
 	carePlanServiceURL, httpService, cpcURL := setupIntegrationTest(t, notificationEndpoint)
 
@@ -92,11 +91,11 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	}
 
 	cpsDataRequester := fhirclient.New(carePlanServiceURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
+	cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 
 	t.Log("Reading task before accepted - Fails")
 	{
 		var fetchedTask fhir.Task
-		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.Error(t, err)
 	}
@@ -124,14 +123,13 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	t.Log("Reading task after accepted")
 	{
 		var fetchedTask fhir.Task
-		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 
 		// Read
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.NoError(t, err)
 		// Search
 		var fetchedBundle fhir.Bundle
-		err = cpsDataHolder.Search("Task", url.Values{"_id": {*task.Id}}, &fetchedBundle)
+		err = cpcDataRequester.Search("Task", url.Values{"_id": {*task.Id}}, &fetchedBundle)
 		require.NoError(t, err)
 		require.Len(t, fetchedBundle.Entry, 1)
 	}
@@ -198,14 +196,17 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	service.RegisterHandlers(serverMux)
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
+	sessionManager, _ := createTestSession()
+
+	// TODO: Tests using the Zorgplatform service
+	cpsProxy := coolfhir.NewProxy("CPS->CPC", log.Logger, fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
 
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.CarePlanService.URL = carePlanServiceURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
-	sessionManager, _ := createTestSession()
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, cpsProxy)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()
