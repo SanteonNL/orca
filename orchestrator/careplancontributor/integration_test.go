@@ -197,7 +197,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
 
-	mockProxy, _ := mock.NewMockReverseProxy(carePlanServiceURL, httpService.Client().Transport, true)
+	mockProxy, _ := mock.NewMockReverseProxy(carePlanServiceURL, orcaPublicURL, httpService.Client().Transport, true)
 
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true

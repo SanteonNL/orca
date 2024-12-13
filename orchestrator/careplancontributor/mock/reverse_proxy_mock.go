@@ -12,13 +12,13 @@ type MockReverseProxy struct {
 	Proxy coolfhir.HttpProxy
 }
 
-func NewMockReverseProxy(target *url.URL, transport http.RoundTripper, allowCaching bool) (*MockReverseProxy, error) {
+func NewMockReverseProxy(target *url.URL, orcaPublicUrl *url.URL, transport http.RoundTripper, allowCaching bool) (*MockReverseProxy, error) {
 	proxy := coolfhir.NewProxy(
 		"MockProxy",
 		log.Logger,
 		target,
-		"/",
-		target,
+		"/cpc/cps/fhir",
+		orcaPublicUrl.JoinPath("/cpc/cps/fhir"),
 		transport,
 		allowCaching,
 	)

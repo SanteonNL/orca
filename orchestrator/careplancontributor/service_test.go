@@ -233,7 +233,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 				healthDataViewEndpointEnabled = *tt.healthDataViewEndpointEnabled
 			}
 
-			mockProxy, _ := mock.NewMockReverseProxy(fhirServerURL, http.DefaultTransport, tt.allowCaching)
+			mockProxy, _ := mock.NewMockReverseProxy(fhirServerURL, orcaPublicURL, http.DefaultTransport, tt.allowCaching)
 
 			service, _ := New(Config{
 				FHIR: coolfhir.ClientConfig{
