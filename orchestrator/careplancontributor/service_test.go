@@ -3,7 +3,6 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/mocks"
 	"github.com/rs/zerolog/log"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
@@ -234,7 +233,15 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 				healthDataViewEndpointEnabled = *tt.healthDataViewEndpointEnabled
 			}
 
-			mockProxy, _ := mocks.NewMockReverseProxy(fhirServerURL, orcaPublicURL, http.DefaultTransport, tt.allowCaching)
+			proxy := coolfhir.NewProxy(
+				"MockProxy",
+				log.Logger,
+				fhirServerURL,
+				"/cpc/cps/fhir",
+				orcaPublicURL.JoinPath("/cpc/cps/fhir"),
+				http.DefaultTransport,
+				tt.allowCaching,
+			)
 
 			service, _ := New(Config{
 				FHIR: coolfhir.ClientConfig{
@@ -244,7 +251,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 					URL: carePlanServiceURL.String(),
 				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.TestProfile{}, orcaPublicURL, sessionManager, mockProxy)
+			}, profile.TestProfile{}, orcaPublicURL, sessionManager, proxy)
 
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
