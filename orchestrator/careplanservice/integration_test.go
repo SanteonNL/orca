@@ -620,8 +620,8 @@ func testBundle(t *testing.T, fhirClient *fhirclient.BaseClient, data []byte) {
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
-		Principal:        auth.TestPrincipal1,
-		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
+		Principal: auth.TestPrincipal1,
+		CSD:       profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
 	}
 	config := DefaultConfig()
 	config.Enabled = true

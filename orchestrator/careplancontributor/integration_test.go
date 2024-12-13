@@ -185,8 +185,8 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	taskengine.LoadTestQuestionnairesAndHealthcareSevices(t, fhirClient)
 
 	activeProfile := profile.TestProfile{
-		Principal:        auth.TestPrincipal1,
-		TestCsdDirectory: profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
+		Principal: auth.TestPrincipal1,
+		CSD:       profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
 	}
 	service, err := careplanservice.New(config, activeProfile, orcaPublicURL)
 	require.NoError(t, err)

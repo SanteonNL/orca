@@ -251,7 +251,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 					URL: carePlanServiceURL.String(),
 				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.TestProfile{}, orcaPublicURL, sessionManager, proxy)
+			}, profile.Test(), orcaPublicURL, sessionManager, proxy)
 
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
@@ -335,9 +335,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 
 // Invalid test cases are simpler, can be tested with http endpoint mocking
 func TestService_HandleNotification_Invalid(t *testing.T) {
-	prof := profile.TestProfile{
-		Principal: auth.TestPrincipal1,
-	}
+	prof := profile.Test()
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -391,9 +389,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, profile.TestProfile{
-		Principal: auth.TestPrincipal1,
-	}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -582,7 +578,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	}
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -651,7 +647,7 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()

@@ -42,7 +42,7 @@ func (m *MockDirectory) EXPECT() *MockDirectoryMockRecorder {
 }
 
 // LookupEndpoint mocks base method.
-func (m *MockDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
+func (m *MockDirectory) LookupEndpoint(ctx context.Context, owner *fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LookupEndpoint", ctx, owner, endpointName)
 	ret0, _ := ret[0].([]fhir.Endpoint)
