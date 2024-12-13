@@ -713,6 +713,9 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 			if slices.Contains(strings.Split(parsedRef.Path, "/"), "..") {
 				return coolfhir.BadRequest(fmt.Sprintf("literal reference is URL with parent path segment '..' (path=%s)", path))
 			}
+			if len(parsedRef.Query()) > 0 {
+				return coolfhir.BadRequest("literal reference is URL with query parameters")
+			}
 		}
 	}
 	return nil
