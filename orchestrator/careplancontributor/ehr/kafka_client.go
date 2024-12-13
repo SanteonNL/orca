@@ -19,11 +19,12 @@ import (
 //   - Endpoint: The Kafka broker endpoint.
 //   - ConnectionString: The connection string used for authentication.
 type KafkaConfig struct {
-	Enabled  bool           `koanf:"enabled" default:"false"`
-	Topic    string         `koanf:"topic"`
-	Endpoint string         `koanf:"endpoint"`
-	Sasl     SaslConfig     `koanf:"sasl"`
-	Security SecurityConfig `koanf:"security"`
+	Enabled   bool           `koanf:"enabled" default:"false" description:"This enables the Kafka client."`
+	DebugOnly bool           `koanf:"debug" default:"false" description:"This enables debug mode for Kafka, writing the messages to a file in /tmp instead of sending them to Kafka."`
+	Topic     string         `koanf:"topic"`
+	Endpoint  string         `koanf:"endpoint"`
+	Sasl      SaslConfig     `koanf:"sasl"`
+	Security  SecurityConfig `koanf:"security"`
 }
 
 // SaslConfig holds the configuration settings for SASL authentication.
@@ -67,13 +68,16 @@ type KafkaClientImpl struct {
 	client *kgo.Client
 }
 
-type NoopClientImpl struct {
+type DebugClient struct {
+}
+
+type NoopClient struct {
 }
 
 // NewClient creates a new KafkaClient based on the provided KafkaConfig.
 // If Kafka is enabled in the configuration, it initializes a Kafka producer
 // and sets up a delivery report handler for produced messages. If Kafka is
-// not enabled, it returns a NoopClientImpl which writes messages to a file.
+// not enabled, it returns a DebugClient which writes messages to a file.
 //
 // Parameters:
 //   - config: KafkaConfig containing the configuration for the Kafka client.
@@ -84,19 +88,22 @@ type NoopClientImpl struct {
 func NewClient(config KafkaConfig) (KafkaClient, error) {
 	var kafkaClient KafkaClient
 	if config.Enabled {
-		protocol := config.Security.Protocol
-		switch protocol {
+		if config.DebugOnly {
+			ctx := context.Background()
+			log.Info().Ctx(ctx).Msg("Debug mode enabled, writing messages to files in /tmp")
+			return &DebugClient{}, nil
+		}
+		switch config.Security.Protocol {
 		case "SASL_PLAINTEXT":
 			return CreateSaslClient(config, kafkaClient)
 		default:
-			err := errors.New("Unsupported protocol: " + protocol)
+			err := errors.New("Unsupported protocol: " + config.Security.Protocol)
 			return nil, err
 
 		}
 
 	}
-	kafkaClient = &NoopClientImpl{}
-	return kafkaClient, nil
+	return &NoopClient{}, nil
 }
 
 // CreateSaslClient creates a new Kafka client with SASL authentication based on the provided KafkaConfig.
@@ -183,13 +190,17 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 //
 // Returns:
 //   - error: An error if the file could not be written.
-func (k *NoopClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
+func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value string) error {
 	name := "/tmp/" + strings.ReplaceAll(key, ":", "_") + ".json"
-	log.Debug().Ctx(ctx).Msgf("NoopClientImpl, write to file: %s", name)
+	log.Debug().Ctx(ctx).Msgf("DebugClient, write to file: %s", name)
 	err := os.WriteFile(name, []byte(value), 0644)
 	if err != nil {
-		log.Warn().Ctx(ctx).Msgf("NoopClientImpl, failed to write to file: %s, err: %s", name, err.Error())
+		log.Warn().Ctx(ctx).Msgf("DebugClient, failed to write to file: %s, err: %s", name, err.Error())
 		return err
 	}
+	return nil
+}
+
+func (k *NoopClient) SubmitMessage(ctx context.Context, key string, value string) error {
 	return nil
 }
