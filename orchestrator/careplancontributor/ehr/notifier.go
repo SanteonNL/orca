@@ -69,6 +69,9 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 	bundles.addBundle(bundle)
 	var tasks []fhir.Task
 	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("Task"), &tasks)
+	if err != nil {
+		return err
+	}
 
 	patientForRefs := findForReferences(ctx, tasks)
 	log.Debug().Ctx(ctx).Msgf("Found %d patientForRefs", len(patientForRefs))
