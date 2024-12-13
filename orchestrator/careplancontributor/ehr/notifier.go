@@ -191,7 +191,7 @@ func findBasedOnReferences(ctx context.Context, tasks []fhir.Task) []string {
 //   - *[]fhir.Bundle: A list of fetched FHIR bundles.
 //   - error: An error if the fetch process fails.
 func fetchRefs(cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
-	var bundels []fhir.Bundle
+	var bundles []fhir.Bundle
 	var refTypeMap = make(map[string][]string)
 	for _, ref := range refs {
 		splits := strings.Split(ref, "/")
@@ -209,10 +209,10 @@ func fetchRefs(cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, erro
 		if err != nil {
 			return nil, err
 		}
-		bundels = append(bundels, bundle)
+		bundles = append(bundles, bundle)
 	}
 
-	return &bundels, nil
+	return &bundles, nil
 }
 
 // putMapListValue adds a value to a map of lists.
