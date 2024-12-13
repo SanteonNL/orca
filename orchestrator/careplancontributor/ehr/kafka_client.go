@@ -2,9 +2,9 @@ package ehr
 
 import (
 	"context"
-	"fmt"
-	"github.com/confluentinc/confluent-kafka-go/v2/kafka"
 	"github.com/rs/zerolog/log"
+	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"os"
 	"strings"
 )
@@ -55,8 +55,8 @@ type KafkaClient interface {
 // KafkaClientImpl is an implementation of the KafkaClient interface.
 // It holds the Kafka topic and producer used to submit messages.
 type KafkaClientImpl struct {
-	topic    string
-	producer *kafka.Producer
+	topic  string
+	client *kgo.Client
 }
 
 type NoopClientImpl struct {
@@ -77,43 +77,36 @@ func NewClient(config KafkaConfig) (KafkaClient, error) {
 	var kafkaClient KafkaClient
 	if config.Enabled {
 		endpoint := config.Endpoint
-		producer, err := kafka.NewProducer(&kafka.ConfigMap{
-			"bootstrap.servers": endpoint,
-			"sasl.mechanisms":   config.Sasl.Mechanism,
-			"sasl.username":     config.Sasl.Username,
-			"sasl.password":     config.Sasl.Password,
-			"security.protocol": config.Security.Protocol,
-		})
-		if err != nil {
-			return nil, err
-		}
-
-		// Delivery report handler for produced messages
-		go func() {
-			ctx := context.Background()
-
-			log.Info().Ctx(ctx).Msgf("Kafka func started")
-			for e := range producer.Events() {
-				log.Info().Ctx(ctx).Msgf("Kafka event received: %v", e.String())
-				switch ev := e.(type) {
-				case *kafka.Message:
-					if ev.TopicPartition.Error != nil {
-						log.Info().Ctx(ctx).Msgf("Kafka delivery failed: %v\n", ev.TopicPartition)
-					} else {
-						log.Info().Ctx(ctx).Msgf("Kafka delivered message to %v\n", ev.TopicPartition)
-					}
-				}
+		mechanism := config.Sasl.Mechanism
+		seeds := []string{endpoint}
+		if mechanism == "PLAIN" {
+			username := config.Sasl.Username
+			password := config.Sasl.Password
+			opts := []kgo.Opt{
+				kgo.SeedBrokers(seeds...),
+				// SASL Options
+				kgo.SASL(plain.Auth{
+					User: username,
+					Pass: password,
+				}.AsMechanism()),
+				// Needed for Microsoft Event Hubs
+				kgo.ProducerBatchCompression(kgo.NoCompression()),
 			}
-			log.Info().Ctx(ctx).Msgf("Kafka func ended")
-		}()
+			client, err := kgo.NewClient(opts...)
+			if err != nil {
+				return nil, err
+			}
 
-		kafkaClient = &KafkaClientImpl{
-			topic:    config.Topic,
-			producer: producer,
+			kafkaClient = &KafkaClientImpl{
+				topic:  config.Topic,
+				client: client,
+			}
+			return kafkaClient, nil
+
 		}
-	} else {
-		kafkaClient = &NoopClientImpl{}
+
 	}
+	kafkaClient = &NoopClientImpl{}
 	return kafkaClient, nil
 }
 
@@ -128,18 +121,19 @@ func NewClient(config KafkaConfig) (KafkaClient, error) {
 //   - error: An error if the message could not be produced.
 func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
 	log.Info().Ctx(ctx).Msgf("SubmitMessage, submitting key %s", key)
-	err := k.producer.Produce(&kafka.Message{
-		TopicPartition: kafka.TopicPartition{
-			Topic:     &k.topic,
-			Partition: kafka.PartitionAny,
-		},
-		Key:   []byte(key),
-		Value: []byte(value),
-	}, nil)
-	if err != nil {
-		return fmt.Errorf("failed to write message: %w", err)
+	record := kgo.KeyStringRecord(key, value)
+	record.Topic = k.topic
+	sync := k.client.ProduceSync(ctx, record)
+	for _, s := range sync {
+		if s.Err != nil {
+			log.Info().Ctx(ctx).Msgf("Error during submission %s", s.Err.Error())
+			return s.Err
+		}
 	}
-	k.producer.Flush(10 * 1000)
+	err := k.client.Flush(ctx)
+	if err != nil {
+		return err
+	}
 	log.Info().Ctx(ctx).Msgf("SubmitMessage, submitted key %s", key)
 	return nil
 }
