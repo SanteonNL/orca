@@ -2,6 +2,7 @@ package ehr
 
 import (
 	"context"
+	"errors"
 	"github.com/rs/zerolog/log"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
@@ -25,12 +26,18 @@ type KafkaConfig struct {
 	Security SecurityConfig `koanf:"security"`
 }
 
+// SaslConfig holds the configuration settings for SASL authentication.
+// It includes the mechanism, username, and password required for authentication.
+//
+// Fields:
+//   - Mechanism: The SASL mechanism to use for authentication (e.g., PLAIN).
+//   - Username: The username for SASL authentication.
+//   - Password: The password for SASL authentication.
 type SaslConfig struct {
 	Mechanism string `koanf:"mechanism" default:"PLAIN"`
 	Username  string `koanf:"username" default:"$ConnectionString"`
 	Password  string `koanf:"password"`
 }
-
 type SecurityConfig struct {
 	Protocol string `koanf:"protocol" default:"SASL_PLAINTEXT"`
 }
@@ -43,6 +50,7 @@ type SecurityConfig struct {
 //   - SubmitMessage: Submits a message with the given key and value.
 //
 // Parameters:
+//   - ctx: The context for the message submission, used for cancellation and timeouts.
 //   - key: The key of the message to be submitted.
 //   - value: The value of the message to be submitted.
 //
@@ -76,38 +84,63 @@ type NoopClientImpl struct {
 func NewClient(config KafkaConfig) (KafkaClient, error) {
 	var kafkaClient KafkaClient
 	if config.Enabled {
-		endpoint := config.Endpoint
-		mechanism := config.Sasl.Mechanism
-		seeds := []string{endpoint}
-		if mechanism == "PLAIN" {
-			username := config.Sasl.Username
-			password := config.Sasl.Password
-			opts := []kgo.Opt{
-				kgo.SeedBrokers(seeds...),
-				// SASL Options
-				kgo.SASL(plain.Auth{
-					User: username,
-					Pass: password,
-				}.AsMechanism()),
-				// Needed for Microsoft Event Hubs
-				kgo.ProducerBatchCompression(kgo.NoCompression()),
-			}
-			client, err := kgo.NewClient(opts...)
-			if err != nil {
-				return nil, err
-			}
-
-			kafkaClient = &KafkaClientImpl{
-				topic:  config.Topic,
-				client: client,
-			}
-			return kafkaClient, nil
+		protocol := config.Security.Protocol
+		switch protocol {
+		case "SASL_PLAINTEXT":
+			return CreateSaslClient(config, kafkaClient)
+		default:
+			err := errors.New("Unsupported protocol: " + protocol)
+			return nil, err
 
 		}
 
 	}
 	kafkaClient = &NoopClientImpl{}
 	return kafkaClient, nil
+}
+
+// CreateSaslClient creates a new Kafka client with SASL authentication based on the provided KafkaConfig.
+// It supports the PLAIN mechanism for SASL authentication.
+//
+// Parameters:
+//   - config: KafkaConfig containing the configuration for the Kafka client.
+//   - kafkaClient: KafkaClient interface to be initialized.
+//
+// Returns:
+//   - KafkaClient: An implementation of the KafkaClient interface.
+//   - error: An error if the Kafka client could not be created or if the mechanism is unsupported.
+func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient) (KafkaClient, error) {
+	endpoint := config.Endpoint
+	seeds := []string{endpoint}
+	mechanism := config.Sasl.Mechanism
+	switch mechanism {
+	case "PLAIN":
+		username := config.Sasl.Username
+		password := config.Sasl.Password
+		opts := []kgo.Opt{
+			kgo.SeedBrokers(seeds...),
+			// SASL Options
+			kgo.SASL(plain.Auth{
+				User: username,
+				Pass: password,
+			}.AsMechanism()),
+			// Needed for Microsoft Event Hubs
+			kgo.ProducerBatchCompression(kgo.NoCompression()),
+		}
+		client, err := kgo.NewClient(opts...)
+		if err != nil {
+			return nil, err
+		}
+
+		kafkaClient = &KafkaClientImpl{
+			topic:  config.Topic,
+			client: client,
+		}
+		return kafkaClient, nil
+	default:
+		err := errors.New("Unsupported mechanism: " + mechanism)
+		return nil, err
+	}
 }
 
 // SubmitMessage submits a message to the Kafka topic associated with the KafkaClientImpl.
