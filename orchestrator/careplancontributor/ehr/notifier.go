@@ -17,12 +17,12 @@ type Notifier interface {
 	NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error
 }
 
-type notifier struct {
+type kafkaNotifier struct {
 	kafkaClient KafkaClient
 }
 
 func NewNotifier(kafkaClient KafkaClient) Notifier {
-	return &notifier{kafkaClient}
+	return &kafkaNotifier{kafkaClient}
 }
 
 // BundleSet represents a set of FHIR bundles associated with a task.
@@ -45,7 +45,7 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 //
 // Returns:
 //   - error: An error if the notification process fails.
-func (n *notifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
+func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 
 	ref := "Task/" + *task.Id
 	log.Debug().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
