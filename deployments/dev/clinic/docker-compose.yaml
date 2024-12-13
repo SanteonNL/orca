@@ -30,10 +30,10 @@ services:
     ports:
       - "1305:1305"
   orchestrator:
-    #image: ghcr.io/santeonnl/orca_orchestrator:main
-    build:
-      context: ../../../orchestrator
-      dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_orchestrator:main
+    # build:
+    #  context: ../../../orchestrator
+    #  dockerfile: Dockerfile
     ports:
       - "3030:8080"
     environment:
