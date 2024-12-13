@@ -163,6 +163,7 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 			return s.Err
 		}
 	}
+	// Make sure all messages are flushed before returning
 	err := k.client.Flush(ctx)
 	if err != nil {
 		log.Error().Ctx(ctx).Msgf("kafka flush failed %s", err.Error())
