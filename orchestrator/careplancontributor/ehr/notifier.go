@@ -48,7 +48,7 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 
 	ref := "Task/" + *task.Id
-	log.Debug().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s)", ref)
+	log.Debug().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s) to Kafka", ref)
 	id := uuid.NewString()
 	bundles := BundleSet{
 		Id:   id,
