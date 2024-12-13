@@ -1,3 +1,4 @@
+import { JSX } from 'react';
 import { Card } from "@mui/material";
 
 type Props = {

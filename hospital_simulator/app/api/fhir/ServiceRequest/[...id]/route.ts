@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+type Params = Promise<{ id: string }>
+
+export async function PATCH(req: NextRequest, { params }: { params: Params }) {
     try {
         const fhirBaseUrl = process.env.FHIR_BASE_URL;
 
@@ -9,7 +11,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         }
 
         const patchData = await req.json(); // Extract the patch data from the request body
-        const { id } = params; // Extract the ServiceRequest ID from the URL
+        const { id } = await params; // Extract the ServiceRequest ID from the URL
 
         const patchResponse = await fetch(`${fhirBaseUrl}/ServiceRequest/${id}`, {
             method: 'PATCH',

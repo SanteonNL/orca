@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -18,6 +17,8 @@ import (
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -232,7 +233,7 @@ func TestService(t *testing.T) {
 			t.Run("check Workflow-ID identifier is properly set on the ServiceRequest", func(t *testing.T) {
 				serviceRequest := sessionData.OtherValues[serviceRequestRef].(fhir.ServiceRequest)
 				assert.Contains(t, serviceRequest.Identifier, fhir.Identifier{
-					System: to.Ptr("https://api.zorgplatform.online/fhir/v1/Task"),
+					System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
 					Value:  to.Ptr("b526e773-e1a6-4533-bd00-1360c97e745f"),
 				})
 			})

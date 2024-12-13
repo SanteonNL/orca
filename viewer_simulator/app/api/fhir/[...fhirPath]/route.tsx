@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+type Params = Promise<{ fhirPath: string }>
+
 //Proxies all GET requests to the configured FHIR_BASE_URL
-export async function GET(req: NextRequest, { params }: { params: { fhirPath: string } }) {
+export async function GET(req: Request, { params }: { params: Params }) {
 
     try {
-        const { fhirPath } = params;
+        const { fhirPath } = await params;
         const fhirPathUrlSegment = Array.isArray(fhirPath) ? fhirPath.join('/') : fhirPath;
 
         let requestHeaders = new Headers(req.headers)

@@ -47,9 +47,9 @@ export default function BgzTable({ rows }: Props) {
             <DataGrid
                 rows={rows}
                 columns={columns}
-                slots={{ toolbar: GridToolbar }}
+                components={{ Toolbar: GridToolbar }}
                 autoHeight
-                slotProps={{
+                componentsProps={{
                     toolbar: {
                         showQuickFilter: true,
                     },
@@ -59,9 +59,7 @@ export default function BgzTable({ rows }: Props) {
                         sortModel: [{ field: 'lastUpdated', sort: 'desc' }]
                     },
                     pagination: {
-                        paginationModel: {
-                            pageSize: 10,
-                        },
+                        pageSize: 10,
                     },
                 }}
             />

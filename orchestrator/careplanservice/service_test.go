@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -697,4 +699,49 @@ func TestService_Handle(t *testing.T) {
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/UpdateOrganization failed: this fails on purpose")
 		})
 	})
+}
+
+func TestService_validateLiteralReferences(t *testing.T) {
+	resourceJson, err := os.ReadFile("testdata/literalreference-ok.json")
+	require.NoError(t, err)
+	var resource fhir.Task
+	err = json.Unmarshal(resourceJson, &resource)
+	require.NoError(t, err)
+
+	t.Run("ok", func(t *testing.T) {
+		err = (&Service{}).validateLiteralReferences(context.Background(), resource)
+		require.NoError(t, err)
+	})
+	t.Run("http:// is not allowed", func(t *testing.T) {
+		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
+			s.Focus.Reference = to.Ptr("http://example.com")
+		})
+		err := (&Service{}).validateLiteralReferences(context.Background(), resource)
+		require.EqualError(t, err, "literal reference is URL with scheme http://, only https:// is allowed (path=focus.reference)")
+	})
+	t.Run("parent directory traversal isn't allowed", func(t *testing.T) {
+		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
+			s.Focus.Reference = to.Ptr("https://example.com/fhir/../secret-page")
+		})
+		err := (&Service{}).validateLiteralReferences(context.Background(), resource)
+		require.EqualError(t, err, "literal reference is URL with parent path segment '..' (path=focus.reference)")
+	})
+}
+
+func Test_collectLiteralReferences(t *testing.T) {
+	resourceJson, err := os.ReadFile("testdata/literalreference-ok.json")
+	require.NoError(t, err)
+	var resource any
+	err = json.Unmarshal(resourceJson, &resource)
+	require.NoError(t, err)
+	actualRefs := map[string]string{}
+	collectLiteralReferences(resource, nil, actualRefs)
+
+	assert.Equal(t, map[string]string{
+		"focus.reference":     "urn:uuid:cps-servicerequest-telemonitoring",
+		"for.reference":       "https://example.com/Patient/1",
+		"partOf.#0.reference": "https://example.com/CarePlan/1",
+		"partOf.#1.reference": "https://example.com/CarePlan/2",
+		"partOf.#2.reference": "CarePlan/3",
+	}, actualRefs)
 }
