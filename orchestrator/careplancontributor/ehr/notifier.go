@@ -274,7 +274,7 @@ func fetchTaskOutputs(task fhir.Task) []string {
 		for _, output := range task.Output {
 			if output.ValueReference != nil &&
 				output.ValueReference.Reference != nil {
-				matchesType := isOfOutputType(output, "QuestionnaireResponse")
+				matchesType := isOfType(output.ValueReference, "QuestionnaireResponse")
 				if matchesType {
 					reference := *output.ValueReference.Reference
 					if !slices.Contains(questionnaireResponseRefs, reference) {
@@ -287,38 +287,20 @@ func fetchTaskOutputs(task fhir.Task) []string {
 	return questionnaireResponseRefs
 }
 
-// isOfOutputType checks if a task output is of a specific type.
+// isOfType checks if a given FHIR reference is of a specified type.
 //
 // Parameters:
-//   - output: The task output to check.
+//   - valueReference: The FHIR reference to check.
 //   - typeName: The type name to check against.
 //
 // Returns:
-//   - bool: True if the output is of the specified type, false otherwise.
-func isOfOutputType(output fhir.TaskOutput, typeName string) bool {
+//   - bool: True if the reference is of the specified type, false otherwise.
+func isOfType(valueReference *fhir.Reference, typeName string) bool {
 	matchesType := false
-	if output.ValueReference.Type != nil {
-		matchesType = *output.ValueReference.Type == typeName
-	} else if output.ValueReference.Reference != nil {
-		matchesType = strings.HasPrefix(*output.ValueReference.Reference, fmt.Sprintf("%s/", typeName))
-	}
-	return matchesType
-}
-
-// isOfInputType checks if a task input is of a specific type.
-//
-// Parameters:
-//   - input: The task input to check.
-//   - typeName: The type name to check against.
-//
-// Returns:
-//   - bool: True if the input is of the specified type, false otherwise.
-func isOfInputType(input fhir.TaskInput, typeName string) bool {
-	matchesType := false
-	if input.ValueReference.Type != nil {
-		matchesType = *input.ValueReference.Type == typeName
-	} else if input.ValueReference.Reference != nil {
-		matchesType = strings.HasPrefix(*input.ValueReference.Reference, fmt.Sprintf("%s/", typeName))
+	if valueReference.Type != nil {
+		matchesType = *valueReference.Type == typeName
+	} else if valueReference.Reference != nil {
+		matchesType = strings.HasPrefix(*valueReference.Reference, fmt.Sprintf("%s/", typeName))
 	}
 	return matchesType
 }
@@ -336,7 +318,7 @@ func fetchTaskInputs(task fhir.Task) []string {
 		for _, input := range task.Input {
 			if input.ValueReference != nil &&
 				input.ValueReference.Reference != nil {
-				matchesType := isOfInputType(input, "Questionnaire")
+				matchesType := isOfType(input.ValueReference, "Questionnaire")
 				if matchesType {
 					reference := *input.ValueReference.Reference
 					if !slices.Contains(questionnaireRefs, reference) {
