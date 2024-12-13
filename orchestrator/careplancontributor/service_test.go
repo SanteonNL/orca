@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/rs/zerolog/log"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 
@@ -34,7 +35,6 @@ import (
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
 
 func TestService_Proxy_Get_And_Search(t *testing.T) {
-	t.Skip("Fix test once the INT-487 is picked up") //TODO: Fix test once the INT-487 is picked up
 	tests := []struct {
 		name string
 		// Set if it should be anything other than the default (auth.TestPrincipal1)
@@ -53,7 +53,8 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 		// Default is GET
 		method *string
 		// Default is "/cpc/fhir/Patient/1"
-		url *string
+		url          *string
+		allowCaching bool
 	}{
 		{
 			name:                          "Fails: No healthDataViewEndpointEnabled flag",
@@ -63,7 +64,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 		{
 			name:           "Fails: No header",
 			expectedStatus: http.StatusBadRequest,
-			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: X-Scp-Context header value must be set"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: X-Scp-Context header must be set"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:           "Fails: header resource is not CarePlan",
@@ -175,21 +176,43 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			name:                 "Success: valid request - GET",
 			expectedStatus:       http.StatusOK,
 			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("GET /fhir/Patient/1"),
+			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/1"),
 			searchStatusReturn:   http.StatusOK,
 			xSCPContext:          "CarePlan/cps-careplan-01",
 			patientStatusReturn:  to.Ptr(http.StatusOK),
 		},
 		{
+			name:                 "Success: valid request - GET - Allow caching",
+			expectedStatus:       http.StatusOK,
+			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
+			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/1"),
+			searchStatusReturn:   http.StatusOK,
+			xSCPContext:          "CarePlan/cps-careplan-01",
+			patientStatusReturn:  to.Ptr(http.StatusOK),
+			allowCaching:         true,
+		},
+		{
 			name:                 "Success: valid request - POST",
 			expectedStatus:       http.StatusOK,
 			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("POST /fhir/Patient/_search"),
+			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/_search"),
 			searchStatusReturn:   http.StatusOK,
 			xSCPContext:          "CarePlan/cps-careplan-01",
 			patientStatusReturn:  to.Ptr(http.StatusOK),
 			method:               to.Ptr("POST"),
 			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
+		},
+		{
+			name:                 "Success: valid request - POST - Allow caching",
+			expectedStatus:       http.StatusOK,
+			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
+			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/_search"),
+			searchStatusReturn:   http.StatusOK,
+			xSCPContext:          "CarePlan/cps-careplan-01",
+			patientStatusReturn:  to.Ptr(http.StatusOK),
+			method:               to.Ptr("POST"),
+			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
+			allowCaching:         true,
 		},
 	}
 
@@ -198,7 +221,6 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			fhirServerMux := http.NewServeMux()
 			fhirServer := httptest.NewServer(fhirServerMux)
 			fhirServerURL, _ := url.Parse(fhirServer.URL)
-			fhirServerURL.Path = "/fhir"
 			sessionManager, _ := createTestSession()
 
 			carePlanServiceMux := http.NewServeMux()
@@ -211,6 +233,16 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 				healthDataViewEndpointEnabled = *tt.healthDataViewEndpointEnabled
 			}
 
+			proxy := coolfhir.NewProxy(
+				"MockProxy",
+				log.Logger,
+				fhirServerURL,
+				"/cpc/cps/fhir",
+				orcaPublicURL.JoinPath("/cpc/cps/fhir"),
+				http.DefaultTransport,
+				tt.allowCaching,
+			)
+
 			service, _ := New(Config{
 				FHIR: coolfhir.ClientConfig{
 					BaseURL: fhirServer.URL + "/fhir",
@@ -219,7 +251,8 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 					URL: carePlanServiceURL.String(),
 				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.TestProfile{}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+			}, profile.TestProfile{}, orcaPublicURL, sessionManager, proxy)
+
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
 
@@ -266,6 +299,10 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			if tt.url != nil {
 				reqURL = *tt.url
 			}
+			log.Info().Msgf("Requesting %s %s", method, frontServer.URL+reqURL)
+			log.Info().Msgf("FHIR Server URL: %s", fhirServer.URL)
+			log.Info().Msgf("CarePlan Service URL: %s", carePlanService.URL)
+
 			httpRequest, _ := http.NewRequest(method, frontServer.URL+reqURL, nil)
 			httpResponse, err := httpClient.Do(httpRequest)
 			require.Equal(t, err, tt.expectedError)
@@ -285,9 +322,11 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 				require.Equal(t, expectedValues, actualValues)
 
 				if tt.expectedStatus == http.StatusOK {
-					t.Run("caching is allowed", func(t *testing.T) {
+					if tt.allowCaching {
 						assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
-					})
+					} else {
+						assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
+					}
 				}
 			}
 		})
