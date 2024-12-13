@@ -1,7 +1,7 @@
 package careplancontributor
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -196,16 +196,17 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	service.RegisterHandlers(serverMux)
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
+	sessionManager, _ := createTestSession()
 
-	mockProxy, _ := mock.NewMockReverseProxy(carePlanServiceURL, orcaPublicURL, httpService.Client().Transport, true)
+	// TODO: Tests using the Zorgplatform service
+	cpsProxy := coolfhir.NewProxy("CPS->CPC", log.Logger, fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
 
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.CarePlanService.URL = carePlanServiceURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
-	sessionManager, _ := createTestSession()
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, mockProxy)
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, cpsProxy)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()
