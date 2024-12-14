@@ -38,9 +38,6 @@ func (c Config) Validate() error {
 	if c.CarePlanService.URL == "" {
 		return errors.New("careplancontributor.careplanservice.url is not configured")
 	}
-	if c.FHIR.BaseURL == "" {
-		return errors.New("careplancontributor.fhir.baseurl is not configured")
-	}
 	return nil
 }
 
