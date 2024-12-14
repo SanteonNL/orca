@@ -648,11 +648,6 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 				continue
 			}
 			defer resp.Body.Close()
-
-			if err != nil {
-				log.Error().Ctx(ctx).Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
-				continue
-			}
 			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
 				log.Error().Ctx(ctx).Msgf("Failed to reindex SearchParameter %s: %s", param.SearchParamId, string(body))
