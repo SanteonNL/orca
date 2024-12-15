@@ -109,7 +109,8 @@ HOSPITAL_URL_ESCAPED=$(sed 's/[&/\]/\\&/g' <<<"${HOSPITAL_URL}")
 sed "s/DiscoveryServerURL/${HOSPITAL_URL_ESCAPED}/" shared_config/discovery_input/homemonitoring.json > shared_config/discovery/homemonitoring.json
 echo "  Starting services"
 pushd hospital
-echo NUTS_URL="${HOSPITAL_URL}" >> .env
+echo NUTS_URL="${HOSPITAL_URL}" > .env
+echo HOSPITAL_URL="${HOSPITAL_URL}" >> .env
 echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
 docker compose --env-file .env pull
 docker compose --env-file .env up --wait --build --remove-orphans
