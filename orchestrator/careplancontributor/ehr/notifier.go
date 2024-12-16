@@ -10,6 +10,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"regexp"
 	"slices"
 	"strings"
 )
@@ -301,7 +302,16 @@ func isOfType(valueReference *fhir.Reference, typeName string) bool {
 	if valueReference.Type != nil {
 		matchesType = *valueReference.Type == typeName
 	} else if valueReference.Reference != nil {
-		matchesType = strings.HasPrefix(*valueReference.Reference, fmt.Sprintf("%s/", typeName))
+		if strings.HasPrefix(*valueReference.Reference, "https://") {
+			compile, err := regexp.Compile(fmt.Sprintf("^https:/.*/%s/(.+)$", typeName))
+			if err != nil {
+				log.Error().Msgf("Failed to compile regex: %s", err.Error())
+			} else {
+				matchesType = compile.MatchString(*valueReference.Reference)
+			}
+		} else {
+			matchesType = strings.HasPrefix(*valueReference.Reference, fmt.Sprintf("%s/", typeName))
+		}
 	}
 	return matchesType
 }
