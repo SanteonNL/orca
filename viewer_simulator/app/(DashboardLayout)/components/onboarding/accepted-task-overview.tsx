@@ -17,9 +17,15 @@ export default async function AcceptedTaskOverview() {
         if (process.env.FHIR_AUTHORIZATION_TOKEN) {
             requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
         }
-        const response = await fetch(`${process.env.FHIR_BASE_URL}/Task?_sort=-_lastUpdated&_count=100`, {
+        requestHeaders.set("Content-Type", "application/x-www-form-urlencoded");
+        const response = await fetch(`${process.env.FHIR_BASE_URL}/Task/_search`, {
+            method: 'POST',
             cache: 'no-store',
-            headers: requestHeaders
+            headers: requestHeaders,
+            body: new URLSearchParams({
+                '_sort': '-_lastUpdated',
+                '_count': '100'
+            })
         });
 
         if (!response.ok) {
@@ -28,8 +34,9 @@ export default async function AcceptedTaskOverview() {
             throw new Error('Failed to fetch tasks: ' + errorText);
         }
 
-        const taskData = await response.json() as Bundle;
-        const { entry } = taskData
+        const taskData = await response.text();
+        const responseBundle = JSON.parse(taskData) as Bundle;
+        const { entry } = responseBundle
         console.log(`Found [${entry?.length}] Task resources`);
 
         if (entry?.length) {

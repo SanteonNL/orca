@@ -21,10 +21,17 @@ export default async function BgzOverview() {
         requestHeaders.set("Cache-Control", "no-cache")
         if (process.env.FHIR_AUTHORIZATION_TOKEN) {
             requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
+            console.log('Authorization', requestHeaders.get("Authorization"))
         }
-        const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan?_sort=-_lastUpdated&_count=100&_include=CarePlan:care-team`, {
-            // cache: 'no-store',
-            headers: requestHeaders
+        requestHeaders.set("Content-Type", "application/x-www-form-urlencoded");
+        const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan/_search`, {
+            method: 'POST',
+            headers: requestHeaders,
+            body: new URLSearchParams({
+                '_sort': '-_lastUpdated',
+                '_count': '100',
+                '_include': 'CarePlan:care-team'
+            })
         });
 
         if (!response.ok) {
@@ -33,8 +40,11 @@ export default async function BgzOverview() {
             throw new Error('Failed to fetch tasks: ' + errorText);
         }
 
-        const responseBundle = await response.json() as Bundle;
-        const { entry } = responseBundle
+        const responseBody = await response.text();
+        const responseBundle = JSON.parse(responseBody) as Bundle;
+        const { entry } = responseBundle;
+        console.log(`Found [${entry?.length}] CarePlan resources`);
+
 
         //map all the resources to their reference as it contains CarePlans, Patients, Tasks and CareTeams
         const resourceMap = entry?.reduce((map, entry: BundleEntry) => {

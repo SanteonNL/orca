@@ -32,11 +32,16 @@ export default async function ServiceRequestOverview() {
             throw new Error('Failed to fetch service requests: ' + errorText);
         }
 
-        const patientsResponse = await fetch(`${process.env.FHIR_BASE_URL}/Patient?_count=500`, {
+        const patientsResponse = await fetch(`${process.env.FHIR_BASE_URL}/Patient/_search`, {
+            method: 'POST',
             cache: 'no-store',
             headers: {
-                "Cache-Control": "no-cache"
-            }
+                "Cache-Control": "no-cache",
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: new URLSearchParams({
+                "_count": "500"
+            })
         });
 
         console.log(`Fetched Patients, status: ${patientsResponse.status}`);
