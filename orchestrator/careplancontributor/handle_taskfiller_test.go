@@ -36,6 +36,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		expectedError    error
 		numBundlesPosted int
 		mock             func(*mock.MockClient)
+		expectSubmission bool
 	}{
 		{
 			name:             "primary task, owner = local organization, triggers subtask creation",
@@ -227,6 +228,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 						return nil
 					})
 			},
+			expectSubmission: true,
 		},
 		{
 			name:             "subtask status=completed, primary task status=accepted (nothing should be done)",
@@ -347,7 +349,12 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					*result = primaryTask
 					return nil
 				}).AnyTimes()
-			notifierMock.EXPECT().NotifyTaskAccepted(ctx, mockFHIRClient, gomock.Any()).AnyTimes()
+
+			expectedSubmissions := 0
+			if tt.expectSubmission {
+				expectedSubmissions = 1
+			}
+			notifierMock.EXPECT().NotifyTaskAccepted(ctx, mockFHIRClient, gomock.Any()).Times(expectedSubmissions)
 			var capturedTx fhir.Bundle
 			if tt.numBundlesPosted > 0 {
 				mockFHIRClient.EXPECT().
