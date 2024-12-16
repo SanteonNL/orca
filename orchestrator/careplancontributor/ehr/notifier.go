@@ -1,3 +1,4 @@
+//go:generate mockgen -destination=./nofifier_mock.go -package=ehr -source=notifier.go
 package ehr
 
 import (

@@ -1,3 +1,4 @@
+//go:generate mockgen -destination=./kafka_client_mock.go -package=ehr -source=kafka_client.go
 package ehr
 
 import (
