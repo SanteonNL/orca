@@ -119,6 +119,21 @@ When integrating with the ORCA system, the EHR (and its FHIR API) needs to suppo
 - *OPTIONAL*: If using the *Frontend*, invoking *Orchestrator*'s app launch
   - Supported: SMART on FHIR (TODO), ChipSoft HIX (TODO)
 
+### Orca Care Plan Contributor task notification
+When a new Task is created or updated at the Care Plan Service, the Task filler's EHR will be notified. As soon as the 
+is accepted, the Task filler's EHR will be notified. The notification is sent to the EHR's by Kafka / EventHubs. The 
+notification mechanism will change over time:
+1. The initial implementation will use Kafka / EventHubs to notify the EHR's of new Tasks and contain all relevant 
+resources in one sibling message. This message contains of a set of FHIR bundles.
+2. The future implementation will use Kafka / EventHubs to notify the EHR's of new Tasks without the relevant FHIR 
+resources as the EHR's should query the Care Plan Service for the relevant resources.
+
+#### The diagram of the initial implementation 
+![clinic-notification-2.svg](docs/images/clinic-notification-2.svg)
+
+#### The diagram of the future implementation
+![clinic-notification-1svg](docs/images/clinic-notification-1.svg)
+
 ## Deployment
 Note: this section needs to be expanded.
 

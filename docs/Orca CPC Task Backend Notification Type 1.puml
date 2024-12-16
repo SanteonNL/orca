@@ -1,4 +1,4 @@
-@startuml  clinic-notification-bus
+@startuml clinic-notification-1
 
 skinparam roundcorner 20
 skinparam defaultFontName Arial
@@ -50,22 +50,20 @@ end group
 group Clinic notification
 manager -> CPC2: update Task[main]
 activate careprofs
-manager -> manager: unpack Task[main]
-manager -> CPC2: fetch ServiceRequest from Task.focus
-CPC2 --> CPS: fetch ServiceRequest
-CPS --> CPC2: ServiceRequest Bundle
-CPC2 --> manager: ServiceRequest Bundle
-manager -> CPC2: fetch Condition from Task.reasonReference
-CPC2 --> CPS: fetch Condition
-CPS --> CPC2: Condition Bundle
-CPC2 --> manager: Condition Bundle
-manager -> CPC2: fetch Task[main]
+manager -> careprofs: notify Task[main]
+careprofs -> CPC2: fetch Task[main]
 CPC2 -> CPS: fetch Task[main]
 CPS --> CPC2: Task[main]
-CPC2 --> manager: Task[main]
-manager -> manager: create Bundle
-manager -> careprofs: notify Bundle[main]
-careprofs -> careprofs: unpack Bundle[main]
+CPC2 --> careprofs: Task[main]
+careprofs -> careprofs: unpack Task[main]
+careprofs -> CPC2: fetch ServiceRequest from Task.focus
+CPC2 --> CPS: fetch ServiceRequest
+CPS --> CPC2: ServiceRequest Bundle
+CPC2 --> careprofs: ServiceRequest Bundle
+careprofs -> CPC2: fetch Condition from Task.reasonReference
+CPC2 --> CPS: fetch Condition
+CPS --> CPC2: Condition Bundle
+CPC2 --> careprofs: Condition Bundle
 careprofs -> careprofs: Create ticket
 end group
 @enduml
