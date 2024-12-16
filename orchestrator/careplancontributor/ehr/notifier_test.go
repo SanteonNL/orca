@@ -226,7 +226,7 @@ func TestNotifyTaskAccepted(t *testing.T) {
 					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
 					Return(errors.New("kafka error"))
 			},
-			expectedError: errors.New("kafka error"),
+			expectedError: errors.New("failed to send task to Kafka: kafka error"),
 		},
 	}
 
