@@ -39,8 +39,7 @@ export default async function BgzOverview() {
             throw new Error('Failed to fetch tasks: ' + errorText);
         }
 
-        const responseBody = await response.text();
-        const responseBundle = JSON.parse(responseBody) as Bundle;
+        const responseBundle = await response.json() as Bundle;
         const { entry } = responseBundle;
         console.log(`Found [${entry?.length}] CarePlan resources`);
 

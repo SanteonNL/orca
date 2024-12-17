@@ -34,8 +34,7 @@ export default async function AcceptedTaskOverview() {
             throw new Error('Failed to fetch tasks: ' + errorText);
         }
 
-        const taskData = await response.text();
-        const responseBundle = JSON.parse(taskData) as Bundle;
+        const responseBundle = await response.json() as Bundle;
         const { entry } = responseBundle
         console.log(`Found [${entry?.length}] Task resources`);
 
