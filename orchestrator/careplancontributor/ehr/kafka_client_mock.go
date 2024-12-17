@@ -20,6 +20,7 @@ import (
 type MockKafkaClient struct {
 	ctrl     *gomock.Controller
 	recorder *MockKafkaClientMockRecorder
+	isgomock struct{}
 }
 
 // MockKafkaClientMockRecorder is the mock recorder for MockKafkaClient.
