@@ -91,7 +91,7 @@ func NewClient(config KafkaConfig) (KafkaClient, error) {
 	if config.Enabled {
 		if config.DebugOnly {
 			ctx := context.Background()
-			log.Info().Ctx(ctx).Msg("Debug mode enabled, writing messages to files in /tmp")
+			log.Info().Ctx(ctx).Msg("Debug mode enabled, writing messages to files in OS temp dir")
 			return &DebugClient{}, nil
 		}
 		switch config.Security.Protocol {
