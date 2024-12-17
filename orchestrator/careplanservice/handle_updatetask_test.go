@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
 	"os"
@@ -461,6 +462,7 @@ func Test_handleUpdateTask(t *testing.T) {
 	fhirClient := mock.NewMockClient(ctrl)
 	service := &Service{
 		fhirClient: fhirClient,
+		profile:    profile.Test(),
 	}
 	fhirClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
 		*result = carePlanBundle
@@ -540,6 +542,19 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.EqualError(t, err, "Task.requester cannot be changed")
+		require.Empty(t, tx.Entry)
+	})
+	t.Run("error: unsecure external literal reference", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.For = &fhir.Reference{
+				Reference: to.Ptr("http://example.com/Patient/1"),
+			}
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.EqualError(t, err, "literal reference is URL with scheme http://, only https:// is allowed (path=for.reference)")
 		require.Empty(t, tx.Entry)
 	})
 	t.Run("error: change Task.owner (not allowed)", func(t *testing.T) {
@@ -624,6 +639,7 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 	// Create the service with the mock FHIR client
 	service := &Service{
 		fhirClient: mockFHIRClient,
+		profile:    profile.Test(),
 	}
 
 	updateTaskAcceptedData, _ := os.ReadFile("./testdata/task-update-accepted.json")

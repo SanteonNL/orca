@@ -17,15 +17,15 @@ import (
 )
 
 func TestCsdDirectory_Lookup(t *testing.T) {
-	ownerUnsupportedCodingSystem := fhir.Identifier{
+	ownerUnsupportedCodingSystem := &fhir.Identifier{
 		System: to.Ptr("custom"),
 		Value:  to.Ptr("123456789"),
 	}
-	ownerURACodingSystem := fhir.Identifier{
+	ownerURACodingSystem := &fhir.Identifier{
 		System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 		Value:  to.Ptr("123"),
 	}
-	otherOwnerURACodingSystem := fhir.Identifier{
+	otherOwnerURACodingSystem := &fhir.Identifier{
 		System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 		Value:  to.Ptr("456"),
 	}
@@ -158,10 +158,10 @@ func TestCsdDirectory_Lookup(t *testing.T) {
 	})
 	t.Run("LookupEntity", func(t *testing.T) {
 		t.Run("ok", func(t *testing.T) {
-			result, err := directory.LookupEntity(ctx, ownerURACodingSystem)
+			result, err := directory.LookupEntity(ctx, *ownerURACodingSystem)
 			require.NoError(t, err)
 			require.Equal(t, "Organization", *result.Type)
-			require.Equal(t, ownerURACodingSystem, *result.Identifier)
+			require.Equal(t, *ownerURACodingSystem, *result.Identifier)
 			require.NotNil(t, result.Display)
 			require.Equal(t, "example", *result.Display)
 		})

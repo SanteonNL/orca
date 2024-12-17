@@ -326,9 +326,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				notifiedTask = tt.notificationTask
 			}
 			// Set up tested context
-			service.profile = profile.TestProfile{
-				Principal: auth.TestPrincipal1,
-			}
+			service.profile = profile.Test()
 			if tt.profile != nil {
 				service.profile = tt.profile
 			}

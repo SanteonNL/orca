@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -143,13 +144,23 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
 
 	// Binding to actual routing
-	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-		s.handleBundle(request, httpResponse)
-	}))
 	// Creating a resource
 	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
+	}))
+	// Searching for a resource via POST
+	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		resourceType := request.PathValue("type")
+		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
+	}))
+	// Handle bundle
+	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != basePath+"/" {
+			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("invalid path"), "CarePlanService/POST", httpResponse)
+			return
+		}
+		s.handleBundle(request, httpResponse)
 	}))
 	// Updating a resource by ID
 	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
@@ -167,11 +178,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
-	}))
-	// Handle search
-	mux.HandleFunc("GET "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-		resourceType := request.PathValue("type")
-		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Get"+resourceType)
 	}))
 }
 
@@ -351,17 +357,31 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
 	headers := new(fhirclient.Headers)
 
+	// Ensure the Content-Type header is set correctly
+	contentType := httpRequest.Header.Get("Content-Type")
+	if strings.Contains(contentType, ",") {
+		contentType = strings.Split(contentType, ",")[0]
+		httpRequest.Header.Set("Content-Type", contentType)
+	}
+
+	// Parse URL-encoded parameters from the request body
+	if err := httpRequest.ParseForm(); err != nil {
+		coolfhir.WriteOperationOutcomeFromError(fmt.Errorf("failed to parse form: %w", err), operationName, httpResponse)
+		return
+	}
+	queryParams := httpRequest.PostForm
+
 	var bundle *fhir.Bundle
 	var err error
 	switch resourceType {
 	case "CarePlan":
-		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), queryParams, headers)
 	case "CareTeam":
-		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), queryParams, headers)
 	case "Task":
-		bundle, err = s.handleSearchTask(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchTask(httpRequest.Context(), queryParams, headers)
 	case "Patient":
-		bundle, err = s.handleSearchPatient(httpRequest.Context(), httpRequest.URL.Query(), headers)
+		bundle, err = s.handleSearchPatient(httpRequest.Context(), queryParams, headers)
 	default:
 		log.Warn().Ctx(httpRequest.Context()).
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
@@ -628,11 +648,6 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 				continue
 			}
 			defer resp.Body.Close()
-
-			if err != nil {
-				log.Error().Ctx(ctx).Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
-				continue
-			}
 			if resp.StatusCode != http.StatusOK {
 				body, _ := io.ReadAll(resp.Body)
 				log.Error().Ctx(ctx).Msgf("Failed to reindex SearchParameter %s: %s", param.SearchParamId, string(body))
@@ -653,4 +668,86 @@ func (s *Service) checkAllowUnmanagedOperations() error {
 		}
 	}
 	return nil
+}
+
+// validateLiteralReferences validates the literal references in the given resource.
+// Literal references may be an external URL, but they MUST use HTTPS and be a child of a FHIR base URL
+// registered in the CSD. This prevents unsafe external references (e.g. accidentally exchanging resources over HTTP),
+// and gives more confidence that the resource can safely be fetched by SCP-nodes.
+func (s *Service) validateLiteralReferences(ctx context.Context, resource any) error {
+	// Literal references are "reference" fields that contain a string. This can be anywhere in the resource,
+	// so we need to recursively search for them.
+	resourceAsJson, err := json.Marshal(resource)
+	if err != nil {
+		// would be very weird
+		return err
+	}
+	resourceAsMap := make(map[string]interface{})
+	err = json.Unmarshal(resourceAsJson, &resourceAsMap)
+	if err != nil {
+		// would be very weird
+		return err
+	}
+
+	// Make a list of allowed FHIR base URLs, normalize them to all make them end with a slash
+	fhirBaseURLs, err := s.profile.CsdDirectory().LookupEndpoint(ctx, nil, profile.FHIRBaseURLEndpointName)
+	if err != nil {
+		return fmt.Errorf("unable to list registered FHIR base URLs for validation: %w", err)
+	}
+	var allowedBaseURLs []string
+	for _, fhirBaseURL := range fhirBaseURLs {
+		allowedBaseURLs = append(allowedBaseURLs, strings.TrimSuffix(fhirBaseURL.Address, "/")+"/")
+	}
+
+	literalReferences := make(map[string]string)
+	collectLiteralReferences(resourceAsMap, []string{}, literalReferences)
+	for path, reference := range literalReferences {
+		lowerCaseRef := strings.ToLower(reference)
+		if strings.HasPrefix(lowerCaseRef, "http://") {
+			return coolfhir.BadRequest(fmt.Sprintf("literal reference is URL with scheme http://, only https:// is allowed (path=%s)", path))
+		}
+		if strings.HasPrefix(lowerCaseRef, "https://") {
+			parsedRef, err := url.Parse(reference)
+			if err != nil {
+				// weird
+				return err
+			}
+			if slices.Contains(strings.Split(parsedRef.Path, "/"), "..") {
+				return coolfhir.BadRequest(fmt.Sprintf("literal reference is URL with parent path segment '..' (path=%s)", path))
+			}
+			if len(parsedRef.Query()) > 0 {
+				return coolfhir.BadRequest("literal reference is URL with query parameters")
+			}
+			// Check if the reference is a child of a registered FHIR base URL
+			isRegisteredBaseUrl := false
+			for _, allowedBaseURL := range allowedBaseURLs {
+				if strings.HasPrefix(parsedRef.String(), allowedBaseURL) {
+					isRegisteredBaseUrl = true
+					break
+				}
+			}
+			if !isRegisteredBaseUrl {
+				return coolfhir.BadRequest(fmt.Sprintf("literal reference is not a child of a registered FHIR base URL (path=%s)", path))
+			}
+		}
+	}
+	return nil
+}
+
+func collectLiteralReferences(resource any, path []string, result map[string]string) {
+	switch r := resource.(type) {
+	case map[string]interface{}:
+		for key, value := range r {
+			collectLiteralReferences(value, append(path, key), result)
+		}
+	case []interface{}:
+		for i, value := range r {
+			collectLiteralReferences(value, append(path, fmt.Sprintf("#%d", i)), result)
+		}
+	case string:
+		if len(path) > 0 && path[len(path)-1] == "reference" {
+			// We found a literal reference
+			result[strings.Join(path, ".")] = r
+		}
+	}
 }

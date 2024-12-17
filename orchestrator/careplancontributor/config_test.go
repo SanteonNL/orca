@@ -17,15 +17,6 @@ func TestConfig_Validate(t *testing.T) {
 		}.Validate()
 		require.EqualError(t, err, "careplancontributor.careplanservice.url is not configured")
 	})
-	t.Run("missing FHIR base URL", func(t *testing.T) {
-		err := Config{
-			Enabled: true,
-			CarePlanService: CarePlanServiceConfig{
-				URL: "http://example.com",
-			},
-		}.Validate()
-		require.EqualError(t, err, "careplancontributor.fhir.baseurl is not configured")
-	})
 }
 
 func TestDefaultConfig(t *testing.T) {

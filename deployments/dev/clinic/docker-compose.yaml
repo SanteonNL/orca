@@ -31,7 +31,7 @@ services:
       - "1305:1305"
   orchestrator:
     image: ghcr.io/santeonnl/orca_orchestrator:main
-    # build:
+    #build:
     #  context: ../../../orchestrator
     #  dockerfile: Dockerfile
     ports:
@@ -42,11 +42,11 @@ services:
       - ORCA_NUTS_SUBJECT=clinic
       - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
       - ORCA_PUBLIC_URL=${NUTS_URL}/orca
-      # Note: clinic re-uses the FHIR store of the Hospital, so we don't need to start a second one making things even slower
-      - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=${HOSPITAL_URL}/fhir
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
+      # Note: clinic re-uses the FHIR store of the Hospital, so we don't need to start a second one making things even slower
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL=${HOSPITAL_URL}/fhir
       - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_KAFKA_TOPIC=orca-patient-enrollment-events
       - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENDPOINT=eventhubs-emulator:9092
@@ -61,10 +61,10 @@ services:
       - "../../../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json:/config/fhir/healthcareservices.json:ro"
       - "../../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
   viewer:
-    image: ghcr.io/santeonnl/orca_orchestrator:main
+    image: ghcr.io/santeonnl/orca_viewersimulator:main
     # build:
-    #  context: ../../../orchestrator
-    #  dockerfile: Dockerfile
+    #   context: ../../../viewer_simulator
+    #   dockerfile: Dockerfile
     environment:
       ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL: ${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       FHIR_BASE_URL: http://orchestrator:8080/cpc/cps/fhir

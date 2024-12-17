@@ -31,7 +31,7 @@ import (
 
 const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
-const zorgplatformWorkflowIdSystem = "https://api.zorgplatform.online/fhir/v1/Task"
+const zorgplatformWorkflowIdSystem = "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"
 
 func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
@@ -583,43 +583,42 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 	}
 	// Mapping defined by https://github.com/Zorgbijjou/oid-repository/blob/main/oid-repository.md
 	p := strings.TrimPrefix(workflowReference, prefix)
-	p = strings.TrimPrefix(p, "urn:oid:")
 	switch p {
 	case "1.0":
 		// Used by Zorgplatform Developer Portal, default to Hartfalen
 		fallthrough
-	case "2.16.840.1.113883.2.4.3.224.2.1":
+	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.1":
 		return &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("84114007"),
-					Display: to.Ptr("Heart failure (disorder)"),
+					Display: to.Ptr("hartfalen (aandoening)"),
 				},
 			},
-			Text: to.Ptr("Heart failure (disorder)"),
+			Text: to.Ptr("hartfalen (aandoening)"),
 		}, nil
-	case "2.16.840.1.113883.2.4.3.224.2.2":
+	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.2":
 		return &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("13645005"),
-					Display: to.Ptr("Chronic obstructive pulmonary disease (disorder)"),
+					Display: to.Ptr("chronische obstructieve longaandoening (aandoening)"),
 				},
 			},
-			Text: to.Ptr("Chronic obstructive pulmonary disease (disorder)"),
+			Text: to.Ptr("chronische obstructieve longaandoening (aandoening)"),
 		}, nil
-	case "2.16.840.1.113883.2.4.3.224.2.3":
+	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.3":
 		return &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("195967001"),
-					Display: to.Ptr("Asthma (disorder)"),
+					Display: to.Ptr("astma (aandoening)"),
 				},
 			},
-			Text: to.Ptr("Asthma (disorder)"),
+			Text: to.Ptr("astma (aandoening)"),
 		}, nil
 	}
 	return nil, fmt.Errorf("unsupported workflow definition: %s", workflowReference)

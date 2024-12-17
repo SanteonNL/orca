@@ -18,7 +18,7 @@ import (
 func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.CarePlan, error) {
 	// fetch CarePlan + CareTeam, validate requester is participant of CareTeam
 	// headers are passed in by reference and returned to the calling method
-	carePlan, careTeams, headers, err := s.getCarePlanAndCareTeams("CarePlan/" + id)
+	carePlan, careTeams, headers, err := s.getCarePlanAndCareTeams(ctx, "CarePlan/"+id)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +52,7 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 		queryParams.Add("_include", "CarePlan:care-team")
 	}
 
-	carePlans, bundle, err := handleSearchResource[fhir.CarePlan](s, "CarePlan", queryParams, headers)
+	carePlans, bundle, err := handleSearchResource[fhir.CarePlan](ctx, s, "CarePlan", queryParams, headers)
 	if err != nil {
 		return nil, err
 	}

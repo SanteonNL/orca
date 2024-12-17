@@ -118,10 +118,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 	// Create the service with the mock FHIR client
 	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
-		profile: profile.TestProfile{
-			Principal:        auth.TestPrincipal1,
-			TestCsdDirectory: profile.TestCsdDirectory{},
-		},
+		profile:    profile.Test(),
 		fhirClient: mockFHIRClient,
 		fhirURL:    fhirBaseUrl,
 	}
@@ -212,6 +209,15 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			expectError: errors.New("task.Intent must be 'order'"),
 		},
 		{
+			name: "error: unsecure literal reference",
+			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
+				task.Focus = &fhir.Reference{
+					Reference: to.Ptr("http://example.com/fhir/Patient/1"),
+				}
+			}),
+			expectError: errors.New("literal reference is URL with scheme http://, only https:// is allowed (path=focus.reference)"),
+		},
+		{
 			name: "error: not an SCP Task",
 			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
 				task.Meta = nil
@@ -295,7 +301,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 
 			if tt.returnedPatientBundle != nil || tt.errorFromPatientBundleRead != nil {
-				mockFHIRClient.EXPECT().Read("Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().Search("Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 					if tt.returnedPatientBundle != nil {
 						reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedPatientBundle))
 					}
@@ -365,10 +371,8 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
 		fhirClient: mockFHIRClient,
-		profile: profile.TestProfile{
-			TestCsdDirectory: profile.TestCsdDirectory{},
-		},
-		fhirURL: fhirBaseUrl,
+		profile:    profile.Test(),
+		fhirURL:    fhirBaseUrl,
 	}
 
 	tests := []struct {

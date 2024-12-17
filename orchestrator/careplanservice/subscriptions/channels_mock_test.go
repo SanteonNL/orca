@@ -22,6 +22,7 @@ import (
 type MockChannelFactory struct {
 	ctrl     *gomock.Controller
 	recorder *MockChannelFactoryMockRecorder
+	isgomock struct{}
 }
 
 // MockChannelFactoryMockRecorder is the mock recorder for MockChannelFactory.
@@ -60,6 +61,7 @@ func (mr *MockChannelFactoryMockRecorder) Create(ctx, subscriber any) *gomock.Ca
 type MockChannel struct {
 	ctrl     *gomock.Controller
 	recorder *MockChannelMockRecorder
+	isgomock struct{}
 }
 
 // MockChannelMockRecorder is the mock recorder for MockChannel.

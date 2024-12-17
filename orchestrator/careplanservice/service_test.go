@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -15,6 +16,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -31,13 +33,13 @@ func TestService_Proxy(t *testing.T) {
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	var capturedQuery url.Values
-	fhirServerMux.HandleFunc("GET /fhir/Success", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/Success/1", func(writer http.ResponseWriter, request *http.Request) {
 		capturedQuery = request.URL.Query()
 		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{
 			Intent: "order",
 		})
 	})
-	fhirServerMux.HandleFunc("GET /fhir/Fail", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/Fail/1", func(writer http.ResponseWriter, request *http.Request) {
 		coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("Fail"), "oops", writer)
 	})
 	fhirServer := httptest.NewServer(fhirServerMux)
@@ -47,7 +49,7 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.TestProfile{}, orcaPublicURL)
+	}, profile.Test(), orcaPublicURL)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -58,7 +60,7 @@ func TestService_Proxy(t *testing.T) {
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
 	t.Run("ok", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
@@ -68,13 +70,13 @@ func TestService_Proxy(t *testing.T) {
 		})
 	})
 	t.Run("it proxies query parameters", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success?_identifier=foo|bar")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1?_identifier=foo|bar")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		assert.Equal(t, "foo|bar", capturedQuery.Get("_identifier"))
 	})
 	t.Run("upstream FHIR server returns FHIR error with operation outcome", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Fail")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Fail/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
@@ -95,7 +97,7 @@ func TestService_Proxy(t *testing.T) {
 			FHIR: coolfhir.ClientConfig{
 				BaseURL: fhirServer.URL + "/fhir",
 			},
-		}, profile.TestProfile{}, orcaPublicURL)
+		}, profile.Test(), orcaPublicURL)
 		require.NoError(t, err)
 		frontServerMux := http.NewServeMux()
 		service.RegisterHandlers(frontServerMux)
@@ -104,7 +106,7 @@ func TestService_Proxy(t *testing.T) {
 		httpClient := frontServer.Client()
 		httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Anything")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Anything/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusMethodNotAllowed, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
@@ -117,7 +119,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	capturedHost := ""
-	fhirServerMux.HandleFunc("GET /fhir/SomeResource", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/SomeResource/1", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write([]byte(`{"resourceType":"Task"}`))
 		capturedHost = request.Host
@@ -130,7 +132,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 			BaseURL: fhirServer.URL + "/fhir",
 		},
 		AllowUnmanagedFHIROperations: true,
-	}, profile.TestProfile{}, orcaPublicURL)
+	}, profile.Test(), orcaPublicURL)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -140,10 +142,19 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource")
+	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource/1")
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 	require.Equal(t, fhirServerURL.Host, capturedHost)
+
+	// Test POST edge cases
+	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/_search", "application/fhir+json", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+
+	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/1/_search", "application/fhir+json", nil)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 }
 
 type OperationOutcomeWithResourceType struct {
@@ -160,7 +171,7 @@ func TestService_ErrorHandling(t *testing.T) {
 				BaseURL: "http://localhost",
 			},
 		},
-		profile.TestProfile{},
+		profile.Test(),
 		orcaPublicURL)
 	require.NoError(t, err)
 	serverMux := http.NewServeMux()
@@ -361,7 +372,7 @@ func TestService_Handle(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.TestProfile{}, orcaPublicURL)
+	}, profile.Test(), orcaPublicURL)
 
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		switch method {
@@ -688,4 +699,70 @@ func TestService_Handle(t *testing.T) {
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/UpdateOrganization failed: this fails on purpose")
 		})
 	})
+}
+
+func TestService_validateLiteralReferences(t *testing.T) {
+	resourceJson, err := os.ReadFile("testdata/literalreference-ok.json")
+	require.NoError(t, err)
+	var resource fhir.Task
+	err = json.Unmarshal(resourceJson, &resource)
+	require.NoError(t, err)
+
+	prof := profile.TestProfile{
+		CSD: profile.TestCsdDirectory{Endpoint: "https://example.com/fhir"},
+	}
+	service := &Service{profile: prof}
+
+	t.Run("ok", func(t *testing.T) {
+		err = service.validateLiteralReferences(context.Background(), resource)
+		require.NoError(t, err)
+	})
+	t.Run("http:// is not allowed", func(t *testing.T) {
+		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
+			s.Focus.Reference = to.Ptr("http://example.com")
+		})
+		err := service.validateLiteralReferences(context.Background(), resource)
+		require.EqualError(t, err, "literal reference is URL with scheme http://, only https:// is allowed (path=focus.reference)")
+	})
+	t.Run("parent directory traversal isn't allowed", func(t *testing.T) {
+		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
+			s.Focus.Reference = to.Ptr("https://example.com/fhir/../secret-page")
+		})
+		err := service.validateLiteralReferences(context.Background(), resource)
+		require.EqualError(t, err, "literal reference is URL with parent path segment '..' (path=focus.reference)")
+	})
+	t.Run("registered base URL", func(t *testing.T) {
+		t.Run("path differs", func(t *testing.T) {
+			resource := deep.AlterCopy(resource, func(s *fhir.Task) {
+				s.Focus.Reference = to.Ptr("https://example.com/alternate/secret-page")
+			})
+			err = service.validateLiteralReferences(context.Background(), resource)
+			require.EqualError(t, err, "literal reference is not a child of a registered FHIR base URL (path=focus.reference)")
+		})
+		t.Run("path differs, check trailing slash normalization", func(t *testing.T) {
+			resource := deep.AlterCopy(resource, func(s *fhir.Task) {
+				s.Focus.Reference = to.Ptr("https://example.com/fhirPatient/not-allowed")
+			})
+			err = service.validateLiteralReferences(context.Background(), resource)
+			require.EqualError(t, err, "literal reference is not a child of a registered FHIR base URL (path=focus.reference)")
+		})
+	})
+}
+
+func Test_collectLiteralReferences(t *testing.T) {
+	resourceJson, err := os.ReadFile("testdata/literalreference-ok.json")
+	require.NoError(t, err)
+	var resource any
+	err = json.Unmarshal(resourceJson, &resource)
+	require.NoError(t, err)
+	actualRefs := map[string]string{}
+	collectLiteralReferences(resource, nil, actualRefs)
+
+	assert.Equal(t, map[string]string{
+		"focus.reference":     "urn:uuid:cps-servicerequest-telemonitoring",
+		"for.reference":       "https://example.com/fhir/Patient/1",
+		"partOf.#0.reference": "https://example.com/fhir/CarePlan/1",
+		"partOf.#1.reference": "https://example.com/fhir/CarePlan/2",
+		"partOf.#2.reference": "CarePlan/3",
+	}, actualRefs)
 }

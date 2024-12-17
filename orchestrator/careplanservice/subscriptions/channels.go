@@ -57,7 +57,7 @@ type CsdChannelFactory struct {
 }
 
 func (c CsdChannelFactory) Create(ctx context.Context, subscriber fhir.Identifier) (Channel, error) {
-	endpoint, err := c.Directory.LookupEndpoint(ctx, subscriber, "fhirNotificationURL") // fhirNotificationURL
+	endpoint, err := c.Directory.LookupEndpoint(ctx, &subscriber, profile.FHIRNotificationURLEndpointName)
 	if err != nil {
 		return nil, fmt.Errorf("lookup notification endpoint in CSD: %w", err)
 	}

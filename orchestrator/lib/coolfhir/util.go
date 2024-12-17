@@ -282,7 +282,7 @@ func IsScpTask(task *fhir.Task) bool {
 	return false
 }
 
-// Returns all identifiers matching the given system from the provided array of identifiers
+// FilterIdentifier returns all identifiers matching the given system from the provided array of identifiers
 func FilterIdentifier(identifiers *[]fhir.Identifier, system string) *[]fhir.Identifier {
 	if identifiers == nil {
 		return &[]fhir.Identifier{}
@@ -299,7 +299,7 @@ func FilterIdentifier(identifiers *[]fhir.Identifier, system string) *[]fhir.Ide
 	return &result
 }
 
-// Returns the first identifier matching the given system from the provided array of identifiers
+// FilterFirstIdentifier returns the first identifier matching the given system from the provided array of identifiers
 func FilterFirstIdentifier(identifiers *[]fhir.Identifier, system string) *fhir.Identifier {
 	if identifiers == nil {
 		return nil
@@ -331,4 +331,16 @@ func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource int
 	if err != nil {
 		log.Err(err).Msgf("Failed to write response: %s", string(data))
 	}
+}
+
+func ContainsCoding(code fhir.Coding, concepts ...fhir.CodeableConcept) bool {
+	for _, codeableConcept := range concepts {
+		for _, currCoding := range codeableConcept.Coding {
+			if (code.Code != nil && currCoding.Code != nil && *code.Code == *currCoding.Code) &&
+				(code.System != nil && currCoding.System != nil && *code.System == *currCoding.System) {
+				return true
+			}
+		}
+	}
+	return false
 }

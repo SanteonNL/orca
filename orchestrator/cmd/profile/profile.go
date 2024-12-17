@@ -8,6 +8,12 @@ import (
 	"net/url"
 )
 
+// FHIRNotificationURLEndpointName is the name of the endpoint in the CSD that contains the FHIR Notification URL.
+const FHIRNotificationURLEndpointName = "fhirNotificationURL"
+
+// FHIRBaseURLEndpointName is the name of the endpoint in the CSD that contains the FHIR Base URL.
+const FHIRBaseURLEndpointName = "fhirBaseUrl"
+
 type Provider interface {
 	// Authenticator returns a middleware http.HandlerFunc that authenticates the caller according to the profile's authentication method.
 	// It sets the authenticate user as auth.Principal in the request context.

@@ -10,7 +10,6 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -19,13 +18,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
@@ -195,10 +195,7 @@ func TestService(t *testing.T) {
 	}
 
 	sessionManager := user.NewSessionManager(time.Minute)
-	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.TestProfile{
-		Principal:        auth.TestPrincipal1,
-		TestCsdDirectory: profile.TestCsdDirectory{},
-	})
+	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.Test())
 	service.secureTokenService = &stubSecureTokenService{}
 	require.NoError(t, err)
 	service.RegisterHandlers(httpServerMux)
@@ -232,7 +229,7 @@ func TestService(t *testing.T) {
 			t.Run("check Workflow-ID identifier is properly set on the ServiceRequest", func(t *testing.T) {
 				serviceRequest := sessionData.OtherValues[serviceRequestRef].(fhir.ServiceRequest)
 				assert.Contains(t, serviceRequest.Identifier, fhir.Identifier{
-					System: to.Ptr("https://api.zorgplatform.online/fhir/v1/Task"),
+					System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
 					Value:  to.Ptr("b526e773-e1a6-4533-bd00-1360c97e745f"),
 				})
 			})
@@ -317,7 +314,7 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.Len(t, conditionCode.Coding, 1)
 		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
 		require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
-		require.Equal(t, "Heart failure (disorder)", *conditionCode.Coding[0].Display)
+		require.Equal(t, "hartfalen (aandoening)", *conditionCode.Coding[0].Display)
 	})
 	t.Run("Heart failure", func(t *testing.T) {
 		task := map[string]interface{}{
@@ -330,7 +327,8 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.Len(t, conditionCode.Coding, 1)
 		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
 		require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
-		require.Equal(t, "Heart failure (disorder)", *conditionCode.Coding[0].Display)
+		require.Equal(t, "hartfalen (aandoening)", *conditionCode.Coding[0].Display)
+		require.Equal(t, "hartfalen (aandoening)", *conditionCode.Text)
 	})
 	t.Run("COPD", func(t *testing.T) {
 		task := map[string]interface{}{
@@ -343,7 +341,8 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.Len(t, conditionCode.Coding, 1)
 		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
 		require.Equal(t, "13645005", *conditionCode.Coding[0].Code)
-		require.Equal(t, "Chronic obstructive pulmonary disease (disorder)", *conditionCode.Coding[0].Display)
+		require.Equal(t, "chronische obstructieve longaandoening (aandoening)", *conditionCode.Coding[0].Display)
+		require.Equal(t, "chronische obstructieve longaandoening (aandoening)", *conditionCode.Text)
 	})
 	t.Run("Asthma", func(t *testing.T) {
 		task := map[string]interface{}{
@@ -356,7 +355,8 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.Len(t, conditionCode.Coding, 1)
 		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
 		require.Equal(t, "195967001", *conditionCode.Coding[0].Code)
-		require.Equal(t, "Asthma (disorder)", *conditionCode.Coding[0].Display)
+		require.Equal(t, "astma (aandoening)", *conditionCode.Coding[0].Display)
+		require.Equal(t, "astma (aandoening)", *conditionCode.Text)
 	})
 	t.Run("unknown workflow", func(t *testing.T) {
 		task := map[string]interface{}{

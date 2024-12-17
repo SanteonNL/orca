@@ -21,6 +21,7 @@ import (
 type MockDirectory struct {
 	ctrl     *gomock.Controller
 	recorder *MockDirectoryMockRecorder
+	isgomock struct{}
 }
 
 // MockDirectoryMockRecorder is the mock recorder for MockDirectory.
@@ -41,7 +42,7 @@ func (m *MockDirectory) EXPECT() *MockDirectoryMockRecorder {
 }
 
 // LookupEndpoint mocks base method.
-func (m *MockDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
+func (m *MockDirectory) LookupEndpoint(ctx context.Context, owner *fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LookupEndpoint", ctx, owner, endpointName)
 	ret0, _ := ret[0].([]fhir.Endpoint)
@@ -53,4 +54,19 @@ func (m *MockDirectory) LookupEndpoint(ctx context.Context, owner fhir.Identifie
 func (mr *MockDirectoryMockRecorder) LookupEndpoint(ctx, owner, endpointName any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupEndpoint", reflect.TypeOf((*MockDirectory)(nil).LookupEndpoint), ctx, owner, endpointName)
+}
+
+// LookupEntity mocks base method.
+func (m *MockDirectory) LookupEntity(ctx context.Context, identifier fhir.Identifier) (*fhir.Reference, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LookupEntity", ctx, identifier)
+	ret0, _ := ret[0].(*fhir.Reference)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LookupEntity indicates an expected call of LookupEntity.
+func (mr *MockDirectoryMockRecorder) LookupEntity(ctx, identifier any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LookupEntity", reflect.TypeOf((*MockDirectory)(nil).LookupEntity), ctx, identifier)
 }

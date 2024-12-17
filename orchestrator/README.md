@@ -29,8 +29,8 @@ Use the following environment variables to configure the orchestrator:
 
 ### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
-These FHIR resources can be read from a different FHIR API than configured in `ORCA_CAREPLANCONTRIBUTOR_FHIR` by setting 
-`ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_FHIR_URL`, `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_FHIR_AUTH_TYPE` and `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_FHIR_AUTH_SCOPES`.
+These FHIR resources can be read from a different FHIR API than configured in `ORCA_CAREPLANCONTRIBUTOR_QUESTIONNAIREFHIR` by setting 
+`ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL`, `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_AUTH_TYPE` and `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_AUTH_SCOPES`.
 
 If you want to automatically load FHIR HealthcareService and Questionnaire resources into the FHIR API on startup,
 you can configure the Task Filler to do so by setting `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS`.

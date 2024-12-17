@@ -7,7 +7,7 @@ export default function ConfirmDataPreEnrollment() {
 
   return (
     <Card className="border-0 shadow-none px-0">
-      <CardHeader className="px-0">
+      <CardHeader className="px-0 space-y-0 pt-0 pb-6">
         <p className="text-muted-foreground">
           Indien het verzoek niet klopt, pas het dan aan in het EPD.
         </p>
