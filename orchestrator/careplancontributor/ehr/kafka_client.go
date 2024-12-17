@@ -192,7 +192,7 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 // Returns:
 //   - error: An error if the file could not be written.
 func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value string) error {
-	name := "/tmp/" + strings.ReplaceAll(key, ":", "_") + ".json"
+	name := path.Join(os.TempDir(), strings.ReplaceAll(key, ":", "_") + ".json")
 	log.Debug().Ctx(ctx).Msgf("DebugClient, write to file: %s", name)
 	err := os.WriteFile(name, []byte(value), 0644)
 	if err != nil {
