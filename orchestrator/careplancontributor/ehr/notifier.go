@@ -363,6 +363,6 @@ func sendBundle(ctx context.Context, set BundleSet, kafkaClient KafkaClient) err
 		return errors.Wrap(err, "failed to send task to Kafka")
 	}
 
-	log.Debug().Ctx(ctx).Msgf("Successfully send task (ref=%s) to Kafka", set.task)
+	log.Debug().Ctx(ctx).Msgf("Successfully sent task (ref=%s) to Kafka", set.task)
 	return nil
 }
