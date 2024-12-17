@@ -30,13 +30,9 @@ type KafkaConfig struct {
 }
 
 // SaslConfig holds the configuration settings for SASL authentication.
-// It includes the mechanism, username, and password required for authentication.
-//
-// Fields:
-//   - Mechanism: The SASL mechanism to use for authentication (e.g., PLAIN).
-//   - Username: The username for SASL authentication.
-//   - Password: The password for SASL authentication.
+// It includes the mechanism, username, and password required for authentication
 type SaslConfig struct {
+	// Mechanism contains the SASL mechanism to use for authentication (e.g., PLAIN).
 	Mechanism string `koanf:"mechanism" default:"PLAIN"`
 	Username  string `koanf:"username" default:"$ConnectionString"`
 	Password  string `koanf:"password"`
