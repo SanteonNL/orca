@@ -6,10 +6,11 @@ import { usePathname } from 'next/navigation'
 
 // TODO: Change the server component when we use access_tokens (no longer rely on the session) to fetch data
 export default function EnrollmentLayout({ children }: { children: React.ReactNode }) {
-    const { serviceRequest, loading } = useEnrollmentStore()
+    const { serviceRequest } = useEnrollmentStore()
     const pathname = usePathname()
 
     const isFirstStep = pathname === '/enrollment/new'
+    const isLastStep = pathname === '/enrollment/success'
     const service = serviceRequest?.code?.coding?.[0].display
 
     const breadcrumb = isFirstStep
@@ -20,15 +21,19 @@ export default function EnrollmentLayout({ children }: { children: React.ReactNo
 
     return (
         <div className="w-full h-full">
-            <div className="max-w-7xl px-5 mx-auto">
-                <nav className="flex items-center space-x-2 text-sm pt-6">
-                    {breadcrumb}
-                    <ChevronRight className="h-4 w-4" />
-                    <span className={`${isFirstStep && 'text-muted-foreground'}`}>{service}</span>
+            <div className="max-w-7xl px-5 mx-auto py-6">
+                <nav className="flex items-center space-x-2 text-sm">
+                    {!isLastStep && (
+                        <>
+                            {breadcrumb}
+                            <ChevronRight className="h-4 w-4" />
+                            <span className={`${isFirstStep && 'text-muted-foreground'}`}>{service}</span>
+                        </>
+                    )}
                 </nav>
-                <div className='text-2xl mb-8 pt-2'>{isFirstStep ? "Verzoek controleren" : title}</div>
+                <div className='text-2xl pt-2'>{isLastStep ? "Verzoek geaccepteerd" : isFirstStep ? "Verzoek controleren" : title}</div>
             </div>
-            <div className="h-px bg-gray-200 mb-5 w-[calc(100%+3rem)] -mx-6"></div>
+            <div className="h-px bg-gray-200 mb-10 w-[calc(100%+3rem)] -mx-6"></div>
             <div className="max-w-7xl px-5 w-full mx-auto">
                 {children}
             </div>

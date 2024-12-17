@@ -24,15 +24,6 @@ interface QuestionnaireRendererPageProps {
 
 const scpSubTaskIdentifierSystem = "http://santeonnl.github.io/shared-care-planning/scp-identifier"
 
-const LoadingOverlay = () => (
-  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50 z-50">
-    <div className="flex items-center justify-center space-x-2 text-white">
-      <ReloadIcon className="mr-2 h-8 w-8 animate-spin" />
-      <span>Submitting...</span>
-    </div>
-  </div>
-);
-
 function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const { inputTask, questionnaire } = props;
   const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
@@ -221,9 +212,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         </QueryClientProvider>
 
         <div className='flex gap-3 mt-5'>
-          <Button variant='text' onClick={router.back}>
-            Terug
-          </Button>
           <Button variant='contained' disabled={isSubmitting || !responseIsValid} onClick={submitQuestionnaireResponse}>
             {isSubmitting && <Spinner className='h-6 mr-2 text-inherit' />}
             Verzoek versturen

@@ -129,7 +129,6 @@ const useEnrollment = () => {
 
     useEffect(() => {
         if (!initialized) {
-            setTimeout(() => fetchAllResources(), 2000);
             fetchAllResources();
         }
     }, [fetchAllResources, initialized]);
