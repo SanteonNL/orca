@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"net/http"
 	"strings"
 
@@ -76,11 +77,11 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
 
 		// In order to create a CarePlan, the requester must have the same URA number as the current node
-		ids, err := s.profile.Identities(ctx)
+		identities, err := s.profile.Identities(ctx)
 		if err != nil {
 			return nil, err
 		}
-		if !isRequesterLocalCareOrganization(ids, principal) {
+		if !isRequesterLocalCareOrganization(profile.IdentifiersOf(identities), principal) {
 			return nil, errors.New("requester must be local care organization in order to create new CarePlan and CareTeam")
 		}
 

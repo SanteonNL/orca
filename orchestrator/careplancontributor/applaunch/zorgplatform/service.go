@@ -484,7 +484,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	} else if len(identities) > 1 {
 		log.Warn().Ctx(ctx).Msgf("More than one identity found, using the first one: %v", identities[0])
 	}
-	localOrgIdentifier := identities[0]
+	localIdentity := identities[0]
 
 	for _, identifier := range patient.Identifier {
 		if identifier.System != nil && *identifier.System == "http://fhir.nl/fhir/NamingSystem/bsn" {
@@ -535,7 +535,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		},
 		Performer: []fhir.Reference{taskPerformer},
 		Requester: &fhir.Reference{
-			Identifier: &localOrgIdentifier,
+			Identifier: &localIdentity,
 		},
 	}
 

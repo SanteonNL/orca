@@ -142,7 +142,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		s.orcaPublicURL.JoinPath(basePath), s.transport, true)
 	baseUrl := s.baseUrl()
 	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
-
+	
 	// Binding to actual routing
 	// Creating a resource
 	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
