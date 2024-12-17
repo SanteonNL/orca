@@ -132,7 +132,7 @@ resources as the EHR's should query the Care Plan Service for the relevant resou
 ![clinic-notification-2.svg](docs/images/clinic-notification-2.svg)
 
 #### The diagram of the future implementation
-![clinic-notification-1svg](docs/images/clinic-notification-1.svg)
+![clinic-notification-1.svg](docs/images/clinic-notification-1.svg)
 
 ## Deployment
 Note: this section needs to be expanded.
