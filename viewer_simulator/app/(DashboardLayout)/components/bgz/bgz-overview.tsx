@@ -21,7 +21,6 @@ export default async function BgzOverview() {
         requestHeaders.set("Cache-Control", "no-cache")
         if (process.env.FHIR_AUTHORIZATION_TOKEN) {
             requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
-            console.log('Authorization', requestHeaders.get("Authorization"))
         }
         requestHeaders.set("Content-Type", "application/x-www-form-urlencoded");
         const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan/_search`, {
