@@ -21,7 +21,7 @@ import (
 //   - ConnectionString: The connection string used for authentication.
 type KafkaConfig struct {
 	Enabled   bool           `koanf:"enabled" default:"false" description:"This enables the Kafka client."`
-	DebugOnly bool           `koanf:"debug" default:"false" description:"This enables debug mode for Kafka, writing the messages to a file in /tmp instead of sending them to Kafka."`
+	DebugOnly bool           `koanf:"debug" default:"false" description:"This enables debug mode for Kafka, writing the messages to a file in the OS TempDir instead of sending them to Kafka."`
 	Topic     string         `koanf:"topic"`
 	Endpoint  string         `koanf:"endpoint"`
 	Sasl      SaslConfig     `koanf:"sasl"`
