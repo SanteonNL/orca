@@ -137,7 +137,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	baseURL := s.orcaPublicURL.JoinPath(basePath)
 	s.profile.RegisterHTTPHandlers(basePath, baseURL, mux)
 	//
-	// Authorized endpoints
+	// The section below defines endpoints specified by Shared Care Planning.
+	// These are secured through the profile (e.g. Nuts access tokens)
 	//
 	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		var notification coolfhir.SubscriptionNotification
@@ -153,17 +154,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		writer.WriteHeader(http.StatusOK)
 	}))
-	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
-	mux.HandleFunc("GET "+basePath+"/aggregate/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
-		err := s.proxyToAllCareTeamMembers(writer, request)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-	}))
-	//TODO: FIX --> Returns unauthorized for dev server
-	// mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if !s.healthdataviewEndpointEnabled {
@@ -187,11 +177,21 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
-	mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", proxyGetOrSearchHandler) //TODO: FIX --> Returns unauthorized for dev server when using s.profile.Authenticator
+	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	//
-	// FE/Session Authorized Endpoints
+	// The section below defines endpoints used for integrating the local EHR with ORCA.
+	// They are NOT specified by SCP. Authorization is specific to the local EHR.
 	//
+	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
+
+	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+		err := s.proxyToAllCareTeamMembers(writer, request)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+	}))
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
@@ -292,7 +292,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 	log.Debug().Msg("Proxying request to all CareTeam members from CarePlan.participants - proxyBaseUrl: " + upstreamServerUrl.String())
 
-	fhirProxy := coolfhir.NewProxy("All External CPC Members->EHR FHIR proxy", log.Logger, upstreamServerUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport, true)
+	fhirProxy := coolfhir.NewProxy("All External CPC Members->EHR FHIR proxy", log.Logger, upstreamServerUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
 
 	fhirProxy.ServeHTTP(writer, request)
 

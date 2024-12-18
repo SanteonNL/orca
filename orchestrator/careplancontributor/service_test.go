@@ -717,6 +717,47 @@ func TestService_handleGetContext(t *testing.T) {
 	}`, httpResponse.Body.String())
 }
 
+func TestService_proxyToAllCareTeamMembers(t *testing.T) {
+	remoteContributorFHIRAPIMux := http.NewServeMux()
+	remoteContributorFHIRAPIMux.HandleFunc("POST /cpc/fhir/Patient/_search", func(writer http.ResponseWriter, request *http.Request) {
+		results := coolfhir.SearchSet().Append(fhir.Patient{
+			Id: to.Ptr("1"),
+		}, nil, nil)
+		coolfhir.SendResponse(writer, http.StatusOK, results)
+	})
+	remoteContributorFHIRAPI := httptest.NewServer(remoteContributorFHIRAPIMux)
+	scpContext := remoteContributorFHIRAPI.URL + "/cps/fhir/CarePlan/1"
+
+	publicURL, _ := url.Parse("https://example.com")
+	service := &Service{
+		scpHttpClient: &http.Client{
+			Transport: auth.AuthenticatedTestRoundTripper(http.DefaultClient.Transport, auth.TestPrincipal1, ""),
+		},
+		orcaPublicURL: publicURL,
+		config: Config{
+			CarePlanService: CarePlanServiceConfig{
+				URL: remoteContributorFHIRAPI.URL + "/cps",
+			},
+		},
+	}
+	expectedBody := url.Values{
+		"_include": {"CarePlan:care-team"},
+	}
+
+	httpRequest := httptest.NewRequest("POST", publicURL.JoinPath("/cpc/aggregate/fhir/Patient/_search").String(), strings.NewReader(expectedBody.Encode()))
+	httpRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	httpRequest.Header.Add("X-SCP-Context", scpContext)
+	httpResponse := httptest.NewRecorder()
+
+	err := service.proxyToAllCareTeamMembers(httpResponse, httpRequest)
+
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, httpResponse.Code)
+	var actualBundle fhir.Bundle
+	require.NoError(t, json.Unmarshal(httpResponse.Body.Bytes(), &actualBundle))
+	require.Len(t, actualBundle.Entry, 1)
+}
+
 func createTestSession() (*user.SessionManager, string) {
 	sessionManager := user.NewSessionManager(time.Minute)
 	sessionHttpResponse := httptest.NewRecorder()
