@@ -153,9 +153,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		writer.WriteHeader(http.StatusOK)
 	}))
-	// The BgZ aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
+	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
 	mux.HandleFunc("GET "+basePath+"/aggregate/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
-
 		err := s.proxyToAllCareTeamMembers(writer, request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
