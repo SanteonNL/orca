@@ -128,7 +128,8 @@ func (f fhirClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 		err = f.client.ReadWithContext(request.Context(), outRequestUrl.Path, &responseResource, params...)
 	case http.MethodPost:
 		if strings.HasSuffix(request.URL.Path, "/_search") {
-			values, err := url.ParseQuery(string(requestData))
+			var values url.Values
+			values, err = url.ParseQuery(string(requestData))
 			if err == nil {
 				err = f.client.SearchWithContext(request.Context(), strings.TrimSuffix(outRequestUrl.Path, "/_search"), values, &responseResource, params...)
 			}
