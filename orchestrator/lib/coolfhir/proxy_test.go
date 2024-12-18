@@ -134,9 +134,9 @@ func TestProxy(t *testing.T) {
 			assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
 		})
 		t.Run("private caching only", func(t *testing.T) {
-			proxy.(*fhirClientProxy).allowCaching = true
+			proxy.allowCaching = true
 			t.Cleanup(func() {
-				proxy.(*fhirClientProxy).allowCaching = false
+				proxy.allowCaching = false
 			})
 			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/DoGet")
 			require.NoError(t, err)

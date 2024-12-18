@@ -176,16 +176,30 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 	targetFhirBaseUrl, _ := url.Parse(s.config.ApiUrl)
-
 	proxyBasePath := "/cpc/fhir"
-
 	rewriteUrl, _ := url.Parse(s.baseURL + proxyBasePath)
-
-	return coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
+	result := coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
 		transport:          s.zorgplatformHttpClient.Transport,
 		cpsFhirClient:      s.cpsFhirClient,
 		secureTokenService: s.secureTokenService,
 	}, true)
+	// Zorgplatform's FHIR API only allows GET-based FHIR searches, while ORCA only allows POST-based FHIR searches.
+	// If the request is a POST-based search, we need to rewrite the request to a GET-based search.
+	result.HTTPRequestModifier = func(req *http.Request) (*http.Request, error) {
+		if strings.HasSuffix(req.URL.Path, "_search") && req.Method == http.MethodPost {
+			newReq := req.Clone(req.Context())
+			newReq.Method = http.MethodGet
+			if err := req.ParseForm(); err != nil {
+				return nil, err
+			}
+			newReq.URL.RawQuery = req.Form.Encode()
+			newReq.URL.Path = strings.TrimSuffix(req.URL.Path, "/_search")
+			newReq.Body = nil
+			return newReq, nil
+		}
+		return req, nil
+	}
+	return result
 }
 
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
@@ -275,10 +289,9 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 
 	log.Debug().Ctx(httpRequest.Context()).Msgf("Found workflowId identifier: %s", *workflowIdIdentifier.Value)
 
-	bsnIdentifier := coolfhir.FilterFirstIdentifier(&patient.Identifier, "http://fhir.nl/fhir/NamingSystem/bsn")
+	bsnIdentifier := coolfhir.FilterFirstIdentifier(&patient.Identifier, coolfhir.BSNNamingSystem)
 	if bsnIdentifier == nil {
-		log.Error().Ctx(httpRequest.Context()).Msg("Identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
-		return nil, fmt.Errorf("identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
+		return nil, fmt.Errorf("patient does not have identifier with system %s", coolfhir.BSNNamingSystem)
 	}
 
 	bsn := *bsnIdentifier.Value
