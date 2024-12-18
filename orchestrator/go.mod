@@ -11,6 +11,7 @@ require (
 	github.com/beevik/etree v1.4.1
 	github.com/braineet/saml v0.4.15
 	github.com/google/uuid v1.6.0
+	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/knadh/koanf/providers/env v1.0.0
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/nuts-foundation/go-nuts-client v0.1.7
@@ -26,6 +27,7 @@ require (
 	github.com/containerd/platforms v0.2.1 // indirect
 	github.com/creack/pty v1.1.20 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
+	golang.org/x/sync v0.9.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240318140521-94a12d6c2237 // indirect
 )
 

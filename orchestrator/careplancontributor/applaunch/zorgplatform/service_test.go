@@ -1,6 +1,7 @@
 package zorgplatform
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -20,6 +21,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
@@ -368,4 +370,61 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.EqualError(t, err, "unsupported workflow definition: ActivityDefinition/other")
 		require.Nil(t, conditionCode)
 	})
+}
+
+func TestGetWorkflowId(t *testing.T) {
+	tests := []struct {
+		name              string
+		ctx               context.Context
+		carePlanReference string
+		expectedError     bool
+		mock              func(*mock.MockClient)
+	}{
+		{
+			name:              "Cache Miss",
+			ctx:               context.Background(),
+			carePlanReference: "http://example.com/CarePlan/123",
+			expectedError:     false,
+			mock: func(mockClient *mock.MockClient) {
+				mockClient.EXPECT().ReadWithContext(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
+			},
+		},
+		{
+			name:              "Cache Hit",
+			ctx:               context.Background(),
+			carePlanReference: "http://example.com/CarePlan/123",
+			expectedError:     false,
+			mock: func(mockClient *mock.MockClient) {
+				mockClient.EXPECT().ReadWithContext(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockClient := mock.NewMockClient(ctrl)
+			tt.mock(mockClient)
+
+			service := &Service{}
+
+			// First call to populate the cache
+			req, err := http.NewRequestWithContext(tt.ctx, "GET", tt.carePlanReference, nil)
+			require.NoError(t, err)
+			rr := httptest.NewRecorder()
+			service.EhrFhirProxy().ServeHTTP(rr, req)
+			require.Equal(t, http.StatusOK, rr.Code)
+			require.NotEmpty(t, rr.Body.String())
+
+			// Second call to test cache hit
+			req, err = http.NewRequestWithContext(tt.ctx, "GET", tt.carePlanReference, nil)
+			require.NoError(t, err)
+			rr = httptest.NewRecorder()
+			service.EhrFhirProxy().ServeHTTP(rr, req)
+			require.Equal(t, http.StatusOK, rr.Code)
+			require.NotEmpty(t, rr.Body.String())
+		})
+	}
 }
