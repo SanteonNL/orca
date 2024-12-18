@@ -298,10 +298,16 @@ func publicKeyToJWK(key rsa.PublicKey, id string, version string) *azkeys.JSONWe
 var _ SecureTokenService = &stubSecureTokenService{}
 
 type stubSecureTokenService struct {
+	invocations int
+	accessToken string
 }
 
-func (s stubSecureTokenService) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
-	return "stub-at", nil
+func (s *stubSecureTokenService) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
+	s.invocations++
+	if s.accessToken == "" {
+		return "stub-at", nil
+	}
+	return s.accessToken, nil
 }
 
 func Test_getConditionCodeFromWorkflowTask(t *testing.T) {

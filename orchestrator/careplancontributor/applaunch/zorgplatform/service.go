@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/globals"
 
@@ -33,13 +34,12 @@ import (
 const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
 const zorgplatformWorkflowIdSystem = "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"
+const cacheTTL = time.Minute * 5
 
-type ScpContextData struct {
-	workflowId *string
-	patientBsn *string
+type workflowContext struct {
+	workflowId string
+	patientBsn string
 }
-
-var scpContextToDataMap = map[string]ScpContextData{}
 
 func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
@@ -148,6 +148,9 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		zorgplatformCert:      cert,
 		profile:               profile,
 		tokenCache:            ttlcache.New[string, string](),
+		workflowContextCache: ttlcache.New[string, workflowContext](
+			ttlcache.WithTTL[string, workflowContext](cacheTTL),
+		),
 		// performing HTTP requests with Zorgplatform requires mutual TLS
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
@@ -159,6 +162,10 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 			},
 		},
 	}
+	// Start cache expiry
+	go result.workflowContextCache.Start()
+	go result.tokenCache.Start()
+
 	result.secureTokenService = result
 	result.registerFhirClientFactory(config)
 	return result, nil
@@ -178,6 +185,9 @@ type Service struct {
 	profile                profile.Provider
 	secureTokenService     SecureTokenService
 	tokenCache             *ttlcache.Cache[string, string]
+	// workflowContextCache stores the Zorgplatform Workflow ID and patient BSN for a given CarePlan (from X-SCP-Context)
+	// This is an expensive, chained lookup, so we cache the result for some time.
+	workflowContextCache *ttlcache.Cache[string, workflowContext]
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -192,18 +202,20 @@ func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 	rewriteUrl, _ := url.Parse(s.baseURL + proxyBasePath)
 
 	return coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
-		transport:          s.zorgplatformHttpClient.Transport,
-		cpsFhirClient:      s.cpsFhirClient,
-		secureTokenService: s.secureTokenService,
+		transport:            s.zorgplatformHttpClient.Transport,
+		cpsFhirClient:        s.cpsFhirClient,
+		secureTokenService:   s.secureTokenService,
+		workflowContextCache: s.workflowContextCache,
 	}, true)
 }
 
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
 
 type stsAccessTokenRoundTripper struct {
-	transport          http.RoundTripper
-	cpsFhirClient      func() fhirclient.Client
-	secureTokenService SecureTokenService
+	transport            http.RoundTripper
+	cpsFhirClient        func() fhirclient.Client
+	secureTokenService   SecureTokenService
+	workflowContextCache *ttlcache.Cache[string, workflowContext]
 }
 
 func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
@@ -222,20 +234,20 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	log.Debug().Ctx(httpRequest.Context()).Msgf("Found SCP context: %s", carePlanReference)
 	//TODO: Replace with CPC to CPS call - using direct acces to the CPS Store - until thr auth part is clear
 
-	scpContextData, err := s.getWorkflowId(httpRequest.Context(), carePlanReference)
+	workflowCtx, err := s.getWorkflowContext(httpRequest.Context(), carePlanReference)
 	if err != nil {
 		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to get workflowId for CarePlan reference: %v", err)
 		return nil, fmt.Errorf("unable to get workflowId for CarePlan reference: %w", err)
 	}
 
 	//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
-	if *scpContextData.patientBsn == "999911120" {
-		*scpContextData.patientBsn = "999999151"
+	if workflowCtx.patientBsn == "999911120" {
+		workflowCtx.patientBsn = "999999151"
 	}
 
 	launchContext := LaunchContext{
-		WorkflowId: *scpContextData.workflowId,
-		Bsn:        *scpContextData.patientBsn,
+		WorkflowId: workflowCtx.workflowId,
+		Bsn:        workflowCtx.patientBsn,
 	}
 
 	//TODO: Cache the token for re-use
@@ -309,11 +321,10 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 }
 
 // This function returns the workflowId for a given CarePlan reference. It will be returned from a cache, if available.
-func (s *stsAccessTokenRoundTripper) getWorkflowId(ctx context.Context, carePlanReference string) (*ScpContextData, error) {
-
+func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, carePlanReference string) (*workflowContext, error) {
 	// First see if cached
-	if workflowCacheEntry, ok := scpContextToDataMap[carePlanReference]; ok {
-		return &workflowCacheEntry, nil
+	if cacheEntry := s.workflowContextCache.Get(carePlanReference); cacheEntry != nil {
+		return to.Ptr(cacheEntry.Value()), nil
 	}
 
 	log.Debug().Ctx(ctx).Msgf("(cache miss) Fetching workflowId for CarePlan reference: %s", carePlanReference)
@@ -356,18 +367,11 @@ func (s *stsAccessTokenRoundTripper) getWorkflowId(ctx context.Context, carePlan
 		return nil, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err)
 	}
 
-	var workflowIdIdentifier *fhir.Identifier
-	for _, identifier := range serviceRequest.Identifier {
-		if identifier.System != nil && *identifier.System == zorgplatformWorkflowIdSystem {
-			workflowIdIdentifier = &identifier
-			break
-		}
+	workflowIdIdentifiers := coolfhir.FilterIdentifier(&serviceRequest.Identifier, zorgplatformWorkflowIdSystem)
+	if len(workflowIdIdentifiers) != 1 {
+		return nil, fmt.Errorf("expected ServiceRequest to have 1 identifier with system %s", zorgplatformWorkflowIdSystem)
 	}
-
-	if workflowIdIdentifier == nil {
-		log.Error().Ctx(ctx).Msgf("Identifier with system %s not found", zorgplatformWorkflowIdSystem)
-		return nil, fmt.Errorf("identifier with system %s not found", zorgplatformWorkflowIdSystem)
-	}
+	workflowID := *workflowIdIdentifiers[0].Value
 
 	var patient fhir.Patient
 	err = s.cpsFhirClient().ReadWithContext(ctx, *carePlan.Subject.Reference, &patient)
@@ -382,18 +386,14 @@ func (s *stsAccessTokenRoundTripper) getWorkflowId(ctx context.Context, carePlan
 		return nil, fmt.Errorf("identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
 	}
 
-	bsn := *bsnIdentifier.Value
+	log.Ctx(ctx).Debug().Msgf("(caching) %s --> %s", carePlanReference, workflowID)
 
-	log.Ctx(ctx).Debug().Msgf("(caching) %s --> %s", carePlanReference, *workflowIdIdentifier.Value)
-
-	cacheEntry := &ScpContextData{
-		workflowId: workflowIdIdentifier.Value,
-		patientBsn: &bsn,
+	result := &workflowContext{
+		workflowId: workflowID,
+		patientBsn: *bsnIdentifier.Value,
 	}
-
-	scpContextToDataMap[carePlanReference] = *cacheEntry
-
-	return cacheEntry, nil
+	s.workflowContextCache.Set(carePlanReference, *result, ttlcache.DefaultTTL)
+	return result, nil
 }
 
 func (s *Service) registerFhirClientFactory(config Config) {
