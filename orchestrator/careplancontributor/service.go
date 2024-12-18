@@ -88,7 +88,10 @@ func New(
 	}
 
 	httpClient := &http.Client{
-		Transport: 
+		Transport: internalDispatchHTTPRoundTripper{
+			profile: profile,
+			handler: ,
+		},
 	}
 	result := &Service{
 		config:                  config,
