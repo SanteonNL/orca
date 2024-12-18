@@ -37,7 +37,7 @@ type FHIRClientProxy struct {
 	HTTPRequestModifier func(*http.Request) (*http.Request, error)
 }
 
-func (f FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, request *http.Request) {
+func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, request *http.Request) {
 	if f.HTTPRequestModifier != nil {
 		var err error
 		if request, err = f.HTTPRequestModifier(request); err != nil {
@@ -194,7 +194,7 @@ func (f FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, reque
 	pipe.DoAndWrite(httpResponseWriter, responseResource, responseStatusCode)
 }
 
-func (f FHIRClientProxy) sanitizeRequestHeaders(header http.Header) http.Header {
+func (f *FHIRClientProxy) sanitizeRequestHeaders(header http.Header) http.Header {
 	result := make(http.Header)
 	// Header sanitizing is loosely inspired by:
 	// - https://www.rfc-editor.org/rfc/rfc7231
