@@ -184,7 +184,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
 	//
 	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
-
 	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		err := s.proxyToAllCareTeamMembers(writer, request)
 		if err != nil {

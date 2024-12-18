@@ -3,7 +3,6 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
-
 	"github.com/rs/zerolog/log"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
