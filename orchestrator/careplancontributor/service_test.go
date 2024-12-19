@@ -716,44 +716,71 @@ func TestService_handleGetContext(t *testing.T) {
 }
 
 func TestService_proxyToAllCareTeamMembers(t *testing.T) {
-	remoteContributorFHIRAPIMux := http.NewServeMux()
-	remoteContributorFHIRAPIMux.HandleFunc("POST /cpc/fhir/Patient/_search", func(writer http.ResponseWriter, request *http.Request) {
-		results := coolfhir.SearchSet().Append(fhir.Patient{
-			Id: to.Ptr("1"),
-		}, nil, nil)
-		coolfhir.SendResponse(writer, http.StatusOK, results)
-	})
-	remoteContributorFHIRAPI := httptest.NewServer(remoteContributorFHIRAPIMux)
-	scpContext := remoteContributorFHIRAPI.URL + "/cps/fhir/CarePlan/1"
+	// TODO: Non-happy tests:
+	//       - CarePlan not found
+	//       - Non-active members aren't queried
+	//       - etc...
+	//       - duplicate endpoints; aren't queried twice
+	t.Run("ok", func(t *testing.T) {
+		remoteContributorFHIRAPIMux := http.NewServeMux()
+		// CPC endpoints
+		remoteContributorFHIRAPIMux.HandleFunc("POST /cpc/fhir/Patient/_search", func(writer http.ResponseWriter, request *http.Request) {
+			results := coolfhir.SearchSet().Append(fhir.Patient{
+				Id: to.Ptr("1"),
+			}, nil, nil)
+			coolfhir.SendResponse(writer, http.StatusOK, results)
+		})
+		// CPS endpoints
+		carePlanBundleData, err := os.ReadFile("./testdata/careplan-bundle-valid.json")
+		require.NoError(t, err)
+		var carePlanBundle fhir.Bundle
+		require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
+		remoteContributorFHIRAPIMux.HandleFunc("POST /cps/fhir/CarePlan/_search", func(writer http.ResponseWriter, request *http.Request) {
+			coolfhir.SendResponse(writer, http.StatusOK, carePlanBundle)
+		})
+		remoteContributorFHIRAPI := httptest.NewServer(remoteContributorFHIRAPIMux)
+		cpcBaseURL := remoteContributorFHIRAPI.URL + "/cpc/fhir"
+		cpsBaseURL := remoteContributorFHIRAPI.URL + "/cps/fhir"
+		scpContext := cpsBaseURL + "/CarePlan/1"
 
-	publicURL, _ := url.Parse("https://example.com")
-	service := &Service{
-		scpHttpClient: &http.Client{
-			Transport: auth.AuthenticatedTestRoundTripper(http.DefaultClient.Transport, auth.TestPrincipal1, ""),
-		},
-		orcaPublicURL: publicURL,
-		config: Config{
-			CarePlanService: CarePlanServiceConfig{
-				URL: remoteContributorFHIRAPI.URL + "/cps",
+		publicURL, _ := url.Parse("https://example.com")
+		service := &Service{
+			scpHttpClient: &http.Client{
+				Transport: auth.AuthenticatedTestRoundTripper(http.DefaultClient.Transport, auth.TestPrincipal1, ""),
 			},
-		},
-	}
-	expectedBody := url.Values{
-		"_include": {"CarePlan:care-team"},
-	}
+			orcaPublicURL: publicURL,
+			config: Config{
+				CarePlanService: CarePlanServiceConfig{
+					URL: remoteContributorFHIRAPI.URL + "/cps",
+				},
+			},
+			cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
+				return fhirclient.New(baseURL, http.DefaultClient, nil)
+			},
+			profile: profile.TestProfile{
+				Principal: auth.TestPrincipal1,
+				CSD: profile.TestCsdDirectory{
+					Endpoint: cpcBaseURL,
+				},
+			},
+		}
+		expectedBody := url.Values{
+			"_include": {"CarePlan:care-team"},
+		}
 
-	httpRequest := httptest.NewRequest("POST", publicURL.JoinPath("/cpc/aggregate/fhir/Patient/_search").String(), strings.NewReader(expectedBody.Encode()))
-	httpRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	httpRequest.Header.Add("X-SCP-Context", scpContext)
-	httpResponse := httptest.NewRecorder()
+		httpRequest := httptest.NewRequest("POST", publicURL.JoinPath("/cpc/aggregate/fhir/Patient/_search").String(), strings.NewReader(expectedBody.Encode()))
+		httpRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		httpRequest.Header.Add("X-SCP-Context", scpContext)
+		httpResponse := httptest.NewRecorder()
 
-	err := service.proxyToAllCareTeamMembers(httpResponse, httpRequest)
+		err = service.proxyToAllCareTeamMembers(httpResponse, httpRequest)
 
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.Code)
-	var actualBundle fhir.Bundle
-	require.NoError(t, json.Unmarshal(httpResponse.Body.Bytes(), &actualBundle))
-	require.Len(t, actualBundle.Entry, 1)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.Code)
+		var actualBundle fhir.Bundle
+		require.NoError(t, json.Unmarshal(httpResponse.Body.Bytes(), &actualBundle))
+		require.Len(t, actualBundle.Entry, 1)
+	})
 }
 
 func createTestSession() (*user.SessionManager, string) {

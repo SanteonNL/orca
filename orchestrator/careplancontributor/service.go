@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"net/http"
 	"net/url"
 	"strings"
@@ -199,10 +200,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
-	mux.HandleFunc(basePath+"/", func(response http.ResponseWriter, request *http.Request) {
-		log.Info().Ctx(request.Context()).Msgf("Redirecting to %s", s.frontendUrl)
-		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
-	})
 
 	// Logout endpoint
 	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
@@ -269,30 +266,70 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 
 // proxyToAllCareTeamMembers is a convenience façade method that can be used proxy the request to all CPC nodes localized from the Shared CarePlan.participants.
 func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request *http.Request) error {
-	//TODO: We currently have a 1-on-1 relation between the EHR and viewer. Should query all CarePlan.participants
-	// carePlanURLValue := request.Header[carePlanURLHeaderKey]
-
-	//TODO: This URL should come from localization based on each participants URA number - for now fixate it to the hospital url
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) != 1 {
 		return coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
 	}
-
 	log.Debug().Msg("Handling BgZ FHIR API request carePlanURL: " + carePlanURLValue[0])
 
-	upstreamServerUrl, err := url.Parse(strings.Replace(s.config.CarePlanService.URL, "/cps", basePath+"/fhir", 1))
-	proxyBasePath := basePath + "/aggregate/fhir/"
-
+	// Get the CPS base URL from the X-SCP-Context header (everything before /CarePlan/<id>).
+	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURLValue[0], "CarePlan")
 	if err != nil {
-		return coolfhir.BadRequestError(err)
+		return coolfhir.BadRequestError(fmt.Errorf("invalid %s header: %w", carePlanURLHeaderKey, err))
+	}
+	_, careTeams, _, err := careplanservice.GetCarePlanAndCareTeams(request.Context(), s.cpsClientFactory(cpsBaseURL), carePlanRef)
+	if err != nil {
+		return fmt.Errorf("failed to get CarePlan and CareTeams for X-SCP-Context: %w", err)
 	}
 
-	log.Debug().Msg("Proxying request to all CareTeam members from CarePlan.participants - proxyBaseUrl: " + upstreamServerUrl.String())
+	// Collect participants. Use a map to ensure we don't send the same request to the same participant multiple times.
+	participantIdentifiers := make(map[string]fhir.Identifier)
+	for _, careTeam := range careTeams {
+		for _, participant := range careTeam.Participant {
+			if !coolfhir.IsLogicalReference(participant.Member) {
+				continue
+			}
+			activeMember, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
+			if err != nil {
+				log.Ctx(request.Context()).Warn().Err(err).Msg("Failed to validate CareTeam participant period")
+			} else if activeMember {
+				participantIdentifiers[coolfhir.ToString(participant.Member.Identifier)] = *participant.Member.Identifier
+			}
+		}
+	}
+	if len(participantIdentifiers) == 0 {
+		return coolfhir.NewErrorWithCode("no active participants found in CareTeam", http.StatusNotFound)
+	}
 
-	fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", log.Logger, upstreamServerUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
+	endpoints := make(map[string]*url.URL)
+	for _, identifier := range participantIdentifiers {
+		fhirEndpoints, err := s.profile.CsdDirectory().LookupEndpoint(request.Context(), &identifier, profile.FHIRBaseURLEndpointName)
+		if err != nil {
+			return fmt.Errorf("failed to lookup FHIR base URL for participant %s: %w", coolfhir.ToString(identifier), err)
+		}
+		for _, fhirEndpoint := range fhirEndpoints {
+			parsedEndpointAddress, err := url.Parse(fhirEndpoint.Address)
+			if err != nil {
+				// TODO: When querying multiple participants, we should continue with the next participant instead of returning an error, and return an entry for the OperationOutcome
+				return fmt.Errorf("failed to parse FHIR base URL for participant %s: %w", coolfhir.ToString(identifier), err)
+			}
+			endpoints[fhirEndpoint.Address] = parsedEndpointAddress
+		}
+	}
 
-	fhirProxy.ServeHTTP(writer, request)
-
+	// Could add more information in the future with OperationOutcome messages
+	if len(endpoints) == 0 {
+		return errors.New("didn't find any queryable FHIR endpoints for any active participant in related CareTeams")
+	}
+	if len(endpoints) > 1 {
+		// TODO: In this case, we need to aggregate the results from multiple endpoints
+		return errors.New("found multiple queryable FHIR endpoints for active participants in related CareTeams, currently not supported")
+	}
+	const proxyBasePath = basePath + "/aggregate/fhir/"
+	for _, endpoint := range endpoints {
+		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", log.Logger, endpoint, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
+		fhirProxy.ServeHTTP(writer, request)
+	}
 	return nil
 }
 
