@@ -30,5 +30,13 @@ type Provider interface {
 	// CsdDirectory returns the directory service for finding endpoints and organizations through Care Service Discovery (IHE-CSD).
 	CsdDirectory() csd.Directory
 	// Identities returns the identities of the local tenant (e.g., a care organization).
-	Identities(ctx context.Context) ([]fhir.Identifier, error)
+	Identities(ctx context.Context) ([]fhir.Organization, error)
+}
+
+func IdentifiersOf(identities []fhir.Organization) []fhir.Identifier {
+	identifiers := make([]fhir.Identifier, len(identities))
+	for i, identity := range identities {
+		identifiers[i] = identity.Identifier[0]
+	}
+	return identifiers
 }

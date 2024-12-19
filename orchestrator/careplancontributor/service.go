@@ -87,7 +87,12 @@ func New(
 		workflowProvider = taskengine.FhirApiWorkflowProvider{Client: questionnaireFhirClient}
 	}
 
-	httpClient := profile.HttpClient()
+	httpClient := &http.Client{
+		Transport: internalDispatchHTTPRoundTripper{
+			profile: profile,
+			handler: ,
+		},
+	}
 	result := &Service{
 		config:                  config,
 		orcaPublicURL:           orcaPublicURL,
