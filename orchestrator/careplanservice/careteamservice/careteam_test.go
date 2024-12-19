@@ -81,7 +81,7 @@ func TestUpdate(t *testing.T) {
 			fhirClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(resource string, v *fhir.Bundle, opts ...interface{}) error {
 				*v = tc.Bundle()
 				return nil
-			}).Times(1)
+			}).AnyTimes()
 			expectedCareTeam := tc.Output()
 
 			// Perform

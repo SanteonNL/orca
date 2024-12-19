@@ -20,6 +20,11 @@ var nowFunc = time.Now
 // It's passed to the function, as the new Task is not yet stored in the FHIR server, since the update is to be done in a single transaction.
 // When the CareTeam is updated, it adds the update(s) to the given transaction and returns true. If no changes are made, it returns false.
 func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.Task, tx *coolfhir.BundleBuilder) (bool, error) {
+	if len(updateTriggerTask.PartOf) > 0 {
+		// Only update the CareTeam if the Task is not a subtask
+		return false, nil
+	}
+
 	bundle := new(fhir.Bundle)
 	if err := client.Read("CarePlan",
 		bundle,

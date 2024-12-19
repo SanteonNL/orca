@@ -826,3 +826,24 @@ func TestFilterFirstIdentifier(t *testing.T) {
 		})
 	}
 }
+
+func TestParseExternalLiteralReference(t *testing.T) {
+	t.Run("root path", func(t *testing.T) {
+		baseURL, ref, err := ParseExternalLiteralReference("http://example.com/Patient/123", "Patient")
+		require.NoError(t, err)
+		assert.Equal(t, "http://example.com", baseURL.String())
+		assert.Equal(t, "Patient/123", ref)
+	})
+	t.Run("sub path", func(t *testing.T) {
+		baseURL, ref, err := ParseExternalLiteralReference("http://example.com/fhir/Patient/123", "Patient")
+		require.NoError(t, err)
+		assert.Equal(t, "http://example.com/fhir", baseURL.String())
+		assert.Equal(t, "Patient/123", ref)
+	})
+	t.Run("query params", func(t *testing.T) {
+		baseURL, ref, err := ParseExternalLiteralReference("http://example.com/fhir/Patient?foo=bar", "Patient")
+		require.EqualError(t, err, "query parameters for external literal reference are not supported")
+		assert.Nil(t, baseURL)
+		assert.Empty(t, ref)
+	})
+}
