@@ -21,7 +21,7 @@ import (
 )
 
 type SecureTokenService interface {
-	RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error)
+	RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error)
 }
 
 type TokenType struct {
@@ -73,7 +73,7 @@ var hcpTokenType = TokenType{
 var _ SecureTokenService = &Service{}
 
 // RequestAccessToken generates the SAML assertion, signs it, sends the SOAP request to the Zorgplatform STS and teturns the SAML access token
-func (s *Service) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
+func (s *Service) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
 	// Create the SAML assertion
 	assertion, err := s.createSAMLAssertion(&launchContext, tokenType)
 
@@ -94,7 +94,7 @@ func (s *Service) RequestAccessToken(launchContext LaunchContext, tokenType Toke
 	}
 
 	// Submit the request via mTLS
-	response, err := s.submitSAMLRequest(envelope)
+	response, err := s.submitSAMLRequest(ctx, envelope)
 	if err != nil {
 		return "Failed to submit SAML request", err
 	}
@@ -356,7 +356,7 @@ func (s *Service) createSOAPEnvelope(signedAssertion *etree.Element) (string, er
 }
 
 // submitSAMLRequest sends the SOAP request over mTLS
-func (s *Service) submitSAMLRequest(envelope string) (string, error) {
+func (s *Service) submitSAMLRequest(ctx context.Context, envelope string) (string, error) {
 	tlsConfig := &tls.Config{
 		Certificates:  []tls.Certificate{*s.tlsClientCertificate},
 		MinVersion:    tls.VersionTLS12,
@@ -369,10 +369,10 @@ func (s *Service) submitSAMLRequest(envelope string) (string, error) {
 		},
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), s.config.SAMLRequestTimeout)
+	ctxWithTimeout, cancel := context.WithTimeout(ctx, s.config.SAMLRequestTimeout)
 	defer cancel()
 
-	req, err := http.NewRequestWithContext(ctx, "POST", s.config.StsUrl, bytes.NewBuffer([]byte(envelope)))
+	req, err := http.NewRequestWithContext(ctxWithTimeout, "POST", s.config.StsUrl, bytes.NewBuffer([]byte(envelope)))
 	if err != nil {
 		return "", err
 	}
@@ -392,8 +392,8 @@ func (s *Service) submitSAMLRequest(envelope string) (string, error) {
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Debug().Ctx(ctx).Msgf("Zorgplatform STS SOAP request: %s", envelope)
-		log.Debug().Ctx(ctx).Msgf("Zorgplatform STS SOAP response: %s", string(responseBody))
+		log.Debug().Ctx(ctxWithTimeout).Msgf("Zorgplatform STS SOAP request: %s", envelope)
+		log.Debug().Ctx(ctxWithTimeout).Msgf("Zorgplatform STS SOAP response: %s", string(responseBody))
 		return "", fmt.Errorf("unexpected response status: %d", resp.StatusCode)
 	}
 
