@@ -132,7 +132,13 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	if err != nil {
 		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
 	}
-	log.Info().Ctx(ctx).Msgf("Successfully accepted Task (ref=%s)", ref)
+	log.Debug().Msgf("Successfully accepted task (ref=%s)", ref)
+	err = s.notifier.NotifyTaskAccepted(ctx, cpsClient, primaryTask)
+	if err != nil {
+		log.Warn().Ctx(ctx).Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
+		return nil
+	}
+	log.Debug().Ctx(ctx).Msgf("Successfully accepted Task (ref=%s)", ref)
 	return nil
 }
 
@@ -140,7 +146,7 @@ func (s *Service) fetchQuestionnaireByID(ctx context.Context, cpsClient fhirclie
 	log.Debug().Ctx(ctx).Msg("Fetching Questionnaire by ID")
 	err := cpsClient.Read(ref, &questionnaire)
 	if err != nil {
-		return fmt.Errorf("failed to fetch Questionnaire: %w", err)
+		return fmt.Errorf("failed to fetch Questionnaire: %s", err.Error())
 	}
 	return nil
 }
@@ -268,14 +274,12 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 	}
 
 	// Create a new SubTask based on the Questionnaire reference
-	questionnaireRef := "urn:uuid:" + *questionnaire.Id
+	questionnaireRef := "Questionnaire/" + *questionnaire.Id
 	subtask := s.getSubTask(primaryTask, questionnaireRef)
 	subtaskRef := "urn:uuid:" + *subtask.Id
 
 	tx := coolfhir.Transaction().
-		Create(questionnaire, coolfhir.WithFullUrl(questionnaireRef), func(entry *fhir.BundleEntry) {
-			entry.Request.Url = "Questionnaire" // TODO: remove this after changed to fhir.Questionnaire
-		}).
+		Update(questionnaire, questionnaireRef).
 		Create(subtask, coolfhir.WithFullUrl(subtaskRef))
 
 	bundle := tx.Bundle()

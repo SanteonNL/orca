@@ -13,6 +13,7 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -88,6 +89,10 @@ func New(
 	}
 
 	httpClient := profile.HttpClient()
+	kafkaClient, err := ehr.NewClient(config.KafkaConfig)
+	if err != nil {
+		return nil, err
+	}
 	result := &Service{
 		config:                  config,
 		orcaPublicURL:           orcaPublicURL,
@@ -103,6 +108,7 @@ func New(
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
+		notifier:                ehr.NewNotifier(kafkaClient),
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
@@ -131,6 +137,7 @@ type Service struct {
 	transport                     http.RoundTripper
 	workflows                     taskengine.WorkflowProvider
 	healthdataviewEndpointEnabled bool
+	notifier                      ehr.Notifier
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {

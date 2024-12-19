@@ -544,6 +544,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		},
 		ReasonReference: []fhir.Reference{reasonReference},
 		Subject: fhir.Reference{
+			Type: to.Ptr("Patient"),
 			Identifier: &fhir.Identifier{
 				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 				Value:  &launchContext.Bsn,
