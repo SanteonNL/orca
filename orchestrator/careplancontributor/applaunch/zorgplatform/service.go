@@ -42,10 +42,13 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
 	}
-	return newWithClients(sessionManager, config, baseURL, landingUrlPath, azKeysClient, azCertClient, profile)
+
+	ctx := context.Background()
+
+	return newWithClients(ctx, sessionManager, config, baseURL, landingUrlPath, azKeysClient, azCertClient, profile)
 }
 
-func newWithClients(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string,
+func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string,
 	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient, profile profile.Provider) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
@@ -53,7 +56,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 	} else {
 		appLaunchURL = "http://localhost" + appLaunchURL + appLaunchUrl
 	}
-	log.Info().Msgf("Zorgplatform app launch is: %s", appLaunchURL)
+	log.Info().Ctx(ctx).Msgf("Zorgplatform app launch is: %s", appLaunchURL)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
 	var signCert [][]byte
@@ -123,7 +126,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		tlsClientCert = *tlsClientCertPtr
 	}
 
-	cert, err := getCertificate(config.DecryptConfig.SignCertPem)
+	cert, err := getCertificate(ctx, config.DecryptConfig.SignCertPem)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load Zorgplatform's public signing certificate: %w", err)
 	}
@@ -307,7 +310,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	}
 
 	//TODO: Cache the token for re-use
-	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, applicationTokenType)
+	accessToken, err := s.secureTokenService.RequestAccessToken(httpRequest.Context(), launchContext, applicationTokenType)
 
 	if err != nil {
 		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to request access token for Zorgplatform: %v", err)
@@ -350,7 +353,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
 
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
-	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, hcpTokenType)
+	accessToken, err := s.secureTokenService.RequestAccessToken(request.Context(), launchContext, hcpTokenType)
 
 	if err != nil {
 		log.Err(err).Ctx(request.Context()).Msg("unable to request access token for HCP ProfessionalService")
@@ -646,7 +649,7 @@ func (a authHeaderRoundTripper) RoundTrip(request *http.Request) (*http.Response
 	return a.inner.RoundTrip(request)
 }
 
-func getCertificate(pemCert string) (*x509.Certificate, error) {
+func getCertificate(ctx context.Context, pemCert string) (*x509.Certificate, error) {
 
 	block, _ := pem.Decode([]byte(pemCert))
 
@@ -703,7 +706,7 @@ U6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
 		return nil, fmt.Errorf("failed to parse certificate: %w", parseErr)
 	}
 
-	log.Info().Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
+	log.Info().Ctx(ctx).Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
 
 	return cert, nil
 }

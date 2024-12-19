@@ -1,6 +1,7 @@
 package zorgplatform
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -198,7 +199,7 @@ func TestService(t *testing.T) {
 	}
 
 	sessionManager := user.NewSessionManager(time.Minute)
-	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.Test())
+	service, err := newWithClients(context.Background(), sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.Test())
 	service.secureTokenService = &stubSecureTokenService{}
 	require.NoError(t, err)
 	service.RegisterHandlers(httpServerMux)
@@ -301,7 +302,7 @@ var _ SecureTokenService = &stubSecureTokenService{}
 type stubSecureTokenService struct {
 }
 
-func (s stubSecureTokenService) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
+func (s stubSecureTokenService) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
 	return "stub-at", nil
 }
 
