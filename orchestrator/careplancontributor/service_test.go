@@ -35,7 +35,6 @@ import (
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
 
 func TestService_Proxy_Get_And_Search(t *testing.T) {
-	t.Skip("TODO: Fix - skipping for demo purposes")
 	tests := []struct {
 		name string
 		// Set if it should be anything other than the default (auth.TestPrincipal1)

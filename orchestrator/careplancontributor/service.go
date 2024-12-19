@@ -258,12 +258,10 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 
 	log.Ctx(request.Context()).Debug().Msg("Handling external FHIR API request")
 
-	//TODO: Fix the authorizeScpMember method - commented out for demo purposes
-	// _, err := s.authorizeScpMember(request)
-
-	// if err != nil {
-	// 	return err
-	// }
+	_, err := s.authorizeScpMember(request)
+	if err != nil {
+		return err
+	}
 
 	s.ehrFhirProxy.ServeHTTP(writer, request)
 	return nil
@@ -291,7 +289,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 	log.Debug().Msg("Proxying request to all CareTeam members from CarePlan.participants - proxyBaseUrl: " + upstreamServerUrl.String())
 
-	fhirProxy := coolfhir.NewProxy("All External CPC Members->EHR FHIR proxy", log.Logger, upstreamServerUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
+	fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", log.Logger, upstreamServerUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
 
 	fhirProxy.ServeHTTP(writer, request)
 
