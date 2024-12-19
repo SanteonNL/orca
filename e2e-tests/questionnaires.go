@@ -8,7 +8,6 @@ import (
 func questionnaireResponseTo(questionnaireUrl string) fhir.QuestionnaireResponse {
 	// TODO: This Response doesn't really fulfill the Questionnaire
 	return questionnaireResponseTelemonitoring1InclusionCriteria(questionnaireUrl)
-
 }
 
 func questionnaireResponseTelemonitoring1InclusionCriteria(questionnaireUrl string) fhir.QuestionnaireResponse {
