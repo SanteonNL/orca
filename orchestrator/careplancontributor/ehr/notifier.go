@@ -11,6 +11,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/url"
 	"regexp"
 	"slices"
 	"strings"
@@ -61,11 +62,10 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 	bundle := fhir.Bundle{}
 
 	// All resources other than tasks are not returned.
-	err := cpsClient.Read("Task",
-		&bundle,
-		fhirclient.QueryParam("_id", *task.Id),
-		fhirclient.QueryParam("_revinclude", "Task:part-of"),
-	)
+	values := url.Values{}
+	values.Set("_id", *task.Id)
+	values.Set("_revinclude", "Task:part-of")
+	err := cpsClient.SearchWithContext(ctx, "Task", values, &bundle)
 	if err != nil {
 		return err
 	}
@@ -78,7 +78,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 
 	patientForRefs := findForReferences(ctx, tasks)
 	log.Debug().Ctx(ctx).Msgf("Found %d patientForRefs", len(patientForRefs))
-	result, err := fetchRefs(cpsClient, patientForRefs)
+	result, err := fetchRefs(ctx, cpsClient, patientForRefs)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 
 	focusRefs := findFocusReferences(ctx, tasks)
 	log.Debug().Ctx(ctx).Msgf("Found %d focusRefs", len(focusRefs))
-	result, err = fetchRefs(cpsClient, focusRefs)
+	result, err = fetchRefs(ctx, cpsClient, focusRefs)
 	if err != nil {
 		return err
 	}
@@ -94,7 +94,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 
 	basedOnRefs := findBasedOnReferences(ctx, tasks)
 	log.Debug().Ctx(ctx).Msgf("Found %d basedOnRefs", len(basedOnRefs))
-	result, err = fetchRefs(cpsClient, basedOnRefs)
+	result, err = fetchRefs(ctx, cpsClient, basedOnRefs)
 	if err != nil {
 		return err
 	}
@@ -102,14 +102,14 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 
 	questionnaireRefs := findQuestionnaireInputs(tasks)
 	log.Debug().Ctx(ctx).Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
-	result, err = fetchRefs(cpsClient, questionnaireRefs)
+	result, err = fetchRefs(ctx, cpsClient, questionnaireRefs)
 	if err != nil {
 		return err
 	}
 	bundles.addBundle(*result...)
 
 	questionnaireResponseRefs := findQuestionnaireOutputs(tasks)
-	result, err = fetchRefs(cpsClient, questionnaireResponseRefs)
+	result, err = fetchRefs(ctx, cpsClient, questionnaireResponseRefs)
 	if err != nil {
 		return err
 	}
@@ -193,7 +193,7 @@ func findBasedOnReferences(ctx context.Context, tasks []fhir.Task) []string {
 // Returns:
 //   - *[]fhir.Bundle: A list of fetched FHIR bundles.
 //   - error: An error if the fetch process fails.
-func fetchRefs(cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
+func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
 	var bundles []fhir.Bundle
 	var refTypeMap = make(map[string][]string)
 	for _, ref := range refs {
@@ -208,7 +208,9 @@ func fetchRefs(cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, erro
 
 	for refType, refIds := range refTypeMap {
 		var bundle fhir.Bundle
-		err := cpsClient.Read(refType, &bundle, fhirclient.QueryParam("_id", strings.Join(refIds, ",")))
+		values := url.Values{}
+		values.Set("_id", strings.Join(refIds, ","))
+		err := cpsClient.SearchWithContext(ctx, refType, values, &bundle)
 		if err != nil {
 			return nil, err
 		}
