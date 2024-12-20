@@ -299,6 +299,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 // If it finds no, or multiple, matching workflows, it returns an error.
 func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) (*taskengine.Workflow, error) {
 	// Determine service code from Task.focus
+	log.Info().Msgf("Selecting workflow for Task %s", *task.Id)
 	var serviceRequest fhir.ServiceRequest
 	if err := cpsClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
 		return nil, fmt.Errorf("failed to fetch ServiceRequest (path=%s): %w", *task.Focus.Reference, err)
@@ -342,8 +343,8 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 		for _, reasonCoding := range taskReasonCodes {
 			workflow, err := s.workflows.Provide(ctx, serviceCoding, reasonCoding)
 			if errors.Is(err, taskengine.ErrWorkflowNotFound) {
-				log.Debug().Ctx(ctx).Msgf("No workflow found (service=%s|%s, condition=%s|%s)",
-					*serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code)
+				log.Debug().Err(err).Ctx(ctx).Msgf("No workflow found (taskID=%s, service=%s|%s, condition=%s|%s)",
+					*task.Id, *serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code)
 				continue
 			} else if err != nil {
 				// Other error occurred
