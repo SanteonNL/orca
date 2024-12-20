@@ -383,6 +383,7 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 	case "Patient":
 		bundle, err = s.handleSearchPatient(httpRequest.Context(), queryParams, headers)
 	default:
+		httpRequest.Body = io.NopCloser(strings.NewReader(queryParams.Encode()))
 		log.Warn().Ctx(httpRequest.Context()).
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()

@@ -120,9 +120,14 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	fhirServerMux := http.NewServeMux()
 	capturedHost := ""
 	fhirServerMux.HandleFunc("GET /fhir/SomeResource/1", func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusOK)
-		_, _ = writer.Write([]byte(`{"resourceType":"Task"}`))
 		capturedHost = request.Host
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{})
+	})
+	var capturedBody []byte
+	fhirServerMux.HandleFunc("POST /fhir/SomeResource/_search", func(writer http.ResponseWriter, request *http.Request) {
+		capturedHost = request.Host
+		capturedBody, _ = io.ReadAll(request.Body)
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
 	})
 	fhirServer := httptest.NewServer(fhirServerMux)
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
@@ -142,19 +147,30 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
-	httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource/1")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-	require.Equal(t, fhirServerURL.Host, capturedHost)
+	t.Run("read", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource/1")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		require.Equal(t, fhirServerURL.Host, capturedHost)
+	})
 
 	// Test POST edge cases
-	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/_search", "application/fhir+json", nil)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
-
-	httpResponse, err = httpClient.Post(frontServer.URL+"/cps/SomeResource/1/1/_search", "application/fhir+json", nil)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	t.Run("search", func(t *testing.T) {
+		t.Run("ok", func(t *testing.T) {
+			httpResponse, err := httpClient.Post(frontServer.URL+"/cps/SomeResource/_search", "application/x-www-form-urlencoded", strings.NewReader(`identifier=foo`))
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			require.Equal(t, fhirServerURL.Host, capturedHost)
+			require.Equal(t, "identifier=foo", string(capturedBody))
+		})
+		t.Run("invalid path (_search must go directly after the resource)", func(t *testing.T) {
+			httpResponse, err := httpClient.Post(frontServer.URL+"/cps/SomeResource/1/_search", "application/fhir+json", nil)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+			responseBody, _ := io.ReadAll(httpResponse.Body)
+			assert.Contains(t, string(responseBody), "invalid path")
+		})
+	})
 }
 
 type OperationOutcomeWithResourceType struct {
