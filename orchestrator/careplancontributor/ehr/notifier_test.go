@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/google/uuid"
+	"net/url"
 	"testing"
 
-	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
@@ -74,8 +75,8 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			task: primaryTask,
 			setupMocks: func(mockFHIRClient *mock.MockClient, mockKafkaClient *MockKafkaClient) {
 				mockFHIRClient.EXPECT().
-					Read("Task", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+					SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
 						*bundle = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{
@@ -85,59 +86,69 @@ func TestNotifyTaskAccepted(t *testing.T) {
 						}
 						return nil
 					}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(primaryPatient),
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+						*bundle = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{
+									Resource: marshalToRawMessage(primaryPatient),
+								},
 							},
-						},
-					}
-					return nil
-				}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("ServiceRequest", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(serviceReq),
+						}
+						return nil
+					}).AnyTimes()
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "ServiceRequest", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+						*bundle = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{
+									Resource: marshalToRawMessage(serviceReq),
+								},
 							},
-						},
-					}
-					return nil
-				}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("Questionnaire", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(questionnaire),
+						}
+						return nil
+					}).AnyTimes()
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "Questionnaire", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+						*bundle = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{
+									Resource: marshalToRawMessage(questionnaire),
+								},
 							},
-						},
-					}
-					return nil
-				}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("QuestionnaireResponse", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(questionnaireResponse1),
+						}
+						return nil
+					}).AnyTimes()
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+						*bundle = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{
+									Resource: marshalToRawMessage(questionnaireResponse1),
+								},
+								{
+									Resource: marshalToRawMessage(questionnaireResponse2),
+								},
 							},
-							{
-								Resource: marshalToRawMessage(questionnaireResponse2),
+						}
+						return nil
+					}).AnyTimes()
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+						*bundle = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{
+									Resource: marshalToRawMessage(carePlan),
+								},
 							},
-						},
-					}
-					return nil
-				}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(carePlan),
-							},
-						},
-					}
-					return nil
-				}).AnyTimes()
+						}
+						return nil
+					}).AnyTimes()
 				mockKafkaClient.EXPECT().
 					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
 					Return(nil)
@@ -148,7 +159,7 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			task: primaryTask,
 			setupMocks: func(mockFHIRClient *mock.MockClient, mockKafkaClient *MockKafkaClient) {
 				mockFHIRClient.EXPECT().
-					Read("Task", gomock.Any(), gomock.Any()).
+					SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).
 					Return(errors.New("fetch error"))
 			},
 			expectedError: errors.New("fetch error"),
@@ -158,8 +169,8 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			task: primaryTask,
 			setupMocks: func(mockFHIRClient *mock.MockClient, mockKafkaClient *MockKafkaClient) {
 				mockFHIRClient.EXPECT().
-					Read("Task", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+					SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
 						*bundle = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{
@@ -169,7 +180,8 @@ func TestNotifyTaskAccepted(t *testing.T) {
 						}
 						return nil
 					}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
 					*bundle = fhir.Bundle{
 						Entry: []fhir.BundleEntry{
 							{
@@ -179,7 +191,8 @@ func TestNotifyTaskAccepted(t *testing.T) {
 					}
 					return nil
 				}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("ServiceRequest", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "ServiceRequest", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
 					*bundle = fhir.Bundle{
 						Entry: []fhir.BundleEntry{
 							{
@@ -189,7 +202,8 @@ func TestNotifyTaskAccepted(t *testing.T) {
 					}
 					return nil
 				}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("Questionnaire", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "Questionnaire", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
 					*bundle = fhir.Bundle{
 						Entry: []fhir.BundleEntry{
 							{
@@ -199,7 +213,8 @@ func TestNotifyTaskAccepted(t *testing.T) {
 					}
 					return nil
 				}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("QuestionnaireResponse", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
 					*bundle = fhir.Bundle{
 						Entry: []fhir.BundleEntry{
 							{
@@ -212,7 +227,8 @@ func TestNotifyTaskAccepted(t *testing.T) {
 					}
 					return nil
 				}).AnyTimes()
-				mockFHIRClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(_ string, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().
+					SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
 					*bundle = fhir.Bundle{
 						Entry: []fhir.BundleEntry{
 							{
