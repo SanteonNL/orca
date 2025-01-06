@@ -33,7 +33,7 @@ export default function EnrollmentLayout({ children }: { children: React.ReactNo
                 </nav>
                 <div className='text-2xl pt-2'>{isLastStep ? "Verzoek geaccepteerd" : isFirstStep ? "Verzoek controleren" : title}</div>
             </div>
-            <div className="h-px bg-gray-200 mb-10 w-[calc(100%+3rem)] -mx-6"></div>
+            <div className="h-px bg-gray-200 mb-10"></div>
             <div className="max-w-7xl px-5 w-full mx-auto">
                 {children}
             </div>
