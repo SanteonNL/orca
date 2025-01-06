@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-// KafkaConfig holds the configuration settings for connecting to a Kafka broker.
+// KafkaConfig holds the configuratoion settings for connecting to a Kafka broker.
 // It includes options to enable Kafka, specify the topic, endpoint, and connection string.
 //
 // Fields:
@@ -21,12 +21,13 @@ import (
 //   - Endpoint: The Kafka broker endpoint.
 //   - ConnectionString: The connection string used for authentication.
 type KafkaConfig struct {
-	Enabled   bool           `koanf:"enabled" default:"false" description:"This enables the Kafka client."`
-	DebugOnly bool           `koanf:"debug" default:"false" description:"This enables debug mode for Kafka, writing the messages to a file in the OS TempDir instead of sending them to Kafka."`
-	Topic     string         `koanf:"topic"`
-	Endpoint  string         `koanf:"endpoint"`
-	Sasl      SaslConfig     `koanf:"sasl"`
-	Security  SecurityConfig `koanf:"security"`
+	Enabled       bool           `koanf:"enabled" default:"false" description:"This enables the Kafka client."`
+	DebugOnly     bool           `koanf:"debug" default:"false" description:"This enables debug mode for Kafka, writing the messages to a file in the OS TempDir instead of sending them to Kafka."`
+	PingOnStartup bool           `koanf:"ping" default:"false" description:"This enables pinging the Kafka broker on startup."`
+	Topic         string         `koanf:"topic"`
+	Endpoint      string         `koanf:"endpoint"`
+	Sasl          SaslConfig     `koanf:"sasl"`
+	Security      SecurityConfig `koanf:"security"`
 }
 
 // SaslConfig holds the configuration settings for SASL authentication.
@@ -136,6 +137,13 @@ func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient) (KafkaClient,
 		if err != nil {
 			return nil, err
 		}
+		log.Info().Msgf("PingOnStartup is set to %t", config.PingOnStartup)
+		if config.PingOnStartup {
+			err = pingConnection(err, client)
+			if err != nil {
+				return nil, err
+			}
+		}
 
 		kafkaClient = &KafkaClientImpl{
 			topic:  config.Topic,
@@ -146,6 +154,18 @@ func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient) (KafkaClient,
 		err := errors.New("Unsupported mechanism: " + mechanism)
 		return nil, err
 	}
+}
+
+func pingConnection(err error, client *kgo.Client) error {
+	ctx := context.Background()
+	err = client.Ping(ctx)
+	if err != nil {
+		log.Error().Ctx(ctx).Err(err).Msgf("Failed to ping Kafka, message: %s", err.Error())
+		return err
+	} else {
+		log.Info().Ctx(ctx).Msg("Pinged Kafka successfully on startup")
+	}
+	return nil
 }
 
 // SubmitMessage submits a message to the Kafka topic associated with the KafkaClientImpl.
@@ -162,16 +182,20 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 	record := kgo.KeyStringRecord(key, value)
 	record.Topic = k.topic
 	sync := k.client.ProduceSync(ctx, record)
+	var lastErr error
 	for _, s := range sync {
 		if s.Err != nil {
-			log.Error().Ctx(ctx).Msgf("Error during submission %s", s.Err.Error())
-			return s.Err
+			log.Error().Ctx(ctx).Err(s.Err).Msgf("Error during submission %s", s.Err.Error())
+			lastErr = s.Err
 		}
+	}
+	if lastErr != nil {
+		return lastErr
 	}
 	// Make sure all messages are flushed before returning
 	err := k.client.Flush(ctx)
 	if err != nil {
-		log.Error().Ctx(ctx).Msgf("kafka flush failed %s", err.Error())
+		log.Error().Ctx(ctx).Err(err).Msgf("kafka flush failed %s", err.Error())
 		return err
 	}
 	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitted key %s", key)
@@ -189,7 +213,7 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 // Returns:
 //   - error: An error if the file could not be written.
 func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value string) error {
-	name := path.Join(os.TempDir(), strings.ReplaceAll(key, ":", "_") + ".json")
+	name := path.Join(os.TempDir(), strings.ReplaceAll(key, ":", "_")+".json")
 	log.Debug().Ctx(ctx).Msgf("DebugClient, write to file: %s", name)
 	err := os.WriteFile(name, []byte(value), 0644)
 	if err != nil {
