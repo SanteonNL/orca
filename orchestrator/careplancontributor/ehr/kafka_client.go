@@ -141,7 +141,7 @@ func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient) (KafkaClient,
 		if config.PingOnStartup {
 			err = pingConnection(err, client)
 			if err != nil {
-				return nil, err
+				log.Info().Msgf("PingOnStartup failed with %s", err.Error())
 			}
 		}
 
