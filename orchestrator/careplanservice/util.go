@@ -35,7 +35,7 @@ func (s *Service) writeOperationOutcomeFromError(ctx context.Context, err error,
 	coolfhir.SendResponse(httpResponse, http.StatusBadRequest, outcome)
 }
 
-func (s *Service) getCarePlanAndCareTeams(ctx context.Context, carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
+func GetCarePlanAndCareTeams(ctx context.Context, client fhirclient.Client, carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
 	bundle := fhir.Bundle{}
 	var carePlan fhir.CarePlan
 	var careTeams []fhir.CareTeam
@@ -43,7 +43,7 @@ func (s *Service) getCarePlanAndCareTeams(ctx context.Context, carePlanReference
 
 	carePlanId := strings.TrimPrefix(carePlanReference, "CarePlan/")
 
-	err := s.fhirClient.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle, fhirclient.ResponseHeaders(headers))
+	err := client.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return fhir.CarePlan{}, nil, nil, err
 	}

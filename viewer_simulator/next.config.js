@@ -4,6 +4,7 @@ if (process.env.NEXT_ALLOWED_ORIGINS) {
   allowedOrigins = process.env.NEXT_ALLOWED_ORIGINS.split(',');
 }
 const nextConfig = {
+  output: "standalone",
   reactStrictMode: true,
   basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
   experimental: {

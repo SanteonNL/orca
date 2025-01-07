@@ -25,6 +25,7 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_SCOPE`: Any specific scope, for example `launch fhirUser`
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_FHIRPROXYURL`: Enable FHIR proxy for demo purposes on `/demo/fhirproxy`, which proxies requests to this URL.
+- `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment/new`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
 ### Care Plan Contributor Task Filler configuration
@@ -42,6 +43,17 @@ The bundles may only contain Questionnaire and HealthcareService resources.
 - `ORCA_CAREPLANSERVICE_FHIR_URL`: Base URL of the FHIR API the CPS uses for storage.
 - `ORCA_CAREPLANSERVICE_FHIR_AUTH_TYPE`: Authentication type for the CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
 - `ORCA_CAREPLANSERVICE_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
+
+### Kafka / Eventhubs configuration
+
+* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENABLED`: Determines whether Kafka integration is enabled for the CarePlan Contributor component of ORCA. If set to `false`, all other Kafka configuration options will be ignored.
+* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_DEBUG`: Determines whether Kafka debug option is enabled for the CarePlan Contributor component of ORCA. This will log all Kafka messages to the /tmp directory. Note that this setting should only be enabled for debugging purposes and once set, all other configuration options below will be ignored. The value of `ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENABLED` needs to be set to `true` to enable this feature.
+* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_TOPIC`: Specifies the Kafka topic to which patient enrollment events are published.
+* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENDPOINT`: Defines the Kafka broker URL to connect to for publishing and consuming messages.
+* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_MECHANISM`: Specifies the SASL mechanism used for Kafka authentication. The current implementation only supports `PLAIN`.
+* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SECURITY_PROTOCOL`: Specifies the security protocol used for Kafka communication. The current implementation only supports `SASL_PLAINTEXT`.
+* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_USERNAME`: The username or connection string used for authenticating with the Kafka broker. 
+* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_PASSWORD`: The password or secret key used in conjunction with the `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_USERNAME` for Kafka authentication.
 
 ## App Launch options
 

@@ -42,12 +42,12 @@ func Start(config Config) error {
 	if config.CarePlanContributor.Enabled {
 		// App Launches
 		var ehrFhirProxy coolfhir.HttpProxy
-		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, careplancontributor.LandingURL))
+		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, config.CarePlanContributor.FrontendConfig.URL))
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
-			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Public.URL, careplancontributor.LandingURL))
+			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.CarePlanContributor.FrontendConfig.URL))
 		}
 		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
-			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, careplancontributor.LandingURL, activeProfile)
+			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, config.CarePlanContributor.FrontendConfig.URL, activeProfile)
 			if err != nil {
 				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
 			}

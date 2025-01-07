@@ -16,7 +16,7 @@ RUN mkdir /app
 RUN go build -o /app/bin .
 
 # ## Deploy
-FROM gcr.io/distroless/base-debian11:debug  
+FROM gcr.io/distroless/base-debian11:debug
 # Connect to shell via /busybox/sh
 
 COPY --from=build /app/bin /app/bin

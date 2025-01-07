@@ -33,7 +33,7 @@ const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
 const zorgplatformWorkflowIdSystem = "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string, profile profile.Provider) (*Service, error) {
+func New(sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
@@ -45,10 +45,10 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 
 	ctx := context.Background()
 
-	return newWithClients(ctx, sessionManager, config, baseURL, landingUrlPath, azKeysClient, azCertClient, profile)
+	return newWithClients(ctx, sessionManager, config, baseURL, frontendLandingUrl, azKeysClient, azCertClient, profile)
 }
 
-func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string,
+func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string,
 	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient, profile profile.Provider) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
@@ -135,7 +135,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager, co
 		sessionManager:        sessionManager,
 		config:                config,
 		baseURL:               baseURL,
-		landingUrlPath:        landingUrlPath,
+		frontendLandingUrl:    frontendLandingUrl,
 		signingCertificate:    signCert,
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
@@ -162,7 +162,7 @@ type Service struct {
 	sessionManager         *user.SessionManager
 	config                 Config
 	baseURL                string
-	landingUrlPath         string
+	frontendLandingUrl     string
 	signingCertificate     [][]byte
 	signingCertificateKey  stdCrypto.Signer
 	tlsClientCertificate   *tls.Certificate
@@ -179,8 +179,9 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 	targetFhirBaseUrl, _ := url.Parse(s.config.ApiUrl)
-	proxyBasePath := "/cpc/fhir"
-	rewriteUrl, _ := url.Parse(s.baseURL + proxyBasePath)
+	const proxyBasePath = "/cpc/fhir"
+	rewriteUrl, _ := url.Parse(s.baseURL)
+	rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
 	result := coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
 		transport:          s.zorgplatformHttpClient.Transport,
 		cpsFhirClient:      s.cpsFhirClient,
@@ -373,10 +374,8 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	s.sessionManager.Create(response, *sessionData)
 
 	// Redirect to landing page
-	targetURL, _ := url.Parse(s.baseURL)
-	targetURL = targetURL.JoinPath(s.landingUrlPath)
 	log.Info().Ctx(request.Context()).Msg("Successfully launched through ChipSoft HiX app launch")
-	http.Redirect(response, request, targetURL.String(), http.StatusFound)
+	http.Redirect(response, request, s.frontendLandingUrl, http.StatusFound)
 }
 
 func (s *Service) registerFhirClientFactory(config Config) {
@@ -544,6 +543,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		},
 		ReasonReference: []fhir.Reference{reasonReference},
 		Subject: fhir.Reference{
+			Type: to.Ptr("Patient"),
 			Identifier: &fhir.Identifier{
 				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 				Value:  &launchContext.Bsn,

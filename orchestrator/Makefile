@@ -5,7 +5,7 @@ install-tools:
 	go install github.com/vektra/mockery/v2@v2.43.2
 
 gen-mocks:
-	mockgen -destination=lib/coolfhir/client_mock.go -package=coolfhir -source=lib/coolfhir/client.go
+	go generate ./...
 
 load-fhir-testdata:
 	curl -X POST -H "Content-Type: application/json" -d @initialize_hopital_data_bundle.json http://localhost:9090/fhir

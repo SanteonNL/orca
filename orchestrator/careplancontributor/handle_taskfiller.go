@@ -132,7 +132,13 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	if err != nil {
 		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
 	}
-	log.Info().Ctx(ctx).Msgf("Successfully accepted Task (ref=%s)", ref)
+	log.Debug().Msgf("Successfully accepted task (ref=%s)", ref)
+	err = s.notifier.NotifyTaskAccepted(ctx, cpsClient, primaryTask)
+	if err != nil {
+		log.Warn().Ctx(ctx).Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
+		return nil
+	}
+	log.Debug().Ctx(ctx).Msgf("Successfully accepted Task (ref=%s)", ref)
 	return nil
 }
 
@@ -140,7 +146,7 @@ func (s *Service) fetchQuestionnaireByID(ctx context.Context, cpsClient fhirclie
 	log.Debug().Ctx(ctx).Msg("Fetching Questionnaire by ID")
 	err := cpsClient.Read(ref, &questionnaire)
 	if err != nil {
-		return fmt.Errorf("failed to fetch Questionnaire: %w", err)
+		return fmt.Errorf("failed to fetch Questionnaire: %s", err.Error())
 	}
 	return nil
 }
@@ -268,14 +274,12 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 	}
 
 	// Create a new SubTask based on the Questionnaire reference
-	questionnaireRef := "urn:uuid:" + *questionnaire.Id
+	questionnaireRef := "Questionnaire/" + *questionnaire.Id
 	subtask := s.getSubTask(primaryTask, questionnaireRef)
 	subtaskRef := "urn:uuid:" + *subtask.Id
 
 	tx := coolfhir.Transaction().
-		Create(questionnaire, coolfhir.WithFullUrl(questionnaireRef), func(entry *fhir.BundleEntry) {
-			entry.Request.Url = "Questionnaire" // TODO: remove this after changed to fhir.Questionnaire
-		}).
+		Update(questionnaire, questionnaireRef).
 		Create(subtask, coolfhir.WithFullUrl(subtaskRef))
 
 	bundle := tx.Bundle()
@@ -298,7 +302,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 	log.Info().Msgf("Selecting workflow for Task %s", *task.Id)
 	var serviceRequest fhir.ServiceRequest
 	if err := cpsClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
-		return nil, fmt.Errorf("failed to fetch ServiceRequest (path=%s): %w", *task.Focus.Reference, err)
+		return nil, fmt.Errorf("failed to fetch ServiceRequest (path=%s, task=%s): %w", *task.Focus.Reference, *task.Id, err)
 	}
 
 	// Determine reason codes from Task.reasonCode and Task.reasonReference
@@ -309,7 +313,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 	if task.ReasonReference != nil && task.ReasonReference.Reference != nil {
 		var condition fhir.Condition
 		if err := cpsClient.Read(*task.ReasonReference.Reference, &condition); err != nil {
-			return nil, fmt.Errorf("failed to fetch Condition of Task.reasonReference.reference (path=%s): %w", *task.ReasonReference.Reference, err)
+			return nil, fmt.Errorf("failed to fetch Condition of Task.reasonReference.reference (path=%s, task=%s): %w", *task.ReasonReference.Reference, *task.Id, err)
 		}
 		for _, coding := range condition.Code.Coding {
 			if coding.System == nil || coding.Code == nil {
@@ -339,20 +343,20 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 		for _, reasonCoding := range taskReasonCodes {
 			workflow, err := s.workflows.Provide(ctx, serviceCoding, reasonCoding)
 			if errors.Is(err, taskengine.ErrWorkflowNotFound) {
-				log.Debug().Err(err).Ctx(ctx).Msgf("No workflow found (taskID=%s, service=%s|%s, condition=%s|%s)",
-					*task.Id, *serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code)
+				log.Debug().Err(err).Ctx(ctx).Msgf("No workflow found (service=%s|%s, condition=%s|%s, task=%s)",
+					*serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, *task.Id)
 				continue
 			} else if err != nil {
 				// Other error occurred
-				return nil, fmt.Errorf("workflow lookup (service=%s|%s, condition=%s|%s): %w", *serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, err)
+				return nil, fmt.Errorf("workflow lookup (service=%s|%s, condition=%s|%s, task=%s): %w", *serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, *task.Id, err)
 			}
 			matchedWorkflows = append(matchedWorkflows, workflow)
 		}
 	}
 	if len(matchedWorkflows) == 0 {
-		return nil, errors.New("ServiceRequest.code and Task.reason.code does not match any workflows")
+		return nil, fmt.Errorf("ServiceRequest.code and Task.reason.code does not match any workflows (task=%s)", *task.Id)
 	} else if len(matchedWorkflows) > 1 {
-		return nil, errors.New("ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one")
+		return nil, fmt.Errorf("ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one (task=%s)", *task.Id)
 	}
 	return matchedWorkflows[0], nil
 }
