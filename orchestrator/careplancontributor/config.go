@@ -2,8 +2,8 @@ package careplancontributor
 
 import (
 	"errors"
-	"strings"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
+	"strings"
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
@@ -15,6 +15,9 @@ func DefaultConfig() Config {
 		Enabled:        true,
 		AppLaunch:      applaunch.DefaultConfig(),
 		SessionTimeout: 15 * time.Minute,
+		FrontendConfig: FrontendConfig{
+			URL: "/frontend/enrollment/new",
+		},
 	}
 }
 

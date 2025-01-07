@@ -199,9 +199,9 @@ func TestService(t *testing.T) {
 	}
 
 	sessionManager := user.NewSessionManager(time.Minute)
-	service, err := newWithClients(context.Background(), sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.Test())
-	service.secureTokenService = &stubSecureTokenService{}
+	service, err := newWithClients(context.Background(), sessionManager, cfg, httpServer.URL, "/frontend", keysClient, certsClient, profile.Test())
 	require.NoError(t, err)
+	service.secureTokenService = &stubSecureTokenService{}
 	service.RegisterHandlers(httpServerMux)
 
 	client := &http.Client{
@@ -216,6 +216,7 @@ func TestService(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
+	require.Equal(t, "/frontend", launchHttpResponse.Header.Get("Location"))
 
 	t.Run("assert user session", func(t *testing.T) {
 		sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)

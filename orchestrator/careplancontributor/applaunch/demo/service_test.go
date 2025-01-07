@@ -13,7 +13,7 @@ import (
 func TestService_handle(t *testing.T) {
 	t.Run("root base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/", landingUrlPath: "/cpc/"}
+		service := Service{sessionManager: sessionManager, baseURL: "/", frontendLandingUrl: "/cpc/"}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir", nil)
 
@@ -24,18 +24,18 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", landingUrlPath: "/cpc/"}
+		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: "/frontend/landing"}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir", nil)
 
 		service.handle(response, request)
 
 		require.Equal(t, http.StatusFound, response.Code)
-		require.Equal(t, "/orca/cpc/", response.Header().Get("Location"))
+		require.Equal(t, "/frontend/landing", response.Header().Get("Location"))
 	})
 	t.Run("should destroy previous session", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", landingUrlPath: "/cpc/"}
+		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: "/cpc/"}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir", nil)
 

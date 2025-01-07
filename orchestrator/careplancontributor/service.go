@@ -26,7 +26,6 @@ import (
 )
 
 const basePath = "/cpc"
-const LandingURL = basePath + "/"
 
 // The care plan header key may be provided as X-SCP-Context but will be changed due to the Go http client canonicalization
 const carePlanURLHeaderKey = "X-Scp-Context"
@@ -108,7 +107,7 @@ func New(
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
-		notifier:                ehr.NewNotifier(kafkaClient),
+		notifier:                      ehr.NewNotifier(kafkaClient),
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
