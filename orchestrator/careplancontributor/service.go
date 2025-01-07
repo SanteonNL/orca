@@ -26,7 +26,6 @@ import (
 )
 
 const basePath = "/cpc"
-const FrontendLandingPath = "/enrollment/new"
 
 // The care plan header key may be provided as X-SCP-Context but will be changed due to the Go http client canonicalization
 const carePlanURLHeaderKey = "X-Scp-Context"

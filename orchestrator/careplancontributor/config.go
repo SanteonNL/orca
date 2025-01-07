@@ -16,7 +16,7 @@ func DefaultConfig() Config {
 		AppLaunch:      applaunch.DefaultConfig(),
 		SessionTimeout: 15 * time.Minute,
 		FrontendConfig: FrontendConfig{
-			URL: "/frontend",
+			URL: "/frontend/enrollment/new",
 		},
 	}
 }
