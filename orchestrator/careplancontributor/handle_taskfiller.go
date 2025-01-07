@@ -2,7 +2,6 @@ package careplancontributor
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/slices"
@@ -197,7 +196,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 	workflow, err := s.selectWorkflow(ctx, cpsClient, primaryTask)
 	if err != nil {
 		return &TaskRejection{
-			Reason: fmt.Errorf("could not select workflow (primary task=%s): %w", *primaryTask.Id, err).Error(),
+			Reason: err.Error(),
 		}
 	}
 	if workflow != nil {
@@ -296,7 +295,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 	// Determine service code from Task.focus
 	var serviceRequest fhir.ServiceRequest
 	if err := cpsClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
-		return nil, fmt.Errorf("failed to fetch ServiceRequest (path=%s): %w", *task.Focus.Reference, err)
+		return nil, fmt.Errorf("failed to fetch ServiceRequest (path=%s, task=%s): %w", *task.Focus.Reference, *task.Id, err)
 	}
 
 	// Determine reason codes from Task.reasonCode and Task.reasonReference
@@ -307,7 +306,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 	if task.ReasonReference != nil && task.ReasonReference.Reference != nil {
 		var condition fhir.Condition
 		if err := cpsClient.Read(*task.ReasonReference.Reference, &condition); err != nil {
-			return nil, fmt.Errorf("failed to fetch Condition of Task.reasonReference.reference (path=%s): %w", *task.ReasonReference.Reference, err)
+			return nil, fmt.Errorf("failed to fetch Condition of Task.reasonReference.reference (path=%s, task=%s): %w", *task.ReasonReference.Reference, *task.Id, err)
 		}
 		for _, coding := range condition.Code.Coding {
 			if coding.System == nil || coding.Code == nil {
@@ -328,10 +327,6 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 	taskReasonCodes = slices.Deduplicate(taskReasonCodes, func(a, b fhir.Coding) bool {
 		return *a.System == *b.System && *a.Code == *b.Code
 	})
-	debugJSON, _ := json.Marshal(taskReasonCodes)
-	log.Info().Ctx(ctx).Msgf("Task.reasonCode and Task.reasonReference codes: %s", string(debugJSON))
-	debugJSON, _ = json.Marshal(serviceRequest.Code.Coding)
-	log.Info().Ctx(ctx).Msgf("ServiceRequest.code codes: %s", string(debugJSON))
 
 	var matchedWorkflows []*taskengine.Workflow
 	for _, serviceCoding := range serviceRequest.Code.Coding {
@@ -341,20 +336,20 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 		for _, reasonCoding := range taskReasonCodes {
 			workflow, err := s.workflows.Provide(ctx, serviceCoding, reasonCoding)
 			if errors.Is(err, taskengine.ErrWorkflowNotFound) {
-				log.Debug().Err(err).Ctx(ctx).Msgf("No workflow found (service=%s|%s, condition=%s|%s)",
-					*serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code)
+				log.Debug().Err(err).Ctx(ctx).Msgf("No workflow found (service=%s|%s, condition=%s|%s, task=%s)",
+					*serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, *task.Id)
 				continue
 			} else if err != nil {
 				// Other error occurred
-				return nil, fmt.Errorf("workflow lookup (service=%s|%s, condition=%s|%s): %w", *serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, err)
+				return nil, fmt.Errorf("workflow lookup (service=%s|%s, condition=%s|%s, task=%s): %w", *serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, *task.Id, err)
 			}
 			matchedWorkflows = append(matchedWorkflows, workflow)
 		}
 	}
 	if len(matchedWorkflows) == 0 {
-		return nil, errors.New("ServiceRequest.code and Task.reason.code does not match any workflows")
+		return nil, fmt.Errorf("ServiceRequest.code and Task.reason.code does not match any workflows (task=%s)", *task.Id)
 	} else if len(matchedWorkflows) > 1 {
-		return nil, errors.New("ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one")
+		return nil, fmt.Errorf("ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one (task=%s)", *task.Id)
 	}
 	return matchedWorkflows[0], nil
 }
