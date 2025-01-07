@@ -76,6 +76,7 @@
         } ]
       } ],
       "subject": {
+        "type": "Patient",
         "identifier": {
           "system": "http://fhir.nl/fhir/NamingSystem/bsn",
           "value": "111222333"
@@ -83,6 +84,7 @@
       },
       "participant": [ {
         "member": {
+          "type": "Patient",
           "identifier": {
             "system": "http://fhir.nl/fhir/NamingSystem/bsn",
             "value": "111222333"
@@ -93,6 +95,7 @@
         }
       }, {
         "member": {
+          "type": "Organization",
           "identifier": {
             "system": "http://fhir.nl/fhir/NamingSystem/ura",
             "value": "1"
@@ -103,6 +106,7 @@
         }
       }, {
         "member": {
+          "type": "Organization",
           "identifier": {
             "system": "http://fhir.nl/fhir/NamingSystem/ura",
             "value": "2"

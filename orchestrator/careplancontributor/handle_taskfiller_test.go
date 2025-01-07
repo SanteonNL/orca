@@ -92,7 +92,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					},
 				}
 			}),
-			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one (task=primary)"),
 		},
 		{
 			name: "primary task, duplicate reasonCodes (but fine, since they're the same)",
@@ -201,14 +201,14 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			serviceRequest: deep.AlterCopy(serviceRequest, func(sr *fhir.ServiceRequest) {
 				sr.Code.Coding[0].Code = to.Ptr("UnknownServiceCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows (task=primary)"),
 		},
 		{
 			name: "error: primary task, unknown condition for requested service (primary Task.reasonCode or reasonReference is not supported)",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonCode.Coding[0].Code = to.Ptr("UnknownConditionCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows (task=primary)"),
 		},
 		{
 			name: "error: primary task, without basedOn",
