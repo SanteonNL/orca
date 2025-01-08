@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"strings"
 	"time"
 
@@ -14,6 +15,9 @@ func DefaultConfig() Config {
 		Enabled:        true,
 		AppLaunch:      applaunch.DefaultConfig(),
 		SessionTimeout: 15 * time.Minute,
+		FrontendConfig: FrontendConfig{
+			URL: "/frontend/enrollment/new",
+		},
 	}
 }
 
@@ -25,6 +29,7 @@ type Config struct {
 	// to be made available through the CarePlanContributor.
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
 	TaskFiller                    TaskFillerConfig      `koanf:"taskfiller"`
+	KafkaConfig                   ehr.KafkaConfig       `koanf:"kafka"`
 	Enabled                       bool                  `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
 	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`

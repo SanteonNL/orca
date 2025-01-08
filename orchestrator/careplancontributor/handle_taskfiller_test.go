@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 
 	"net/url"
 	"testing"
@@ -35,6 +36,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		expectedError    error
 		numBundlesPosted int
 		mock             func(*mock.MockClient)
+		expectSubmission bool
 	}{
 		{
 			name:             "primary task, owner = local organization, triggers subtask creation",
@@ -90,7 +92,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					},
 				}
 			}),
-			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one (task=primary)"),
 		},
 		{
 			name: "primary task, duplicate reasonCodes (but fine, since they're the same)",
@@ -199,14 +201,14 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			serviceRequest: deep.AlterCopy(serviceRequest, func(sr *fhir.ServiceRequest) {
 				sr.Code.Coding[0].Code = to.Ptr("UnknownServiceCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows (task=primary)"),
 		},
 		{
 			name: "error: primary task, unknown condition for requested service (primary Task.reasonCode or reasonReference is not supported)",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonCode.Coding[0].Code = to.Ptr("UnknownConditionCode")
 			}),
-			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows"),
+			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code does not match any workflows (task=primary)"),
 		},
 		{
 			name: "error: primary task, without basedOn",
@@ -226,6 +228,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 						return nil
 					})
 			},
+			expectSubmission: true,
 		},
 		{
 			name:             "subtask status=completed, primary task status=accepted (nothing should be done)",
@@ -297,11 +300,13 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
+			notifierMock := ehr.NewMockNotifier(ctrl)
 			service := &Service{
 				workflows: taskengine.DefaultTestWorkflowProvider(),
 				cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 					return mockFHIRClient
 				},
+				notifier: notifierMock,
 			}
 			if tt.mock != nil {
 				tt.mock(mockFHIRClient)
@@ -343,6 +348,11 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					return nil
 				}).AnyTimes()
 
+			expectedSubmissions := 0
+			if tt.expectSubmission {
+				expectedSubmissions = 1
+			}
+			notifierMock.EXPECT().NotifyTaskAccepted(ctx, mockFHIRClient, gomock.Any()).Times(expectedSubmissions)
 			var capturedTx fhir.Bundle
 			if tt.numBundlesPosted > 0 {
 				mockFHIRClient.EXPECT().

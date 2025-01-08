@@ -41,7 +41,7 @@ type workflowContext struct {
 	patientBsn string
 }
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string, profile profile.Provider) (*Service, error) {
+func New(sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
@@ -50,10 +50,13 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
 	}
-	return newWithClients(sessionManager, config, baseURL, landingUrlPath, azKeysClient, azCertClient, profile)
+
+	ctx := context.Background()
+
+	return newWithClients(ctx, sessionManager, config, baseURL, frontendLandingUrl, azKeysClient, azCertClient, profile)
 }
 
-func newWithClients(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string,
+func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string,
 	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient, profile profile.Provider) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
@@ -61,7 +64,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 	} else {
 		appLaunchURL = "http://localhost" + appLaunchURL + appLaunchUrl
 	}
-	log.Info().Msgf("Zorgplatform app launch is: %s", appLaunchURL)
+	log.Info().Ctx(ctx).Msgf("Zorgplatform app launch is: %s", appLaunchURL)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
 	var signCert [][]byte
@@ -131,7 +134,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		tlsClientCert = *tlsClientCertPtr
 	}
 
-	cert, err := getCertificate(config.DecryptConfig.SignCertPem)
+	cert, err := getCertificate(ctx, config.DecryptConfig.SignCertPem)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load Zorgplatform's public signing certificate: %w", err)
 	}
@@ -140,7 +143,7 @@ func newWithClients(sessionManager *user.SessionManager, config Config, baseURL 
 		sessionManager:        sessionManager,
 		config:                config,
 		baseURL:               baseURL,
-		landingUrlPath:        landingUrlPath,
+		frontendLandingUrl:    frontendLandingUrl,
 		signingCertificate:    signCert,
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
@@ -175,7 +178,7 @@ type Service struct {
 	sessionManager         *user.SessionManager
 	config                 Config
 	baseURL                string
-	landingUrlPath         string
+	frontendLandingUrl     string
 	signingCertificate     [][]byte
 	signingCertificateKey  stdCrypto.Signer
 	tlsClientCertificate   *tls.Certificate
@@ -196,17 +199,32 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 	targetFhirBaseUrl, _ := url.Parse(s.config.ApiUrl)
-
-	proxyBasePath := "/cpc/fhir"
-
-	rewriteUrl, _ := url.Parse(s.baseURL + proxyBasePath)
-
-	return coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
+	const proxyBasePath = "/cpc/fhir"
+	rewriteUrl, _ := url.Parse(s.baseURL)
+	rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
+	result := coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
 		transport:            s.zorgplatformHttpClient.Transport,
 		cpsFhirClient:        s.cpsFhirClient,
 		secureTokenService:   s.secureTokenService,
 		workflowContextCache: s.workflowContextCache,
 	}, true)
+	// Zorgplatform's FHIR API only allows GET-based FHIR searches, while ORCA only allows POST-based FHIR searches.
+	// If the request is a POST-based search, we need to rewrite the request to a GET-based search.
+	result.HTTPRequestModifier = func(req *http.Request) (*http.Request, error) {
+		if strings.HasSuffix(req.URL.Path, "_search") && req.Method == http.MethodPost {
+			newReq := req.Clone(req.Context())
+			newReq.Method = http.MethodGet
+			if err := req.ParseForm(); err != nil {
+				return nil, err
+			}
+			newReq.URL.RawQuery = req.Form.Encode()
+			newReq.URL.Path = strings.TrimSuffix(req.URL.Path, "/_search")
+			newReq.Body = nil
+			return newReq, nil
+		}
+		return req, nil
+	}
+	return result
 }
 
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
@@ -233,7 +251,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 
 	log.Debug().Ctx(httpRequest.Context()).Msgf("Found SCP context: %s", carePlanReference)
 	//TODO: Replace with CPC to CPS call - using direct acces to the CPS Store - until thr auth part is clear
-
+	s.workflowContextCache
 	workflowCtx, err := s.getWorkflowContext(httpRequest.Context(), carePlanReference)
 	if err != nil {
 		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to get workflowId for CarePlan reference: %v", err)
@@ -251,8 +269,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	}
 
 	//TODO: Cache the token for re-use
-	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, applicationTokenType)
-
+	accessToken, err := s.secureTokenService.RequestAccessToken(httpRequest.Context(), launchContext, applicationTokenType)
 	if err != nil {
 		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to request access token for Zorgplatform: %v", err)
 		return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
@@ -294,7 +311,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
 
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
-	accessToken, err := s.secureTokenService.RequestAccessToken(launchContext, hcpTokenType)
+	accessToken, err := s.secureTokenService.RequestAccessToken(request.Context(), launchContext, hcpTokenType)
 
 	if err != nil {
 		log.Err(err).Ctx(request.Context()).Msg("unable to request access token for HCP ProfessionalService")
@@ -314,10 +331,8 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	s.sessionManager.Create(response, *sessionData)
 
 	// Redirect to landing page
-	targetURL, _ := url.Parse(s.baseURL)
-	targetURL = targetURL.JoinPath(s.landingUrlPath)
 	log.Info().Ctx(request.Context()).Msg("Successfully launched through ChipSoft HiX app launch")
-	http.Redirect(response, request, targetURL.String(), http.StatusFound)
+	http.Redirect(response, request, s.frontendLandingUrl, http.StatusFound)
 }
 
 // This function returns the workflowId for a given CarePlan reference. It will be returned from a cache, if available.
@@ -329,14 +344,11 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 
 	log.Debug().Ctx(ctx).Msgf("(cache miss) Fetching workflowId for CarePlan reference: %s", carePlanReference)
 
-	startIndex := strings.Index(carePlanReference, "/CarePlan")
-	if startIndex == -1 {
-		log.Error().Ctx(ctx).Msgf("Unable to find CarePlan reference in URL: %s", carePlanReference)
-		return nil, fmt.Errorf("unable to find CarePlan reference in URL: %s", carePlanReference)
+	// TODO: use baseURL if there's multiple possible CPS'
+	_, localCarePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanReference, "CarePlan")
+	if err != nil {
+		return nil, fmt.Errorf("invalid CarePlan reference (url=%s): %w", carePlanReference, err)
 	}
-
-	localCarePlanRef := carePlanReference[startIndex:]
-
 	log.Debug().Ctx(ctx).Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
 
 	// TODO: group requests, something like:
@@ -347,12 +359,13 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	// urlRef.RawQuery = query.Encode()
 
 	var carePlan fhir.CarePlan
-	err := s.cpsFhirClient().ReadWithContext(ctx, localCarePlanRef, &carePlan)
+	err = s.cpsFhirClient().ReadWithContext(ctx, localCarePlanRef, &carePlan)
 	if err != nil {
 		log.Error().Ctx(ctx).Msgf("Unable to fetch CarePlan resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch CarePlan resource: %w", err)
 	}
 
+	// TODO: What if there's no activities?
 	var task fhir.Task
 	err = s.cpsFhirClient().ReadWithContext(ctx, *carePlan.Activity[0].Reference.Reference, &task)
 	if err != nil {
@@ -380,14 +393,10 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 		return nil, fmt.Errorf("unable to fetch Patient resource: %w", err)
 	}
 
-	bsnIdentifier := coolfhir.FilterFirstIdentifier(&patient.Identifier, "http://fhir.nl/fhir/NamingSystem/bsn")
+	bsnIdentifier := coolfhir.FilterFirstIdentifier(&patient.Identifier, coolfhir.BSNNamingSystem)
 	if bsnIdentifier == nil {
-		log.Error().Ctx(ctx).Msg("Identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
-		return nil, fmt.Errorf("identifier with system http://fhir.nl/fhir/NamingSystem/bsn not found")
+		return nil, fmt.Errorf("identifier with system %s not found", coolfhir.BSNNamingSystem)
 	}
-
-	log.Ctx(ctx).Debug().Msgf("(caching) %s --> %s", carePlanReference, workflowID)
-
 	result := &workflowContext{
 		workflowId: workflowID,
 		patientBsn: *bsnIdentifier.Value,
@@ -561,6 +570,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		},
 		ReasonReference: []fhir.Reference{reasonReference},
 		Subject: fhir.Reference{
+			Type: to.Ptr("Patient"),
 			Identifier: &fhir.Identifier{
 				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 				Value:  &launchContext.Bsn,
@@ -666,7 +676,7 @@ func (a authHeaderRoundTripper) RoundTrip(request *http.Request) (*http.Response
 	return a.inner.RoundTrip(request)
 }
 
-func getCertificate(pemCert string) (*x509.Certificate, error) {
+func getCertificate(ctx context.Context, pemCert string) (*x509.Certificate, error) {
 
 	block, _ := pem.Decode([]byte(pemCert))
 
@@ -723,7 +733,7 @@ U6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
 		return nil, fmt.Errorf("failed to parse certificate: %w", parseErr)
 	}
 
-	log.Info().Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
+	log.Info().Ctx(ctx).Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
 
 	return cert, nil
 }

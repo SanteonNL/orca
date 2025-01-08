@@ -11,17 +11,21 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/jellydator/ttlcache/v3"
 	"hash"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
@@ -197,9 +201,9 @@ func TestService(t *testing.T) {
 	}
 
 	sessionManager := user.NewSessionManager(time.Minute)
-	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.Test())
-	service.secureTokenService = &stubSecureTokenService{}
+	service, err := newWithClients(context.Background(), sessionManager, cfg, httpServer.URL, "/frontend", keysClient, certsClient, profile.Test())
 	require.NoError(t, err)
+	service.secureTokenService = &stubSecureTokenService{}
 	service.RegisterHandlers(httpServerMux)
 
 	client := &http.Client{
@@ -214,6 +218,7 @@ func TestService(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
+	require.Equal(t, "/frontend", launchHttpResponse.Header.Get("Location"))
 
 	t.Run("assert user session", func(t *testing.T) {
 		sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
@@ -302,7 +307,7 @@ type stubSecureTokenService struct {
 	accessToken string
 }
 
-func (s *stubSecureTokenService) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
+func (s *stubSecureTokenService) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
 	s.invocations++
 	if s.accessToken == "" {
 		return "stub-at", nil
@@ -378,31 +383,30 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 	})
 }
 
-func TestGetWorkflowId(t *testing.T) {
+func TestGetWorkflowContext(t *testing.T) {
 	tests := []struct {
 		name              string
 		ctx               context.Context
 		carePlanReference string
 		expectedError     bool
-		mock              func(*mock.MockClient)
+		expectedCacheHits int
+		carePlan          *fhir.CarePlan
+		task              *fhir.Task
+		serviceRequest    *fhir.ServiceRequest
+		patient           *fhir.Patient
 	}{
 		{
 			name:              "Cache Miss",
 			ctx:               context.Background(),
 			carePlanReference: "http://example.com/CarePlan/123",
 			expectedError:     false,
-			mock: func(mockClient *mock.MockClient) {
-				mockClient.EXPECT().ReadWithContext(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil)
-			},
 		},
 		{
 			name:              "Cache Hit",
 			ctx:               context.Background(),
 			carePlanReference: "http://example.com/CarePlan/123",
 			expectedError:     false,
-			mock: func(mockClient *mock.MockClient) {
-				mockClient.EXPECT().ReadWithContext(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).Times(1)
-			},
+			expectedCacheHits: 3,
 		},
 	}
 
@@ -411,26 +415,173 @@ func TestGetWorkflowId(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockClient := mock.NewMockClient(ctrl)
-			tt.mock(mockClient)
+			cpsFHIRClient := test.StubFHIRClient{}
+			if tt.carePlan == nil {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, fhir.CarePlan{
+					Id: to.Ptr("123"),
+					Subject: fhir.Reference{
+						Reference: to.Ptr("Patient/123"),
+					},
+					Activity: []fhir.CarePlanActivity{
+						{
+							Reference: &fhir.Reference{
+								Reference: to.Ptr("Task/123"),
+							},
+						},
+					},
+				})
+			} else {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, *tt.carePlan)
+			}
+			if tt.task == nil {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, fhir.Task{
+					Id: to.Ptr("123"),
+					Focus: &fhir.Reference{
+						Reference: to.Ptr("ServiceRequest/123"),
+					},
+				})
+			} else {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, *tt.task)
+			}
+			if tt.serviceRequest == nil {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, fhir.ServiceRequest{
+					Id: to.Ptr("123"),
+					Identifier: []fhir.Identifier{
+						{
+							System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
+							Value:  to.Ptr("415FD2C0-E88D-4C89-B9D6-8FBE31E2D1C9"),
+						},
+					},
+				})
+			} else {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, *tt.serviceRequest)
+			}
+			if tt.patient == nil {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, fhir.Patient{
+					Id: to.Ptr("123"),
+					Identifier: []fhir.Identifier{
+						{
+							System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+							Value:  to.Ptr("123456789"),
+						},
+					},
+				})
+			} else {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, *tt.patient)
+			}
 
-			service := &Service{}
+			service := stsAccessTokenRoundTripper{
+				transport: nil,
+				cpsFhirClient: func() fhirclient.Client {
+					return cpsFHIRClient
+				},
+				secureTokenService: &stubSecureTokenService{},
+				workflowContextCache: ttlcache.New[string, workflowContext](
+					ttlcache.WithTTL[string, workflowContext](cacheTTL),
+				),
+			}
 
-			// First call to populate the cache
-			req, err := http.NewRequestWithContext(tt.ctx, "GET", tt.carePlanReference, nil)
-			require.NoError(t, err)
-			rr := httptest.NewRecorder()
-			service.EhrFhirProxy().ServeHTTP(rr, req)
-			require.Equal(t, http.StatusOK, rr.Code)
-			require.NotEmpty(t, rr.Body.String())
-
-			// Second call to test cache hit
-			req, err = http.NewRequestWithContext(tt.ctx, "GET", tt.carePlanReference, nil)
-			require.NoError(t, err)
-			rr = httptest.NewRecorder()
-			service.EhrFhirProxy().ServeHTTP(rr, req)
-			require.Equal(t, http.StatusOK, rr.Code)
-			require.NotEmpty(t, rr.Body.String())
+			for i := 0; i < tt.expectedCacheHits+1; i++ {
+				result, err := service.getWorkflowContext(context.Background(), tt.carePlanReference)
+				if tt.expectedError {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, "415FD2C0-E88D-4C89-B9D6-8FBE31E2D1C9", result.workflowId)
+					require.Equal(t, "123456789", result.patientBsn)
+				}
+			}
+			assert.Equal(t, tt.expectedCacheHits, int(service.workflowContextCache.Metrics().Hits))
 		})
 	}
+}
+
+func TestService_EhrFhirProxy(t *testing.T) {
+	t.Run("POST-based search is rewritten to GET-based search", func(t *testing.T) {
+		cpsHttpServer := setupCarePlanService(t)
+		carePlanUrl := cpsHttpServer.URL + "/fhir/" + testCarePlanReference
+		zorgplatformFHIRServerMux := http.NewServeMux()
+		var actualQueryParams url.Values
+		zorgplatformFHIRServerMux.HandleFunc("GET /fhir/Condition", func(w http.ResponseWriter, r *http.Request) {
+			actualQueryParams = r.URL.Query()
+			coolfhir.SendResponse(w, http.StatusOK, fhir.Bundle{})
+		})
+		zorgplatformFHIRServer := httptest.NewServer(zorgplatformFHIRServerMux)
+
+		service := &Service{
+			zorgplatformHttpClient: zorgplatformFHIRServer.Client(),
+			secureTokenService:     &stubSecureTokenService{},
+			workflowContextCache: ttlcache.New[string, workflowContext](
+				ttlcache.WithTTL[string, workflowContext](cacheTTL),
+			),
+			config: Config{ApiUrl: zorgplatformFHIRServer.URL + "/fhir"},
+		}
+
+		expectedSearchParams := url.Values{
+			"_id": {"123"},
+		}
+		httpRequest := httptest.NewRequest("POST", "/cpc/fhir/Condition/_search", strings.NewReader(expectedSearchParams.Encode()))
+		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		httpRequest.Header.Set("X-SCP-Context", carePlanUrl)
+		httpResponse := httptest.NewRecorder()
+		service.EhrFhirProxy().ServeHTTP(httpResponse, httpRequest)
+
+		require.Equal(t, http.StatusOK, httpResponse.Code)
+		require.Equal(t, expectedSearchParams, actualQueryParams, "expected search parameters to be passed through")
+	})
+}
+
+const testCarePlanReference = "CarePlan/CP-1"
+
+func setupCarePlanService(t *testing.T) *httptest.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /fhir/"+testCarePlanReference, func(w http.ResponseWriter, r *http.Request) {
+		coolfhir.SendResponse(w, http.StatusOK, fhir.CarePlan{
+			Id: to.Ptr("CP-1"),
+			Subject: fhir.Reference{
+				Reference: to.Ptr("Patient/P-1"),
+			},
+			Activity: []fhir.CarePlanActivity{
+				{
+					Reference: &fhir.Reference{
+						Reference: to.Ptr("Task/T-1"),
+					},
+				},
+			},
+		})
+	})
+	mux.HandleFunc("GET /fhir/Patient/P-1", func(w http.ResponseWriter, r *http.Request) {
+		coolfhir.SendResponse(w, http.StatusOK, fhir.Patient{
+			Id: to.Ptr("P-1"),
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("123456789"),
+				},
+			},
+		})
+	})
+	mux.HandleFunc("GET /fhir/Task/T-1", func(w http.ResponseWriter, r *http.Request) {
+		coolfhir.SendResponse(w, http.StatusOK, fhir.Task{
+			Id: to.Ptr("T-1"),
+			Focus: &fhir.Reference{
+				Reference: to.Ptr("ServiceRequest/SR-1"),
+			},
+		})
+	})
+	mux.HandleFunc("GET /fhir/ServiceRequest/SR-1", func(w http.ResponseWriter, r *http.Request) {
+		coolfhir.SendResponse(w, http.StatusOK, fhir.ServiceRequest{
+			Id: to.Ptr("SR-1"),
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
+					Value:  to.Ptr("workflow-id-1"),
+				},
+			},
+		})
+	})
+	httpServer := httptest.NewServer(mux)
+	baseURL, _ := url.Parse(httpServer.URL)
+	globals.CarePlanServiceFhirClient = fhirclient.New(baseURL.JoinPath("fhir"), http.DefaultClient, nil)
+	return httpServer
 }

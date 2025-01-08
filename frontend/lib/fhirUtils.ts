@@ -157,6 +157,7 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
             ]
         },
         for: {
+            type: "Patient",
             reference: patientReference,
         },
         status: "requested",

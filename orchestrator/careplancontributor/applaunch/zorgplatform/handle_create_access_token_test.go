@@ -1,6 +1,7 @@
 package zorgplatform
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -229,6 +230,8 @@ func TestService_RequestAccessToken_IntegrationTest(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	launchContext := LaunchContext{
 		Practitioner: fhir.Practitioner{Identifier: []fhir.Identifier{
 			{
@@ -241,12 +244,12 @@ func TestService_RequestAccessToken_IntegrationTest(t *testing.T) {
 	}
 
 	//Request an HCP token
-	hcpToken, err := service.RequestAccessToken(launchContext, hcpTokenType)
+	hcpToken, err := service.RequestAccessToken(ctx, launchContext, hcpTokenType)
 	require.NoError(t, err)
 	require.NotEmpty(t, hcpToken)
 
 	//Request an application token
-	applicationToken, err := service.RequestAccessToken(launchContext, applicationTokenType)
+	applicationToken, err := service.RequestAccessToken(ctx, launchContext, applicationTokenType)
 	require.NoError(t, err)
 	require.NotEmpty(t, applicationToken)
 }
@@ -308,6 +311,7 @@ func TestCreateSAMLAssertion_DifferentTokenTypes(t *testing.T) {
 }
 
 func TestCachingSecureTokenService_RequestAccessToken(t *testing.T) {
+	ctx := context.Background()
 	t.Run("not cached", func(t *testing.T) {
 		t.Run("cache empty", func(t *testing.T) {
 			underlying := &stubSecureTokenService{}
@@ -315,7 +319,7 @@ func TestCachingSecureTokenService_RequestAccessToken(t *testing.T) {
 				underlying: underlying,
 				cache:      ttlcache.New[LaunchContextHash, string](),
 			}
-			token, err := service.RequestAccessToken(LaunchContext{}, applicationTokenType)
+			token, err := service.RequestAccessToken(ctx, LaunchContext{}, applicationTokenType)
 			require.NoError(t, err)
 			require.NotEmpty(t, token)
 			require.Equal(t, 1, underlying.invocations)
@@ -345,12 +349,12 @@ func TestCachingSecureTokenService_RequestAccessToken(t *testing.T) {
 				}},
 			}
 			// other invocation
-			token, err := service.RequestAccessToken(otherLaunchContext, applicationTokenType)
+			token, err := service.RequestAccessToken(ctx, otherLaunchContext, applicationTokenType)
 			require.NoError(t, err)
 			require.NotEmpty(t, token)
 			require.Equal(t, 1, underlying.invocations)
 			// second invocation, cached
-			token, err = service.RequestAccessToken(LaunchContext{}, applicationTokenType)
+			token, err = service.RequestAccessToken(ctx, ownLaunchContext, applicationTokenType)
 			require.NoError(t, err)
 			require.NotEmpty(t, token)
 			require.Equal(t, 2, underlying.invocations)
@@ -367,12 +371,12 @@ func TestCachingSecureTokenService_RequestAccessToken(t *testing.T) {
 		}
 
 		// initial invocation
-		actual, err := service.RequestAccessToken(launchContext, applicationTokenType)
+		actual, err := service.RequestAccessToken(ctx, launchContext, applicationTokenType)
 		require.NoError(t, err)
 		require.NotEmpty(t, actual)
 		require.Equal(t, 1, underlying.invocations)
 		// second invocation, cached
-		actual, err = service.RequestAccessToken(launchContext, applicationTokenType)
+		actual, err = service.RequestAccessToken(ctx, launchContext, applicationTokenType)
 		require.NoError(t, err)
 		require.NotEmpty(t, actual)
 		require.Equal(t, 1, underlying.invocations)

@@ -28,5 +28,10 @@
     "key": "006",
     "name": "Task.status=received (no other active Tasks)",
     "description": "The only Task of a participant is rejected, Task.owner shouldn't be in CareTeam."
+  },
+  {
+    "key": "007",
+    "name": "Task.status=completed, but it's a subtask",
+    "description": "A subtask is completed (e.g. Questionnaire required by Task Filler to accept the primary Task). The CareTeam should not be updated for subtask updates."
   }
 ]

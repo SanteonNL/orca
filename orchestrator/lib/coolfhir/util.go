@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"path"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -310,6 +313,32 @@ func FilterFirstIdentifier(identifiers *[]fhir.Identifier, system string) *fhir.
 		}
 	}
 	return nil
+}
+
+// ParseExternalLiteralReference parses an external literal reference and returns the FHIR base URL and the resource reference.
+// For example:
+// - http://example.com/fhir/Patient/123 yields http://example.com/fhir and Patient/123
+// - http://example.com/Patient/123 yields http://example.com and Patient/123
+// - http://example.com/subdir/fhir/Patient/123 yields http://example.com/subdir/fhir and Patient/123
+// The reference must contain a resource type and an ID, and cannot contain query parameters.
+func ParseExternalLiteralReference(literal string, resourceType string) (*url.URL, string, error) {
+	parsedLiteral, err := url.Parse(literal)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(parsedLiteral.Query()) > 0 {
+		return nil, "", errors.New("query parameters for external literal reference are not supported")
+	}
+	pathParts := strings.Split(parsedLiteral.Path, "/")
+	if len(pathParts) < 2 {
+		return nil, "", errors.New("external literal reference must contain at least a resource type and an ID")
+	}
+	if pathParts[len(pathParts)-2] != resourceType {
+		return nil, "", errors.New("external literal reference does not contain the expected resource type")
+	}
+	ref := path.Join(pathParts[len(pathParts)-2:]...)
+	parsedLiteral.Path = path.Join(pathParts[:len(pathParts)-2]...)
+	return parsedLiteral, ref, nil
 }
 
 func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource interface{}, additionalHeaders ...map[string]string) {

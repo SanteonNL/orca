@@ -1,13 +1,11 @@
 package demo
 
 import (
-	"net/http"
-	"net/url"
-	"strings"
-
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
+	"net/http"
+	"net/url"
 )
 
 const fhirLauncherKey = "demo"
@@ -23,27 +21,19 @@ func init() {
 	}
 }
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string) *Service {
-	var appLaunchURL string
-	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
-		appLaunchURL = baseURL + "/demo-app-launch"
-	} else {
-		appLaunchURL = "http://localhost" + appLaunchURL + "/demo-app-launch"
-	}
-	log.Info().Msgf("Demo app launch is (%s)", appLaunchURL)
+func New(sessionManager *user.SessionManager, config Config, frontendLandingUrl string) *Service {
 	return &Service{
-		sessionManager: sessionManager,
-		config:         config,
-		baseURL:        baseURL,
-		landingUrlPath: landingUrlPath,
+		sessionManager:     sessionManager,
+		config:             config,
+		frontendLandingUrl: frontendLandingUrl,
 	}
 }
 
 type Service struct {
-	sessionManager *user.SessionManager
-	config         Config
-	baseURL        string
-	landingUrlPath string
+	sessionManager     *user.SessionManager
+	config             Config
+	baseURL            string
+	frontendLandingUrl string
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -95,7 +85,5 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		StringValues: values,
 	})
 	// Redirect to landing page
-	targetURL, _ := url.Parse(s.baseURL)
-	targetURL = targetURL.JoinPath(s.landingUrlPath)
-	http.Redirect(response, request, targetURL.String(), http.StatusFound)
+	http.Redirect(response, request, s.frontendLandingUrl, http.StatusFound)
 }
