@@ -22,9 +22,15 @@ export default async function BgzOverview() {
         if (process.env.FHIR_AUTHORIZATION_TOKEN) {
             requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
         }
-        const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan?_sort=-_lastUpdated&_count=100&_include=CarePlan:care-team`, {
-            // cache: 'no-store',
-            headers: requestHeaders
+        requestHeaders.set("Content-Type", "application/x-www-form-urlencoded");
+        const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan/_search`, {
+            method: 'POST',
+            headers: requestHeaders,
+            body: new URLSearchParams({
+                '_sort': '-_lastUpdated',
+                '_count': '100',
+                '_include': 'CarePlan:care-team'
+            })
         });
 
         if (!response.ok) {
@@ -34,7 +40,9 @@ export default async function BgzOverview() {
         }
 
         const responseBundle = await response.json() as Bundle;
-        const { entry } = responseBundle
+        const { entry } = responseBundle;
+        console.log(`Found [${entry?.length}] CarePlan resources`);
+
 
         //map all the resources to their reference as it contains CarePlans, Patients, Tasks and CareTeams
         const resourceMap = entry?.reduce((map, entry: BundleEntry) => {

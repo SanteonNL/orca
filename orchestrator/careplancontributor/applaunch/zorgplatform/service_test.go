@@ -1,6 +1,7 @@
 package zorgplatform
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha1"
@@ -10,11 +11,14 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"hash"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -195,9 +199,9 @@ func TestService(t *testing.T) {
 	}
 
 	sessionManager := user.NewSessionManager(time.Minute)
-	service, err := newWithClients(sessionManager, cfg, httpServer.URL, "/", keysClient, certsClient, profile.Test())
-	service.secureTokenService = &stubSecureTokenService{}
+	service, err := newWithClients(context.Background(), sessionManager, cfg, httpServer.URL, "/frontend", keysClient, certsClient, profile.Test())
 	require.NoError(t, err)
+	service.secureTokenService = &stubSecureTokenService{}
 	service.RegisterHandlers(httpServerMux)
 
 	client := &http.Client{
@@ -212,6 +216,7 @@ func TestService(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
+	require.Equal(t, "/frontend", launchHttpResponse.Header.Get("Location"))
 
 	t.Run("assert user session", func(t *testing.T) {
 		sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
@@ -298,7 +303,7 @@ var _ SecureTokenService = &stubSecureTokenService{}
 type stubSecureTokenService struct {
 }
 
-func (s stubSecureTokenService) RequestAccessToken(launchContext LaunchContext, tokenType TokenType) (string, error) {
+func (s stubSecureTokenService) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
 	return "stub-at", nil
 }
 
@@ -368,4 +373,91 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.EqualError(t, err, "unsupported workflow definition: ActivityDefinition/other")
 		require.Nil(t, conditionCode)
 	})
+}
+
+func TestService_EhrFhirProxy(t *testing.T) {
+	t.Run("POST-based search is rewritten to GET-based search", func(t *testing.T) {
+		cpsHttpServer := setupCarePlanService(t)
+		carePlanUrl := cpsHttpServer.URL + "/fhir/" + testCarePlanReference
+		zorgplatformFHIRServerMux := http.NewServeMux()
+		var actualQueryParams url.Values
+		zorgplatformFHIRServerMux.HandleFunc("GET /fhir/Condition", func(w http.ResponseWriter, r *http.Request) {
+			actualQueryParams = r.URL.Query()
+			coolfhir.SendResponse(w, http.StatusOK, fhir.Bundle{})
+		})
+		zorgplatformFHIRServer := httptest.NewServer(zorgplatformFHIRServerMux)
+
+		service := &Service{
+			zorgplatformHttpClient: zorgplatformFHIRServer.Client(),
+			secureTokenService:     &stubSecureTokenService{},
+			config:                 Config{ApiUrl: zorgplatformFHIRServer.URL + "/fhir"},
+		}
+
+		expectedSearchParams := url.Values{
+			"_id": {"123"},
+		}
+		httpRequest := httptest.NewRequest("POST", "/cpc/fhir/Condition/_search", strings.NewReader(expectedSearchParams.Encode()))
+		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		httpRequest.Header.Set("X-SCP-Context", carePlanUrl)
+		httpResponse := httptest.NewRecorder()
+		service.EhrFhirProxy().ServeHTTP(httpResponse, httpRequest)
+
+		require.Equal(t, http.StatusOK, httpResponse.Code)
+		require.Equal(t, expectedSearchParams, actualQueryParams, "expected search parameters to be passed through")
+	})
+}
+
+const testCarePlanReference = "CarePlan/CP-1"
+
+func setupCarePlanService(t *testing.T) *httptest.Server {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /fhir/"+testCarePlanReference, func(w http.ResponseWriter, r *http.Request) {
+		coolfhir.SendResponse(w, http.StatusOK, fhir.CarePlan{
+			Id: to.Ptr("CP-1"),
+			Subject: fhir.Reference{
+				Reference: to.Ptr("Patient/P-1"),
+			},
+			Activity: []fhir.CarePlanActivity{
+				{
+					Reference: &fhir.Reference{
+						Reference: to.Ptr("Task/T-1"),
+					},
+				},
+			},
+		})
+	})
+	mux.HandleFunc("GET /fhir/Patient/P-1", func(w http.ResponseWriter, r *http.Request) {
+		coolfhir.SendResponse(w, http.StatusOK, fhir.Patient{
+			Id: to.Ptr("P-1"),
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("123456789"),
+				},
+			},
+		})
+	})
+	mux.HandleFunc("GET /fhir/Task/T-1", func(w http.ResponseWriter, r *http.Request) {
+		coolfhir.SendResponse(w, http.StatusOK, fhir.Task{
+			Id: to.Ptr("T-1"),
+			Focus: &fhir.Reference{
+				Reference: to.Ptr("ServiceRequest/SR-1"),
+			},
+		})
+	})
+	mux.HandleFunc("GET /fhir/ServiceRequest/SR-1", func(w http.ResponseWriter, r *http.Request) {
+		coolfhir.SendResponse(w, http.StatusOK, fhir.ServiceRequest{
+			Id: to.Ptr("SR-1"),
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
+					Value:  to.Ptr("workflow-id-1"),
+				},
+			},
+		})
+	})
+	httpServer := httptest.NewServer(mux)
+	baseURL, _ := url.Parse(httpServer.URL)
+	globals.CarePlanServiceFhirClient = fhirclient.New(baseURL.JoinPath("fhir"), http.DefaultClient, nil)
+	return httpServer
 }

@@ -1,0 +1,24 @@
+{
+  "resourceType": "Task",
+  "id": "2",
+  "status": "completed",
+  "partOf": [
+    {
+      "reference": "Task/1"
+    }
+  ],
+  "requester": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "2"
+    }
+  },
+  "owner": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "1"
+    }
+  }
+}

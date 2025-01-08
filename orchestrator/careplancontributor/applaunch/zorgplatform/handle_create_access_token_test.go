@@ -1,6 +1,7 @@
 package zorgplatform
 
 import (
+	"context"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
@@ -228,6 +229,8 @@ func TestService_RequestAccessToken_IntegrationTest(t *testing.T) {
 		},
 	}
 
+	ctx := context.Background()
+
 	launchContext := LaunchContext{
 		Practitioner: fhir.Practitioner{Identifier: []fhir.Identifier{
 			{
@@ -240,12 +243,12 @@ func TestService_RequestAccessToken_IntegrationTest(t *testing.T) {
 	}
 
 	//Request an HCP token
-	hcpToken, err := service.RequestAccessToken(launchContext, hcpTokenType)
+	hcpToken, err := service.RequestAccessToken(ctx, launchContext, hcpTokenType)
 	require.NoError(t, err)
 	require.NotEmpty(t, hcpToken)
 
 	//Request an application token
-	applicationToken, err := service.RequestAccessToken(launchContext, applicationTokenType)
+	applicationToken, err := service.RequestAccessToken(ctx, launchContext, applicationTokenType)
 	require.NoError(t, err)
 	require.NotEmpty(t, applicationToken)
 }

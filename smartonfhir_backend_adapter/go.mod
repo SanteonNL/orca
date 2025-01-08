@@ -11,7 +11,7 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/samply/golang-fhir-models/fhir-models v0.3.2
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/oauth2 v0.24.0
+	golang.org/x/oauth2 v0.25.0
 )
 
 require (
