@@ -134,6 +134,7 @@ func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient, useTls bool) 
 			}.AsMechanism()),
 			// Needed for Microsoft Event Hubs
 			kgo.ProducerBatchCompression(kgo.NoCompression()),
+			kgo.DefaultProduceTopic(config.Topic),
 		}
 		if useTls {
 			opts = append(opts, kgo.DialTLS())
@@ -190,7 +191,7 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 	var lastErr error
 	for _, s := range sync {
 		if s.Err != nil {
-			log.Error().Ctx(ctx).Err(s.Err).Msgf("Error during submission %s", s.Err.Error())
+			log.Error().Ctx(ctx).Err(s.Err).Msgf("Error during submission %s, with topic %s", s.Err.Error(), record.Topic)
 			lastErr = s.Err
 		}
 	}
