@@ -6,7 +6,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"github.com/jellydator/ttlcache/v3"
 	"net/http"
 	"os"
 	"testing"
@@ -308,78 +307,4 @@ func TestCreateSAMLAssertion_DifferentTokenTypes(t *testing.T) {
 	appRole := appAssertion.FindElement("AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xacml:2.0:subject:role']/AttributeValue/Role").SelectAttrValue("code", "")
 	assert.Equal(t, expectedHcpRole, hcpRole)
 	assert.Equal(t, expectedAppRole, appRole)
-}
-
-func TestCachingSecureTokenService_RequestAccessToken(t *testing.T) {
-	ctx := context.Background()
-	t.Run("not cached", func(t *testing.T) {
-		t.Run("cache empty", func(t *testing.T) {
-			underlying := &stubSecureTokenService{}
-			service := CachingSecureTokenService{
-				underlying: underlying,
-				cache:      ttlcache.New[LaunchContextHash, string](),
-			}
-			token, err := service.RequestAccessToken(ctx, LaunchContext{}, applicationTokenType)
-			require.NoError(t, err)
-			require.NotEmpty(t, token)
-			require.Equal(t, 1, underlying.invocations)
-		})
-		t.Run("cache contains entry of another practitioner", func(t *testing.T) {
-			underlying := &stubSecureTokenService{}
-			service := CachingSecureTokenService{
-				underlying: underlying,
-				cache:      ttlcache.New[LaunchContextHash, string](),
-			}
-			ownLaunchContext := LaunchContext{
-				Bsn: "123",
-				Practitioner: fhir.Practitioner{Identifier: []fhir.Identifier{
-					{
-						System: to.Ptr("urn:oid:2.16.840.1.113883.4.1"),
-						Value:  to.Ptr("999999999"),
-					},
-				}},
-			}
-			otherLaunchContext := LaunchContext{
-				Bsn: "123",
-				Practitioner: fhir.Practitioner{Identifier: []fhir.Identifier{
-					{
-						System: to.Ptr("urn:oid:2.16.840.1.113883.4.1"),
-						Value:  to.Ptr("888888888"),
-					},
-				}},
-			}
-			// other invocation
-			token, err := service.RequestAccessToken(ctx, otherLaunchContext, applicationTokenType)
-			require.NoError(t, err)
-			require.NotEmpty(t, token)
-			require.Equal(t, 1, underlying.invocations)
-			// second invocation, cached
-			token, err = service.RequestAccessToken(ctx, ownLaunchContext, applicationTokenType)
-			require.NoError(t, err)
-			require.NotEmpty(t, token)
-			require.Equal(t, 2, underlying.invocations)
-		})
-	})
-	t.Run("cached", func(t *testing.T) {
-		underlying := &stubSecureTokenService{}
-		service := CachingSecureTokenService{
-			underlying: underlying,
-			cache:      ttlcache.New[LaunchContextHash, string](),
-		}
-		launchContext := LaunchContext{
-			Bsn: "123",
-		}
-
-		// initial invocation
-		actual, err := service.RequestAccessToken(ctx, launchContext, applicationTokenType)
-		require.NoError(t, err)
-		require.NotEmpty(t, actual)
-		require.Equal(t, 1, underlying.invocations)
-		// second invocation, cached
-		actual, err = service.RequestAccessToken(ctx, launchContext, applicationTokenType)
-		require.NoError(t, err)
-		require.NotEmpty(t, actual)
-		require.Equal(t, 1, underlying.invocations)
-	})
-
 }

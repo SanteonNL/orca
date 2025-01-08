@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/globals"
@@ -383,12 +384,11 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 	})
 }
 
-func TestGetWorkflowContext(t *testing.T) {
+func TestSTSAccessTokenRoundTripper(t *testing.T) {
 	tests := []struct {
 		name              string
-		ctx               context.Context
 		carePlanReference string
-		expectedError     bool
+		expectedError     error
 		expectedCacheHits int
 		carePlan          *fhir.CarePlan
 		task              *fhir.Task
@@ -396,17 +396,25 @@ func TestGetWorkflowContext(t *testing.T) {
 		patient           *fhir.Patient
 	}{
 		{
-			name:              "Cache Miss",
-			ctx:               context.Background(),
+			name:              "ok",
 			carePlanReference: "http://example.com/CarePlan/123",
-			expectedError:     false,
 		},
 		{
-			name:              "Cache Hit",
-			ctx:               context.Background(),
+			name:              "access token cache hit",
 			carePlanReference: "http://example.com/CarePlan/123",
-			expectedError:     false,
 			expectedCacheHits: 3,
+		},
+		{
+			name:          "missing X-SCP-Context header",
+			expectedError: errors.New("missing X-Scp-Context header"),
+		},
+		{
+			name: "ServiceRequest doesn't have Zorgplatform Workflow ID",
+			serviceRequest: &fhir.ServiceRequest{
+				Id: to.Ptr("123"),
+			},
+			carePlanReference: "http://example.com/CarePlan/123",
+			expectedError:     errors.New("unable to get workflowId for CarePlan reference: expected ServiceRequest to have 1 identifier with system http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
 		},
 	}
 
@@ -470,28 +478,33 @@ func TestGetWorkflowContext(t *testing.T) {
 				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, *tt.patient)
 			}
 
-			service := stsAccessTokenRoundTripper{
-				transport: nil,
+			httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				coolfhir.SendResponse(w, http.StatusOK, fhir.Bundle{})
+			}))
+			rt := stsAccessTokenRoundTripper{
+				transport: httpServer.Client().Transport,
 				cpsFhirClient: func() fhirclient.Client {
 					return cpsFHIRClient
 				},
 				secureTokenService: &stubSecureTokenService{},
-				workflowContextCache: ttlcache.New[string, workflowContext](
-					ttlcache.WithTTL[string, workflowContext](cacheTTL),
+				accessTokenCache: ttlcache.New[string, string](
+					ttlcache.WithTTL[string, string](accessTokenCacheTTL),
 				),
 			}
 
 			for i := 0; i < tt.expectedCacheHits+1; i++ {
-				result, err := service.getWorkflowContext(context.Background(), tt.carePlanReference)
-				if tt.expectedError {
-					require.Error(t, err)
+				httpRequest := httptest.NewRequest("POST", httpServer.URL, nil)
+				httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				httpRequest.Header.Set("X-SCP-Context", tt.carePlanReference)
+				httpResponse, err := rt.RoundTrip(httpRequest)
+				if tt.expectedError != nil {
+					require.EqualError(t, err, tt.expectedError.Error())
 				} else {
 					require.NoError(t, err)
-					require.Equal(t, "415FD2C0-E88D-4C89-B9D6-8FBE31E2D1C9", result.workflowId)
-					require.Equal(t, "123456789", result.patientBsn)
+					require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 				}
 			}
-			assert.Equal(t, tt.expectedCacheHits, int(service.workflowContextCache.Metrics().Hits))
+			assert.Equal(t, tt.expectedCacheHits, int(rt.accessTokenCache.Metrics().Hits))
 		})
 	}
 }
@@ -511,8 +524,8 @@ func TestService_EhrFhirProxy(t *testing.T) {
 		service := &Service{
 			zorgplatformHttpClient: zorgplatformFHIRServer.Client(),
 			secureTokenService:     &stubSecureTokenService{},
-			workflowContextCache: ttlcache.New[string, workflowContext](
-				ttlcache.WithTTL[string, workflowContext](cacheTTL),
+			accessTokenCache: ttlcache.New[string, string](
+				ttlcache.WithTTL[string, string](accessTokenCacheTTL),
 			),
 			config: Config{ApiUrl: zorgplatformFHIRServer.URL + "/fhir"},
 		}

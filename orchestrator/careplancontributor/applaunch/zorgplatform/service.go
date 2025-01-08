@@ -34,7 +34,10 @@ import (
 const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
 const zorgplatformWorkflowIdSystem = "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"
-const cacheTTL = time.Minute * 5
+
+// accessTokenCacheTTL is the time-to-live for the Zorgplatform access tokens in the cache.
+// They expire after ca. 12 minutes, so this value is on the safe side.
+const accessTokenCacheTTL = time.Minute * 5
 
 type workflowContext struct {
 	workflowId string
@@ -150,9 +153,8 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager, co
 		decryptCertificate:    decryptCert,
 		zorgplatformCert:      cert,
 		profile:               profile,
-		tokenCache:            ttlcache.New[string, string](),
-		workflowContextCache: ttlcache.New[string, workflowContext](
-			ttlcache.WithTTL[string, workflowContext](cacheTTL),
+		accessTokenCache: ttlcache.New[string, string](
+			ttlcache.WithTTL[string, string](accessTokenCacheTTL),
 		),
 		// performing HTTP requests with Zorgplatform requires mutual TLS
 		zorgplatformHttpClient: &http.Client{
@@ -166,8 +168,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager, co
 		},
 	}
 	// Start cache expiry
-	go result.workflowContextCache.Start()
-	go result.tokenCache.Start()
+	go result.accessTokenCache.Start()
 
 	result.secureTokenService = result
 	result.registerFhirClientFactory(config)
@@ -187,10 +188,9 @@ type Service struct {
 	zorgplatformCert       *x509.Certificate
 	profile                profile.Provider
 	secureTokenService     SecureTokenService
-	tokenCache             *ttlcache.Cache[string, string]
-	// workflowContextCache stores the Zorgplatform Workflow ID and patient BSN for a given CarePlan (from X-SCP-Context)
-	// This is an expensive, chained lookup, so we cache the result for some time.
-	workflowContextCache *ttlcache.Cache[string, workflowContext]
+	// accessTokenCache stores the Zorgplatform access tokens a given CarePlan (from X-SCP-Context)
+	// Requesting an access token involves an, chained lookup, so we cache the result for some time.
+	accessTokenCache *ttlcache.Cache[string, string]
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -203,10 +203,10 @@ func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 	rewriteUrl, _ := url.Parse(s.baseURL)
 	rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
 	result := coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
-		transport:            s.zorgplatformHttpClient.Transport,
-		cpsFhirClient:        s.cpsFhirClient,
-		secureTokenService:   s.secureTokenService,
-		workflowContextCache: s.workflowContextCache,
+		transport:          s.zorgplatformHttpClient.Transport,
+		cpsFhirClient:      s.cpsFhirClient,
+		secureTokenService: s.secureTokenService,
+		accessTokenCache:   s.accessTokenCache,
 	}, true)
 	// Zorgplatform's FHIR API only allows GET-based FHIR searches, while ORCA only allows POST-based FHIR searches.
 	// If the request is a POST-based search, we need to rewrite the request to a GET-based search.
@@ -230,10 +230,10 @@ func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
 
 type stsAccessTokenRoundTripper struct {
-	transport            http.RoundTripper
-	cpsFhirClient        func() fhirclient.Client
-	secureTokenService   SecureTokenService
-	workflowContextCache *ttlcache.Cache[string, workflowContext]
+	transport          http.RoundTripper
+	cpsFhirClient      func() fhirclient.Client
+	secureTokenService SecureTokenService
+	accessTokenCache   *ttlcache.Cache[string, string]
 }
 
 func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
@@ -250,32 +250,36 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	}
 
 	log.Debug().Ctx(httpRequest.Context()).Msgf("Found SCP context: %s", carePlanReference)
-	//TODO: Replace with CPC to CPS call - using direct acces to the CPS Store - until thr auth part is clear
-	s.workflowContextCache
-	workflowCtx, err := s.getWorkflowContext(httpRequest.Context(), carePlanReference)
-	if err != nil {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to get workflowId for CarePlan reference: %v", err)
-		return nil, fmt.Errorf("unable to get workflowId for CarePlan reference: %w", err)
-	}
+	// First see if cached
+	var accessToken string
+	if cacheEntry := s.accessTokenCache.Get(carePlanReference); cacheEntry != nil {
+		accessToken = cacheEntry.Value()
+	} else {
+		log.Debug().Ctx(httpRequest.Context()).Msgf("(cache miss) Getting Zorgplatform access token for CarePlan reference: %s", carePlanReference)
+		workflowCtx, err := s.getWorkflowContext(httpRequest.Context(), carePlanReference)
+		if err != nil {
+			log.Error().Ctx(httpRequest.Context()).Msgf("Unable to get workflowId for CarePlan reference: %v", err)
+			return nil, fmt.Errorf("unable to get workflowId for CarePlan reference: %w", err)
+		}
 
-	//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
-	if workflowCtx.patientBsn == "999911120" {
-		workflowCtx.patientBsn = "999999151"
-	}
+		//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
+		if workflowCtx.patientBsn == "999911120" {
+			workflowCtx.patientBsn = "999999151"
+		}
 
-	launchContext := LaunchContext{
-		WorkflowId: workflowCtx.workflowId,
-		Bsn:        workflowCtx.patientBsn,
-	}
+		launchContext := LaunchContext{
+			WorkflowId: workflowCtx.workflowId,
+			Bsn:        workflowCtx.patientBsn,
+		}
 
-	//TODO: Cache the token for re-use
-	accessToken, err := s.secureTokenService.RequestAccessToken(httpRequest.Context(), launchContext, applicationTokenType)
-	if err != nil {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to request access token for Zorgplatform: %v", err)
-		return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
+		accessToken, err = s.secureTokenService.RequestAccessToken(httpRequest.Context(), launchContext, applicationTokenType)
+		if err != nil {
+			log.Error().Ctx(httpRequest.Context()).Msgf("Unable to request access token for Zorgplatform: %v", err)
+			return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
+		}
+		log.Debug().Ctx(httpRequest.Context()).Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
+		s.accessTokenCache.Set(carePlanReference, accessToken, ttlcache.DefaultTTL)
 	}
-
-	log.Debug().Ctx(httpRequest.Context()).Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
 	newHttpRequest.Header.Add("Accept", "application/fhir+json")
 	newHttpRequest.Header.Add("Authorization", "SAML "+accessToken)
@@ -337,13 +341,6 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 // This function returns the workflowId for a given CarePlan reference. It will be returned from a cache, if available.
 func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, carePlanReference string) (*workflowContext, error) {
-	// First see if cached
-	if cacheEntry := s.workflowContextCache.Get(carePlanReference); cacheEntry != nil {
-		return to.Ptr(cacheEntry.Value()), nil
-	}
-
-	log.Debug().Ctx(ctx).Msgf("(cache miss) Fetching workflowId for CarePlan reference: %s", carePlanReference)
-
 	// TODO: use baseURL if there's multiple possible CPS'
 	_, localCarePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanReference, "CarePlan")
 	if err != nil {
@@ -401,7 +398,6 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 		workflowId: workflowID,
 		patientBsn: *bsnIdentifier.Value,
 	}
-	s.workflowContextCache.Set(carePlanReference, *result, ttlcache.DefaultTTL)
 	return result, nil
 }
 

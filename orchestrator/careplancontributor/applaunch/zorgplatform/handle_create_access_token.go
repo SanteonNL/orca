@@ -5,13 +5,10 @@ import (
 	"context"
 	"crypto"
 	"crypto/rand"
-	"crypto/sha1"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/base64"
-	"encoding/json"
 	"fmt"
-	"github.com/jellydator/ttlcache/v3"
 	"io"
 	"net/http"
 	"time"
@@ -28,32 +25,6 @@ type SecureTokenService interface {
 }
 
 type LaunchContextHash [20]byte
-
-var _ SecureTokenService = &CachingSecureTokenService{}
-
-type CachingSecureTokenService struct {
-	underlying SecureTokenService
-	cache      *ttlcache.Cache[LaunchContextHash, string]
-}
-
-func (c *CachingSecureTokenService) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
-	launchContextJSON, err := json.Marshal(launchContext)
-	if err != nil {
-		return "", err
-	}
-	launchContextHash := sha1.Sum(launchContextJSON)
-	cachedEntry := c.cache.Get(launchContextHash)
-	if cachedEntry != nil {
-		return cachedEntry.Value(), nil
-	}
-	// Not cached, request a new token and cache it
-	token, err := c.underlying.RequestAccessToken(ctx, launchContext, tokenType)
-	if err != nil {
-		return "", err
-	}
-	c.cache.Set(launchContextHash, token, ttlcache.DefaultTTL)
-	return token, nil
-}
 
 type TokenType struct {
 	Subject      func(element *etree.Element, launchContext *LaunchContext, applicationIssuer string)
