@@ -93,8 +93,10 @@ func NewClient(config KafkaConfig) (KafkaClient, error) {
 			return &DebugClient{}, nil
 		}
 		switch config.Security.Protocol {
+		case "SASL_SSL":
+			return CreateSaslClient(config, kafkaClient, true)
 		case "SASL_PLAINTEXT":
-			return CreateSaslClient(config, kafkaClient)
+			return CreateSaslClient(config, kafkaClient, false)
 		default:
 			err := errors.New("Unsupported protocol: " + config.Security.Protocol)
 			return nil, err
@@ -115,7 +117,7 @@ func NewClient(config KafkaConfig) (KafkaClient, error) {
 // Returns:
 //   - KafkaClient: An implementation of the KafkaClient interface.
 //   - error: An error if the Kafka client could not be created or if the mechanism is unsupported.
-func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient) (KafkaClient, error) {
+func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient, useTls bool) (KafkaClient, error) {
 	endpoint := config.Endpoint
 	seeds := []string{endpoint}
 	mechanism := config.Sasl.Mechanism
@@ -132,6 +134,9 @@ func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient) (KafkaClient,
 			}.AsMechanism()),
 			// Needed for Microsoft Event Hubs
 			kgo.ProducerBatchCompression(kgo.NoCompression()),
+		}
+		if useTls {
+			opts = append(opts, kgo.DialTLS())
 		}
 		client, err := kgo.NewClient(opts...)
 		if err != nil {
