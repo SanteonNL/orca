@@ -24,8 +24,6 @@ type SecureTokenService interface {
 	RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error)
 }
 
-type LaunchContextHash [20]byte
-
 type TokenType struct {
 	Subject      func(element *etree.Element, launchContext *LaunchContext, applicationIssuer string)
 	Role         func(element *etree.Element)
