@@ -11,9 +11,11 @@ import (
 
 var _ http.RoundTripper = internalDispatchHTTPRoundTripper{}
 
+// internalDispatchHTTPRoundTripper is an http.RoundTripper that forwards the request to an in-process HTTP handler.
 type internalDispatchHTTPRoundTripper struct {
 	profile profile.Provider
 	handler http.Handler
+	matcher func(*http.Request) bool
 }
 
 type memoryResponseWriter struct {
@@ -55,5 +57,6 @@ func (i internalDispatchHTTPRoundTripper) RoundTrip(request *http.Request) (*htt
 		StatusCode: responseWriter.status,
 		Header:     responseWriter.headers,
 		Body:       io.NopCloser(bytes.NewReader(responseWriter.body.Bytes())),
+		Request:    request,
 	}, nil
 }

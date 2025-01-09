@@ -251,7 +251,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 					URL: carePlanServiceURL.String(),
 				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.Test(), orcaPublicURL, sessionManager, proxy)
+			}, profile.Test(), orcaPublicURL, sessionManager, proxy, carePlanServiceMux)
 
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
@@ -389,7 +389,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{}, carePlanServiceMux)
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -498,7 +498,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
-	}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{}, http.NewServeMux())
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
@@ -578,7 +578,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	}
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{}, http.NewServeMux())
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -647,7 +647,7 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{}, carePlanServiceMux)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()

@@ -40,6 +40,11 @@ func (t TestProfile) CsdDirectory() csd.Directory {
 
 func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
+		_, err := auth.PrincipalFromContext(request.Context())
+		if err == nil {
+			fn(writer, request)
+			return
+		}
 		authHeader := request.Header.Get("Authorization")
 		if authHeader == "" {
 			writer.WriteHeader(http.StatusUnauthorized)

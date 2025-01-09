@@ -166,8 +166,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Len(t, identities, 2)
-		assert.Contains(t, identities, identifier1)
-		assert.Contains(t, identities, identifier2)
+		assert.Contains(t, identities[0].Identifier, identifier1)
+		assert.Contains(t, identities[1].Identifier, identifier2)
 	})
 	t.Run("NutsUraCredential and others in wallet", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -184,7 +184,7 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Len(t, identities, 1)
-		assert.Contains(t, identities, identifier1)
+		assert.Contains(t, identities[0].Identifier, identifier1)
 	})
 	t.Run("initial fetch, then cached", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -201,8 +201,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Len(t, identities, 2)
-		assert.Contains(t, identities, identifier1)
-		assert.Contains(t, identities, identifier2)
+		assert.Contains(t, identities[0].Identifier, identifier1)
+		assert.Contains(t, identities[1].Identifier, identifier2)
 
 		identities, err = prof.Identities(ctx)
 		require.NoError(t, err)
@@ -251,7 +251,7 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		identities, err := prof.Identities(ctx)
 		require.NoError(t, err)
 		require.Len(t, identities, 1)
-		assert.Contains(t, identities, identifier1)
+		assert.Contains(t, identities[0].Identifier, identifier1)
 	})
 	t.Run("fetched again when cache is expired", func(t *testing.T) {
 		ctrl := gomock.NewController(t)
@@ -268,8 +268,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		require.NoError(t, err)
 
 		require.Len(t, identities, 2)
-		assert.Contains(t, identities, identifier1)
-		assert.Contains(t, identities, identifier2)
+		assert.Contains(t, identities[0].Identifier, identifier1)
+		assert.Contains(t, identities[1].Identifier, identifier2)
 
 		// expire cache
 		prof.identitiesRefreshedAt = prof.identitiesRefreshedAt.Add(-identitiesCacheTTL)
