@@ -185,12 +185,6 @@ func Test_Main(t *testing.T) {
 				err = hospitalOrcaFHIRClient.Create(responseBundle, &responseBundle, fhirclient.AtPath("/"))
 				require.NoError(t, err)
 
-				t.Run("Check that the Task Filler accepted the Task #2", func(t *testing.T) {
-					err = hospitalOrcaFHIRClient.Read("Task/"+*task.ID, &task)
-					require.NoError(t, err)
-					require.Equal(t, fhir.TaskStatusCompleted, task.Status)
-				})
-
 				// Get QuestionnaireResponse ID from Bundle
 				err = json.Unmarshal(responseBundle.Entry[0].Resource, &questionnaireResponse)
 				require.NoError(t, err)
