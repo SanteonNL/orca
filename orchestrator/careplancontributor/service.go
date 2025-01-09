@@ -43,7 +43,8 @@ func New(
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager,
-	ehrFhirProxy coolfhir.HttpProxy) (*Service, error) {
+	ehrFhirProxy coolfhir.HttpProxy,
+	httpHandler http.Handler) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 	cpsURL, _ := url.Parse(config.CarePlanService.URL)
@@ -91,7 +92,7 @@ func New(
 	httpClient := &http.Client{
 		Transport: internalDispatchHTTPRoundTripper{
 			profile: profile,
-			handler: ,
+			handler: httpHandler,
 		},
 	}
 	kafkaClient, err := ehr.NewClient(config.KafkaConfig)

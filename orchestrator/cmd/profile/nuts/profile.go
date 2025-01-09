@@ -31,7 +31,7 @@ var uziOtherNameUraRegex = regexp.MustCompile("^[0-9.]+-\\d+-\\d+-S-(\\d+)-00\\.
 // - Care Services Discovery: Nuts Discovery Service
 type DutchNutsProfile struct {
 	Config                Config
-	cachedIdentities      []fhir.Identifier
+	cachedIdentities      []fhir.Organization
 	identitiesRefreshedAt time.Time
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
@@ -70,7 +70,7 @@ func (d DutchNutsProfile) RegisterHTTPHandlers(basePath string, resourceServerUR
 }
 
 // Identities consults the Nuts node to retrieve the local identities of the SCP node, given the credentials in the subject's wallet.
-func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, error) {
+func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization, error) {
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
 		identifiers, err := d.identities(ctx)
 		if err != nil {
@@ -87,7 +87,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, e
 	return d.cachedIdentities, nil
 }
 
-func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, error) {
+func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Organization, error) {
 	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, d.Config.OwnSubject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
@@ -111,7 +111,7 @@ func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, er
 	return results, nil
 }
 
-func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredential) ([]fhir.Identifier, error) {
+func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredential) ([]fhir.Organization, error) {
 	var asMaps []map[string]interface{}
 	if err := cred.UnmarshalCredentialSubject(&asMaps); err != nil {
 		return nil, err

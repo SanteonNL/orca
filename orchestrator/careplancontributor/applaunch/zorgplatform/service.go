@@ -551,7 +551,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		},
 		Performer: []fhir.Reference{taskPerformer},
 		Requester: &fhir.Reference{
-			Identifier: &localIdentity,
+			Identifier: &localIdentity.Identifier[0],
 		},
 	}
 
