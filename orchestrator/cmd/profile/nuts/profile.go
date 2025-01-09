@@ -99,7 +99,7 @@ func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Organization, 
 		}
 		return nil, fmt.Errorf("list credentials non-OK HTTP response (status=%s)", response.Status())
 	}
-	var results []fhir.Identifier
+	var results []fhir.Organization
 	for _, cred := range *response.JSON200 {
 		identifiers, err := d.identifiersFromCredential(cred)
 		if err != nil {
@@ -116,25 +116,39 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 	if err := cred.UnmarshalCredentialSubject(&asMaps); err != nil {
 		return nil, err
 	}
-	var results []fhir.Identifier
+	var results []fhir.Organization
 	for _, asMap := range asMaps {
-		flattenCredential, _ := maps.Flatten(asMap, []string{"credentialSubject"}, ".")
-		var ura string
+		flatCredential, _ := maps.Flatten(asMap, []string{"credentialSubject"}, ".")
+		var ura, name, city string
 		if cred.IsType(ssi.MustParseURI("NutsUraCredential")) {
-			ura, _ = flattenCredential["credentialSubject.organization.ura"].(string)
+			ura, _ = flatCredential["credentialSubject.organization.ura"].(string)
+			name, _ = flatCredential["credentialSubject.organization.name"].(string)
+			city, _ = flatCredential["credentialSubject.organization.city"].(string)
 		}
 		if cred.IsType(ssi.MustParseURI("UziServerCertificateCredential")) {
-			otherName, ok := flattenCredential["credentialSubject.otherName"].(string)
+			otherName, ok := flatCredential["credentialSubject.otherName"].(string)
 			if ok {
 				if match := uziOtherNameUraRegex.FindStringSubmatch(otherName); len(match) > 1 {
 					ura = match[1]
 				}
 			}
+			name, _ = flatCredential["credentialSubject.O"].(string)
+			city, _ = flatCredential["credentialSubject.L"].(string)
 		}
 		if ura != "" {
-			results = append(results, fhir.Identifier{
-				System: to.Ptr(coolfhir.URANamingSystem),
-				Value:  to.Ptr(ura),
+			results = append(results, fhir.Organization{
+				Identifier: []fhir.Identifier{
+					{
+						System: to.Ptr(coolfhir.URANamingSystem),
+						Value:  to.Ptr(ura),
+					},
+				},
+				Name: to.Ptr(name),
+				Address: []fhir.Address{
+					{
+						City: to.Ptr(city),
+					},
+				},
 			})
 		}
 	}
