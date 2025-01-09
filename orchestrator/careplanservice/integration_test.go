@@ -230,11 +230,15 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 			primaryTask.Status = fhir.TaskStatusAccepted
 			err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &primaryTask)
 			require.NoError(t, err)
-			t.Run("check CareTeam contains both parties", func(t *testing.T) {
+			t.Run("INT-516: check CareTeam contains both parties, and that both are active", func(t *testing.T) {
 				var careTeam fhir.CareTeam
 				err := carePlanContributor1.Read(*carePlan.CareTeam[0].Reference, &careTeam)
 				require.NoError(t, err)
 				assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2)
+				assert.NotNil(t, careTeam.Participant[0].Period.Start)
+				assert.Nil(t, careTeam.Participant[0].Period.End)
+				assert.NotNil(t, careTeam.Participant[1].Period.Start)
+				assert.Nil(t, careTeam.Participant[1].Period.End)
 			})
 		}
 	}
