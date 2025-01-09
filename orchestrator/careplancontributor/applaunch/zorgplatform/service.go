@@ -355,7 +355,6 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
 	accessToken, err := s.secureTokenService.RequestAccessToken(request.Context(), launchContext, hcpTokenType)
-
 	if err != nil {
 		log.Err(err).Ctx(request.Context()).Msg("unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
@@ -404,7 +403,28 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	if err != nil {
 		return nil, err
 	}
+
+	// Check if there's already a CPS Task for this Zorgplatform workflow
+	var existingTaskBundle fhir.Bundle
+	var existingTaskRef *string
+	err = s.cpsFhirClient().SearchWithContext(ctx, "Task", url.Values{
+		"identifier": []string{zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId},
+	}, &existingTaskBundle)
+	if err != nil {
+		return nil, fmt.Errorf("unable to search for existing CPS Task: %w", err)
+	}
+	if len(existingTaskBundle.Entry) == 1 {
+		var existingTask fhir.Task
+		if err := coolfhir.ResourceInBundle(&existingTaskBundle, coolfhir.EntryIsOfType("Task"), &existingTask); err != nil {
+			return nil, fmt.Errorf("unable to get existing CPS Task resource from search bundle: %w", err)
+		}
+		existingTaskRef = to.Ptr("Task/" + *existingTask.Id)
+	} else if len(existingTaskBundle.Entry) > 1 {
+		return nil, fmt.Errorf("found multiple existing CPS Tasks for Zorgplatform workflow (workflowID=%s)", launchContext.WorkflowId)
+	}
+
 	fhirClient := fhirclient.New(apiUrl, s.createZorgplatformApiClient(accessToken), coolfhir.Config())
+
 	// Zorgplatform provides us with a Task, from which we need to derive the Patient and ServiceRequest
 	// - Patient is contained in the Task.encounter but separately requested to include the Practitioner
 	// - ServiceRequest is not provided by Zorgplatform, so we need to create one based on the Task and Encounter
@@ -502,7 +522,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	localOrgIdentifier := identities[0]
 
 	for _, identifier := range patient.Identifier {
-		if identifier.System != nil && *identifier.System == "http://fhir.nl/fhir/NamingSystem/bsn" {
+		if identifier.System != nil && *identifier.System == coolfhir.BSNNamingSystem {
 			//TODO: overwriting the BSN with the one from the Patient resource, as with test data they can differ, normally we want to throw an error
 			launchContext.Bsn = *identifier.Value
 			break
@@ -512,7 +532,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	// Zorgplatform does not provide a ServiceRequest, so we need to create one based on other resources they do use
 	taskPerformer := fhir.Reference{
 		Identifier: &fhir.Identifier{
-			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+			System: to.Ptr(coolfhir.URANamingSystem),
 			Value:  &s.config.TaskPerformerUra,
 		},
 	}
@@ -545,7 +565,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Subject: fhir.Reference{
 			Type: to.Ptr("Patient"),
 			Identifier: &fhir.Identifier{
-				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				System: to.Ptr(coolfhir.BSNNamingSystem),
 				Value:  &launchContext.Bsn,
 			},
 		},
@@ -560,11 +580,12 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	organizationRef := "Organization/magic-" + uuid.NewString()
 
-	return &user.SessionData{
+	sessionData := user.SessionData{
 		FHIRLauncher: launcherKey,
 		//TODO: See how/if to pass the conditions to the StringValues
 		StringValues: map[string]string{
 			"patient":        "Patient/" + *patient.Id,
+			"task":           "Task/" + launchContext.WorkflowId,
 			"serviceRequest": serviceRequestRef,
 			"practitioner":   practitionerRef,
 			"organization":   organizationRef,
@@ -578,7 +599,11 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 			*reasonReference.Reference: reason,
 			"launchContext":            launchContext, // Can be used to fetch a new access token after expiration
 		},
-	}, nil
+	}
+	if existingTaskRef != nil {
+		sessionData.StringValues["task"] = *existingTaskRef
+	}
+	return &sessionData, nil
 }
 
 func (s *Service) cpsFhirClient() fhirclient.Client {
