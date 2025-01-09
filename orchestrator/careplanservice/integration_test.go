@@ -189,7 +189,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 				Profile: []string{coolfhir.SCPTaskProfile},
 			},
 			Intent:    "order",
-			Status:    fhir.TaskStatusRequested,
+			Status:    fhir.TaskStatusReady,
 			Requester: primaryTask.Owner,
 			Owner:     primaryTask.Requester,
 			BasedOn: []fhir.Reference{
@@ -217,10 +217,35 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		err = carePlanContributor1.Search("Task", url.Values{"part-of": {*subTask.PartOf[0].Reference}}, &searchResult)
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 1)
+
+		t.Log("Completing Subtask")
+		{
+			subTask.Status = fhir.TaskStatusCompleted
+			err := carePlanContributor1.Update("Task/"+*subTask.Id, subTask, &subTask)
+			require.NoError(t, err)
+		}
+		// Here, the Task Filler checks the subtask questionnaire response (if there were any), and then accepts or rejects the Task
+		t.Log("Accepting Task")
+		{
+			primaryTask.Status = fhir.TaskStatusAccepted
+			err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &primaryTask)
+			require.NoError(t, err)
+			t.Run("INT-516: check CareTeam contains both parties, and that both are active", func(t *testing.T) {
+				var careTeam fhir.CareTeam
+				err := carePlanContributor1.Read(*carePlan.CareTeam[0].Reference, &careTeam)
+				require.NoError(t, err)
+				assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2)
+				assert.NotNil(t, careTeam.Participant[0].Period.Start)
+				assert.Nil(t, careTeam.Participant[0].Period.End)
+				assert.NotNil(t, careTeam.Participant[1].Period.Start)
+				assert.Nil(t, careTeam.Participant[1].Period.End)
+			})
+		}
 	}
 
 	t.Log("Creating Task - No BasedOn, new CarePlan and CareTeam are created")
 	{
+		notificationCounter.Store(0)
 		primaryTask = fhir.Task{
 			Intent:    "order",
 			Status:    fhir.TaskStatusRequested,
