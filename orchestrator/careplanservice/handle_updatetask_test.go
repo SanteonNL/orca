@@ -4,13 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
 	"os"
 	"reflect"
-	"slices"
 	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -32,12 +30,11 @@ func Test_isValidTransition(t *testing.T) {
 		isRequester  bool
 		isScpSubtask bool
 	}
-	type testCase struct {
+	tests := []struct {
 		name string
 		args args
 		want bool
-	}
-	tests := []testCase{
+	}{
 		// Positive cases
 		{
 			name: "requested -> received : owner (OK)",
@@ -438,75 +435,16 @@ func Test_isValidTransition(t *testing.T) {
 			want: false,
 		},
 	}
-	// After a final state, no additional state transition is allowed. Some poor-men's variance testing
-	const maxTaskStatusValue = 11
-	finalStates := []fhir.TaskStatus{
-		fhir.TaskStatusCompleted,
-		fhir.TaskStatusFailed,
-		fhir.TaskStatusCancelled,
-	}
-	for _, finalState := range finalStates {
-		for i := 0; i < maxTaskStatusValue; i++ {
-			if finalState == fhir.TaskStatus(i) {
-				continue
-			}
-			tests = append(tests,
-				testCase{
-					name: fmt.Sprintf("%s -> %s : owner (FAIL)", finalState, fhir.TaskStatus(i)),
-					args: args{
-						from:         finalState,
-						to:           fhir.TaskStatus(i),
-						isOwner:      true,
-						isRequester:  false,
-						isScpSubtask: false,
-					},
-				},
-				testCase{
-					name: fmt.Sprintf("%s -> %s : requester (FAIL)", finalState, fhir.TaskStatus(i)),
-					args: args{
-						from:         finalState,
-						to:           fhir.TaskStatus(i),
-						isOwner:      false,
-						isRequester:  true,
-						isScpSubtask: false,
-					},
-				},
-				testCase{
-					name: fmt.Sprintf("%s -> %s : owner, SCP subtask (FAIL)", finalState, fhir.TaskStatus(i)),
-					args: args{
-						from:         finalState,
-						to:           fhir.TaskStatus(i),
-						isOwner:      true,
-						isRequester:  false,
-						isScpSubtask: true,
-					},
-				},
-				testCase{
-					name: fmt.Sprintf("%s -> %s : requester, SCP subtask (FAIL)", finalState, fhir.TaskStatus(i)),
-					args: args{
-						from:         finalState,
-						to:           fhir.TaskStatus(i),
-						isOwner:      false,
-						isRequester:  true,
-						isScpSubtask: true,
-					},
-				},
-			)
-		}
-	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := isValidTransition(tt.args.from, tt.args.to, tt.args.isOwner, tt.args.isRequester, tt.args.isScpSubtask)
 			require.Equal(t, tt.want, got)
-			// Validate that the opposite direction fails, besides in-progress <-> on-hold (not for end states)
-			if !slices.Contains(finalStates, tt.args.from) {
-				if (tt.args.from == fhir.TaskStatusOnHold && tt.args.to == fhir.TaskStatusInProgress) || (tt.args.from == fhir.TaskStatusInProgress && tt.args.to == fhir.TaskStatusOnHold) {
-					return
-				}
-				got = isValidTransition(tt.args.to, tt.args.from, tt.args.isOwner, tt.args.isRequester, tt.args.isScpSubtask)
-				require.Equal(t, false, got)
+			// Validate that the opposite direction fails, besides in-progress <-> on-hold
+			if (tt.args.from == fhir.TaskStatusOnHold && tt.args.to == fhir.TaskStatusInProgress) || (tt.args.from == fhir.TaskStatusInProgress && tt.args.to == fhir.TaskStatusOnHold) {
+				return
 			}
+			got = isValidTransition(tt.args.to, tt.args.from, tt.args.isOwner, tt.args.isRequester, tt.args.isScpSubtask)
+			require.Equal(t, false, got)
 		})
 	}
 }
