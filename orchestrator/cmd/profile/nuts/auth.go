@@ -52,11 +52,11 @@ func claimsToOrganization(claims map[string]interface{}) (*fhir.Organization, er
 		return nil, errors.New("missing organization_ura claim in user info")
 	}
 	name, ok := claims["organization_name"].(string)
-	if !ok || ura == "" {
+	if !ok || name == "" {
 		return nil, errors.New("missing organization_name claim in user info")
 	}
 	city, ok := claims["organization_city"].(string)
-	if !ok || ura == "" {
+	if !ok || city == "" {
 		return nil, errors.New("missing organization_city claim in user info")
 	}
 
