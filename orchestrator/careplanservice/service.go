@@ -147,6 +147,10 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// Creating a resource
 	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
+		if s.allowUnmanagedFHIROperations && strings.HasPrefix(resourceType, "$") {
+			s.proxy.ServeHTTP(httpResponse, request)
+			return
+		}
 		s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	}))
 	// Searching for a resource via POST
