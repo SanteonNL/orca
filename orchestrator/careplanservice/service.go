@@ -180,8 +180,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
 	}))
 	if s.allowUnmanagedFHIROperations {
-		mux.HandleFunc("GET "+basePath+"/{rest...}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-			s.handleGet(request, httpResponse, "", "", "CarePlanService/Other")
+		mux.HandleFunc(basePath+"/{rest...}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+			s.proxy.ServeHTTP(httpResponse, request)
 		}))
 	}
 }
