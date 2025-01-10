@@ -20,6 +20,7 @@ COPY --from=base /app/.env.production ./.env.production
 COPY --from=base /app/.next/standalone ./
 COPY --from=base /app/.next/static ./.next/static
 COPY --from=base /app/public ./public
+COPY --from=base /app/next.config.js ./next.config.js
 
 # Expose the port the app runs on
 EXPOSE 3000

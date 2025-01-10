@@ -11,8 +11,7 @@ const nextConfig = {
     serverActions: {
       allowedOrigins: allowedOrigins,
     },
-  },
-  hostname: allowedOrigins[0]
+  }
 };
 
 module.exports = nextConfig;
