@@ -179,6 +179,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
 	}))
+	if s.allowUnmanagedFHIROperations {
+		mux.HandleFunc("GET "+basePath+"/{rest...}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+			s.handleGet(request, httpResponse, "", "", "CarePlanService/Other")
+		}))
+	}
 }
 
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
