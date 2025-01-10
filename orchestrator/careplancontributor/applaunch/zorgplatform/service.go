@@ -585,7 +585,6 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		//TODO: See how/if to pass the conditions to the StringValues
 		StringValues: map[string]string{
 			"patient":        "Patient/" + *patient.Id,
-			"task":           "Task/" + launchContext.WorkflowId,
 			"serviceRequest": serviceRequestRef,
 			"practitioner":   practitionerRef,
 			"organization":   organizationRef,
