@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"context"
 	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -27,7 +28,30 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
 	t.Log("This test creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
 	notificationEndpoint := setupNotificationEndpoint(t)
-	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor := setupIntegrationTest(t, notificationEndpoint)
+	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, notificationEndpoint)
+
+	t.Run("custom search parameters", func(t *testing.T) {
+		t.Run("existence", func(t *testing.T) {
+			var capabilityStatement fhir.CapabilityStatement
+			err := service.fhirClient.Read("metadata", &capabilityStatement)
+			require.NoError(t, err)
+			for _, rest := range capabilityStatement.Rest {
+				for _, resource := range rest.Resource {
+					for _, searchParam := range resource.SearchParam {
+						if searchParam.Definition != nil && *searchParam.Definition == "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier" {
+							// OK
+							return
+						}
+					}
+				}
+			}
+			require.Fail(t, "Search parameter CarePlan-subject-identifier not found")
+		})
+		t.Run("search parameters already exist", func(t *testing.T) {
+			err := service.ensureCustomSearchParametersExists(context.Background())
+			require.NoError(t, err)
+		})
+	})
 
 	notificationCounter.Store(0)
 
@@ -642,7 +666,7 @@ func testBundle(t *testing.T, fhirClient *fhirclient.BaseClient, data []byte) {
 	println(string(responseData))
 }
 
-func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient) {
+func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
 		Principal: auth.TestPrincipal1,
@@ -668,7 +692,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhircli
 	carePlanContributor1 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport1}, nil)
 	carePlanContributor2 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport2}, nil)
 	carePlanContributor3 := fhirclient.New(carePlanServiceURL, &http.Client{Transport: transport3}, nil)
-	return carePlanContributor1, carePlanContributor2, carePlanContributor3
+	return carePlanContributor1, carePlanContributor2, carePlanContributor3, service
 }
 
 func assertCareTeam(t *testing.T, fhirClient fhirclient.Client, careTeamRef string, expectedMembers ...fhir.CareTeamParticipant) {
