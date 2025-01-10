@@ -203,8 +203,7 @@ func (f *FHIRClientProxy) sanitizeRequestHeaders(header http.Header) http.Header
 	// - httputil.ReverseProxy: remove hop-by-hop headers
 	for name, values := range header {
 		nameLC := strings.ToLower(name)
-		if strings.HasPrefix(nameLC, "x-") && nameLC != "x-scp-context" ||
-			nameLC == "referer" ||
+		if nameLC == "referer" ||
 			nameLC == "cookie" ||
 			nameLC == "user-agent" ||
 			nameLC == "accept-encoding" ||
