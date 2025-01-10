@@ -12,6 +12,7 @@ const nextConfig = {
       allowedOrigins: allowedOrigins,
     },
   },
+  hostname: allowedOrigins[0]
 };
 
 module.exports = nextConfig;
