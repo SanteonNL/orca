@@ -143,6 +143,12 @@ type Service struct {
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	baseURL := s.orcaPublicURL.JoinPath(basePath)
 	s.profile.RegisterHTTPHandlers(basePath, baseURL, mux)
+	mux.HandleFunc("GET "+basePath+"/request-headers", func(writer http.ResponseWriter, request *http.Request) {
+		jsonData, _ := json.Marshal(request.Header)
+		writer.Header().Set("Content-Type", "application/json")
+		writer.WriteHeader(http.StatusOK)
+		_, _ = writer.Write(jsonData)
+	})
 	//
 	// The section below defines endpoints specified by Shared Care Planning.
 	// These are secured through the profile (e.g. Nuts access tokens)
