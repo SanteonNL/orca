@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -653,15 +654,13 @@ func (a authHeaderRoundTripper) RoundTrip(request *http.Request) (*http.Response
 }
 
 func getCertificate(ctx context.Context, pemCert string) (*x509.Certificate, error) {
-
 	block, _ := pem.Decode([]byte(pemCert))
-
 	if block == nil {
-
+		if globals.StrictMode {
+			return nil, errors.New("failed to decode certificate PEM")
+		}
+		// Fallback to hardcoded certificate - for some reason the certificate cannot be decoded on Docker Desktop OSX from the env var
 		log.Warn().Msg("Zorgplatform certificate could not be decoded by environment variable, falling back to hardcoded certificate")
-
-		//TODO: We do not want a hard coded key in the code, should be able to load from config - fix issue
-		//TODO: Fallback to hardcoded certificate - for some reason the certificate cannot be decoded on Docker Desktop OSX from the env var
 		pemCert = `-----BEGIN CERTIFICATE-----
 MIIGpTCCBY2gAwIBAgIJAJ7SiMwCRCiBMA0GCSqGSIb3DQEBCwUAMIG0MQswCQYD
 VQQGEwJVUzEQMA4GA1UECBMHQXJpem9uYTETMBEGA1UEBxMKU2NvdHRzZGFsZTEa
@@ -702,14 +701,10 @@ U6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
 -----END CERTIFICATE-----`
 		block, _ = pem.Decode([]byte(pemCert))
 	}
-
-	cert, parseErr := x509.ParseCertificate(block.Bytes)
-
-	if parseErr != nil {
-		return nil, fmt.Errorf("failed to parse certificate: %w", parseErr)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
-
 	log.Info().Ctx(ctx).Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
-
 	return cert, nil
 }
