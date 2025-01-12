@@ -307,8 +307,17 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 		return coolfhir.NewErrorWithCode("no active participants found in CareTeam", http.StatusNotFound)
 	}
 
+	localIdentities, err := s.profile.Identities(request.Context())
+	if err != nil {
+		return err
+	}
+
 	endpoints := make(map[string]*url.URL)
 	for _, identifier := range participantIdentifiers {
+		// Don't fetch data from own endpoint, since we don't support querying from multiple endpoints yet
+		if coolfhir.HasIdentifier(identifier, localIdentities...) {
+			continue
+		}
 		fhirEndpoints, err := s.profile.CsdDirectory().LookupEndpoint(request.Context(), &identifier, profile.FHIRBaseURLEndpointName)
 		if err != nil {
 			return fmt.Errorf("failed to lookup FHIR base URL for participant %s: %w", coolfhir.ToString(identifier), err)

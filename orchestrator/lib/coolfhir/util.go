@@ -242,6 +242,16 @@ func IdentifierEquals(one *fhir.Identifier, other *fhir.Identifier) bool {
 	return *one.System == *other.System && *one.Value == *other.Value
 }
 
+// HasIdentifier returns whether a slice of fhir.Identifier contains a specific identifier.
+func HasIdentifier(needle fhir.Identifier, haystack ...fhir.Identifier) bool {
+	for _, id := range haystack {
+		if IdentifierEquals(&needle, &id) {
+			return true
+		}
+	}
+	return false
+}
+
 func ToString(resource interface{}) string {
 	switch r := resource.(type) {
 	case *fhir.Identifier:
