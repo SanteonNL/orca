@@ -17,7 +17,7 @@ export const createEhrClient = () => {
 export const createCpsClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
-        : "http://localhost:7090/fhir";
+        : "http://localhost:9090/fhir";
 
     return new Client({ baseUrl });
 };
@@ -145,11 +145,11 @@ const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, p
     return cleanedServiceRequest;
 }
 
-export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: string, serviceRequestReference: string): Task => {
+export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: string, serviceRequestReference: string, taskIdentifier?: string): Task => {
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task");
 
-    return {
+    const task = {
         resourceType: "Task",
         meta: {
             profile: [
@@ -176,13 +176,24 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
             type: "ServiceRequest",
             reference: serviceRequestReference,
         },
+    } as Task
+
+    if (taskIdentifier) {
+        const systemAndIdentifier = taskIdentifier.split("|")
+        if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`")
+        task.identifier = [{
+            system: systemAndIdentifier[0],
+            value: systemAndIdentifier[1],
+        }]
     }
+
+    return task
 }
 
-export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient): Bundle & { type: "transaction" } => {
+export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, taskIdentifier?: string): Bundle & { type: "transaction" } => {
     const cleanedPatient = cleanPatient(patient);
     const cleanedServiceRequest = cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient");
-    const constructedTask = constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest");
+    const constructedTask = constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest", taskIdentifier);
 
     return {
         resourceType: "Bundle",

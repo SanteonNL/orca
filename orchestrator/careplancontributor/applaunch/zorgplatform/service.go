@@ -589,6 +589,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 			"practitioner":   practitionerRef,
 			"organization":   organizationRef,
 			"accessToken":    accessToken,
+			"taskIdentifier": zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId,
 		},
 		OtherValues: map[string]interface{}{
 			"Patient/" + *patient.Id:   patient, //Zorgplatform only allows for a GET on /Patient, we request by ID
