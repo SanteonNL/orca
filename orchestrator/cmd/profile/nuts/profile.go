@@ -31,7 +31,7 @@ var uziOtherNameUraRegex = regexp.MustCompile("^[0-9.]+-\\d+-\\d+-S-(\\d+)-00\\.
 // - Care Services Discovery: Nuts Discovery Service
 type DutchNutsProfile struct {
 	Config                Config
-	cachedIdentities      []fhir.Identifier
+	cachedIdentities      []fhir.Organization
 	identitiesRefreshedAt time.Time
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
@@ -70,7 +70,7 @@ func (d DutchNutsProfile) RegisterHTTPHandlers(basePath string, resourceServerUR
 }
 
 // Identities consults the Nuts node to retrieve the local identities of the SCP node, given the credentials in the subject's wallet.
-func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, error) {
+func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization, error) {
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
 		identifiers, err := d.identities(ctx)
 		if err != nil {
@@ -87,7 +87,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, e
 	return d.cachedIdentities, nil
 }
 
-func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, error) {
+func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Organization, error) {
 	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, d.Config.OwnSubject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
@@ -99,7 +99,7 @@ func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, er
 		}
 		return nil, fmt.Errorf("list credentials non-OK HTTP response (status=%s)", response.Status())
 	}
-	var results []fhir.Identifier
+	var results []fhir.Organization
 	for _, cred := range *response.JSON200 {
 		identifiers, err := d.identifiersFromCredential(cred)
 		if err != nil {
@@ -111,30 +111,44 @@ func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, er
 	return results, nil
 }
 
-func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredential) ([]fhir.Identifier, error) {
+func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredential) ([]fhir.Organization, error) {
 	var asMaps []map[string]interface{}
 	if err := cred.UnmarshalCredentialSubject(&asMaps); err != nil {
 		return nil, err
 	}
-	var results []fhir.Identifier
+	var results []fhir.Organization
 	for _, asMap := range asMaps {
-		flattenCredential, _ := maps.Flatten(asMap, []string{"credentialSubject"}, ".")
-		var ura string
+		flatCredential, _ := maps.Flatten(asMap, []string{"credentialSubject"}, ".")
+		var ura, name, city string
 		if cred.IsType(ssi.MustParseURI("NutsUraCredential")) {
-			ura, _ = flattenCredential["credentialSubject.organization.ura"].(string)
+			ura, _ = flatCredential["credentialSubject.organization.ura"].(string)
+			name, _ = flatCredential["credentialSubject.organization.name"].(string)
+			city, _ = flatCredential["credentialSubject.organization.city"].(string)
 		}
 		if cred.IsType(ssi.MustParseURI("UziServerCertificateCredential")) {
-			otherName, ok := flattenCredential["credentialSubject.otherName"].(string)
+			otherName, ok := flatCredential["credentialSubject.otherName"].(string)
 			if ok {
 				if match := uziOtherNameUraRegex.FindStringSubmatch(otherName); len(match) > 1 {
 					ura = match[1]
 				}
 			}
+			name, _ = flatCredential["credentialSubject.O"].(string)
+			city, _ = flatCredential["credentialSubject.L"].(string)
 		}
 		if ura != "" {
-			results = append(results, fhir.Identifier{
-				System: to.Ptr(coolfhir.URANamingSystem),
-				Value:  to.Ptr(ura),
+			results = append(results, fhir.Organization{
+				Identifier: []fhir.Identifier{
+					{
+						System: to.Ptr(coolfhir.URANamingSystem),
+						Value:  to.Ptr(ura),
+					},
+				},
+				Name: to.Ptr(name),
+				Address: []fhir.Address{
+					{
+						City: to.Ptr(city),
+					},
+				},
 			})
 		}
 	}

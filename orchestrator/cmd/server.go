@@ -73,7 +73,8 @@ func Start(ctx context.Context, config Config) error {
 			activeProfile,
 			config.Public.ParseURL(),
 			sessionManager,
-			ehrFhirProxy)
+			ehrFhirProxy,
+			httpHandler)
 		if err != nil {
 			return err
 		}

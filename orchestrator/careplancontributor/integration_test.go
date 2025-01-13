@@ -207,7 +207,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.CarePlanService.URL = carePlanServiceURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, cpsProxy)
+	cpc, err := New(cpcConfig, activeProfile, orcaPublicURL, sessionManager, cpsProxy, serverMux)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()
