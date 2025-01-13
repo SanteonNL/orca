@@ -11,9 +11,6 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +19,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 
 	"github.com/stretchr/testify/assert"
 
@@ -220,7 +221,7 @@ func TestService(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
-		require.Equal(t, "/frontend", launchHttpResponse.Header.Get("Location"))
+		require.Equal(t, "/frontend/new", launchHttpResponse.Header.Get("Location"))
 
 		t.Run("assert user session", func(t *testing.T) {
 			sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
