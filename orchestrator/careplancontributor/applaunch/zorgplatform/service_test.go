@@ -275,6 +275,7 @@ func TestService(t *testing.T) {
 
 		sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
 		require.NotNil(t, sessionData)
+		require.Equal(t, "/frontend/task/12345678910", launchHttpResponse.Header.Get("Location"))
 		assert.Equal(t, "Task/"+*existingTask.Id, sessionData.StringValues["task"])
 	})
 
