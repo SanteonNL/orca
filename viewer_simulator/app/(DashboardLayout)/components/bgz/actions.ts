@@ -65,7 +65,7 @@ export async function getBgzData(carePlan: CarePlan, careTeam: CareTeam) {
 
 async function fetchBgzData(resourceType: string, query: string, carePlan: CarePlan) {
     const requestUrl = `${process.env.FHIR_AGGREGATE_URL}/${resourceType}/_search`;
-    const xSCPContext = `${process.env.FHIR_BASE_URL}/CarePlan/${carePlan.id}`;
+    const xSCPContext = `${process.env.ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}/CarePlan/${carePlan.id}`;
     console.log(`Sending request to ${requestUrl} with X-Scp-Context: ${xSCPContext}`);
 
     const response = await fetch(requestUrl, {
