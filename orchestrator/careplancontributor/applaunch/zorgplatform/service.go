@@ -417,9 +417,11 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	// Check if there's already a CPS Task for this Zorgplatform workflow
 	var existingTaskBundle fhir.Bundle
 	var existingTaskRef *string
+	headers := http.Header{}
+	headers.Add("Cache-Control", "no-cache")
 	err = s.cpsFhirClient().SearchWithContext(ctx, "Task", url.Values{
 		"identifier": []string{zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId},
-	}, &existingTaskBundle)
+	}, &existingTaskBundle, fhirclient.RequestHeaders(headers))
 	if err != nil {
 		return nil, fmt.Errorf("unable to search for existing CPS Task: %w", err)
 	}
