@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"encoding/json"
 	"fmt"
+
 	"github.com/rs/zerolog/log"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
@@ -705,13 +706,17 @@ func TestService_handleGetContext(t *testing.T) {
 			"practitioner":   "the-doctor",
 			"serviceRequest": "ServiceRequest/1",
 			"patient":        "Patient/1",
+			"task":           "Task/1",
+			"taskIdentifier": "task-identifier-123",
 		},
 	})
 	assert.Equal(t, http.StatusOK, httpResponse.Code)
 	assert.JSONEq(t, `{
 		"practitioner": "the-doctor",
 		"serviceRequest": "ServiceRequest/1",	
-		"patient": "Patient/1"
+		"patient": "Patient/1",
+		"task": "Task/1",
+		"taskIdentifier": "task-identifier-123"
 	}`, httpResponse.Body.String())
 }
 
