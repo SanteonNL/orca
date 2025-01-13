@@ -1,6 +1,7 @@
 package careplancontributor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -525,6 +526,12 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		DoAndReturn(func(path string, result *fhir.ServiceRequest, option ...fhirclient.Option) error {
 			rawJson, _ := os.ReadFile("./testdata/servicerequest-1.json")
 			return json.Unmarshal(rawJson, &result)
+		})
+
+	mockFHIRClient.EXPECT().UpdateWithContext(gomock.Any(), "Task/3", gomock.Any(), gomock.Any()).
+		DoAndReturn(func(_ context.Context, _ string, updatedPrimaryTask *fhir.Task, _ interface{}, options ...fhirclient.Option) error {
+			assert.Equal(t, fhir.TaskStatusReceived, updatedPrimaryTask.Status)
+			return nil
 		})
 
 	mockFHIRClient.EXPECT().

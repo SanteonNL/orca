@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
@@ -80,6 +81,14 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		if !isOwner {
 			log.Info().Ctx(ctx).Msg("Current CPC node is not the task Owner - skipping")
 			return nil
+		}
+
+		// Mark the task as "received" to indicate that the task is being processed
+		log.Info().Ctx(ctx).Msgf("Marking task as received (id=%s)", *task.Id)
+		task.Status = fhir.TaskStatusReceived
+		err = cpsClient.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
+		if err != nil {
+			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
 
 		log.Info().Ctx(ctx).Msg("Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
