@@ -301,8 +301,11 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	bsn := *bsnIdentifier.Value
 
 	//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
-	if bsn == "999911120" {
-		bsn = "999999151"
+	if !globals.StrictMode {
+		log.Warn().Msg("Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
+		if bsn == "999911120" {
+			bsn = "999999151"
+		}
 	}
 
 	launchContext := LaunchContext{

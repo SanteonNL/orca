@@ -25,6 +25,7 @@ type Config struct {
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
 	LogLevel        zerolog.Level          `koanf:"loglevel"`
+	StrictMode      bool                   `koanf:"strictmode"`
 }
 
 func (c Config) Validate() error {
@@ -106,7 +107,8 @@ func splitWithEscaping(s, separator, escape string) []string {
 // DefaultConfig returns sensible, but not complete, default configuration values.
 func DefaultConfig() Config {
 	return Config{
-		LogLevel: zerolog.InfoLevel,
+		LogLevel:   zerolog.InfoLevel,
+		StrictMode: true,
 		Public: InterfaceConfig{
 			Address: ":8080",
 			URL:     "/",
