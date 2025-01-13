@@ -3,19 +3,13 @@ import React from 'react'
 import useEnrollmentStore from '@/lib/store/enrollment-store'
 import { Spinner } from '@/components/spinner'
 import organizationName from '@/lib/fhirUtils'
-import { useRouter } from 'next/navigation'
 
 export default function EnrollmentDetails() {
 
     const { serviceRequest, taskCondition, patient, loading, launchContext } = useEnrollmentStore()
-    const router = useRouter()
 
     if (loading) return <Spinner className="h-12 w-12 text-primary" />
 
-    //TODO: Let the back-end handle the redirect logic
-    if (launchContext?.task) {
-        router.push(`/enrollment/${launchContext.task.toLowerCase()}`)
-    }
 
     return (
         (

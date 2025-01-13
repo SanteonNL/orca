@@ -377,7 +377,14 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	// Redirect to landing page
 	log.Info().Ctx(request.Context()).Msg("Successfully launched through ChipSoft HiX app launch")
-	http.Redirect(response, request, s.frontendLandingUrl, http.StatusFound)
+
+	taskRef := sessionData.StringValues["task"]
+	if taskRef == "" {
+		taskRef = "/new" //If the task doesn't exist yet, send the user to the new page, where data is first confirmed
+	}
+	frontendUrl := strings.ToLower(s.frontendLandingUrl + "/" + taskRef)
+
+	http.Redirect(response, request, frontendUrl, http.StatusFound)
 }
 
 func (s *Service) registerFhirClientFactory(config Config) {
