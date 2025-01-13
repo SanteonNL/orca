@@ -365,19 +365,19 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
 		return nil, coolfhir.BadRequest("invalid CarePlan URL in header. Got: " + carePlanURL + " expected: " + s.localCarePlanServiceUrl.String())
 	}
-	u, err := url.Parse(carePlanURL)
-	if err != nil {
-		return nil, err
-	}
-	// Verify that the u.Path refers to a careplan
-	if !strings.Contains(u.Path, "/CarePlan") {
-		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
-	}
 
-	var bundle fhir.Bundle
-	// TODO: Discuss changes to this validation with team
+	_, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
+	var carePlanId string
+	if err != nil {
+		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
+	} else {
+		_, carePlanId, err = coolfhir.ParseLocalReference(carePlanRef)
+		if err != nil {
+			return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
+		}
+	}
 	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
-	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.localCarePlanServiceUrl.String())
+	var bundle fhir.Bundle
 	err = s.cpsClientFactory(s.localCarePlanServiceUrl).Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle)
 	if err != nil {
 		return nil, err
