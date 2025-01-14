@@ -308,8 +308,17 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 		return coolfhir.NewErrorWithCode("no active participants found in CareTeam", http.StatusNotFound)
 	}
 
+	localIdentities, err := s.profile.Identities(request.Context())
+	if err != nil {
+		return err
+	}
+
 	endpoints := make(map[string]*url.URL)
 	for _, identifier := range participantIdentifiers {
+		// Don't fetch data from own endpoint, since we don't support querying from multiple endpoints yet
+		if coolfhir.HasIdentifier(identifier, localIdentities...) {
+			continue
+		}
 		fhirEndpoints, err := s.profile.CsdDirectory().LookupEndpoint(request.Context(), &identifier, profile.FHIRBaseURLEndpointName)
 		if err != nil {
 			return fmt.Errorf("failed to lookup FHIR base URL for participant %s: %w", coolfhir.ToString(identifier), err)
@@ -357,19 +366,19 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
 		return nil, coolfhir.BadRequest("invalid CarePlan URL in header. Got: " + carePlanURL + " expected: " + s.localCarePlanServiceUrl.String())
 	}
-	u, err := url.Parse(carePlanURL)
-	if err != nil {
-		return nil, err
-	}
-	// Verify that the u.Path refers to a careplan
-	if !strings.Contains(u.Path, "/CarePlan") {
-		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
-	}
 
-	var bundle fhir.Bundle
-	// TODO: Discuss changes to this validation with team
+	_, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
+	var carePlanId string
+	if err != nil {
+		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
+	} else {
+		_, carePlanId, err = coolfhir.ParseLocalReference(carePlanRef)
+		if err != nil {
+			return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
+		}
+	}
 	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
-	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.localCarePlanServiceUrl.String())
+	var bundle fhir.Bundle
 	err = s.cpsClientFactory(s.localCarePlanServiceUrl).Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle)
 	if err != nil {
 		return nil, err

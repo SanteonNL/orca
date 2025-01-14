@@ -213,7 +213,7 @@ func TestService(t *testing.T) {
 	}
 
 	t.Run("ok, new Task", func(t *testing.T) {
-		globals.CarePlanServiceFhirClient = test.StubFHIRClient{}
+		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
 
 		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
 			"SAMLResponse": {createSAMLResponse(t, certificate.Leaf)},
@@ -261,7 +261,7 @@ func TestService(t *testing.T) {
 				},
 			},
 		}
-		cpsFHIRClient := test.StubFHIRClient{
+		cpsFHIRClient := &test.StubFHIRClient{
 			Resources: []interface{}{
 				existingTask,
 			},

@@ -242,6 +242,16 @@ func IdentifierEquals(one *fhir.Identifier, other *fhir.Identifier) bool {
 	return *one.System == *other.System && *one.Value == *other.Value
 }
 
+// HasIdentifier returns whether a slice of fhir.Identifier contains a specific identifier.
+func HasIdentifier(needle fhir.Identifier, haystack ...fhir.Identifier) bool {
+	for _, id := range haystack {
+		if IdentifierEquals(&needle, &id) {
+			return true
+		}
+	}
+	return false
+}
+
 func ToString(resource interface{}) string {
 	switch r := resource.(type) {
 	case *fhir.Identifier:
@@ -313,6 +323,22 @@ func FilterFirstIdentifier(identifiers *[]fhir.Identifier, system string) *fhir.
 		}
 	}
 	return nil
+}
+
+// ParseLocalReference parses a local reference and returns the resource type and the resource ID.
+// If the reference is not in this format, an error is returned.
+func ParseLocalReference(reference string) (string, string, error) {
+	if strings.Count(reference, "/") != 1 {
+		return "", "", errors.New("local reference must contain exactly one '/'")
+	}
+	parts := strings.Split(reference, "/")
+	if parts[0] == "" {
+		return "", "", errors.New("local reference must contain a resource type")
+	}
+	if parts[1] == "" {
+		return "", "", errors.New("local reference must contain a resource ID")
+	}
+	return parts[0], parts[1], nil
 }
 
 // ParseExternalLiteralReference parses an external literal reference and returns the FHIR base URL and the resource reference.

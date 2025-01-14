@@ -19,12 +19,17 @@ type BaseResource struct {
 	Identifier []fhir.Identifier `json:"identifier"`
 	Type       string            `json:"resourceType"`
 	Data       []byte            `json:"-"`
+	URL        string            `json:"url"`
 }
 
 var _ fhirclient.Client = &StubFHIRClient{}
 
 type StubFHIRClient struct {
-	Resources []interface{}
+	Resources []any
+	Metadata  fhir.CapabilityStatement
+	// CreatedResources is a list of resources that have been created using this client.
+	// It's not used by the client itself, but can be used by tests to verify that the client has been used correctly.
+	CreatedResources map[string][]any
 }
 
 func (s StubFHIRClient) Read(path string, target any, opts ...fhirclient.Option) error {
@@ -32,6 +37,10 @@ func (s StubFHIRClient) Read(path string, target any, opts ...fhirclient.Option)
 }
 
 func (s StubFHIRClient) ReadWithContext(ctx context.Context, path string, target any, opts ...fhirclient.Option) error {
+	if path == "metadata" {
+		unmarshalInto(s.Metadata, &target)
+		return nil
+	}
 	for _, resource := range s.Resources {
 		var baseResource BaseResource
 		unmarshalInto(resource, &baseResource)
@@ -46,27 +55,7 @@ func (s StubFHIRClient) ReadWithContext(ctx context.Context, path string, target
 }
 
 func (s StubFHIRClient) Create(resource any, result any, opts ...fhirclient.Option) error {
-	resourceType := coolfhir.ResourceType(resource)
-	if resourceType == "" {
-		return fmt.Errorf("can't defer resource type of %T", resource)
-	}
-	var resourceAsMap map[string]interface{}
-	unmarshalInto(resource, resourceAsMap)
-	if resourceAsMap["id"] == nil {
-		resourceAsMap["id"] = uuid.NewString()
-	} else {
-		// Check if it doesn't already exist
-		for _, existingResource := range s.Resources {
-			var existingResourceBase BaseResource
-			unmarshalInto(existingResource, &existingResourceBase)
-			if resourceType == existingResourceBase.Type && existingResourceBase.Id == resourceAsMap["id"] {
-				return errors.New("resource already exists")
-			}
-		}
-	}
-	s.Resources = append(s.Resources, resource)
-	unmarshalInto(resource, result)
-	return nil
+	return s.CreateWithContext(context.Background(), resource, result, opts...)
 }
 
 func (s StubFHIRClient) Search(resourceType string, query url.Values, target any, opts ...fhirclient.Option) error {
@@ -110,6 +99,10 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 				}
 				return false
 			})
+		case "url":
+			filterCandidates(func(candidate BaseResource) bool {
+				return candidate.URL == value
+			})
 		default:
 			return fmt.Errorf("unsupported query parameter: %s", name)
 		}
@@ -128,8 +121,32 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 	return json.Unmarshal(resultJSON, target)
 }
 
-func (s StubFHIRClient) CreateWithContext(ctx context.Context, resource any, result any, opts ...fhirclient.Option) error {
-	panic("implement me")
+func (s *StubFHIRClient) CreateWithContext(_ context.Context, resource any, result any, opts ...fhirclient.Option) error {
+	resourceType := coolfhir.ResourceType(resource)
+	if resourceType == "" {
+		return fmt.Errorf("can't defer resource type of %T", resource)
+	}
+	var resourceAsMap = make(map[string]interface{})
+	unmarshalInto(resource, resourceAsMap)
+	if resourceAsMap["id"] == nil {
+		resourceAsMap["id"] = uuid.NewString()
+	} else {
+		// Check if it doesn't already exist
+		for _, existingResource := range s.Resources {
+			var existingResourceBase BaseResource
+			unmarshalInto(existingResource, &existingResourceBase)
+			if resourceType == existingResourceBase.Type && existingResourceBase.Id == resourceAsMap["id"] {
+				return errors.New("resource already exists")
+			}
+		}
+	}
+	s.Resources = append(s.Resources, resource)
+	if s.CreatedResources == nil {
+		s.CreatedResources = make(map[string][]any)
+	}
+	s.CreatedResources[resourceType] = append(s.CreatedResources[resourceType], resource)
+	unmarshalInto(resource, result)
+	return nil
 }
 
 func (s StubFHIRClient) Update(path string, resource any, result any, opts ...fhirclient.Option) error {
@@ -149,11 +166,16 @@ func unmarshalInto(resource interface{}, target interface{}) {
 	if err != nil {
 		panic(err)
 	}
-	if err := json.Unmarshal(resJSON, &target); err != nil {
-		panic(err)
-	}
-	baseResource, ok := target.(*BaseResource)
-	if ok {
-		baseResource.Data = resJSON
+	switch t := target.(type) {
+	case *[]byte:
+		*t = resJSON
+	default:
+		if err := json.Unmarshal(resJSON, &target); err != nil {
+			panic(err)
+		}
+		baseResource, ok := target.(*BaseResource)
+		if ok {
+			baseResource.Data = resJSON
+		}
 	}
 }
