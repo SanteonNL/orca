@@ -83,14 +83,6 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 			return nil
 		}
 
-		// Mark the task as "received" to indicate that the task is being processed
-		log.Info().Ctx(ctx).Msgf("Marking task as received (id=%s)", *task.Id)
-		task.Status = fhir.TaskStatusReceived
-		err = cpsClient.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
-		if err != nil {
-			return fmt.Errorf("failed to process new primary Task: %w", err)
-		}
-
 		log.Info().Ctx(ctx).Msg("Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
 		err = s.createSubTaskOrAcceptPrimaryTask(ctx, cpsClient, task, task, identities)
 		if err != nil {
@@ -290,6 +282,13 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 	tx := coolfhir.Transaction().
 		Update(questionnaire, questionnaireRef).
 		Create(subtask, coolfhir.WithFullUrl(subtaskRef))
+
+	if isPrimaryTask && primaryTask.Status == fhir.TaskStatusRequested {
+		// Mark the task as "received" to indicate that the task is being processed
+		log.Info().Ctx(ctx).Msgf("Marking task as received (id=%s)", *task.Id)
+		primaryTask.Status = fhir.TaskStatusReceived
+		tx.Update(primaryTask, "Task/"+*primaryTask.Id)
+	}
 
 	bundle := tx.Bundle()
 
