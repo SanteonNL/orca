@@ -11,8 +11,6 @@ import (
 	"encoding/binary"
 	"encoding/pem"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/globals"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -21,6 +19,10 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 
 	"github.com/stretchr/testify/assert"
 
@@ -60,13 +62,13 @@ func TestService(t *testing.T) {
 				CER: certificate.Certificate[0],
 				KID: (*azcertificates.ID)(&clientCertName),
 			},
-		}, nil)
+		}, nil).MinTimes(1)
 	keysClient.EXPECT().GetKey(gomock.Any(), clientCertName, "", nil).
 		Return(azkeys.GetKeyResponse{
 			KeyBundle: azkeys.KeyBundle{
 				Key: publicKeyToJWK(certificate.PrivateKey.(*rsa.PrivateKey).PublicKey, clientCertName, "0"),
 			},
-		}, nil)
+		}, nil).MinTimes(1)
 	// Decryption cert
 	decryptKeyName := "decrypt-cert"
 	keysClient.EXPECT().GetKey(gomock.Any(), decryptKeyName, "", nil).
@@ -74,7 +76,7 @@ func TestService(t *testing.T) {
 			KeyBundle: azkeys.KeyBundle{
 				Key: publicKeyToJWK(*certificate.Leaf.PublicKey.(*rsa.PublicKey), decryptKeyName, "0"),
 			},
-		}, nil)
+		}, nil).MinTimes(1)
 	keysClient.EXPECT().Decrypt(gomock.Any(), decryptKeyName, "0", gomock.Any(), nil).
 		DoAndReturn(func(ctx interface{}, keyName string, keyVersion string, parameters azkeys.KeyOperationParameters, options *azkeys.DecryptOptions) (azkeys.DecryptResponse, error) {
 			var h hash.Hash
@@ -95,7 +97,7 @@ func TestService(t *testing.T) {
 					Result: result,
 				},
 			}, nil
-		})
+		}).MinTimes(1)
 	// Signing cert
 	signKeyName := "sign-cert"
 	signingKeyPair, _ := rsa.GenerateKey(rand.Reader, 2048)
@@ -105,13 +107,13 @@ func TestService(t *testing.T) {
 				CER: certificate.Certificate[0],
 				KID: (*azcertificates.ID)(&signKeyName),
 			},
-		}, nil)
+		}, nil).MinTimes(1)
 	keysClient.EXPECT().GetKey(gomock.Any(), signKeyName, "", nil).
 		Return(azkeys.GetKeyResponse{
 			KeyBundle: azkeys.KeyBundle{
 				Key: publicKeyToJWK(signingKeyPair.PublicKey, signKeyName, "0"),
 			},
-		}, nil)
+		}, nil).MinTimes(1)
 
 	zorgplatformHttpServerMux := http.NewServeMux()
 	zorgplatformHttpServer := httptest.NewServer(zorgplatformHttpServerMux)
@@ -210,40 +212,71 @@ func TestService(t *testing.T) {
 		},
 	}
 
-	launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
-		"SAMLResponse": {createSAMLResponse(t, certificate.Leaf)},
-	})
+	t.Run("ok, new Task", func(t *testing.T) {
+		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
 
-	require.NoError(t, err)
-	require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
-	require.Equal(t, "/frontend", launchHttpResponse.Header.Get("Location"))
-
-	t.Run("assert user session", func(t *testing.T) {
-		sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
-		require.NotNil(t, sessionData)
-
-		t.Run("check Practitioner is in session", func(t *testing.T) {
-			practitionerRef := sessionData.StringValues["practitioner"]
-			require.NotEmpty(t, practitionerRef)
-			require.IsType(t, fhir.Practitioner{}, sessionData.OtherValues[practitionerRef])
+		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
+			"SAMLResponse": {createSAMLResponse(t, certificate.Leaf)},
 		})
-		t.Run("check ServiceRequest is in session", func(t *testing.T) {
-			serviceRequestRef := sessionData.StringValues["serviceRequest"]
-			require.NotEmpty(t, serviceRequestRef)
-			require.IsType(t, fhir.ServiceRequest{}, sessionData.OtherValues[serviceRequestRef])
-			t.Run("check Workflow-ID identifier is properly set on the ServiceRequest", func(t *testing.T) {
-				serviceRequest := sessionData.OtherValues[serviceRequestRef].(fhir.ServiceRequest)
-				assert.Contains(t, serviceRequest.Identifier, fhir.Identifier{
-					System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
-					Value:  to.Ptr("b526e773-e1a6-4533-bd00-1360c97e745f"),
+
+		require.NoError(t, err)
+		require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
+		require.Equal(t, "/frontend/new", launchHttpResponse.Header.Get("Location"))
+
+		t.Run("assert user session", func(t *testing.T) {
+			sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
+			require.NotNil(t, sessionData)
+
+			t.Run("check Practitioner is in session", func(t *testing.T) {
+				practitionerRef := sessionData.StringValues["practitioner"]
+				require.NotEmpty(t, practitionerRef)
+				require.IsType(t, fhir.Practitioner{}, sessionData.OtherValues[practitionerRef])
+			})
+			t.Run("check ServiceRequest is in session", func(t *testing.T) {
+				serviceRequestRef := sessionData.StringValues["serviceRequest"]
+				require.NotEmpty(t, serviceRequestRef)
+				require.IsType(t, fhir.ServiceRequest{}, sessionData.OtherValues[serviceRequestRef])
+				t.Run("check Workflow-ID identifier is properly set on the ServiceRequest", func(t *testing.T) {
+					serviceRequest := sessionData.OtherValues[serviceRequestRef].(fhir.ServiceRequest)
+					assert.Contains(t, serviceRequest.Identifier, fhir.Identifier{
+						System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
+						Value:  to.Ptr("b526e773-e1a6-4533-bd00-1360c97e745f"),
+					})
 				})
 			})
+			t.Run("check Patient is in session", func(t *testing.T) {
+				patientRef := sessionData.StringValues["patient"]
+				require.NotEmpty(t, patientRef)
+				require.IsType(t, fhir.Patient{}, sessionData.OtherValues[patientRef])
+			})
 		})
-		t.Run("check Patient is in session", func(t *testing.T) {
-			patientRef := sessionData.StringValues["patient"]
-			require.NotEmpty(t, patientRef)
-			require.IsType(t, fhir.Patient{}, sessionData.OtherValues[patientRef])
+	})
+	t.Run("ok, existing Task", func(t *testing.T) {
+		existingTask := fhir.Task{
+			Id: to.Ptr("12345678910"),
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
+					Value:  to.Ptr("b526e773-e1a6-4533-bd00-1360c97e745f"),
+				},
+			},
+		}
+		cpsFHIRClient := &test.StubFHIRClient{
+			Resources: []interface{}{
+				existingTask,
+			},
+		}
+		globals.CarePlanServiceFhirClient = cpsFHIRClient
+
+		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
+			"SAMLResponse": {createSAMLResponse(t, certificate.Leaf)},
 		})
+		require.NoError(t, err)
+
+		sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
+		require.NotNil(t, sessionData)
+		require.Equal(t, "/frontend/task/12345678910", launchHttpResponse.Header.Get("Location"))
+		assert.Equal(t, "Task/"+*existingTask.Id, sessionData.StringValues["task"])
 	})
 
 	t.Run("test invalid SAML response", func(t *testing.T) {
@@ -319,7 +352,7 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.Len(t, conditionCode.Coding, 1)
 		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
 		require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
-		require.Equal(t, "hartfalen (aandoening)", *conditionCode.Coding[0].Display)
+		require.Equal(t, "hartfalen", *conditionCode.Coding[0].Display)
 	})
 	t.Run("Heart failure", func(t *testing.T) {
 		task := map[string]interface{}{
@@ -332,8 +365,8 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.Len(t, conditionCode.Coding, 1)
 		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
 		require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
-		require.Equal(t, "hartfalen (aandoening)", *conditionCode.Coding[0].Display)
-		require.Equal(t, "hartfalen (aandoening)", *conditionCode.Text)
+		require.Equal(t, "hartfalen", *conditionCode.Coding[0].Display)
+		require.Equal(t, "hartfalen", *conditionCode.Text)
 	})
 	t.Run("COPD", func(t *testing.T) {
 		task := map[string]interface{}{
@@ -346,8 +379,8 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.Len(t, conditionCode.Coding, 1)
 		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
 		require.Equal(t, "13645005", *conditionCode.Coding[0].Code)
-		require.Equal(t, "chronische obstructieve longaandoening (aandoening)", *conditionCode.Coding[0].Display)
-		require.Equal(t, "chronische obstructieve longaandoening (aandoening)", *conditionCode.Text)
+		require.Equal(t, "chronische obstructieve longaandoening", *conditionCode.Coding[0].Display)
+		require.Equal(t, "chronische obstructieve longaandoening", *conditionCode.Text)
 	})
 	t.Run("Asthma", func(t *testing.T) {
 		task := map[string]interface{}{
@@ -360,8 +393,8 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.Len(t, conditionCode.Coding, 1)
 		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
 		require.Equal(t, "195967001", *conditionCode.Coding[0].Code)
-		require.Equal(t, "astma (aandoening)", *conditionCode.Coding[0].Display)
-		require.Equal(t, "astma (aandoening)", *conditionCode.Text)
+		require.Equal(t, "astma", *conditionCode.Coding[0].Display)
+		require.Equal(t, "astma", *conditionCode.Text)
 	})
 	t.Run("unknown workflow", func(t *testing.T) {
 		task := map[string]interface{}{

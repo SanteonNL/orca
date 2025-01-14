@@ -6,11 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -434,10 +435,14 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 		Patient        string `json:"patient"`
 		ServiceRequest string `json:"serviceRequest"`
 		Practitioner   string `json:"practitioner"`
+		Task           string `json:"task"`
+		TaskIdentifier string `json:"taskIdentifier"`
 	}{
 		Patient:        session.StringValues["patient"],
 		ServiceRequest: session.StringValues["serviceRequest"],
 		Practitioner:   session.StringValues["practitioner"],
+		Task:           session.StringValues["task"],
+		TaskIdentifier: session.StringValues["taskIdentifier"],
 	}
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)

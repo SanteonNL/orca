@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
@@ -281,6 +282,13 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 	tx := coolfhir.Transaction().
 		Update(questionnaire, questionnaireRef).
 		Create(subtask, coolfhir.WithFullUrl(subtaskRef))
+
+	if isPrimaryTask && primaryTask.Status == fhir.TaskStatusRequested {
+		// Mark the task as "received" to indicate that the task is being processed
+		log.Info().Ctx(ctx).Msgf("Marking task as received (id=%s)", *task.Id)
+		primaryTask.Status = fhir.TaskStatusReceived
+		tx.Update(primaryTask, "Task/"+*primaryTask.Id)
+	}
 
 	bundle := tx.Bundle()
 

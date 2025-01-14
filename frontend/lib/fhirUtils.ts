@@ -1,5 +1,5 @@
 import Client from 'fhir-kit-client';
-import { Bundle, CarePlan, Condition, Patient, Questionnaire, Reference, Resource, ServiceRequest, Task } from 'fhir/r4';
+import {Bundle, CarePlan, Condition, Patient, Questionnaire, Reference, Resource, ServiceRequest, Task} from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -11,15 +11,15 @@ export const createEhrClient = () => {
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`
         : "http://localhost:9090/fhir";
 
-    return new Client({ baseUrl });
+    return new Client({baseUrl});
 };
 
 export const createCpsClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
-        : "http://localhost:7090/fhir";
+        : "http://localhost:9090/fhir";
 
-    return new Client({ baseUrl });
+    return new Client({baseUrl});
 };
 
 export const fetchAllBundlePages = async <T extends Resource>(
@@ -39,7 +39,13 @@ export const fetchAllBundlePages = async <T extends Resource>(
     processBundle(initialBundle);
 
     while (nextPageUrl) {
-        const result = await client.nextPage({ bundle: { resourceType: 'Bundle', type: 'searchset', link: [{ relation: 'next', url: nextPageUrl }] } });
+        const result = await client.nextPage({
+            bundle: {
+                resourceType: 'Bundle',
+                type: 'searchset',
+                link: [{relation: 'next', url: nextPageUrl}]
+            }
+        });
         const bundle = result as FhirBundle<T>;
         processBundle(bundle);
         nextPageUrl = bundle.link?.find(link => link.relation === 'next')?.url;
@@ -82,7 +88,7 @@ export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanN
 }
 
 const cleanPatient = (patient: Patient) => {
-    const cleanedPatient = { ...patient, id: undefined }
+    const cleanedPatient = {...patient, id: undefined}
     if (cleanedPatient.contact) {
         for (const contact of cleanedPatient.contact) {
             if (contact.organization?.reference) {
@@ -115,7 +121,7 @@ const cleanPatient = (patient: Patient) => {
 
 const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string) => {
     // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
-    const cleanedServiceRequest = { ...serviceRequest, id: undefined };
+    const cleanedServiceRequest = {...serviceRequest, id: undefined};
 
     if (serviceRequest.subject?.identifier?.system === BSN_SYSTEM && serviceRequest.subject?.identifier?.value !== getBsn(patient)) {
         throw new Error("Subject BSN in service request differs from Patient BSN");
@@ -145,11 +151,11 @@ const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, p
     return cleanedServiceRequest;
 }
 
-export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: string, serviceRequestReference: string): Task => {
+export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: string, serviceRequestReference: string, taskIdentifier?: string): Task => {
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task");
 
-    return {
+    const task = {
         resourceType: "Task",
         meta: {
             profile: [
@@ -176,15 +182,48 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
             type: "ServiceRequest",
             reference: serviceRequestReference,
         },
+    } as Task
+
+    if (taskIdentifier) {
+        const systemAndIdentifier = taskIdentifier.split("|")
+        if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`")
+        task.identifier = [{
+            system: systemAndIdentifier[0],
+            value: systemAndIdentifier[1],
+        }]
     }
+
+    return task
 }
 
-export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient): Bundle & { type: "transaction" } => {
+export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, taskIdentifier?: string): Bundle & {
+    type: "transaction"
+} => {
     const cleanedPatient = cleanPatient(patient);
-    const cleanedServiceRequest = cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient");
-    const constructedTask = constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest");
-
-    return {
+    const serviceRequestEntry = {
+        fullUrl: "urn:uuid:serviceRequest",
+        resource: cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient"),
+        request: {
+            method: "POST",
+            url: "ServiceRequest",
+            ifNoneExist: "",
+        }
+    }
+    const taskEntry = {
+        fullUrl: "urn:uuid:task",
+        resource: constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest", taskIdentifier),
+        request: {
+            method: "POST",
+            url: "Task",
+            ifNoneExist: "",
+        }
+    }
+    if (taskIdentifier) {
+        // TODO: Find out why the `ifNoneExist` doesn't work in the dev setup - it keeps creating new resources
+        serviceRequestEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
+        taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
+    }
+    const bundle = {
         resourceType: "Bundle",
         type: "transaction",
         entry: [
@@ -197,24 +236,12 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                     ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
                 }
             },
-            {
-                fullUrl: "urn:uuid:serviceRequest",
-                resource: cleanedServiceRequest,
-                request: {
-                    method: "POST",
-                    url: "ServiceRequest"
-                }
-            },
-            {
-                fullUrl: "urn:uuid:task",
-                resource: constructedTask,
-                request: {
-                    method: "POST",
-                    url: "Task"
-                }
-            }
+            serviceRequestEntry,
+            taskEntry
         ]
     }
+
+    return bundle as Bundle & { type: "transaction" }
 }
 
 export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Questionnaire) => {
