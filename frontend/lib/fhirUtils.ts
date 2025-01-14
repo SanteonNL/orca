@@ -192,9 +192,27 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
 
 export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, taskIdentifier?: string): Bundle & { type: "transaction" } => {
     const cleanedPatient = cleanPatient(patient);
-    const cleanedServiceRequest = cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient");
-    const constructedTask = constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest", taskIdentifier);
-
+    const serviceRequestEntry = {
+        fullUrl: "urn:uuid:serviceRequest",
+        resource: cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient"),
+        request: {
+            method: "POST",
+            url: "ServiceRequest"
+        }
+    }
+    const taskEntry = {
+        fullUrl: "urn:uuid:task",
+        resource: constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest", taskIdentifier),
+        request: {
+            method: "POST",
+            url: "Task",
+        }
+    }
+    if (taskIdentifier) {
+        // TODO: Find out why the `ifNoneExist` doesn't work in the dev setup - it keeps creating new resources
+        serviceRequestEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
+        taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
+    }
     const bundle = {
         resourceType: "Bundle",
         type: "transaction",
@@ -208,32 +226,9 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                     ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
                 }
             },
-            {
-                fullUrl: "urn:uuid:serviceRequest",
-                resource: cleanedServiceRequest,
-                request: {
-                    method: "POST",
-                    url: "ServiceRequest"
-                }
-            },
-            {
-                fullUrl: "urn:uuid:task",
-                resource: constructedTask,
-                request: {
-                    method: "POST",
-                    url: "Task",
-                }
-            }
+            serviceRequestEntry,
+            taskEntry
         ]
-    }
-
-    if (taskIdentifier) {
-        bundle.entry
-            .filter(entry => entry.fullUrl === "urn:uuid:task" || entry.fullUrl === "urn:uuid:serviceRequest")
-            .forEach(bundleEntry => {
-                //TODO: Find out why the `ifNoneExist` doesn't work in the dev setup - it keeps creating new resources
-                bundleEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
-            })
     }
 
     return bundle as Bundle & { type: "transaction" }
