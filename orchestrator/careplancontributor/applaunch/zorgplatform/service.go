@@ -570,7 +570,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("719858009"),
-					Display: to.Ptr("monitoren via telegeneeskunde (regime/therapie)"),
+					Display: to.Ptr("Telehealth monitoring"),
 				},
 			},
 		},
@@ -646,10 +646,10 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("84114007"),
-					Display: to.Ptr("hartfalen (aandoening)"),
+					Display: to.Ptr("hartfalen"),
 				},
 			},
-			Text: to.Ptr("hartfalen (aandoening)"),
+			Text: to.Ptr("hartfalen"),
 		}, nil
 	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.2":
 		return &fhir.CodeableConcept{
@@ -657,10 +657,10 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("13645005"),
-					Display: to.Ptr("chronische obstructieve longaandoening (aandoening)"),
+					Display: to.Ptr("chronische obstructieve longaandoening"),
 				},
 			},
-			Text: to.Ptr("chronische obstructieve longaandoening (aandoening)"),
+			Text: to.Ptr("chronische obstructieve longaandoening"),
 		}, nil
 	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.3":
 		return &fhir.CodeableConcept{
@@ -668,10 +668,10 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("195967001"),
-					Display: to.Ptr("astma (aandoening)"),
+					Display: to.Ptr("astma"),
 				},
 			},
-			Text: to.Ptr("astma (aandoening)"),
+			Text: to.Ptr("astma"),
 		}, nil
 	}
 	return nil, fmt.Errorf("unsupported workflow definition: %s", workflowReference)
