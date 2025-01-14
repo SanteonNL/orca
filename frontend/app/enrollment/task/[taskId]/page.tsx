@@ -24,7 +24,12 @@ export default function EnrollmentTaskPage() {
     const conditionName = task?.reasonCode?.coding?.[0].display || "Unknown"
     const taskDate = task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend"
 
-    const StatusWrapper = ({ children }: { children: React.ReactNode }) => <div className='w-[568px]'>{children}</div>
+    const StatusWrapper = ({ children }: { children: React.ReactNode }) => (
+        <div className='w-[568px] flex flex-col gap-4'>
+            {children}
+            {!!task?.statusReason?.text && <p>Statusreden: {task.statusReason.text}</p>}
+        </div>
+    )
 
     switch (task?.status) {
         case "accepted":
