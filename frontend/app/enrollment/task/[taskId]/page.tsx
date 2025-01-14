@@ -38,7 +38,7 @@ export default function EnrollmentTaskPage() {
         case "in-progress":
             return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} uit te voeren, wordt momenteel (sinds {taskDate}) uitgevoerd door {organizationName(task.owner)}.</StatusWrapper>
         case "on-hold":
-            return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} uit te voeren, is sinds {taskDate} gepauseerd door {organizationName(task.owner)}.</StatusWrapper>
+            return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} uit te voeren, is sinds {taskDate} gepauzeerd door {organizationName(task.owner)}.</StatusWrapper>
         case "requested":
             return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} is verstuurd naar {organizationName(task.owner)}, maar nog niet ontvangen.</StatusWrapper>
         case "received":
