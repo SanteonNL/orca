@@ -6,6 +6,7 @@ import (
 	"errors"
 	"github.com/rs/zerolog/log"
 	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/twmb/franz-go/pkg/sasl/oauth"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
 	"os"
 	"path"
@@ -122,6 +123,49 @@ func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient, useTls bool) 
 	seeds := []string{endpoint}
 	mechanism := config.Sasl.Mechanism
 	switch mechanism {
+	case "OAUTHBEARER":
+		oauthClient, err := NewAzureOauthClient()
+		if err != nil {
+			return nil, err
+		}
+		principalToken, err := oauthClient.GetAzureCredential()
+		if err != nil {
+			return nil, err
+		}
+		bearerToken, err := oauthClient.GetBearerToken(principalToken)
+		if err != nil {
+			return nil, err
+		}
+		opts := []kgo.Opt{
+			kgo.SeedBrokers(seeds...),
+			// SASL Options
+			kgo.SASL(oauth.Auth{
+				Token: bearerToken.TokenValue,
+			}.AsMechanism()),
+			// Needed for Microsoft Event Hubs
+			kgo.ProducerBatchCompression(kgo.NoCompression()),
+			kgo.DefaultProduceTopic(config.Topic),
+		}
+		if useTls {
+			opts = append(opts, kgo.DialTLS())
+		}
+		client, err := kgo.NewClient(opts...)
+		if err != nil {
+			return nil, err
+		}
+		log.Info().Msgf("PingOnStartup is set to %t", config.PingOnStartup)
+		if config.PingOnStartup {
+			err = pingConnection(err, client)
+			if err != nil {
+				log.Info().Msgf("PingOnStartup failed with %s", err.Error())
+			}
+		}
+
+		kafkaClient = &KafkaClientImpl{
+			topic:  config.Topic,
+			client: client,
+		}
+		return kafkaClient, nil
 	case "PLAIN":
 		username := config.Sasl.Username
 		password := config.Sasl.Password
