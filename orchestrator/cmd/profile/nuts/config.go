@@ -6,10 +6,17 @@ import (
 )
 
 type Config struct {
-	API              APIConfig    `koanf:"api"`
-	Public           PublicConfig `koanf:"public"`
-	OwnSubject       string       `koanf:"subject"`
-	DiscoveryService string       `koanf:"discoveryservice"`
+	API              APIConfig           `koanf:"api"`
+	Public           PublicConfig        `koanf:"public"`
+	OwnSubject       string              `koanf:"subject"`
+	DiscoveryService string              `koanf:"discoveryservice"`
+	AzureKeyVault    AzureKeyVaultConfig `koanf:"azurekv"`
+}
+
+type AzureKeyVaultConfig struct {
+	URL            string `koanf:"url"`
+	CredentialType string `koanf:"credentialtype"`
+	ClientCertName string `koanf:"clientcertname"`
 }
 
 func (c Config) Validate() error {
@@ -25,6 +32,14 @@ func (c Config) Validate() error {
 	}
 	if c.DiscoveryService == "" {
 		return errors.New("invalid/empty Discovery Service ID")
+	}
+	if c.AzureKeyVault.ClientCertName != "" || c.AzureKeyVault.URL != "" {
+		if c.AzureKeyVault.ClientCertName == "" {
+			return errors.New("invalid/empty Azure Key Vault client certificate name")
+		}
+		if c.AzureKeyVault.URL == "" {
+			return errors.New("invalid/empty Azure Key Vault URL")
+		}
 	}
 	return nil
 }

@@ -2,7 +2,11 @@ package nuts
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test/vcrclient_mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -270,5 +274,67 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		identities, err = prof.Identities(ctx)
 		require.NoError(t, err)
 		require.Len(t, identities, 2)
+	})
+}
+
+func TestDutchNutsProfile_HttpClient(t *testing.T) {
+	t.Run("without client cert", func(t *testing.T) {
+		// Create an HTTP test server that requires a TLS client certificate
+		httpServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer httpServer.Close()
+
+		globals.DefaultTLSConfig = httpServer.Client().Transport.(*http.Transport).TLSClientConfig
+
+		profile := DutchNutsProfile{}
+		httpResponse, err := profile.HttpClient().Get(httpServer.URL)
+
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("with client cert", func(t *testing.T) {
+		// Create an HTTP test server that requires a TLS client certificate
+		httpServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer httpServer.Close()
+		clientCert, err := tls.LoadX509KeyPair("test_cert.pem", "test_cert_key.pem")
+		require.NoError(t, err)
+		httpServer.TLS = &tls.Config{}
+		httpServer.TLS.ClientCAs = x509.NewCertPool()
+		httpServer.TLS.ClientCAs.AppendCertsFromPEM(clientCert.Certificate[0])
+		httpServer.TLS.ClientAuth = tls.RequireAnyClientCert
+		httpServer.StartTLS()
+
+		globals.DefaultTLSConfig = httpServer.Client().Transport.(*http.Transport).TLSClientConfig
+		globals.DefaultTLSConfig.Certificates = []tls.Certificate{clientCert}
+		profile := DutchNutsProfile{
+			clientCert: &clientCert,
+		}
+
+		httpResponse, err := profile.HttpClient().Get(httpServer.URL)
+
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+}
+
+func TestNew(t *testing.T) {
+	t.Run("load client certificate from Azure Key Vault", func(t *testing.T) {
+		kv := azkeyvault.NewTestServer()
+		azkeyvault.AzureHttpRequestDoer = kv.TestHttpServer.Client()
+		cert, err := tls.LoadX509KeyPair("test_cert.pem", "test_cert_key.pem")
+		require.NoError(t, err)
+		kv.AddCertificate("test-client-cert", &cert)
+
+		profile, err := New(Config{
+			AzureKeyVault: AzureKeyVaultConfig{
+				URL:            kv.TestHttpServer.URL,
+				ClientCertName: "test-client-cert",
+			},
+		})
+		require.NoError(t, err)
+		require.NotNil(t, profile.clientCert)
 	})
 }

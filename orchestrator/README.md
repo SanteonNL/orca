@@ -1,7 +1,6 @@
 ## Configuration
 Use the following environment variables to configure the orchestrator:
 
-
 ### General configuration
 - `ORCA_PUBLIC_BASEURL` (required): base URL of the public endpoints.
 - `ORCA_PUBLIC_ADDRESS` (required): address the public endpoints bind to (default: `:8080`).
@@ -15,6 +14,9 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_NUTS_API_URL`: address of the Nuts node API to use, e.g. `http://nutsnode:8081`.
 - `ORCA_NUTS_SUBJECT`: Nuts subject of the local party, as it was created in/by the Nuts node.
 - `ORCA_NUTS_DISCOVERYSERVICE`: ID of the Nuts Discovery Service that is used for CSD lookups (finding (local) care organizations and looking up their endpoints).
+- `ORCA_NUTS_AZUREKV_URL`: URL of the Azure Key Vault that holds the client certificate for outbound HTTP requests.
+- `ORCA_NUTS_AZUREKV_CLIENTCERTNAME`: Name of the certificate for outbound HTTP requests.
+- `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 
 ### Care Plan Contributor configuration
 - `ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL`: FHIR base URL of the CarePlan service.
