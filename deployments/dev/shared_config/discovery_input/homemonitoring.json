@@ -96,6 +96,16 @@
               "filter": {
                 "type": "string"
               }
+            },
+            {
+              "id": "fhir_base_url",
+              "purpose": "Base URL of the Care Plan Contributor's FHIR API provided by the SCP-node.",
+              "path": [
+                "$.credentialSubject.fhirBaseURL"
+              ],
+              "filter": {
+                "type": "string"
+              }
             }
           ]
         }
