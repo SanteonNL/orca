@@ -98,15 +98,19 @@ func (d DutchNutsProfile) RegisterHTTPHandlers(basePath string, resourceServerUR
 }
 
 func (d DutchNutsProfile) HttpClient() *http.Client {
-	var httpTransport *http.Transport
+	var roundTripper http.RoundTripper
 	if d.clientCert != nil {
 		tlsConfig := globals.DefaultTLSConfig.Clone()
 		tlsConfig.Certificates = []tls.Certificate{*d.clientCert}
-		httpTransport = &http.Transport{TLSClientConfig: tlsConfig}
+		roundTripper = &http.Transport{TLSClientConfig: tlsConfig}
+	} else {
+		httpTransport := http.DefaultTransport.(*http.Transport).Clone()
+		httpTransport.TLSClientConfig = globals.DefaultTLSConfig
+		roundTripper = httpTransport
 	}
 	return &http.Client{
 		Transport: &oauth2.Transport{
-			UnderlyingTransport: httpTransport,
+			UnderlyingTransport: roundTripper,
 			TokenSource: nuts.OAuth2TokenSource{
 				NutsSubject: d.Config.OwnSubject,
 				NutsAPIURL:  d.Config.API.URL,

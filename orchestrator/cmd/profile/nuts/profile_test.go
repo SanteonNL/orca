@@ -278,7 +278,22 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 }
 
 func TestDutchNutsProfile_HttpClient(t *testing.T) {
-	t.Run("with client cert configured", func(t *testing.T) {
+	t.Run("without client cert", func(t *testing.T) {
+		// Create an HTTP test server that requires a TLS client certificate
+		httpServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+		}))
+		defer httpServer.Close()
+
+		globals.DefaultTLSConfig = httpServer.Client().Transport.(*http.Transport).TLSClientConfig
+
+		profile := DutchNutsProfile{}
+		httpResponse, err := profile.HttpClient().Get(httpServer.URL)
+
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("with client cert", func(t *testing.T) {
 		// Create an HTTP test server that requires a TLS client certificate
 		httpServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
