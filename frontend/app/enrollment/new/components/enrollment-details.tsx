@@ -6,9 +6,10 @@ import organizationName from '@/lib/fhirUtils'
 
 export default function EnrollmentDetails() {
 
-    const { serviceRequest, taskCondition, patient, loading } = useEnrollmentStore()
+    const { serviceRequest, taskCondition, patient, loading, launchContext } = useEnrollmentStore()
 
     if (loading) return <Spinner className="h-12 w-12 text-primary" />
+
 
     return (
         (

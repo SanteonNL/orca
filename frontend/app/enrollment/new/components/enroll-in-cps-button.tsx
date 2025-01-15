@@ -24,7 +24,7 @@ interface Props {
  */
 export default function EnrollInCpsButton({ className }: Props) {
 
-    const { patient, selectedCarePlan, taskCondition, serviceRequest, loading } = useEnrollment()
+    const { patient, selectedCarePlan, taskCondition, serviceRequest, loading, launchContext } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
 
@@ -75,7 +75,7 @@ export default function EnrollInCpsButton({ className }: Props) {
         var taskBundle: Bundle & { type: "transaction"; };
 
         try {
-            taskBundle = constructTaskBundle(serviceRequest, taskCondition, patient);
+            taskBundle = constructTaskBundle(serviceRequest, taskCondition, patient, launchContext?.taskIdentifier);
         } catch (error) {
             console.debug("Error constructing taskBundle");
             console.error(error);

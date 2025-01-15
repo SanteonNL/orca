@@ -847,3 +847,30 @@ func TestParseExternalLiteralReference(t *testing.T) {
 		assert.Empty(t, ref)
 	})
 }
+
+func TestParseLocalReference(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		resourceType, resourceID, err := ParseLocalReference("")
+		require.EqualError(t, err, "local reference must contain exactly one '/'")
+		assert.Empty(t, resourceType)
+		assert.Empty(t, resourceID)
+	})
+	t.Run("no slash", func(t *testing.T) {
+		resourceType, resourceID, err := ParseLocalReference("Patient")
+		require.EqualError(t, err, "local reference must contain exactly one '/'")
+		assert.Empty(t, resourceType)
+		assert.Empty(t, resourceID)
+	})
+	t.Run("no resource ID", func(t *testing.T) {
+		resourceType, resourceID, err := ParseLocalReference("Patient/")
+		require.EqualError(t, err, "local reference must contain a resource ID")
+		assert.Empty(t, resourceType)
+		assert.Empty(t, resourceID)
+	})
+	t.Run("valid", func(t *testing.T) {
+		resourceType, resourceID, err := ParseLocalReference("Patient/123")
+		require.NoError(t, err)
+		assert.Equal(t, "Patient", resourceType)
+		assert.Equal(t, "123", resourceID)
+	})
+}

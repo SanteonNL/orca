@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
@@ -90,7 +91,8 @@ func (t TestProfile) HttpClient() *http.Client {
 var _ csd.Directory = TestCsdDirectory{}
 
 type TestCsdDirectory struct {
-	Endpoint string
+	Endpoint  string
+	Endpoints map[string]map[string]string
 }
 
 func (t TestCsdDirectory) LookupEntity(ctx context.Context, identifier fhir.Identifier) (*fhir.Reference, error) {
@@ -98,6 +100,20 @@ func (t TestCsdDirectory) LookupEntity(ctx context.Context, identifier fhir.Iden
 }
 
 func (t TestCsdDirectory) LookupEndpoint(_ context.Context, owner *fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
+	if t.Endpoints != nil {
+		if endpoints, ok := t.Endpoints[coolfhir.ToString(owner)]; ok {
+			if endpoint, ok := endpoints[endpointName]; ok {
+				return []fhir.Endpoint{
+					{
+						Address: endpoint,
+					},
+				}, nil
+			}
+		}
+	}
+	if t.Endpoint == "" {
+		return nil, nil
+	}
 	return []fhir.Endpoint{
 		{
 			Address: t.Endpoint,

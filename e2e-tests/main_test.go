@@ -60,6 +60,7 @@ func Test_Main(t *testing.T) {
 	var patient fhir.Patient
 	var task fhir.Task
 	var serviceRequest fhir.ServiceRequest
+	var carePlanId string
 	t.Run("EHR using Orchestrator REST API", func(t *testing.T) {
 		t.Log("Creating patient for Task to refer to")
 		{
@@ -141,6 +142,7 @@ func Test_Main(t *testing.T) {
 				task.Status = fhir.TaskStatusRequested
 				err = hospitalOrcaFHIRClient.Create(task, &task)
 				require.NoError(t, err)
+				carePlanId = strings.TrimPrefix(*task.BasedOn[0].Reference, "CarePlan/")
 			}
 			t.Log("Responding to Task Questionnaire")
 			{
@@ -179,6 +181,7 @@ func Test_Main(t *testing.T) {
 				responseBundle := caramel.Transaction().
 					Create(questionnaireResponse, caramel.WithFullUrl("urn:uuid:questionnaire-response")).
 					Update(subTask, "Task/"+*subTask.ID).Bundle()
+
 				err = hospitalOrcaFHIRClient.Create(responseBundle, &responseBundle, fhirclient.AtPath("/"))
 				require.NoError(t, err)
 
@@ -195,6 +198,16 @@ func Test_Main(t *testing.T) {
 				require.Equal(t, questionnaireResponse.Status, fetchedQuestionnaireResponse.Status)
 				require.Equal(t, len(questionnaireResponse.Item), len(fetchedQuestionnaireResponse.Item))
 			}
+			t.Run("Check Task requester and owner are in the CareTeam", func(t *testing.T) {
+				var carePlansAndCareTeams fhir.Bundle
+				err := hospitalOrcaFHIRClient.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &carePlansAndCareTeams)
+				require.NoError(t, err)
+				require.Len(t, carePlansAndCareTeams.Entry, 2, "Expected 2 entries in bundle")
+				// Assume CareTeam is 2nd resource
+				var careTeam fhir.CareTeam
+				require.NoError(t, json.Unmarshal(carePlansAndCareTeams.Entry[1].Resource, &careTeam))
+				require.Len(t, careTeam.Participant, 2)
+			})
 
 			//t.Log("Filler adding Questionnaire sub-Task...")
 			//subTask := fhir.Task{}

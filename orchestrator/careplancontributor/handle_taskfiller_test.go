@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 
 	"net/url"
@@ -27,21 +28,23 @@ import (
 
 func TestService_handleTaskFillerCreate(t *testing.T) {
 	tests := []struct {
-		name             string
-		ctx              context.Context
-		profile          profile.Provider
-		notificationTask fhir.Task
-		primaryTask      *fhir.Task
-		serviceRequest   fhir.ServiceRequest
-		expectedError    error
-		numBundlesPosted int
-		mock             func(*mock.MockClient)
-		expectSubmission bool
+		name                    string
+		ctx                     context.Context
+		profile                 profile.Provider
+		notificationTask        fhir.Task
+		primaryTask             *fhir.Task
+		serviceRequest          fhir.ServiceRequest
+		expectedError           error
+		numBundlesPosted        int
+		mock                    func(*mock.MockClient)
+		expectSubmission        bool
+		expectPrimaryTaskStatus *fhir.TaskStatus
 	}{
 		{
-			name:             "primary task, owner = local organization, triggers subtask creation",
-			notificationTask: deep.Copy(primaryTask),
-			numBundlesPosted: 1, // One subtask should be created
+			name:                    "primary task, owner = local organization, triggers subtask creation",
+			notificationTask:        deep.Copy(primaryTask),
+			numBundlesPosted:        1, // One subtask should be created
+			expectPrimaryTaskStatus: to.Ptr(fhir.TaskStatusReceived),
 		},
 		{
 			name:             "primary task, owner != local organization, nothing should happen",
@@ -50,7 +53,8 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			notificationTask: deep.Copy(primaryTask),
 		},
 		{
-			name: "primary task, contains reasonReference instead of reasonCode, triggers subtask creation",
+			name:                    "primary task, contains reasonReference instead of reasonCode, triggers subtask creation",
+			expectPrimaryTaskStatus: to.Ptr(fhir.TaskStatusReceived),
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonReference = &fhir.Reference{
 					Reference: to.Ptr("Condition/1"),
@@ -77,7 +81,8 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			numBundlesPosted: 1, // One subtask should be created
 		},
 		{
-			name: "error: primary task, multiple workflow matches",
+			name:                    "error: primary task, multiple workflow matches",
+			expectPrimaryTaskStatus: to.Ptr(fhir.TaskStatusFailed),
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonCode = &fhir.CodeableConcept{
 					Coding: []fhir.Coding{
@@ -95,7 +100,8 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			expectedError: errors.New("failed to process new primary Task: task rejected by filler: ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one (task=primary)"),
 		},
 		{
-			name: "primary task, duplicate reasonCodes (but fine, since they're the same)",
+			name:                    "primary task, duplicate reasonCodes (but fine, since they're the same)",
+			expectPrimaryTaskStatus: to.Ptr(fhir.TaskStatusReceived),
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.ReasonCode = &fhir.CodeableConcept{
 					Coding: []fhir.Coding{
@@ -149,7 +155,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			}),
 		},
 		{
-			name: "primary task, status=accepted, should not process",
+			name: "primary task, status=rejected, should not process",
 			notificationTask: deep.AlterCopy(primaryTask, func(t *fhir.Task) {
 				t.Status = fhir.TaskStatusRejected
 			}),
@@ -373,6 +379,13 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 								},
 							},
 						}
+
+						if tt.expectPrimaryTaskStatus != nil {
+							var existingTask fhir.Task
+							err := coolfhir.ResourceInBundle(&capturedTx, coolfhir.EntryHasID("primary"), &existingTask)
+							require.NoError(t, err)
+							require.Equal(t, *tt.expectPrimaryTaskStatus, existingTask.Status)
+						}
 						bytes, _ := json.Marshal(mockResponse)
 						_ = json.Unmarshal(bytes, &result)
 						return nil
@@ -380,6 +393,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					Times(tt.numBundlesPosted)
 			}
 
+			log.Info().Msgf("Running test case: %s", tt.name)
 			err := service.handleTaskNotification(ctx, mockFHIRClient, &notifiedTask)
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
