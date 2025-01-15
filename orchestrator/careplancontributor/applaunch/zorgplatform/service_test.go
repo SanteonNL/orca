@@ -10,7 +10,12 @@ import (
 	"crypto/x509"
 	"encoding/binary"
 	"encoding/pem"
+	"errors"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/jellydator/ttlcache/v3"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -19,10 +24,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/lib/test"
 
 	"github.com/stretchr/testify/assert"
 
@@ -334,10 +335,16 @@ func publicKeyToJWK(key rsa.PublicKey, id string, version string) *azkeys.JSONWe
 var _ SecureTokenService = &stubSecureTokenService{}
 
 type stubSecureTokenService struct {
+	invocations int
+	accessToken string
 }
 
-func (s stubSecureTokenService) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
-	return "stub-at", nil
+func (s *stubSecureTokenService) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
+	s.invocations++
+	if s.accessToken == "" {
+		return "stub-at", nil
+	}
+	return s.accessToken, nil
 }
 
 func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
@@ -408,6 +415,131 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 	})
 }
 
+func TestSTSAccessTokenRoundTripper(t *testing.T) {
+	tests := []struct {
+		name              string
+		carePlanReference string
+		expectedError     error
+		expectedCacheHits int
+		carePlan          *fhir.CarePlan
+		task              *fhir.Task
+		serviceRequest    *fhir.ServiceRequest
+		patient           *fhir.Patient
+	}{
+		{
+			name:              "ok",
+			carePlanReference: "http://example.com/CarePlan/123",
+		},
+		{
+			name:              "access token cache hit",
+			carePlanReference: "http://example.com/CarePlan/123",
+			expectedCacheHits: 3,
+		},
+		{
+			name:          "missing X-SCP-Context header",
+			expectedError: errors.New("missing X-Scp-Context header"),
+		},
+		{
+			name: "ServiceRequest doesn't have Zorgplatform Workflow ID",
+			serviceRequest: &fhir.ServiceRequest{
+				Id: to.Ptr("123"),
+			},
+			carePlanReference: "http://example.com/CarePlan/123",
+			expectedError:     errors.New("unable to get workflowId for CarePlan reference: expected ServiceRequest to have 1 identifier with system http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			cpsFHIRClient := &test.StubFHIRClient{}
+			if tt.carePlan == nil {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, fhir.CarePlan{
+					Id: to.Ptr("123"),
+					Subject: fhir.Reference{
+						Reference: to.Ptr("Patient/123"),
+					},
+					Activity: []fhir.CarePlanActivity{
+						{
+							Reference: &fhir.Reference{
+								Reference: to.Ptr("Task/123"),
+							},
+						},
+					},
+				})
+			} else {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, *tt.carePlan)
+			}
+			if tt.task == nil {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, fhir.Task{
+					Id: to.Ptr("123"),
+					Focus: &fhir.Reference{
+						Reference: to.Ptr("ServiceRequest/123"),
+					},
+				})
+			} else {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, *tt.task)
+			}
+			if tt.serviceRequest == nil {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, fhir.ServiceRequest{
+					Id: to.Ptr("123"),
+					Identifier: []fhir.Identifier{
+						{
+							System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
+							Value:  to.Ptr("415FD2C0-E88D-4C89-B9D6-8FBE31E2D1C9"),
+						},
+					},
+				})
+			} else {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, *tt.serviceRequest)
+			}
+			if tt.patient == nil {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, fhir.Patient{
+					Id: to.Ptr("123"),
+					Identifier: []fhir.Identifier{
+						{
+							System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+							Value:  to.Ptr("123456789"),
+						},
+					},
+				})
+			} else {
+				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, *tt.patient)
+			}
+
+			httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				coolfhir.SendResponse(w, http.StatusOK, fhir.Bundle{})
+			}))
+			rt := stsAccessTokenRoundTripper{
+				transport: httpServer.Client().Transport,
+				cpsFhirClient: func() fhirclient.Client {
+					return cpsFHIRClient
+				},
+				secureTokenService: &stubSecureTokenService{},
+				accessTokenCache: ttlcache.New[string, string](
+					ttlcache.WithTTL[string, string](accessTokenCacheTTL),
+				),
+			}
+
+			for i := 0; i < tt.expectedCacheHits+1; i++ {
+				httpRequest := httptest.NewRequest("POST", httpServer.URL, nil)
+				httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+				httpRequest.Header.Set("X-SCP-Context", tt.carePlanReference)
+				httpResponse, err := rt.RoundTrip(httpRequest)
+				if tt.expectedError != nil {
+					require.EqualError(t, err, tt.expectedError.Error())
+				} else {
+					require.NoError(t, err)
+					require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+				}
+			}
+			assert.Equal(t, tt.expectedCacheHits, int(rt.accessTokenCache.Metrics().Hits))
+		})
+	}
+}
+
 func TestService_EhrFhirProxy(t *testing.T) {
 	t.Run("POST-based search is rewritten to GET-based search", func(t *testing.T) {
 		cpsHttpServer := setupCarePlanService(t)
@@ -423,7 +555,10 @@ func TestService_EhrFhirProxy(t *testing.T) {
 		service := &Service{
 			zorgplatformHttpClient: zorgplatformFHIRServer.Client(),
 			secureTokenService:     &stubSecureTokenService{},
-			config:                 Config{ApiUrl: zorgplatformFHIRServer.URL + "/fhir"},
+			accessTokenCache: ttlcache.New[string, string](
+				ttlcache.WithTTL[string, string](accessTokenCacheTTL),
+			),
+			config: Config{ApiUrl: zorgplatformFHIRServer.URL + "/fhir"},
 		}
 
 		expectedSearchParams := url.Values{

@@ -11,6 +11,7 @@ require (
 	github.com/beevik/etree v1.4.1
 	github.com/braineet/saml v0.4.15
 	github.com/google/uuid v1.6.0
+	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/knadh/koanf/providers/env v1.0.0
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/nuts-foundation/go-nuts-client v0.1.7
@@ -34,6 +35,7 @@ require (
 	github.com/twmb/franz-go/pkg/kmsg v1.9.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.24.0 // indirect
+	golang.org/x/sync v0.10.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240318140521-94a12d6c2237 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect

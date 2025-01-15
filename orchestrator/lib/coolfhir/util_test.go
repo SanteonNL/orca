@@ -669,7 +669,7 @@ func TestFilterIdentifier(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want *[]fhir.Identifier
+		want []fhir.Identifier
 	}{
 		{
 			name: "nil identifiers",
@@ -677,7 +677,7 @@ func TestFilterIdentifier(t *testing.T) {
 				identifiers: nil,
 				system:      "http://example.com",
 			},
-			want: &[]fhir.Identifier{},
+			want: []fhir.Identifier{},
 		},
 		{
 			name: "no matching identifiers",
@@ -690,7 +690,7 @@ func TestFilterIdentifier(t *testing.T) {
 				},
 				system: "http://example.com",
 			},
-			want: &[]fhir.Identifier{},
+			want: []fhir.Identifier{},
 		},
 		{
 			name: "one matching identifier",
@@ -707,7 +707,7 @@ func TestFilterIdentifier(t *testing.T) {
 				},
 				system: "http://example.com",
 			},
-			want: &[]fhir.Identifier{
+			want: []fhir.Identifier{
 				{
 					System: to.Ptr("http://example.com"),
 					Value:  to.Ptr("123"),
@@ -729,7 +729,7 @@ func TestFilterIdentifier(t *testing.T) {
 				},
 				system: "http://example.com",
 			},
-			want: &[]fhir.Identifier{
+			want: []fhir.Identifier{
 				{
 					System: to.Ptr("http://example.com"),
 					Value:  to.Ptr("123"),

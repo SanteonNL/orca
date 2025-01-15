@@ -296,9 +296,9 @@ func IsScpTask(task *fhir.Task) bool {
 }
 
 // FilterIdentifier returns all identifiers matching the given system from the provided array of identifiers
-func FilterIdentifier(identifiers *[]fhir.Identifier, system string) *[]fhir.Identifier {
+func FilterIdentifier(identifiers *[]fhir.Identifier, system string) []fhir.Identifier {
 	if identifiers == nil {
-		return &[]fhir.Identifier{}
+		return []fhir.Identifier{}
 	}
 	var result []fhir.Identifier
 	for _, identifier := range *identifiers {
@@ -307,9 +307,9 @@ func FilterIdentifier(identifiers *[]fhir.Identifier, system string) *[]fhir.Ide
 		}
 	}
 	if len(result) == 0 {
-		return &[]fhir.Identifier{}
+		return []fhir.Identifier{}
 	}
-	return &result
+	return result
 }
 
 // FilterFirstIdentifier returns the first identifier matching the given system from the provided array of identifiers
