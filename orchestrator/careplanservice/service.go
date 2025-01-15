@@ -549,7 +549,9 @@ func (s *Service) reindexSearchParameter(ctx context.Context, param fhir.SearchP
 		},
 	}
 	var response []byte
-	return s.fhirClient.CreateWithContext(ctx, reindexParam, &response, fhirclient.AtPath("/$reindex"))
+	err := s.fhirClient.CreateWithContext(ctx, reindexParam, &response, fhirclient.AtPath("/$reindex"))
+	log.Info().Ctx(ctx).Msgf("Reindexing SearchParameter %s: %s", param.Url, string(response))
+	return err
 }
 
 func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error {
@@ -627,6 +629,7 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 	}
 
 	for _, param := range params {
+		log.Debug().Ctx(ctx).Msgf("Processing custom SearchParameter %s", param.SearchParamId)
 		// Check if param exists before creating
 		existingParamBundle := fhir.Bundle{}
 		err := s.fhirClient.Search("SearchParameter", url.Values{"url": {param.SearchParam.Url}}, &existingParamBundle)
@@ -634,9 +637,11 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 			return fmt.Errorf("search SearchParameter %s: %w", param.SearchParamId, err)
 		}
 		if len(existingParamBundle.Entry) > 0 {
+			log.Debug().Ctx(ctx).Msgf("SearchParameter/%s already exists, checking if it needs re-indexing", param.SearchParamId)
 			// Azure FHIR: if the SearchParameter exists but isn't in the CapabilityStatement, it needs to be re-indexed.
 			// See https://learn.microsoft.com/en-us/azure/healthcare-apis/azure-api-for-fhir/how-to-do-custom-search
 			if !searchParameterExists(capabilityStatement, param.SearchParam.Url) {
+				log.Debug().Ctx(ctx).Msgf("SearchParameter/%s needs re-indexing", param.SearchParamId)
 				if err := s.reindexSearchParameter(ctx, param.SearchParam); err != nil {
 					return fmt.Errorf("reindexing SearchParameter %s: %w", param.SearchParamId, err)
 				}
