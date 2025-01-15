@@ -329,8 +329,8 @@ func TestNew(t *testing.T) {
 		kv.AddCertificate("test-client-cert", &cert)
 
 		profile, err := New(Config{
-			AzureConfig: AzureKeyVaultConfig{
-				KeyVaultURL:    kv.TestHttpServer.URL,
+			AzureKeyVault: AzureKeyVaultConfig{
+				URL:            kv.TestHttpServer.URL,
 				ClientCertName: "test-client-cert",
 			},
 		})

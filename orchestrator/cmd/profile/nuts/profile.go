@@ -45,19 +45,19 @@ type DutchNutsProfile struct {
 
 func New(config Config) (*DutchNutsProfile, error) {
 	var clientCert *tls.Certificate
-	if config.AzureConfig.ClientCertName != "" {
-		if config.AzureConfig.CredentialType == "" {
-			config.AzureConfig.CredentialType = "managed_identity"
+	if config.AzureKeyVault.ClientCertName != "" {
+		if config.AzureKeyVault.CredentialType == "" {
+			config.AzureKeyVault.CredentialType = "managed_identity"
 		}
-		azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
+		azKeysClient, err := azkeyvault.NewKeysClient(config.AzureKeyVault.URL, config.AzureKeyVault.CredentialType, false)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
 		}
-		azCertClient, err := azkeyvault.NewCertificatesClient(config.AzureConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
+		azCertClient, err := azkeyvault.NewCertificatesClient(config.AzureKeyVault.URL, config.AzureKeyVault.CredentialType, false)
 		if err != nil {
 			return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
 		}
-		clientCert, err = azkeyvault.GetTLSCertificate(context.Background(), azCertClient, azKeysClient, config.AzureConfig.ClientCertName)
+		clientCert, err = azkeyvault.GetTLSCertificate(context.Background(), azCertClient, azKeysClient, config.AzureKeyVault.ClientCertName)
 		if err != nil {
 			return nil, fmt.Errorf("unable to get client certificate from Azure Key Vault: %w", err)
 		}
