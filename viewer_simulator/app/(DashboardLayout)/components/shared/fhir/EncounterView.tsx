@@ -27,7 +27,7 @@ export const EncounterView = () => {
                                             <strong>Type:</strong> {encounter.type?.[0]?.text || 'N/A'}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
-                                            <strong>Periode:</strong> {new Date(encounter.period?.start || '').toLocaleDateString('nl-NL')} - {encounter.period?.end ? new Date(encounter.period?.end).toLocaleDateString('nl-NL') : 'Lopend'}
+                                            <strong>Periode:</strong> {encounter.period?.start ? new Date(encounter.period?.start).toLocaleDateString('nl-NL') : 'N/A'} - {encounter.period?.end ? new Date(encounter.period?.end).toLocaleDateString('nl-NL') : 'Lopend'}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
                                             <strong>Reden:</strong> {encounter.reason?.[0]?.text || 'N/A'}

@@ -37,7 +37,7 @@ export const ConsentView = () => {
                       <strong>Beperkingen:</strong> {consent.except?.[0]?.extension?.find(ext => ext.url === 'http://nictiz.nl/fhir/StructureDefinition/zib-TreatmentDirective-Restrictions')?.valueString || 'N/A'}
                     </Typography>
                     <Typography variant="body1" component="p" color="text.primary">
-                      <strong>Startdatum:</strong> {new Date(consent.period?.start || '').toLocaleString('nl-NL') || 'N/A'}
+                      <strong>Startdatum:</strong> {consent.period?.start ? new Date(consent.period?.start).toLocaleString('nl-NL') : 'N/A'}
                     </Typography>
                   </>
                 }

@@ -17,10 +17,10 @@ export const AppointmentView = () => {
                             <strong>Status:</strong> {appointment.status}
                         </Typography>
                         <Typography variant="body1" component="p" color="text.primary">
-                            <strong>Start:</strong> {new Date(appointment.start || '').toLocaleDateString('nl-NL')}
+                            <strong>Start:</strong> {appointment.start ? new Date(appointment.start).toLocaleDateString('nl-NL') : 'N/A'}
                         </Typography>
                         <Typography variant="body1" component="p" color="text.primary">
-                            <strong>End:</strong> {new Date(appointment.end || '').toLocaleDateString('nl-NL')}
+                            <strong>End:</strong> {appointment.end ? new Date(appointment.end).toLocaleDateString('nl-NL') : 'N/A'}
                         </Typography>
                         <Typography variant="body1" component="p" color="text.primary">
                             <strong>Type:</strong> {appointment.appointmentType?.text}
@@ -45,7 +45,7 @@ export const AppointmentView = () => {
                             ))}
                         </List>
                         <Typography variant="body1" component="p" color="text.primary">
-                            <strong>Requested Period:</strong> {new Date(appointment.requestedPeriod?.[0]?.start || '').toLocaleDateString('nl-NL')} - {new Date(appointment.requestedPeriod?.[0]?.end || '').toLocaleDateString('nl-NL')}
+                            <strong>Requested Period:</strong> {appointment.requestedPeriod?.[0]?.start ? new Date(appointment.requestedPeriod?.[0]?.start).toLocaleDateString('nl-NL') : 'N/A'} - {appointment.requestedPeriod?.[0]?.end ? new Date(appointment.requestedPeriod?.[0]?.end).toLocaleDateString('nl-NL') : 'N/A'}
                         </Typography>
                         <Typography variant="body1" component="p" color="text.primary">
                             <strong>Opmerking:</strong> {appointment.comment?.[0] || 'Geen opmerkingen'}
