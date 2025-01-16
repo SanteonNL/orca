@@ -40,6 +40,20 @@ func (m *MockKafkaClient) EXPECT() *MockKafkaClientMockRecorder {
 	return m.recorder
 }
 
+// PingConnection mocks base method.
+func (m *MockKafkaClient) PingConnection(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PingConnection", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// PingConnection indicates an expected call of PingConnection.
+func (mr *MockKafkaClientMockRecorder) PingConnection(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PingConnection", reflect.TypeOf((*MockKafkaClient)(nil).PingConnection), ctx)
+}
+
 // SubmitMessage mocks base method.
 func (m *MockKafkaClient) SubmitMessage(ctx context.Context, key, value string) error {
 	m.ctrl.T.Helper()

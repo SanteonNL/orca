@@ -4,6 +4,7 @@ package ehr
 import (
 	"context"
 	"errors"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/rs/zerolog/log"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/oauth"
@@ -59,13 +60,13 @@ type SecurityConfig struct {
 //   - error: An error if the message could not be submitted.
 type KafkaClient interface {
 	SubmitMessage(ctx context.Context, key string, value string) error
+	PingConnection(ctx context.Context) error
 }
 
 // KafkaClientImpl is an implementation of the KafkaClient interface.
 // It holds the Kafka topic and producer used to submit messages.
 type KafkaClientImpl struct {
-	topic  string
-	client *kgo.Client
+	config KafkaConfig
 }
 
 type DebugClient struct {
@@ -86,53 +87,39 @@ type NoopClient struct {
 //   - KafkaClient: An implementation of the KafkaClient interface.
 //   - error: An error if the Kafka producer could not be created.
 func NewClient(config KafkaConfig) (KafkaClient, error) {
-	var kafkaClient KafkaClient
 	if config.Enabled {
 		if config.DebugOnly {
 			ctx := context.Background()
 			log.Info().Ctx(ctx).Msg("Debug mode enabled, writing messages to files in OS temp dir")
 			return &DebugClient{}, nil
 		}
-		switch config.Security.Protocol {
-		case "SASL_SSL":
-			return CreateSaslClient(config, kafkaClient, true)
-		case "SASL_PLAINTEXT":
-			return CreateSaslClient(config, kafkaClient, false)
-		default:
-			err := errors.New("Unsupported protocol: " + config.Security.Protocol)
-			return nil, err
-
+		kafkaClient := newKafkaClient(config)
+		if config.PingOnStartup {
+			err := kafkaClient.PingConnection(context.Background())
+			if err != nil {
+				log.Error().Err(err).Msgf("PingOnStartup failed with %s", err.Error())
+				return nil, err
+			}
 		}
-
+		return kafkaClient, nil
 	}
 	return &NoopClient{}, nil
 }
 
-// CreateSaslClient creates a new Kafka client with SASL authentication based on the provided KafkaConfig.
-// It supports the PLAIN mechanism for SASL authentication.
-//
-// Parameters:
-//   - config: KafkaConfig containing the configuration for the Kafka client.
-//   - kafkaClient: KafkaClient interface to be initialized.
-//
-// Returns:
-//   - KafkaClient: An implementation of the KafkaClient interface.
-//   - error: An error if the Kafka client could not be created or if the mechanism is unsupported.
-func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient, useTls bool) (KafkaClient, error) {
-	endpoint := config.Endpoint
+var newKafkaClient = func(config KafkaConfig) KafkaClient {
+	return &KafkaClientImpl{
+		config: config,
+	}
+}
+
+// CreateSaslClient initializes and returns a Kafka client configured with SASL authentication and optional TLS support.
+func (k *KafkaClientImpl) CreateSaslClient(ctx context.Context, useTls bool) (KgoClient, error) {
+	endpoint := k.config.Endpoint
 	seeds := []string{endpoint}
-	mechanism := config.Sasl.Mechanism
+	mechanism := k.config.Sasl.Mechanism
 	switch mechanism {
 	case "OAUTHBEARER":
-		oauthClient, err := NewAzureOauthClient()
-		if err != nil {
-			return nil, err
-		}
-		principalToken, err := oauthClient.GetAzureCredential()
-		if err != nil {
-			return nil, err
-		}
-		bearerToken, err := oauthClient.GetBearerToken(principalToken)
+		bearerToken, err := getAccessToken(ctx, endpoint)
 		if err != nil {
 			return nil, err
 		}
@@ -140,35 +127,25 @@ func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient, useTls bool) 
 			kgo.SeedBrokers(seeds...),
 			// SASL Options
 			kgo.SASL(oauth.Auth{
-				Token: bearerToken.TokenValue,
+				Token: bearerToken.Token,
 			}.AsMechanism()),
 			// Needed for Microsoft Event Hubs
 			kgo.ProducerBatchCompression(kgo.NoCompression()),
-			kgo.DefaultProduceTopic(config.Topic),
+			kgo.DefaultProduceTopic(k.config.Topic),
 		}
 		if useTls {
 			opts = append(opts, kgo.DialTLS())
 		}
-		client, err := kgo.NewClient(opts...)
+		client, err := newKgoClient(opts)
 		if err != nil {
 			return nil, err
 		}
-		log.Info().Msgf("PingOnStartup is set to %t", config.PingOnStartup)
-		if config.PingOnStartup {
-			err = pingConnection(err, client)
-			if err != nil {
-				log.Info().Msgf("PingOnStartup failed with %s", err.Error())
-			}
-		}
+		log.Info().Msgf("PingOnStartup is set to %t", k.config.PingOnStartup)
 
-		kafkaClient = &KafkaClientImpl{
-			topic:  config.Topic,
-			client: client,
-		}
-		return kafkaClient, nil
+		return client, nil
 	case "PLAIN":
-		username := config.Sasl.Username
-		password := config.Sasl.Password
+		username := k.config.Sasl.Username
+		password := k.config.Sasl.Password
 		opts := []kgo.Opt{
 			kgo.SeedBrokers(seeds...),
 			// SASL Options
@@ -178,36 +155,78 @@ func CreateSaslClient(config KafkaConfig, kafkaClient KafkaClient, useTls bool) 
 			}.AsMechanism()),
 			// Needed for Microsoft Event Hubs
 			kgo.ProducerBatchCompression(kgo.NoCompression()),
-			kgo.DefaultProduceTopic(config.Topic),
+			kgo.DefaultProduceTopic(k.config.Topic),
 		}
 		if useTls {
 			opts = append(opts, kgo.DialTLS())
 		}
-		client, err := kgo.NewClient(opts...)
+		client, err := newKgoClient(opts)
 		if err != nil {
 			return nil, err
 		}
-		log.Info().Msgf("PingOnStartup is set to %t", config.PingOnStartup)
-		if config.PingOnStartup {
-			err = pingConnection(err, client)
-			if err != nil {
-				log.Info().Msgf("PingOnStartup failed with %s", err.Error())
-			}
-		}
 
-		kafkaClient = &KafkaClientImpl{
-			topic:  config.Topic,
-			client: client,
-		}
-		return kafkaClient, nil
+		return client, nil
 	default:
 		err := errors.New("Unsupported mechanism: " + mechanism)
 		return nil, err
 	}
 }
 
-func pingConnection(err error, client *kgo.Client) error {
-	ctx := context.Background()
+var newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+	return NewKgoClientWithOpts(opts)
+}
+
+// Connect establishes a connection to Kafka using the protocol specified in the configuration.
+// It supports SASL_SSL and SASL_PLAINTEXT protocols for authentication.
+// Returns a Kafka client or an error if the connection fails or an unsupported protocol is specified.
+func (k *KafkaClientImpl) Connect(ctx context.Context) (client KgoClient, err error) {
+	switch k.config.Security.Protocol {
+	case "SASL_SSL":
+		return k.CreateSaslClient(ctx, true)
+	case "SASL_PLAINTEXT":
+		return k.CreateSaslClient(ctx, false)
+	default:
+		err := errors.New("Unsupported protocol: " + k.config.Security.Protocol)
+		return nil, err
+	}
+}
+
+// getAccessToken retrieves an access token for a given Azure endpoint using an OAuth client.
+// It initializes the OAuth client, fetches Azure credentials, and acquires a bearer token.
+// Parameters:
+// - ctx: The context for managing request deadlines and cancellation.
+// - endpoint: The Azure resource endpoint for which the access token is required.
+// Returns:
+// - *azcore.AccessToken: Retrieved access token containing the token string and expiry.
+// - error: An error if token retrieval or any intermediate operation fails.
+var getAccessToken = func(ctx context.Context, endpoint string) (*azcore.AccessToken, error) {
+	oauthClient, err := newAzureOauthClient()
+	if err != nil {
+		return nil, err
+	}
+	principalToken, err := oauthClient.GetAzureCredential()
+	if err != nil {
+		return nil, err
+	}
+	bearerToken, err := oauthClient.GetBearerToken(ctx, principalToken, endpoint)
+	if err != nil {
+		return nil, err
+	}
+	return bearerToken, nil
+}
+
+// PingConnection attempts to establish and verify a connection to Kafka by invoking Ping on the Kafka client.
+// It logs a success message if Kafka is reachable or an error message if the ping fails and returns the error.
+// Parameters:
+//   - ctx: Context used to carry deadlines, cancellation signals, and other request-scoped values.
+//
+// Returns:
+//   - error: An error if the connection or ping operation fails.
+func (k *KafkaClientImpl) PingConnection(ctx context.Context) error {
+	client, err := k.Connect(ctx)
+	if err != nil {
+		log.Error().Err(err).Msgf("Connect failed with %s", err.Error())
+	}
 	err = client.Ping(ctx)
 	if err != nil {
 		log.Error().Ctx(ctx).Err(err).Msgf("Failed to ping Kafka, message: %s", err.Error())
@@ -229,9 +248,14 @@ func pingConnection(err error, client *kgo.Client) error {
 //   - error: An error if the message could not be produced.
 func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
 	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitting key %s", key)
+	client, err := k.Connect(ctx)
+	if err != nil {
+		log.Error().Ctx(ctx).Err(err).Msgf("Connect failed with %s", err.Error())
+		return err
+	}
 	record := kgo.KeyStringRecord(key, value)
-	record.Topic = k.topic
-	sync := k.client.ProduceSync(ctx, record)
+	record.Topic = k.config.Topic
+	sync := client.ProduceSync(ctx, record)
 	var lastErr error
 	for _, s := range sync {
 		if s.Err != nil {
@@ -243,7 +267,7 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 		return lastErr
 	}
 	// Make sure all messages are flushed before returning
-	err := k.client.Flush(ctx)
+	err = client.Flush(ctx)
 	if err != nil {
 		log.Error().Ctx(ctx).Err(err).Msgf("kafka flush failed %s", err.Error())
 		return err
@@ -270,6 +294,15 @@ func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value strin
 		log.Warn().Ctx(ctx).Msgf("DebugClient, failed to write to file: %s, err: %s", name, err.Error())
 		return err
 	}
+	return nil
+}
+
+func (k *DebugClient) PingConnection(ctx context.Context) error {
+	log.Debug().Ctx(ctx).Msgf("DebugClient: pong")
+	return nil
+}
+
+func (k *NoopClient) PingConnection(ctx context.Context) error {
 	return nil
 }
 
