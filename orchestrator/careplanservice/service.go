@@ -542,21 +542,6 @@ func searchParameterExists(capabilityStatement fhir.CapabilityStatement, definit
 	return false
 }
 
-func (s *Service) reindexSearchParameter(ctx context.Context, param fhir.SearchParameter) error {
-	reindexParam := fhir.Parameters{
-		Parameter: []fhir.ParametersParameter{
-			{
-				Name:        "targetSearchParameterTypes",
-				ValueString: to.Ptr(param.Url),
-			},
-		},
-	}
-	var response []byte
-	err := s.fhirClient.CreateWithContext(ctx, reindexParam, &response, fhirclient.AtPath("/$reindex"))
-	log.Info().Ctx(ctx).Msgf("Reindexing SearchParameter %s: %s", param.Url, string(response))
-	return err
-}
-
 func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error {
 	type SearchParam struct {
 		SearchParamId string
