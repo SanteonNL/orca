@@ -83,6 +83,19 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 	err := carePlanContributor1.Create(patient, &patient)
 	require.NoError(t, err)
 
+	t.Run("Conditional Create: Patient is not created if it already exists (unmanaged resource)", func(t *testing.T) {
+		// Create the patient again with conditional create
+		requestHeaders := http.Header{"If-None-Exist": {"identifier=" + coolfhir.ToString(patient.Identifier[0])}}
+		err = carePlanContributor1.Create(patient, &patient, fhirclient.RequestHeaders(requestHeaders))
+		require.NoError(t, err)
+
+		// Search again, there still should be just 1 patient
+		var patientBundle fhir.Bundle
+		err = service.fhirClient.SearchWithContext(context.Background(), "Patient", url.Values{"identifier": {coolfhir.ToString(patient.Identifier[0])}}, &patientBundle)
+		require.NoError(t, err)
+		require.Len(t, patientBundle.Entry, 1)
+	})
+
 	// Patient not associated with any CarePlans or CareTeams for negative auth testing
 	var patient2 fhir.Patient
 	err = carePlanContributor1.Create(fhir.Patient{
@@ -201,10 +214,25 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 		err := carePlanContributor1.Update("Task", primaryTask, &primaryTask, fhirclient.QueryParam("_id", "123"))
 		require.NoError(t, err)
-		notificationCounter.Store(0)
 		// Resolve created CarePlan through Task.basedOn
 		require.NoError(t, carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan))
 	}
+
+	t.Run("Conditional Create: Task is not created if it already exists (managed resource)", func(t *testing.T) {
+		t.Skip("Implementation broken (INT-529): Task isn't created twice, but it's still added to CarePlan as second activity")
+		// Create the Task again with conditional create
+		requestHeaders := http.Header{"If-None-Exist": {"_id=" + *primaryTask.Id}}
+		err = carePlanContributor1.Create(primaryTask, &primaryTask, fhirclient.RequestHeaders(requestHeaders))
+		require.NoError(t, err)
+
+		// Search again, there still should be just 1 Task
+		var taskBundle fhir.Bundle
+		err = service.fhirClient.SearchWithContext(context.Background(), "Task", url.Values{"intent": {"order"}}, &taskBundle)
+		require.NoError(t, err)
+		require.Len(t, taskBundle.Entry, 1, "expected 1 Task in the FHIR server")
+	})
+
+	notificationCounter.Store(0)
 
 	t.Log("Create Subtask")
 	{

@@ -149,7 +149,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL)).
 			Create(careTeam, coolfhir.WithFullUrl(careTeamURL)).
-			Create(task, coolfhir.WithFullUrl(taskURL))
+			Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders))
 		taskEntryIdx = len(tx.Entry) - 1
 		taskBundleEntry = tx.Entry[taskEntryIdx]
 	} else {

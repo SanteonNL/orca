@@ -50,8 +50,10 @@ func TestService_Proxy(t *testing.T) {
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	var capturedQuery url.Values
+	var capturedRequestHeaders http.Header
 	fhirServerMux.HandleFunc("GET /fhir/Success/1", func(writer http.ResponseWriter, request *http.Request) {
 		capturedQuery = request.URL.Query()
+		capturedRequestHeaders = request.Header
 		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{
 			Intent: "order",
 		})
@@ -92,6 +94,21 @@ func TestService_Proxy(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		assert.Equal(t, "foo|bar", capturedQuery.Get("_identifier"))
+	})
+	t.Run("it proxies FHIR HTTP request headers", func(t *testing.T) {
+		// https://build.fhir.org/http.html#Http-Headers
+		httpRequest, _ := http.NewRequest(http.MethodGet, frontServer.URL+"/cps/Success/1", nil)
+		httpRequest.Header.Set("If-None-Exist", "ine")
+		httpRequest.Header.Set("If-Match", "im")
+		httpRequest.Header.Set("If-Modified-Since", "ims")
+		httpRequest.Header.Set("If-None-Match", "inm")
+
+		_, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		assert.Equal(t, "ine", capturedRequestHeaders.Get("If-None-Exist"))
+		assert.Equal(t, "im", capturedRequestHeaders.Get("If-Match"))
+		assert.Equal(t, "ims", capturedRequestHeaders.Get("If-Modified-Since"))
+		assert.Equal(t, "inm", capturedRequestHeaders.Get("If-None-Match"))
 	})
 	t.Run("upstream FHIR server returns FHIR error with operation outcome", func(t *testing.T) {
 		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Fail/1")
@@ -413,12 +430,14 @@ func TestService_Handle(t *testing.T) {
 		},
 	}, profile.Test(), orcaPublicURL)
 
+	var capturedHeaders []http.Header
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		switch method {
 		case http.MethodPost:
 			switch resourceType {
 			case "CarePlan":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("CarePlan"))
@@ -431,6 +450,7 @@ func TestService_Handle(t *testing.T) {
 				}
 			case "Task":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
@@ -446,6 +466,7 @@ func TestService_Handle(t *testing.T) {
 			switch resourceType {
 			case "Task":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
@@ -458,6 +479,7 @@ func TestService_Handle(t *testing.T) {
 				}
 			case "Organization":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					return nil, errors.New("this fails on purpose")
 				}
 			}
@@ -514,7 +536,6 @@ func TestService_Handle(t *testing.T) {
 			})
 		})
 		t.Run("PUT 1 item (Task)", func(t *testing.T) {
-			// Create a bundle with 2 Tasks
 			requestBundle := fhir.Bundle{
 				Type: fhir.BundleTypeTransaction,
 				Entry: []fhir.BundleEntry{
@@ -539,6 +560,33 @@ func TestService_Handle(t *testing.T) {
 			assert.Equal(t, "Task/123", *resultBundle.Entry[0].Response.Location)
 			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 			assert.JSONEq(t, `{"id":"123","status":"draft","intent":"","resourceType":"Task"}`, string(resultBundle.Entry[0].Resource))
+		})
+		t.Run("FHIR HTTP request headers are passed on", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method:          fhir.HTTPVerbPUT,
+							Url:             "Task",
+							IfNoneExist:     to.Ptr("ifnoneexist"),
+							IfMatch:         to.Ptr("ifmatch"),
+							IfModifiedSince: to.Ptr("ifmodifiedsince"),
+							IfNoneMatch:     to.Ptr("ifnonematch"),
+						},
+						Resource: json.RawMessage(`{}`),
+					},
+				},
+			}
+			capturedHeaders = nil
+			err = fhirClient.Create(requestBundle, new(fhir.Bundle), fhirclient.AtPath("/"))
+
+			require.NoError(t, err)
+			require.Len(t, capturedHeaders, 1)
+			assert.Equal(t, "ifnoneexist", capturedHeaders[0].Get("If-None-Exist"))
+			assert.Equal(t, "ifmatch", capturedHeaders[0].Get("If-Match"))
+			assert.Equal(t, "ifmodifiedsince", capturedHeaders[0].Get("If-Modified-Since"))
+			assert.Equal(t, "ifnonematch", capturedHeaders[0].Get("If-None-Match"))
 		})
 		t.Run("handler fails (PUT Organization)", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
