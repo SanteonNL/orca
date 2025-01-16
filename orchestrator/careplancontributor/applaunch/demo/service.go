@@ -1,7 +1,6 @@
 package demo
 
 import (
-	"fmt"
 	"net/http"
 	"net/url"
 
@@ -9,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -70,31 +70,20 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		StringValues: values,
 	})
 
-	var existingTaskBundle fhir.Bundle
-	headers := http.Header{}
-	headers.Add("Cache-Control", "no-cache")
-	err := s.cpsFhirClient().SearchWithContext(request.Context(), "Task", url.Values{
-		"identifier": []string{demoTaskSystemSystem + "|" + values["taskIdentifier"]},
-	}, &existingTaskBundle, fhirclient.RequestHeaders(headers))
+	existingTask, err := coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), fhir.Identifier{
+		System: to.Ptr(demoTaskSystemSystem),
+		Value:  to.Ptr(values["taskIdentifier"]),
+	})
 
-	log.Debug().Ctx(request.Context()).Msg("Search for existing CPS Task resource for demo task completed")
 	if err != nil {
-		http.Error(response, fmt.Sprintf("Failed to search for Task: %v", err), http.StatusInternalServerError)
+		log.Debug().Ctx(request.Context()).Msg("Existing CPS Task check failed for task with identifier: " + values["taskIdentifier"])
+		http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
 		return
 	}
 
-	if len(existingTaskBundle.Entry) == 1 {
-		log.Debug().Ctx(request.Context()).Msg("Found existing CPS Task resource for demo task")
-		var existingTask fhir.Task
-		if err := coolfhir.ResourceInBundle(&existingTaskBundle, coolfhir.EntryIsOfType("Task"), &existingTask); err != nil {
-			http.Error(response, fmt.Sprintf("unable to get existing CPS Task resource from search bundle: %v", err), http.StatusInternalServerError)
-			return
-		}
+	if existingTask != nil {
+		log.Debug().Ctx(request.Context()).Msg("Existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
 		http.Redirect(response, request, s.frontendLandingUrl+"/task/"+*existingTask.Id, http.StatusFound)
-		return
-	} else if len(existingTaskBundle.Entry) > 1 {
-		log.Error().Ctx(request.Context()).Msg("Found multiple existing CPS Tasks for demo task with identifier: " + values["taskIdentifier"])
-		http.Error(response, fmt.Sprintf("found multiple existing CPS Tasks for demo task (taskIdentifier=%s): %v", values["taskIdentifier"], err), http.StatusConflict)
 		return
 	}
 
