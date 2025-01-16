@@ -1,24 +1,25 @@
 package azkeyvault
 
 import (
-	"crypto/rand"
+	"crypto"
+	"crypto/ecdsa"
+	"crypto/elliptic"
 	"crypto/rsa"
-	"crypto/sha1"
 	"crypto/tls"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates"
 	"github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys"
 	"github.com/rs/zerolog/log"
-	"io"
 	"net/http"
 	"net/http/httptest"
 )
 
 func NewTestServer() *TestAzureKeyVault {
 	result := &TestAzureKeyVault{
-		keys:         make(map[string]*rsa.PrivateKey),
+		keys:         make(map[string]crypto.PrivateKey),
 		certificates: make(map[string]*tls.Certificate),
 	}
 	httpServerMux := http.NewServeMux()
@@ -30,33 +31,6 @@ func NewTestServer() *TestAzureKeyVault {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(bundle)
-		} else {
-			w.WriteHeader(http.StatusNotFound)
-		}
-	}))
-	httpServerMux.Handle("POST /keys/{name}/0/decrypt", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		requestBytes, _ := io.ReadAll(r.Body)
-		name := r.PathValue("name")
-		println("data " + string(requestBytes))
-		w.WriteHeader(http.StatusOK)
-		return
-		if key, ok := result.keys[name]; ok {
-			plainText, err := rsa.DecryptOAEP(sha1.New(), rand.Reader, key, []byte("test"), nil)
-			if err != nil {
-				log.Logger.Err(err).Msg("failed to decrypt")
-				w.WriteHeader(http.StatusInternalServerError)
-				return
-			}
-			var response = azkeys.DecryptResponse{
-				KeyOperationResult: azkeys.KeyOperationResult{
-					IV:     nil,
-					KID:    nil,
-					Result: plainText,
-				},
-			}
-			w.Header().Set("Content-Type", "application/json")
-			w.WriteHeader(http.StatusOK)
-			_ = json.NewEncoder(w).Encode(response)
 		} else {
 			w.WriteHeader(http.StatusNotFound)
 		}
@@ -82,29 +56,52 @@ func NewTestServer() *TestAzureKeyVault {
 }
 
 type TestAzureKeyVault struct {
-	keys           map[string]*rsa.PrivateKey
+	keys           map[string]crypto.PrivateKey
 	certificates   map[string]*tls.Certificate
 	TestHttpServer *httptest.Server
 }
 
 func (t TestAzureKeyVault) AddCertificate(name string, cert *tls.Certificate) {
 	t.certificates[name] = cert
+	t.keys[name] = cert.PrivateKey
 }
 
 func (t TestAzureKeyVault) AddKey(name string, key *rsa.PrivateKey) {
 	t.keys[name] = key
 }
 
-func (t TestAzureKeyVault) keyToBundle(name string, key *rsa.PrivateKey) azkeys.KeyBundle {
+func (t TestAzureKeyVault) keyToBundle(name string, key crypto.PrivateKey) azkeys.KeyBundle {
 	id := azkeys.ID(t.TestHttpServer.URL + "/keys/" + name + "/0")
-	e := make([]byte, 8)
-	binary.BigEndian.PutUint64(e, uint64(key.E))
-	return azkeys.KeyBundle{
-		Key: &azkeys.JSONWebKey{
-			Kty: to.Ptr(azkeys.KeyTypeRSA),
-			E:   e,
-			N:   key.N.Bytes(),
-			KID: &id,
-		},
+	switch key := key.(type) {
+	case *rsa.PrivateKey:
+		e := make([]byte, 8)
+		binary.BigEndian.PutUint64(e, uint64(key.E))
+		return azkeys.KeyBundle{
+			Key: &azkeys.JSONWebKey{
+				Kty: to.Ptr(azkeys.KeyTypeRSA),
+				E:   e,
+				N:   key.N.Bytes(),
+				KID: &id,
+			},
+		}
+	case *ecdsa.PrivateKey:
+		var crv azkeys.CurveName
+		switch key.Curve.Params().Name {
+		case elliptic.P256().Params().Name:
+			crv = azkeys.CurveNameP256
+		default:
+			panic(fmt.Errorf("unsupported curve: %s", key.Curve.Params().Name).Error())
+		}
+		return azkeys.KeyBundle{
+			Key: &azkeys.JSONWebKey{
+				Kty: to.Ptr(azkeys.KeyTypeEC),
+				Crv: to.Ptr(crv),
+				X:   key.X.Bytes(),
+				Y:   key.Y.Bytes(),
+				KID: &id,
+			},
+		}
+	default:
+		panic(fmt.Errorf("unsupported key type: %T", key).Error())
 	}
 }
