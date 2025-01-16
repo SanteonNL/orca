@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"strings"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/url"
-	"strings"
 )
 
 type BaseResource struct {
@@ -122,7 +122,7 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 }
 
 func (s *StubFHIRClient) CreateWithContext(_ context.Context, resource any, result any, opts ...fhirclient.Option) error {
-	resourceType := coolfhir.ResourceType(resource)
+	resourceType := resource.(BaseResource).Type
 	if resourceType == "" {
 		return fmt.Errorf("can't defer resource type of %T", resource)
 	}
