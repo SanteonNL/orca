@@ -2,13 +2,18 @@ package nuts
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/knadh/koanf/maps"
 	ssi "github.com/nuts-foundation/go-did"
+	"github.com/nuts-foundation/go-nuts-client/nuts"
 	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"github.com/nuts-foundation/go-nuts-client/nuts/vcr"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
@@ -35,9 +40,31 @@ type DutchNutsProfile struct {
 	identitiesRefreshedAt time.Time
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
+	clientCert            *tls.Certificate
 }
 
 func New(config Config) (*DutchNutsProfile, error) {
+	var clientCert *tls.Certificate
+	if config.AzureKeyVault.ClientCertName != "" {
+		if config.AzureKeyVault.CredentialType == "" {
+			config.AzureKeyVault.CredentialType = "managed_identity"
+		}
+		azKeysClient, err := azkeyvault.NewKeysClient(config.AzureKeyVault.URL, config.AzureKeyVault.CredentialType, false)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
+		}
+		azCertClient, err := azkeyvault.NewCertificatesClient(config.AzureKeyVault.URL, config.AzureKeyVault.CredentialType, false)
+		if err != nil {
+			return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
+		}
+		clientCert, err = azkeyvault.GetTLSCertificate(context.Background(), azCertClient, azKeysClient, config.AzureKeyVault.ClientCertName)
+		if err != nil {
+			return nil, fmt.Errorf("unable to get client certificate from Azure Key Vault: %w", err)
+		}
+	} else {
+		log.Warn().Msg("Nuts: no TLS client certificate configured for outbound HTTP requests")
+	}
+
 	vcrClient, err := vcr.NewClientWithResponses(config.API.URL)
 	if err != nil {
 		return nil, err
@@ -52,6 +79,7 @@ func New(config Config) (*DutchNutsProfile, error) {
 			entryCache: make(map[string]cacheEntry),
 			cacheMux:   sync.RWMutex{},
 		},
+		clientCert: clientCert,
 	}, nil
 }
 
@@ -67,6 +95,33 @@ func (d DutchNutsProfile) RegisterHTTPHandlers(basePath string, resourceServerUR
 		}
 		_ = json.NewEncoder(writer).Encode(md)
 	})
+}
+
+func (d DutchNutsProfile) HttpClient() *http.Client {
+	var roundTripper http.RoundTripper
+	if d.clientCert != nil {
+		tlsConfig := globals.DefaultTLSConfig.Clone()
+		tlsConfig.Certificates = []tls.Certificate{*d.clientCert}
+		roundTripper = &http.Transport{TLSClientConfig: tlsConfig}
+	} else {
+		httpTransport := http.DefaultTransport.(*http.Transport).Clone()
+		httpTransport.TLSClientConfig = globals.DefaultTLSConfig
+		roundTripper = httpTransport
+	}
+	return &http.Client{
+		Transport: &oauth2.Transport{
+			UnderlyingTransport: roundTripper,
+			TokenSource: nuts.OAuth2TokenSource{
+				NutsSubject: d.Config.OwnSubject,
+				NutsAPIURL:  d.Config.API.URL,
+			},
+			MetadataLoader: &oauth2.MetadataLoader{},
+			AuthzServerLocators: []oauth2.AuthorizationServerLocator{
+				oauth2.ProtectedResourceMetadataLocator,
+			},
+			Scope: careplancontributor.CarePlanServiceOAuth2Scope,
+		},
+	}
 }
 
 // Identities consults the Nuts node to retrieve the local identities of the SCP node, given the credentials in the subject's wallet.
