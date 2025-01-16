@@ -29,6 +29,22 @@ import (
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
 
+// For most tests we do not need these to exist, mock the calls to the FHIR server so the test doesn't fail
+func mockCustomSearchParams(fhirServerMux *http.ServeMux) {
+	fhirServerMux.HandleFunc("GET /fhir/metadata", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.CapabilityStatement{})
+	})
+	fhirServerMux.HandleFunc("POST /fhir/SearchParameter/_search", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
+	})
+	fhirServerMux.HandleFunc("POST /fhir/SearchParameter", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
+	})
+	fhirServerMux.HandleFunc("POST /fhir/$reindex", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
+	})
+}
+
 func TestService_Proxy(t *testing.T) {
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
@@ -43,6 +59,7 @@ func TestService_Proxy(t *testing.T) {
 	fhirServerMux.HandleFunc("GET /fhir/Fail/1", func(writer http.ResponseWriter, request *http.Request) {
 		coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("Fail"), "oops", writer)
 	})
+	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
 	service, err := New(Config{
@@ -130,6 +147,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 		capturedBody, _ = io.ReadAll(request.Body)
 		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
 	})
+	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	// Setup: create the service
@@ -181,19 +199,22 @@ type OperationOutcomeWithResourceType struct {
 
 // TestService_ErrorHandling asserts invalid requests return OperationOutcome
 func TestService_ErrorHandling(t *testing.T) {
+	fhirServerMux := http.NewServeMux()
+	mockCustomSearchParams(fhirServerMux)
+	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: configure the service
 	service, err := New(
 		Config{
 			FHIR: coolfhir.ClientConfig{
-				BaseURL: "http://localhost",
+				BaseURL: fhirServer.URL + "/fhir",
 			},
 		},
 		profile.Test(),
 		orcaPublicURL)
 	require.NoError(t, err)
-	serverMux := http.NewServeMux()
-	service.RegisterHandlers(serverMux)
-	server := httptest.NewServer(serverMux)
+
+	service.RegisterHandlers(fhirServerMux)
+	server := httptest.NewServer(fhirServerMux)
 
 	// Setup: configure the client
 	httpClient := server.Client()
@@ -383,6 +404,7 @@ func TestService_Handle(t *testing.T) {
 		}
 		json.NewEncoder(writer).Encode(bundle)
 	})
+	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
 	service, err := New(Config{
