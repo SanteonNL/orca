@@ -111,6 +111,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20210106213030-5aafc221ea8c // indirect
 	github.com/russellhaering/goxmldsig v1.4.0
+	github.com/samply/golang-fhir-models/fhir-models v0.3.2
 	github.com/segmentio/asm v1.2.0
 	github.com/shengdoushi/base58 v1.0.0 // indirect
 	github.com/shirou/gopsutil/v3 v3.23.12 // indirect
