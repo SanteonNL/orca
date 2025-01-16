@@ -71,7 +71,10 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 			New: baseUrl.String(),
 		})
 	s.handlerProvider = s.defaultHandlerProvider
-	s.ensureCustomSearchParametersExists(context.Background())
+	err = s.ensureCustomSearchParametersExists(context.Background())
+	if err != nil {
+		return nil, err
+	}
 	return &s, nil
 }
 
@@ -645,9 +648,6 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 			// See https://learn.microsoft.com/en-us/azure/healthcare-apis/azure-api-for-fhir/how-to-do-custom-search
 			if !searchParameterExists(capabilityStatement, param.SearchParam.Url) {
 				log.Debug().Ctx(ctx).Msgf("SearchParameter/%s needs re-indexing", param.SearchParamId)
-				//if err := s.reindexSearchParameter(ctx, param.SearchParam); err != nil {
-				//	return fmt.Errorf("reindexing SearchParameter %s: %w", param.SearchParamId, err)
-				//}
 				reindexURLs = append(reindexURLs, param.SearchParam.Url)
 			}
 			log.Info().Ctx(ctx).Msgf("SearchParameter/%s already exists, skipping creation", param.SearchParamId)
@@ -658,11 +658,13 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 		if err != nil {
 			return fmt.Errorf("create SearchParameter %s: %w", param.SearchParamId, err)
 		}
-		err = s.reindexSearchParameter(ctx, param.SearchParam)
-		if err != nil {
-			return fmt.Errorf("reindex SearchParameter %s: %w", param.SearchParamId, err)
-		}
-		log.Info().Ctx(ctx).Msgf("Created SearchParameter/%s and triggered re-index job.", param.SearchParamId)
+		reindexURLs = append(reindexURLs, param.SearchParam.Url)
+		log.Info().Ctx(ctx).Msgf("Created SearchParameter/%s and added to list for batch re-index job.", param.SearchParamId)
+	}
+
+	if len(reindexURLs) == 0 {
+		log.Debug().Ctx(ctx).Msg("No SearchParameters need re-indexing")
+		return nil
 	}
 
 	log.Info().Ctx(ctx).Msgf("Batch reindexing %d SearchParameters", len(reindexURLs))
