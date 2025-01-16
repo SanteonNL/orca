@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
@@ -26,7 +28,6 @@ import (
 )
 
 const basePath = "/cpc"
-const LandingURL = basePath + "/"
 
 // The care plan header key may be provided as X-SCP-Context but will be changed due to the Go http client canonicalization
 const carePlanURLHeaderKey = "X-Scp-Context"
@@ -75,7 +76,7 @@ func New(
 		// Load Questionnaire-related resources for the Task Filler Engine from the configured URLs into the Questionnaire FHIR API
 		go func(ctx context.Context, client fhirclient.Client) {
 			if len(config.TaskFiller.QuestionnaireSyncURLs) > 0 {
-				log.Info().Ctx(ctx).Msgf("Synchronizing Task Filler Questionnaires resources from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
+				log.Info().Ctx(ctx).Msgf("Synchronizing Task Filler Questionnaires resources to local FHIR store from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
 				for _, u := range config.TaskFiller.QuestionnaireSyncURLs {
 					if err := coolfhir.ImportResources(ctx, questionnaireFhirClient, []string{"Questionnaire", "HealthcareService"}, u); err != nil {
 						log.Error().Ctx(ctx).Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
@@ -108,7 +109,7 @@ func New(
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
-		notifier:                ehr.NewNotifier(kafkaClient),
+		notifier:                      ehr.NewNotifier(kafkaClient),
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
@@ -144,7 +145,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	baseURL := s.orcaPublicURL.JoinPath(basePath)
 	s.profile.RegisterHTTPHandlers(basePath, baseURL, mux)
 	//
-	// Authorized endpoints
+	// The section below defines endpoints specified by Shared Care Planning.
+	// These are secured through the profile (e.g. Nuts access tokens)
 	//
 	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		var notification coolfhir.SubscriptionNotification
@@ -160,17 +162,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		writer.WriteHeader(http.StatusOK)
 	}))
-	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
-	mux.HandleFunc("GET "+basePath+"/aggregate/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
-		err := s.proxyToAllCareTeamMembers(writer, request)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-	}))
-	//TODO: FIX --> Returns unauthorized for dev server
-	// mux.HandleFunc("GET "+basePath+"/fhir/{rest...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if !s.healthdataviewEndpointEnabled {
@@ -197,8 +188,17 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	//
-	// FE/Session Authorized Endpoints
+	// The section below defines endpoints used for integrating the local EHR with ORCA.
+	// They are NOT specified by SCP. Authorization is specific to the local EHR.
 	//
+	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
+	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+		err := s.proxyToAllCareTeamMembers(writer, request)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+	}))
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
@@ -207,10 +207,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
-	mux.HandleFunc(basePath+"/", func(response http.ResponseWriter, request *http.Request) {
-		log.Info().Ctx(request.Context()).Msgf("Redirecting to %s", s.frontendUrl)
-		http.Redirect(response, request, s.frontendUrl, http.StatusFound)
-	})
 
 	// Logout endpoint
 	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
@@ -267,7 +263,6 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	log.Ctx(request.Context()).Debug().Msg("Handling external FHIR API request")
 
 	_, err := s.authorizeScpMember(request)
-
 	if err != nil {
 		return err
 	}
@@ -278,30 +273,79 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 
 // proxyToAllCareTeamMembers is a convenience façade method that can be used proxy the request to all CPC nodes localized from the Shared CarePlan.participants.
 func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request *http.Request) error {
-	//TODO: We currently have a 1-on-1 relation between the EHR and viewer. Should query all CarePlan.participants
-	// carePlanURLValue := request.Header[carePlanURLHeaderKey]
-
-	//TODO: This URL should come from localization based on each participants URA number - for now fixate it to the hospital url
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) != 1 {
 		return coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
 	}
-
 	log.Debug().Msg("Handling BgZ FHIR API request carePlanURL: " + carePlanURLValue[0])
 
-	upstreamServerUrl, err := url.Parse(strings.Replace(s.config.CarePlanService.URL, "/cps", basePath+"/fhir", 1))
-	proxyBasePath := basePath + "/aggregate/fhir/"
-
+	// Get the CPS base URL from the X-SCP-Context header (everything before /CarePlan/<id>).
+	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURLValue[0], "CarePlan")
 	if err != nil {
-		return coolfhir.BadRequestError(err)
+		return coolfhir.BadRequestError(fmt.Errorf("invalid %s header: %w", carePlanURLHeaderKey, err))
+	}
+	_, careTeams, _, err := careplanservice.GetCarePlanAndCareTeams(request.Context(), s.cpsClientFactory(cpsBaseURL), carePlanRef)
+	if err != nil {
+		return fmt.Errorf("failed to get CarePlan and CareTeams for X-SCP-Context: %w", err)
 	}
 
-	log.Debug().Msg("Proxying request to all CareTeam members from CarePlan.participants - proxyBaseUrl: " + upstreamServerUrl.String())
+	// Collect participants. Use a map to ensure we don't send the same request to the same participant multiple times.
+	participantIdentifiers := make(map[string]fhir.Identifier)
+	for _, careTeam := range careTeams {
+		for _, participant := range careTeam.Participant {
+			if !coolfhir.IsLogicalReference(participant.Member) {
+				continue
+			}
+			activeMember, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
+			if err != nil {
+				log.Ctx(request.Context()).Warn().Err(err).Msg("Failed to validate CareTeam participant period")
+			} else if activeMember {
+				participantIdentifiers[coolfhir.ToString(participant.Member.Identifier)] = *participant.Member.Identifier
+			}
+		}
+	}
+	if len(participantIdentifiers) == 0 {
+		return coolfhir.NewErrorWithCode("no active participants found in CareTeam", http.StatusNotFound)
+	}
 
-	fhirProxy := coolfhir.NewProxy("All External CPC Members->EHR FHIR proxy", log.Logger, upstreamServerUrl, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.transport, true)
+	localIdentities, err := s.profile.Identities(request.Context())
+	if err != nil {
+		return err
+	}
 
-	fhirProxy.ServeHTTP(writer, request)
+	endpoints := make(map[string]*url.URL)
+	for _, identifier := range participantIdentifiers {
+		// Don't fetch data from own endpoint, since we don't support querying from multiple endpoints yet
+		if coolfhir.HasIdentifier(identifier, localIdentities...) {
+			continue
+		}
+		fhirEndpoints, err := s.profile.CsdDirectory().LookupEndpoint(request.Context(), &identifier, profile.FHIRBaseURLEndpointName)
+		if err != nil {
+			return fmt.Errorf("failed to lookup FHIR base URL for participant %s: %w", coolfhir.ToString(identifier), err)
+		}
+		for _, fhirEndpoint := range fhirEndpoints {
+			parsedEndpointAddress, err := url.Parse(fhirEndpoint.Address)
+			if err != nil {
+				// TODO: When querying multiple participants, we should continue with the next participant instead of returning an error, and return an entry for the OperationOutcome
+				return fmt.Errorf("failed to parse FHIR base URL for participant %s: %w", coolfhir.ToString(identifier), err)
+			}
+			endpoints[fhirEndpoint.Address] = parsedEndpointAddress
+		}
+	}
 
+	// Could add more information in the future with OperationOutcome messages
+	if len(endpoints) == 0 {
+		return errors.New("didn't find any queryable FHIR endpoints for any active participant in related CareTeams")
+	}
+	if len(endpoints) > 1 {
+		// TODO: In this case, we need to aggregate the results from multiple endpoints
+		return errors.New("found multiple queryable FHIR endpoints for active participants in related CareTeams, currently not supported")
+	}
+	const proxyBasePath = basePath + "/aggregate/fhir/"
+	for _, endpoint := range endpoints {
+		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", log.Logger, endpoint, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
+		fhirProxy.ServeHTTP(writer, request)
+	}
 	return nil
 }
 
@@ -322,19 +366,19 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
 		return nil, coolfhir.BadRequest("invalid CarePlan URL in header. Got: " + carePlanURL + " expected: " + s.localCarePlanServiceUrl.String())
 	}
-	u, err := url.Parse(carePlanURL)
-	if err != nil {
-		return nil, err
-	}
-	// Verify that the u.Path refers to a careplan
-	if !strings.Contains(u.Path, "/CarePlan") {
-		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
-	}
 
-	var bundle fhir.Bundle
-	// TODO: Discuss changes to this validation with team
+	_, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
+	var carePlanId string
+	if err != nil {
+		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
+	} else {
+		_, carePlanId, err = coolfhir.ParseLocalReference(carePlanRef)
+		if err != nil {
+			return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
+		}
+	}
 	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
-	carePlanId := strings.TrimPrefix(strings.TrimPrefix(u.Path, "/cps/CarePlan/"), s.localCarePlanServiceUrl.String())
+	var bundle fhir.Bundle
 	err = s.cpsClientFactory(s.localCarePlanServiceUrl).Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle)
 	if err != nil {
 		return nil, err
@@ -391,10 +435,14 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 		Patient        string `json:"patient"`
 		ServiceRequest string `json:"serviceRequest"`
 		Practitioner   string `json:"practitioner"`
+		Task           string `json:"task"`
+		TaskIdentifier string `json:"taskIdentifier"`
 	}{
 		Patient:        session.StringValues["patient"],
 		ServiceRequest: session.StringValues["serviceRequest"],
 		Practitioner:   session.StringValues["practitioner"],
+		Task:           session.StringValues["task"],
+		TaskIdentifier: session.StringValues["taskIdentifier"],
 	}
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)

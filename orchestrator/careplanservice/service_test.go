@@ -9,6 +9,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
@@ -781,4 +782,95 @@ func Test_collectLiteralReferences(t *testing.T) {
 		"partOf.#1.reference": "https://example.com/fhir/CarePlan/2",
 		"partOf.#2.reference": "CarePlan/3",
 	}, actualRefs)
+}
+
+func TestService_ensureCustomSearchParametersExists(t *testing.T) {
+	ctx := context.Background()
+	t.Run("parameters are created", func(t *testing.T) {
+		fhirClient := test.StubFHIRClient{}
+		service := &Service{
+			fhirClient: &fhirClient,
+		}
+		err := service.ensureCustomSearchParametersExists(ctx)
+		require.NoError(t, err)
+		require.Len(t, fhirClient.CreatedResources["SearchParameter"], 3)
+		// First SearchParameter create, rest should be OK
+		searchParam := fhirClient.CreatedResources["SearchParameter"][0].(fhir.SearchParameter)
+		assert.Equal(t, "CarePlan-subject-identifier", *searchParam.Id)
+		// First SearchParameter re-index, rest should be OK
+		require.Len(t, fhirClient.CreatedResources["Parameters"], 3)
+		searchParamReindex := fhirClient.CreatedResources["Parameters"][0].(fhir.Parameters)
+		assert.Equal(t, "targetSearchParameterTypes", searchParamReindex.Parameter[0].Name)
+		assert.Equal(t, "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier", *searchParamReindex.Parameter[0].ValueString)
+	})
+	t.Run("parameters exist", func(t *testing.T) {
+		fhirClient := test.StubFHIRClient{
+			Resources: []any{
+				fhir.SearchParameter{
+					Url: "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
+				},
+				fhir.SearchParameter{
+					Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-output-reference.json",
+				},
+				fhir.SearchParameter{
+					Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-input-reference.json",
+				},
+			},
+			Metadata: fhir.CapabilityStatement{
+				Rest: []fhir.CapabilityStatementRest{
+					{
+						Resource: []fhir.CapabilityStatementRestResource{
+							{
+								SearchParam: []fhir.CapabilityStatementRestResourceSearchParam{
+									{
+										Definition: to.Ptr("http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier"),
+									},
+									{
+										Definition: to.Ptr("http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-output-reference.json"),
+									},
+									{
+										Definition: to.Ptr("http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-input-reference.json"),
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		service := &Service{
+			fhirClient: &fhirClient,
+		}
+		err := service.ensureCustomSearchParametersExists(ctx)
+		require.NoError(t, err)
+		require.Empty(t, fhirClient.CreatedResources)
+	})
+	t.Run("Azure FHIR: parameter exists, but needs to be re-indexed", func(t *testing.T) {
+		t.Log("SearchParameter exists, but doesn't show up in CapabilityStatement. On Azure FHIR, this indicates the parameter needs to be re-indexed.")
+		fhirClient := test.StubFHIRClient{
+			Resources: []any{
+				fhir.SearchParameter{
+					Url: "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
+				},
+				fhir.SearchParameter{
+					Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-output-reference.json",
+				},
+				fhir.SearchParameter{
+					Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-input-reference.json",
+				},
+			},
+		}
+		service := &Service{
+			fhirClient: &fhirClient,
+		}
+		err := service.ensureCustomSearchParametersExists(ctx)
+		require.NoError(t, err)
+		// SearchParameter isn't created, but is re-indexed.
+		require.Empty(t, fhirClient.CreatedResources["SearchParameter"])
+		require.Len(t, fhirClient.CreatedResources["Parameters"], 3)
+		// Just check the first one
+		searchParamReindex := fhirClient.CreatedResources["Parameters"][0].(fhir.Parameters)
+		assert.Equal(t, "targetSearchParameterTypes", searchParamReindex.Parameter[0].Name)
+		assert.Equal(t, "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier", *searchParamReindex.Parameter[0].ValueString)
+	})
 }

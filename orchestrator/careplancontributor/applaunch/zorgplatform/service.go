@@ -7,11 +7,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/globals"
 
@@ -26,6 +28,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/google/uuid"
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/rs/zerolog/log"
 )
 
@@ -33,7 +36,16 @@ const launcherKey = "zorgplatform"
 const appLaunchUrl = "/zorgplatform-app-launch"
 const zorgplatformWorkflowIdSystem = "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string, profile profile.Provider) (*Service, error) {
+// accessTokenCacheTTL is the time-to-live for the Zorgplatform access tokens in the cache.
+// They expire after ca. 12 minutes, so this value is on the safe side.
+const accessTokenCacheTTL = time.Minute * 5
+
+type workflowContext struct {
+	workflowId string
+	patientBsn string
+}
+
+func New(sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
@@ -45,10 +57,10 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, lan
 
 	ctx := context.Background()
 
-	return newWithClients(ctx, sessionManager, config, baseURL, landingUrlPath, azKeysClient, azCertClient, profile)
+	return newWithClients(ctx, sessionManager, config, baseURL, frontendLandingUrl, azKeysClient, azCertClient, profile)
 }
 
-func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, landingUrlPath string,
+func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string,
 	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient, profile profile.Provider) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
@@ -135,13 +147,16 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager, co
 		sessionManager:        sessionManager,
 		config:                config,
 		baseURL:               baseURL,
-		landingUrlPath:        landingUrlPath,
+		frontendLandingUrl:    frontendLandingUrl,
 		signingCertificate:    signCert,
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
 		decryptCertificate:    decryptCert,
 		zorgplatformCert:      cert,
 		profile:               profile,
+		accessTokenCache: ttlcache.New[string, string](
+			ttlcache.WithTTL[string, string](accessTokenCacheTTL),
+		),
 		// performing HTTP requests with Zorgplatform requires mutual TLS
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
@@ -153,6 +168,9 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager, co
 			},
 		},
 	}
+	// Start cache expiry
+	go result.accessTokenCache.Start()
+
 	result.secureTokenService = result
 	result.registerFhirClientFactory(config)
 	return result, nil
@@ -162,7 +180,7 @@ type Service struct {
 	sessionManager         *user.SessionManager
 	config                 Config
 	baseURL                string
-	landingUrlPath         string
+	frontendLandingUrl     string
 	signingCertificate     [][]byte
 	signingCertificateKey  stdCrypto.Signer
 	tlsClientCertificate   *tls.Certificate
@@ -171,6 +189,9 @@ type Service struct {
 	zorgplatformCert       *x509.Certificate
 	profile                profile.Provider
 	secureTokenService     SecureTokenService
+	// accessTokenCache stores the Zorgplatform access tokens a given CarePlan (from X-SCP-Context)
+	// Requesting an access token involves an, chained lookup, so we cache the result for some time.
+	accessTokenCache *ttlcache.Cache[string, string]
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -179,12 +200,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 	targetFhirBaseUrl, _ := url.Parse(s.config.ApiUrl)
-	proxyBasePath := "/cpc/fhir"
-	rewriteUrl, _ := url.Parse(s.baseURL + proxyBasePath)
+	const proxyBasePath = "/cpc/fhir"
+	rewriteUrl, _ := url.Parse(s.baseURL)
+	rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
 	result := coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
 		transport:          s.zorgplatformHttpClient.Transport,
 		cpsFhirClient:      s.cpsFhirClient,
 		secureTokenService: s.secureTokenService,
+		accessTokenCache:   s.accessTokenCache,
 	}, true)
 	// Zorgplatform's FHIR API only allows GET-based FHIR searches, while ORCA only allows POST-based FHIR searches.
 	// If the request is a POST-based search, we need to rewrite the request to a GET-based search.
@@ -211,6 +234,7 @@ type stsAccessTokenRoundTripper struct {
 	transport          http.RoundTripper
 	cpsFhirClient      func() fhirclient.Client
 	secureTokenService SecureTokenService
+	accessTokenCache   *ttlcache.Cache[string, string]
 }
 
 func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
@@ -227,97 +251,39 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	}
 
 	log.Debug().Ctx(httpRequest.Context()).Msgf("Found SCP context: %s", carePlanReference)
-	//TODO: Replace with CPC to CPS call - using direct acces to the CPS Store - until thr auth part is clear
+	// First see if cached
+	var accessToken string
+	if cacheEntry := s.accessTokenCache.Get(carePlanReference); cacheEntry != nil {
+		accessToken = cacheEntry.Value()
+	} else {
+		log.Debug().Ctx(httpRequest.Context()).Msgf("(cache miss) Getting Zorgplatform access token for CarePlan reference: %s", carePlanReference)
+		workflowCtx, err := s.getWorkflowContext(httpRequest.Context(), carePlanReference)
+		if err != nil {
+			log.Error().Ctx(httpRequest.Context()).Msgf("Unable to get workflowId for CarePlan reference: %v", err)
+			return nil, fmt.Errorf("unable to get workflowId for CarePlan reference: %w", err)
+		}
 
-	// // carePlanReference = strings.TrimPrefix(urlRef.Path, "/CarePlan/")
-	startIndex := strings.Index(carePlanReference, "/CarePlan")
-	if startIndex == -1 {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to find CarePlan reference in URL: %s", carePlanReference)
-		return nil, fmt.Errorf("unable to find CarePlan reference in URL: %s", carePlanReference)
-	}
-
-	localCarePlanRef := carePlanReference[startIndex:]
-	// localCarePlanRef = strings.ReplaceAll(localCarePlanRef, "%3F", "?")
-
-	log.Debug().Ctx(httpRequest.Context()).Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
-
-	// TODO: group requests, something like:
-	// ?_include=CarePlan:activity-reference&_include:iterate=Task:focus
-	// query.Add("_include", "CarePlan:activity-reference")
-	// //TODO: This is a tmp solution, but if it's not that temporary, not all FHIR servers support chaining
-	// query.Add("_include:iterate", "Task:focus") //chain the Task.focus from the joined CarePlan.activity-references
-	// urlRef.RawQuery = query.Encode()
-
-	var carePlan fhir.CarePlan
-	err := s.cpsFhirClient().ReadWithContext(httpRequest.Context(), localCarePlanRef, &carePlan)
-	if err != nil {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch CarePlan resource: %v", err)
-		return nil, fmt.Errorf("unable to fetch CarePlan resource: %w", err)
-	}
-
-	var task fhir.Task
-	err = s.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Activity[0].Reference.Reference, &task)
-	if err != nil {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch Task resource: %v", err)
-		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
-	}
-
-	var patient fhir.Patient
-	err = s.cpsFhirClient().ReadWithContext(httpRequest.Context(), *carePlan.Subject.Reference, &patient)
-	if err != nil {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch Patient resource: %v", err)
-		return nil, fmt.Errorf("unable to fetch Patient resource: %w", err)
-	}
-
-	var serviceRequest fhir.ServiceRequest
-	err = s.cpsFhirClient().ReadWithContext(httpRequest.Context(), *task.Focus.Reference, &serviceRequest)
-	if err != nil {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to fetch ServiceRequest resource: %v", err)
-		return nil, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err)
-	}
-
-	var workflowIdIdentifier *fhir.Identifier
-	for _, identifier := range serviceRequest.Identifier {
-		if identifier.System != nil && *identifier.System == zorgplatformWorkflowIdSystem {
-			workflowIdIdentifier = &identifier
-			break
+	//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
+	if !globals.StrictMode {
+		log.Warn().Msg("Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
+		if workflowCtx.patientBsn == "999911120" {
+			workflowCtx.patientBsn = "999999151"
 		}
 	}
 
-	//TODO: Cache/Map the careplan to its workflow id in case a token expires
-	if workflowIdIdentifier == nil {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Identifier with system %s not found", zorgplatformWorkflowIdSystem)
-		return nil, fmt.Errorf("identifier with system %s not found", zorgplatformWorkflowIdSystem)
+		launchContext := LaunchContext{
+			WorkflowId: workflowCtx.workflowId,
+			Bsn:        workflowCtx.patientBsn,
+		}
+
+		accessToken, err = s.secureTokenService.RequestAccessToken(httpRequest.Context(), launchContext, applicationTokenType)
+		if err != nil {
+			log.Error().Ctx(httpRequest.Context()).Msgf("Unable to request access token for Zorgplatform: %v", err)
+			return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
+		}
+		log.Debug().Ctx(httpRequest.Context()).Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
+		s.accessTokenCache.Set(carePlanReference, accessToken, ttlcache.DefaultTTL)
 	}
-
-	log.Debug().Ctx(httpRequest.Context()).Msgf("Found workflowId identifier: %s", *workflowIdIdentifier.Value)
-
-	bsnIdentifier := coolfhir.FilterFirstIdentifier(&patient.Identifier, coolfhir.BSNNamingSystem)
-	if bsnIdentifier == nil {
-		return nil, fmt.Errorf("patient does not have identifier with system %s", coolfhir.BSNNamingSystem)
-	}
-
-	bsn := *bsnIdentifier.Value
-
-	//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
-	if bsn == "999911120" {
-		bsn = "999999151"
-	}
-
-	launchContext := LaunchContext{
-		WorkflowId: *workflowIdIdentifier.Value,
-		Bsn:        bsn,
-	}
-
-	//TODO: Cache the token for re-use
-	accessToken, err := s.secureTokenService.RequestAccessToken(httpRequest.Context(), launchContext, applicationTokenType)
-
-	if err != nil {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Unable to request access token for Zorgplatform: %v", err)
-		return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
-	}
-
-	log.Debug().Ctx(httpRequest.Context()).Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
 	newHttpRequest.Header.Add("Accept", "application/fhir+json")
 	newHttpRequest.Header.Add("Authorization", "SAML "+accessToken)
@@ -354,7 +320,6 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
 	accessToken, err := s.secureTokenService.RequestAccessToken(request.Context(), launchContext, hcpTokenType)
-
 	if err != nil {
 		log.Err(err).Ctx(request.Context()).Msg("unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
@@ -373,10 +338,77 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	s.sessionManager.Create(response, *sessionData)
 
 	// Redirect to landing page
-	targetURL, _ := url.Parse(s.baseURL)
-	targetURL = targetURL.JoinPath(s.landingUrlPath)
 	log.Info().Ctx(request.Context()).Msg("Successfully launched through ChipSoft HiX app launch")
-	http.Redirect(response, request, targetURL.String(), http.StatusFound)
+
+	taskRef := sessionData.StringValues["task"]
+	if taskRef == "" {
+		taskRef = "/new" //If the task doesn't exist yet, send the user to the new page, where data is first confirmed
+	}
+	frontendUrl := strings.ToLower(s.frontendLandingUrl + "/" + taskRef)
+
+	http.Redirect(response, request, frontendUrl, http.StatusFound)
+}
+
+// This function returns the workflowId for a given CarePlan reference. It will be returned from a cache, if available.
+func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, carePlanReference string) (*workflowContext, error) {
+	// TODO: use baseURL if there's multiple possible CPS'
+	_, localCarePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanReference, "CarePlan")
+	if err != nil {
+		return nil, fmt.Errorf("invalid CarePlan reference (url=%s): %w", carePlanReference, err)
+	}
+	log.Debug().Ctx(ctx).Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
+
+	// TODO: group requests, something like:
+	// ?_include=CarePlan:activity-reference&_include:iterate=Task:focus
+	// query.Add("_include", "CarePlan:activity-reference")
+	// //TODO: This is a tmp solution, but if it's not that temporary, not all FHIR servers support chaining
+	// query.Add("_include:iterate", "Task:focus") //chain the Task.focus from the joined CarePlan.activity-references
+	// urlRef.RawQuery = query.Encode()
+
+	var carePlan fhir.CarePlan
+	err = s.cpsFhirClient().ReadWithContext(ctx, localCarePlanRef, &carePlan)
+	if err != nil {
+		log.Error().Ctx(ctx).Msgf("Unable to fetch CarePlan resource: %v", err)
+		return nil, fmt.Errorf("unable to fetch CarePlan resource: %w", err)
+	}
+
+	// TODO: What if there's no activities?
+	var task fhir.Task
+	err = s.cpsFhirClient().ReadWithContext(ctx, *carePlan.Activity[0].Reference.Reference, &task)
+	if err != nil {
+		log.Error().Ctx(ctx).Msgf("Unable to fetch Task resource: %v", err)
+		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
+	}
+
+	var serviceRequest fhir.ServiceRequest
+	err = s.cpsFhirClient().ReadWithContext(ctx, *task.Focus.Reference, &serviceRequest)
+	if err != nil {
+		log.Error().Ctx(ctx).Msgf("Unable to fetch ServiceRequest resource: %v", err)
+		return nil, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err)
+	}
+
+	workflowIdIdentifiers := coolfhir.FilterIdentifier(&serviceRequest.Identifier, zorgplatformWorkflowIdSystem)
+	if len(workflowIdIdentifiers) != 1 {
+		return nil, fmt.Errorf("expected ServiceRequest to have 1 identifier with system %s", zorgplatformWorkflowIdSystem)
+	}
+	workflowID := *workflowIdIdentifiers[0].Value
+
+	var patient fhir.Patient
+	err = s.cpsFhirClient().ReadWithContext(ctx, *carePlan.Subject.Reference, &patient)
+	if err != nil {
+		log.Error().Ctx(ctx).Msgf("Unable to fetch Patient resource: %v", err)
+		return nil, fmt.Errorf("unable to fetch Patient resource: %w", err)
+	}
+
+	bsnIdentifier := coolfhir.FilterFirstIdentifier(&patient.Identifier, coolfhir.BSNNamingSystem)
+	if bsnIdentifier == nil {
+		return nil, fmt.Errorf("identifier with system %s not found", coolfhir.BSNNamingSystem)
+	}
+	result := &workflowContext{
+		workflowId: workflowID,
+		patientBsn: *bsnIdentifier.Value,
+	}
+	return result, nil
 }
 
 func (s *Service) registerFhirClientFactory(config Config) {
@@ -405,7 +437,30 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	if err != nil {
 		return nil, err
 	}
+
+	// Check if there's already a CPS Task for this Zorgplatform workflow
+	var existingTaskBundle fhir.Bundle
+	var existingTaskRef *string
+	headers := http.Header{}
+	headers.Add("Cache-Control", "no-cache")
+	err = s.cpsFhirClient().SearchWithContext(ctx, "Task", url.Values{
+		"identifier": []string{zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId},
+	}, &existingTaskBundle, fhirclient.RequestHeaders(headers))
+	if err != nil {
+		return nil, fmt.Errorf("unable to search for existing CPS Task: %w", err)
+	}
+	if len(existingTaskBundle.Entry) == 1 {
+		var existingTask fhir.Task
+		if err := coolfhir.ResourceInBundle(&existingTaskBundle, coolfhir.EntryIsOfType("Task"), &existingTask); err != nil {
+			return nil, fmt.Errorf("unable to get existing CPS Task resource from search bundle: %w", err)
+		}
+		existingTaskRef = to.Ptr("Task/" + *existingTask.Id)
+	} else if len(existingTaskBundle.Entry) > 1 {
+		return nil, fmt.Errorf("found multiple existing CPS Tasks for Zorgplatform workflow (workflowID=%s)", launchContext.WorkflowId)
+	}
+
 	fhirClient := fhirclient.New(apiUrl, s.createZorgplatformApiClient(accessToken), coolfhir.Config())
+
 	// Zorgplatform provides us with a Task, from which we need to derive the Patient and ServiceRequest
 	// - Patient is contained in the Task.encounter but separately requested to include the Practitioner
 	// - ServiceRequest is not provided by Zorgplatform, so we need to create one based on the Task and Encounter
@@ -503,7 +558,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	localOrgIdentifier := identities[0]
 
 	for _, identifier := range patient.Identifier {
-		if identifier.System != nil && *identifier.System == "http://fhir.nl/fhir/NamingSystem/bsn" {
+		if identifier.System != nil && *identifier.System == coolfhir.BSNNamingSystem {
 			//TODO: overwriting the BSN with the one from the Patient resource, as with test data they can differ, normally we want to throw an error
 			launchContext.Bsn = *identifier.Value
 			break
@@ -513,7 +568,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	// Zorgplatform does not provide a ServiceRequest, so we need to create one based on other resources they do use
 	taskPerformer := fhir.Reference{
 		Identifier: &fhir.Identifier{
-			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+			System: to.Ptr(coolfhir.URANamingSystem),
 			Value:  &s.config.TaskPerformerUra,
 		},
 	}
@@ -538,7 +593,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("719858009"),
-					Display: to.Ptr("monitoren via telegeneeskunde (regime/therapie)"),
+					Display: to.Ptr("Telehealth monitoring"),
 				},
 			},
 		},
@@ -546,7 +601,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Subject: fhir.Reference{
 			Type: to.Ptr("Patient"),
 			Identifier: &fhir.Identifier{
-				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				System: to.Ptr(coolfhir.BSNNamingSystem),
 				Value:  &launchContext.Bsn,
 			},
 		},
@@ -561,7 +616,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
 	organizationRef := "Organization/magic-" + uuid.NewString()
 
-	return &user.SessionData{
+	sessionData := user.SessionData{
 		FHIRLauncher: launcherKey,
 		//TODO: See how/if to pass the conditions to the StringValues
 		StringValues: map[string]string{
@@ -570,6 +625,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 			"practitioner":   practitionerRef,
 			"organization":   organizationRef,
 			"accessToken":    accessToken,
+			"taskIdentifier": zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId,
 		},
 		OtherValues: map[string]interface{}{
 			"Patient/" + *patient.Id:   patient, //Zorgplatform only allows for a GET on /Patient, we request by ID
@@ -579,7 +635,11 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 			*reasonReference.Reference: reason,
 			"launchContext":            launchContext, // Can be used to fetch a new access token after expiration
 		},
-	}, nil
+	}
+	if existingTaskRef != nil {
+		sessionData.StringValues["task"] = *existingTaskRef
+	}
+	return &sessionData, nil
 }
 
 func (s *Service) cpsFhirClient() fhirclient.Client {
@@ -609,10 +669,10 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("84114007"),
-					Display: to.Ptr("hartfalen (aandoening)"),
+					Display: to.Ptr("hartfalen"),
 				},
 			},
-			Text: to.Ptr("hartfalen (aandoening)"),
+			Text: to.Ptr("hartfalen"),
 		}, nil
 	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.2":
 		return &fhir.CodeableConcept{
@@ -620,10 +680,10 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("13645005"),
-					Display: to.Ptr("chronische obstructieve longaandoening (aandoening)"),
+					Display: to.Ptr("chronische obstructieve longaandoening"),
 				},
 			},
-			Text: to.Ptr("chronische obstructieve longaandoening (aandoening)"),
+			Text: to.Ptr("chronische obstructieve longaandoening"),
 		}, nil
 	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.3":
 		return &fhir.CodeableConcept{
@@ -631,10 +691,10 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("195967001"),
-					Display: to.Ptr("astma (aandoening)"),
+					Display: to.Ptr("astma"),
 				},
 			},
-			Text: to.Ptr("astma (aandoening)"),
+			Text: to.Ptr("astma"),
 		}, nil
 	}
 	return nil, fmt.Errorf("unsupported workflow definition: %s", workflowReference)
@@ -651,15 +711,13 @@ func (a authHeaderRoundTripper) RoundTrip(request *http.Request) (*http.Response
 }
 
 func getCertificate(ctx context.Context, pemCert string) (*x509.Certificate, error) {
-
 	block, _ := pem.Decode([]byte(pemCert))
-
 	if block == nil {
-
+		if globals.StrictMode {
+			return nil, errors.New("failed to decode certificate PEM")
+		}
+		// Fallback to hardcoded certificate - for some reason the certificate cannot be decoded on Docker Desktop OSX from the env var
 		log.Warn().Msg("Zorgplatform certificate could not be decoded by environment variable, falling back to hardcoded certificate")
-
-		//TODO: We do not want a hard coded key in the code, should be able to load from config - fix issue
-		//TODO: Fallback to hardcoded certificate - for some reason the certificate cannot be decoded on Docker Desktop OSX from the env var
 		pemCert = `-----BEGIN CERTIFICATE-----
 MIIGpTCCBY2gAwIBAgIJAJ7SiMwCRCiBMA0GCSqGSIb3DQEBCwUAMIG0MQswCQYD
 VQQGEwJVUzEQMA4GA1UECBMHQXJpem9uYTETMBEGA1UEBxMKU2NvdHRzZGFsZTEa
@@ -700,14 +758,10 @@ U6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
 -----END CERTIFICATE-----`
 		block, _ = pem.Decode([]byte(pemCert))
 	}
-
-	cert, parseErr := x509.ParseCertificate(block.Bytes)
-
-	if parseErr != nil {
-		return nil, fmt.Errorf("failed to parse certificate: %w", parseErr)
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
-
 	log.Info().Ctx(ctx).Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
-
 	return cert, nil
 }

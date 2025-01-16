@@ -669,7 +669,7 @@ func TestFilterIdentifier(t *testing.T) {
 	tests := []struct {
 		name string
 		args args
-		want *[]fhir.Identifier
+		want []fhir.Identifier
 	}{
 		{
 			name: "nil identifiers",
@@ -677,7 +677,7 @@ func TestFilterIdentifier(t *testing.T) {
 				identifiers: nil,
 				system:      "http://example.com",
 			},
-			want: &[]fhir.Identifier{},
+			want: []fhir.Identifier{},
 		},
 		{
 			name: "no matching identifiers",
@@ -690,7 +690,7 @@ func TestFilterIdentifier(t *testing.T) {
 				},
 				system: "http://example.com",
 			},
-			want: &[]fhir.Identifier{},
+			want: []fhir.Identifier{},
 		},
 		{
 			name: "one matching identifier",
@@ -707,7 +707,7 @@ func TestFilterIdentifier(t *testing.T) {
 				},
 				system: "http://example.com",
 			},
-			want: &[]fhir.Identifier{
+			want: []fhir.Identifier{
 				{
 					System: to.Ptr("http://example.com"),
 					Value:  to.Ptr("123"),
@@ -729,7 +729,7 @@ func TestFilterIdentifier(t *testing.T) {
 				},
 				system: "http://example.com",
 			},
-			want: &[]fhir.Identifier{
+			want: []fhir.Identifier{
 				{
 					System: to.Ptr("http://example.com"),
 					Value:  to.Ptr("123"),
@@ -825,4 +825,52 @@ func TestFilterFirstIdentifier(t *testing.T) {
 			assert.Equalf(t, tt.want, FilterFirstIdentifier(tt.args.identifiers, tt.args.system), "FilterFirstIdentifier(%v, %v)", tt.args.identifiers, tt.args.system)
 		})
 	}
+}
+
+func TestParseExternalLiteralReference(t *testing.T) {
+	t.Run("root path", func(t *testing.T) {
+		baseURL, ref, err := ParseExternalLiteralReference("http://example.com/Patient/123", "Patient")
+		require.NoError(t, err)
+		assert.Equal(t, "http://example.com", baseURL.String())
+		assert.Equal(t, "Patient/123", ref)
+	})
+	t.Run("sub path", func(t *testing.T) {
+		baseURL, ref, err := ParseExternalLiteralReference("http://example.com/fhir/Patient/123", "Patient")
+		require.NoError(t, err)
+		assert.Equal(t, "http://example.com/fhir", baseURL.String())
+		assert.Equal(t, "Patient/123", ref)
+	})
+	t.Run("query params", func(t *testing.T) {
+		baseURL, ref, err := ParseExternalLiteralReference("http://example.com/fhir/Patient?foo=bar", "Patient")
+		require.EqualError(t, err, "query parameters for external literal reference are not supported")
+		assert.Nil(t, baseURL)
+		assert.Empty(t, ref)
+	})
+}
+
+func TestParseLocalReference(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		resourceType, resourceID, err := ParseLocalReference("")
+		require.EqualError(t, err, "local reference must contain exactly one '/'")
+		assert.Empty(t, resourceType)
+		assert.Empty(t, resourceID)
+	})
+	t.Run("no slash", func(t *testing.T) {
+		resourceType, resourceID, err := ParseLocalReference("Patient")
+		require.EqualError(t, err, "local reference must contain exactly one '/'")
+		assert.Empty(t, resourceType)
+		assert.Empty(t, resourceID)
+	})
+	t.Run("no resource ID", func(t *testing.T) {
+		resourceType, resourceID, err := ParseLocalReference("Patient/")
+		require.EqualError(t, err, "local reference must contain a resource ID")
+		assert.Empty(t, resourceType)
+		assert.Empty(t, resourceID)
+	})
+	t.Run("valid", func(t *testing.T) {
+		resourceType, resourceID, err := ParseLocalReference("Patient/123")
+		require.NoError(t, err)
+		assert.Equal(t, "Patient", resourceType)
+		assert.Equal(t, "123", resourceID)
+	})
 }

@@ -6,11 +6,12 @@ ORCA implements the following features:
 
 - Initiating a FHIR workflow (Task placer) and handling incoming workflow Tasks (Task filler), with/from other care organizations through Shared Care Planning.
 - User interface for care professionals to fill in questionnaires required for a FHIR workflow.
-- Proxy for the care organization's EHR to access the Care Plan Service's FHIR API, that handles authentication. 
+- Proxy for the care organization's EHR to access the Care Plan Service's FHIR API, that handles authentication.
+- Proxy for the care organization's EHR to access the other Shared Care Planning participants' FHIR API, that handles localization, authentication and data aggregation for participants that use the ChipSoft Zorgplatform FHIR API.
 
 The following features are planned:
 - Lightweight decision engine for accepting FHIR workflow Tasks (Task filler).
-- Proxy for the care organization's EHR to access the other Shared Care Planning participants' FHIR API, that handles localization, authentication and data aggregation.
+- Proxy for the care organization's EHR to access the other Shared Care Planning participants' FHIR API, that handles localization, authentication and data aggregation for participants that use the FHIR API of Azure Health Data Services. Please contribute to the Orca project if you want to prioritize the inclusion of a particular FHIR API.
 
 ## Architecture
 Systems that implement Shared Care Planning (SCP) are known as SCP nodes. ORCA is such an implementation.

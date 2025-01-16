@@ -71,7 +71,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 			New: baseUrl.String(),
 		})
 	s.handlerProvider = s.defaultHandlerProvider
-	s.ensureSearchParameterExists(context.Background())
+	s.ensureCustomSearchParametersExists(context.Background())
 	return &s, nil
 }
 
@@ -526,7 +526,33 @@ func getResourceType(resourcePath string) string {
 	return strings.Split(resourcePath, "/")[0]
 }
 
-func (s *Service) ensureSearchParameterExists(ctx context.Context) {
+func searchParameterExists(capabilityStatement fhir.CapabilityStatement, definitionURL string) bool {
+	for _, rest := range capabilityStatement.Rest {
+		for _, resource := range rest.Resource {
+			for _, searchParam := range resource.SearchParam {
+				if searchParam.Definition != nil && *searchParam.Definition == definitionURL {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
+func (s *Service) reindexSearchParameter(ctx context.Context, param fhir.SearchParameter) error {
+	reindexParam := fhir.Parameters{
+		Parameter: []fhir.ParametersParameter{
+			{
+				Name:        "targetSearchParameterTypes",
+				ValueString: to.Ptr(param.Url),
+			},
+		},
+	}
+	var response []byte
+	return s.fhirClient.CreateWithContext(ctx, reindexParam, &response, fhirclient.AtPath("/$reindex"))
+}
+
+func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error {
 	type SearchParam struct {
 		SearchParamId string
 		SearchParam   fhir.SearchParameter
@@ -594,70 +620,42 @@ func (s *Service) ensureSearchParameterExists(ctx context.Context) {
 			},
 		},
 	}
-	for _, param := range params {
 
+	var capabilityStatement fhir.CapabilityStatement
+	if err := s.fhirClient.Read("metadata", &capabilityStatement); err != nil {
+		return fmt.Errorf("failed to read CapabilityStatement: %w", err)
+	}
+
+	for _, param := range params {
 		// Check if param exists before creating
 		existingParamBundle := fhir.Bundle{}
-		err := s.fhirClient.Read("SearchParameter", &existingParamBundle, fhirclient.QueryParam("name", param.SearchParam.Name))
+		err := s.fhirClient.Search("SearchParameter", url.Values{"url": {param.SearchParam.Url}}, &existingParamBundle)
 		if err != nil {
-			log.Error().Ctx(ctx).Err(err).Msgf("Failed to read SearchParameter %s, attempting create", param.SearchParamId)
+			return fmt.Errorf("search SearchParameter %s: %w", param.SearchParamId, err)
 		}
 		if len(existingParamBundle.Entry) > 0 {
+			// Azure FHIR: if the SearchParameter exists but isn't in the CapabilityStatement, it needs to be re-indexed.
+			// See https://learn.microsoft.com/en-us/azure/healthcare-apis/azure-api-for-fhir/how-to-do-custom-search
+			if !searchParameterExists(capabilityStatement, param.SearchParam.Url) {
+				if err := s.reindexSearchParameter(ctx, param.SearchParam); err != nil {
+					return fmt.Errorf("reindexing SearchParameter %s: %w", param.SearchParamId, err)
+				}
+			}
 			log.Info().Ctx(ctx).Msgf("SearchParameter/%s already exists, skipping creation", param.SearchParamId)
 			continue
 		}
 
-		log.Info().Ctx(ctx).
-			Msgf("Performing conditional create on %s", param.SearchParamId)
-		ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-		defer cancel()
-
-		err = s.fhirClient.CreateWithContext(ctx, &param.SearchParam, &param.SearchParam)
+		err = s.fhirClient.CreateWithContext(ctx, param.SearchParam, new(SearchParam))
 		if err != nil {
-			log.Error().Ctx(ctx).Err(err).Msgf("Failed to ensure SearchParameter %s", param.SearchParamId)
-		} else {
-			log.Info().Ctx(ctx).Msgf("Ensured SearchParameter/%s", param.SearchParamId)
-
-			// Re-index SearchParamters
-			reindexParam := fhir.Parameters{
-				Parameter: []fhir.ParametersParameter{
-					{
-						Name:        param.SearchParam.Name,
-						ValueString: to.Ptr(param.SearchParam.Url),
-					},
-				},
-			}
-
-			requestBody, err := json.Marshal(reindexParam)
-			if err != nil {
-				log.Error().Ctx(ctx).Err(err).
-					Msgf("Failed to marshal reindex request for SearchParameter %s", param.SearchParamId)
-				continue
-			}
-
-			req, err := http.NewRequest("POST", s.fhirURL.String()+"/$reindex", strings.NewReader(string(requestBody)))
-			if err != nil {
-				log.Error().Ctx(ctx).Err(err).
-					Msgf("Failed to create reindex request for SearchParameter %s", param.SearchParamId)
-				continue
-			}
-			req.Header.Set("Content-Type", "application/fhir+json")
-
-			resp, err := s.profile.HttpClient().Do(req)
-			if err != nil {
-				log.Error().Ctx(ctx).Err(err).Msgf("Failed to reindex SearchParameter %s", param.SearchParamId)
-				continue
-			}
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				body, _ := io.ReadAll(resp.Body)
-				log.Error().Ctx(ctx).Msgf("Failed to reindex SearchParameter %s: %s", param.SearchParamId, string(body))
-				continue
-			} else {
-				log.Info().Ctx(ctx).Msgf("Reindexed SearchParameter/%s", param.SearchParamId)
-			}
+			return fmt.Errorf("create SearchParameter %s: %w", param.SearchParamId, err)
 		}
+		err = s.reindexSearchParameter(ctx, param.SearchParam)
+		if err != nil {
+			return fmt.Errorf("reindex SearchParameter %s: %w", param.SearchParamId, err)
+		}
+		log.Info().Ctx(ctx).Msgf("Created SearchParameter/%s and triggered re-index job.", param.SearchParamId)
 	}
+	return nil
 }
 
 // checkAllowUnmanagedOperations checks if unmanaged operations are allowed. It errors if they are not.

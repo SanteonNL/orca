@@ -7,6 +7,8 @@ interface LaunchContext {
     patient: string
     practitioner: string
     serviceRequest: string
+    task?: string
+    taskIdentifier?: string
 }
 
 interface StoreState {

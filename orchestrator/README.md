@@ -1,17 +1,22 @@
 ## Configuration
 Use the following environment variables to configure the orchestrator:
 
-
 ### General configuration
 - `ORCA_PUBLIC_BASEURL` (required): base URL of the public endpoints.
 - `ORCA_PUBLIC_ADDRESS` (required): address the public endpoints bind to (default: `:8080`).
 - `ORCA_LOGLEVEL`: log level, can be `trace`, `debug`, `info`, `warn`, `error`, `fatal`, `panic`, or `disabled` (default: `info`).
+- `ORCA_STRICTMODE`: enables strict mode which is recommended in production. (default: `true`).
+   Disabling strict mode will change the behavior of the orchestrator in the following ways:
+   - Zorgplatform app launch: patient BSN `999911120` is changed to `999999151` (to cope with a bug in its test data).
 
 #### Required configuration for Nuts
 - `ORCA_NUTS_PUBLIC_URL`: public URL of the Nuts, used for informing OAuth2 clients of the URL of the OAuth2 Authorization Server, e.g. `http://example.com/nuts`.
 - `ORCA_NUTS_API_URL`: address of the Nuts node API to use, e.g. `http://nutsnode:8081`.
 - `ORCA_NUTS_SUBJECT`: Nuts subject of the local party, as it was created in/by the Nuts node.
 - `ORCA_NUTS_DISCOVERYSERVICE`: ID of the Nuts Discovery Service that is used for CSD lookups (finding (local) care organizations and looking up their endpoints).
+- `ORCA_NUTS_AZUREKV_URL`: URL of the Azure Key Vault that holds the client certificate for outbound HTTP requests.
+- `ORCA_NUTS_AZUREKV_CLIENTCERTNAME`: Name of the certificate for outbound HTTP requests.
+- `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 
 ### Care Plan Contributor configuration
 - `ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL`: FHIR base URL of the CarePlan service.
@@ -25,6 +30,7 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_SCOPE`: Any specific scope, for example `launch fhirUser`
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_FHIRPROXYURL`: Enable FHIR proxy for demo purposes on `/demo/fhirproxy`, which proxies requests to this URL.
+- `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
 ### Care Plan Contributor Task Filler configuration

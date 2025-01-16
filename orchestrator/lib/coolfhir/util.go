@@ -6,8 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"path"
 	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 
@@ -239,6 +242,16 @@ func IdentifierEquals(one *fhir.Identifier, other *fhir.Identifier) bool {
 	return *one.System == *other.System && *one.Value == *other.Value
 }
 
+// HasIdentifier returns whether a slice of fhir.Identifier contains a specific identifier.
+func HasIdentifier(needle fhir.Identifier, haystack ...fhir.Identifier) bool {
+	for _, id := range haystack {
+		if IdentifierEquals(&needle, &id) {
+			return true
+		}
+	}
+	return false
+}
+
 func ToString(resource interface{}) string {
 	switch r := resource.(type) {
 	case *fhir.Identifier:
@@ -283,9 +296,9 @@ func IsScpTask(task *fhir.Task) bool {
 }
 
 // FilterIdentifier returns all identifiers matching the given system from the provided array of identifiers
-func FilterIdentifier(identifiers *[]fhir.Identifier, system string) *[]fhir.Identifier {
+func FilterIdentifier(identifiers *[]fhir.Identifier, system string) []fhir.Identifier {
 	if identifiers == nil {
-		return &[]fhir.Identifier{}
+		return []fhir.Identifier{}
 	}
 	var result []fhir.Identifier
 	for _, identifier := range *identifiers {
@@ -294,9 +307,9 @@ func FilterIdentifier(identifiers *[]fhir.Identifier, system string) *[]fhir.Ide
 		}
 	}
 	if len(result) == 0 {
-		return &[]fhir.Identifier{}
+		return []fhir.Identifier{}
 	}
-	return &result
+	return result
 }
 
 // FilterFirstIdentifier returns the first identifier matching the given system from the provided array of identifiers
@@ -310,6 +323,48 @@ func FilterFirstIdentifier(identifiers *[]fhir.Identifier, system string) *fhir.
 		}
 	}
 	return nil
+}
+
+// ParseLocalReference parses a local reference and returns the resource type and the resource ID.
+// If the reference is not in this format, an error is returned.
+func ParseLocalReference(reference string) (string, string, error) {
+	if strings.Count(reference, "/") != 1 {
+		return "", "", errors.New("local reference must contain exactly one '/'")
+	}
+	parts := strings.Split(reference, "/")
+	if parts[0] == "" {
+		return "", "", errors.New("local reference must contain a resource type")
+	}
+	if parts[1] == "" {
+		return "", "", errors.New("local reference must contain a resource ID")
+	}
+	return parts[0], parts[1], nil
+}
+
+// ParseExternalLiteralReference parses an external literal reference and returns the FHIR base URL and the resource reference.
+// For example:
+// - http://example.com/fhir/Patient/123 yields http://example.com/fhir and Patient/123
+// - http://example.com/Patient/123 yields http://example.com and Patient/123
+// - http://example.com/subdir/fhir/Patient/123 yields http://example.com/subdir/fhir and Patient/123
+// The reference must contain a resource type and an ID, and cannot contain query parameters.
+func ParseExternalLiteralReference(literal string, resourceType string) (*url.URL, string, error) {
+	parsedLiteral, err := url.Parse(literal)
+	if err != nil {
+		return nil, "", err
+	}
+	if len(parsedLiteral.Query()) > 0 {
+		return nil, "", errors.New("query parameters for external literal reference are not supported")
+	}
+	pathParts := strings.Split(parsedLiteral.Path, "/")
+	if len(pathParts) < 2 {
+		return nil, "", errors.New("external literal reference must contain at least a resource type and an ID")
+	}
+	if pathParts[len(pathParts)-2] != resourceType {
+		return nil, "", errors.New("external literal reference does not contain the expected resource type")
+	}
+	ref := path.Join(pathParts[len(pathParts)-2:]...)
+	parsedLiteral.Path = path.Join(pathParts[:len(pathParts)-2]...)
+	return parsedLiteral, ref, nil
 }
 
 func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource interface{}, additionalHeaders ...map[string]string) {

@@ -1,9 +1,16 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/rs/zerolog/log"
 	"net/http"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
@@ -17,9 +24,15 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/user"
 )
 
-func Start(config Config) error {
+// Start starts the server with the given configuration. It blocks until the given context is cancelled.
+func Start(ctx context.Context, config Config) error {
 	if config.Validate() != nil {
 		return fmt.Errorf("invalid configuration: %w", config.Validate())
+	}
+
+	globals.StrictMode = config.StrictMode
+	if !globals.StrictMode {
+		log.Warn().Msg("Strict mode is disabled, do not use in production")
 	}
 
 	// Set up dependencies
@@ -42,12 +55,12 @@ func Start(config Config) error {
 	if config.CarePlanContributor.Enabled {
 		// App Launches
 		var ehrFhirProxy coolfhir.HttpProxy
-		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, careplancontributor.LandingURL))
+		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, config.CarePlanContributor.FrontendConfig.URL))
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
-			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Public.URL, careplancontributor.LandingURL))
+			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.CarePlanContributor.FrontendConfig.URL))
 		}
 		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
-			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, careplancontributor.LandingURL, activeProfile)
+			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, config.CarePlanContributor.FrontendConfig.URL, activeProfile)
 			if err != nil {
 				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
 			}
@@ -86,11 +99,37 @@ func Start(config Config) error {
 		service.RegisterHandlers(httpHandler)
 	}
 
-	// Start HTTP server
-	err = http.ListenAndServe(config.Public.Address, httpHandler)
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("failed to start HTTP server: %w", err)
+	// Start HTTP server, shutdown when given context.Context is cancelled
+	httpServer := &http.Server{Addr: config.Public.Address, Handler: httpHandler}
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	listenChan := make(chan error)
+	go func() {
+		err := httpServer.ListenAndServe()
+		if err != nil && !errors.Is(err, http.ErrServerClosed) {
+			// couldn't start server
+			listenChan <- err
+		}
+	}()
+
+	interruptChan := make(chan os.Signal, 1)
+	signal.Notify(interruptChan, os.Interrupt, syscall.SIGTERM)
+
+	select {
+	case listenErr := <-listenChan:
+		return fmt.Errorf("failed to start HTTP server: %w", listenErr)
+	case <-interruptChan:
+		// Interrupt signal, need to shut down gracefully
+		break
+	case <-ctx.Done():
+		// Start context cancelled, need to shut down gracefully
+		break
 	}
+	log.Info().Msg("Shutting down...")
+	if err := httpServer.Shutdown(context.Background()); err != nil {
+		return fmt.Errorf("failed to shut down HTTP server: %w", err)
+	}
+	// Graceful shutdown
 	return nil
 }
 
