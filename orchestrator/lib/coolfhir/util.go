@@ -3,6 +3,7 @@
 package coolfhir
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
@@ -398,4 +400,30 @@ func ContainsCoding(code fhir.Coding, concepts ...fhir.CodeableConcept) bool {
 		}
 	}
 	return false
+}
+
+func GetTaskByIdentifier(ctx context.Context, fhirClient fhirclient.Client, identifier fhir.Identifier) (*fhir.Task, error) {
+	var existingTaskBundle fhir.Bundle
+	headers := http.Header{}
+	headers.Add("Cache-Control", "no-cache")
+	err := fhirClient.SearchWithContext(ctx, "Task", url.Values{
+		"identifier": []string{*identifier.System + "|" + *identifier.Value},
+	}, &existingTaskBundle, fhirclient.RequestHeaders(headers))
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to search for Task: %v", err)
+	}
+
+	if len(existingTaskBundle.Entry) == 1 {
+		var existingTask fhir.Task
+		if err := ResourceInBundle(&existingTaskBundle, EntryIsOfType("Task"), &existingTask); err != nil {
+			return nil, fmt.Errorf("unable to get existing CPS Task resource from search bundle: %v", err)
+		}
+		log.Debug().Ctx(ctx).Msg("Found existing CPS Task resource for demo task")
+		return &existingTask, nil
+	} else if len(existingTaskBundle.Entry) > 1 {
+		return nil, fmt.Errorf("found multiple existing CPS Tasks for identifier: %s", *identifier.System+"|"+*identifier.Value)
+	}
+
+	return nil, nil
 }
