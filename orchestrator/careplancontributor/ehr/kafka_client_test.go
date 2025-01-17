@@ -55,25 +55,19 @@ func TestKafkaClient_SubmitMessage(t *testing.T) {
 			value: "test-value",
 			setup: func(tt *testStruct) {
 				globals.StrictMode = false
-				// Create a test server
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					// Check the request method and URL
 					require.Equal(t, "POST", r.Method)
 					require.Equal(t, "/test-endpoint", r.URL.Path)
 
-					// Read the request body
 					body, err := io.ReadAll(r.Body)
 					require.NoError(t, err)
 					require.Equal(t, "test-value", string(body))
 
-					// Respond with a success status
 					w.WriteHeader(http.StatusOK)
 				}))
 
-				// Set the endpoint to the test server URL
 				tt.config.Endpoint = ts.URL + "/test-endpoint"
 
-				// Store the test server in the test struct for later teardown
 				tt.teardown = func() {
 					ts.Close()
 				}

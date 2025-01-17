@@ -59,7 +59,6 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_PASSWORD=Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
       - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SECURITY_PROTOCOL=SASL_PLAINTEXT
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json
-#      - ORCA_LOGLEVEL=0
     volumes:
       # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
       # used by the Task Filler Engine

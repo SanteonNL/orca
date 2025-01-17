@@ -231,17 +231,15 @@ func (k *DemoClient) SubmitMessage(ctx context.Context, key string, value string
 	jsonValue = strings.ReplaceAll(jsonValue, "\n", "")
 	jsonValue = strings.ReplaceAll(jsonValue, "\t", "")
 	log.Debug().Ctx(ctx).Msgf("DemoClient, submitting message %s - %s", key, jsonValue)
-	// Create a new HTTP request
+
 	req, err := http.NewRequestWithContext(ctx, "POST", k.messageEndpoint, strings.NewReader(jsonValue))
 	if err != nil {
 		log.Error().Ctx(ctx).Msgf("DemoClient, failed to create request: %s", err.Error())
 		return err
 	}
 
-	// Set the content type to application/json
 	req.Header.Set("Content-Type", "application/json")
 
-	// Send the request
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -250,7 +248,6 @@ func (k *DemoClient) SubmitMessage(ctx context.Context, key string, value string
 	}
 	defer resp.Body.Close()
 
-	// Check for a successful response
 	if resp.StatusCode != http.StatusOK {
 		err = fmt.Errorf("DemoClient, received non-OK response: %d", resp.StatusCode)
 		log.Error().Ctx(ctx).Msgf("DemoClient, %s", err.Error())
