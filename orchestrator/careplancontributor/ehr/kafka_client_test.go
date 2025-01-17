@@ -54,6 +54,7 @@ func TestKafkaClient_SubmitMessage(t *testing.T) {
 			key:   "test-key",
 			value: "test-value",
 			setup: func(tt *testStruct) {
+				globals.StrictMode = false
 				// Create a test server
 				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					// Check the request method and URL
