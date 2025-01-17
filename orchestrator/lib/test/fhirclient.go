@@ -122,7 +122,10 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 }
 
 func (s *StubFHIRClient) CreateWithContext(_ context.Context, resource any, result any, opts ...fhirclient.Option) error {
-	resourceType := resource.(BaseResource).Type
+	var baseResource BaseResource
+	unmarshalInto(resource, &baseResource)
+	resourceType := baseResource.Type
+
 	if resourceType == "" {
 		return fmt.Errorf("can't defer resource type of %T", resource)
 	}
