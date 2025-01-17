@@ -214,6 +214,7 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 		err := carePlanContributor1.Update("Task", primaryTask, &primaryTask, fhirclient.QueryParam("_id", "123"))
 		require.NoError(t, err)
+		notificationCounter.Store(0)
 		// Resolve created CarePlan through Task.basedOn
 		require.NoError(t, carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan))
 	}
@@ -230,9 +231,8 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		err = service.fhirClient.SearchWithContext(context.Background(), "Task", url.Values{"intent": {"order"}}, &taskBundle)
 		require.NoError(t, err)
 		require.Len(t, taskBundle.Entry, 1, "expected 1 Task in the FHIR server")
+		notificationCounter.Store(0)
 	})
-
-	notificationCounter.Store(0)
 
 	t.Log("Create Subtask")
 	{
