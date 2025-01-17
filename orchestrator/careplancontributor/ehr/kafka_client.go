@@ -4,9 +4,12 @@ package ehr
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/rs/zerolog/log"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -22,6 +25,7 @@ import (
 //   - ConnectionString: The connection string used for authentication.
 type KafkaConfig struct {
 	Enabled   bool           `koanf:"enabled" default:"false" description:"This enables the Kafka client."`
+	Demo      bool           `koanf:"demo" default:"false" description:"This enables the Kafka client in demo mode. In demo mode, the Kafka client will send messages to the endpoint over http instead of Kafka."`
 	DebugOnly bool           `koanf:"debug" default:"false" description:"This enables debug mode for Kafka, writing the messages to a file in the OS TempDir instead of sending them to Kafka."`
 	Topic     string         `koanf:"topic"`
 	Endpoint  string         `koanf:"endpoint"`
@@ -69,6 +73,10 @@ type KafkaClientImpl struct {
 type DebugClient struct {
 }
 
+type DemoClient struct {
+	messageEndpoint string
+}
+
 type NoopClient struct {
 }
 
@@ -86,6 +94,17 @@ type NoopClient struct {
 func NewClient(config KafkaConfig) (KafkaClient, error) {
 	var kafkaClient KafkaClient
 	if config.Enabled {
+		if config.Demo {
+			if globals.StrictMode {
+				err := errors.New("demo mode is not allowed at the same time as strict mode")
+				return nil, err
+			}
+			ctx := context.Background()
+			log.Info().Ctx(ctx).Msgf("Demo mode enabled, sending messages over http to endpoint: %s", config.Endpoint)
+			return &DemoClient{
+				messageEndpoint: config.Endpoint,
+			}, nil
+		}
 		if config.DebugOnly {
 			ctx := context.Background()
 			log.Info().Ctx(ctx).Msg("Debug mode enabled, writing messages to files in OS temp dir")
@@ -189,13 +208,56 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 // Returns:
 //   - error: An error if the file could not be written.
 func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value string) error {
-	name := path.Join(os.TempDir(), strings.ReplaceAll(key, ":", "_") + ".json")
+	name := path.Join(os.TempDir(), strings.ReplaceAll(key, ":", "_")+".json")
 	log.Debug().Ctx(ctx).Msgf("DebugClient, write to file: %s", name)
 	err := os.WriteFile(name, []byte(value), 0644)
 	if err != nil {
 		log.Warn().Ctx(ctx).Msgf("DebugClient, failed to write to file: %s, err: %s", name, err.Error())
 		return err
 	}
+	return nil
+}
+
+// SubmitMessage submits a message to the configured endpoint over http.
+//
+// Parameters:
+//   - key: The key of the message to be submitted.
+//   - value: The value of the message to be submitted.
+//
+// Returns:
+//   - error: An error if the message could not be produced.
+func (k *DemoClient) SubmitMessage(ctx context.Context, key string, value string) error {
+	jsonValue := strings.ReplaceAll(value, " ", "")
+	jsonValue = strings.ReplaceAll(jsonValue, "\n", "")
+	jsonValue = strings.ReplaceAll(jsonValue, "\t", "")
+	log.Debug().Ctx(ctx).Msgf("DemoClient, submitting message %s - %s", key, jsonValue)
+	// Create a new HTTP request
+	req, err := http.NewRequestWithContext(ctx, "POST", k.messageEndpoint, strings.NewReader(jsonValue))
+	if err != nil {
+		log.Error().Ctx(ctx).Msgf("DemoClient, failed to create request: %s", err.Error())
+		return err
+	}
+
+	// Set the content type to application/json
+	req.Header.Set("Content-Type", "application/json")
+
+	// Send the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Error().Ctx(ctx).Msgf("DemoClient, failed to send request: %s", err.Error())
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Check for a successful response
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("DemoClient, received non-OK response: %d", resp.StatusCode)
+		log.Error().Ctx(ctx).Msgf("DemoClient, %s", err.Error())
+		return err
+	}
+
+	log.Debug().Ctx(ctx).Msgf("DemoClient, successfully sent message to endpoint")
 	return nil
 }
 

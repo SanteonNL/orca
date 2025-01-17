@@ -210,6 +210,9 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 		var bundle fhir.Bundle
 		values := url.Values{}
 		values.Set("_id", strings.Join(refIds, ","))
+		if refType == "CarePlan" {
+			values.Set("_include", "CarePlan:care-team")
+		}
 		err := cpsClient.SearchWithContext(ctx, refType, values, &bundle)
 		if err != nil {
 			return nil, err

@@ -4,8 +4,16 @@ import { storeNotificationBundle } from './storage';
 
 export async function POST(req: NextRequest) {
     try {
-        const bundle = await req.json() as Bundle;
-        storeNotificationBundle(bundle);
+        console.log('Received notification bundle');
+
+        // The bundles are in the object under the key 'bundles'
+        // @ts-ignore
+        const { bundles } = await req.json() as Bundle[];
+
+        console.log('Bundle: ', bundles);
+        for (const bundle of bundles) {
+            storeNotificationBundle(bundle);
+        }
 
         return NextResponse.json({message: 'Notification bundle received successfully'}, {status: 200});
     } catch (error) {
