@@ -60,7 +60,7 @@ export default async function BgzOverview() {
         }, new Map<string, any>());
 
 
-        rows = entries?.filter((entry) => entry.resource?.resourceType === "CarePlan")
+        rows = entries?.filter((entries) => entries.resource?.resourceType === "CarePlan")
             .map((entry: any) => entry.resource as CarePlan)
             .map((carePlan: CarePlan) => {
                 const careTeam = carePlan.careTeam?.[0]?.reference ? resourceMap?.get(carePlan.careTeam[0].reference) : undefined;
