@@ -96,8 +96,7 @@ func NewClient(config KafkaConfig) (KafkaClient, error) {
 	if config.Enabled {
 		if config.Demo {
 			if globals.StrictMode {
-				err := errors.New("demo mode is not allowed at the same time as strict mode")
-				return nil, err
+				return nil, errors.New("demo mode is not allowed in strict mode")
 			}
 			ctx := context.Background()
 			log.Info().Ctx(ctx).Msgf("Demo mode enabled, sending messages over http to endpoint: %s", config.Endpoint)
