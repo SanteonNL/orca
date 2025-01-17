@@ -1,13 +1,16 @@
 package coolfhir
 
 import (
+	"context"
 	"errors"
 	"testing"
 	"time"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -873,4 +876,86 @@ func TestParseLocalReference(t *testing.T) {
 		assert.Equal(t, "Patient", resourceType)
 		assert.Equal(t, "123", resourceID)
 	})
+}
+
+func TestGetTaskByIdentifier(t *testing.T) {
+	type args struct {
+		ctx        context.Context
+		fhirClient fhirclient.Client
+		identifier fhir.Identifier
+	}
+
+	existingTask := fhir.Task{
+		Id: to.Ptr("12345678910"),
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("unit-test-system"),
+				Value:  to.Ptr("20"),
+			},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		args    args
+		want    *fhir.Task
+		wantErr string
+	}{
+		{
+			name: "successful search with one result",
+			args: args{
+				ctx: context.Background(),
+				fhirClient: &test.StubFHIRClient{
+					Resources: []interface{}{
+						existingTask,
+					},
+				},
+				identifier: fhir.Identifier{
+					System: to.Ptr("unit-test-system"),
+					Value:  to.Ptr("20"),
+				},
+			},
+			want: &existingTask,
+		},
+		{
+			name: "successful search with multiple results",
+			args: args{
+				ctx: context.Background(),
+				fhirClient: &test.StubFHIRClient{
+					Resources: []interface{}{
+						existingTask,
+						existingTask,
+					},
+				},
+				identifier: fhir.Identifier{
+					System: to.Ptr("unit-test-system"),
+					Value:  to.Ptr("20"),
+				},
+			},
+			wantErr: "found multiple existing CPS Tasks for identifier: unit-test-system|20",
+		},
+		{
+			name: "no results found",
+			args: args{
+				ctx:        context.Background(),
+				fhirClient: &test.StubFHIRClient{},
+				identifier: fhir.Identifier{
+					System: to.Ptr("unit-test-system"),
+					Value:  to.Ptr("20"),
+				},
+			},
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := GetTaskByIdentifier(tt.args.ctx, tt.args.fhirClient, tt.args.identifier)
+			if tt.wantErr != "" {
+				assert.EqualError(t, err, tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }

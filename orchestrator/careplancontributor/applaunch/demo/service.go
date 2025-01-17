@@ -1,14 +1,21 @@
 package demo
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
-	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/rs/zerolog/log"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 const fhirLauncherKey = "demo"
+const demoTaskSystemSystem = "http://demo-launch/fhir/NamingSystem/task-identifier"
 
 func init() {
 	// Register FHIR client factory that can create FHIR clients when the Demo AppLaunch is used
@@ -36,39 +43,17 @@ type Service struct {
 	frontendLandingUrl string
 }
 
+func (s *Service) cpsFhirClient() fhirclient.Client {
+	return globals.CarePlanServiceFhirClient
+}
+
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/demo-app-launch", s.handle)
-	//if s.config.FHIRProxyURL != "" {
-	//	log.Info().Msgf("Demo FHIR proxy enabled: %s", s.config.FHIRProxyURL)
-	//	fhirProxyURL, err := url.Parse(s.config.FHIRProxyURL)
-	//	if err != nil {
-	//		log.Fatal().Err(err).Msgf("Invalid demo FHIR proxy URL: %s", s.config.FHIRProxyURL)
-	//	}
-	//	reverseProxy := &httputil.ReverseProxy{
-	//		Rewrite: func(r *httputil.ProxyRequest) {
-	//			r.SetURL(fhirProxyURL)
-	//		},
-	//	}
-	//	reverseProxy.ErrorHandler = func(responseWriter http.ResponseWriter, request *http.Request, err error) {
-	//		responseWriter.Header().Add("Content-Type", "application/fhir+json")
-	//		responseWriter.WriteHeader(http.StatusBadGateway)
-	//		diagnostics := "The system tried to proxy the FHIR operation, but an error occurred."
-	//		data, _ := json.Marshal(fhir.OperationOutcome{
-	//			Issue: []fhir.OperationOutcomeIssue{
-	//				{
-	//					Severity:    fhir.IssueSeverityError,
-	//					Diagnostics: &diagnostics,
-	//				},
-	//			},
-	//		})
-	//		_, _ = responseWriter.Write(data)
-	//	}
-	//	mux.HandleFunc("/demo/fhirproxy", reverseProxy.ServeHTTP)
-	//}
 }
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
-	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss")
+	log.Debug().Ctx(request.Context()).Msg("Handling demo app launch")
+	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss", "taskIdentifier")
 	if !ok {
 		return
 	}
@@ -84,6 +69,25 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		FHIRLauncher: fhirLauncherKey,
 		StringValues: values,
 	})
+
+	existingTask, err := coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), fhir.Identifier{
+		System: to.Ptr(demoTaskSystemSystem),
+		Value:  to.Ptr(values["taskIdentifier"]),
+	})
+
+	if err != nil {
+		log.Error().Ctx(request.Context()).Msg("Existing CPS Task check failed for task with identifier: " + values["taskIdentifier"])
+		http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
+		return
+	}
+
+	if existingTask != nil {
+		log.Debug().Ctx(request.Context()).Msg("Existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
+		http.Redirect(response, request, s.frontendLandingUrl+"/task/"+*existingTask.Id, http.StatusFound)
+		return
+	}
+
 	// Redirect to landing page
-	http.Redirect(response, request, s.frontendLandingUrl, http.StatusFound)
+	log.Debug().Ctx(request.Context()).Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
+	http.Redirect(response, request, s.frontendLandingUrl+"/new", http.StatusFound)
 }
