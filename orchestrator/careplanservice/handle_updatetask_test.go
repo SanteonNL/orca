@@ -514,6 +514,18 @@ func Test_handleUpdateTask(t *testing.T) {
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
 	})
+	t.Run("original FHIR request headers are passed to outgoing Bundle entry", func(t *testing.T) {
+		request := updateRequest()
+		request.HttpHeaders = map[string][]string{
+			"If-None-Exist": {"ifnoneexist"},
+		}
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.NoError(t, err)
+		require.Equal(t, "ifnoneexist", *tx.Entry[0].Request.IfNoneExist)
+	})
 	t.Run("error: resource ID can't be changed (while Task is identified by search parameters)", func(t *testing.T) {
 		request := updateRequest(func(task *fhir.Task) {
 			task.Id = to.Ptr("1000")
