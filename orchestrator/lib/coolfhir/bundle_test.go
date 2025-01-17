@@ -5,6 +5,7 @@ import (
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
 	"net/http/httptest"
 	"net/url"
@@ -145,5 +146,42 @@ func TestFetchBundleEntry(t *testing.T) {
 		actualEntry, err := NormalizeTransactionBundleResponseEntry(fhirClient, fhirBaseUrl, nil, responseEntry, nil)
 		require.NoError(t, err)
 		require.NotNil(t, actualEntry)
+	})
+}
+
+func TestWithRequestHeaders(t *testing.T) {
+	t.Run("set", func(t *testing.T) {
+		entry := &fhir.BundleEntry{}
+		WithRequestHeaders(map[string][]string{
+			IfNoneExistHeader:     {"ifnoneexist"},
+			IfMatchHeader:         {"ifmatch"},
+			IfNoneMatchHeader:     {"ifnonematch"},
+			IfModifiedSinceHeader: {"ifmodifiedsince"},
+		})(entry)
+		require.Equal(t, "ifnoneexist", *entry.Request.IfNoneExist)
+		require.Equal(t, "ifmatch", *entry.Request.IfMatch)
+		require.Equal(t, "ifnonematch", *entry.Request.IfNoneMatch)
+		require.Equal(t, "ifmodifiedsince", *entry.Request.IfModifiedSince)
+	})
+	t.Run("not set", func(t *testing.T) {
+		entry := &fhir.BundleEntry{}
+		WithRequestHeaders(map[string][]string{})(entry)
+		assert.Nil(t, entry.Request.IfMatch)
+		assert.Nil(t, entry.Request.IfNoneMatch)
+		assert.Nil(t, entry.Request.IfModifiedSince)
+		assert.Nil(t, entry.Request.IfNoneExist)
+	})
+}
+
+func TestWithFullUrl(t *testing.T) {
+	t.Run("empty", func(t *testing.T) {
+		entry := &fhir.BundleEntry{}
+		WithFullUrl("")(entry)
+		assert.Nil(t, entry.FullUrl)
+	})
+	t.Run("set", func(t *testing.T) {
+		entry := &fhir.BundleEntry{}
+		WithFullUrl("http://example.com/fhir/Task/123")(entry)
+		require.Equal(t, "http://example.com/fhir/Task/123", *entry.FullUrl)
 	})
 }

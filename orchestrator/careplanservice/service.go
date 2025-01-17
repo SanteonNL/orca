@@ -103,6 +103,7 @@ type FHIRHandlerRequest struct {
 	ResourcePath string
 	ResourceData json.RawMessage
 	HttpMethod   string
+	HttpHeaders  http.Header
 	RequestUrl   *url.URL
 	FullUrl      string
 	Context      context.Context
@@ -128,9 +129,8 @@ func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
 			result.Request.Url += "?" + query.Encode()
 		}
 	}
-	if r.FullUrl != "" {
-		result.FullUrl = to.Ptr(r.FullUrl)
-	}
+	coolfhir.WithFullUrl(r.FullUrl)(&result)
+	coolfhir.WithRequestHeaders(r.HttpHeaders)(&result)
 	return result
 }
 
@@ -274,6 +274,7 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 	fhirRequest := FHIRHandlerRequest{
 		RequestUrl:   httpRequest.URL,
 		HttpMethod:   httpRequest.Method,
+		HttpHeaders:  coolfhir.FilterRequestHeaders(httpRequest.Header),
 		ResourceId:   httpRequest.PathValue("id"),
 		ResourcePath: resourcePath,
 		ResourceData: bodyBytes,
@@ -454,6 +455,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 
 		fhirRequest := FHIRHandlerRequest{
 			HttpMethod:   entry.Request.Method.Code(),
+			HttpHeaders:  coolfhir.HeadersFromBundleEntryRequest(entry.Request),
 			RequestUrl:   requestUrl,
 			ResourcePath: resourcePath,
 			ResourceData: entry.Resource,
