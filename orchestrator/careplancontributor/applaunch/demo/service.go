@@ -3,6 +3,7 @@ package demo
 import (
 	"net/http"
 	"net/url"
+	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -89,5 +90,9 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 
 	// Redirect to landing page
 	log.Debug().Ctx(request.Context()).Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
-	http.Redirect(response, request, s.frontendLandingUrl+"/new", http.StatusFound)
+	redirect := s.frontendLandingUrl
+	if !strings.HasSuffix(s.frontendLandingUrl, "/new") {
+		redirect += "/new"
+	}
+	http.Redirect(response, request, redirect, http.StatusFound)
 }

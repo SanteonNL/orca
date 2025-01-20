@@ -185,12 +185,13 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
     } as Task
 
     if (taskIdentifier) {
-        const systemAndIdentifier = taskIdentifier.split("|")
-        if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`")
-        task.identifier = [{
-            system: systemAndIdentifier[0],
-            value: systemAndIdentifier[1],
-        }]
+        // TODO: Fix ifNoneExists
+        // const systemAndIdentifier = taskIdentifier.split("|")
+        // if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`")
+        // task.identifier = [{
+        //     system: systemAndIdentifier[0],
+        //     value: systemAndIdentifier[1],
+        // }]
     }
 
     return task
