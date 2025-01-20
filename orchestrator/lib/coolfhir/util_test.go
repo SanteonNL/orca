@@ -959,3 +959,34 @@ func TestGetTaskByIdentifier(t *testing.T) {
 		})
 	}
 }
+
+func TestTokenToIdentifier(t *testing.T) {
+	t.Run("system and code", func(t *testing.T) {
+		identifier, err := TokenToIdentifier("http://example.com|123")
+		require.NoError(t, err)
+		assert.Equal(t, "http://example.com", *identifier.System)
+		assert.Equal(t, "123", *identifier.Value)
+	})
+	t.Run("system only", func(t *testing.T) {
+		identifier, err := TokenToIdentifier("http://example.com|")
+		require.NoError(t, err)
+		assert.Equal(t, "http://example.com", *identifier.System)
+		assert.Nil(t, identifier.Value)
+	})
+	t.Run("code only", func(t *testing.T) {
+		identifier, err := TokenToIdentifier("|123")
+		require.NoError(t, err)
+		assert.Nil(t, identifier.System)
+		assert.Equal(t, "123", *identifier.Value)
+	})
+	t.Run("neither", func(t *testing.T) {
+		identifier, err := TokenToIdentifier("|")
+		require.EqualError(t, err, "identifier search token must contain a system, or a code, or both")
+		assert.Nil(t, identifier)
+	})
+	t.Run("invalid format", func(t *testing.T) {
+		identifier, err := TokenToIdentifier("http://example.com")
+		require.EqualError(t, err, "identifier search token must contain exactly one '|'")
+		assert.Nil(t, identifier)
+	})
+}
