@@ -121,9 +121,6 @@ func TestService(t *testing.T) {
 	zorgplatformHttpServerMux.Handle("GET /api/Task/b526e773-e1a6-4533-bd00-1360c97e745f", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Get Zorgplatform Workflow Task
 		coolfhir.SendResponse(w, http.StatusOK, map[string]interface{}{
-			"context": map[string]interface{}{
-				"reference": "Encounter/enc-123",
-			},
 			"definitionReference": map[string]interface{}{
 				"reference": "ActivityDefinition/1.0",
 			},
@@ -146,27 +143,6 @@ func TestService(t *testing.T) {
 					Id: to.Ptr("prac-123"),
 				}, nil, nil),
 		)
-	}))
-	zorgplatformHttpServerMux.Handle("GET /api/Encounter", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Query().Get("_id") == "enc-123" {
-			enc := fhir.Encounter{
-				Subject: &fhir.Reference{
-					Reference: to.Ptr("Patient/pat-123"),
-				},
-				ServiceProvider: &fhir.Reference{
-					Reference: to.Ptr("Organization/org-123"),
-				},
-			}
-			org := fhir.Organization{
-				Id: to.Ptr("org-123"),
-			}
-			coolfhir.SendResponse(w, http.StatusOK, coolfhir.SearchSet().
-				Append(enc, nil, nil).
-				Append(org, nil, nil),
-			)
-			return
-		}
-		coolfhir.SendResponse(w, http.StatusNotFound, nil)
 	}))
 
 	certDER := certificate.Certificate[0]

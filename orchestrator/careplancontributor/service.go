@@ -316,7 +316,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	endpoints := make(map[string]*url.URL)
 	for _, identifier := range participantIdentifiers {
 		// Don't fetch data from own endpoint, since we don't support querying from multiple endpoints yet
-		if coolfhir.HasIdentifier(identifier, localIdentities...) {
+		if coolfhir.HasIdentifier(identifier, coolfhir.OrganizationIdentifiers(localIdentities)...) {
 			continue
 		}
 		fhirEndpoints, err := s.profile.CsdDirectory().LookupEndpoint(request.Context(), &identifier, profile.FHIRBaseURLEndpointName)
