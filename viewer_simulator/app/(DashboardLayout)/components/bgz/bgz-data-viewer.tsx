@@ -73,7 +73,7 @@ export default function BgzDataViewer({ carePlan, careTeam }: { carePlan: CarePl
                             <CloseIcon />
                         </IconButton>
                         <Typography sx={{ ml: 2, flex: 1 }} variant="h6" component="div">
-                            Medical Records Viewer for BSN {getBsn(carePlan)} and CarePlan/{carePlan.id}
+                            Medical Records Viewer for CarePlan/{carePlan.id}
                         </Typography>
                     </Toolbar>
                 </AppBar>

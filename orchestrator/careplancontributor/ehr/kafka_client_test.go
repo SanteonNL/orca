@@ -3,73 +3,680 @@ package ehr
 import (
 	"context"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"testing"
-
-	"github.com/stretchr/testify/require"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/mock/gomock"
+	"os"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 )
 
-func TestKafkaClient_SubmitMessage(t *testing.T) {
-	ctx := context.Background()
-	type testStruct struct {
-		name          string
-		config        *KafkaConfig
-		key           string
-		value         string
-		expectedError error
-		setup         func(tt *testStruct)
-		teardown      func()
-	}
-	tests := []testStruct{
+// Mock struct for KafkaClientImpl
+type MockKafkaClientImpl struct {
+	mock.Mock
+}
+
+func (m *MockKafkaClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
+	args := m.Called(ctx, key, value)
+	return args.Error(0)
+}
+
+func TestNewClient(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	tests := []struct {
+		name        string
+		config      KafkaConfig
+		wantType    KafkaClient
+		expectError bool
+		prepare     func() func()
+	}{
 		{
-			name: "successful message submission",
-			config: &KafkaConfig{
+			name: "DebugClientDebugOnlyEnabled",
+			config: KafkaConfig{
+				Enabled:   true,
+				DebugOnly: true,
+			},
+			wantType:    &DebugClient{},
+			expectError: false,
+		},
+		{
+			name: "Plain",
+			config: KafkaConfig{
+				Enabled: true,
+			},
+			wantType:    &KafkaClientImpl{},
+			expectError: false,
+		},
+		{
+			name: "KafkaClientImplEnabled",
+			config: KafkaConfig{
+				Enabled:       true,
+				DebugOnly:     false,
+				PingOnStartup: false,
+			},
+			wantType:    &MockKafkaClient{},
+			expectError: false,
+			prepare: func() func() {
+				mockKafkaClient := NewMockKafkaClient(ctrl)
+				var originalNewKafkaClient = newKafkaClient
+				newKafkaClient = func(config KafkaConfig) KafkaClient {
+					return mockKafkaClient
+				}
+				return func() {
+					newKafkaClient = originalNewKafkaClient
+				}
+			},
+		},
+		{
+			name: "KafkaClientImplEnabledPingOnStartup",
+			config: KafkaConfig{
+				Enabled:       true,
+				DebugOnly:     false,
+				PingOnStartup: true,
+			},
+			wantType:    &MockKafkaClient{},
+			expectError: false,
+			prepare: func() func() {
+				mockKafkaClient := NewMockKafkaClient(ctrl)
+				mockKafkaClient.EXPECT().PingConnection(gomock.Any()).Return(nil)
+				var originalNewKafkaClient = newKafkaClient
+				newKafkaClient = func(config KafkaConfig) KafkaClient {
+					return mockKafkaClient
+				}
+				return func() {
+					newKafkaClient = originalNewKafkaClient
+				}
+			},
+		},
+		{
+			name: "KafkaClientImplEnabledPingOnStartup",
+			config: KafkaConfig{
+				Enabled:       true,
+				DebugOnly:     false,
+				PingOnStartup: true,
+			},
+			wantType:    &MockKafkaClient{},
+			expectError: true,
+			prepare: func() func() {
+				mockKafkaClient := NewMockKafkaClient(ctrl)
+				mockKafkaClient.EXPECT().PingConnection(gomock.Any()).Return(errors.New("mock error"))
+				var originalNewKafkaClient = newKafkaClient
+				newKafkaClient = func(config KafkaConfig) KafkaClient {
+					return mockKafkaClient
+				}
+				return func() {
+					newKafkaClient = originalNewKafkaClient
+				}
+			},
+		},
+		{
+			name: "NoopClientWhenDisabled",
+			config: KafkaConfig{
 				Enabled: false,
 			},
-			key:   "test-key",
-			value: "test-value",
+			wantType:    &NoopClient{},
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			prepare := tt.prepare
+			if prepare != nil {
+				f := prepare()
+				defer f()
+			}
+
+			client, err := NewClient(tt.config)
+			if (err != nil) != tt.expectError {
+				t.Errorf("NewClient() error = %v, expectError %v", err, tt.expectError)
+				return
+			}
+			if !tt.expectError {
+				switch tt.wantType.(type) {
+				case *DebugClient:
+					_, ok := client.(*DebugClient)
+					assert.True(t, ok, "Expected DebugClient but got something else")
+				case *KafkaClientImpl:
+					_, ok := client.(*KafkaClientImpl)
+					assert.True(t, ok, "Expected KafkaClientImpl but got something else")
+				case *MockKafkaClient:
+					_, ok := client.(*MockKafkaClient)
+					assert.True(t, ok, "Expected KafkaClientImpl but got something else")
+				case *NoopClient:
+					_, ok := client.(*NoopClient)
+					assert.True(t, ok, "Expected NoopClient but got something else")
+				default:
+					t.Errorf("Unexpected client type")
+				}
+			}
+		})
+	}
+}
+
+func TestSubmitMessage(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	tests := []struct {
+		name        string
+		config      KafkaConfig
+		expectError bool
+		mockSetup   func() func() // Optional setup and teardown for mocks
+	}{
+		{
+			name: "DisabledClient",
+			config: KafkaConfig{
+				Enabled: false,
+			},
+			expectError: false,
 		},
 		{
-			name: "error creating client - demo mode",
-			config: &KafkaConfig{
+			name: "DebugClientDebugOnlyEnabled",
+			config: KafkaConfig{
+				Enabled:   true,
+				DebugOnly: true,
+			},
+			expectError: false,
+		},
+		{
+			name: "DebugClientDebugOnlyEnabled",
+			config: KafkaConfig{
+				Enabled:       true,
+				DebugOnly:     true,
+				PingOnStartup: true,
+			},
+			expectError: false,
+		},
+		{
+			name: "SendingMessage",
+			config: KafkaConfig{
 				Enabled: true,
-				Demo:    true,
+				Sasl: SaslConfig{
+					Mechanism: "PLAIN",
+				},
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT",
+				},
 			},
-			expectedError: errors.New("demo mode is not allowed at the same time as strict mode"),
-			setup: func(tt *testStruct) {
-				globals.StrictMode = true
+			mockSetup: func() func() {
+				var org = newKgoClient
+				mockKgoClient := NewMockKgoClient(ctrl)
+				mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
+					kgo.ProduceResult{
+						Record: &kgo.Record{},
+					},
+				})
+				mockKgoClient.EXPECT().Flush(ctx).Return(nil)
+				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+					return mockKgoClient, nil
+				}
+				return func() {
+					newKgoClient = org
+				}
 			},
+			expectError: false,
 		},
 		{
-			name: "demo mode client",
-			config: &KafkaConfig{
-				Enabled:  true,
-				Demo:     true,
-				Endpoint: "",
+			name: "SendingMessageWithPing",
+			config: KafkaConfig{
+				Enabled:       true,
+				PingOnStartup: true,
+				Sasl: SaslConfig{
+					Mechanism: "PLAIN",
+				},
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT",
+				},
 			},
-			key:   "test-key",
-			value: "test-value",
-			setup: func(tt *testStruct) {
-				globals.StrictMode = false
-				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					require.Equal(t, "POST", r.Method)
-					require.Equal(t, "/test-endpoint", r.URL.Path)
+			mockSetup: func() func() {
+				var org = newKgoClient
+				mockKgoClient := NewMockKgoClient(ctrl)
+				mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
+					kgo.ProduceResult{
+						Record: &kgo.Record{},
+					},
+				})
+				mockKgoClient.EXPECT().Ping(ctx).Return(nil)
+				mockKgoClient.EXPECT().Flush(ctx).Return(nil)
+				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+					return mockKgoClient, nil
+				}
+				return func() {
+					newKgoClient = org
+				}
+			},
+			expectError: false,
+		},
+		{
+			name: "NewFail",
+			config: KafkaConfig{
+				Enabled: true,
+				Sasl: SaslConfig{
+					Mechanism: "PLAIN",
+				},
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT",
+				},
+			},
+			mockSetup: func() func() {
+				var org = newKgoClient
+				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+					return nil, errors.New("mock error")
+				}
+				return func() {
+					newKgoClient = org
+				}
+			},
+			expectError: true,
+		},
+		{
+			name: "PingFail",
+			config: KafkaConfig{
+				Enabled:       true,
+				PingOnStartup: true,
+				Sasl: SaslConfig{
+					Mechanism: "PLAIN",
+				},
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT",
+				},
+			},
+			mockSetup: func() func() {
+				var org = newKgoClient
+				mockKgoClient := NewMockKgoClient(ctrl)
+				mockKgoClient.EXPECT().Ping(ctx).Return(errors.New("mock error"))
+				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+					return mockKgoClient, nil
+				}
+				return func() {
+					newKgoClient = org
+				}
 
-					body, err := io.ReadAll(r.Body)
-					require.NoError(t, err)
-					require.Equal(t, "test-value", string(body))
+			},
+			expectError: true,
+		},
+		{
+			name: "ErrorSendingMessage",
+			config: KafkaConfig{
+				Enabled: true,
+				Sasl: SaslConfig{
+					Mechanism: "PLAIN",
+				},
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT",
+				},
+			},
+			mockSetup: func() func() {
+				var org = newKgoClient
+				mockKgoClient := NewMockKgoClient(ctrl)
+				mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
+					kgo.ProduceResult{
+						Record: nil,
+						Err:    errors.New("mock error"),
+					},
+				})
+				//mockKgoClient.EXPECT().Flush(ctx).Return(nil)
+				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+					return mockKgoClient, nil
+				}
+				return func() {
+					newKgoClient = org
+				}
+			},
+			expectError: true,
+		},
+		{
+			name: "FlushError",
+			config: KafkaConfig{
+				Enabled: true,
+				Sasl: SaslConfig{
+					Mechanism: "PLAIN",
+				},
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT",
+				},
+			},
+			mockSetup: func() func() {
+				var org = newKgoClient
+				mockKgoClient := NewMockKgoClient(ctrl)
+				mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
+					kgo.ProduceResult{
+						Record: &kgo.Record{},
+					},
+				})
+				mockKgoClient.EXPECT().Flush(ctx).Return(errors.New("mock error"))
+				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+					return mockKgoClient, nil
+				}
+				return func() {
+					newKgoClient = org
+				}
+			},
+			expectError: true,
+		},
+		{
+			name: "OauthBarerError1",
+			config: KafkaConfig{
+				Enabled: true,
+				Sasl: SaslConfig{
+					Mechanism: "OAUTHBEARER",
+				},
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT",
+				},
+			},
+			mockSetup: func() func() {
+				// Standard mock
+				var org = newKgoClient
+				mockKgoClient := NewMockKgoClient(ctrl)
+				//mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
+				//	kgo.ProduceResult{
+				//		Record: &kgo.Record{},
+				//	},
+				//})
+				//mockKgoClient.EXPECT().Flush(ctx).Return(nil)
+				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+					return mockKgoClient, nil
+				}
 
-					w.WriteHeader(http.StatusOK)
-				}))
+				// Azure mock
+				var orgOathClient = newAzureOauthClient
+				mockClient := NewMockAzureOauthClient(ctrl)
+				mockClient.EXPECT().GetAzureCredential().Return(nil, errors.New("mock error"))
+				newAzureOauthClient = func() (AzureOauthClient, error) {
+					return mockClient, nil
+				}
+				return func() {
+					newAzureOauthClient = orgOathClient
+					newKgoClient = org
+				}
+			},
+			expectError: true,
+		},
+		{
+			name: "OauthBarerError2",
+			config: KafkaConfig{
+				Enabled:  true,
+				Endpoint: "https://example.com",
+				Sasl: SaslConfig{
+					Mechanism: "OAUTHBEARER",
+				},
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT",
+				},
+			},
+			mockSetup: func() func() {
+				// Standard mock
+				var org = newKgoClient
+				mockKgoClient := NewMockKgoClient(ctrl)
+				//mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
+				//	kgo.ProduceResult{
+				//		Record: &kgo.Record{},
+				//	},
+				//})
+				//mockKgoClient.EXPECT().Flush(ctx).Return(nil)
+				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+					return mockKgoClient, nil
+				}
 
-				tt.config.Endpoint = ts.URL + "/test-endpoint"
+				// Azure mock
+				var orgOathClient = newAzureOauthClient
+				mockClient := NewMockAzureOauthClient(ctrl)
+				credential := azidentity.DefaultAzureCredential{}
+				mockClient.EXPECT().GetAzureCredential().Return(&credential, nil)
+				mockClient.EXPECT().GetBearerToken(ctx, &credential, "https://example.com").Return(nil, errors.New("mock error"))
+				newAzureOauthClient = func() (AzureOauthClient, error) {
+					return mockClient, nil
+				}
+				return func() {
+					newAzureOauthClient = orgOathClient
+					newKgoClient = org
+				}
+			},
+			expectError: true,
+		},
+		{
+			name: "OauthBarer",
+			config: KafkaConfig{
+				Enabled:  true,
+				Endpoint: "https://example.com",
+				Sasl: SaslConfig{
+					Mechanism: "OAUTHBEARER",
+				},
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT",
+				},
+			},
+			mockSetup: func() func() {
+				// Standard mock
+				var org = newKgoClient
+				mockKgoClient := NewMockKgoClient(ctrl)
+				mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
+					kgo.ProduceResult{
+						Record: &kgo.Record{},
+					},
+				})
+				mockKgoClient.EXPECT().Flush(ctx).Return(nil)
+				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
+					return mockKgoClient, nil
+				}
 
-				tt.teardown = func() {
-					ts.Close()
+				// Azure mock
+				var orgOathClient = newAzureOauthClient
+				mockClient := NewMockAzureOauthClient(ctrl)
+				credential := azidentity.DefaultAzureCredential{}
+				token := azcore.AccessToken{}
+				mockClient.EXPECT().GetAzureCredential().Return(&credential, nil)
+				mockClient.EXPECT().GetBearerToken(ctx, &credential, "https://example.com").Return(&token, nil)
+				newAzureOauthClient = func() (AzureOauthClient, error) {
+					return mockClient, nil
+				}
+				return func() {
+					newAzureOauthClient = orgOathClient
+					newKgoClient = org
+				}
+			},
+			expectError: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup mock if defined
+			if tt.mockSetup != nil {
+				teardown := tt.mockSetup()
+				defer teardown()
+			}
+
+			kafkaClient, err := NewClient(tt.config)
+			if err == nil {
+				err = kafkaClient.SubmitMessage(ctx, "key", "value")
+			}
+			if tt.expectError {
+				assert.Error(t, err, "Expected error but got none")
+			} else {
+				assert.NoError(t, err, "Unexpected error")
+			}
+		})
+	}
+}
+
+func TestDebugClientSubmitMessage(t *testing.T) {
+	ctx := context.Background()
+	key := "debugKey"
+	value := "debugValue"
+	debugClient := DebugClient{}
+
+	err := debugClient.SubmitMessage(ctx, key, value)
+	assert.NoError(t, err, "SubmitMessage should not return an error")
+
+	expectedFilePath := os.TempDir() + "/" + key + ".json"
+	_, statErr := os.Stat(expectedFilePath)
+	assert.NoError(t, statErr, "Debug file should exist")
+
+	_ = os.Remove(expectedFilePath)
+}
+
+func TestNoopClientSubmitMessage(t *testing.T) {
+	ctx := context.Background()
+	key := "noopKey"
+	value := "noopValue"
+	noopClient := NoopClient{}
+
+	err := noopClient.SubmitMessage(ctx, key, value)
+	assert.NoError(t, err, "SubmitMessage should not return an error")
+}
+
+func TestGetAccessTokenErr(t *testing.T) {
+	ctx := context.Background()
+	endpoint := "testEndpoint"
+
+	// Mock newAzureOauthClient behavior to simulate failure
+	oauthClientError := errors.New("mock OAuth client error")
+	newAzureOauthClient = func() (AzureOauthClient, error) {
+		return nil, oauthClientError
+	}
+
+	_, err := getAccessToken(ctx, endpoint)
+	assert.Error(t, err, "Expected error when getting access token")
+	assert.Equal(t, oauthClientError, err, "Expected mock error")
+}
+
+func TestDebugClient(t *testing.T) {
+	ctx := context.Background()
+	client := DebugClient{}
+	err := client.PingConnection(ctx)
+	if err == nil {
+		err = client.SubmitMessage(ctx, "key", "value")
+	}
+
+	assert.NoError(t, err, "Unexpected error when getting access token")
+}
+
+func TestNoopClient(t *testing.T) {
+	ctx := context.Background()
+	client := NoopClient{}
+	err := client.PingConnection(ctx)
+	if err == nil {
+		err = client.SubmitMessage(ctx, "key", "value")
+	}
+
+	assert.NoError(t, err, "Unexpected error when getting access token")
+}
+
+func TestGetAccessToken(t *testing.T) {
+	ctx := context.Background()
+	ctrl := gomock.NewController(t)
+	endpoint := "testEndpoint"
+	token := azcore.AccessToken{
+		Token:     "token",
+		ExpiresOn: time.Time{},
+	}
+
+	// Mock newAzureOauthClient behavior to simulate failure
+	mockAzureOauthClient := NewMockAzureOauthClient(ctrl)
+	mockAzureOauthClient.EXPECT().GetAzureCredential().Return(nil, nil)
+	mockAzureOauthClient.EXPECT().GetBearerToken(ctx, nil, endpoint).Return(&token, nil)
+	newAzureOauthClient = func() (AzureOauthClient, error) {
+		return mockAzureOauthClient, nil
+	}
+
+	foundToken, err := getAccessToken(ctx, endpoint)
+	assert.NoError(t, err, "Not expected error when getting access token")
+	assert.Equal(t, foundToken.Token, "token", "Expected token")
+}
+
+func TestKafkaClientImpl_Connect(t *testing.T) {
+	tests := []struct {
+		name        string
+		config      KafkaConfig
+		expectError bool
+		mockSetup   func() func() // Optional setup and teardown for mocks
+	}{
+		{
+			name: "UnsupportedProtocol",
+			config: KafkaConfig{
+				Security: SecurityConfig{
+					Protocol: "SASL_SSL", // Unknown protocol
+				},
+				Sasl: SaslConfig{
+					Mechanism: "PLAIN",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "UnsupportedProtocol",
+			config: KafkaConfig{
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT", // Unknown protocol
+				},
+				Sasl: SaslConfig{
+					Mechanism: "PLAIN",
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "UnsupportedProtocol",
+			config: KafkaConfig{
+				Security: SecurityConfig{
+					Protocol: "UNKNOWN", // Unknown protocol
+				},
+				Sasl: SaslConfig{
+					Mechanism: "PLAIN",
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "UnsupportedMechanism",
+			config: KafkaConfig{
+				Security: SecurityConfig{
+					Protocol: "SASL_SSL", // Unknown protocol
+				},
+				Sasl: SaslConfig{
+					Mechanism: "UNKNOWN",
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "UnsupportedMechanism",
+			config: KafkaConfig{
+				Security: SecurityConfig{
+					Protocol: "SASL_PLAINTEXT", // Unknown protocol
+				},
+				Sasl: SaslConfig{
+					Mechanism: "UNKNOWN",
+				},
+			},
+			expectError: true,
+		},
+		{
+			name: "SASL_SSL_ConnectSuccess",
+			config: KafkaConfig{
+				Security: SecurityConfig{
+					Protocol: "SASL_SSL",
+				},
+				Sasl: SaslConfig{
+					Mechanism: "OAUTHBEARER",
+				},
+			},
+			expectError: false,
+			mockSetup: func() func() {
+				originalgetAccessToken := getAccessToken
+				getAccessToken = func(ctx context.Context, endpoint string) (*azcore.AccessToken, error) {
+					return &azcore.AccessToken{
+						Token:     "token",
+						ExpiresOn: time.Now().Add(time.Hour),
+					}, nil
+				}
+				return func() {
+					getAccessToken = originalgetAccessToken
 				}
 			},
 		},
@@ -77,28 +684,19 @@ func TestKafkaClient_SubmitMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
-			if tt.setup != nil {
-				tt.setup(&tt)
+			// Setup mock if defined
+			if tt.mockSetup != nil {
+				teardown := tt.mockSetup()
+				defer teardown()
 			}
 
-			client, err := NewClient(*tt.config)
-			if err != nil {
-				require.EqualError(t, err, tt.expectedError.Error())
-				return
-			}
+			kafkaClient := KafkaClientImpl{config: tt.config}
+			_, err := kafkaClient.Connect(context.Background())
 
-			err = client.SubmitMessage(ctx, tt.key, tt.value)
-			if tt.expectedError != nil {
-				require.EqualError(t, err, tt.expectedError.Error())
+			if tt.expectError {
+				assert.Error(t, err, "Expected error but got none")
 			} else {
-				require.NoError(t, err)
-			}
-
-			if tt.teardown != nil {
-				tt.teardown()
+				assert.NoError(t, err, "Unexpected error")
 			}
 		})
 	}

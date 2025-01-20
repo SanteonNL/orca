@@ -238,7 +238,8 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": `identifier=${performerIdentifier.system}|${performerIdentifier.value}`
+                    // TODO: Fix ifNoneExists
+                    // "ifNoneExist": `identifier=${performerIdentifier.system}|${performerIdentifier.value}`
                 }
             },
             {
@@ -287,7 +288,8 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                 "request": {
                     "method": "POST",
                     "url": "Practitioner",
-                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
+                    // TODO: Fix ifNoneExists
+                    // "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
                 }
             },
             {
@@ -323,7 +325,8 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                 "request": {
                     "method": "POST",
                     "url": "PractitionerRole",
-                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
+                    // TODO: Fix ifNoneExists
+                    // "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
                 }
             },
             {
@@ -332,7 +335,8 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    "ifNoneExist": `identifier=${requesterIdentifier.system}|${requesterIdentifier.value}`
+                    // TODO: Fix ifNoneExists
+                    // "ifNoneExist": `identifier=${requesterIdentifier.system}|${requesterIdentifier.value}`
                 }
             },
             {

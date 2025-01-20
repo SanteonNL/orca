@@ -587,7 +587,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("719858009"),
-					Display: to.Ptr("Telehealth monitoring"),
+					Display: to.Ptr("monitoren via telegeneeskunde"),
 				},
 			},
 		},
