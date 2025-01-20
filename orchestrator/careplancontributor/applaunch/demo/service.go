@@ -76,7 +76,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	})
 
 	if err != nil {
-		log.Error().Ctx(request.Context()).Msg("Existing CPS Task check failed for task with identifier: " + values["taskIdentifier"])
+		log.Error().Err(err).Ctx(request.Context()).Msg("Existing CPS Task check failed for task with identifier: " + values["taskIdentifier"])
 		http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
 		return
 	}
