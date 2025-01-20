@@ -67,13 +67,13 @@ func TestNotifyTaskAccepted(t *testing.T) {
 	tests := []struct {
 		name          string
 		task          fhir.Task
-		setupMocks    func(*mock.MockClient, *MockKafkaClient)
+		setupMocks    func(*mock.MockClient, *MockServiceBusClient)
 		expectedError error
 	}{
 		{
 			name: "successful notification",
 			task: primaryTask,
-			setupMocks: func(mockFHIRClient *mock.MockClient, mockKafkaClient *MockKafkaClient) {
+			setupMocks: func(mockFHIRClient *mock.MockClient, mockServiceBusClient *MockServiceBusClient) {
 				mockFHIRClient.EXPECT().
 					SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
@@ -149,7 +149,7 @@ func TestNotifyTaskAccepted(t *testing.T) {
 						}
 						return nil
 					}).AnyTimes()
-				mockKafkaClient.EXPECT().
+				mockServiceBusClient.EXPECT().
 					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
 					Return(nil)
 			},
@@ -157,7 +157,7 @@ func TestNotifyTaskAccepted(t *testing.T) {
 		{
 			name: "error fetching task",
 			task: primaryTask,
-			setupMocks: func(mockFHIRClient *mock.MockClient, mockKafkaClient *MockKafkaClient) {
+			setupMocks: func(mockFHIRClient *mock.MockClient, mockServiceBusClient *MockServiceBusClient) {
 				mockFHIRClient.EXPECT().
 					SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).
 					Return(errors.New("fetch error"))
@@ -165,9 +165,9 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			expectedError: errors.New("fetch error"),
 		},
 		{
-			name: "error sending to Kafka",
+			name: "error sending to ServiceBus",
 			task: primaryTask,
-			setupMocks: func(mockFHIRClient *mock.MockClient, mockKafkaClient *MockKafkaClient) {
+			setupMocks: func(mockFHIRClient *mock.MockClient, mockServiceBusClient *MockServiceBusClient) {
 				mockFHIRClient.EXPECT().
 					SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
@@ -238,11 +238,11 @@ func TestNotifyTaskAccepted(t *testing.T) {
 					}
 					return nil
 				}).AnyTimes()
-				mockKafkaClient.EXPECT().
+				mockServiceBusClient.EXPECT().
 					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
 					Return(errors.New("kafka error"))
 			},
-			expectedError: errors.New("failed to send task to Kafka: kafka error"),
+			expectedError: errors.New("failed to send task to ServiceBus: kafka error"),
 		},
 	}
 
@@ -252,12 +252,12 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			defer ctrl.Finish()
 
 			mockFHIRClient := mock.NewMockClient(ctrl)
-			mockKafkaClient := NewMockKafkaClient(ctrl)
+			mockServiceBusClient := NewMockServiceBusClient(ctrl)
 
 			if tt.setupMocks != nil {
-				tt.setupMocks(mockFHIRClient, mockKafkaClient)
+				tt.setupMocks(mockFHIRClient, mockServiceBusClient)
 			}
-			notifier := NewNotifier(mockKafkaClient)
+			notifier := NewNotifier(mockServiceBusClient)
 
 			err := notifier.NotifyTaskAccepted(ctx, mockFHIRClient, &tt.task)
 			if tt.expectedError != nil {

@@ -5,6 +5,7 @@ go 1.23
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.1
+	github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.7.4
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.3.0
 	github.com/SanteonNL/go-fhir-client v0.2.16
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.0.0-20240805130644-8b92f1cbf865
@@ -18,7 +19,6 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.35.0
-	github.com/twmb/franz-go v1.18.0
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20241004123003-6f30810f220e
 	go.uber.org/mock v0.5.0
 	golang.org/x/oauth2 v0.25.0
@@ -31,8 +31,7 @@ require (
 )
 
 require (
-	github.com/pierrec/lz4/v4 v4.1.21 // indirect
-	github.com/twmb/franz-go/pkg/kmsg v1.9.0 // indirect
+	github.com/Azure/go-amqp v1.3.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.24.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect

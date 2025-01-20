@@ -20,7 +20,7 @@ func TestConfig_Validate(t *testing.T) {
 }
 
 func TestDefaultConfig(t *testing.T) {
-	t.Run("validate healthDataView Endpoint is disabled by default", func(t *testing.T) {
+	t.Run("validate healthDataView Hostname is disabled by default", func(t *testing.T) {
 		config := DefaultConfig()
 		assert.False(t, config.HealthDataViewEndpointEnabled)
 	})

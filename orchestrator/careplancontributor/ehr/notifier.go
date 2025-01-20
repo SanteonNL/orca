@@ -22,10 +22,10 @@ type Notifier interface {
 }
 
 type kafkaNotifier struct {
-	kafkaClient KafkaClient
+	kafkaClient ServiceBusClient
 }
 
-func NewNotifier(kafkaClient KafkaClient) Notifier {
+func NewNotifier(kafkaClient ServiceBusClient) Notifier {
 	return &kafkaNotifier{kafkaClient}
 }
 
@@ -42,7 +42,7 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 }
 
 // NotifyTaskAccepted handles the notification process when a task is accepted.
-// It fetches related FHIR resources and sends the data to Kafka.
+// It fetches related FHIR resources and sends the data to ServiceBus.
 //
 // Parameters:
 //   - task: The FHIR task that was accepted.
@@ -52,7 +52,7 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 
 	ref := "Task/" + *task.Id
-	log.Debug().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s) to Kafka", ref)
+	log.Debug().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s) to ServiceBus", ref)
 	id := uuid.NewString()
 	bundles := BundleSet{
 		Id:   id,
@@ -345,26 +345,26 @@ func fetchTaskInputs(task fhir.Task) []string {
 	return questionnaireRefs
 }
 
-// sendBundle sends a BundleSet to Kafka.
+// sendBundle sends a BundleSet to ServiceBus.
 //
 // Parameters:
 //   - set: The BundleSet to send.
-//   - kafkaClient: The Kafka client used to send the message.
+//   - kafkaClient: The ServiceBus client used to send the message.
 //
 // Returns:
 //   - error: An error if the send process fails.
-func sendBundle(ctx context.Context, set BundleSet, kafkaClient KafkaClient) error {
+func sendBundle(ctx context.Context, set BundleSet, kafkaClient ServiceBusClient) error {
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
 		return err
 	}
-	log.Debug().Ctx(ctx).Msgf("Sending set for task (ref=%s) to Kafka", set.task)
+	log.Debug().Ctx(ctx).Msgf("Sending set for task (ref=%s) to ServiceBus", set.task)
 	err = kafkaClient.SubmitMessage(ctx, set.Id, string(jsonData))
 	if err != nil {
-		log.Warn().Ctx(ctx).Msgf("Sending set for task (ref=%s) to Kafka failed, error: %s", set.task, err.Error())
-		return errors.Wrap(err, "failed to send task to Kafka")
+		log.Warn().Ctx(ctx).Msgf("Sending set for task (ref=%s) to ServiceBus failed, error: %s", set.task, err.Error())
+		return errors.Wrap(err, "failed to send task to ServiceBus")
 	}
 
-	log.Debug().Ctx(ctx).Msgf("Successfully sent task (ref=%s) to Kafka", set.task)
+	log.Debug().Ctx(ctx).Msgf("Successfully sent task (ref=%s) to ServiceBus", set.task)
 	return nil
 }

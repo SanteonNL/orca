@@ -90,7 +90,7 @@ func New(
 	}
 
 	httpClient := profile.HttpClient()
-	kafkaClient, err := ehr.NewClient(config.KafkaConfig)
+	serviceBusClient, err := ehr.NewClient(config.ServiceBusConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func New(
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
-		notifier:                      ehr.NewNotifier(kafkaClient),
+		notifier:                      ehr.NewNotifier(serviceBusClient),
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification

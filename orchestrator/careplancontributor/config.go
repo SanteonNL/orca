@@ -30,7 +30,7 @@ type Config struct {
 	// to be made available through the CarePlanContributor.
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
 	TaskFiller                    TaskFillerConfig      `koanf:"taskfiller"`
-	KafkaConfig                   ehr.KafkaConfig       `koanf:"kafka"`
+	ServiceBusConfig              ehr.ServiceBusConfig  `koanf:"kafka"`
 	Enabled                       bool                  `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
 	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`
