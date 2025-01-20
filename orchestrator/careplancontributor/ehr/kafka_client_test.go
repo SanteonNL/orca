@@ -5,8 +5,13 @@ import (
 	"errors"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/stretchr/testify/require"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"go.uber.org/mock/gomock"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"testing"
 	"time"
@@ -121,6 +126,30 @@ func TestNewClient(t *testing.T) {
 			wantType:    &NoopClient{},
 			expectError: false,
 		},
+		{
+			name: "DemoClient",
+			config: KafkaConfig{
+				Enabled: true,
+				Demo:    true,
+			},
+			wantType:    &DemoClient{},
+			expectError: false,
+		},
+		{
+			name: "DemoClient - StrictMode - Not allowed",
+			config: KafkaConfig{
+				Enabled: true,
+				Demo:    true,
+			},
+			wantType:    &DemoClient{},
+			expectError: true,
+			prepare: func() func() {
+				globals.StrictMode = true
+				return func() {
+					globals.StrictMode = true
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -150,6 +179,9 @@ func TestNewClient(t *testing.T) {
 				case *NoopClient:
 					_, ok := client.(*NoopClient)
 					assert.True(t, ok, "Expected NoopClient but got something else")
+				case *DemoClient:
+					_, ok := client.(*DemoClient)
+					assert.True(t, ok, "Expected DemoClient but got something else")
 				default:
 					t.Errorf("Unexpected client type")
 				}
@@ -161,12 +193,13 @@ func TestNewClient(t *testing.T) {
 func TestSubmitMessage(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
-	tests := []struct {
+	type testStruct struct {
 		name        string
 		config      KafkaConfig
 		expectError bool
-		mockSetup   func() func() // Optional setup and teardown for mocks
-	}{
+		mockSetup   func(tt *testStruct) func(tt *testStruct) // Optional setup and teardown for mocks
+	}
+	tests := []testStruct{
 		{
 			name: "DisabledClient",
 			config: KafkaConfig{
@@ -202,7 +235,7 @@ func TestSubmitMessage(t *testing.T) {
 					Protocol: "SASL_PLAINTEXT",
 				},
 			},
-			mockSetup: func() func() {
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
 				var org = newKgoClient
 				mockKgoClient := NewMockKgoClient(ctrl)
 				mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
@@ -214,7 +247,7 @@ func TestSubmitMessage(t *testing.T) {
 				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
 					return mockKgoClient, nil
 				}
-				return func() {
+				return func(tt *testStruct) {
 					newKgoClient = org
 				}
 			},
@@ -232,7 +265,7 @@ func TestSubmitMessage(t *testing.T) {
 					Protocol: "SASL_PLAINTEXT",
 				},
 			},
-			mockSetup: func() func() {
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
 				var org = newKgoClient
 				mockKgoClient := NewMockKgoClient(ctrl)
 				mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
@@ -245,7 +278,7 @@ func TestSubmitMessage(t *testing.T) {
 				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
 					return mockKgoClient, nil
 				}
-				return func() {
+				return func(tt *testStruct) {
 					newKgoClient = org
 				}
 			},
@@ -262,12 +295,12 @@ func TestSubmitMessage(t *testing.T) {
 					Protocol: "SASL_PLAINTEXT",
 				},
 			},
-			mockSetup: func() func() {
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
 				var org = newKgoClient
 				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
 					return nil, errors.New("mock error")
 				}
-				return func() {
+				return func(tt *testStruct) {
 					newKgoClient = org
 				}
 			},
@@ -285,14 +318,14 @@ func TestSubmitMessage(t *testing.T) {
 					Protocol: "SASL_PLAINTEXT",
 				},
 			},
-			mockSetup: func() func() {
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
 				var org = newKgoClient
 				mockKgoClient := NewMockKgoClient(ctrl)
 				mockKgoClient.EXPECT().Ping(ctx).Return(errors.New("mock error"))
 				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
 					return mockKgoClient, nil
 				}
-				return func() {
+				return func(tt *testStruct) {
 					newKgoClient = org
 				}
 
@@ -310,7 +343,7 @@ func TestSubmitMessage(t *testing.T) {
 					Protocol: "SASL_PLAINTEXT",
 				},
 			},
-			mockSetup: func() func() {
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
 				var org = newKgoClient
 				mockKgoClient := NewMockKgoClient(ctrl)
 				mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
@@ -323,7 +356,7 @@ func TestSubmitMessage(t *testing.T) {
 				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
 					return mockKgoClient, nil
 				}
-				return func() {
+				return func(tt *testStruct) {
 					newKgoClient = org
 				}
 			},
@@ -340,7 +373,7 @@ func TestSubmitMessage(t *testing.T) {
 					Protocol: "SASL_PLAINTEXT",
 				},
 			},
-			mockSetup: func() func() {
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
 				var org = newKgoClient
 				mockKgoClient := NewMockKgoClient(ctrl)
 				mockKgoClient.EXPECT().ProduceSync(ctx, gomock.Any()).Return([]kgo.ProduceResult{
@@ -352,7 +385,7 @@ func TestSubmitMessage(t *testing.T) {
 				newKgoClient = func(opts []kgo.Opt) (KgoClient, error) {
 					return mockKgoClient, nil
 				}
-				return func() {
+				return func(tt *testStruct) {
 					newKgoClient = org
 				}
 			},
@@ -369,7 +402,7 @@ func TestSubmitMessage(t *testing.T) {
 					Protocol: "SASL_PLAINTEXT",
 				},
 			},
-			mockSetup: func() func() {
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
 				// Standard mock
 				var org = newKgoClient
 				mockKgoClient := NewMockKgoClient(ctrl)
@@ -390,7 +423,7 @@ func TestSubmitMessage(t *testing.T) {
 				newAzureOauthClient = func() (AzureOauthClient, error) {
 					return mockClient, nil
 				}
-				return func() {
+				return func(tt *testStruct) {
 					newAzureOauthClient = orgOathClient
 					newKgoClient = org
 				}
@@ -409,7 +442,7 @@ func TestSubmitMessage(t *testing.T) {
 					Protocol: "SASL_PLAINTEXT",
 				},
 			},
-			mockSetup: func() func() {
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
 				// Standard mock
 				var org = newKgoClient
 				mockKgoClient := NewMockKgoClient(ctrl)
@@ -432,7 +465,7 @@ func TestSubmitMessage(t *testing.T) {
 				newAzureOauthClient = func() (AzureOauthClient, error) {
 					return mockClient, nil
 				}
-				return func() {
+				return func(tt *testStruct) {
 					newAzureOauthClient = orgOathClient
 					newKgoClient = org
 				}
@@ -451,7 +484,7 @@ func TestSubmitMessage(t *testing.T) {
 					Protocol: "SASL_PLAINTEXT",
 				},
 			},
-			mockSetup: func() func() {
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
 				// Standard mock
 				var org = newKgoClient
 				mockKgoClient := NewMockKgoClient(ctrl)
@@ -475,20 +508,46 @@ func TestSubmitMessage(t *testing.T) {
 				newAzureOauthClient = func() (AzureOauthClient, error) {
 					return mockClient, nil
 				}
-				return func() {
+				return func(tt *testStruct) {
 					newAzureOauthClient = orgOathClient
 					newKgoClient = org
 				}
 			},
 			expectError: false,
 		},
+		{
+			name: "demo mode client",
+			config: KafkaConfig{
+				Enabled: true,
+				Demo:    true,
+			},
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
+
+				globals.StrictMode = false
+				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					require.Equal(t, "/test-endpoint", r.URL.Path)
+
+					body, err := io.ReadAll(r.Body)
+					require.NoError(t, err)
+					require.Equal(t, "value", string(body))
+
+					w.WriteHeader(http.StatusOK)
+				}))
+
+				tt.config.Endpoint = ts.URL + "/test-endpoint"
+
+				return func(tt *testStruct) {
+					ts.Close()
+				}
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Setup mock if defined
 			if tt.mockSetup != nil {
-				teardown := tt.mockSetup()
-				defer teardown()
+				teardown := tt.mockSetup(&tt)
+				defer teardown(&tt)
 			}
 
 			kafkaClient, err := NewClient(tt.config)
