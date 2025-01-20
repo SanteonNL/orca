@@ -29,13 +29,31 @@ import (
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
 
+// For most tests we do not need these to exist, mock the calls to the FHIR server so the test doesn't fail
+func mockCustomSearchParams(fhirServerMux *http.ServeMux) {
+	fhirServerMux.HandleFunc("GET /fhir/metadata", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.CapabilityStatement{})
+	})
+	fhirServerMux.HandleFunc("POST /fhir/SearchParameter/_search", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
+	})
+	fhirServerMux.HandleFunc("POST /fhir/SearchParameter", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
+	})
+	fhirServerMux.HandleFunc("POST /fhir/$reindex", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
+	})
+}
+
 func TestService_Proxy(t *testing.T) {
 	// Test that the service registers the /cps URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
 	var capturedQuery url.Values
+	var capturedRequestHeaders http.Header
 	fhirServerMux.HandleFunc("GET /fhir/Success/1", func(writer http.ResponseWriter, request *http.Request) {
 		capturedQuery = request.URL.Query()
+		capturedRequestHeaders = request.Header
 		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{
 			Intent: "order",
 		})
@@ -43,6 +61,7 @@ func TestService_Proxy(t *testing.T) {
 	fhirServerMux.HandleFunc("GET /fhir/Fail/1", func(writer http.ResponseWriter, request *http.Request) {
 		coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("Fail"), "oops", writer)
 	})
+	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
 	service, err := New(Config{
@@ -75,6 +94,21 @@ func TestService_Proxy(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		assert.Equal(t, "foo|bar", capturedQuery.Get("_identifier"))
+	})
+	t.Run("it proxies FHIR HTTP request headers", func(t *testing.T) {
+		// https://build.fhir.org/http.html#Http-Headers
+		httpRequest, _ := http.NewRequest(http.MethodGet, frontServer.URL+"/cps/Success/1", nil)
+		httpRequest.Header.Set("If-None-Exist", "ine")
+		httpRequest.Header.Set("If-Match", "im")
+		httpRequest.Header.Set("If-Modified-Since", "ims")
+		httpRequest.Header.Set("If-None-Match", "inm")
+
+		_, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		assert.Equal(t, "ine", capturedRequestHeaders.Get("If-None-Exist"))
+		assert.Equal(t, "im", capturedRequestHeaders.Get("If-Match"))
+		assert.Equal(t, "ims", capturedRequestHeaders.Get("If-Modified-Since"))
+		assert.Equal(t, "inm", capturedRequestHeaders.Get("If-None-Match"))
 	})
 	t.Run("upstream FHIR server returns FHIR error with operation outcome", func(t *testing.T) {
 		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Fail/1")
@@ -130,6 +164,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 		capturedBody, _ = io.ReadAll(request.Body)
 		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
 	})
+	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	// Setup: create the service
@@ -181,19 +216,22 @@ type OperationOutcomeWithResourceType struct {
 
 // TestService_ErrorHandling asserts invalid requests return OperationOutcome
 func TestService_ErrorHandling(t *testing.T) {
+	fhirServerMux := http.NewServeMux()
+	mockCustomSearchParams(fhirServerMux)
+	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: configure the service
 	service, err := New(
 		Config{
 			FHIR: coolfhir.ClientConfig{
-				BaseURL: "http://localhost",
+				BaseURL: fhirServer.URL + "/fhir",
 			},
 		},
 		profile.Test(),
 		orcaPublicURL)
 	require.NoError(t, err)
-	serverMux := http.NewServeMux()
-	service.RegisterHandlers(serverMux)
-	server := httptest.NewServer(serverMux)
+
+	service.RegisterHandlers(fhirServerMux)
+	server := httptest.NewServer(fhirServerMux)
 
 	// Setup: configure the client
 	httpClient := server.Client()
@@ -383,6 +421,7 @@ func TestService_Handle(t *testing.T) {
 		}
 		json.NewEncoder(writer).Encode(bundle)
 	})
+	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
 	service, err := New(Config{
@@ -391,12 +430,14 @@ func TestService_Handle(t *testing.T) {
 		},
 	}, profile.Test(), orcaPublicURL)
 
+	var capturedHeaders []http.Header
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		switch method {
 		case http.MethodPost:
 			switch resourceType {
 			case "CarePlan":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("CarePlan"))
@@ -409,6 +450,7 @@ func TestService_Handle(t *testing.T) {
 				}
 			case "Task":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
@@ -424,6 +466,7 @@ func TestService_Handle(t *testing.T) {
 			switch resourceType {
 			case "Task":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
 					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
@@ -436,6 +479,7 @@ func TestService_Handle(t *testing.T) {
 				}
 			case "Organization":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					return nil, errors.New("this fails on purpose")
 				}
 			}
@@ -492,7 +536,6 @@ func TestService_Handle(t *testing.T) {
 			})
 		})
 		t.Run("PUT 1 item (Task)", func(t *testing.T) {
-			// Create a bundle with 2 Tasks
 			requestBundle := fhir.Bundle{
 				Type: fhir.BundleTypeTransaction,
 				Entry: []fhir.BundleEntry{
@@ -517,6 +560,33 @@ func TestService_Handle(t *testing.T) {
 			assert.Equal(t, "Task/123", *resultBundle.Entry[0].Response.Location)
 			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 			assert.JSONEq(t, `{"id":"123","status":"draft","intent":"","resourceType":"Task"}`, string(resultBundle.Entry[0].Resource))
+		})
+		t.Run("FHIR HTTP request headers are passed on", func(t *testing.T) {
+			requestBundle := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method:          fhir.HTTPVerbPUT,
+							Url:             "Task",
+							IfNoneExist:     to.Ptr("ifnoneexist"),
+							IfMatch:         to.Ptr("ifmatch"),
+							IfModifiedSince: to.Ptr("ifmodifiedsince"),
+							IfNoneMatch:     to.Ptr("ifnonematch"),
+						},
+						Resource: json.RawMessage(`{}`),
+					},
+				},
+			}
+			capturedHeaders = nil
+			err = fhirClient.Create(requestBundle, new(fhir.Bundle), fhirclient.AtPath("/"))
+
+			require.NoError(t, err)
+			require.Len(t, capturedHeaders, 1)
+			assert.Equal(t, "ifnoneexist", capturedHeaders[0].Get("If-None-Exist"))
+			assert.Equal(t, "ifmatch", capturedHeaders[0].Get("If-Match"))
+			assert.Equal(t, "ifmodifiedsince", capturedHeaders[0].Get("If-Modified-Since"))
+			assert.Equal(t, "ifnonematch", capturedHeaders[0].Get("If-None-Match"))
 		})
 		t.Run("handler fails (PUT Organization)", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
@@ -798,10 +868,14 @@ func TestService_ensureCustomSearchParametersExists(t *testing.T) {
 		searchParam := fhirClient.CreatedResources["SearchParameter"][0].(fhir.SearchParameter)
 		assert.Equal(t, "CarePlan-subject-identifier", *searchParam.Id)
 		// First SearchParameter re-index, rest should be OK
-		require.Len(t, fhirClient.CreatedResources["Parameters"], 3)
+		require.Len(t, fhirClient.CreatedResources["Parameters"], 1)
+		// Split parameters by comma, should match the created resources
 		searchParamReindex := fhirClient.CreatedResources["Parameters"][0].(fhir.Parameters)
-		assert.Equal(t, "targetSearchParameterTypes", searchParamReindex.Parameter[0].Name)
-		assert.Equal(t, "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier", *searchParamReindex.Parameter[0].ValueString)
+		params := strings.Split(*searchParamReindex.Parameter[0].ValueString, ",")
+		require.Len(t, params, len(fhirClient.CreatedResources["SearchParameter"]))
+		for _, sp := range fhirClient.CreatedResources["SearchParameter"] {
+			assert.Contains(t, params, sp.(fhir.SearchParameter).Url)
+		}
 	})
 	t.Run("parameters exist", func(t *testing.T) {
 		fhirClient := test.StubFHIRClient{
@@ -845,18 +919,74 @@ func TestService_ensureCustomSearchParametersExists(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, fhirClient.CreatedResources)
 	})
-	t.Run("Azure FHIR: parameter exists, but needs to be re-indexed", func(t *testing.T) {
+	t.Run("Azure FHIR: parameter exists, but needs to be re-indexed (all)", func(t *testing.T) {
 		t.Log("SearchParameter exists, but doesn't show up in CapabilityStatement. On Azure FHIR, this indicates the parameter needs to be re-indexed.")
+
+		resources := []any{
+			fhir.SearchParameter{
+				Url: "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
+			},
+			fhir.SearchParameter{
+				Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-output-reference.json",
+			},
+			fhir.SearchParameter{
+				Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-input-reference.json",
+			},
+		}
+
 		fhirClient := test.StubFHIRClient{
-			Resources: []any{
-				fhir.SearchParameter{
-					Url: "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
-				},
-				fhir.SearchParameter{
-					Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-output-reference.json",
-				},
-				fhir.SearchParameter{
-					Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-input-reference.json",
+			Resources: resources,
+		}
+		service := &Service{
+			fhirClient: &fhirClient,
+		}
+		err := service.ensureCustomSearchParametersExists(ctx)
+		require.NoError(t, err)
+		// SearchParameter isn't created, but is re-indexed.
+		require.Empty(t, fhirClient.CreatedResources["SearchParameter"])
+		require.Len(t, fhirClient.CreatedResources["Parameters"], 1)
+		// Split parameters by comma, should match the created resources
+		searchParamReindex := fhirClient.CreatedResources["Parameters"][0].(fhir.Parameters)
+		params := strings.Split(*searchParamReindex.Parameter[0].ValueString, ",")
+		// Assert the length of params is equal to the amount of SearchParameters in the FHIR client, minus 1 because of the newly created parameter
+		require.Len(t, params, len(resources))
+		for _, sp := range resources {
+			assert.Contains(t, params, sp.(fhir.SearchParameter).Url)
+		}
+	})
+	t.Run("Azure FHIR: parameter exists, but needs to be re-indexed (only one)", func(t *testing.T) {
+		t.Log("SearchParameter exists, but doesn't show up in CapabilityStatement. On Azure FHIR, this indicates the parameter needs to be re-indexed.")
+
+		resources := []any{
+			fhir.SearchParameter{
+				Url: "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier",
+			},
+			fhir.SearchParameter{
+				Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-output-reference.json",
+			},
+			fhir.SearchParameter{
+				Url: "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-input-reference.json",
+			},
+		}
+
+		fhirClient := test.StubFHIRClient{
+			Resources: resources,
+			Metadata: fhir.CapabilityStatement{
+				Rest: []fhir.CapabilityStatementRest{
+					{
+						Resource: []fhir.CapabilityStatementRestResource{
+							{
+								SearchParam: []fhir.CapabilityStatementRestResourceSearchParam{
+									{
+										Definition: to.Ptr("http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-output-reference.json"),
+									},
+									{
+										Definition: to.Ptr("http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-input-reference.json"),
+									},
+								},
+							},
+						},
+					},
 				},
 			},
 		}
@@ -867,10 +997,12 @@ func TestService_ensureCustomSearchParametersExists(t *testing.T) {
 		require.NoError(t, err)
 		// SearchParameter isn't created, but is re-indexed.
 		require.Empty(t, fhirClient.CreatedResources["SearchParameter"])
-		require.Len(t, fhirClient.CreatedResources["Parameters"], 3)
-		// Just check the first one
+		require.Len(t, fhirClient.CreatedResources["Parameters"], 1)
+		// Split parameters by comma, should match the created resources
 		searchParamReindex := fhirClient.CreatedResources["Parameters"][0].(fhir.Parameters)
-		assert.Equal(t, "targetSearchParameterTypes", searchParamReindex.Parameter[0].Name)
-		assert.Equal(t, "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier", *searchParamReindex.Parameter[0].ValueString)
+		params := strings.Split(*searchParamReindex.Parameter[0].ValueString, ",")
+		// We only expect 1 param that needs to be re-indexed
+		require.Len(t, params, 1)
+		assert.Equal(t, "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier", params[0])
 	})
 }

@@ -219,9 +219,9 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         }
     }
     if (taskIdentifier) {
-        // TODO: Find out why the `ifNoneExist` doesn't work in the dev setup - it keeps creating new resources
-        serviceRequestEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
-        taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
+        // TODO: Fix ifNoneExists
+        // serviceRequestEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
+        // taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
     }
     const bundle = {
         resourceType: "Bundle",
@@ -233,7 +233,8 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                 request: {
                     method: "POST",
                     url: "Patient",
-                    ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
+                    // TODO: Fix ifNoneExists
+                    // ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
                 }
             },
             serviceRequestEntry,

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -70,8 +71,45 @@ type BundleEntryOption func(entry *fhir.BundleEntry)
 
 func WithFullUrl(fullUrl string) BundleEntryOption {
 	return func(entry *fhir.BundleEntry) {
-		entry.FullUrl = to.Ptr(fullUrl)
+		entry.FullUrl = to.NilString(fullUrl)
 	}
+}
+
+func WithRequestHeaders(header http.Header) BundleEntryOption {
+	return func(entry *fhir.BundleEntry) {
+		if entry.Request == nil {
+			entry.Request = &fhir.BundleEntryRequest{}
+		}
+		if header[IfNoneExistHeader] != nil {
+			entry.Request.IfNoneExist = to.Ptr(header.Get(IfNoneExistHeader))
+		}
+		if header[IfMatchHeader] != nil {
+			entry.Request.IfMatch = to.Ptr(header.Get(IfMatchHeader))
+		}
+		if header[IfNoneMatchHeader] != nil {
+			entry.Request.IfNoneMatch = to.Ptr(header.Get(IfNoneMatchHeader))
+		}
+		if header[IfModifiedSinceHeader] != nil {
+			entry.Request.IfModifiedSince = to.Ptr(header.Get(IfModifiedSinceHeader))
+		}
+	}
+}
+
+func HeadersFromBundleEntryRequest(entry *fhir.BundleEntryRequest) http.Header {
+	header := http.Header{}
+	if entry.IfNoneExist != nil {
+		header.Set(IfNoneExistHeader, *entry.IfNoneExist)
+	}
+	if entry.IfMatch != nil {
+		header.Set(IfMatchHeader, *entry.IfMatch)
+	}
+	if entry.IfNoneMatch != nil {
+		header.Set(IfNoneMatchHeader, *entry.IfNoneMatch)
+	}
+	if entry.IfModifiedSince != nil {
+		header.Set(IfModifiedSinceHeader, *entry.IfModifiedSince)
+	}
+	return header
 }
 
 type Resource struct {

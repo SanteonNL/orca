@@ -18,7 +18,7 @@ export const ImmunizationView = () => {
               <strong>Status:</strong> {immunization.status === 'completed' ? 'Voltooid' : immunization.status}
             </Typography>
             <Typography component="p" variant="body1" color="text.primary">
-              <strong>Datum:</strong> {new Date(immunization?.date || '').toLocaleDateString('nl-NL')}
+              <strong>Datum:</strong> {immunization?.date ? new Date(immunization?.date).toLocaleDateString('nl-NL') : 'N/A'}
             </Typography>
             <Typography variant="body1" component="p">
               <strong>Opmerking:</strong> {immunization.note?.[0]?.text || 'Geen opmerkingen'}

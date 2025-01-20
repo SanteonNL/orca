@@ -263,13 +263,13 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 			return nil, fmt.Errorf("unable to get workflowId for CarePlan reference: %w", err)
 		}
 
-	//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
-	if !globals.StrictMode {
-		log.Warn().Msg("Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
-		if workflowCtx.patientBsn == "999911120" {
-			workflowCtx.patientBsn = "999999151"
+		//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
+		if !globals.StrictMode {
+			log.Warn().Msg("Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
+			if workflowCtx.patientBsn == "999911120" {
+				workflowCtx.patientBsn = "999999151"
+			}
 		}
-	}
 
 		launchContext := LaunchContext{
 			WorkflowId: workflowCtx.workflowId,
@@ -438,25 +438,19 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		return nil, err
 	}
 
-	// Check if there's already a CPS Task for this Zorgplatform workflow
-	var existingTaskBundle fhir.Bundle
 	var existingTaskRef *string
-	headers := http.Header{}
-	headers.Add("Cache-Control", "no-cache")
-	err = s.cpsFhirClient().SearchWithContext(ctx, "Task", url.Values{
-		"identifier": []string{zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId},
-	}, &existingTaskBundle, fhirclient.RequestHeaders(headers))
+	existingTask, err := coolfhir.GetTaskByIdentifier(ctx, s.cpsFhirClient(), fhir.Identifier{
+		System: to.Ptr(zorgplatformWorkflowIdSystem),
+		Value:  to.Ptr(launchContext.WorkflowId),
+	})
+
 	if err != nil {
-		return nil, fmt.Errorf("unable to search for existing CPS Task: %w", err)
+		log.Error().Ctx(ctx).Msgf("Failed to check for existing CPS Task resource: %v", err)
+		return nil, fmt.Errorf("failed to check for existing CPS Task resource: %w", err)
 	}
-	if len(existingTaskBundle.Entry) == 1 {
-		var existingTask fhir.Task
-		if err := coolfhir.ResourceInBundle(&existingTaskBundle, coolfhir.EntryIsOfType("Task"), &existingTask); err != nil {
-			return nil, fmt.Errorf("unable to get existing CPS Task resource from search bundle: %w", err)
-		}
+
+	if existingTask != nil {
 		existingTaskRef = to.Ptr("Task/" + *existingTask.Id)
-	} else if len(existingTaskBundle.Entry) > 1 {
-		return nil, fmt.Errorf("found multiple existing CPS Tasks for Zorgplatform workflow (workflowID=%s)", launchContext.WorkflowId)
 	}
 
 	fhirClient := fhirclient.New(apiUrl, s.createZorgplatformApiClient(accessToken), coolfhir.Config())
@@ -593,7 +587,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("719858009"),
-					Display: to.Ptr("Telehealth monitoring"),
+					Display: to.Ptr("monitoren via telegeneeskunde"),
 				},
 			},
 		},

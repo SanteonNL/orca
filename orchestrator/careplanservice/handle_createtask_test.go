@@ -320,6 +320,9 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				ResourcePath: "Task",
 				ResourceData: taskBytes,
 				HttpMethod:   "POST",
+				HttpHeaders: map[string][]string{
+					"If-None-Exist": {"ifnoneexist"},
+				},
 			}
 
 			tx := coolfhir.Transaction()
@@ -348,6 +351,11 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				returnedBundle = tt.returnedBundle
 			}
 			require.Len(t, tx.Entry, len(returnedBundle.Entry))
+
+			t.Run("original FHIR request headers are passed to outgoing Bundle entry", func(t *testing.T) {
+				taskEntry := coolfhir.FirstBundleEntry((*fhir.Bundle)(tx), coolfhir.EntryIsOfType("Task"))
+				require.Equal(t, "ifnoneexist", *taskEntry.Request.IfNoneExist)
+			})
 
 			// Process result
 			require.NotNil(t, result)

@@ -58,8 +58,6 @@ const ServiceRequestTable: React.FC<Props> = ({ rows }) => {
             headerName: 'Enroll',
             sortable: false,
             renderCell: (params) => {
-                if (params.row.status !== "draft") return <></>
-
                 return <EnrollmentPopup patientId={params.row.patientId} serviceRequestId={params.row.id} callback={() => enrollServiceRequest(params.row)} />;
             }
         }
