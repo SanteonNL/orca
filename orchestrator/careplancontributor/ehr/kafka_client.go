@@ -4,11 +4,14 @@ package ehr
 import (
 	"context"
 	"errors"
+	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/rs/zerolog/log"
 	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/twmb/franz-go/pkg/sasl/oauth"
 	"github.com/twmb/franz-go/pkg/sasl/plain"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -24,6 +27,7 @@ import (
 //   - ConnectionString: The connection string used for authentication.
 type KafkaConfig struct {
 	Enabled       bool           `koanf:"enabled" default:"false" description:"This enables the Kafka client."`
+	Demo          bool           `koanf:"demo" default:"false" description:"This enables the Kafka client in demo mode. In demo mode, the Kafka client will send messages to the endpoint over http instead of Kafka."`
 	DebugOnly     bool           `koanf:"debug" default:"false" description:"This enables debug mode for Kafka, writing the messages to a file in the OS TempDir instead of sending them to Kafka."`
 	PingOnStartup bool           `koanf:"ping" default:"false" description:"This enables pinging the Kafka broker on startup."`
 	Topic         string         `koanf:"topic"`
@@ -72,6 +76,10 @@ type KafkaClientImpl struct {
 type DebugClient struct {
 }
 
+type DemoClient struct {
+	messageEndpoint string
+}
+
 type NoopClient struct {
 }
 
@@ -88,6 +96,16 @@ type NoopClient struct {
 //   - error: An error if the Kafka producer could not be created.
 func NewClient(config KafkaConfig) (KafkaClient, error) {
 	if config.Enabled {
+		if config.Demo {
+			if globals.StrictMode {
+				return nil, errors.New("demo mode is not allowed in strict mode")
+			}
+			log.Info().Msgf("Demo mode enabled, sending messages over http to endpoint: %s", config.Endpoint)
+
+			return &DemoClient{
+				messageEndpoint: config.Endpoint,
+			}, nil
+		}
 		if config.DebugOnly {
 			ctx := context.Background()
 			log.Info().Ctx(ctx).Msg("Debug mode enabled, writing messages to files in OS temp dir")
@@ -299,6 +317,48 @@ func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value strin
 
 func (k *DebugClient) PingConnection(ctx context.Context) error {
 	log.Debug().Ctx(ctx).Msgf("DebugClient: pong")
+	return nil
+}
+
+// SubmitMessage submits a message to the configured endpoint over http.
+//
+// Parameters:
+//   - key: The key of the message to be submitted.
+//   - value: The value of the message to be submitted.
+//
+// Returns:
+//   - error: An error if the message could not be produced.
+func (k *DemoClient) SubmitMessage(ctx context.Context, key string, value string) error {
+	jsonValue := strings.ReplaceAll(value, " ", "")
+	jsonValue = strings.ReplaceAll(jsonValue, "\n", "")
+	jsonValue = strings.ReplaceAll(jsonValue, "\t", "")
+	log.Debug().Ctx(ctx).Msgf("DemoClient, submitting message %s - %s", key, jsonValue)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", k.messageEndpoint, strings.NewReader(jsonValue))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("DemoClient, received non-OK response: %d", resp.StatusCode)
+		return err
+	}
+
+	log.Debug().Ctx(ctx).Msgf("DemoClient, successfully sent message to endpoint")
+	return nil
+}
+
+func (k *DemoClient) PingConnection(ctx context.Context) error {
+	log.Debug().Ctx(ctx).Msgf("DemoClient: pong")
 	return nil
 }
 
