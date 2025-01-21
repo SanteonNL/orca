@@ -683,6 +683,94 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 
 }
 
+func Test_Integration_BundleCreation(t *testing.T) {
+	notificationEndpoint := setupNotificationEndpoint(t)
+	carePlanContributor1, _, _, _ := setupIntegrationTest(t, notificationEndpoint)
+
+	t.Log("Creating a bundle with Patient and Task should replace identifier with new local reference")
+	{
+		localRef := "urn:uuid:xyz"
+		patient := fhir.Patient{
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
+		}
+		patientRaw, err := json.Marshal(patient)
+		require.NoError(t, err)
+
+		task := fhir.Task{
+			For: &fhir.Reference{
+				Reference: to.Ptr(localRef),
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("123"),
+					Assigner: &fhir.Reference{
+						Reference: to.Ptr("Organization/1"),
+					},
+				},
+			},
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			Focus: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					// COPD
+					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+					Value:  to.Ptr("99534756439"),
+				},
+			},
+		}
+		taskRaw, err := json.Marshal(task)
+		require.NoError(t, err)
+
+		bundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransaction,
+			Entry: []fhir.BundleEntry{
+				{
+					FullUrl:  to.Ptr(localRef),
+					Resource: patientRaw,
+					Request: &fhir.BundleEntryRequest{
+						Method: fhir.HTTPVerbPOST,
+						Url:    "Patient",
+					},
+				},
+				{
+					Resource: taskRaw,
+					Request: &fhir.BundleEntryRequest{
+						Method: fhir.HTTPVerbPOST,
+						Url:    "Task",
+					},
+				},
+			},
+		}
+
+		var responseBundle fhir.Bundle
+
+		err = carePlanContributor1.Create(bundle, &responseBundle, fhirclient.AtPath("/"))
+		require.NoError(t, err)
+
+		require.Len(t, responseBundle.Entry, 2)
+		// Verify that task.For has been replaced
+		var createdPatient fhir.Patient
+		var createdTask fhir.Task
+		require.NoError(t, coolfhir.ResourceInBundle(&responseBundle, coolfhir.EntryIsOfType("Patient"), &createdPatient))
+		require.NoError(t, coolfhir.ResourceInBundle(&responseBundle, coolfhir.EntryIsOfType("Task"), &createdTask))
+
+		require.Equal(t, "Patient/"+*createdPatient.Id, *createdTask.For.Reference)
+		require.NotEqual(t, localRef, *createdTask.For.Reference)
+
+		// Verify that Task.For.Assigner.Identifier is not replaced
+		require.Equal(t, "Organization/1", *createdTask.For.Identifier.Assigner.Reference)
+	}
+}
+
 func testBundle(t *testing.T, fhirClient *fhirclient.BaseClient, data []byte) {
 	var bundle fhir.Bundle
 	err := json.Unmarshal(data, &bundle)
