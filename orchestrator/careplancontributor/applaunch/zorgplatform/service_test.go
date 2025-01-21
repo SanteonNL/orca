@@ -14,6 +14,7 @@ import (
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/jellydator/ttlcache/v3"
 	"hash"
@@ -202,7 +203,7 @@ func TestService(t *testing.T) {
 	}
 
 	sessionManager := user.NewSessionManager(time.Minute)
-	service, err := newWithClients(context.Background(), sessionManager, cfg, httpServer.URL, "/frontend", keysClient, certsClient, profile.Test())
+	service, err := newWithClients(context.Background(), sessionManager, cfg, httpServer.URL, must.ParseURL("/frontend"), keysClient, certsClient, profile.Test())
 	require.NoError(t, err)
 	service.secureTokenService = &stubSecureTokenService{}
 	service.RegisterHandlers(httpServerMux)
@@ -646,7 +647,6 @@ func setupCarePlanService(t *testing.T) *httptest.Server {
 		})
 	})
 	httpServer := httptest.NewServer(mux)
-	baseURL, _ := url.Parse(httpServer.URL)
-	globals.CarePlanServiceFhirClient = fhirclient.New(baseURL.JoinPath("fhir"), http.DefaultClient, nil)
+	globals.CarePlanServiceFhirClient = fhirclient.New(must.ParseURL(httpServer.URL).JoinPath("fhir"), http.DefaultClient, nil)
 	return httpServer
 }

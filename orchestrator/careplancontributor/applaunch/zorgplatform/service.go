@@ -45,7 +45,7 @@ type workflowContext struct {
 	patientBsn string
 }
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string, profile profile.Provider) (*Service, error) {
+func New(sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl *url.URL, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
@@ -60,7 +60,7 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, fro
 	return newWithClients(ctx, sessionManager, config, baseURL, frontendLandingUrl, azKeysClient, azCertClient, profile)
 }
 
-func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string,
+func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl *url.URL,
 	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient, profile profile.Provider) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
@@ -180,7 +180,7 @@ type Service struct {
 	sessionManager         *user.SessionManager
 	config                 Config
 	baseURL                string
-	frontendLandingUrl     string
+	frontendLandingUrl     *url.URL
 	signingCertificate     [][]byte
 	signingCertificateKey  stdCrypto.Signer
 	tlsClientCertificate   *tls.Certificate
@@ -341,12 +341,15 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	log.Info().Ctx(request.Context()).Msg("Successfully launched through ChipSoft HiX app launch")
 
 	taskRef := sessionData.StringValues["task"]
+	redirectURL := s.frontendLandingUrl
+	// If the task doesn't exist yet, send the user to the new page, where data is first confirmed
 	if taskRef == "" {
-		taskRef = "/new" //If the task doesn't exist yet, send the user to the new page, where data is first confirmed
+		redirectURL = redirectURL.JoinPath("new")
+	} else {
+		// taskRef is in format Task/<id>, redirect URL is in task/<id> format
+		redirectURL = redirectURL.JoinPath("task", strings.Split(taskRef, "/")[1])
 	}
-	frontendUrl := strings.ToLower(s.frontendLandingUrl + "/" + taskRef)
-
-	http.Redirect(response, request, frontendUrl, http.StatusFound)
+	http.Redirect(response, request, redirectURL.String(), http.StatusFound)
 }
 
 // This function returns the workflowId for a given CarePlan reference. It will be returned from a cache, if available.
