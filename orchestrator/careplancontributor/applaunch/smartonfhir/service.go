@@ -31,10 +31,10 @@ type Service struct {
 	stateToTokenUrlMap map[string]string //TODO: move to redis
 	mu                 *sync.Mutex
 	sessionManager     *user.SessionManager
-	landingUrlPath     string
+	landingUrlPath     *url.URL
 }
 
-func New(config Config, manager *user.SessionManager, landingUrlPath string) *Service {
+func New(config Config, manager *user.SessionManager, landingUrlPath *url.URL) *Service {
 	return &Service{
 		config:             config,
 		stateToTokenUrlMap: make(map[string]string),
@@ -123,7 +123,7 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 			"access_token": tokenResponse["access_token"].(string),
 		},
 	})
-	http.Redirect(response, request, s.landingUrlPath, http.StatusFound)
+	http.Redirect(response, request, s.landingUrlPath.String(), http.StatusFound)
 }
 
 func (s *Service) appLaunchRedirectLogic(ctx context.Context, state string, code string) (map[string]interface{}, error) {

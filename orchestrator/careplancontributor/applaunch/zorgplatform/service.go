@@ -45,7 +45,7 @@ type workflowContext struct {
 	patientBsn string
 }
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string, profile profile.Provider) (*Service, error) {
+func New(sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl *url.URL, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
@@ -60,7 +60,7 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, fro
 	return newWithClients(ctx, sessionManager, config, baseURL, frontendLandingUrl, azKeysClient, azCertClient, profile)
 }
 
-func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl string,
+func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl *url.URL,
 	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient, profile profile.Provider) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
@@ -180,7 +180,7 @@ type Service struct {
 	sessionManager         *user.SessionManager
 	config                 Config
 	baseURL                string
-	frontendLandingUrl     string
+	frontendLandingUrl     *url.URL
 	signingCertificate     [][]byte
 	signingCertificateKey  stdCrypto.Signer
 	tlsClientCertificate   *tls.Certificate
@@ -341,12 +341,15 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	log.Info().Ctx(request.Context()).Msg("Successfully launched through ChipSoft HiX app launch")
 
 	taskRef := sessionData.StringValues["task"]
+	redirectURL := s.frontendLandingUrl
+	// If the task doesn't exist yet, send the user to the new page, where data is first confirmed
 	if taskRef == "" {
-		taskRef = "/new" //If the task doesn't exist yet, send the user to the new page, where data is first confirmed
+		redirectURL = redirectURL.JoinPath("new")
+	} else {
+		// taskRef is in format Task/<id>, redirect URL is in task/<id> format
+		redirectURL = redirectURL.JoinPath("task", strings.Split(taskRef, "/")[1])
 	}
-	frontendUrl := strings.ToLower(s.frontendLandingUrl + "/" + taskRef)
-
-	http.Redirect(response, request, frontendUrl, http.StatusFound)
+	http.Redirect(response, request, redirectURL.String(), http.StatusFound)
 }
 
 // This function returns the workflowId for a given CarePlan reference. It will be returned from a cache, if available.
@@ -640,6 +643,11 @@ func (s *Service) cpsFhirClient() fhirclient.Client {
 	return globals.CarePlanServiceFhirClient
 }
 
+// getConditionCodeFromWorkflowTask returns a CodeableConcept based on the workflow definition reference of the Task.
+// The workflow definition reference can be in the following formats:
+// - ActivityDefinition/urn:oid:1.2.3.4
+// - ActivityDefinition/1.2.3.4
+// - ActivityDefinition/1.0 (test case of Zorgplatform Developer Portal)
 func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.CodeableConcept, error) {
 	var workflowReference string
 	if definitionRef, ok := task["definitionReference"].(map[string]interface{}); !ok {
@@ -652,12 +660,13 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 		return nil, fmt.Errorf("Task.definitionReference.reference does is not in the form '%s/<id>': %s", prefix, workflowReference)
 	}
 	// Mapping defined by https://github.com/Zorgbijjou/oid-repository/blob/main/oid-repository.md
-	p := strings.TrimPrefix(workflowReference, prefix)
-	switch p {
+	activityId := strings.TrimPrefix(workflowReference, prefix)
+	activityId = strings.TrimPrefix(activityId, "urn:oid:")
+	switch activityId {
 	case "1.0":
 		// Used by Zorgplatform Developer Portal, default to Hartfalen
 		fallthrough
-	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.1":
+	case "2.16.840.1.113883.2.4.3.224.2.1":
 		return &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{
@@ -668,7 +677,7 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 			},
 			Text: to.Ptr("hartfalen"),
 		}, nil
-	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.2":
+	case "2.16.840.1.113883.2.4.3.224.2.2":
 		return &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{
@@ -679,7 +688,7 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 			},
 			Text: to.Ptr("chronische obstructieve longaandoening"),
 		}, nil
-	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.3":
+	case "2.16.840.1.113883.2.4.3.224.2.3":
 		return &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{

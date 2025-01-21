@@ -427,3 +427,23 @@ func GetTaskByIdentifier(ctx context.Context, fhirClient fhirclient.Client, iden
 
 	return nil, nil
 }
+
+// TokenToIdentifier parses a token string into an fhir.Identifier, as specified by https://www.hl7.org/fhir/search.html#token.
+// E.g.: system|code, system|, |code
+func TokenToIdentifier(s string) (*fhir.Identifier, error) {
+	parts := strings.Split(s, "|")
+	if len(parts) != 2 {
+		return nil, errors.New("identifier search token must contain exactly one '|'")
+	}
+	if parts[0] == "" && parts[1] == "" {
+		return nil, errors.New("identifier search token must contain a system, or a code, or both")
+	}
+	result := &fhir.Identifier{}
+	if parts[0] != "" {
+		result.System = &parts[0]
+	}
+	if parts[1] != "" {
+		result.Value = &parts[1]
+	}
+	return result, nil
+}

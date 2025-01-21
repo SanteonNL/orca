@@ -1,17 +1,15 @@
 package demo
 
 import (
-	"net/http"
-	"net/url"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/http"
+	"net/url"
 )
 
 const fhirLauncherKey = "demo"
@@ -28,7 +26,7 @@ func init() {
 	}
 }
 
-func New(sessionManager *user.SessionManager, config Config, frontendLandingUrl string) *Service {
+func New(sessionManager *user.SessionManager, config Config, frontendLandingUrl *url.URL) *Service {
 	return &Service{
 		sessionManager:     sessionManager,
 		config:             config,
@@ -40,7 +38,7 @@ type Service struct {
 	sessionManager     *user.SessionManager
 	config             Config
 	baseURL            string
-	frontendLandingUrl string
+	frontendLandingUrl *url.URL
 }
 
 func (s *Service) cpsFhirClient() fhirclient.Client {
@@ -70,24 +68,28 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		StringValues: values,
 	})
 
-	existingTask, err := coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), fhir.Identifier{
-		System: to.Ptr(demoTaskSystemSystem),
-		Value:  to.Ptr(values["taskIdentifier"]),
-	})
-
-	if err != nil {
-		log.Error().Err(err).Ctx(request.Context()).Msg("Existing CPS Task check failed for task with identifier: " + values["taskIdentifier"])
-		http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
-		return
+	var existingTask *fhir.Task
+	if values["taskIdentifier"] != "" {
+		taskIdentifier, err := coolfhir.TokenToIdentifier(values["taskIdentifier"])
+		if err != nil {
+			http.Error(response, "Failed to parse task identifier: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), *taskIdentifier)
+		if err != nil {
+			log.Error().Err(err).Ctx(request.Context()).Msg("Existing CPS Task check failed for task with identifier: " + coolfhir.ToString(taskIdentifier))
+			http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if existingTask != nil {
 		log.Debug().Ctx(request.Context()).Msg("Existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
-		http.Redirect(response, request, s.frontendLandingUrl+"/task/"+*existingTask.Id, http.StatusFound)
+		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("task", *existingTask.Id).String(), http.StatusFound)
 		return
 	}
 
 	// Redirect to landing page
 	log.Debug().Ctx(request.Context()).Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
-	http.Redirect(response, request, s.frontendLandingUrl+"/new", http.StatusFound)
+	http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
 }
