@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -32,7 +33,7 @@ func TestService_handle(t *testing.T) {
 
 	t.Run("root base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/", frontendLandingUrl: "/cpc/"}
+		service := Service{sessionManager: sessionManager, baseURL: "/", frontendLandingUrl: must.ParseURL("/cpc/")}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=10", nil)
 
@@ -43,7 +44,7 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: "/frontend/landing"}
+		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: must.ParseURL("/frontend/landing")}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=10", nil)
 
@@ -54,7 +55,7 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("should destroy previous session", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: "/cpc/"}
+		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: must.ParseURL("/cpc/")}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=10", nil)
 
@@ -73,7 +74,7 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("should restore task", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: "/frontend/enrollment"}
+		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: must.ParseURL("/frontend/enrollment")}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=20", nil)
 
