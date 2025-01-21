@@ -643,6 +643,11 @@ func (s *Service) cpsFhirClient() fhirclient.Client {
 	return globals.CarePlanServiceFhirClient
 }
 
+// getConditionCodeFromWorkflowTask returns a CodeableConcept based on the workflow definition reference of the Task.
+// The workflow definition reference can be in the following formats:
+// - ActivityDefinition/urn:oid:1.2.3.4
+// - ActivityDefinition/1.2.3.4
+// - ActivityDefinition/1.0 (test case of Zorgplatform Developer Portal)
 func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.CodeableConcept, error) {
 	var workflowReference string
 	if definitionRef, ok := task["definitionReference"].(map[string]interface{}); !ok {
@@ -655,12 +660,13 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 		return nil, fmt.Errorf("Task.definitionReference.reference does is not in the form '%s/<id>': %s", prefix, workflowReference)
 	}
 	// Mapping defined by https://github.com/Zorgbijjou/oid-repository/blob/main/oid-repository.md
-	p := strings.TrimPrefix(workflowReference, prefix)
-	switch p {
+	activityId := strings.TrimPrefix(workflowReference, prefix)
+	activityId = strings.TrimPrefix(activityId, "urn:oid:")
+	switch activityId {
 	case "1.0":
 		// Used by Zorgplatform Developer Portal, default to Hartfalen
 		fallthrough
-	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.1":
+	case "2.16.840.1.113883.2.4.3.224.2.1":
 		return &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{
@@ -671,7 +677,7 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 			},
 			Text: to.Ptr("hartfalen"),
 		}, nil
-	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.2":
+	case "2.16.840.1.113883.2.4.3.224.2.2":
 		return &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{
@@ -682,7 +688,7 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 			},
 			Text: to.Ptr("chronische obstructieve longaandoening"),
 		}, nil
-	case "urn:oid:2.16.840.1.113883.2.4.3.224.2.3":
+	case "2.16.840.1.113883.2.4.3.224.2.3":
 		return &fhir.CodeableConcept{
 			Coding: []fhir.Coding{
 				{

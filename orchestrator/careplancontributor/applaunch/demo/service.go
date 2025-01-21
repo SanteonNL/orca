@@ -5,7 +5,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -69,15 +68,19 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		StringValues: values,
 	})
 
-	existingTask, err := coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), fhir.Identifier{
-		System: to.Ptr(demoTaskSystemSystem),
-		Value:  to.Ptr(values["taskIdentifier"]),
-	})
-
-	if err != nil {
-		log.Error().Err(err).Ctx(request.Context()).Msg("Existing CPS Task check failed for task with identifier: " + values["taskIdentifier"])
-		http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
-		return
+	var existingTask *fhir.Task
+	if values["taskIdentifier"] != "" {
+		taskIdentifier, err := coolfhir.TokenToIdentifier(values["taskIdentifier"])
+		if err != nil {
+			http.Error(response, "Failed to parse task identifier: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), *taskIdentifier)
+		if err != nil {
+			log.Error().Err(err).Ctx(request.Context()).Msg("Existing CPS Task check failed for task with identifier: " + coolfhir.ToString(taskIdentifier))
+			http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	if existingTask != nil {

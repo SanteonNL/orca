@@ -363,46 +363,67 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 		require.Equal(t, "hartfalen", *conditionCode.Coding[0].Display)
 	})
 	t.Run("Heart failure", func(t *testing.T) {
-		task := map[string]interface{}{
+		taskWithOid := map[string]interface{}{
 			"definitionReference": map[string]interface{}{
 				"reference": "ActivityDefinition/urn:oid:2.16.840.1.113883.2.4.3.224.2.1",
 			},
 		}
-		conditionCode, err := getConditionCodeFromWorkflowTask(task)
-		require.NoError(t, err)
-		require.Len(t, conditionCode.Coding, 1)
-		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
-		require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
-		require.Equal(t, "hartfalen", *conditionCode.Coding[0].Display)
-		require.Equal(t, "hartfalen", *conditionCode.Text)
+		taskWithoutOid := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.1",
+			},
+		}
+		for _, curr := range []map[string]interface{}{taskWithOid, taskWithoutOid} {
+			conditionCode, err := getConditionCodeFromWorkflowTask(curr)
+			require.NoError(t, err)
+			require.Len(t, conditionCode.Coding, 1)
+			require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+			require.Equal(t, "84114007", *conditionCode.Coding[0].Code)
+			require.Equal(t, "hartfalen", *conditionCode.Coding[0].Display)
+			require.Equal(t, "hartfalen", *conditionCode.Text)
+		}
 	})
 	t.Run("COPD", func(t *testing.T) {
-		task := map[string]interface{}{
+		taskWithOid := map[string]interface{}{
 			"definitionReference": map[string]interface{}{
 				"reference": "ActivityDefinition/urn:oid:2.16.840.1.113883.2.4.3.224.2.2",
 			},
 		}
-		conditionCode, err := getConditionCodeFromWorkflowTask(task)
-		require.NoError(t, err)
-		require.Len(t, conditionCode.Coding, 1)
-		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
-		require.Equal(t, "13645005", *conditionCode.Coding[0].Code)
-		require.Equal(t, "chronische obstructieve longaandoening", *conditionCode.Coding[0].Display)
-		require.Equal(t, "chronische obstructieve longaandoening", *conditionCode.Text)
+		taskWithoutOid := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.2",
+			},
+		}
+		for _, curr := range []map[string]interface{}{taskWithOid, taskWithoutOid} {
+			conditionCode, err := getConditionCodeFromWorkflowTask(curr)
+			require.NoError(t, err)
+			require.Len(t, conditionCode.Coding, 1)
+			require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+			require.Equal(t, "13645005", *conditionCode.Coding[0].Code)
+			require.Equal(t, "chronische obstructieve longaandoening", *conditionCode.Coding[0].Display)
+			require.Equal(t, "chronische obstructieve longaandoening", *conditionCode.Text)
+		}
 	})
 	t.Run("Asthma", func(t *testing.T) {
-		task := map[string]interface{}{
+		taskWithOid := map[string]interface{}{
 			"definitionReference": map[string]interface{}{
 				"reference": "ActivityDefinition/urn:oid:2.16.840.1.113883.2.4.3.224.2.3",
 			},
 		}
-		conditionCode, err := getConditionCodeFromWorkflowTask(task)
-		require.NoError(t, err)
-		require.Len(t, conditionCode.Coding, 1)
-		require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
-		require.Equal(t, "195967001", *conditionCode.Coding[0].Code)
-		require.Equal(t, "astma", *conditionCode.Coding[0].Display)
-		require.Equal(t, "astma", *conditionCode.Text)
+		taskWithoutOid := map[string]interface{}{
+			"definitionReference": map[string]interface{}{
+				"reference": "ActivityDefinition/2.16.840.1.113883.2.4.3.224.2.3",
+			},
+		}
+		for _, curr := range []map[string]interface{}{taskWithOid, taskWithoutOid} {
+			conditionCode, err := getConditionCodeFromWorkflowTask(curr)
+			require.NoError(t, err)
+			require.Len(t, conditionCode.Coding, 1)
+			require.Equal(t, "http://snomed.info/sct", *conditionCode.Coding[0].System)
+			require.Equal(t, "195967001", *conditionCode.Coding[0].Code)
+			require.Equal(t, "astma", *conditionCode.Coding[0].Display)
+			require.Equal(t, "astma", *conditionCode.Text)
+		}
 	})
 	t.Run("unknown workflow", func(t *testing.T) {
 		task := map[string]interface{}{
