@@ -459,8 +459,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	fhirClient := fhirclient.New(apiUrl, s.createZorgplatformApiClient(accessToken), coolfhir.Config())
 
 	// Zorgplatform provides us with a Task, from which we need to derive the Patient and ServiceRequest
-	// - Patient is contained in the Task.encounter but separately requested to include the Practitioner
-	// - ServiceRequest is not provided by Zorgplatform, so we need to create one based on the Task and Encounter
+	// - ServiceRequest is not provided by Zorgplatform, so we need to create one based on the Task
 	var task map[string]interface{}
 	if err = fhirClient.ReadWithContext(ctx, "Task/"+launchContext.WorkflowId, &task); err != nil {
 		return nil, fmt.Errorf("unable to fetch Task resource (id=%s): %w", launchContext.WorkflowId, err)
@@ -471,42 +470,13 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		return nil, err
 	}
 
-	// Search for Encounter, contains Encounter, Organization and Patient
-	if task["context"] == nil {
-		return nil, fmt.Errorf("task.context is not provided")
-	}
-	taskContext := task["context"].(map[string]interface{})
-	encounterId := strings.Split(taskContext["reference"].(string), "/")[1]
-	var encounterSearchResult fhir.Bundle
-	if err = fhirClient.ReadWithContext(ctx, "Encounter", &encounterSearchResult, fhirclient.QueryParam("_id", encounterId)); err != nil {
-		return nil, fmt.Errorf("unable to fetch Encounter resource (id=%s): %w", encounterId, err)
-	}
-	var encounter fhir.Encounter
-	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryIsOfType("Encounter"), &encounter); err != nil {
-		return nil, fmt.Errorf("get Encounter from Bundle (id=%s): %w", encounterId, err)
-	}
-	// Get Patient from bundle, specified by Encounter.subject
-	if encounter.Subject == nil || encounter.Subject.Reference == nil {
-		return nil, fmt.Errorf("encounter.subject does not contain a reference to a Patient")
-	}
-
-	if encounter.ServiceProvider == nil || encounter.ServiceProvider.Reference == nil {
-		return nil, fmt.Errorf("encounter.serviceProvider does not contain a reference to an Organization")
-	}
-
-	// Get Organization from bundle, specified by Encounter.serviceProvider
-	var organization fhir.Organization
-	if err := coolfhir.ResourceInBundle(&encounterSearchResult, coolfhir.EntryHasID(*encounter.ServiceProvider.Reference), &organization); err != nil {
-		return nil, fmt.Errorf("get Organization from Bundle (id=%s): %w", encounterId, err)
-	}
-
 	var patientAndPractitionerBundle fhir.Bundle
 	if err = fhirClient.ReadWithContext(ctx, "Patient", &patientAndPractitionerBundle, fhirclient.QueryParam("_include", "Patient:general-practitioner")); err != nil {
 		return nil, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err)
 	}
 	var patient fhir.Patient
-	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryHasID(*encounter.Subject.Reference), &patient); err != nil {
-		return nil, fmt.Errorf("unable to find Patient resource in Bundle (id=%s): %w", *encounter.Subject.Reference, err)
+	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
+		return nil, fmt.Errorf("unable to find Patient resource in Bundle: %w", err)
 	}
 	var practitioner fhir.Practitioner
 	//TODO: The Practitioner has no indetifier set, so we cannot ensure this is the launched Practitioner. Verify with Zorgplatform
@@ -543,16 +513,15 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		Display:   to.Ptr(*reason.Code.Text),
 	}
 
+	// Resolve identity of local care organization
 	identities, err := s.profile.Identities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch identities: %w", err)
 	}
-	if len(identities) == 0 {
-		return nil, fmt.Errorf("no identities found")
-	} else if len(identities) > 1 {
-		log.Warn().Ctx(ctx).Msgf("More than one identity found, using the first one: %v", identities[0])
+	if len(identities) != 1 {
+		return nil, fmt.Errorf("expected exactly one identity, got %d", len(identities))
 	}
-	localOrgIdentifier := identities[0]
+	organization := identities[0]
 
 	for _, identifier := range patient.Identifier {
 		if identifier.System != nil && *identifier.System == coolfhir.BSNNamingSystem {
@@ -604,7 +573,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 		},
 		Performer: []fhir.Reference{taskPerformer},
 		Requester: &fhir.Reference{
-			Identifier: &localOrgIdentifier,
+			Identifier: &organization.Identifier[0],
 		},
 	}
 

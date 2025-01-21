@@ -37,8 +37,10 @@ func (d InProcessChannelFactory) Create(ctx context.Context, subscriber fhir.Ide
 	localIdentities, err := d.Profile.Identities(ctx)
 	if err == nil {
 		for _, localIdentity := range localIdentities {
-			if coolfhir.IdentifierEquals(&localIdentity, &subscriber) {
-				return InProcessPubSubChannel{}, nil
+			for _, localIdentifier := range localIdentity.Identifier {
+				if coolfhir.IdentifierEquals(&localIdentifier, &subscriber) {
+					return InProcessPubSubChannel{}, nil
+				}
 			}
 		}
 	}
