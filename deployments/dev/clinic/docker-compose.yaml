@@ -50,7 +50,8 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL=${HOSPITAL_URL}/fhir
       - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_TOPIC=orca-patient-enrollment-events
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_ENDPOINT=servicebus-emulator
+      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_HOSTNAME=
+      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_CONNECTIONSTRING=Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json
     volumes:
       # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,

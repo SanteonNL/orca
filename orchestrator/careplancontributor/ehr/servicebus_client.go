@@ -3,6 +3,7 @@ package ehr
 
 import (
 	"context"
+	"errors"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 	"github.com/rs/zerolog/log"
@@ -13,10 +14,12 @@ import (
 
 // ServiceBusConfig represents configurations for connecting to ServiceBus, including enabling, debugging, and hostname.
 type ServiceBusConfig struct {
-	Enabled   bool   `koanf:"enabled" default:"false" description:"This enables the ServiceBus client."`
-	DebugOnly bool   `koanf:"debug" default:"false" description:"This enables debug mode for ServiceBus, writing the messages to a file in the OS TempDir instead of sending them to ServiceBus."`
-	Topic     string `koanf:"topic"`
-	Hostname  string `koanf:"hostname"`
+	Enabled          bool   `koanf:"enabled" default:"false" description:"This enables the ServiceBus client."`
+	DebugOnly        bool   `koanf:"debug" default:"false" description:"This enables debug mode for ServiceBus, writing the messages to a file in the OS TempDir instead of sending them to ServiceBus."`
+	Topic            string `koanf:"topic"`
+	PingOnStartup    bool   `koanf:"ping" default:"false" description:"This enables pinging the ServiceBus client on startup."`
+	Hostname         string `koanf:"hostname"`
+	ConnectionString string `koanf:"connectionstring" description:"This is the connection string for connecting to ServiceBus."`
 }
 
 // ServiceBusClient defines an interface for submitting messages to a service bus.
@@ -42,13 +45,20 @@ type NoopClient struct {
 // If debug mode is enabled, it returns a DebugClient for writing messages to files.
 // Otherwise, it returns a ServiceBus client for interacting with the configured messaging system.
 func NewClient(config ServiceBusConfig) (ServiceBusClient, error) {
+	ctx := context.Background()
 	if config.Enabled {
 		if config.DebugOnly {
-			ctx := context.Background()
 			log.Info().Ctx(ctx).Msg("Debug mode enabled, writing messages to files in OS temp dir")
 			return &DebugClient{}, nil
 		}
 		kafkaClient := newServiceBusClient(config)
+		if config.PingOnStartup {
+			log.Info().Ctx(ctx).Msg("Ping enabled, starting ping")
+			err := kafkaClient.SubmitMessage(context.Background(), "ping", "pong")
+			if err != nil {
+				return nil, err
+			}
+		}
 		return kafkaClient, nil
 	}
 	return &NoopClient{}, nil
@@ -67,7 +77,14 @@ var newAzureServiceBusClient = func(conf ServiceBusConfig) (*azservicebus.Client
 	if err != nil {
 		return nil, err
 	}
-	return azservicebus.NewClient(conf.Hostname, cred, nil)
+	if conf.ConnectionString != "" {
+		return azservicebus.NewClientFromConnectionString(conf.ConnectionString, nil)
+	}
+	if conf.Hostname != "" {
+		return azservicebus.NewClient(conf.Hostname, cred, nil)
+	}
+	return nil, errors.New(
+		"ServiceBus configuration is missing hostname or connection string")
 }
 
 // Connect establishes a connection to an Azure Service Bus topic and returns a message sender or an error if connection fails.
@@ -85,13 +102,14 @@ func (k *ServiceBusClientImpl) Connect(ctx context.Context) (sender *azservicebu
 func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
 	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitting key %s", key)
 	sender, err := k.Connect(ctx)
-	defer sender.Close(ctx)
 	if err != nil {
 		log.Error().Ctx(ctx).Err(err).Msgf("Connect failed with %s", err.Error())
 		return err
 	}
+	defer sender.Close(ctx)
 	message := &azservicebus.Message{
-		Body: []byte(value),
+		Body:          []byte(value),
+		CorrelationID: &key,
 	}
 	err = sender.SendMessage(ctx, message, nil)
 	if err != nil {
