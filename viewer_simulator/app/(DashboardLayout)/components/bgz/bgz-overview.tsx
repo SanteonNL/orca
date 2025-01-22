@@ -3,6 +3,7 @@ import { Bundle, BundleEntry, CarePlan, Task } from 'fhir/r4';
 import CarePlanTable from './bgz-careplan-table';
 import { getBsn } from '@/utils/fhirUtils';
 import { headers } from 'next/headers'
+import { getNotificationBundles } from '@/app/api/delivery/storage';
 
 export default async function BgzOverview() {
 
@@ -17,42 +18,49 @@ export default async function BgzOverview() {
     let rows: any[] = [];
 
     try {
-        let requestHeaders = new Headers();
-        requestHeaders.set("Cache-Control", "no-cache")
-        if (process.env.FHIR_AUTHORIZATION_TOKEN) {
-            requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
+        // Get bundles from internal storage, join all entries
+        const notificationBundles = getNotificationBundles();
+        let entries = notificationBundles.flatMap(bundle => bundle.entry || []);
+
+        // The list of entries is in-memory and volatile, so it may be empty
+        // For convenience, use the existing fetch logic to try populate the list
+        if (entries.length === 0) {
+            let requestHeaders = new Headers();
+            requestHeaders.set("Cache-Control", "no-cache")
+            if (process.env.FHIR_AUTHORIZATION_TOKEN) {
+                requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
+            }
+            requestHeaders.set("Content-Type", "application/x-www-form-urlencoded");
+            const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan/_search`, {
+                method: 'POST',
+                headers: requestHeaders,
+                body: new URLSearchParams({
+                    '_sort': '-_lastUpdated',
+                    '_count': '100',
+                    '_include': 'CarePlan:care-team'
+                })
+            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error('Failed to fetch tasks: ', errorText);
+                throw new Error('Failed to fetch tasks: ' + errorText);
+            }
+
+            const responseBundle = await response.json() as Bundle;
+            entries = responseBundle.entry || [];
+            console.log(`Found [${entries?.length}] CarePlan resources`);
         }
-        requestHeaders.set("Content-Type", "application/x-www-form-urlencoded");
-        const response = await fetch(`${process.env.FHIR_BASE_URL}/CarePlan/_search`, {
-            method: 'POST',
-            headers: requestHeaders,
-            body: new URLSearchParams({
-                '_sort': '-_lastUpdated',
-                '_count': '100',
-                '_include': 'CarePlan:care-team'
-            })
-        });
-
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Failed to fetch tasks: ', errorText);
-            throw new Error('Failed to fetch tasks: ' + errorText);
-        }
-
-        const responseBundle = await response.json() as Bundle;
-        const { entry } = responseBundle;
-        console.log(`Found [${entry?.length}] CarePlan resources`);
-
 
         //map all the resources to their reference as it contains CarePlans, Patients, Tasks and CareTeams
-        const resourceMap = entry?.reduce((map, entry: BundleEntry) => {
+        const resourceMap = entries?.reduce((map, entry: BundleEntry) => {
             const resource = entry.resource;
             map.set(`${resource?.resourceType}/${resource?.id}`, resource);
             return map;
         }, new Map<string, any>());
 
 
-        rows = entry?.filter((entry) => entry.resource?.resourceType === "CarePlan")
+        rows = entries?.filter((entries) => entries.resource?.resourceType === "CarePlan")
             .map((entry: any) => entry.resource as CarePlan)
             .map((carePlan: CarePlan) => {
                 const careTeam = carePlan.careTeam?.[0]?.reference ? resourceMap?.get(carePlan.careTeam[0].reference) : undefined;

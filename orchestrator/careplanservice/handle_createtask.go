@@ -253,11 +253,13 @@ func basedOn(task fhir.Task) (*string, error) {
 	return task.BasedOn[0].Reference, nil
 }
 
-func isRequesterLocalCareOrganization(profileIdentities []fhir.Identifier, principal auth.Principal) bool {
-	for _, id := range profileIdentities {
-		for _, poid := range principal.Organization.Identifier {
-			if coolfhir.IdentifierEquals(&id, &poid) {
-				return true
+func isRequesterLocalCareOrganization(localIdentities []fhir.Organization, principal auth.Principal) bool {
+	for _, localIdentity := range localIdentities {
+		for _, requesterIdentifier := range principal.Organization.Identifier {
+			for _, localIdentifier := range localIdentity.Identifier {
+				if coolfhir.IdentifierEquals(&localIdentifier, &requesterIdentifier) {
+					return true
+				}
 			}
 		}
 	}

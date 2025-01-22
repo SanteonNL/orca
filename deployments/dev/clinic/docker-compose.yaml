@@ -31,9 +31,9 @@ services:
       - "1305:1305"
   orchestrator:
     image: ghcr.io/santeonnl/orca_orchestrator:main
-    #build:
-    #  context: ../../../orchestrator
-    #  dockerfile: Dockerfile
+#    build:
+#      context: ../../../orchestrator
+#      dockerfile: Dockerfile
     ports:
       - "3030:8080"
     environment:
@@ -60,9 +60,9 @@ services:
       - "../../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
   viewer:
     image: ghcr.io/santeonnl/orca_viewersimulator:main
-    # build:
-    #   context: ../../../viewer_simulator
-    #   dockerfile: Dockerfile
+#    build:
+#      context: ../../../viewer_simulator
+#      dockerfile: Dockerfile
     environment:
       ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL: ${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       FHIR_BASE_URL: http://orchestrator:8080/cpc/cps/fhir

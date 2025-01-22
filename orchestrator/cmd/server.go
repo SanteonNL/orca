@@ -7,6 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/rs/zerolog/log"
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"sync"
@@ -54,13 +55,14 @@ func Start(ctx context.Context, config Config) error {
 	}
 	if config.CarePlanContributor.Enabled {
 		// App Launches
-		var ehrFhirProxy coolfhir.HttpProxy
-		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, config.CarePlanContributor.FrontendConfig.URL))
+		frontendUrl, _ := url.Parse(config.CarePlanContributor.FrontendConfig.URL)
+		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, frontendUrl))
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
-			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.CarePlanContributor.FrontendConfig.URL))
+			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, frontendUrl))
 		}
+		var ehrFhirProxy coolfhir.HttpProxy
 		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
-			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, config.CarePlanContributor.FrontendConfig.URL, activeProfile)
+			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, frontendUrl, activeProfile)
 			if err != nil {
 				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
 			}

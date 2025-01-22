@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,7 +20,7 @@ func TestService_handle(t *testing.T) {
 		Id: to.Ptr("12345678910"),
 		Identifier: []fhir.Identifier{
 			{
-				System: to.Ptr(demoTaskSystemSystem),
+				System: to.Ptr("unit-test-system"),
 				Value:  to.Ptr("20"),
 			},
 		},
@@ -32,9 +33,9 @@ func TestService_handle(t *testing.T) {
 
 	t.Run("root base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/", frontendLandingUrl: "/cpc/"}
+		service := Service{sessionManager: sessionManager, baseURL: "/", frontendLandingUrl: must.ParseURL("/cpc/")}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -43,9 +44,9 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: "/frontend/landing"}
+		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: must.ParseURL("/frontend/landing")}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -54,9 +55,9 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("should destroy previous session", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: "/cpc/"}
+		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: must.ParseURL("/cpc/")}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 		require.Equal(t, 1, sessionManager.SessionCount())
@@ -64,7 +65,7 @@ func TestService_handle(t *testing.T) {
 		// Now launch the second session - copy the cookies so the session is retained
 		cookies := response.Result().Cookies()
 		response = httptest.NewRecorder()
-		request = httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=10", nil)
+		request = httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
 		for _, cookie := range cookies {
 			request.AddCookie(cookie)
 		}
@@ -73,9 +74,9 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("should restore task", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: "/frontend/enrollment"}
+		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: must.ParseURL("/frontend/enrollment")}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=20", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 

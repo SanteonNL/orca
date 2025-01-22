@@ -316,7 +316,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	endpoints := make(map[string]*url.URL)
 	for _, identifier := range participantIdentifiers {
 		// Don't fetch data from own endpoint, since we don't support querying from multiple endpoints yet
-		if coolfhir.HasIdentifier(identifier, localIdentities...) {
+		if coolfhir.HasIdentifier(identifier, coolfhir.OrganizationIdentifiers(localIdentities)...) {
 			continue
 		}
 		fhirEndpoints, err := s.profile.CsdDirectory().LookupEndpoint(request.Context(), &identifier, profile.FHIRBaseURLEndpointName)
@@ -511,17 +511,14 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	}
 	// TODO: for now, we assume the resource URL is always in the form of <FHIR base url>/<resource type>/<resource id>
 	//       Then, we can deduce the FHIR base URL from the resource URL
-	resourceUrlParts := strings.Split(resourceUrl, "/")
-	resourceUrlParts = resourceUrlParts[:len(resourceUrlParts)-2]
-	resourceBaseUrl := strings.Join(resourceUrlParts, "/")
-	parsedResourceBaseUrl, err := url.Parse(resourceBaseUrl)
+	fhirBaseURL, _, err := coolfhir.ParseExternalLiteralReference(resourceUrl, *focusReference.Type)
 	if err != nil {
 		return err
 	}
 
 	switch *focusReference.Type {
 	case "Task":
-		fhirClient := s.cpsClientFactory(parsedResourceBaseUrl)
+		fhirClient := s.cpsClientFactory(fhirBaseURL)
 		// Get task
 		var task fhir.Task
 		err = fhirClient.Read(*focusReference.Reference, &task)
