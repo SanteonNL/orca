@@ -54,7 +54,7 @@ func TestCsdDirectory_Lookup(t *testing.T) {
 				},
 			}
 		}
-		if r.URL.Query().Get("credentialSubject.otherName") == "*-S-"+*otherOwnerURACodingSystem.Value+"-00.000*" {
+		if r.URL.Query().Get("credentialSubject.san.otherName") == "*-S-"+*otherOwnerURACodingSystem.Value+"-00.000*" {
 			response = []discovery.SearchResult{
 				{
 					RegistrationParameters: map[string]interface{}{

@@ -194,14 +194,14 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 			ura, _ = flattenCredential["credentialSubject.organization.ura"].(string)
 			name, _ = flattenCredential["credentialSubject.organization.name"].(string)
 		}
-		if cred.IsType(ssi.MustParseURI("UziServerCertificateCredential")) {
-			otherName, ok := flattenCredential["credentialSubject.otherName"].(string)
+		if cred.IsType(ssi.MustParseURI("X509Credential")) {
+			otherName, ok := flattenCredential["credentialSubject.san.otherName"].(string)
 			if ok {
 				if match := uziOtherNameUraRegex.FindStringSubmatch(otherName); len(match) > 1 {
 					ura = match[1]
 				}
 			}
-			name, _ = flattenCredential["credentialSubject.O"].(string)
+			name, _ = flattenCredential["credentialSubject.subject.O"].(string)
 		}
 		if ura != "" {
 			entry := fhir.Organization{
