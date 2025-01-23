@@ -3,8 +3,6 @@ package ehr
 
 import (
 	"context"
-	"errors"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 	"github.com/rs/zerolog/log"
 	"os"
@@ -72,36 +70,20 @@ var newServiceBusClient = func(config ServiceBusConfig) ServiceBusClient {
 }
 
 // newAzureServiceBusClient creates a new Azure Service Bus client using the provided configuration and default credentials.
-var newAzureServiceBusClient = func(conf ServiceBusConfig) (*azservicebus.Client, error) {
-	cred, err := azidentity.NewDefaultAzureCredential(nil)
-	if err != nil {
-		return nil, err
-	}
-	if conf.ConnectionString != "" {
-		return azservicebus.NewClientFromConnectionString(conf.ConnectionString, nil)
-	}
-	if conf.Hostname != "" {
-		return azservicebus.NewClient(conf.Hostname, cred, nil)
-	}
-	return nil, errors.New(
-		"ServiceBus configuration is missing hostname or connection string")
+var newAzureServiceBusClient = func(conf ServiceBusConfig) (SbClient, error) {
+	return NewSbClient(conf)
 }
 
 // Connect establishes a connection to an Azure Service Bus topic and returns a message sender or an error if connection fails.
-func (k *ServiceBusClientImpl) Connect(ctx context.Context) (sender *azservicebus.Sender, err error) {
-	client, err := newAzureServiceBusClient(k.config)
-	if err != nil {
-		return nil, err
-	}
-	return client.NewSender(k.config.Topic, nil)
-
+func (k *ServiceBusClientImpl) Connect() (sender SbClient, err error) {
+	return newAzureServiceBusClient(k.config)
 }
 
 // SubmitMessage submits a message to Azure Service Bus with the given key and value.
 // It establishes a connection, sends the message, and handles any errors during the process.
 func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
 	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitting key %s", key)
-	sender, err := k.Connect(ctx)
+	sender, err := k.Connect()
 	if err != nil {
 		log.Error().Ctx(ctx).Err(err).Msgf("Connect failed with %s", err.Error())
 		return err
@@ -111,7 +93,7 @@ func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, va
 		Body:          []byte(value),
 		CorrelationID: &key,
 	}
-	err = sender.SendMessage(ctx, message, nil)
+	err = sender.SendMessage(ctx, message)
 	if err != nil {
 		return err
 	}
