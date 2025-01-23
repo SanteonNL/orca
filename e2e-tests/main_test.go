@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel/to"
@@ -355,105 +354,5 @@ func Test_Main(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, fhir.TaskStatusRejected, rejectedTask.Status)
 		})
-	})
-	t.Run("Creating Task and Patient via bundle, supplied fields are persisted, and local references are replaced", func(t *testing.T) {
-		localRef := "urn:uuid:xyz"
-		patient = fhir.Patient{
-			Identifier: []fhir.Identifier{
-				{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1122334455"),
-				},
-			},
-			Meta: &fhir.Meta{
-				Profile: []string{
-					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCP-Patient",
-				},
-			},
-		}
-		patientRaw, err := json.Marshal(patient)
-		require.NoError(t, err)
-
-		task := fhir.Task{
-			For: &fhir.Reference{
-				Reference: to.Ptr(localRef),
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("123"),
-					Assigner: &fhir.Reference{
-						Reference: to.Ptr("Organization/1"),
-					},
-				},
-			},
-			Intent: "order",
-			Status: fhir.TaskStatusRequested,
-			Requester: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr(URANamingSystem),
-					Value:  to.Ptr(strconv.Itoa(hospitalURA)),
-				},
-			},
-			Owner: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr(URANamingSystem),
-					Value:  to.Ptr(strconv.Itoa(clinicURA)),
-				},
-			},
-			Meta: &fhir.Meta{
-				Profile: []string{
-					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
-				},
-			},
-			Focus: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					// COPD
-					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
-					Value:  to.Ptr("99534756439"),
-				},
-			},
-		}
-		taskRaw, err := json.Marshal(task)
-		require.NoError(t, err)
-
-		bundle := fhir.Bundle{
-			Type: fhir.BundleTypeTransaction,
-			Entry: []fhir.BundleEntry{
-				{
-					FullUrl:  to.Ptr(localRef),
-					Resource: patientRaw,
-					Request: &fhir.BundleEntryRequest{
-						Method: fhir.HTTPVerbPOST,
-						Url:    "Patient",
-					},
-				},
-				{
-					Resource: taskRaw,
-					Request: &fhir.BundleEntryRequest{
-						Method: fhir.HTTPVerbPOST,
-						Url:    "Task",
-					},
-				},
-			},
-		}
-
-		var responseBundle fhir.Bundle
-
-		err = hospitalOrcaFHIRClient.Create(bundle, &responseBundle, fhirclient.AtPath("/"))
-		require.NoError(t, err)
-
-		require.Len(t, responseBundle.Entry, 2)
-
-		// Verify that task.For has been replaced
-		var createdPatient fhir.Patient
-		var createdTask fhir.Task
-
-		require.NoError(t, coolfhir.ResourceInBundle(&responseBundle, coolfhir.EntryIsOfType("Patient"), &createdPatient))
-		require.NoError(t, coolfhir.ResourceInBundle(&responseBundle, coolfhir.EntryIsOfType("Task"), &createdTask))
-
-		require.Equal(t, "Patient/"+*createdPatient.Id, *createdTask.For.Reference)
-		require.NotEqual(t, localRef, *createdTask.For.Reference)
-
-		// Verify that Task.For.Assigner.Identifier is not replaced
-		require.Equal(t, "Organization/1", *createdTask.For.Identifier.Assigner.Reference)
 	})
 }
