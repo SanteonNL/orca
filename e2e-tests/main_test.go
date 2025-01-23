@@ -122,7 +122,7 @@ func Test_Main(t *testing.T) {
 					Type: to.Ptr("Organization"),
 				}
 				task.Focus = &fhir.Reference{
-					Reference: to.Ptr("ServiceRequest/" + *serviceRequest.ID),
+					Reference: to.Ptr("ServiceRequest/" + *serviceRequest.Id),
 				}
 				task.ReasonCode = &fhir.CodeableConcept{
 					Coding: []fhir.Coding{
@@ -147,7 +147,7 @@ func Test_Main(t *testing.T) {
 			t.Log("Responding to Task Questionnaire")
 			{
 				var searchResult fhir.Bundle
-				err = hospitalOrcaFHIRClient.Search("Task", url.Values{"part-of": {"Task/" + *task.ID}}, &searchResult)
+				err = hospitalOrcaFHIRClient.Search("Task", url.Values{"part-of": {"Task/" + *task.Id}}, &searchResult)
 				require.NoError(t, err)
 				require.Len(t, searchResult.Entry, 1, "Expected 1 subtask")
 
@@ -180,20 +180,20 @@ func Test_Main(t *testing.T) {
 				})
 				responseBundle := caramel.Transaction().
 					Create(questionnaireResponse, caramel.WithFullUrl("urn:uuid:questionnaire-response")).
-					Update(subTask, "Task/"+*subTask.ID).Bundle()
+					Update(subTask, "Task/"+*subTask.Id).Bundle()
 
 				err = hospitalOrcaFHIRClient.Create(responseBundle, &responseBundle, fhirclient.AtPath("/"))
 				require.NoError(t, err)
 
-				// Get QuestionnaireResponse ID from Bundle
+				// Get QuestionnaireResponse Id from Bundle
 				err = json.Unmarshal(responseBundle.Entry[0].Resource, &questionnaireResponse)
 				require.NoError(t, err)
 
 				// Get QuestionnaireResponse, which will use the custom SearchParameter to verify the user has access
 				var fetchedQuestionnaireResponse fhir.QuestionnaireResponse
-				err = hospitalOrcaFHIRClient.Read("QuestionnaireResponse/"+*questionnaireResponse.ID, &fetchedQuestionnaireResponse)
+				err = hospitalOrcaFHIRClient.Read("QuestionnaireResponse/"+*questionnaireResponse.Id, &fetchedQuestionnaireResponse)
 				require.NoError(t, err)
-				require.Equal(t, *questionnaireResponse.ID, *fetchedQuestionnaireResponse.ID)
+				require.Equal(t, *questionnaireResponse.Id, *fetchedQuestionnaireResponse.Id)
 				require.Equal(t, *questionnaireResponse.Questionnaire, *fetchedQuestionnaireResponse.Questionnaire)
 				require.Equal(t, questionnaireResponse.Status, fetchedQuestionnaireResponse.Status)
 				require.Equal(t, len(questionnaireResponse.Item), len(fetchedQuestionnaireResponse.Item))
@@ -251,7 +251,7 @@ func Test_Main(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 					Value:  to.Ptr("1333333337"),
 				},
-				Reference: to.Ptr("Patient/" + *patient.ID),
+				Reference: to.Ptr("Patient/" + *patient.Id),
 			}
 			task.Intent = "order"
 			task.Status = fhir.TaskStatusRequested
@@ -266,26 +266,26 @@ func Test_Main(t *testing.T) {
 		// TODO: Negative testing with a third party that has a valid bearer token but no access to the existing CarePlan and CareTeams
 		// Patient
 		var fetchedPatient fhir.Patient
-		err = hospitalOrcaFHIRClient.Read("Patient/"+*patient.ID, &fetchedPatient)
+		err = hospitalOrcaFHIRClient.Read("Patient/"+*patient.Id, &fetchedPatient)
 		require.NoError(t, err)
-		require.Equal(t, *patient.ID, *fetchedPatient.ID)
+		require.Equal(t, *patient.Id, *fetchedPatient.Id)
 		require.Equal(t, *patient.Identifier[0].Value, *fetchedPatient.Identifier[0].Value)
 
-		err = clinicOrcaFHIRClient.Read("Patient/"+*patient.ID, &fetchedPatient)
+		err = clinicOrcaFHIRClient.Read("Patient/"+*patient.Id, &fetchedPatient)
 		require.NoError(t, err)
-		require.Equal(t, *patient.ID, *fetchedPatient.ID)
+		require.Equal(t, *patient.Id, *fetchedPatient.Id)
 		require.Equal(t, *patient.Identifier[0].Value, *fetchedPatient.Identifier[0].Value)
 
 		// ServiceRequest
 		var fetchedServiceRequest fhir.ServiceRequest
-		err = hospitalOrcaFHIRClient.Read("ServiceRequest/"+*serviceRequest.ID, &fetchedServiceRequest)
+		err = hospitalOrcaFHIRClient.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
 		require.NoError(t, err)
-		require.Equal(t, *serviceRequest.ID, *fetchedServiceRequest.ID)
+		require.Equal(t, *serviceRequest.Id, *fetchedServiceRequest.Id)
 		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
 
-		err = clinicOrcaFHIRClient.Read("ServiceRequest/"+*serviceRequest.ID, &fetchedServiceRequest)
+		err = clinicOrcaFHIRClient.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
 		require.NoError(t, err)
-		require.Equal(t, *serviceRequest.ID, *fetchedServiceRequest.ID)
+		require.Equal(t, *serviceRequest.Id, *fetchedServiceRequest.Id)
 		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
 	})
 	t.Run("Task Filler doesn't support the ServiceRequest code, and rejects the Task", func(t *testing.T) {
@@ -326,7 +326,7 @@ func Test_Main(t *testing.T) {
 				},
 			},
 			Focus: &fhir.Reference{
-				Reference: to.Ptr("ServiceRequest/" + *unsupportedServiceRequest.ID),
+				Reference: to.Ptr("ServiceRequest/" + *unsupportedServiceRequest.Id),
 			},
 			For: &fhir.Reference{
 				Identifier: &fhir.Identifier{
@@ -350,7 +350,7 @@ func Test_Main(t *testing.T) {
 
 		t.Run("assert Task is rejected", func(t *testing.T) {
 			var rejectedTask fhir.Task
-			err = hospitalOrcaFHIRClient.Read("Task/"+*unsupportedTask.ID, &rejectedTask)
+			err = hospitalOrcaFHIRClient.Read("Task/"+*unsupportedTask.Id, &rejectedTask)
 			require.NoError(t, err)
 			require.Equal(t, fhir.TaskStatusRejected, rejectedTask.Status)
 		})
