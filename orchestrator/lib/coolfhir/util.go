@@ -447,3 +447,11 @@ func TokenToIdentifier(s string) (*fhir.Identifier, error) {
 	}
 	return result, nil
 }
+
+func OrganizationIdentifiers(organizations []fhir.Organization) []fhir.Identifier {
+	var result []fhir.Identifier
+	for _, organization := range organizations {
+		result = append(result, organization.Identifier...)
+	}
+	return result
+}

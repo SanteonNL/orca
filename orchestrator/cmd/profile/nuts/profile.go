@@ -23,6 +23,8 @@ import (
 	"net/url"
 	"path"
 	"regexp"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -36,7 +38,7 @@ var uziOtherNameUraRegex = regexp.MustCompile("^[0-9.]+-\\d+-\\d+-S-(\\d+)-00\\.
 // - Care Services Discovery: Nuts Discovery Service
 type DutchNutsProfile struct {
 	Config                Config
-	cachedIdentities      []fhir.Identifier
+	cachedIdentities      []fhir.Organization
 	identitiesRefreshedAt time.Time
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
@@ -125,7 +127,7 @@ func (d DutchNutsProfile) HttpClient() *http.Client {
 }
 
 // Identities consults the Nuts node to retrieve the local identities of the SCP node, given the credentials in the subject's wallet.
-func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, error) {
+func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization, error) {
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
 		identifiers, err := d.identities(ctx)
 		if err != nil {
@@ -142,7 +144,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Identifier, e
 	return d.cachedIdentities, nil
 }
 
-func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, error) {
+func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Organization, error) {
 	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, d.Config.OwnSubject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
@@ -154,29 +156,43 @@ func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Identifier, er
 		}
 		return nil, fmt.Errorf("list credentials non-OK HTTP response (status=%s)", response.Status())
 	}
-	var results []fhir.Identifier
+	var results []fhir.Organization
 	for _, cred := range *response.JSON200 {
-		identifiers, err := d.identifiersFromCredential(cred)
+		identities, err := d.identifiersFromCredential(cred)
 		if err != nil {
-			log.Warn().Ctx(ctx).Err(err).Msgf("Failed to extract identifiers from credential: %s", cred.ID)
+			log.Warn().Ctx(ctx).Err(err).Msgf("Failed to extract identities from credential: %s", cred.ID)
 			continue
 		}
-		results = append(results, identifiers...)
+		results = append(results, identities...)
 	}
-	return results, nil
+	// Deduplicate the organization entries, then build a sorted slice of the results
+	deduplicated := make(map[string]fhir.Organization)
+	for _, entry := range results {
+		deduplicated[*entry.Identifier[0].Value] = entry
+	}
+	var deduplicatedResults []fhir.Organization
+	for _, entry := range deduplicated {
+		deduplicatedResults = append(deduplicatedResults, entry)
+	}
+	slices.SortStableFunc(deduplicatedResults, func(a, b fhir.Organization) int {
+		return strings.Compare(*a.Identifier[0].Value, *b.Identifier[0].Value)
+	})
+	return deduplicatedResults, nil
 }
 
-func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredential) ([]fhir.Identifier, error) {
+func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredential) ([]fhir.Organization, error) {
 	var asMaps []map[string]interface{}
 	if err := cred.UnmarshalCredentialSubject(&asMaps); err != nil {
 		return nil, err
 	}
-	var results []fhir.Identifier
+	var results []fhir.Organization
 	for _, asMap := range asMaps {
 		flattenCredential, _ := maps.Flatten(asMap, []string{"credentialSubject"}, ".")
 		var ura string
+		var name string
 		if cred.IsType(ssi.MustParseURI("NutsUraCredential")) {
 			ura, _ = flattenCredential["credentialSubject.organization.ura"].(string)
+			name, _ = flattenCredential["credentialSubject.organization.name"].(string)
 		}
 		if cred.IsType(ssi.MustParseURI("UziServerCertificateCredential")) {
 			otherName, ok := flattenCredential["credentialSubject.otherName"].(string)
@@ -185,12 +201,21 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 					ura = match[1]
 				}
 			}
+			name, _ = flattenCredential["credentialSubject.O"].(string)
 		}
 		if ura != "" {
-			results = append(results, fhir.Identifier{
-				System: to.Ptr(coolfhir.URANamingSystem),
-				Value:  to.Ptr(ura),
-			})
+			entry := fhir.Organization{
+				Identifier: []fhir.Identifier{
+					{
+						System: to.Ptr(coolfhir.URANamingSystem),
+						Value:  to.Ptr(ura),
+					},
+				},
+			}
+			if name != "" {
+				entry.Name = to.Ptr(name)
+			}
+			results = append(results, entry)
 		}
 	}
 	return results, nil

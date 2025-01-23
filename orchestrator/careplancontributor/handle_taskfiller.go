@@ -65,6 +65,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 	if err != nil {
 		return err
 	}
+	localIdentifiers := coolfhir.OrganizationIdentifiers(identities)
 
 	// If partOfRef is nil, handle the task as a primary task - no need to create follow-up subtasks for newly created Tasks
 	//This only happens on Task update where the Task.output is filled with a QuestionnaireResponse
@@ -77,20 +78,20 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		}
 
 		// Validate that the current CPC is the task Owner to perform task filling
-		isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(task, identities)
+		isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(task, localIdentifiers)
 		if !isOwner {
 			log.Info().Ctx(ctx).Msg("Current CPC node is not the task Owner - skipping")
 			return nil
 		}
 
 		log.Info().Ctx(ctx).Msg("Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
-		err = s.createSubTaskOrAcceptPrimaryTask(ctx, cpsClient, task, task, identities)
+		err = s.createSubTaskOrAcceptPrimaryTask(ctx, cpsClient, task, task, localIdentifiers)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
 	} else {
 		log.Info().Ctx(ctx).Msgf("Notified Task is a sub-task (id=%s, primary task=%s)", *task.Id, *partOfRef)
-		err = s.handleSubtaskNotification(ctx, cpsClient, task, *partOfRef, identities)
+		err = s.handleSubtaskNotification(ctx, cpsClient, task, *partOfRef, localIdentifiers)
 		if err != nil {
 			return fmt.Errorf("failed to update sub Task: %w", err)
 		}
