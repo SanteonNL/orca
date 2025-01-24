@@ -35,11 +35,10 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const [initialized, setInitialized] = useState(false)
   const [shouldScroll, setShouldScroll] = useState(false)
 
-  const [prevQuestionnaireResponse, setPrevQuestionnaireReaspone] = useState<QuestionnaireResponse>()
-  const { activeStep, setStep } = useStepper()
+  const [, setPrevQuestionnaireResponse] = useState<QuestionnaireResponse>()
 
   const cpsClient = useCpsClient()
-  const { onSubTaskSubmit } = useTaskProgressStore()
+  const { onSubTaskSubmit, task } = useTaskProgressStore()
   const router = useRouter()
 
   useEffect(() => {
@@ -60,7 +59,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       console.log(`Found QuestionnaireResponse: ${JSON.stringify(questionnaireResponse)}`)
 
       if (questionnaireResponse) {
-        setPrevQuestionnaireReaspone(questionnaireResponse)
+        setPrevQuestionnaireResponse(questionnaireResponse)
       }
     }
 
@@ -148,7 +147,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       body: bundle
     });
 
-    onSubTaskSubmit(router.push(`/enrollment/success`))
+    onSubTaskSubmit(router.push(`/enrollment/task/${task!!.id}`))
   }
 
   useEffect(() => {
@@ -161,7 +160,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       });
 
       if (populateResult && populateResult?.populated) {
-        setPrevQuestionnaireReaspone(populateResult.populated)
+        setPrevQuestionnaireResponse(populateResult.populated)
         // updatableResponse = populateResult.populated
         useQuestionnaireResponseStore.setState({ updatableResponse: populateResult.populated })
       }

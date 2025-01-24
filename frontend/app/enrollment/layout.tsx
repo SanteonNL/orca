@@ -1,23 +1,36 @@
 "use client"
 import React from 'react'
 import useEnrollmentStore from '@/lib/store/enrollment-store'
-import { ChevronRight } from 'lucide-react'
-import { usePathname } from 'next/navigation'
+import {ChevronRight} from 'lucide-react'
+import useTaskProgressStore from "@/lib/store/task-progress-store";
 
 // TODO: Change the server component when we use access_tokens (no longer rely on the session) to fetch data
-export default function EnrollmentLayout({ children }: { children: React.ReactNode }) {
-    const { serviceRequest } = useEnrollmentStore()
-    const pathname = usePathname()
+export default function EnrollmentLayout({children}: { children: React.ReactNode }) {
+    const {serviceRequest} = useEnrollmentStore()
+    const {task} = useTaskProgressStore()
 
-    const isFirstStep = pathname === '/enrollment/new'
-    const isLastStep = pathname === '/enrollment/success'
+    const lastStepTaskStates = ['accepted', 'in-progress', 'rejected', 'failed', 'completed', 'cancelled', 'on-hold']
+    const isFirstStep = task?.status == "requested"
+    const isLastStep = task ? lastStepTaskStates.includes(task.status) : false
     const service = serviceRequest?.code?.coding?.[0].display
+    const statusTitles: Map<String, String> = new Map([
+        ["ready", service ? `${service} instellen` : "Instellen"],
+        ["requested", service ? `${service} instellen` : "Instellen"],
+        ["received", service ? `${service} instellen` : "Instellen"],
+        ["accepted", "Verzoek geaccepteerd"],
+        ["in-progress", "Verzoek in behandeling"],
+        ["on-hold", "Uitvoering gepauzeerd"],
+        ["completed", "Uitvoering afgerond"],
+        ["cancelled", "Uitvoering geannuleerd"],
+        ["failed", "Uitvoering mislukt"],
+        ["rejected", "Verzoek afgewezen"],
+    ])
 
     const breadcrumb = isFirstStep
         ? <span className='font-medium'>Verzoek controleren</span>
         : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Verzoek controleren</a>
 
-    const title = service ? `${service} instellen` : "Instellen"
+    const title = task ? statusTitles.get(task.status) : "Verzoek controleren"
 
     return (
         <div className="w-full h-full">
@@ -26,17 +39,17 @@ export default function EnrollmentLayout({ children }: { children: React.ReactNo
                     {!isLastStep && (
                         <>
                             {breadcrumb}
-                            <ChevronRight className="h-4 w-4" />
+                            <ChevronRight className="h-4 w-4"/>
                             <span className={`${isFirstStep && 'text-muted-foreground'}`}>{service}</span>
                         </>
                     )}
                 </nav>
-                <div className='text-2xl pt-2'>{isLastStep ? "Verzoek geaccepteerd" : isFirstStep ? "Verzoek controleren" : title}</div>
+                <div className='text-2xl pt-2'>{title}</div>
             </div>
             <div className="h-px bg-gray-200 mb-10"></div>
             <div className="max-w-7xl px-5 w-full mx-auto">
                 {children}
             </div>
-        </div >
+        </div>
     )
 }

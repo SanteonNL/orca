@@ -14,16 +14,16 @@ export default function EnrollmentDetails() {
     return (
         (
             <div className="grid grid-cols-[1fr,2fr] gap-y-4">
-                <div className="text-gray-700 font-medium">Patient:</div>
+                <div className="text-muted-foreground">Patient:</div>
                 <div className="font-bold">{patient?.name?.[0].text || "Unknown"}</div>
 
-                <div className="text-gray-700 font-medium">Verzoek:</div>
+                <div className="text-muted-foreground">Verzoek:</div>
                 <div className="font-bold">{serviceRequest?.code?.coding?.[0].display || "Unknown"}</div>
 
-                <div className="text-gray-700 font-medium">Diagnose:</div>
+                <div className="text-muted-foreground">Diagnose:</div>
                 <div className="font-bold">{taskCondition?.code?.text || taskCondition?.code?.coding?.[0].display || "Unknown"}</div>
 
-                <div className="text-gray-700 font-medium">Uitvoerende organisatie:</div>
+                <div className="text-muted-foreground">Uitvoerende organisatie:</div>
                 <div className="font-bold">
                     {organizationName(serviceRequest?.performer?.[0])}
                 </div>

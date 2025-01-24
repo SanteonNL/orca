@@ -72,7 +72,7 @@ export default function EnrollInCpsButton({ className }: Props) {
             throw new Error("Missing required items for Task creation")
         }
 
-        var taskBundle: Bundle & { type: "transaction"; };
+        let taskBundle: Bundle & { type: "transaction"; };
 
         try {
             taskBundle = constructTaskBundle(serviceRequest, taskCondition, patient, launchContext?.taskIdentifier);
