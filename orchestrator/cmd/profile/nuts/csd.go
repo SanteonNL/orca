@@ -117,12 +117,12 @@ func (n *CsdDirectory) find(ctx context.Context, owner fhir.Identifier) (*discov
 
 	// 2 credentials are supported:
 	// - NutsUraCredential, which contains credentialSubject.organization.ura
-	// - UziServerCertificateCredential, which contains credentialSubject.otherName (which is a string that contains the URA)
+	// - X509Credential, which contains credentialSubject.san.otherName (which is a string that contains the URA)
 	//   Example otherName: 2.16.528.1.1007.99.2110-1-1234-S-86446-00.000-5678 (86446 is the URA)
 	var searchResponse *discovery.SearchPresentationsResponse
 	searchResponse, err := n.doSearch(ctx, discovery.SearchPresentationsParams{
 		Query: &map[string]interface{}{
-			"credentialSubject.otherName": "*-S-" + *owner.Value + "-00.000*",
+			"credentialSubject.san.otherName": "*-S-" + *owner.Value + "-00.000*",
 		},
 	})
 	if err != nil {
