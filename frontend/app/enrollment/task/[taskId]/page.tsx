@@ -20,9 +20,7 @@ export default function EnrollmentTaskPage() {
         }
     }, [taskId, setSelectedTaskId])
 
-    // TODO: This shouldn't be possible?
-    if (loading || !initialized || !task) return <Loading/>
-
+    if (loading || !initialized) return <Loading/>
 
     if (!task) {
         return <div className='w-[568px] flex flex-col gap-4'>Ongeldige taak</div>

@@ -86,8 +86,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
                 ])
 
                 set({ task, subTasks })
-                fetchQuestionnaires(subTasks, set)
-
+                await fetchQuestionnaires(subTasks, set)
             }
             set({ initialized: true, loading: false, })
 
@@ -111,7 +110,7 @@ const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState |
                     }) as Questionnaire;
                     tmpMap[task.id] = questionnaire;
                 } catch (error) {
-                    console.error("Failed to fetch questionnaire", error);
+                    set({ error: `Failed to fetch questionnaire: ${error}` });
                 }
             }
         }
