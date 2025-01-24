@@ -580,22 +580,25 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	// patientRef := "Patient/magic-" + uuid.NewString() <-- Do not use a magic link so that we can request all Conditions for the Patient
 	serviceRequestRef := "ServiceRequest/magic-" + uuid.NewString()
 	practitionerRef := "Practitioner/magic-" + uuid.NewString()
+	practitionerRoleRef := "PractitionerRole/magic-" + uuid.NewString()
 	organizationRef := "Organization/magic-" + uuid.NewString()
 
 	sessionData := user.SessionData{
 		FHIRLauncher: launcherKey,
 		//TODO: See how/if to pass the conditions to the StringValues
 		StringValues: map[string]string{
-			"patient":        "Patient/" + *patient.Id,
-			"serviceRequest": serviceRequestRef,
-			"practitioner":   practitionerRef,
-			"organization":   organizationRef,
-			"accessToken":    accessToken,
-			"taskIdentifier": zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId,
+			"patient":          "Patient/" + *patient.Id,
+			"serviceRequest":   serviceRequestRef,
+			"practitioner":     practitionerRef,
+			"practitionerRole": practitionerRoleRef,
+			"organization":     organizationRef,
+			"accessToken":      accessToken,
+			"taskIdentifier":   zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId,
 		},
 		OtherValues: map[string]interface{}{
 			"Patient/" + *patient.Id:   patient, //Zorgplatform only allows for a GET on /Patient, we request by ID
 			practitionerRef:            practitioner,
+			practitionerRoleRef:        launchContext.PractitionerRole,
 			serviceRequestRef:          *serviceRequest,
 			organizationRef:            organization,
 			*reasonReference.Reference: reason,

@@ -432,17 +432,19 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 
 func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
 	contextData := struct {
-		Patient        string `json:"patient"`
-		ServiceRequest string `json:"serviceRequest"`
-		Practitioner   string `json:"practitioner"`
-		Task           string `json:"task"`
-		TaskIdentifier string `json:"taskIdentifier"`
+		Patient          string `json:"patient"`
+		ServiceRequest   string `json:"serviceRequest"`
+		Practitioner     string `json:"practitioner"`
+		PractitionerRole string `json:"practitionerRole"`
+		Task             string `json:"task"`
+		TaskIdentifier   string `json:"taskIdentifier"`
 	}{
-		Patient:        session.StringValues["patient"],
-		ServiceRequest: session.StringValues["serviceRequest"],
-		Practitioner:   session.StringValues["practitioner"],
-		Task:           session.StringValues["task"],
-		TaskIdentifier: session.StringValues["taskIdentifier"],
+		Patient:          session.StringValues["patient"],
+		ServiceRequest:   session.StringValues["serviceRequest"],
+		Practitioner:     session.StringValues["practitioner"],
+		PractitionerRole: session.StringValues["practitionerRole"],
+		Task:             session.StringValues["task"],
+		TaskIdentifier:   session.StringValues["taskIdentifier"],
 	}
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)

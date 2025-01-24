@@ -3,7 +3,7 @@ import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
 import { findInBundle, getBsn, constructTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import { Bundle, Condition } from 'fhir/r4'
+import { Bundle, Condition, PractitionerRole } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
 import { toast } from "sonner"
 import { useRouter } from 'next/navigation'
@@ -24,7 +24,7 @@ interface Props {
  */
 export default function EnrollInCpsButton({ className }: Props) {
 
-    const { patient, selectedCarePlan, taskCondition, serviceRequest, loading, launchContext } = useEnrollment()
+    const { patient, selectedCarePlan, taskCondition, practitionerRole, serviceRequest, loading, launchContext } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
 
@@ -51,7 +51,7 @@ export default function EnrollInCpsButton({ className }: Props) {
             throw new Error("Something went wrong with CarePlan creation")
         }
 
-        const taskBundle = await createTask(taskCondition)
+        const taskBundle = await createTask(taskCondition, practitionerRole)
         const task = findInBundle('Task', taskBundle as Bundle);
 
         if (!task) {
@@ -62,7 +62,7 @@ export default function EnrollInCpsButton({ className }: Props) {
         router.push(`/enrollment/task/${task.id}`)
     }
 
-    const createTask = async (taskCondition: Condition) => {
+    const createTask = async (taskCondition: Condition, practitionerRole?: PractitionerRole) => {
         if (!cpsClient || !ehrClient) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
@@ -75,7 +75,7 @@ export default function EnrollInCpsButton({ className }: Props) {
         var taskBundle: Bundle & { type: "transaction"; };
 
         try {
-            taskBundle = constructTaskBundle(serviceRequest, taskCondition, patient, launchContext?.taskIdentifier);
+            taskBundle = constructTaskBundle(serviceRequest, taskCondition, patient, practitionerRole, launchContext?.taskIdentifier);
         } catch (error) {
             console.debug("Error constructing taskBundle");
             console.error(error);
