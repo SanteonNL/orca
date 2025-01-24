@@ -185,13 +185,12 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
     } as Task
 
     if (taskIdentifier) {
-        // TODO: Fix ifNoneExists
-        // const systemAndIdentifier = taskIdentifier.split("|")
-        // if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`")
-        // task.identifier = [{
-        //     system: systemAndIdentifier[0],
-        //     value: systemAndIdentifier[1],
-        // }]
+        const systemAndIdentifier = taskIdentifier.split("|")
+        if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`")
+        task.identifier = [{
+            system: systemAndIdentifier[0],
+            value: systemAndIdentifier[1],
+        }]
     }
 
     return task
@@ -207,7 +206,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         request: {
             method: "POST",
             url: "ServiceRequest",
-            ifNoneExist: "",
+            ifNoneExist: `ServiceRequest?_id=${serviceRequest.id}`,
         }
     }
     const taskEntry = {
@@ -220,9 +219,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         }
     }
     if (taskIdentifier) {
-        // TODO: Fix ifNoneExists
-        // serviceRequestEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
-        // taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
+        taskEntry.request.ifNoneExist = `Task?identifier=${taskIdentifier}`
     }
     const bundle = {
         resourceType: "Bundle",
@@ -234,8 +231,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                 request: {
                     method: "POST",
                     url: "Patient",
-                    // TODO: Fix ifNoneExists
-                    // ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
+                    ifNoneExist: `Patient?identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
                 }
             },
             serviceRequestEntry,

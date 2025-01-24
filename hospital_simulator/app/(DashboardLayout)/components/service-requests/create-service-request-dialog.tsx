@@ -238,8 +238,7 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    // TODO: Fix ifNoneExists
-                    // "ifNoneExist": `identifier=${performerIdentifier.system}|${performerIdentifier.value}`
+                    "ifNoneExist": `Organization?identifier=${performerIdentifier.system}|${performerIdentifier.value}`
                 }
             },
             {
@@ -288,8 +287,7 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                 "request": {
                     "method": "POST",
                     "url": "Practitioner",
-                    // TODO: Fix ifNoneExists
-                    // "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
+                    "ifNoneExist": "Practitioner?identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
                 }
             },
             {
@@ -325,8 +323,7 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                 "request": {
                     "method": "POST",
                     "url": "PractitionerRole",
-                    // TODO: Fix ifNoneExists
-                    // "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
+                    "ifNoneExist": "PractitionerRole?identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
                 }
             },
             {
@@ -335,8 +332,7 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                 "request": {
                     "method": "POST",
                     "url": "Organization",
-                    // TODO: Fix ifNoneExists
-                    // "ifNoneExist": `identifier=${requesterIdentifier.system}|${requesterIdentifier.value}`
+                    "ifNoneExist": `Organization?identifier=${requesterIdentifier.system}|${requesterIdentifier.value}`
                 }
             },
             {
