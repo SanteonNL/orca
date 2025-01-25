@@ -13,24 +13,26 @@ export default function EnrollmentLayout({children}: { children: React.ReactNode
     const isFirstStep = task?.status == "requested"
     const isLastStep = task ? lastStepTaskStates.includes(task.status) : false
     const service = serviceRequest?.code?.coding?.[0].display
-    const statusTitles: Map<String, String> = new Map([
-        ["ready", service ? `${service} instellen` : "Instellen"],
-        ["requested", service ? `${service} instellen` : "Instellen"],
-        ["received", service ? `${service} instellen` : "Instellen"],
-        ["accepted", "Verzoek geaccepteerd"],
-        ["in-progress", "Verzoek in behandeling"],
-        ["on-hold", "Uitvoering gepauzeerd"],
-        ["completed", "Uitvoering afgerond"],
-        ["cancelled", "Uitvoering geannuleerd"],
-        ["failed", "Uitvoering mislukt"],
-        ["rejected", "Verzoek afgewezen"],
-    ])
+    const statusTitles = {
+        "ready": service ? `${service} instellen` : "Instellen",
+        "requested": service ? `${service} instellen` : "Instellen",
+        "received": service ? `${service} instellen` : "Instellen",
+        "accepted": "Verzoek geaccepteerd",
+        "in-progress": "Verzoek in behandeling",
+        "on-hold": "Uitvoering gepauzeerd",
+        "completed": "Uitvoering afgerond",
+        "cancelled": "Uitvoering geannuleerd",
+        "failed": "Uitvoering mislukt",
+        "rejected": "Verzoek afgewezen",
+        "draft": "Verzoek in concept",
+        "entered-in-error": "Verzoek gemarkeerd als foutief",
+    }
 
     const breadcrumb = isFirstStep
         ? <span className='font-medium'>Verzoek controleren</span>
         : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Verzoek controleren</a>
 
-    const title = task ? statusTitles.get(task.status) : "Verzoek controleren"
+    const title = task ? statusTitles[task.status] : "Verzoek controleren"
 
     return (
         <div className="w-full h-full">
