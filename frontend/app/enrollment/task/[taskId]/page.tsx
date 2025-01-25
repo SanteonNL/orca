@@ -23,7 +23,7 @@ export default function EnrollmentTaskPage() {
     if (loading || !initialized) return <Loading/>
 
     if (!task) {
-        return <div className='w-[568px] flex flex-col gap-4'>Ongeldige taak</div>
+        return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
     }
 
     const StatusElement = (props: { label: string, value: string }) =>
