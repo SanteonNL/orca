@@ -26,10 +26,10 @@ export default function EnrollmentTaskPage() {
         return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
     }
 
-    const StatusElement = (props: { label: string, value: string }) =>
+    const StatusElement = ({label, value}: { label: string, value: string }) =>
         <>
-            <div className="text-muted-foreground">{props.label}:</div>
-            <div className="font-bold">{props.value}</div>
+            <div className="text-muted-foreground">{label}:</div>
+            <div className="font-bold">{value}</div>
         </>
 
     if (task.status === "received") {
