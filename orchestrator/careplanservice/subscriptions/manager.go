@@ -76,6 +76,7 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 		careTeam := resource.(*fhir.CareTeam)
 		focus = fhir.Reference{
 			Reference: to.Ptr("CareTeam/" + *careTeam.Id),
+			Type:      to.Ptr("CareTeam"),
 		}
 		for _, participant := range careTeam.Participant {
 			isMemberValid := coolfhir.IsLogicalReference(participant.Member)
