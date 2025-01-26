@@ -6,6 +6,8 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"net/http"
 	"os"
 	"testing"
@@ -63,7 +65,9 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 		},
 	}
 
-	workflowId := "b526e773-e1a6-4533-bd00-1360c97e745f"
+	globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
+
+	workflowId := "4ade39c3-a2cd-4050-9e61-eed30e7320bf"
 	launchContext := LaunchContext{
 		Practitioner: fhir.Practitioner{Identifier: []fhir.Identifier{
 			{

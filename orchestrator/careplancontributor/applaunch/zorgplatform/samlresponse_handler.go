@@ -18,6 +18,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// currentTime is a variable that holds a function that returns the current time.
+// This variable is used to mock the current time in tests.
+var currentTime = time.Now
+
 type LaunchContext struct {
 	Bsn            string
 	SubjectNameId  string
@@ -26,43 +30,31 @@ type LaunchContext struct {
 	WorkflowId     string
 }
 
-// parseSamlResponse takes a SAML Response, validates it and extracts the SAML assertion, which is then returned as LaunchContext.
+// parseSAMLResponse takes a SAML Response, validates it and extracts the SAML assertion, which is then returned as LaunchContext.
 // If the SAML Assertion is encrypted, it decrypts it.
-func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (LaunchContext, error) {
+func (s *Service) parseSAMLResponse(ctx context.Context, samlResponse string) (*LaunchContext, error) {
 	// TODO: Implement the SAML token validation logic
 	doc := etree.NewDocument()
 	decodedResponse, err := base64.StdEncoding.DecodeString(samlResponse)
 	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to decode base64 SAML response: %w", err)
+		return nil, fmt.Errorf("unable to decode base64 SAML response: %w", err)
 	}
 
 	err = doc.ReadFromString(string(decodedResponse))
 
 	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to parse XML: %w", err)
+		return nil, fmt.Errorf("unable to parse XML: %w", err)
 	}
+
+	//wsSecurity := doc.Root().FindElement("./s:Header/o:Security")
+	//if wsSecurity == nil {
+	//	return nil, errors.New("ws-security header not found")
+	//}
 
 	//TODO: Do we want to trim/cleanup values before validating?
 	assertion, err := s.decryptAssertion(doc)
 	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to decrypt assertion: %w", err)
-	}
-
-	// Validate the signature of the assertion using the public key of the Zorgplatform STS
-	if err := s.validateZorgplatformSignature(assertion); err != nil {
-		return LaunchContext{}, fmt.Errorf("invalid assertion signature: %w", err)
-	}
-
-	// TODO: Do we need this?
-	//if err := s.validateAssertionExpiry(assertion); err != nil {
-	//	return LaunchContext{}, fmt.Errorf("token has expired: %w", err)
-	//}
-
-	if err := s.validateAudience(assertion); err != nil {
-		return LaunchContext{}, fmt.Errorf("invalid audience: %w", err)
-	}
-	if err := s.validateIssuer(assertion); err != nil {
-		return LaunchContext{}, fmt.Errorf("invalid issuer: %w", err)
+		return nil, fmt.Errorf("unable to decrypt assertion: %w", err)
 	}
 
 	// TODO: Remove this before going to acceptance/production
@@ -71,33 +63,10 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	xml, _ := doc.WriteToString()
 	println("Decrypted assertion:", xml)
 
-	// Extract Subject/NameID and log in the user
-	practitioner, err := s.extractPractitioner(ctx, assertion)
-	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to extract Practitioner from SAML Assertion.Subject: %w", err)
-	}
-
-	// Extract resource-id claim to select the correct patient
-	resourceID, err := s.extractResourceID(assertion)
-	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to extract resource-id: %w", err)
-	}
-	workflowID, err := s.extractWorkflowID(ctx, assertion)
-	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to extract workflow-id: %w", err)
-	}
-
-	// // Process any other required attributes (claims)
-	// if err := s.processAdditionalAttributes(assertion); err != nil {
-	// 	return fmt.Errorf("unable to process additional attributes: %w", err)
-	// }
-
-	return LaunchContext{
-		Bsn:          resourceID,
-		Practitioner: *practitioner,
-		WorkflowId:   workflowID,
-	}, nil
-
+	return (&ProfessionalSSOAssertion{
+		Element:                    assertion,
+		ExpectedSigningCertificate: s.zorgplatformCert,
+	}).Validate(ctx)
 }
 
 func (s *Service) decryptAssertion(doc *etree.Document) (*etree.Element, error) {
@@ -116,83 +85,101 @@ func (s *Service) decryptAssertion(doc *etree.Document) (*etree.Element, error) 
 	return result.FindElement("Assertion"), nil
 }
 
-func (s *Service) validateAssertionExpiry(ctx context.Context, doc *etree.Document) error {
-	createdElement := doc.Root().FindElement("//u:Timestamp/u:Created")
-	expiresElement := doc.Root().FindElement("//u:Timestamp/u:Expires")
-
-	if createdElement == nil || expiresElement == nil {
-		return fmt.Errorf("timestamp elements not found in the assertion")
-	}
-
-	created := createdElement.Text()
-	expires := expiresElement.Text()
-
-	log.Trace().Ctx(ctx).Msgf("Token created: %s", created)
-	log.Trace().Ctx(ctx).Msgf("Token expires: %s", expires)
-
-	createdTime, err := time.Parse(time.RFC3339Nano, created)
-	if err != nil {
-		return fmt.Errorf("invalid created time format: %w", err)
-	}
-
-	expiresTime, err := time.Parse(time.RFC3339Nano, expires)
-	if err != nil {
-		return fmt.Errorf("invalid expires time format: %w", err)
-	}
-
-	now := time.Now().UTC()
-	if now.Before(createdTime) || now.After(expiresTime) {
-		return fmt.Errorf("token is not valid at the current time")
-	}
-
-	return nil
+type ProfessionalSSOAssertion struct {
+	*etree.Element
+	ExpectedSigningCertificate *x509.Certificate
+	ExpectedAudience           string
+	ExpectedIssuer             string
 }
 
-// Validates the descrypted assertion signature using the public key of the Zorgplatform STS
-func (s *Service) validateZorgplatformSignature(decryptedAssertion *etree.Element) error {
-	signatureElement := decryptedAssertion.FindElement("Signature")
+func (a *ProfessionalSSOAssertion) Validate(ctx context.Context) (*LaunchContext, error) {
+	if err := a.validateSignature(); err != nil {
+		return nil, fmt.Errorf("invalid assertion signature: %w", err)
+	}
+	if err := a.validateAudience(); err != nil {
+		return nil, fmt.Errorf("invalid audience: %w", err)
+	}
+	if err := a.validateIssuer(); err != nil {
+		return nil, fmt.Errorf("invalid issuer: %w", err)
+	}
+
+	// Extract Subject/NameID and log in the user
+	practitioner, err := a.extractPractitioner(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract Practitioner from SAML Assertion.Subject: %w", err)
+	}
+
+	// Extract resource-id claim to select the correct patient
+	resourceID, err := a.extractResourceID()
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract resource-id: %w", err)
+	}
+	workflowID, err := a.extractWorkflowID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to extract workflow-id: %w", err)
+	}
+
+	return &LaunchContext{
+		Bsn:          resourceID,
+		Practitioner: *practitioner,
+		WorkflowId:   workflowID,
+	}, nil
+}
+
+// validateSignature checks the decrypted assertion signature using the public key of the Zorgplatform STS
+func (a *ProfessionalSSOAssertion) validateSignature() error {
+	signatureElement := a.FindElement("Signature")
 	if signatureElement == nil {
 		return fmt.Errorf("signature element not found in the assertion")
 	}
 
 	validationContext := dsig.NewDefaultValidationContext(&dsig.MemoryX509CertificateStore{
-		Roots: []*x509.Certificate{s.zorgplatformCert},
+		Roots: []*x509.Certificate{a.ExpectedSigningCertificate},
 	})
 
-	_, err := validationContext.Validate(decryptedAssertion)
+	_, err := validationContext.Validate(a.Element)
 	if err != nil {
 		return fmt.Errorf("unable to validate signature: %w", err)
 	}
 	return nil //valid
 }
 
-func (s *Service) validateAudience(decryptedAssertion *etree.Element) error {
-	el := decryptedAssertion.FindElement("//AudienceRestriction/Audience")
-	aud := el.Text()
-
-	if aud == s.config.DecryptConfig.Audience {
-		return nil
+func (a *ProfessionalSSOAssertion) validateAudience() error {
+	conditionsEl := a.FindElement("Conditions")
+	if conditionsEl == nil {
+		return fmt.Errorf("conditions element not found in the assertion")
+	}
+	if notBeforeEl, notAfterEl := conditionsEl.SelectAttr("NotBefore"), conditionsEl.SelectAttr("NotOnOrAfter"); notBeforeEl != nil && notAfterEl != nil {
+		if isValid, err := xmlTimeBetweenInclusive(notBeforeEl.Value, notAfterEl.Value, currentTime()); err != nil {
+			return fmt.Errorf("unable to validate audience timestamps: %w", err)
+		} else if !isValid {
+			return fmt.Errorf("audience token is expired")
+		}
 	}
 
-	return fmt.Errorf("invalid aud. Found [%s] but expected [%s]", aud, s.config.DecryptConfig.Audience)
+	audienceEl := conditionsEl.FindElement("AudienceRestriction/Audience")
+	aud := strings.TrimSpace(audienceEl.Text())
+	if aud != a.ExpectedAudience {
+		return fmt.Errorf("invalid aud. Found [%s] but expected [%s]", aud, a.ExpectedAudience)
+	}
+	return nil
 }
 
-func (s *Service) validateIssuer(decryptedAssertion *etree.Element) error {
-
-	el := decryptedAssertion.FindElement("//Issuer")
+func (a *ProfessionalSSOAssertion) validateIssuer() error {
+	el := a.FindElement("//Issuer")
 	iss := el.Text()
 
-	if iss == s.config.DecryptConfig.Issuer {
+	if iss == a.ExpectedIssuer {
 		return nil
 	}
-	return fmt.Errorf("invalid iss. Found [%s] but expected [%s]", iss, s.config.DecryptConfig.Issuer)
+	return fmt.Errorf("invalid iss. Found [%s] but expected [%s]", iss, a.ExpectedIssuer)
 }
 
-func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Element) (*fhir.Practitioner, error) {
+func (a *ProfessionalSSOAssertion) extractPractitioner(ctx context.Context) (*fhir.Practitioner, error) {
 	var result fhir.Practitioner
 	// Identifier (e.g.: USER1@2.16.840.1.113883.2.4.3.124.8.50.8)
 	{
-		el := assertion.FindElement("//Subject/NameID")
+		el := a.FindElement("//Subject/NameID")
 		if el == nil || strings.TrimSpace(el.Text()) == "" {
 			return nil, errors.New("Subject.NameID not found")
 		}
@@ -208,7 +195,7 @@ func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Elem
 	// Name (e.g.: Jansen, Doctor - optional)
 	{
 
-		value, _ := getSubjectAttribute(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
+		value, _ := getSubjectAttribute(a.Element, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
 		if value != "" {
 			parts := strings.Split(value, ",")
 			result.Name = []fhir.HumanName{
@@ -229,7 +216,7 @@ func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Elem
 	}
 	// Role (e.g.: <Role code="223366009" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT"/>)
 	{
-		el := assertion.FindElement("AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xacml:2.0:subject:role']/AttributeValue/Role")
+		el := a.FindElement("AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xacml:2.0:subject:role']/AttributeValue/Role")
 		if el == nil {
 			return nil, errors.New("subject Role not found")
 		}
@@ -258,7 +245,7 @@ func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Elem
 	}
 	// E-mail (optional field)
 	{
-		value, _ := getSubjectAttribute(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")
+		value, _ := getSubjectAttribute(a.Element, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress")
 
 		if value != "" {
 			result.Telecom = append(result.Telecom, fhir.ContactPoint{
@@ -273,9 +260,9 @@ func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Elem
 	return &result, nil
 }
 
-func (s *Service) extractResourceID(decryptedAssertion *etree.Element) (string, error) {
+func (a *ProfessionalSSOAssertion) extractResourceID() (string, error) {
 	// Find the Attribute element with the specified Name
-	attributeElement := decryptedAssertion.FindElement("//AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xacml:1.0:resource:resource-id']/AttributeValue/InstanceIdentifier")
+	attributeElement := a.FindElement("//AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xacml:1.0:resource:resource-id']/AttributeValue/InstanceIdentifier")
 	if attributeElement == nil {
 		return "", fmt.Errorf("resource-id attribute not found in the assertion")
 	}
@@ -289,8 +276,8 @@ func (s *Service) extractResourceID(decryptedAssertion *etree.Element) (string, 
 	return resourceID, nil
 }
 
-func (s *Service) extractWorkflowID(ctx context.Context, decryptedAssertion *etree.Element) (string, error) {
-	workflowIdElement := decryptedAssertion.FindElement("//AttributeStatement/Attribute[@Name='http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id']/AttributeValue")
+func (a *ProfessionalSSOAssertion) extractWorkflowID(ctx context.Context) (string, error) {
+	workflowIdElement := a.FindElement("//AttributeStatement/Attribute[@Name='http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id']/AttributeValue")
 	if workflowIdElement == nil {
 		return "", fmt.Errorf("workflow-id attribute not found in the assertion")
 	}
@@ -298,12 +285,6 @@ func (s *Service) extractWorkflowID(ctx context.Context, decryptedAssertion *etr
 	log.Debug().Ctx(ctx).Msgf("Extracted workflow-id: %s", workflowId)
 
 	return workflowId, nil
-}
-
-func (s *Service) processAdditionalAttributes(decryptedAssertion *etree.Document) error {
-	// TODO: Implement the logic to process additional attributes (claims) from the assertion
-	// This is a placeholder implementation
-	return nil
 }
 
 func getSubjectAttribute(decryptedAssertion *etree.Element, name string) (string, error) {

@@ -1,0 +1,89 @@
+<Assertion ID="_40372bc3-c7a1-4c0f-85ff-30e6743857ae" IssueInstant="2025-01-24T12:25:37.756Z" Version="2.0"
+           xmlns="urn:oasis:names:tc:SAML:2.0:assertion">
+    <Issuer>https://zorgplatform.online/sts</Issuer>
+    <Signature xmlns="http://www.w3.org/2000/09/xmldsig#">
+        <SignedInfo>
+            <CanonicalizationMethod Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+            <SignatureMethod Algorithm="http://www.w3.org/2001/04/xmldsig-more#rsa-sha256"/>
+            <Reference URI="#_40372bc3-c7a1-4c0f-85ff-30e6743857ae">
+                <Transforms>
+                    <Transform Algorithm="http://www.w3.org/2000/09/xmldsig#enveloped-signature"/>
+                    <Transform Algorithm="http://www.w3.org/2001/10/xml-exc-c14n#"/>
+                </Transforms>
+                <DigestMethod Algorithm="http://www.w3.org/2001/04/xmlenc#sha256"/>
+                <DigestValue>jpi//hgI44dOuO+OAuxEQasuAyU3qhLHQFAi9nBNu3k=</DigestValue>
+            </Reference>
+        </SignedInfo>
+        <SignatureValue>
+            ngzA5BR/iHV0yfLnoAVVMyVN17CWLUxjA1bD/tHGtjEGS4t9sgAYWhZyJAPyZz3m/JXPF4wofYyeJ68UFh4jXrPkXTnRbPGFQLMCOWmSHuxxgz+jOW4NAzn5PE0JK398IjQqxBaEt/qxRPrsR6lOIiifppygPGwlTrlMGgIiyXTdYWGxWbKSi3/CqFUsAf6L3z0ViFCcngXZx1hlVLhyZ88n56v40UyI74fVW52CSS6LXZloW+J9bbU8ZJEoGi1MI5zSNdPD1hB+EYAeaIDY9z+Q1kgTp4KGjztwze8Th09wbF8HZ6Gcn1fuQOXGXxeaJscR0rMjLroHsx2O32PpqQ==
+        </SignatureValue>
+        <KeyInfo>
+            <X509Data>
+                <X509Certificate>
+                    MIIGpTCCBY2gAwIBAgIJAJ7SiMwCRCiBMA0GCSqGSIb3DQEBCwUAMIG0MQswCQYDVQQGEwJVUzEQMA4GA1UECBMHQXJpem9uYTETMBEGA1UEBxMKU2NvdHRzZGFsZTEaMBgGA1UEChMRR29EYWRkeS5jb20sIEluYy4xLTArBgNVBAsTJGh0dHA6Ly9jZXJ0cy5nb2RhZGR5LmNvbS9yZXBvc2l0b3J5LzEzMDEGA1UEAxMqR28gRGFkZHkgU2VjdXJlIENlcnRpZmljYXRlIEF1dGhvcml0eSAtIEcyMB4XDTI0MDcwMzE2MDMyNFoXDTI1MDgwNDE2MDMyNFowIDEeMBwGA1UEAwwVKi56b3JncGxhdGZvcm0ub25saW5lMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAptpmGW3pOURCzuF1+oyPvIW8bGEjPLyRzMfn29WhNFj8HrkH7+tQCaNE3aL1TTcskwAZEsXTxC9pGAbuqGrUUkc8TIDX/Ze6W9CnT/bUYfYl43hLXmmdElxdCtYZAcJtbIeR3bSR1hqdH0w3T/ObQ8bDl5TXGX6IPPf/vZ/tBsv/886brz+bXSwArSzNwVBqvVW+EpSyWnDm45/oXzbEN9Sl7kRzlUuzMDH+GWGNRGOItBfIfixRp4NiopBt7WYBw/lOaUvjYH+GsC46fZzTXu0gwzkw8/AqJRyS0OkYGmddEswUizBIPH6OLmjPskpqc6WrsoL2VipcaA+hr0FzZwIDAQABo4IDSzCCA0cwDAYDVR0TAQH/BAIwADAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwDgYDVR0PAQH/BAQDAgWgMDkGA1UdHwQyMDAwLqAsoCqGKGh0dHA6Ly9jcmwuZ29kYWRkeS5jb20vZ2RpZzJzMS0yNDM0MS5jcmwwXQYDVR0gBFYwVDBIBgtghkgBhv1tAQcXATA5MDcGCCsGAQUFBwIBFitodHRwOi8vY2VydGlmaWNhdGVzLmdvZGFkZHkuY29tL3JlcG9zaXRvcnkvMAgGBmeBDAECATB2BggrBgEFBQcBAQRqMGgwJAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3Nw
+                    LmdvZGFkZHkuY29tLzBABggrBgEFBQcwAoY0aHR0cDovL2NlcnRpZmljYXRlcy5nb2RhZGR5LmNvbS9yZXBvc2l0b3J5L2dkaWcyLmNydDAfBgNVHSMEGDAWgBRAwr0njsw0gzCiM9f7bLPwtCyAzjA1BgNVHREELjAsghUqLnpvcmdwbGF0Zm9ybS5vbmxpbmWCE3pvcmdwbGF0Zm9ybS5vbmxpbmUwHQYDVR0OBBYEFPZefQaBIVcTvBQ6Q7aL5Xs9z+OrMIIBfQYKKwYBBAHWeQIEAgSCAW0EggFpAWcAdgAS8U40vVNyTIQGGcOPP3oT+Oe1YoeInG0wBYTr5YYmOgAAAZB5Vh7tAAAEAwBHMEUCIQDdEs3O/Bh0XyB/bNCDYHnGsvy2uvIqLGLUyXcIzi97pwIgWUdyVuJi9r6l0iVFJpNiHIl/7OdG6v7F1ppRsRQ4gFwAdQB9WR4S4XgqexxhZ3xe/fjQh1wUoE6VnrkDL9kOjC55uAAAAZB5Vh/1AAAEAwBGMEQCIBZ0Y+G1jNdhFJXKRwhWkkIhRmCKPuBN/U596oL7Yta7AiAZ9hEqvZw8qqWckQR5M0He2rgFWE9w3frfzuYNd9OsGAB2AMz7D2qFcQll/pWbU87psnwi6YVcDZeNtql+VMD+TA2wAAABkHlWIKkAAAQDAEcwRQIhAKI5arrZ02GLep/gElJGSxNJp4HepzjXJC5dF9N75et3AiAqQHOYLY1u8xWl45guYPxpBiSKf+bKxhyZYPCN1wRQEzANBgkqhkiG9w0BAQsFAAOCAQEAGFpFlsmdTCsiSEgwSHW1NPgeZV0EkiS7wz52iuLdphheoIY9xw44iPNrUknBcP9gfoMpUmMGKelwDdauUitEsHQYo2cFATJvIGyMkK5hxcldZdmjgehi8tXl7/3gH3R2f6CPOEUbG/+Tlc50cdN0o4jd/qZlfMjDo9odblOVHe4oOlnJYugBKLh5Cy6PjY6n28xqStJFd2Aximzius46N1XC1XjtMCpwUov+wrf3/CkDTc7dWSU3yBBl3pbBMYkf2wjOBGWWXcRuK+Tldk1nA0SI0zRRlzjgi4mD74fXdUwtr8Chsh9uU6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
+                </X509Certificate>
+            </X509Data>
+        </KeyInfo>
+    </Signature>
+    <Subject>
+        <NameID>DeveloperPortal@2.16.840.1.113883.2.4.3.124.8.50.26.03</NameID>
+        <SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"/>
+    </Subject>
+    <Conditions NotBefore="2025-01-24T12:25:37.756Z" NotOnOrAfter="2025-01-24T12:37:37.756Z">
+        <AudienceRestriction>
+            <Audience>https://zorgplatform.test.integration.zorgbijjou.com/</Audience>
+        </AudienceRestriction>
+    </Conditions>
+    <AttributeStatement>
+        <Attribute Name="urn:ihe:iti:xca:2010:homeCommunityId">
+            <AttributeValue>urn:oid:2.16.840.1.113883.2.4.3.124.8.22</AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xspa:1.0:subject:organization-id"
+                   a:OriginalIssuer="O=Internet Widgits Pty Ltd, S=Some-State, C=AU"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>urn:oid:2.16.840.1.113883.2.4.3.124.8.50.26.03</AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xspa:1.0:subject:purposeofuse"
+                   a:OriginalIssuer="O=Internet Widgits Pty Ltd, S=Some-State, C=AU"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>
+                <PurposeOfUse code="TREATMENT" codeSystem="2.16.840.1.113883.3.18.7.1" codeSystemName="nhin-purpose"
+                              displayName="" xmlns="urn:hl7-org:v3"/>
+            </AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xacml:2.0:subject:role"
+                   a:OriginalIssuer="O=Internet Widgits Pty Ltd, S=Some-State, C=AU"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>
+                <Role code="223366009" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT" displayName=""
+                      xmlns="urn:hl7-org:v3"/>
+            </AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xacml:1.0:resource:resource-id"
+                   a:OriginalIssuer="O=Internet Widgits Pty Ltd, S=Some-State, C=AU"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>
+                <InstanceIdentifier root="2.16.840.1.113883.2.4.6.3" extension="999999151" xmlns="urn:hl7-org:v3"/>
+            </AttributeValue>
+        </Attribute>
+        <Attribute Name="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+                   a:OriginalIssuer="O=Internet Widgits Pty Ltd, S=Some-State, C=AU"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>jorritspee</AttributeValue>
+        </Attribute>
+        <Attribute Name="http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"
+                   a:OriginalIssuer="O=Internet Widgits Pty Ltd, S=Some-State, C=AU"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>6ad65deb-2d93-474b-acbe-72582a158c27</AttributeValue>
+        </Attribute>
+        <Attribute Name="http://sts.zorgplatform.online/ws/claims/2017/07/identity/patient-connectionTypeId">
+            <AttributeValue>c0b98bf2-de02-4b97-94fb-ffffd57b058a</AttributeValue>
+        </Attribute>
+    </AttributeStatement>
+    <AuthnStatement AuthnInstant="2025-01-24T12:25:37.496Z">
+        <AuthnContext>
+            <AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:X509</AuthnContextClassRef>
+        </AuthnContext>
+    </AuthnStatement>
+</Assertion>

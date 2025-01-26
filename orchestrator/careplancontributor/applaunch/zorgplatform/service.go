@@ -302,7 +302,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	launchContext, err := s.parseSamlResponse(request.Context(), samlResponse)
+	launchContext, err := s.parseSAMLResponse(request.Context(), samlResponse)
 
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
@@ -319,7 +319,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
 
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
-	accessToken, err := s.secureTokenService.RequestAccessToken(request.Context(), launchContext, hcpTokenType)
+	accessToken, err := s.secureTokenService.RequestAccessToken(request.Context(), *launchContext, hcpTokenType)
 	if err != nil {
 		log.Err(err).Ctx(request.Context()).Msg("unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
@@ -328,7 +328,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	log.Info().Ctx(request.Context()).Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
-	sessionData, err := s.getSessionData(request.Context(), accessToken, launchContext)
+	sessionData, err := s.getSessionData(request.Context(), accessToken, *launchContext)
 	if err != nil {
 		log.Err(err).Ctx(request.Context()).Msg("unable to create session data")
 		http.Error(response, "Application launch failed.", http.StatusInternalServerError)

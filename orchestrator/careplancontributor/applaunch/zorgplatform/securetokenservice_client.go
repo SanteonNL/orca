@@ -20,6 +20,7 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 )
 
+// SecureTokenService is the clientinterface for requesting access tokens from the Zorgplatform STS
 type SecureTokenService interface {
 	RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error)
 }
