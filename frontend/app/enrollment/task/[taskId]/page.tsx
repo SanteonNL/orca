@@ -4,8 +4,8 @@ import useTaskProgressStore from '@/lib/store/task-progress-store'
 import {useParams} from 'next/navigation'
 import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
-import organizationName from '@/lib/fhirUtils'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
+import {patientName, organizationName} from "@/lib/fhirRender";
 
 export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
@@ -47,7 +47,7 @@ export default function EnrollmentTaskPage() {
                     <p className="text-muted-foreground">{executionText(task.status)}</p> : <></>
             }
             <div className="grid grid-cols-[1fr,2fr] gap-y-4">
-                <StatusElement label="Patiënt" value={patient?.name?.[0].text || "Unknown"}/>
+                <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"}/>
                 <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"}/>
                 <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"}/>
                 <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)}/>
