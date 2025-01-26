@@ -27,21 +27,21 @@ func (d DutchNutsProfile) Authenticator(resourceServerURL *url.URL, fn func(writ
 		userInfo := middleware.UserInfo(request.Context())
 		if userInfo == nil {
 			// would be weird, should've been handled by middleware.Secure()
-			log.Error().Msg("User info not found in context")
+			log.Ctx(request.Context()).Error().Msg("User info not found in context")
 			http.Error(response, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 
 		organization, err := claimsToOrganization(userInfo)
 		if err != nil {
-			log.Err(err).Msg("Invalid user info in context")
+			log.Ctx(request.Context()).Err(err).Msg("Invalid user info in context")
 			http.Error(response, "Unauthorized", http.StatusUnauthorized)
 			return
 		}
 		principal := auth.Principal{
 			Organization: *organization,
 		}
-		log.Info().Msgf("Authenticated user: %v", principal)
+		log.Ctx(request.Context()).Debug().Msgf("Authenticated user: %v", principal)
 		fn(response, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 	})
 }

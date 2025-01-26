@@ -19,7 +19,7 @@ import (
 
 // Writes an OperationOutcome based on the given error as HTTP response.
 func (s *Service) writeOperationOutcomeFromError(ctx context.Context, err error, desc string, httpResponse http.ResponseWriter) {
-	log.Info().Ctx(ctx).Msgf("%s failed: %v", desc, err)
+	log.Ctx(ctx).Info().Msgf("%s failed: %v", desc, err)
 	diagnostics := fmt.Sprintf("%s failed: %s", desc, err.Error())
 
 	issue := fhir.OperationOutcomeIssue{
@@ -217,7 +217,7 @@ func filterMatchingResourcesInBundle(ctx context.Context, bundle *fhir.Bundle, r
 		if err != nil {
 			// We don't want to fail the whole operation if one resource fails to unmarshal.
 			// Replace result bundle entry with an OperationOutcome to inform the client something went wrong.
-			log.Error().Ctx(ctx).Msgf("filterMatchingResourcesInBundle: Failed to unmarshal resource: %v", err)
+			log.Ctx(ctx).Error().Msgf("filterMatchingResourcesInBundle: Failed to unmarshal resource: %v", err)
 			newBundle.Entry[j] = coolfhir.CreateOperationOutcomeBundleEntryFromError(err, "Failed to unmarshal resource")
 			j++
 			continue
@@ -228,7 +228,7 @@ func filterMatchingResourcesInBundle(ctx context.Context, bundle *fhir.Bundle, r
 				parts := strings.Split(ref, "/")
 				if len(parts) != 2 {
 					// Replace result bundle entry with an OperationOutcome, since we couldn't resolve it
-					log.Error().Ctx(ctx).Msgf("filterMatchingResourcesInBundle: Invalid reference format: %s", ref)
+					log.Ctx(ctx).Error().Msgf("filterMatchingResourcesInBundle: Invalid reference format: %s", ref)
 					newBundle.Entry[j] = coolfhir.CreateOperationOutcomeBundleEntryFromError(fmt.Errorf("Invalid reference format: %s", ref), "Invalid reference format")
 					j++
 					continue

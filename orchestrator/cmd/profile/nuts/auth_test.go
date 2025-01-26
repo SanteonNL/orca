@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"io"
@@ -28,6 +29,7 @@ func TestDutchNutsProfile_Authenticator(t *testing.T) {
 		var capturedPrincipal auth.Principal
 		var capturedError error
 		handler := profile.Authenticator(resourceServerURL, func(writer http.ResponseWriter, request *http.Request) {
+			log.Ctx(request.Context()).Info().Msg("test")
 			capturedPrincipal, capturedError = auth.PrincipalFromContext(request.Context())
 			_, _ = io.ReadAll(request.Body)
 			writer.WriteHeader(http.StatusOK)
