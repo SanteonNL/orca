@@ -119,7 +119,7 @@ const cleanPatient = (patient: Patient) => {
     return cleanedPatient;
 }
 
-const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string) => {
+const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string, taskIdentifier?: string) => {
     // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
     const cleanedServiceRequest = {...serviceRequest, id: undefined};
 
@@ -146,6 +146,10 @@ const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, p
         if (item?.reference) {
             delete item.reference;
         }
+    }
+
+    if (taskIdentifier) {
+        cleanedServiceRequest.identifier = parseTaskIdentifier(taskIdentifier);
     }
 
     return cleanedServiceRequest;
@@ -185,16 +189,20 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
     } as Task
 
     if (taskIdentifier) {
-        const systemAndIdentifier = taskIdentifier.split("|")
-        if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`")
-        task.identifier = [{
-            system: systemAndIdentifier[0],
-            value: systemAndIdentifier[1],
-        }]
+        task.identifier = parseTaskIdentifier(taskIdentifier);
     }
 
     return task
 }
+
+const parseTaskIdentifier = (taskIdentifier: string) => {
+    const systemAndIdentifier = taskIdentifier.split("|");
+    if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`");
+    return [{
+        system: systemAndIdentifier[0],
+        value: systemAndIdentifier[1],
+    }];
+};
 
 export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, taskIdentifier?: string): Bundle & {
     type: "transaction"
@@ -202,11 +210,11 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     const cleanedPatient = cleanPatient(patient);
     const serviceRequestEntry = {
         fullUrl: "urn:uuid:serviceRequest",
-        resource: cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient"),
+        resource: cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient", taskIdentifier),
         request: {
             method: "POST",
             url: "ServiceRequest",
-            ifNoneExist: `_id=${serviceRequest.id}`,
+            ifNoneExist: "",
         }
     }
     const taskEntry = {
@@ -219,6 +227,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         }
     }
     if (taskIdentifier) {
+        serviceRequestEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
         taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
     }
     const bundle = {
