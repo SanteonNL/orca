@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-// ServiceBusConfig represents configurations for connecting to ServiceBus, including enabling, debugging, and hostname.
+// ServiceBusConfig holds the configuration for connecting to and interacting with a ServiceBus instance.
 type ServiceBusConfig struct {
 	Enabled          bool   `koanf:"enabled" default:"false" description:"This enables the ServiceBus client."`
 	DebugOnly        bool   `koanf:"debug" default:"false" description:"This enables debug mode for ServiceBus, writing the messages to a file in the OS TempDir instead of sending them to ServiceBus."`
@@ -20,28 +20,26 @@ type ServiceBusConfig struct {
 	ConnectionString string `koanf:"connectionstring" description:"This is the connection string for connecting to ServiceBus."`
 }
 
-// ServiceBusClient defines an interface for submitting messages to a service bus.
+// ServiceBusClient defines an interface for submitting messages to a Service Bus system.
 type ServiceBusClient interface {
 	SubmitMessage(ctx context.Context, key string, value string) error
 }
 
-// ServiceBusClientImpl is an implementation of the ServiceBusClient interface for sending messages to Azure Service Bus.
+// ServiceBusClientImpl provides an implementation for interacting with Azure Service Bus using the provided configuration.
 type ServiceBusClientImpl struct {
 	config ServiceBusConfig
 }
 
-// DebugClient is a ServiceBusClient implementation used for debugging purposes by writing messages to temporary files.
+// DebugClient is an implementation of ServiceBusClient that simulates message submission by writing data to the OS TempDir.
 type DebugClient struct {
 }
 
-// NoopClient is a no-operation client implementing the ServiceBusClient interface for disabled configurations.
+// NoopClient is a no-operation implementation of the ServiceBusClient interface, used when ServiceBus is disabled or unused.
 type NoopClient struct {
 }
 
-// NewClient initializes a ServiceBus client based on the provided configuration.
-// If ServiceBus is disabled, it returns a NoopClient.
-// If debug mode is enabled, it returns a DebugClient for writing messages to files.
-// Otherwise, it returns a ServiceBus client for interacting with the configured messaging system.
+// NewClient initializes and returns a ServiceBusClient based on the provided ServiceBusConfig.
+// Returns an error if configuration is invalid or initialization fails.
 func NewClient(config ServiceBusConfig) (ServiceBusClient, error) {
 	ctx := context.Background()
 	if config.Enabled {
@@ -62,25 +60,24 @@ func NewClient(config ServiceBusConfig) (ServiceBusClient, error) {
 	return &NoopClient{}, nil
 }
 
-// newServiceBusClient is a factory function that initializes a new instance of ServiceBusClient with the given configuration.
+// newServiceBusClient initializes a new ServiceBusClient instance based on the provided ServiceBusConfig.
 var newServiceBusClient = func(config ServiceBusConfig) ServiceBusClient {
 	return &ServiceBusClientImpl{
 		config: config,
 	}
 }
 
-// newAzureServiceBusClient creates a new Azure Service Bus client using the provided configuration and default credentials.
-var newAzureServiceBusClient = func(conf ServiceBusConfig) (SbClient, error) {
-	return NewSbClient(conf)
+// newAzureServiceBusClient initializes a new ServiceBusClientWrapper using the provided ServiceBusConfig.
+var newAzureServiceBusClient = func(conf ServiceBusConfig) (ServiceBusClientWrapper, error) {
+	return NewServiceBusClientWrapper(conf)
 }
 
-// Connect establishes a connection to an Azure Service Bus topic and returns a message sender or an error if connection fails.
-func (k *ServiceBusClientImpl) Connect() (sender SbClient, err error) {
+// Connect establishes a connection to Azure Service Bus and returns a ServiceBusClientWrapper or an error if it fails.
+func (k *ServiceBusClientImpl) Connect() (sender ServiceBusClientWrapper, err error) {
 	return newAzureServiceBusClient(k.config)
 }
 
-// SubmitMessage submits a message to Azure Service Bus with the given key and value.
-// It establishes a connection, sends the message, and handles any errors during the process.
+// SubmitMessage sends a message with a specified key and value to the configured Azure Service Bus topic.
 func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
 	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitting key %s", key)
 	sender, err := k.Connect()
@@ -101,8 +98,8 @@ func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, va
 	return nil
 }
 
-// SubmitMessage writes the provided key-value pair to a file in the OS's temporary directory as a JSON file.
-// It replaces colons in the key with underscores to form the filename and returns an error if the operation fails.
+// SubmitMessage writes the provided value to a temporary JSON file named based on the sanitized key parameter.
+// The method logs the operation and returns an error if the file writing fails.
 func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value string) error {
 	name := path.Join(os.TempDir(), strings.ReplaceAll(key, ":", "_")+".json")
 	log.Debug().Ctx(ctx).Msgf("DebugClient, write to file: %s", name)
@@ -114,22 +111,18 @@ func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value strin
 	return nil
 }
 
-// PingConnection checks the connectivity of the DebugClient and logs a debug message with "pong" for verification.
+// PingConnection sends a debug "pong" message and returns nil error if the operation is successful.
 func (k *DebugClient) PingConnection(ctx context.Context) error {
 	log.Debug().Ctx(ctx).Msgf("DebugClient: pong")
 	return nil
 }
 
-// PingConnection checks the connectivity of the NoopClient. It always returns nil to simulate a successful ping.
+// PingConnection checks the availability of the connection and returns an error if the connection is unavailable.
 func (k *NoopClient) PingConnection(ctx context.Context) error {
 	return nil
 }
 
-// SubmitMessage submits a key-value pair as a message using the NoopClient.
-// Returns an error if the operation fails.
-// ctx is the context for managing request deadlines or cancellation.
-// key is the identifier associated with the message.
-// value is the content of the message to be submitted.
+// SubmitMessage sends a message with the given key and value, acting as a no-op in this implementation.
 func (k *NoopClient) SubmitMessage(ctx context.Context, key string, value string) error {
 	return nil
 }

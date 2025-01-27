@@ -151,7 +151,7 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 			false,
 			func(mock *MockSbClient) func() {
 				var old = newServiceBusClient
-				newAzureServiceBusClient = func(config ServiceBusConfig) (SbClient, error) {
+				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return mock, nil
 				}
 				mock.EXPECT().SendMessage(ctx, gomock.Any()).Return(nil)
@@ -167,7 +167,7 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 			true,
 			func(mock *MockSbClient) func() {
 				var old = newServiceBusClient
-				newAzureServiceBusClient = func(config ServiceBusConfig) (SbClient, error) {
+				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return nil, errors.New("connection failed")
 				}
 				return func() {
@@ -178,7 +178,7 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 		{
 			"SendMessage error", nil, errors.New("send failed"), true, func(mock *MockSbClient) func() {
 				var old = newServiceBusClient
-				newAzureServiceBusClient = func(config ServiceBusConfig) (SbClient, error) {
+				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return mock, nil
 				}
 				mock.EXPECT().SendMessage(ctx, gomock.Any()).Return(errors.New("send failed"))
