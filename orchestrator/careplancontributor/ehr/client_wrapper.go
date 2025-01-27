@@ -29,7 +29,7 @@ func NewServiceBusClientWrapper(conf ServiceBusConfig) (ServiceBusClientWrapper,
 		if err != nil {
 			return nil, err
 		}
-		return &ServiceBusClientWrapperImpl{sbClient: sender}, nil
+		return &ServiceBusClientWrapperImpl{sender: sender}, nil
 
 	}
 	if conf.Hostname != "" {
@@ -41,7 +41,7 @@ func NewServiceBusClientWrapper(conf ServiceBusConfig) (ServiceBusClientWrapper,
 		if err != nil {
 			return nil, err
 		}
-		return &ServiceBusClientWrapperImpl{sbClient: sender}, nil
+		return &ServiceBusClientWrapperImpl{sender: sender, client: client}, nil
 	}
 	return nil, errors.New(
 		"ServiceBus configuration is missing hostname or connection string")
@@ -51,15 +51,20 @@ func NewServiceBusClientWrapper(conf ServiceBusConfig) (ServiceBusClientWrapper,
 // It wraps an azservicebus.Sender for sending messages to a specific Service Bus topic.
 // This struct provides methods to send messages and close the underlying Service Bus connection.
 type ServiceBusClientWrapperImpl struct {
-	sbClient *azservicebus.Sender
+	sender *azservicebus.Sender
+	client *azservicebus.Client
 }
 
 // Close releases the underlying resources associated with the ServiceBusClientWrapperImpl instance.
 func (c *ServiceBusClientWrapperImpl) Close(ctx context.Context) error {
-	return c.sbClient.Close(ctx)
+	err := c.sender.Close(ctx)
+	if err != nil {
+		err = c.client.Close(ctx)
+	}
+	return err
 }
 
 // SendMessage sends a message to the associated Azure Service Bus sender client. It returns an error if the operation fails.
 func (c *ServiceBusClientWrapperImpl) SendMessage(ctx context.Context, message *azservicebus.Message) error {
-	return c.sbClient.SendMessage(ctx, message, nil)
+	return c.sender.SendMessage(ctx, message, nil)
 }

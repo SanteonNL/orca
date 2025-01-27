@@ -85,7 +85,12 @@ func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, va
 		log.Error().Ctx(ctx).Err(err).Msgf("Connect failed with %s", err.Error())
 		return err
 	}
-	defer sender.Close(ctx)
+	defer func(sender ServiceBusClientWrapper, ctx context.Context) {
+		err := sender.Close(ctx)
+		if err != nil {
+			log.Error().Ctx(ctx).Err(err).Msgf("Close failed with %s", err.Error())
+		}
+	}(sender, ctx)
 	message := &azservicebus.Message{
 		Body:          []byte(value),
 		CorrelationID: &key,
