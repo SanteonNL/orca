@@ -13,6 +13,7 @@ func main() {
 		log.Fatal().Err(err).Msg("Failed to load configuration")
 	}
 	zerolog.SetGlobalLevel(config.LogLevel)
+	zerolog.DefaultContextLogger = &log.Logger
 	log.Info().Msgf("Public interface listens on %s", config.Public.Address)
 	log.Info().Msgf("Using Nuts API on %s", config.Nuts.API.URL)
 	if err := cmd.Start(context.Background(), *config); err != nil {

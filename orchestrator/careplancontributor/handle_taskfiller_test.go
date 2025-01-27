@@ -435,7 +435,7 @@ func TestService_getSubTask(t *testing.T) {
 	require.NotNil(t, questionnaire)
 
 	questionnaireRef := "urn:uuid:" + *questionnaire.Id
-	log.Info().Ctx(context.Background()).Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
+	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
 	subtask := service.getSubTask(&primaryTask, questionnaireRef)
 
 	expectedSubTaskInput := []fhir.TaskInput{

@@ -131,7 +131,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
 		identifiers, err := d.identities(ctx)
 		if err != nil {
-			log.Warn().Ctx(ctx).Err(err).Msg("Failed to refresh local identities using Nuts node")
+			log.Ctx(ctx).Warn().Err(err).Msg("Failed to refresh local identities using Nuts node")
 			if d.cachedIdentities == nil {
 				// If we don't have a cached value, we can't return anything, so return the error.
 				return nil, fmt.Errorf("failed to load local identities: %w", err)
@@ -160,7 +160,7 @@ func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Organization, 
 	for _, cred := range *response.JSON200 {
 		identities, err := d.identifiersFromCredential(cred)
 		if err != nil {
-			log.Warn().Ctx(ctx).Err(err).Msgf("Failed to extract identities from credential: %s", cred.ID)
+			log.Ctx(ctx).Warn().Err(err).Msgf("Failed to extract identities from credential: %s", cred.ID)
 			continue
 		}
 		results = append(results, identities...)
@@ -194,14 +194,14 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 			ura, _ = flattenCredential["credentialSubject.organization.ura"].(string)
 			name, _ = flattenCredential["credentialSubject.organization.name"].(string)
 		}
-		if cred.IsType(ssi.MustParseURI("UziServerCertificateCredential")) {
-			otherName, ok := flattenCredential["credentialSubject.otherName"].(string)
+		if cred.IsType(ssi.MustParseURI("X509Credential")) {
+			otherName, ok := flattenCredential["credentialSubject.san.otherName"].(string)
 			if ok {
 				if match := uziOtherNameUraRegex.FindStringSubmatch(otherName); len(match) > 1 {
 					ura = match[1]
 				}
 			}
-			name, _ = flattenCredential["credentialSubject.O"].(string)
+			name, _ = flattenCredential["credentialSubject.subject.O"].(string)
 		}
 		if ura != "" {
 			entry := fhir.Organization{

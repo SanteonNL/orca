@@ -68,7 +68,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager, co
 	} else {
 		appLaunchURL = "http://localhost" + appLaunchURL + appLaunchUrl
 	}
-	log.Info().Ctx(ctx).Msgf("Zorgplatform app launch is: %s", appLaunchURL)
+	log.Ctx(ctx).Info().Msgf("Zorgplatform app launch is: %s", appLaunchURL)
 
 	// Load certs: signing, TLS client authentication and decryption certificates
 	var signCert [][]byte
@@ -359,7 +359,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	if err != nil {
 		return nil, fmt.Errorf("invalid CarePlan reference (url=%s): %w", carePlanReference, err)
 	}
-	log.Debug().Ctx(ctx).Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
+	log.Ctx(ctx).Debug().Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
 
 	// TODO: group requests, something like:
 	// ?_include=CarePlan:activity-reference&_include:iterate=Task:focus
@@ -371,7 +371,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var carePlan fhir.CarePlan
 	err = s.cpsFhirClient().ReadWithContext(ctx, localCarePlanRef, &carePlan)
 	if err != nil {
-		log.Error().Ctx(ctx).Msgf("Unable to fetch CarePlan resource: %v", err)
+		log.Ctx(ctx).Error().Msgf("Unable to fetch CarePlan resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch CarePlan resource: %w", err)
 	}
 
@@ -379,14 +379,14 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var task fhir.Task
 	err = s.cpsFhirClient().ReadWithContext(ctx, *carePlan.Activity[0].Reference.Reference, &task)
 	if err != nil {
-		log.Error().Ctx(ctx).Msgf("Unable to fetch Task resource: %v", err)
+		log.Ctx(ctx).Error().Msgf("Unable to fetch Task resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
 	}
 
 	var serviceRequest fhir.ServiceRequest
 	err = s.cpsFhirClient().ReadWithContext(ctx, *task.Focus.Reference, &serviceRequest)
 	if err != nil {
-		log.Error().Ctx(ctx).Msgf("Unable to fetch ServiceRequest resource: %v", err)
+		log.Ctx(ctx).Error().Msgf("Unable to fetch ServiceRequest resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err)
 	}
 
@@ -399,7 +399,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var patient fhir.Patient
 	err = s.cpsFhirClient().ReadWithContext(ctx, *carePlan.Subject.Reference, &patient)
 	if err != nil {
-		log.Error().Ctx(ctx).Msgf("Unable to fetch Patient resource: %v", err)
+		log.Ctx(ctx).Error().Msgf("Unable to fetch Patient resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch Patient resource: %w", err)
 	}
 
@@ -448,7 +448,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	})
 
 	if err != nil {
-		log.Error().Ctx(ctx).Msgf("Failed to check for existing CPS Task resource: %v", err)
+		log.Ctx(ctx).Error().Msgf("Failed to check for existing CPS Task resource: %v", err)
 		return nil, fmt.Errorf("failed to check for existing CPS Task resource: %w", err)
 	}
 
@@ -540,7 +540,7 @@ func (s *Service) getSessionData(ctx context.Context, accessToken string, launch
 	}
 	// Enrich performer URA with registered name
 	if result, err := s.profile.CsdDirectory().LookupEntity(ctx, *taskPerformer.Identifier); err != nil {
-		log.Warn().Ctx(ctx).Err(err).Msgf("Couldn't resolve performer name (ura: %s)", s.config.TaskPerformerUra)
+		log.Ctx(ctx).Warn().Err(err).Msgf("Couldn't resolve performer name (ura: %s)", s.config.TaskPerformerUra)
 	} else {
 		taskPerformer = *result
 	}
@@ -734,6 +734,6 @@ U6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse certificate: %w", err)
 	}
-	log.Info().Ctx(ctx).Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
+	log.Ctx(ctx).Info().Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
 	return cert, nil
 }

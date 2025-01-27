@@ -48,7 +48,7 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 
 	ref := "Task/" + *task.Id
-	log.Debug().Ctx(ctx).Msgf("NotifyTaskAccepted Task (ref=%s) to ServiceBus", ref)
+	log.Ctx(ctx).Debug().Msgf("NotifyTaskAccepted Task (ref=%s) to ServiceBus", ref)
 	id := uuid.NewString()
 	bundles := BundleSet{
 		Id:   id,
@@ -73,7 +73,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 	}
 
 	patientForRefs := findForReferences(ctx, tasks)
-	log.Debug().Ctx(ctx).Msgf("Found %d patientForRefs", len(patientForRefs))
+	log.Ctx(ctx).Debug().Msgf("Found %d patientForRefs", len(patientForRefs))
 	result, err := fetchRefs(ctx, cpsClient, patientForRefs)
 	if err != nil {
 		return err
@@ -81,7 +81,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 	bundles.addBundle(*result...)
 
 	focusRefs := findFocusReferences(ctx, tasks)
-	log.Debug().Ctx(ctx).Msgf("Found %d focusRefs", len(focusRefs))
+	log.Ctx(ctx).Debug().Msgf("Found %d focusRefs", len(focusRefs))
 	result, err = fetchRefs(ctx, cpsClient, focusRefs)
 	if err != nil {
 		return err
@@ -89,7 +89,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 	bundles.addBundle(*result...)
 
 	basedOnRefs := findBasedOnReferences(ctx, tasks)
-	log.Debug().Ctx(ctx).Msgf("Found %d basedOnRefs", len(basedOnRefs))
+	log.Ctx(ctx).Debug().Msgf("Found %d basedOnRefs", len(basedOnRefs))
 	result, err = fetchRefs(ctx, cpsClient, basedOnRefs)
 	if err != nil {
 		return err
@@ -97,7 +97,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 	bundles.addBundle(*result...)
 
 	questionnaireRefs := findQuestionnaireInputs(tasks)
-	log.Debug().Ctx(ctx).Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
+	log.Ctx(ctx).Debug().Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
 	result, err = fetchRefs(ctx, cpsClient, questionnaireRefs)
 	if err != nil {
 		return err
@@ -121,7 +121,7 @@ func findForReferences(ctx context.Context, tasks []fhir.Task) []string {
 		if task.For != nil {
 			patientReference := task.For.Reference
 			if patientReference != nil {
-				log.Debug().Ctx(ctx).Msgf("Found patientReference %s", *patientReference)
+				log.Ctx(ctx).Debug().Msgf("Found patientReference %s", *patientReference)
 				patientForRefs = append(patientForRefs, *patientReference)
 			}
 		}
@@ -136,7 +136,7 @@ func findFocusReferences(ctx context.Context, tasks []fhir.Task) []string {
 		if task.Focus != nil {
 			focusReference := task.Focus.Reference
 			if focusReference != nil {
-				log.Debug().Ctx(ctx).Msgf("Found focusReference %s", *focusReference)
+				log.Ctx(ctx).Debug().Msgf("Found focusReference %s", *focusReference)
 				focusRefs = append(focusRefs, *focusReference)
 			}
 		}
@@ -153,7 +153,7 @@ func findBasedOnReferences(ctx context.Context, tasks []fhir.Task) []string {
 			for _, reference := range basedOnReferences {
 				basedOnReference := reference.Reference
 				if basedOnReference != nil {
-					log.Debug().Ctx(ctx).Msgf("Found basedOnReference %s", *basedOnReference)
+					log.Ctx(ctx).Debug().Msgf("Found basedOnReference %s", *basedOnReference)
 					basedOnRefs = append(basedOnRefs, *basedOnReference)
 				}
 			}
@@ -294,13 +294,13 @@ func sendBundle(ctx context.Context, set BundleSet, kafkaClient ServiceBusClient
 	if err != nil {
 		return err
 	}
-	log.Debug().Ctx(ctx).Msgf("Sending set for task (ref=%s) to ServiceBus", set.task)
+	log.Ctx(ctx).Debug().Msgf("Sending set for task (ref=%s) to ServiceBus", set.task)
 	err = kafkaClient.SubmitMessage(ctx, set.Id, string(jsonData))
 	if err != nil {
-		log.Warn().Ctx(ctx).Msgf("Sending set for task (ref=%s) to ServiceBus failed, error: %s", set.task, err.Error())
+		log.Ctx(ctx).Warn().Msgf("Sending set for task (ref=%s) to ServiceBus failed, error: %s", set.task, err.Error())
 		return errors.Wrap(err, "failed to send task to ServiceBus")
 	}
 
-	log.Debug().Ctx(ctx).Msgf("Successfully sent task (ref=%s) to ServiceBus", set.task)
+	log.Ctx(ctx).Debug().Msgf("Successfully sent task (ref=%s) to ServiceBus", set.task)
 	return nil
 }
