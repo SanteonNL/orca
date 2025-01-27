@@ -48,17 +48,10 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       # Note: clinic re-uses the FHIR store of the Hospital, so we don't need to start a second one making things even slower
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL=${HOSPITAL_URL}/fhir
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENABLED=true
-      # Note: To disable demo mode, comment the next two lines and uncomment the other endpoint variable
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_DEMO=true
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENDPOINT=${NUTS_URL}/viewer/api/delivery
-#      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENDPOINT=eventhubs-emulator:9092
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_TOPIC=orca-patient-enrollment-events
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_MECHANISM=PLAIN
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_USERNAME=$$ConnectionString
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_PASSWORD=Endpoint=sb://eventhubs-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_SECURITY_PROTOCOL=SASL_PLAINTEXT
-      - ORCA_CAREPLANCONTRIBUTOR_KAFKA_PING=true
+      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_TOPIC=orca-patient-enrollment-events
+      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_HOSTNAME=
+      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_CONNECTIONSTRING=Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json
     volumes:
       # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
@@ -76,36 +69,24 @@ services:
       FHIR_AGGREGATE_URL: http://orchestrator:8080/cpc/aggregate/fhir
       FHIR_AUTHORIZATION_TOKEN: valid
       NEXT_ALLOWED_ORIGINS: localhost:7080
-  eventhubs-emulator:
-    container_name: "eventhubs-emulator"
-    image: "mcr.microsoft.com/azure-messaging/eventhubs-emulator:latest"
+  servicebus-emulator:
+    container_name: "servicebus-emulator"
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
     volumes:
-      - "./config/eventhubs-emulator.json:/Eventhubs_Emulator/ConfigFiles/Config.json"
+      - "./config/servicebus-emulator.json:/ServiceBus_Emulator/ConfigFiles/Config.json"
     ports:
       - "5672:5672"
-      - "9092:9092"
     environment:
-      BLOB_SERVER: azurite
-      METADATA_SERVER: azurite
+      SQL_SERVER: mssql
+      MSSQL_SA_PASSWORD: "Z4perS3!cr3!t"
       ACCEPT_EULA: "Y"
     depends_on:
-      - azurite
-  azurite:
-    container_name: "azurite"
-    image: "mcr.microsoft.com/azure-storage/azurite:latest"
-    volumes:
-      - azurite:/data
-    ports:
-      - "10000:10000"
-      - "10001:10001"
-      - "10002:10002"
-  init-azurite:
-    container_name: "init-azurite"
-    image: mcr.microsoft.com/azure-cli:latest
-    command: >
-      bash -c "az storage container create --name leases --connection-string \"DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://azurite:10000/devstoreaccount1;\" && sleep 999999999"
-    depends_on:
-      azurite:
-        condition: service_started
-volumes:
-  azurite:
+      - mssql
+  mssql:
+        container_name: "mssql"
+        image: "mcr.microsoft.com/mssql/server:2022-latest"
+        platform: linux/amd64
+        environment:
+          ACCEPT_EULA:  "Y"
+          MSSQL_SA_PASSWORD: "Z4perS3!cr3!t"
+          DOCKER_DEFAULT_PLATFORM: linux/amd64

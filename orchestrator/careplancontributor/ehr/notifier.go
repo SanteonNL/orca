@@ -1,4 +1,4 @@
-//go:generate mockgen -destination=./nofifier_mock.go -package=ehr -source=notifier.go
+//go:generate mockgen -destination=./notifier_mock.go -package=ehr -source=notifier.go
 package ehr
 
 import (
@@ -17,42 +17,38 @@ import (
 	"strings"
 )
 
+// Notifier is an interface for sending notifications regarding task acceptance within a FHIR-based system.
 type Notifier interface {
 	NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error
 }
 
+// kafkaNotifier is a type that uses a ServiceBusClient to send messages to a Kafka service.
 type kafkaNotifier struct {
-	kafkaClient KafkaClient
+	kafkaClient ServiceBusClient
 }
 
-func NewNotifier(kafkaClient KafkaClient) Notifier {
+// NewNotifier creates and returns a Notifier implementation using the provided ServiceBusClient for message handling.
+func NewNotifier(kafkaClient ServiceBusClient) Notifier {
 	return &kafkaNotifier{kafkaClient}
 }
 
-// BundleSet represents a set of FHIR bundles associated with a task.
+// BundleSet represents a collection of FHIR bundles associated with a specific task, identified by an ID.
 type BundleSet struct {
 	Id      string
 	task    string
 	Bundles []fhir.Bundle `json:"bundles"`
 }
 
-// addBundle adds one or more FHIR bundles to the BundleSet.
+// addBundle adds one or more FHIR bundles to the BundleSet's Bundles slice.
 func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 	b.Bundles = append(b.Bundles, bundle...)
 }
 
-// NotifyTaskAccepted handles the notification process when a task is accepted.
-// It fetches related FHIR resources and sends the data to Kafka.
-//
-// Parameters:
-//   - task: The FHIR task that was accepted.
-//
-// Returns:
-//   - error: An error if the notification process fails.
+// NotifyTaskAccepted sends notification data comprehensively related to a specific FHIR Task to a Kafka service bus.
 func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 
 	ref := "Task/" + *task.Id
-	log.Ctx(ctx).Debug().Msgf("NotifyTaskAccepted Task (ref=%s) to Kafka", ref)
+	log.Ctx(ctx).Debug().Msgf("NotifyTaskAccepted Task (ref=%s) to ServiceBus", ref)
 	id := uuid.NewString()
 	bundles := BundleSet{
 		Id:   id,
@@ -118,13 +114,7 @@ func (n *kafkaNotifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhircl
 	return sendBundle(ctx, bundles, n.kafkaClient)
 }
 
-// findForReferences extracts patient references from a list of tasks.
-//
-// Parameters:
-//   - tasks: A list of FHIR tasks.
-//
-// Returns:
-//   - []string: A list of patient references.
+// findForReferences retrieves a list of patient references from the "For" field in the provided list of fhir.Task objects.
 func findForReferences(ctx context.Context, tasks []fhir.Task) []string {
 	var patientForRefs []string
 	for _, task := range tasks {
@@ -139,13 +129,7 @@ func findForReferences(ctx context.Context, tasks []fhir.Task) []string {
 	return patientForRefs
 }
 
-// findFocusReferences extracts focus references from a list of tasks.
-//
-// Parameters:
-//   - tasks: A list of FHIR tasks.
-//
-// Returns:
-//   - []string: A list of focus references.
+// findFocusReferences extracts and returns a list of focus references from the provided FHIR tasks, if available.
 func findFocusReferences(ctx context.Context, tasks []fhir.Task) []string {
 	var focusRefs []string
 	for _, task := range tasks {
@@ -160,13 +144,7 @@ func findFocusReferences(ctx context.Context, tasks []fhir.Task) []string {
 	return focusRefs
 }
 
-// findBasedOnReferences extracts based-on references from a list of tasks.
-//
-// Parameters:
-//   - tasks: A list of FHIR tasks.
-//
-// Returns:
-//   - []string: A list of based-on references.
+// findBasedOnReferences retrieves a list of references from the "BasedOn" field of the given tasks, filtering out nil references.
 func findBasedOnReferences(ctx context.Context, tasks []fhir.Task) []string {
 	var basedOnRefs []string
 	for _, task := range tasks {
@@ -184,15 +162,10 @@ func findBasedOnReferences(ctx context.Context, tasks []fhir.Task) []string {
 	return basedOnRefs
 }
 
-// fetchRefs fetches FHIR bundles for a list of references.
-//
-// Parameters:
-//   - cpsClient: The FHIR client used to fetch resources.
-//   - refs: A list of references to fetch.
-//
-// Returns:
-//   - *[]fhir.Bundle: A list of fetched FHIR bundles.
-//   - error: An error if the fetch process fails.
+// fetchRefs retrieves FHIR Bundles for the provided resource references using the FHIR client and returns the resulting bundles.
+// It organizes references by resource type, executes FHIR searches for each type, and handles errors during the search process.
+// The function supports including CareTeam resources for CarePlan references when constructing the query parameters.
+// Returns a pointer to a slice of FHIR Bundles and an error, if any occurred during FHIR client interactions.
 func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
 	var bundles []fhir.Bundle
 	var refTypeMap = make(map[string][]string)
@@ -223,12 +196,7 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 	return &bundles, nil
 }
 
-// putMapListValue adds a value to a map of lists.
-//
-// Parameters:
-//   - refTypeMap: The map to update.
-//   - refType: The key for the map.
-//   - refId: The value to add to the list.
+// putMapListValue adds a reference ID to a map of string slices if not already present, grouped by reference type.
 func putMapListValue(refTypeMap map[string][]string, refType string, refId string) {
 	values := refTypeMap[refType]
 	if values == nil {
@@ -239,13 +207,7 @@ func putMapListValue(refTypeMap map[string][]string, refType string, refId strin
 	refTypeMap[refType] = values
 }
 
-// findQuestionnaireInputs extracts questionnaire input references from a list of tasks.
-//
-// Parameters:
-//   - tasks: A list of FHIR tasks.
-//
-// Returns:
-//   - []string: A list of questionnaire input references.
+// findQuestionnaireInputs extracts and returns references to "Questionnaire" resources from the input tasks.
 func findQuestionnaireInputs(tasks []fhir.Task) []string {
 	var questionnaireRefs []string
 	for _, task := range tasks {
@@ -254,13 +216,7 @@ func findQuestionnaireInputs(tasks []fhir.Task) []string {
 	return questionnaireRefs
 }
 
-// findQuestionnaireOutputs extracts questionnaire output references from a list of tasks.
-//
-// Parameters:
-//   - tasks: A list of FHIR tasks.
-//
-// Returns:
-//   - []string: A list of questionnaire output references.
+// findQuestionnaireOutputs extracts references to "QuestionnaireResponse" outputs from a list of FHIR tasks.
 func findQuestionnaireOutputs(tasks []fhir.Task) []string {
 	var questionnaireResponseRefs []string
 	for _, task := range tasks {
@@ -269,13 +225,7 @@ func findQuestionnaireOutputs(tasks []fhir.Task) []string {
 	return questionnaireResponseRefs
 }
 
-// fetchTaskOutputs extracts questionnaire response references from a task's outputs.
-//
-// Parameters:
-//   - task: A FHIR task.
-//
-// Returns:
-//   - []string: A list of questionnaire response references.
+// fetchTaskOutputs retrieves unique references to `QuestionnaireResponse` outputs from a given FHIR Task.
 func fetchTaskOutputs(task fhir.Task) []string {
 	var questionnaireResponseRefs []string
 	if task.Output != nil {
@@ -295,14 +245,7 @@ func fetchTaskOutputs(task fhir.Task) []string {
 	return questionnaireResponseRefs
 }
 
-// isOfType checks if a given FHIR reference is of a specified type.
-//
-// Parameters:
-//   - valueReference: The FHIR reference to check.
-//   - typeName: The type name to check against.
-//
-// Returns:
-//   - bool: True if the reference is of the specified type, false otherwise.
+// isOfType checks if a given FHIR reference matches the specified type name based on its Type or Reference field.
 func isOfType(valueReference *fhir.Reference, typeName string) bool {
 	matchesType := false
 	if valueReference.Type != nil {
@@ -322,13 +265,8 @@ func isOfType(valueReference *fhir.Reference, typeName string) bool {
 	return matchesType
 }
 
-// fetchTaskInputs extracts questionnaire references from a task's inputs.
-//
-// Parameters:
-//   - task: A FHIR task.
-//
-// Returns:
-//   - []string: A list of questionnaire references.
+// fetchTaskInputs extracts and returns a list of questionnaire references from the inputs of the given FHIR Task.
+// It ensures references are unique and belong to the type "Questionnaire".
 func fetchTaskInputs(task fhir.Task) []string {
 	var questionnaireRefs []string
 	if task.Input != nil {
@@ -348,26 +286,21 @@ func fetchTaskInputs(task fhir.Task) []string {
 	return questionnaireRefs
 }
 
-// sendBundle sends a BundleSet to Kafka.
-//
-// Parameters:
-//   - set: The BundleSet to send.
-//   - kafkaClient: The Kafka client used to send the message.
-//
-// Returns:
-//   - error: An error if the send process fails.
-func sendBundle(ctx context.Context, set BundleSet, kafkaClient KafkaClient) error {
+// sendBundle sends a serialized BundleSet to a Service Bus using the provided ServiceBusClient.
+// It logs the process and errors during submission while wrapping and returning them.
+// Returns an error if serialization or message submission fails.
+func sendBundle(ctx context.Context, set BundleSet, kafkaClient ServiceBusClient) error {
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
 		return err
 	}
-	log.Ctx(ctx).Debug().Msgf("Sending set for task (ref=%s) to Kafka", set.task)
+	log.Ctx(ctx).Debug().Msgf("Sending set for task (ref=%s) to ServiceBus", set.task)
 	err = kafkaClient.SubmitMessage(ctx, set.Id, string(jsonData))
 	if err != nil {
-		log.Ctx(ctx).Warn().Msgf("Sending set for task (ref=%s) to Kafka failed, error: %s", set.task, err.Error())
-		return errors.Wrap(err, "failed to send task to Kafka")
+		log.Ctx(ctx).Warn().Msgf("Sending set for task (ref=%s) to ServiceBus failed, error: %s", set.task, err.Error())
+		return errors.Wrap(err, "failed to send task to ServiceBus")
 	}
 
-	log.Ctx(ctx).Debug().Msgf("Successfully sent task (ref=%s) to Kafka", set.task)
+	log.Ctx(ctx).Debug().Msgf("Successfully sent task (ref=%s) to ServiceBus", set.task)
 	return nil
 }
