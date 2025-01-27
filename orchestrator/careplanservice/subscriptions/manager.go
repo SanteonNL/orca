@@ -43,7 +43,7 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			Reference: to.Ptr("Task/" + *task.Id),
 			Type:      to.Ptr("Task"),
 		}
-		log.Info().Ctx(ctx).Msgf("Notifying subscribers for Task %s", *task.Id)
+		log.Ctx(ctx).Info().Msgf("Notifying subscribers for Task %s", *task.Id)
 		isOwnerValid := false
 		if task.Owner != nil {
 			isOwnerValid = coolfhir.IsLogicalIdentifier(task.Owner.Identifier)
@@ -53,9 +53,9 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 		} else {
 			ownerJSON, err := json.Marshal(task.Owner)
 			if err != nil {
-				log.Error().Ctx(ctx).Msgf("Failed to marshal owner to JSON: %s", err)
+				log.Ctx(ctx).Error().Msgf("Failed to marshal owner to JSON: %s", err)
 			} else {
-				log.Warn().Ctx(ctx).Msgf("Owner LogicalIdentifier is invalid: %s", string(ownerJSON))
+				log.Ctx(ctx).Warn().Msgf("Owner LogicalIdentifier is invalid: %s", string(ownerJSON))
 			}
 		}
 		isRequesterValid := false
@@ -67,9 +67,9 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 		} else {
 			requesterJSON, err := json.Marshal(task.Requester)
 			if err != nil {
-				log.Error().Ctx(ctx).Msgf("Failed to marshal requester to JSON: %s", err)
+				log.Ctx(ctx).Error().Msgf("Failed to marshal requester to JSON: %s", err)
 			} else {
-				log.Warn().Ctx(ctx).Msgf("Requester LogicalIdentifier is invalid: %s", string(requesterJSON))
+				log.Ctx(ctx).Warn().Msgf("Requester LogicalIdentifier is invalid: %s", string(requesterJSON))
 			}
 		}
 	case "CareTeam":
@@ -84,9 +84,9 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			} else {
 				memberJSON, err := json.Marshal(participant.Member)
 				if err != nil {
-					log.Error().Ctx(ctx).Msgf("Failed to marshal member to JSON: %s", err)
+					log.Ctx(ctx).Error().Msgf("Failed to marshal member to JSON: %s", err)
 				} else {
-					log.Warn().Ctx(ctx).Msgf("Member LogicalReference is invalid: %s", string(memberJSON))
+					log.Ctx(ctx).Warn().Msgf("Member LogicalReference is invalid: %s", string(memberJSON))
 				}
 			}
 		}
@@ -94,7 +94,7 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 		return fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
 	}
 
-	log.Info().Ctx(ctx).Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)
+	log.Ctx(ctx).Info().Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)
 
 	return r.notifyAll(ctx, timeFunc(), focus, subscribers)
 }

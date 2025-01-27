@@ -61,7 +61,7 @@ func New(
 		// Use embedded workflow provider
 		memoryWorkflowProvider := &taskengine.MemoryWorkflowProvider{}
 		for _, bundleUrl := range config.TaskFiller.QuestionnaireSyncURLs {
-			log.Info().Ctx(ctx).Msgf("Loading Task Filler Questionnaires/HealthcareService resources from URL: %s", bundleUrl)
+			log.Ctx(ctx).Info().Msgf("Loading Task Filler Questionnaires/HealthcareService resources from URL: %s", bundleUrl)
 			if err := memoryWorkflowProvider.LoadBundle(ctx, bundleUrl); err != nil {
 				return nil, fmt.Errorf("failed to load Task Filler Questionnaires/HealthcareService resources (url=%s): %w", bundleUrl, err)
 			}
@@ -76,12 +76,12 @@ func New(
 		// Load Questionnaire-related resources for the Task Filler Engine from the configured URLs into the Questionnaire FHIR API
 		go func(ctx context.Context, client fhirclient.Client) {
 			if len(config.TaskFiller.QuestionnaireSyncURLs) > 0 {
-				log.Info().Ctx(ctx).Msgf("Synchronizing Task Filler Questionnaires resources to local FHIR store from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
+				log.Ctx(ctx).Info().Msgf("Synchronizing Task Filler Questionnaires resources to local FHIR store from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
 				for _, u := range config.TaskFiller.QuestionnaireSyncURLs {
 					if err := coolfhir.ImportResources(ctx, questionnaireFhirClient, []string{"Questionnaire", "HealthcareService"}, u); err != nil {
-						log.Error().Ctx(ctx).Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
+						log.Ctx(ctx).Error().Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
 					} else {
-						log.Debug().Ctx(ctx).Msgf("Synchronized Task Filler Questionnaire resources (url=%s)", u)
+						log.Ctx(ctx).Debug().Msgf("Synchronized Task Filler Questionnaire resources (url=%s)", u)
 					}
 				}
 			}
@@ -494,7 +494,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		}
 	}
 
-	log.Info().Ctx(ctx).Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
+	log.Ctx(ctx).Info().Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
 
 	if focusReference.Reference == nil {
 		return &coolfhir.ErrorWithCode{
@@ -538,14 +538,14 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			return err
 		}
 	default:
-		log.Info().Ctx(ctx).Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
+		log.Ctx(ctx).Info().Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
 	}
 
 	return nil
 }
 
 func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {
-	log.Info().Ctx(ctx).Msgf("Rejecting task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+	log.Ctx(ctx).Info().Msgf("Rejecting task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
 	task.Status = fhir.TaskStatusRejected
 	task.StatusReason = &fhir.CodeableConcept{
 		Text: to.Ptr(rejection.FormatReason()),

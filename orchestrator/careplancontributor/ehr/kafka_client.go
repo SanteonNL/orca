@@ -108,7 +108,7 @@ func NewClient(config KafkaConfig) (KafkaClient, error) {
 		}
 		if config.DebugOnly {
 			ctx := context.Background()
-			log.Info().Ctx(ctx).Msg("Debug mode enabled, writing messages to files in OS temp dir")
+			log.Ctx(ctx).Info().Msg("Debug mode enabled, writing messages to files in OS temp dir")
 			return &DebugClient{}, nil
 		}
 		kafkaClient := newKafkaClient(config)
@@ -247,10 +247,10 @@ func (k *KafkaClientImpl) PingConnection(ctx context.Context) error {
 	}
 	err = client.Ping(ctx)
 	if err != nil {
-		log.Error().Ctx(ctx).Err(err).Msgf("Failed to ping Kafka, message: %s", err.Error())
+		log.Ctx(ctx).Error().Err(err).Msgf("Failed to ping Kafka, message: %s", err.Error())
 		return err
 	} else {
-		log.Info().Ctx(ctx).Msg("Pinged Kafka successfully on startup")
+		log.Ctx(ctx).Info().Msg("Pinged Kafka successfully on startup")
 	}
 	return nil
 }
@@ -265,10 +265,10 @@ func (k *KafkaClientImpl) PingConnection(ctx context.Context) error {
 // Returns:
 //   - error: An error if the message could not be produced.
 func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
-	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitting key %s", key)
+	log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitting key %s", key)
 	client, err := k.Connect(ctx)
 	if err != nil {
-		log.Error().Ctx(ctx).Err(err).Msgf("Connect failed with %s", err.Error())
+		log.Ctx(ctx).Error().Err(err).Msgf("Connect failed with %s", err.Error())
 		return err
 	}
 	record := kgo.KeyStringRecord(key, value)
@@ -277,7 +277,7 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 	var lastErr error
 	for _, s := range sync {
 		if s.Err != nil {
-			log.Error().Ctx(ctx).Err(s.Err).Msgf("Error during submission %s, with topic %s", s.Err.Error(), record.Topic)
+			log.Ctx(ctx).Error().Err(s.Err).Msgf("Error during submission %s, with topic %s", s.Err.Error(), record.Topic)
 			lastErr = s.Err
 		}
 	}
@@ -287,10 +287,10 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 	// Make sure all messages are flushed before returning
 	err = client.Flush(ctx)
 	if err != nil {
-		log.Error().Ctx(ctx).Err(err).Msgf("kafka flush failed %s", err.Error())
+		log.Ctx(ctx).Error().Err(err).Msgf("kafka flush failed %s", err.Error())
 		return err
 	}
-	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitted key %s", key)
+	log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitted key %s", key)
 	return nil
 }
 
@@ -306,17 +306,17 @@ func (k *KafkaClientImpl) SubmitMessage(ctx context.Context, key string, value s
 //   - error: An error if the file could not be written.
 func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value string) error {
 	name := path.Join(os.TempDir(), strings.ReplaceAll(key, ":", "_")+".json")
-	log.Debug().Ctx(ctx).Msgf("DebugClient, write to file: %s", name)
+	log.Ctx(ctx).Debug().Msgf("DebugClient, write to file: %s", name)
 	err := os.WriteFile(name, []byte(value), 0644)
 	if err != nil {
-		log.Warn().Ctx(ctx).Msgf("DebugClient, failed to write to file: %s, err: %s", name, err.Error())
+		log.Ctx(ctx).Warn().Msgf("DebugClient, failed to write to file: %s, err: %s", name, err.Error())
 		return err
 	}
 	return nil
 }
 
 func (k *DebugClient) PingConnection(ctx context.Context) error {
-	log.Debug().Ctx(ctx).Msgf("DebugClient: pong")
+	log.Ctx(ctx).Debug().Msgf("DebugClient: pong")
 	return nil
 }
 
@@ -332,7 +332,7 @@ func (k *DemoClient) SubmitMessage(ctx context.Context, key string, value string
 	jsonValue := strings.ReplaceAll(value, " ", "")
 	jsonValue = strings.ReplaceAll(jsonValue, "\n", "")
 	jsonValue = strings.ReplaceAll(jsonValue, "\t", "")
-	log.Debug().Ctx(ctx).Msgf("DemoClient, submitting message %s - %s", key, jsonValue)
+	log.Ctx(ctx).Debug().Msgf("DemoClient, submitting message %s - %s", key, jsonValue)
 
 	req, err := http.NewRequestWithContext(ctx, "POST", k.messageEndpoint, strings.NewReader(jsonValue))
 	if err != nil {
@@ -353,12 +353,12 @@ func (k *DemoClient) SubmitMessage(ctx context.Context, key string, value string
 		return err
 	}
 
-	log.Debug().Ctx(ctx).Msgf("DemoClient, successfully sent message to endpoint")
+	log.Ctx(ctx).Debug().Msgf("DemoClient, successfully sent message to endpoint")
 	return nil
 }
 
 func (k *DemoClient) PingConnection(ctx context.Context) error {
-	log.Debug().Ctx(ctx).Msgf("DemoClient: pong")
+	log.Ctx(ctx).Debug().Msgf("DemoClient: pong")
 	return nil
 }
 

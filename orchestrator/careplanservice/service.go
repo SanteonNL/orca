@@ -518,7 +518,7 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 	notifyCtx, cancel := context.WithTimeout(ctx, subscriberNotificationTimeout)
 	defer cancel()
 	if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
-		log.Error().Ctx(ctx).Err(err).
+		log.Ctx(ctx).Error().Err(err).
 			Msgf("Failed to notify subscribers for %T", resource)
 	}
 }
@@ -621,7 +621,7 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 	reindexURLs := []string{}
 
 	for _, param := range params {
-		log.Info().Ctx(ctx).Msgf("Processing custom SearchParameter %s", param.SearchParamId)
+		log.Ctx(ctx).Info().Msgf("Processing custom SearchParameter %s", param.SearchParamId)
 		// Check if param exists before creating
 		existingParamBundle := fhir.Bundle{}
 		err := s.fhirClient.Search("SearchParameter", url.Values{"url": {param.SearchParam.Url}}, &existingParamBundle)
@@ -630,14 +630,14 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 		}
 
 		if len(existingParamBundle.Entry) > 0 {
-			log.Info().Ctx(ctx).Msgf("SearchParameter/%s already exists, checking if it needs re-indexing", param.SearchParamId)
+			log.Ctx(ctx).Info().Msgf("SearchParameter/%s already exists, checking if it needs re-indexing", param.SearchParamId)
 			// Azure FHIR: if the SearchParameter exists but isn't in the CapabilityStatement, it needs to be re-indexed.
 			// See https://learn.microsoft.com/en-us/azure/healthcare-apis/azure-api-for-fhir/how-to-do-custom-search
 			if !searchParameterExists(capabilityStatement, param.SearchParam.Url) {
-				log.Info().Ctx(ctx).Msgf("SearchParameter/%s needs re-indexing", param.SearchParamId)
+				log.Ctx(ctx).Info().Msgf("SearchParameter/%s needs re-indexing", param.SearchParamId)
 				reindexURLs = append(reindexURLs, param.SearchParam.Url)
 			}
-			log.Info().Ctx(ctx).Msgf("SearchParameter/%s already exists, skipping creation", param.SearchParamId)
+			log.Ctx(ctx).Info().Msgf("SearchParameter/%s already exists, skipping creation", param.SearchParamId)
 			continue
 		}
 
@@ -646,15 +646,15 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 			return fmt.Errorf("create SearchParameter %s: %w", param.SearchParamId, err)
 		}
 		reindexURLs = append(reindexURLs, param.SearchParam.Url)
-		log.Info().Ctx(ctx).Msgf("Created SearchParameter/%s and added to list for batch re-index job.", param.SearchParamId)
+		log.Ctx(ctx).Info().Msgf("Created SearchParameter/%s and added to list for batch re-index job.", param.SearchParamId)
 	}
 
 	if len(reindexURLs) == 0 {
-		log.Info().Ctx(ctx).Msg("No SearchParameters need re-indexing")
+		log.Ctx(ctx).Info().Msg("No SearchParameters need re-indexing")
 		return nil
 	}
 
-	log.Info().Ctx(ctx).Msgf("Batch reindexing %d SearchParameters", len(reindexURLs))
+	log.Ctx(ctx).Info().Msgf("Batch reindexing %d SearchParameters", len(reindexURLs))
 	reindexParam := fhir.Parameters{
 		Parameter: []fhir.ParametersParameter{
 			{
@@ -665,7 +665,7 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 	}
 	var response []byte
 	err := s.fhirClient.CreateWithContext(ctx, reindexParam, &response, fhirclient.AtPath("/$reindex"))
-	log.Info().Ctx(ctx).Msgf("Reindexing SearchParameter response %s", string(response))
+	log.Ctx(ctx).Info().Msgf("Reindexing SearchParameter response %s", string(response))
 	if err != nil {
 		return fmt.Errorf("batch reindex SearchParameter %s: %w", strings.Join(reindexURLs, ","), err)
 	}

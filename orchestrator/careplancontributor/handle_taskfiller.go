@@ -39,10 +39,10 @@ func (t TaskRejection) Error() string {
 }
 
 func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
-	log.Info().Ctx(ctx).Msgf("Running handleTaskNotification for Task %s", *task.Id)
+	log.Ctx(ctx).Info().Msgf("Running handleTaskNotification for Task %s", *task.Id)
 
 	if !coolfhir.IsScpTask(task) {
-		log.Info().Ctx(ctx).Msg("Task is not an SCP Task - skipping")
+		log.Ctx(ctx).Info().Msg("Task is not an SCP Task - skipping")
 		return nil
 	}
 
@@ -70,27 +70,27 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 	// If partOfRef is nil, handle the task as a primary task - no need to create follow-up subtasks for newly created Tasks
 	//This only happens on Task update where the Task.output is filled with a QuestionnaireResponse
 	if partOfRef == nil {
-		log.Info().Ctx(ctx).Msgf("Notified Task is a primary Task (id=%s)", *task.Id)
+		log.Ctx(ctx).Info().Msgf("Notified Task is a primary Task (id=%s)", *task.Id)
 		// Check if the primary task is "created", its status will be updated by subtasks that are completed - not directly here
 		if task.Status != fhir.TaskStatusRequested {
-			log.Debug().Ctx(ctx).Msg("primary Task.status != requested (workflow already started) - not processing in handleTaskNotification")
+			log.Ctx(ctx).Debug().Msg("primary Task.status != requested (workflow already started) - not processing in handleTaskNotification")
 			return nil
 		}
 
 		// Validate that the current CPC is the task Owner to perform task filling
 		isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(task, localIdentifiers)
 		if !isOwner {
-			log.Info().Ctx(ctx).Msg("Current CPC node is not the task Owner - skipping")
+			log.Ctx(ctx).Info().Msg("Current CPC node is not the task Owner - skipping")
 			return nil
 		}
 
-		log.Info().Ctx(ctx).Msg("Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
+		log.Ctx(ctx).Info().Msg("Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
 		err = s.createSubTaskOrAcceptPrimaryTask(ctx, cpsClient, task, task, localIdentifiers)
 		if err != nil {
 			return fmt.Errorf("failed to process new primary Task: %w", err)
 		}
 	} else {
-		log.Info().Ctx(ctx).Msgf("Notified Task is a sub-task (id=%s, primary task=%s)", *task.Id, *partOfRef)
+		log.Ctx(ctx).Info().Msgf("Notified Task is a sub-task (id=%s, primary task=%s)", *task.Id, *partOfRef)
 		err = s.handleSubtaskNotification(ctx, cpsClient, task, *partOfRef, localIdentifiers)
 		if err != nil {
 			return fmt.Errorf("failed to update sub Task: %w", err)
@@ -102,10 +102,10 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 // TODO: This function now always expects a subtask, but it should also be able to handle primary tasks
 func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, primaryTaskRef string, identities []fhir.Identifier) error {
 	if task.Status != fhir.TaskStatusCompleted {
-		log.Debug().Ctx(ctx).Msg("Task.status is not completed - skipping")
+		log.Ctx(ctx).Debug().Msg("Task.status is not completed - skipping")
 		return nil
 	}
-	log.Info().Ctx(ctx).Msg("SubTask.status is completed - processing")
+	log.Ctx(ctx).Info().Msg("SubTask.status is completed - processing")
 
 	// TODO: Doesn't support nested subtasks for now
 	primaryTask := new(fhir.Task)
@@ -123,10 +123,10 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 
 func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, primaryTask *fhir.Task) error {
 	if primaryTask.Status != fhir.TaskStatusRequested && primaryTask.Status != fhir.TaskStatusReceived {
-		log.Debug().Ctx(ctx).Msg("primary Task.status != requested||received (workflow already started) - not processing in handleTaskNotification")
+		log.Ctx(ctx).Debug().Msg("primary Task.status != requested||received (workflow already started) - not processing in handleTaskNotification")
 		return nil
 	}
-	log.Debug().Ctx(ctx).Msg("Accepting primary Task")
+	log.Ctx(ctx).Debug().Msg("Accepting primary Task")
 	primaryTask.Status = fhir.TaskStatusAccepted
 	// Update the task in the FHIR server
 	ref := "Task/" + *primaryTask.Id
@@ -134,18 +134,18 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	if err != nil {
 		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
 	}
-	log.Debug().Msgf("Successfully accepted task (ref=%s)", ref)
+	log.Ctx(ctx).Debug().Msgf("Successfully accepted task (ref=%s)", ref)
 	err = s.notifier.NotifyTaskAccepted(ctx, cpsClient, primaryTask)
 	if err != nil {
-		log.Warn().Ctx(ctx).Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
+		log.Ctx(ctx).Warn().Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
 		return nil
 	}
-	log.Debug().Ctx(ctx).Msgf("Successfully accepted Task (ref=%s)", ref)
+	log.Ctx(ctx).Debug().Msgf("Successfully accepted Task (ref=%s)", ref)
 	return nil
 }
 
 func (s *Service) fetchQuestionnaireByID(ctx context.Context, cpsClient fhirclient.Client, ref string, questionnaire *fhir.Questionnaire) error {
-	log.Debug().Ctx(ctx).Msg("Fetching Questionnaire by ID")
+	log.Ctx(ctx).Debug().Msg("Fetching Questionnaire by ID")
 	err := cpsClient.Read(ref, &questionnaire)
 	if err != nil {
 		return fmt.Errorf("failed to fetch Questionnaire: %s", err.Error())
@@ -216,7 +216,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 			// For subtasks, we need to make sure it's completed, and if so, find out if more Questionnaires are needed.
 			// We do this by fetching the Questionnaire, and comparing it's url value to the followUpQuestionnaireMap
 			if task.Status != fhir.TaskStatusCompleted {
-				log.Info().Ctx(ctx).Msg("SubTask is not completed - skipping")
+				log.Ctx(ctx).Info().Msg("SubTask is not completed - skipping")
 			}
 			// TODO: Should we check if there's actually a QuestionnaireResponse?
 			// TODO: What if multiple Tasks match the conditions?
@@ -233,7 +233,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 					}
 					nextStep, err = workflow.Proceed(*item.ValueReference.Reference)
 					if err != nil {
-						log.Error().Ctx(ctx).Err(err).Msgf("Unable to determine next questionnaire (previous URL=%s)", *fetchedQuestionnaire.Url)
+						log.Ctx(ctx).Error().Err(err).Msgf("Unable to determine next questionnaire (previous URL=%s)", *fetchedQuestionnaire.Url)
 					} else {
 						break
 					}
@@ -243,7 +243,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 
 		// TODO: If we can't perform the next step, we should mark the primary task as failed?
 		if nextStep != nil {
-			log.Debug().Ctx(ctx).Msgf("Found next step in workflow, loading questionnaire (url=%s)", nextStep.QuestionnaireUrl)
+			log.Ctx(ctx).Debug().Msgf("Found next step in workflow, loading questionnaire (url=%s)", nextStep.QuestionnaireUrl)
 			questionnaire, err = s.workflows.QuestionnaireLoader().Load(ctx, nextStep.QuestionnaireUrl)
 			if err != nil {
 				return &TaskRejection{
@@ -260,7 +260,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 
 		if task.PartOf == nil {
 			// TODO: reject here: nothing more to do
-			log.Info().Ctx(ctx).Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as accepted")
+			log.Ctx(ctx).Info().Msg("Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as accepted")
 			return &TaskRejection{
 				Reason: "Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as accepted",
 			}
@@ -286,7 +286,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 
 	if isPrimaryTask && primaryTask.Status == fhir.TaskStatusRequested {
 		// Mark the task as "received" to indicate that the task is being processed
-		log.Info().Ctx(ctx).Msgf("Marking task as received (id=%s)", *task.Id)
+		log.Ctx(ctx).Info().Msgf("Marking task as received (id=%s)", *task.Id)
 		primaryTask.Status = fhir.TaskStatusReceived
 		tx.Update(primaryTask, "Task/"+*primaryTask.Id)
 	}
@@ -298,7 +298,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 		return fmt.Errorf("failed to execute transaction: %w", err)
 	}
 
-	log.Info().Ctx(ctx).Msg("Successfully created a subtask")
+	log.Ctx(ctx).Info().Msg("Successfully created a subtask")
 
 	return nil
 }

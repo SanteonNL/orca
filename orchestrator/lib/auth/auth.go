@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -23,13 +25,20 @@ func PrincipalFromContext(ctx context.Context) (Principal, error) {
 }
 
 func WithPrincipal(ctx context.Context, principal Principal) context.Context {
-	return context.WithValue(ctx, principalContextKey, principal)
+	ctx = context.WithValue(ctx, principalContextKey, principal)
+	// Add a child logger with the 'principal' field set, to log it on every log line related to this request
+	ctx = log.Ctx(ctx).With().Str("principal", principal.ID()).Logger().WithContext(ctx)
+	return ctx
 }
 
 var _ fmt.Stringer = Principal{}
 
 type Principal struct {
 	Organization fhir.Organization
+}
+
+func (u Principal) ID() string {
+	return coolfhir.ToString(u.Organization.Identifier[0])
 }
 
 func (u Principal) String() string {
