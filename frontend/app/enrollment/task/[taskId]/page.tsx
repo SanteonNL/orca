@@ -1,14 +1,16 @@
 "use client"
-import React, { useEffect } from 'react'
+import React, {useEffect} from 'react'
 import useTaskProgressStore from '@/lib/store/task-progress-store'
-import { useParams } from 'next/navigation'
+import {useParams} from 'next/navigation'
 import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
-import organizationName from '@/lib/fhirUtils'
+import useEnrollmentStore from "@/lib/store/enrollment-store";
+import {patientName, organizationName} from "@/lib/fhirRender";
 
 export default function EnrollmentTaskPage() {
-    const { taskId } = useParams()
-    const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
+    const {taskId} = useParams()
+    const {task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap} = useTaskProgressStore()
+    const {patient} = useEnrollmentStore()
 
     useEffect(() => {
         if (taskId) {
@@ -18,46 +20,93 @@ export default function EnrollmentTaskPage() {
         }
     }, [taskId, setSelectedTaskId])
 
-    if (loading || !initialized) return <Loading />
+    if (loading || !initialized) return <Loading/>
 
-    const serviceName = task?.focus?.display || "Unknown"
-    const conditionName = task?.reasonCode?.coding?.[0].display || "Unknown"
-    const taskDate = task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend"
+    if (!task) {
+        return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
+    }
 
-    const StatusWrapper = ({ children }: { children: React.ReactNode }) => (
-        <div className='w-[568px] flex flex-col gap-4'>
-            {children}
-            {!!task?.statusReason?.text && <p>Statusreden: {task.statusReason.text}</p>}
-        </div>
-    )
+    const StatusElement = ({label, value}: { label: string, value: string }) =>
+        <>
+            <div className="text-muted-foreground">{label}:</div>
+            <div className="font-bold">{value}</div>
+        </>
 
-    switch (task?.status) {
-        case "accepted":
-            return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} uit te voeren, is door {organizationName(task.owner)} op {taskDate} geaccepteerd. Uitvoering is nog niet gestart.</StatusWrapper>
-        case "completed":
-            return <StatusWrapper>De uitvoering van {serviceName} voor {conditionName} is door {organizationName(task.owner)} afgerond op {taskDate}.</StatusWrapper>
-        case "cancelled":
-            return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} uit te voeren, is op {taskDate} geannuleerd door {organizationName(task.owner)}.</StatusWrapper>
-        case "failed":
-            return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} uit te voeren, is sinds {taskDate} gemarkeerd als &quot;mislukt&quot; door {organizationName(task.owner)}.</StatusWrapper>
-        case "in-progress":
-            return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} uit te voeren, wordt momenteel (sinds {taskDate}) uitgevoerd door {organizationName(task.owner)}.</StatusWrapper>
-        case "on-hold":
-            return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} uit te voeren, is sinds {taskDate} gepauzeerd door {organizationName(task.owner)}.</StatusWrapper>
-        case "requested":
-            return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} is verstuurd naar {organizationName(task.owner)}, maar nog niet ontvangen.</StatusWrapper>
-        case "received":
-            if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
-                return <>Task is ontvangen, maar er ontbreekt informatie.</>
+    if (task.status === "received") {
+        if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
+            return <>Task is ontvangen, maar er ontbreekt informatie.</>
+        }
+        return <QuestionnaireRenderer
+            questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
+            inputTask={subTasks[0]}
+        />
+    } else {
+        return <div className='w-[568px] flex flex-col auto-cols-max gap-4'>
+            {
+                task && executionText(task.status) ?
+                    <p className="text-muted-foreground">{executionText(task.status)}</p> : <></>
             }
-            return <QuestionnaireRenderer
-                questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
-                inputTask={subTasks[0]}
-            />
+            <div className="grid grid-cols-[1fr,2fr] gap-y-4">
+                <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"}/>
+                <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"}/>
+                <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"}/>
+                <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)}/>
+                <StatusElement label="Status"
+                               value={statusLabel(task.status) + " op " + (task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend")}/>
+                {task.statusReason
+                    ? <StatusElement label="Statusreden"
+                                     value={task.statusReason.text ?? task.statusReason.coding?.at(0)?.code ?? "Onbekend"}/>
+                    : <></>
+                }
+            </div>
+        </div>
+    }
+}
+
+function statusLabel(taskStatus: string): string {
+    switch (taskStatus) {
+        case "accepted":
+            return "Geaccepteerd"
+        case "completed":
+            return "Afgerond"
+        case "cancelled":
+            return "Geannuleerd"
+        case "failed":
+            return "Mislukt"
+        case "in-progress":
+            return "In behandeling"
+        case "on-hold":
+            return "Gepauzeerd"
+        case "requested":
+            return "Verstuurd"
+        case "received":
+            return "Ontvangen"
         case "rejected":
-            return <StatusWrapper>Het verzoek om {serviceName} voor {conditionName} uit te voeren is op {taskDate} afgewezen door {organizationName(task.owner)}.</StatusWrapper>
+            return "Afgewezen"
         default:
-            //primary tasks cannot handle Task.stats, for example `ready`
-            return <StatusWrapper>Task status {task?.status || "Taak niet gevonden"} is geen valide status voor een enrollment Task.</StatusWrapper>
+            return taskStatus
+    }
+}
+
+function executionText(taskStatus: string) {
+    switch (taskStatus) {
+        case "requested":
+            return "Het verzoek is door de uitvoerende organisatie ontvangen, maar nog niet beoordeeld."
+        case "accepted":
+            return "Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart."
+        case "in-progress":
+            return "Het verzoek is door de uitvoerende partij geaccepteerd, en uitvoering is gestart."
+        case "cancelled":
+            return "Het verzoek is afgebroken."
+        case "rejected":
+            return "Het verzoek is door de uitvoerende partij afgewezen."
+        case "failed":
+            return "Het verzoek is mislukt."
+        case "completed":
+            return "Het verzoek is door de uitvoerende partij afgerond."
+        case "on-hold":
+            return "Het verzoek is door de uitvoerende partij gepauzeerd."
+        default:
+            return null
     }
 }
