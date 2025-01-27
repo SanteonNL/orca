@@ -105,30 +105,12 @@ func TestDebugClient_SubmitMessage(t *testing.T) {
 	}
 }
 
-func TestDebugClient_PingConnection(t *testing.T) {
-	client := &DebugClient{}
-	err := client.PingConnection(context.Background())
-
-	if err != nil {
-		t.Fatalf("PingConnection failed with error: %v", err)
-	}
-}
-
 func TestNoopClient_SubmitMessage(t *testing.T) {
 	client := &NoopClient{}
 	err := client.SubmitMessage(context.Background(), "test", "test-value")
 
 	if err != nil {
 		t.Fatalf("SubmitMessage failed with error: %v", err)
-	}
-}
-
-func TestNoopClient_PingConnection(t *testing.T) {
-	client := &NoopClient{}
-	err := client.PingConnection(context.Background())
-
-	if err != nil {
-		t.Fatalf("PingConnection failed with error: %v", err)
 	}
 }
 

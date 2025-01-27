@@ -111,18 +111,7 @@ func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value strin
 	return nil
 }
 
-// PingConnection sends a debug "pong" message and returns nil error if the operation is successful.
-func (k *DebugClient) PingConnection(ctx context.Context) error {
-	log.Debug().Ctx(ctx).Msgf("DebugClient: pong")
-	return nil
-}
-
-// PingConnection checks the availability of the connection and returns an error if the connection is unavailable.
-func (k *NoopClient) PingConnection(ctx context.Context) error {
-	return nil
-}
-
 // SubmitMessage sends a message with the given key and value, acting as a no-op in this implementation.
-func (k *NoopClient) SubmitMessage(ctx context.Context, key string, value string) error {
+func (k *NoopClient) SubmitMessage(_ context.Context, _ string, _ string) error {
 	return nil
 }
