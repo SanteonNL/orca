@@ -206,7 +206,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         request: {
             method: "POST",
             url: "ServiceRequest",
-            ifNoneExist: `ServiceRequest?_id=${serviceRequest.id}`,
+            ifNoneExist: `_id=${serviceRequest.id}`,
         }
     }
     const taskEntry = {
@@ -219,7 +219,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         }
     }
     if (taskIdentifier) {
-        taskEntry.request.ifNoneExist = `Task?identifier=${taskIdentifier}`
+        taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
     }
     const bundle = {
         resourceType: "Bundle",
@@ -231,7 +231,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                 request: {
                     method: "POST",
                     url: "Patient",
-                    ifNoneExist: `Patient?identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
+                    ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
                 }
             },
             serviceRequestEntry,
