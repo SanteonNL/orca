@@ -147,7 +147,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       body: bundle
     });
 
-    onSubTaskSubmit(router.push(`/enrollment/task/${task!!.id}`))
+    onSubTaskSubmit(router.push(`/enrollment/task/${task!.id}`))
   }
 
   useEffect(() => {
