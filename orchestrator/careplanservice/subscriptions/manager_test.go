@@ -51,5 +51,6 @@ func TestDerivingManager_Notify(t *testing.T) {
 		require.NoError(t, err)
 		focus, _ := capturedMember1Notification.GetFocus()
 		require.Equal(t, "http://example.com/fhir/CareTeam/10", *focus.Reference)
+		require.Equal(t, "CareTeam", *focus.Type)
 	})
 }
