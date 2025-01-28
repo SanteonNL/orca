@@ -31,7 +31,6 @@ require (
 )
 
 require (
-	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/Azure/go-amqp v1.3.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.24.0 // indirect

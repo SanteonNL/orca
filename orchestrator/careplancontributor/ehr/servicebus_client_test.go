@@ -3,7 +3,13 @@ package ehr
 import (
 	"context"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
+	"io"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -16,6 +22,7 @@ func TestNewClient(t *testing.T) {
 		config     ServiceBusConfig
 		expectType ServiceBusClient
 		expectErr  bool
+		setup      func() func()
 	}{
 		{
 			name: "NoopClient when disabled",
@@ -33,6 +40,32 @@ func TestNewClient(t *testing.T) {
 			},
 			expectType: &DebugClient{},
 			expectErr:  false,
+		},
+		{
+			name: "DemoClient when demo endpoint is set",
+			config: ServiceBusConfig{
+				Enabled:      true,
+				DebugOnly:    false,
+				DemoEndpoint: "http://localhost:8080",
+			},
+			expectType: &DemoClient{},
+			expectErr:  false,
+		},
+		{
+			name: "DemoClient when demo endpoint is set in strict mode",
+			config: ServiceBusConfig{
+				Enabled:      true,
+				DebugOnly:    false,
+				DemoEndpoint: "http://localhost:8080",
+			},
+			expectType: nil,
+			expectErr:  true,
+			setup: func() func() {
+				globals.StrictMode = true
+				return func() {
+					globals.StrictMode = false
+				}
+			},
 		},
 		{
 			name: "PingOnStartup enabled with incomplete config",
@@ -57,6 +90,11 @@ func TestNewClient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			setup := tt.setup
+			if setup != nil {
+				f := setup()
+				defer f()
+			}
 			client, err := NewClient(tt.config)
 
 			if (err != nil) != tt.expectErr {
@@ -111,6 +149,73 @@ func TestNoopClient_SubmitMessage(t *testing.T) {
 
 	if err != nil {
 		t.Fatalf("SubmitMessage failed with error: %v", err)
+	}
+}
+
+func TestDemoClient_SubmitMessage(t *testing.T) {
+	ctx := context.Background()
+	type testStruct struct {
+		name        string
+		config      ServiceBusConfig
+		expectError bool
+		mockSetup   func(tt *testStruct) func(tt *testStruct) // Optional setup and teardown for mocks
+	}
+	tests := []testStruct{
+		{
+			name: "send message - success",
+			config: ServiceBusConfig{
+				Enabled: true,
+			},
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
+				globals.StrictMode = false
+				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					require.Equal(t, "/test-endpoint", r.URL.Path)
+					body, err := io.ReadAll(r.Body)
+					require.NoError(t, err)
+					require.Equal(t, "value", string(body))
+					w.WriteHeader(http.StatusOK)
+				}))
+				tt.config.DemoEndpoint = ts.URL + "/test-endpoint"
+				return func(tt *testStruct) {
+					ts.Close()
+				}
+			},
+		},
+		{
+			name: "send message - error",
+			config: ServiceBusConfig{
+				Enabled: true,
+			},
+			expectError: true,
+			mockSetup: func(tt *testStruct) func(tt *testStruct) {
+				globals.StrictMode = false
+				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					w.WriteHeader(http.StatusInternalServerError)
+				}))
+				tt.config.DemoEndpoint = ts.URL + "/test-endpoint"
+				return func(tt *testStruct) {
+					ts.Close()
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Setup mock if defined
+			if tt.mockSetup != nil {
+				teardown := tt.mockSetup(&tt)
+				defer teardown(&tt)
+			}
+			kafkaClient, err := NewClient(tt.config)
+			if err == nil {
+				err = kafkaClient.SubmitMessage(ctx, "key", "value")
+			}
+			if tt.expectError {
+				assert.Error(t, err, "Expected error but got none")
+			} else {
+				assert.NoError(t, err, "Unexpected error")
+			}
+		})
 	}
 }
 
