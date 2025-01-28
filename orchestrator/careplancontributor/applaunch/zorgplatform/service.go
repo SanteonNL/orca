@@ -203,7 +203,7 @@ func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 	const proxyBasePath = "/cpc/fhir"
 	rewriteUrl, _ := url.Parse(s.baseURL)
 	rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
-	result := coolfhir.NewProxy("App->EHR (ZPF)", log.Logger, targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
+	result := coolfhir.NewProxy("App->EHR (ZPF)", targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
 		transport:          s.zorgplatformHttpClient.Transport,
 		cpsFhirClient:      s.cpsFhirClient,
 		secureTokenService: s.secureTokenService,
