@@ -41,10 +41,10 @@ export default function EnrollmentTaskPage() {
             inputTask={subTasks[0]}
         />
     } else {
-        return <div className='w-[568px] flex flex-col auto-cols-max gap-4'>
+        return <div className='w-[568px] flex flex-col auto-cols-max'>
             {
                 task && executionText(task.status) ?
-                    <p className="text-muted-foreground pb-2">{executionText(task.status)}</p> : <></>
+                    <p className="text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
             }
             <div className="grid grid-cols-[1fr,2fr] gap-y-4">
                 <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} />
