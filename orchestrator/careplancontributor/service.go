@@ -538,7 +538,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			return err
 		}
 	default:
-		log.Ctx(ctx).Info().Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
+		log.Ctx(ctx).Debug().Msgf("No handler for notification of type %s, ignoring", *focusReference.Type)
 	}
 
 	return nil
