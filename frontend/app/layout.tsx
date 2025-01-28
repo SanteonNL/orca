@@ -22,7 +22,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body className={font.className}>
-        <main className="h-screen w-screen">
+        <main>
           {children}
           <Toaster />
         </main>
