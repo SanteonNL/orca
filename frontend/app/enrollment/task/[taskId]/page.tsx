@@ -1,16 +1,16 @@
 "use client"
-import React, {useEffect} from 'react'
+import React, { useEffect } from 'react'
 import useTaskProgressStore from '@/lib/store/task-progress-store'
-import {useParams} from 'next/navigation'
+import { useParams } from 'next/navigation'
 import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
-import {patientName, organizationName} from "@/lib/fhirRender";
+import { patientName, organizationName } from "@/lib/fhirRender";
 
 export default function EnrollmentTaskPage() {
-    const {taskId} = useParams()
-    const {task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap} = useTaskProgressStore()
-    const {patient} = useEnrollmentStore()
+    const { taskId } = useParams()
+    const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
+    const { patient } = useEnrollmentStore()
 
     useEffect(() => {
         if (taskId) {
@@ -20,16 +20,16 @@ export default function EnrollmentTaskPage() {
         }
     }, [taskId, setSelectedTaskId])
 
-    if (loading || !initialized) return <Loading/>
+    if (loading || !initialized) return <Loading />
 
     if (!task) {
         return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
     }
 
-    const StatusElement = ({label, value}: { label: string, value: string }) =>
+    const StatusElement = ({ label, value }: { label: string, value: string }) =>
         <>
-            <div className="text-muted-foreground">{label}:</div>
-            <div className="font-bold">{value}</div>
+            <div>{label}:</div>
+            <div className="font-[500] capitalize">{value}</div>
         </>
 
     if (task.status === "received") {
@@ -44,18 +44,18 @@ export default function EnrollmentTaskPage() {
         return <div className='w-[568px] flex flex-col auto-cols-max gap-4'>
             {
                 task && executionText(task.status) ?
-                    <p className="text-muted-foreground">{executionText(task.status)}</p> : <></>
+                    <p className="text-muted-foreground pb-2">{executionText(task.status)}</p> : <></>
             }
             <div className="grid grid-cols-[1fr,2fr] gap-y-4">
-                <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"}/>
-                <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"}/>
-                <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"}/>
-                <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)}/>
+                <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} />
+                <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
+                <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"} />
+                <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)} />
                 <StatusElement label="Status"
-                               value={statusLabel(task.status) + " op " + (task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend")}/>
+                    value={statusLabel(task.status) + " op " + (task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend")} />
                 {task.statusReason
                     ? <StatusElement label="Statusreden"
-                                     value={task.statusReason.text ?? task.statusReason.coding?.at(0)?.code ?? "Onbekend"}/>
+                        value={task.statusReason.text ?? task.statusReason.coding?.at(0)?.code ?? "Onbekend"} />
                     : <></>
                 }
             </div>

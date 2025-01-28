@@ -5,7 +5,8 @@ import { Toaster } from "@/components/ui/sonner";
 
 const font = Roboto({
   subsets: ["latin"],
-  weight: "400"
+  weight: ["300", "400", "500", "700"]
+
 });
 
 export const metadata: Metadata = {
