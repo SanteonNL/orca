@@ -152,12 +152,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		var notification coolfhir.SubscriptionNotification
 		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
 			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to decode notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
 			return
 		}
 		if err := s.handleNotification(request.Context(), &notification); err != nil {
 			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to handle notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
 			return
 		}
 		writer.WriteHeader(http.StatusOK)
@@ -165,7 +165,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if !s.healthdataviewEndpointEnabled {
-			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), &coolfhir.ErrorWithCode{
 				Message:    "health data view proxy endpoint is disabled",
 				StatusCode: http.StatusMethodNotAllowed,
 			}, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
@@ -181,7 +181,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
 				err = operationOutcomeErr
 			}
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 	})
@@ -195,14 +195,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		err := s.proxyToAllCareTeamMembers(writer, request)
 		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 	}))
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
-	carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", log.Logger, s.localCarePlanServiceUrl,
+	carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", s.localCarePlanServiceUrl,
 		proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, false)
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
@@ -239,7 +239,7 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
 	proxyBasePath := basePath + "/ehr/fhir"
-	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", log.Logger, clientFactory.BaseURL, proxyBasePath,
+	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", clientFactory.BaseURL, proxyBasePath,
 		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false)
 
 	resourcePath := request.PathValue("rest")
@@ -343,7 +343,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	}
 	const proxyBasePath = basePath + "/aggregate/fhir/"
 	for _, endpoint := range endpoints {
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", log.Logger, endpoint, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
+		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", endpoint, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
 		fhirProxy.ServeHTTP(writer, request)
 	}
 	return nil

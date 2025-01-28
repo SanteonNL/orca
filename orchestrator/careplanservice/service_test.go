@@ -59,7 +59,7 @@ func TestService_Proxy(t *testing.T) {
 		})
 	})
 	fhirServerMux.HandleFunc("GET /fhir/Fail/1", func(writer http.ResponseWriter, request *http.Request) {
-		coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequest("Fail"), "oops", writer)
+		coolfhir.WriteOperationOutcomeFromError(context.Background(), coolfhir.BadRequest("Fail"), "oops", writer)
 	})
 	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)

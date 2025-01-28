@@ -236,7 +236,6 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 
 			proxy := coolfhir.NewProxy(
 				"MockProxy",
-				log.Logger,
 				fhirServerURL,
 				"/cpc/cps/fhir",
 				orcaPublicURL.JoinPath("/cpc/cps/fhir"),

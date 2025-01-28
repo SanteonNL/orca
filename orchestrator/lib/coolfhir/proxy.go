@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,7 +14,6 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -41,7 +41,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 	if f.HTTPRequestModifier != nil {
 		var err error
 		if request, err = f.HTTPRequestModifier(request); err != nil {
-			WriteOperationOutcomeFromError(err, "FHIR request", httpResponseWriter)
+			WriteOperationOutcomeFromError(request.Context(), err, "FHIR request", httpResponseWriter)
 			return
 		}
 	}
@@ -68,7 +68,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		// LimitReader 10mb to prevent DoS attacks
 		requestData, err = io.ReadAll(io.LimitReader(request.Body, 10*1024*1024+1))
 		if len(requestData) > 10*1024*1024 {
-			WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
+			WriteOperationOutcomeFromError(request.Context(), fhirclient.OperationOutcomeError{
 				OperationOutcome: fhir.OperationOutcome{
 					Issue: []fhir.OperationOutcomeIssue{
 						{
@@ -83,7 +83,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 			return
 		}
 		if err != nil {
-			WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
+			WriteOperationOutcomeFromError(request.Context(), fhirclient.OperationOutcomeError{
 				OperationOutcome: fhir.OperationOutcome{
 					Issue: []fhir.OperationOutcomeIssue{
 						{
@@ -100,7 +100,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		if len(requestData) > 0 && !strings.HasSuffix(request.URL.Path, "/_search") {
 			requestResource = make(map[string]interface{})
 			if err := json.Unmarshal(requestData, &requestResource); err != nil {
-				WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
+				WriteOperationOutcomeFromError(request.Context(), fhirclient.OperationOutcomeError{
 					OperationOutcome: fhir.OperationOutcome{
 						Issue: []fhir.OperationOutcomeIssue{
 							{
@@ -117,7 +117,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		}
 	}
 	if requestResource == nil && (request.Method == http.MethodPost || request.Method == http.MethodPut) && !strings.HasSuffix(request.URL.Path, "/_search") {
-		WriteOperationOutcomeFromError(fhirclient.OperationOutcomeError{
+		WriteOperationOutcomeFromError(request.Context(), fhirclient.OperationOutcomeError{
 			OperationOutcome: fhir.OperationOutcome{
 				Issue: []fhir.OperationOutcomeIssue{
 					{
@@ -175,7 +175,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 				HttpStatusCode: responseStatusCode,
 			}
 		}
-		WriteOperationOutcomeFromError(err, "FHIR request", httpResponseWriter)
+		WriteOperationOutcomeFromError(request.Context(), err, "FHIR request", httpResponseWriter)
 		return
 	}
 	upstreamUrl := f.upstreamBaseUrl.String()
@@ -236,13 +236,12 @@ func (f *FHIRClientProxy) sanitizeRequestHeaders(header http.Header) http.Header
 //   - if the proxy is on /fhir, and the reverse proxy binds to /, then proxyBasePath = /fhir and rewriteUrl = /.
 //   - if the proxy is on /, and the reverse proxy binds to /fhir, then proxyBasePath = / and rewriteUrl = /fhir.
 //   - if the proxy is on /fhir, and the reverse proxy binds to /app/fhir, then proxyBasePath = /fhir and rewriteUrl = /app/fhir.
-func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, proxyBasePath string, rewriteUrl *url.URL,
+func NewProxy(name string, upstreamBaseUrl *url.URL, proxyBasePath string, rewriteUrl *url.URL,
 	transport http.RoundTripper, allowCaching bool) *FHIRClientProxy {
 	httpClient := &http.Client{
 		Transport: &loggingRoundTripper{
-			name:   name,
-			logger: &logger,
-			next:   transport,
+			name: name,
+			next: transport,
 		},
 	}
 	return &FHIRClientProxy{
@@ -257,21 +256,21 @@ func NewProxy(name string, logger zerolog.Logger, upstreamBaseUrl *url.URL, prox
 var _ http.RoundTripper = &loggingRoundTripper{}
 
 type loggingRoundTripper struct {
-	name   string
-	logger *zerolog.Logger
-	next   http.RoundTripper
+	name string
+	next http.RoundTripper
 }
 
 func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	l.logger.Info().Ctx(request.Context()).Msgf("%s request: %s %s", l.name, request.Method, request.URL.String())
-	if l.logger.Debug().Ctx(request.Context()).Enabled() {
+	logger := log.Ctx(request.Context())
+	logger.Info().Msgf("%s request: %s %s", l.name, request.Method, request.URL.String())
+	if logger.Debug().Enabled() {
 		var headers []string
 		for key, values := range request.Header {
 			headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 		}
-		l.logger.Debug().Ctx(request.Context()).Msgf("%s request headers: %s", l.name, strings.Join(headers, ", "))
+		logger.Debug().Msgf("%s request headers: %s", l.name, strings.Join(headers, ", "))
 	}
-	if l.logger.Trace().Ctx(request.Context()).Enabled() {
+	if logger.Trace().Enabled() {
 		var requestBody []byte
 		var err error
 		if request.Body != nil {
@@ -280,26 +279,26 @@ func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 				return nil, err
 			}
 		}
-		l.logger.Trace().Ctx(request.Context()).Msgf("%s request body: %s", l.name, string(requestBody))
+		logger.Trace().Msgf("%s request body: %s", l.name, string(requestBody))
 		request.Body = io.NopCloser(bytes.NewReader(requestBody))
 	}
 	response, err := l.next.RoundTrip(request)
 	if err != nil {
-		l.logger.Warn().Err(err).Msgf("%s request failed (url=%s)", l.name, request.URL.String())
+		logger.Warn().Err(err).Msgf("%s request failed (url=%s)", l.name, request.URL.String())
 	} else {
-		if l.logger.Debug().Ctx(request.Context()).Enabled() {
+		if logger.Debug().Enabled() {
 			var headers []string
 			for key, values := range response.Header {
 				headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 			}
-			l.logger.Debug().Ctx(request.Context()).Msgf("%s response: %s, headers: %s", l.name, response.Status, strings.Join(headers, ", "))
+			logger.Debug().Msgf("%s response: %s, headers: %s", l.name, response.Status, strings.Join(headers, ", "))
 		}
-		if l.logger.Trace().Ctx(request.Context()).Enabled() {
+		if logger.Trace().Enabled() {
 			responseBody, err := io.ReadAll(response.Body)
 			if err != nil {
 				return nil, err
 			}
-			l.logger.Trace().Ctx(request.Context()).Msgf("%s response body: %s", l.name, string(responseBody))
+			logger.Trace().Msgf("%s response body: %s", l.name, string(responseBody))
 			response.Body = io.NopCloser(bytes.NewReader(responseBody))
 		}
 	}
