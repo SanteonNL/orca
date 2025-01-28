@@ -297,6 +297,7 @@ func TestService_DefaultOperationHandler(t *testing.T) {
 		request := FHIRHandlerRequest{
 			ResourcePath: "ServiceRequest",
 			HttpMethod:   http.MethodPost,
+			Context:      context.Background(),
 		}
 		ctrl := gomock.NewController(t)
 		fhirClient := mock.NewMockClient(ctrl)
@@ -336,6 +337,7 @@ func TestService_DefaultOperationHandler(t *testing.T) {
 		request := FHIRHandlerRequest{
 			ResourcePath: "ServiceRequest",
 			HttpMethod:   http.MethodPost,
+			Context:      context.Background(),
 		}
 
 		resultHandler, err := service.handleUnmanagedOperation(request, tx)

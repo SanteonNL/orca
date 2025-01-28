@@ -44,12 +44,12 @@ func NewClient(config ServiceBusConfig) (ServiceBusClient, error) {
 	ctx := context.Background()
 	if config.Enabled {
 		if config.DebugOnly {
-			log.Info().Ctx(ctx).Msg("Debug mode enabled, writing messages to files in OS temp dir")
+			log.Ctx(ctx).Info().Msg("Debug mode enabled, writing messages to files in OS temp dir")
 			return &DebugClient{}, nil
 		}
 		kafkaClient := newServiceBusClient(config)
 		if config.PingOnStartup {
-			log.Info().Ctx(ctx).Msg("Ping enabled, starting ping")
+			log.Ctx(ctx).Info().Msg("Ping enabled, starting ping")
 			err := kafkaClient.SubmitMessage(context.Background(), "ping", "pong")
 			if err != nil {
 				return nil, err
@@ -79,16 +79,16 @@ func (k *ServiceBusClientImpl) Connect() (sender ServiceBusClientWrapper, err er
 
 // SubmitMessage sends a message with a specified key and value to the configured Azure Service Bus topic.
 func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
-	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitting key %s", key)
+	log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitting key %s", key)
 	sender, err := k.Connect()
 	if err != nil {
-		log.Error().Ctx(ctx).Err(err).Msgf("Connect failed with %s", err.Error())
+		log.Ctx(ctx).Error().Err(err).Msgf("Connect failed with %s", err.Error())
 		return err
 	}
 	defer func(sender ServiceBusClientWrapper, ctx context.Context) {
 		err := sender.Close(ctx)
 		if err != nil {
-			log.Error().Ctx(ctx).Err(err).Msgf("Close failed with %s", err.Error())
+			log.Ctx(ctx).Error().Err(err).Msgf("Close failed with %s", err.Error())
 		}
 	}(sender, ctx)
 	message := &azservicebus.Message{
@@ -99,7 +99,7 @@ func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, va
 	if err != nil {
 		return err
 	}
-	log.Debug().Ctx(ctx).Msgf("SubmitMessage, submitted key %s", key)
+	log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitted key %s", key)
 	return nil
 }
 
@@ -107,10 +107,10 @@ func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, va
 // The method logs the operation and returns an error if the file writing fails.
 func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value string) error {
 	name := path.Join(os.TempDir(), strings.ReplaceAll(key, ":", "_")+".json")
-	log.Debug().Ctx(ctx).Msgf("DebugClient, write to file: %s", name)
+	log.Ctx(ctx).Debug().Msgf("DebugClient, write to file: %s", name)
 	err := os.WriteFile(name, []byte(value), 0644)
 	if err != nil {
-		log.Warn().Ctx(ctx).Msgf("DebugClient, failed to write to file: %s, err: %s", name, err.Error())
+		log.Ctx(ctx).Warn().Msgf("DebugClient, failed to write to file: %s, err: %s", name, err.Error())
 		return err
 	}
 	return nil

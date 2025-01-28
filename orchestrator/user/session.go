@@ -69,7 +69,7 @@ func (m *SessionManager) Destroy(response http.ResponseWriter, request *http.Req
 	if sessionID != "" {
 		m.store.destroy(sessionID)
 	} else {
-		log.Warn().Ctx(request.Context()).Msg("No session to destroy")
+		log.Ctx(request.Context()).Warn().Msg("No session to destroy")
 	}
 	cookie := http.Cookie{
 		Name:     "sid",

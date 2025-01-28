@@ -351,7 +351,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 		for _, reasonCoding := range taskReasonCodes {
 			workflow, err := s.workflows.Provide(ctx, serviceCoding, reasonCoding)
 			if errors.Is(err, taskengine.ErrWorkflowNotFound) {
-				log.Debug().Err(err).Ctx(ctx).Msgf("No workflow found (service=%s|%s, condition=%s|%s, task=%s)",
+				log.Ctx(ctx).Debug().Err(err).Msgf("No workflow found (service=%s|%s, condition=%s|%s, task=%s)",
 					*serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, *task.Id)
 				continue
 			} else if err != nil {

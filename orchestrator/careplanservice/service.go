@@ -189,13 +189,13 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
 	if log.Trace().Enabled() {
 		txJson, _ := json.MarshalIndent(tx, "", "  ")
-		log.Trace().Ctx(request.Context()).Msgf("FHIR Transaction request: %s", txJson)
+		log.Ctx(request.Context()).Trace().Msgf("FHIR Transaction request: %s", txJson)
 	}
 	var txResult fhir.Bundle
 	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 		txResultJson, _ := json.Marshal(tx.Bundle())
-		log.Error().Ctx(request.Context()).Err(err).
+		log.Ctx(request.Context()).Error().Err(err).
 			Msgf("Failed to execute transaction (url=%s): %s", request.URL.String(), string(txResultJson))
 		var operationOutcomeErr fhirclient.OperationOutcomeError
 		if errors.As(err, &operationOutcomeErr) {
@@ -210,7 +210,7 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBu
 	}
 	if log.Trace().Enabled() {
 		txJson, _ := json.MarshalIndent(txResult, "", "  ")
-		log.Trace().Ctx(request.Context()).Msgf("FHIR Transaction response: %s", txJson)
+		log.Ctx(request.Context()).Trace().Msgf("FHIR Transaction response: %s", txJson)
 	}
 	var notificationResources []any
 	for entryIdx, resultHandler := range resultHandlers {
@@ -248,7 +248,7 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 }
 
 func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	log.Warn().Ctx(request.Context).Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
+	log.Ctx(request.Context).Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
 
 	err := s.checkAllowUnmanagedOperations()
 	if err != nil {
@@ -291,7 +291,7 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 		return
 	}
 	if len(txResult.Entry) != 1 {
-		log.Error().Ctx(httpRequest.Context()).Msgf("Expected exactly one entry in transaction result (operation=%s), got %d", operationName, len(txResult.Entry))
+		log.Ctx(httpRequest.Context()).Error().Msgf("Expected exactly one entry in transaction result (operation=%s), got %d", operationName, len(txResult.Entry))
 		httpResponse.WriteHeader(http.StatusNoContent)
 		return
 	}
@@ -299,7 +299,7 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 	fhirResponse := txResult.Entry[0].Response
 	statusParts := strings.Split(fhirResponse.Status, " ")
 	if statusCode, err = strconv.Atoi(statusParts[0]); err != nil {
-		log.Warn().Ctx(httpRequest.Context()).Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
+		log.Ctx(httpRequest.Context()).Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
 		statusCode = http.StatusOK
 	}
 	var headers = map[string][]string{}
@@ -340,7 +340,7 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 	case "Condition":
 		resource, err = s.handleGetCondition(httpRequest.Context(), resourceId, headers)
 	default:
-		log.Warn().Ctx(httpRequest.Context()).
+		log.Ctx(httpRequest.Context()).Warn().
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
 		if err != nil {
@@ -388,7 +388,7 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchPatient(httpRequest.Context(), queryParams, headers)
 	default:
 		httpRequest.Body = io.NopCloser(strings.NewReader(queryParams.Encode()))
-		log.Warn().Ctx(httpRequest.Context()).
+		log.Ctx(httpRequest.Context()).Warn().
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
 		err = s.checkAllowUnmanagedOperations()
 		if err != nil {
