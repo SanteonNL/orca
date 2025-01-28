@@ -14,7 +14,7 @@ import { populateQuestionnaire } from '../../utils/populate';
 import useEnrollmentStore from '@/lib/store/enrollment-store';
 import { useRouter } from 'next/navigation';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { Button, createTheme, ThemeProvider } from '@mui/material';
+import { Button, createTheme, Shadows, ThemeProvider } from '@mui/material';
 import Loading from '../loading';
 
 interface QuestionnaireRendererPageProps {
@@ -185,14 +185,17 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         main: '#1c6268',
       },
     },
+    shadows: Array(25).fill('none') as Shadows,
     components: {
       MuiGrid: {
+        defaultProps: {
+          mb: 1
+        },
+      },
+      MuiCard: {
         styleOverrides: {
           root: {
-            '& .MuiGrid-item': {
-              marginBottom: '5px',
-            }
-
+            border: '1px solid #e0e0e0',
           },
         },
       }
