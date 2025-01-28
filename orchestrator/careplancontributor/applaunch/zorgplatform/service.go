@@ -238,7 +238,7 @@ type stsAccessTokenRoundTripper struct {
 }
 
 func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
-	log.Debug().Ctx(httpRequest.Context()).Msg("Handling Zorgplatform STS access token request")
+	log.Ctx(httpRequest.Context()).Debug().Msg("Handling Zorgplatform STS access token request")
 
 	// Do something to request the access token
 	newHttpRequest := httpRequest.Clone(httpRequest.Context())
@@ -246,26 +246,26 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	//TODO: Check if we can update the CarePlan.basedOn to point to the service request
 	carePlanReference := httpRequest.Header.Get("X-Scp-Context")
 	if carePlanReference == "" {
-		log.Error().Ctx(httpRequest.Context()).Msg("Missing X-Scp-Context header")
+		log.Ctx(httpRequest.Context()).Error().Msg("Missing X-Scp-Context header")
 		return nil, fmt.Errorf("missing X-Scp-Context header")
 	}
 
-	log.Debug().Ctx(httpRequest.Context()).Msgf("Found SCP context: %s", carePlanReference)
+	log.Ctx(httpRequest.Context()).Debug().Msgf("Found SCP context: %s", carePlanReference)
 	// First see if cached
 	var accessToken string
 	if cacheEntry := s.accessTokenCache.Get(carePlanReference); cacheEntry != nil {
 		accessToken = cacheEntry.Value()
 	} else {
-		log.Debug().Ctx(httpRequest.Context()).Msgf("(cache miss) Getting Zorgplatform access token for CarePlan reference: %s", carePlanReference)
+		log.Ctx(httpRequest.Context()).Debug().Msgf("(cache miss) Getting Zorgplatform access token for CarePlan reference: %s", carePlanReference)
 		workflowCtx, err := s.getWorkflowContext(httpRequest.Context(), carePlanReference)
 		if err != nil {
-			log.Error().Ctx(httpRequest.Context()).Msgf("Unable to get workflowId for CarePlan reference: %v", err)
+			log.Ctx(httpRequest.Context()).Error().Msgf("Unable to get workflowId for CarePlan reference: %v", err)
 			return nil, fmt.Errorf("unable to get workflowId for CarePlan reference: %w", err)
 		}
 
 		//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
 		if !globals.StrictMode {
-			log.Warn().Msg("Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
+			log.Ctx(httpRequest.Context()).Warn().Msg("Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
 			if workflowCtx.patientBsn == "999911120" {
 				workflowCtx.patientBsn = "999999151"
 			}
@@ -278,10 +278,10 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 
 		accessToken, err = s.secureTokenService.RequestAccessToken(httpRequest.Context(), launchContext, applicationTokenType)
 		if err != nil {
-			log.Error().Ctx(httpRequest.Context()).Msgf("Unable to request access token for Zorgplatform: %v", err)
+			log.Ctx(httpRequest.Context()).Error().Msgf("Unable to request access token for Zorgplatform: %v", err)
 			return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
 		}
-		log.Debug().Ctx(httpRequest.Context()).Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
+		log.Ctx(httpRequest.Context()).Debug().Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 		s.accessTokenCache.Set(carePlanReference, accessToken, ttlcache.DefaultTTL)
 	}
 
@@ -291,7 +291,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 }
 
 func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Request) {
-	log.Debug().Ctx(request.Context()).Msg("Handling ChipSoft HiX app launch")
+	log.Ctx(request.Context()).Debug().Msg("Handling ChipSoft HiX app launch")
 	if err := request.ParseForm(); err != nil {
 		http.Error(response, fmt.Errorf("unable to parse form: %w", err).Error(), http.StatusBadRequest)
 		return
@@ -306,13 +306,13 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
-		log.Err(err).Ctx(request.Context()).Msg("unable to validate SAML token")
+		log.Ctx(request.Context()).Err(err).Msg("unable to validate SAML token")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
 
 	// TODO: Remove this debug logging later
-	log.Info().Ctx(request.Context()).Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
+	log.Ctx(request.Context()).Info().Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
 
 	//TODO: launchContext.Practitioner needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
 	// Cache FHIR resources that don't exist in the EHR in the session,
@@ -321,16 +321,16 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
 	accessToken, err := s.secureTokenService.RequestAccessToken(request.Context(), launchContext, hcpTokenType)
 	if err != nil {
-		log.Err(err).Ctx(request.Context()).Msg("unable to request access token for HCP ProfessionalService")
+		log.Ctx(request.Context()).Err(err).Msg("unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
 
-	log.Info().Ctx(request.Context()).Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
+	log.Ctx(request.Context()).Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
 	sessionData, err := s.getSessionData(request.Context(), accessToken, launchContext)
 	if err != nil {
-		log.Err(err).Ctx(request.Context()).Msg("unable to create session data")
+		log.Ctx(request.Context()).Err(err).Msg("unable to create session data")
 		http.Error(response, "Application launch failed.", http.StatusInternalServerError)
 		return
 	}
@@ -338,7 +338,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	s.sessionManager.Create(response, *sessionData)
 
 	// Redirect to landing page
-	log.Info().Ctx(request.Context()).Msg("Successfully launched through ChipSoft HiX app launch")
+	log.Ctx(request.Context()).Info().Msg("Successfully launched through ChipSoft HiX app launch")
 
 	taskRef := sessionData.StringValues["task"]
 	redirectURL := s.frontendLandingUrl

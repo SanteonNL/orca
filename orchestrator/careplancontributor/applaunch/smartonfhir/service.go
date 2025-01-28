@@ -112,7 +112,7 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 
 	// accessToken := tokenResponse["access_token"]
 
-	log.Info().Ctx(request.Context()).Msgf("SMART App Launch succeeded, got the following response\n%v", tokenResponse)
+	log.Ctx(request.Context()).Info().Msgf("SMART App Launch succeeded, got the following response\n%v", tokenResponse)
 
 	// 1) Extract the type of launch that is being performed, for example an enrollment, or a data view
 	// 2) switch type - call the apropriate service to handle the request

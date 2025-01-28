@@ -392,8 +392,8 @@ func (s *Service) submitSAMLRequest(ctx context.Context, envelope string) (strin
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Debug().Ctx(ctxWithTimeout).Msgf("Zorgplatform STS SOAP request: %s", envelope)
-		log.Debug().Ctx(ctxWithTimeout).Msgf("Zorgplatform STS SOAP response: %s", string(responseBody))
+		log.Ctx(ctxWithTimeout).Debug().Msgf("Zorgplatform STS SOAP request: %s", envelope)
+		log.Ctx(ctxWithTimeout).Debug().Msgf("Zorgplatform STS SOAP response: %s", string(responseBody))
 		return "", fmt.Errorf("unexpected response status: %d", resp.StatusCode)
 	}
 

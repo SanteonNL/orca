@@ -152,7 +152,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 			return &Workflow{
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: *questionnaire.Id,
+						QuestionnaireUrl: "Questionnaire/" + *questionnaire.Id,
 					},
 				},
 			}, nil
@@ -163,7 +163,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 
 func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl string) (*fhir.Questionnaire, error) {
 	for _, questionnaire := range e.questionnaires {
-		if *questionnaire.Id == questionnaireUrl {
+		if "Questionnaire/"+*questionnaire.Id == questionnaireUrl {
 			return &questionnaire, nil
 		}
 	}
