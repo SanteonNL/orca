@@ -7,8 +7,6 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/rs/zerolog/log"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
@@ -200,7 +198,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	sessionManager, _ := createTestSession()
 
 	// TODO: Tests using the Zorgplatform service
-	cpsProxy := coolfhir.NewProxy("CPS->CPC", log.Logger, fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
+	cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
 
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true

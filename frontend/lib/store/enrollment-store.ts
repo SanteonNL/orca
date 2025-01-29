@@ -78,8 +78,8 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
     } else {
         //TODO: We can remove this when going live, this is useful during development
         launchContext = {
-            "patient": "Patient/4",
-            "serviceRequest": "ServiceRequest/6",
+            "patient": "Patient/6",
+            "serviceRequest": "ServiceRequest/12",
             "practitioner": "Practitioner/8",
             "practitionerRole": "PractitionerRole/9"
         }

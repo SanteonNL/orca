@@ -51,6 +51,13 @@ func TestMemoryFHIRResourcesWorkflowProvider_Provide(t *testing.T) {
 			workflow, err := provider.Provide(context.Background(), serviceCode, conditionCode)
 			require.NoError(t, err)
 			require.NotNil(t, workflow)
+
+			t.Run("proceed, no more steps", func(t *testing.T) {
+				step := workflow.Start()
+				nextStep, err := workflow.Proceed(step.QuestionnaireUrl)
+				require.NoError(t, err)
+				require.Nil(t, nextStep)
+			})
 		})
 		t.Run("service not supported", func(t *testing.T) {
 			serviceCode := fhir.Coding{

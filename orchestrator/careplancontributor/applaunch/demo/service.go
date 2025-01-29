@@ -50,7 +50,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
-	log.Debug().Ctx(request.Context()).Msg("Handling demo app launch")
+	log.Ctx(request.Context()).Debug().Msg("Handling demo app launch")
 	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss", "taskIdentifier")
 	if !ok {
 		return
@@ -59,7 +59,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	//Destroy the previous session if found
 	session := s.sessionManager.Get(request)
 	if session != nil {
-		log.Debug().Ctx(request.Context()).Msg("Demo launch performed and previous session found - Destroying previous session")
+		log.Ctx(request.Context()).Debug().Msg("Demo launch performed and previous session found - Destroying previous session")
 		s.sessionManager.Destroy(response, request)
 	}
 
@@ -77,19 +77,19 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		}
 		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), *taskIdentifier)
 		if err != nil {
-			log.Error().Err(err).Ctx(request.Context()).Msg("Existing CPS Task check failed for task with identifier: " + coolfhir.ToString(taskIdentifier))
+			log.Ctx(request.Context()).Error().Err(err).Msg("Existing CPS Task check failed for task with identifier: " + coolfhir.ToString(taskIdentifier))
 			http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
 			return
 		}
 	}
 
 	if existingTask != nil {
-		log.Debug().Ctx(request.Context()).Msg("Existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
+		log.Ctx(request.Context()).Debug().Msg("Existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
 		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("task", *existingTask.Id).String(), http.StatusFound)
 		return
 	}
 
 	// Redirect to landing page
-	log.Debug().Ctx(request.Context()).Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
+	log.Ctx(request.Context()).Debug().Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
 	http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
 }

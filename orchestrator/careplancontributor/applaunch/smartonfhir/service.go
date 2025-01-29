@@ -112,7 +112,7 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 
 	// accessToken := tokenResponse["access_token"]
 
-	log.Info().Ctx(request.Context()).Msgf("SMART App Launch succeeded, got the following response\n%v", tokenResponse)
+	log.Ctx(request.Context()).Info().Msgf("SMART App Launch succeeded, got the following response\n%v", tokenResponse)
 
 	// 1) Extract the type of launch that is being performed, for example an enrollment, or a data view
 	// 2) switch type - call the apropriate service to handle the request
@@ -143,7 +143,7 @@ func (s *Service) appLaunchRedirectLogic(ctx context.Context, state string, code
 
 	resp, err := http.PostForm(tokenEndpoint, data)
 	if err != nil {
-		log.Error().Ctx(ctx).Err(err).Msg("Failed to exchange authorization code for access token")
+		log.Ctx(ctx).Error().Err(err).Msg("Failed to exchange authorization code for access token")
 		return nil, err
 	}
 	defer resp.Body.Close()
@@ -154,7 +154,7 @@ func (s *Service) appLaunchRedirectLogic(ctx context.Context, state string, code
 
 	var tokenResponse map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&tokenResponse); err != nil {
-		log.Error().Ctx(ctx).Err(err).Msg("Failed to decode token response")
+		log.Ctx(ctx).Error().Err(err).Msg("Failed to decode token response")
 		return nil, err
 	}
 

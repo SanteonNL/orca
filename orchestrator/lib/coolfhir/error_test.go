@@ -1,6 +1,7 @@
 package coolfhir
 
 import (
+	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
@@ -82,7 +83,7 @@ func TestWriteOperationOutcomeFromError(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			response := httptest.NewRecorder()
-			WriteOperationOutcomeFromError(tt.args.err, tt.args.desc, response)
+			WriteOperationOutcomeFromError(context.Background(), tt.args.err, tt.args.desc, response)
 			assert.Equal(t, tt.expectedCode, response.Code)
 			assert.JSONEq(t, tt.expectedBody, response.Body.String())
 		})

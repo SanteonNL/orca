@@ -5,6 +5,7 @@ go 1.23
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.1
+	github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.7.4
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.3.0
 	github.com/SanteonNL/go-fhir-client v0.2.16
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.0.0-20240805130644-8b92f1cbf865
@@ -40,6 +41,7 @@ require (
 	github.com/twmb/franz-go/pkg/kmsg v1.9.0 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
+	github.com/Azure/go-amqp v1.3.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.24.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect

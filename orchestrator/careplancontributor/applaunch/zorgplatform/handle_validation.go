@@ -137,8 +137,8 @@ func (s *Service) validateAssertionExpiry(ctx context.Context, doc *etree.Docume
 	created := createdElement.Text()
 	expires := expiresElement.Text()
 
-	log.Trace().Ctx(ctx).Msgf("Token created: %s", created)
-	log.Trace().Ctx(ctx).Msgf("Token expires: %s", expires)
+	log.Ctx(ctx).Trace().Msgf("Token created: %s", created)
+	log.Ctx(ctx).Trace().Msgf("Token expires: %s", expires)
 
 	createdTime, err := time.Parse(time.RFC3339Nano, created)
 	if err != nil {
@@ -292,7 +292,7 @@ func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Elem
 				result.Name[0].Prefix = []string{strings.TrimSpace(parts[2])}
 			}
 		} else {
-			log.Debug().Ctx(ctx).Msg("Name attribute not found")
+			log.Ctx(ctx).Debug().Msg("Name attribute not found")
 		}
 	}
 	// Role (e.g.: <Role code="223366009" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT"/>)
@@ -334,7 +334,7 @@ func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Elem
 				Value:  to.Ptr(value),
 			})
 		} else {
-			log.Debug().Ctx(ctx).Msg("Email attribute not found")
+			log.Ctx(ctx).Debug().Msg("Email attribute not found")
 		}
 	}
 
@@ -363,7 +363,7 @@ func (s *Service) extractWorkflowID(ctx context.Context, decryptedAssertion *etr
 		return "", fmt.Errorf("workflow-id attribute not found in the assertion")
 	}
 	workflowId := workflowIdElement.Text()
-	log.Debug().Ctx(ctx).Msgf("Extracted workflow-id: %s", workflowId)
+	log.Ctx(ctx).Debug().Msgf("Extracted workflow-id: %s", workflowId)
 
 	return workflowId, nil
 }

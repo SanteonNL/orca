@@ -3,7 +3,13 @@ package globals
 import (
 	"crypto/tls"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
+
+func init() {
+	zerolog.DefaultContextLogger = &log.Logger
+}
 
 var CarePlanServiceFhirClient fhirclient.Client
 

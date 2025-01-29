@@ -61,7 +61,7 @@ func New(
 		// Use embedded workflow provider
 		memoryWorkflowProvider := &taskengine.MemoryWorkflowProvider{}
 		for _, bundleUrl := range config.TaskFiller.QuestionnaireSyncURLs {
-			log.Info().Ctx(ctx).Msgf("Loading Task Filler Questionnaires/HealthcareService resources from URL: %s", bundleUrl)
+			log.Ctx(ctx).Info().Msgf("Loading Task Filler Questionnaires/HealthcareService resources from URL: %s", bundleUrl)
 			if err := memoryWorkflowProvider.LoadBundle(ctx, bundleUrl); err != nil {
 				return nil, fmt.Errorf("failed to load Task Filler Questionnaires/HealthcareService resources (url=%s): %w", bundleUrl, err)
 			}
@@ -76,12 +76,12 @@ func New(
 		// Load Questionnaire-related resources for the Task Filler Engine from the configured URLs into the Questionnaire FHIR API
 		go func(ctx context.Context, client fhirclient.Client) {
 			if len(config.TaskFiller.QuestionnaireSyncURLs) > 0 {
-				log.Info().Ctx(ctx).Msgf("Synchronizing Task Filler Questionnaires resources to local FHIR store from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
+				log.Ctx(ctx).Info().Msgf("Synchronizing Task Filler Questionnaires resources to local FHIR store from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
 				for _, u := range config.TaskFiller.QuestionnaireSyncURLs {
 					if err := coolfhir.ImportResources(ctx, questionnaireFhirClient, []string{"Questionnaire", "HealthcareService"}, u); err != nil {
-						log.Error().Ctx(ctx).Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
+						log.Ctx(ctx).Error().Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
 					} else {
-						log.Debug().Ctx(ctx).Msgf("Synchronized Task Filler Questionnaire resources (url=%s)", u)
+						log.Ctx(ctx).Debug().Msgf("Synchronized Task Filler Questionnaire resources (url=%s)", u)
 					}
 				}
 			}
@@ -90,7 +90,7 @@ func New(
 	}
 
 	httpClient := profile.HttpClient()
-	kafkaClient, err := ehr.NewClient(config.KafkaConfig)
+	serviceBusClient, err := ehr.NewClient(config.ServiceBusConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -109,7 +109,7 @@ func New(
 		cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
-		notifier:                      ehr.NewNotifier(kafkaClient),
+		notifier:                      ehr.NewNotifier(serviceBusClient),
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
@@ -151,13 +151,13 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		var notification coolfhir.SubscriptionNotification
 		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
-			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to decode notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
+			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to decode notification")
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
 			return
 		}
 		if err := s.handleNotification(request.Context(), &notification); err != nil {
-			log.Error().Ctx(request.Context()).Err(err).Msg("Failed to handle notification")
-			coolfhir.WriteOperationOutcomeFromError(coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
+			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to handle notification")
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
 			return
 		}
 		writer.WriteHeader(http.StatusOK)
@@ -165,7 +165,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if !s.healthdataviewEndpointEnabled {
-			coolfhir.WriteOperationOutcomeFromError(&coolfhir.ErrorWithCode{
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), &coolfhir.ErrorWithCode{
 				Message:    "health data view proxy endpoint is disabled",
 				StatusCode: http.StatusMethodNotAllowed,
 			}, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
@@ -174,14 +174,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 		err := s.handleProxyExternalRequestToEHR(writer, request)
 		if err != nil {
-			log.Err(err).Ctx(request.Context()).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
+			log.Ctx(request.Context()).Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
 			// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 			var operationOutcomeErr fhirclient.OperationOutcomeError
 			if errors.As(err, &operationOutcomeErr) {
 				operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
 				err = operationOutcomeErr
 			}
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 	})
@@ -195,14 +195,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		err := s.proxyToAllCareTeamMembers(writer, request)
 		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 	}))
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
-	carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", log.Logger, s.localCarePlanServiceUrl,
+	carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", s.localCarePlanServiceUrl,
 		proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, false)
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		carePlanServiceProxy.ServeHTTP(writer, request)
@@ -239,7 +239,7 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
 	proxyBasePath := basePath + "/ehr/fhir"
-	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", log.Logger, clientFactory.BaseURL, proxyBasePath,
+	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", clientFactory.BaseURL, proxyBasePath,
 		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false)
 
 	resourcePath := request.PathValue("rest")
@@ -343,7 +343,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	}
 	const proxyBasePath = basePath + "/aggregate/fhir/"
 	for _, endpoint := range endpoints {
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", log.Logger, endpoint, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
+		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", endpoint, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), s.scpHttpClient.Transport, true)
 		fhirProxy.ServeHTTP(writer, request)
 	}
 	return nil
@@ -496,7 +496,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		}
 	}
 
-	log.Info().Ctx(ctx).Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
+	log.Ctx(ctx).Info().Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
 
 	if focusReference.Reference == nil {
 		return &coolfhir.ErrorWithCode{
@@ -534,20 +534,20 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		if errors.As(err, &rejection) || errors.As(err, rejection) {
 			if err := s.rejectTask(ctx, fhirClient, task, *rejection); err != nil {
 				// TODO: what to do here?
-				log.Err(err).Ctx(ctx).Msgf("Failed to reject task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+				log.Ctx(ctx).Err(err).Msgf("Failed to reject task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
 			}
 		} else if err != nil {
 			return err
 		}
 	default:
-		log.Info().Ctx(ctx).Msgf("Received notification of type %s is not yet supported", *focusReference.Type)
+		log.Ctx(ctx).Debug().Msgf("No handler for notification of type %s, ignoring", *focusReference.Type)
 	}
 
 	return nil
 }
 
 func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {
-	log.Info().Ctx(ctx).Msgf("Rejecting task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+	log.Ctx(ctx).Info().Msgf("Rejecting task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
 	task.Status = fhir.TaskStatusRejected
 	task.StatusReason = &fhir.CodeableConcept{
 		Text: to.Ptr(rejection.FormatReason()),

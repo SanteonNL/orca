@@ -1,6 +1,7 @@
 package coolfhir
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -90,8 +91,8 @@ func CreateOperationOutcomeBundleEntryFromError(err error, desc string) fhir.Bun
 
 // WriteOperationOutcomeFromError writes an OperationOutcome based on the given error as HTTP response.
 // when sent a WriteOperationOutcomeFromError, it will write the contained error code to the header, else it defaults to StatusBadRequest
-func WriteOperationOutcomeFromError(err error, desc string, httpResponse http.ResponseWriter) {
-	log.Warn().Msgf("%s failed: %v", desc, err)
+func WriteOperationOutcomeFromError(ctx context.Context, err error, desc string, httpResponse http.ResponseWriter) {
+	log.Ctx(ctx).Warn().Msgf("%s failed: %v", desc, err)
 
 	statusCode := http.StatusInternalServerError
 	var operationOutcome fhir.OperationOutcome

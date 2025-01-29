@@ -419,7 +419,7 @@ func GetTaskByIdentifier(ctx context.Context, fhirClient fhirclient.Client, iden
 		if err := ResourceInBundle(&existingTaskBundle, EntryIsOfType("Task"), &existingTask); err != nil {
 			return nil, fmt.Errorf("unable to get existing CPS Task resource from search bundle: %v", err)
 		}
-		log.Debug().Ctx(ctx).Msg("Found existing CPS Task resource for demo task")
+		log.Ctx(ctx).Debug().Msg("Found existing CPS Task resource for demo task")
 		return &existingTask, nil
 	} else if len(existingTaskBundle.Entry) > 1 {
 		return nil, fmt.Errorf("found multiple existing CPS Tasks for identifier: %s", *identifier.System+"|"+*identifier.Value)

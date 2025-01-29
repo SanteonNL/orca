@@ -1,5 +1,5 @@
 import Client from 'fhir-kit-client';
-import { Bundle, CarePlan, Condition, Patient, PractitionerRole, Questionnaire, Reference, Resource, ServiceRequest, Task } from 'fhir/r4';
+import { Bundle, Condition, Patient, PractitionerRole, Questionnaire, Resource, ServiceRequest, Task } from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -62,31 +62,6 @@ export const findInBundle = (resourceType: string, bundle?: Bundle) => {
     return bundle?.entry?.find((entry) => entry.resource?.resourceType === resourceType)?.resource;
 }
 
-export const getCarePlan = (patient: Patient, conditions: Condition[], carePlanName: string): CarePlan => {
-    return {
-        resourceType: 'CarePlan',
-        status: 'active',
-        intent: 'plan',
-        subject: {
-            identifier: {
-                system: BSN_SYSTEM,
-                value: getBsn(patient)
-            }
-        },
-        addresses: conditions.map(condition => {
-            return {
-                identifier: {
-                    system: condition?.code?.coding?.[0].system,
-                    value: condition?.code?.coding?.[0].code,
-                },
-                display: condition?.code?.coding?.[0].display
-            }
-        }),
-        title: carePlanName,
-        description: "Care plan description here"
-    }
-}
-
 const cleanPatient = (patient: Patient) => {
     const cleanedPatient = { ...patient, id: undefined }
     if (cleanedPatient.contact) {
@@ -119,7 +94,7 @@ const cleanPatient = (patient: Patient) => {
     return cleanedPatient;
 }
 
-const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string) => {
+const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string, taskIdentifier?: string) => {
     // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
     const cleanedServiceRequest = { ...serviceRequest, id: undefined };
 
@@ -146,6 +121,10 @@ const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, p
         if (item?.reference) {
             delete item.reference;
         }
+    }
+
+    if (taskIdentifier) {
+        cleanedServiceRequest.identifier = parseTaskIdentifier(taskIdentifier);
     }
 
     return cleanedServiceRequest;
@@ -185,13 +164,18 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
     } as Task
 
     if (taskIdentifier) {
-        // TODO: Fix ifNoneExists
-        // const systemAndIdentifier = taskIdentifier.split("|")
-        // if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`")
-        // task.identifier = [{
-        //     system: systemAndIdentifier[0],
-        //     value: systemAndIdentifier[1],
-        // }]
+        task.identifier = parseTaskIdentifier(taskIdentifier);
+    }
+
+    if (practitionerRole) {
+
+        task.contained = [practitionerRole]
+
+        //TODO: This should be set, but currently breaks in orca. Leaving it as-is as this code will be removed with INT-558
+        // task.owner = {
+        //     type: "PractitionerRole",
+        //     reference: `#${practitionerRole.id}`
+        // }
     }
 
     if (practitionerRole) {
@@ -208,13 +192,22 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
     return task
 }
 
+const parseTaskIdentifier = (taskIdentifier: string) => {
+    const systemAndIdentifier = taskIdentifier.split("|");
+    if (systemAndIdentifier.length !== 2) throw new Error("Invalid task identifier - expecting `system|identifier`");
+    return [{
+        system: systemAndIdentifier[0],
+        value: systemAndIdentifier[1],
+    }];
+};
+
 export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, practitionerRole?: PractitionerRole, taskIdentifier?: string): Bundle & {
     type: "transaction"
 } => {
     const cleanedPatient = cleanPatient(patient);
     const serviceRequestEntry = {
         fullUrl: "urn:uuid:serviceRequest",
-        resource: cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient"),
+        resource: cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient", taskIdentifier),
         request: {
             method: "POST",
             url: "ServiceRequest",
@@ -231,9 +224,8 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         }
     }
     if (taskIdentifier) {
-        // TODO: Fix ifNoneExists
-        // serviceRequestEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
-        // taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
+        serviceRequestEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
+        taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
     }
 
     const bundle = {
@@ -246,8 +238,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                 request: {
                     method: "POST",
                     url: "Patient",
-                    // TODO: Fix ifNoneExists
-                    // ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
+                    ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
                 }
             },
             serviceRequestEntry,
@@ -277,29 +268,3 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
     })
 }
 
-export function getPatientAddress(patient?: Patient) {
-    const address = patient?.address?.[0]
-    if (!address) return "Unknown address"
-
-    return `${address.line?.join(", ")}, ${address.postalCode} ${address.city}`
-}
-
-export default function organizationName(reference?: Reference) {
-
-    if (!reference) {
-        return "No Organization Reference found"
-    }
-
-    const displayName = reference.display;
-
-    // If the identifier has no system or value, simply return the displayName, or "unknown" if no displayName is present.
-    if (!reference.identifier || !reference.identifier.system || !reference.identifier.value) {
-        return displayName || "unknown"
-    }
-
-    const isUraIdentifier = reference.identifier.system === 'http://fhir.nl/fhir/NamingSystem/ura'
-    const identifierValue = isUraIdentifier ?
-        `URA ${reference.identifier.value}` : `${reference.identifier.system}: ${reference.identifier.value}`;
-
-    return displayName ? `${displayName} (${identifierValue})` : identifierValue
-}
