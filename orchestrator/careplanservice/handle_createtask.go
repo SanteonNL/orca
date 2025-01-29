@@ -239,7 +239,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			notifications = append(notifications, &updatedCareTeam)
 		}
 
-		return result, []any{&createdTask}, nil
+		return result, notifications, nil
 	}, nil
 }
 
