@@ -1,6 +1,7 @@
 import React from 'react';
 import EnrolledTaskTable from './enrolled-task-table';
 import { Bundle, PractitionerRole, Task } from 'fhir/r4';
+import {getNotificationBundles} from "@/app/api/delivery/storage";
 
 export default async function AcceptedTaskOverview() {
 
@@ -12,34 +13,15 @@ export default async function AcceptedTaskOverview() {
     let rows: any[] = [];
 
     try {
-        let requestHeaders = new Headers();
-        requestHeaders.set("Cache-Control", "no-cache")
-        if (process.env.FHIR_AUTHORIZATION_TOKEN) {
-            requestHeaders.set("Authorization", "Bearer " + process.env.FHIR_AUTHORIZATION_TOKEN);
-        }
-        requestHeaders.set("Content-Type", "application/x-www-form-urlencoded");
-        const response = await fetch(`${process.env.FHIR_BASE_URL}/Task/_search`, {
-            method: 'POST',
-            cache: 'no-store',
-            headers: requestHeaders,
-            body: new URLSearchParams({
-                '_sort': '-_lastUpdated',
-                '_count': '100'
-            })
-        });
+        // Get bundles from internal storage, join all entries
+        const notificationBundles = getNotificationBundles();
+        let entries = notificationBundles.flatMap(bundle => bundle.entry || []);
+        console.log(`Found [${entries?.length}] bundle resources`);
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Failed to fetch tasks: ', errorText);
-            throw new Error('Failed to fetch tasks: ' + errorText);
-        }
-
-        const responseBundle = await response.json() as Bundle;
-        const { entry } = responseBundle
-        console.log(`Found [${entry?.length}] Task resources`);
-
-        if (entry?.length) {
-            rows = entry.map((entry: any) => {
+        if (entries?.length) {
+            rows = entries.
+            filter((entries) => entries.resource?.resourceType === "Task").
+            map((entry: any) => {
                 const task = entry.resource as Task;
                 const bsn = task.for?.identifier?.value || "Unknown";
 
