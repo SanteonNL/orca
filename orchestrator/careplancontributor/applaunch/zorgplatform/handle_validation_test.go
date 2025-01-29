@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -36,40 +37,48 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 	require.NoError(t, err)
 
 	tests := []struct {
-		name               string
-		audience           string
-		issuer             string
-		expectedSubj       string
-		expectedBSN        string
-		expectedWorkflowId string
-		expectedError      error
+		name                   string
+		audience               string
+		issuer                 string
+		expectedSubj           string
+		expectedBSN            string
+		expectedWorkflowId     string
+		expectedRoleCode       string
+		expectedRoleCodeSystem string
+		expectedError          error
 	}{
 		{
-			name:               "Happy flow",
-			audience:           "https://partner-application.nl",
-			issuer:             "urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8",
-			expectedSubj:       "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
-			expectedBSN:        "999999205",
-			expectedWorkflowId: "test123-workflow-id",
-			expectedError:      nil,
+			name:                   "Happy flow",
+			audience:               "https://partner-application.nl",
+			issuer:                 "urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8",
+			expectedSubj:           "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
+			expectedBSN:            "999999205",
+			expectedWorkflowId:     "test123-workflow-id",
+			expectedRoleCode:       "223366009",
+			expectedRoleCodeSystem: "http://snomed.info/sct",
+			expectedError:          nil,
 		},
 		{
-			name:               "Invalid audience",
-			audience:           "invalid_audience",
-			issuer:             "urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8",
-			expectedSubj:       "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
-			expectedBSN:        "999999205",
-			expectedWorkflowId: "test123-workflow-id",
-			expectedError:      errors.New("invalid aud. Found [https://partner-application.nl] but expected [invalid_audience]"),
+			name:                   "Invalid audience",
+			audience:               "invalid_audience",
+			issuer:                 "urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8",
+			expectedSubj:           "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
+			expectedBSN:            "999999205",
+			expectedWorkflowId:     "test123-workflow-id",
+			expectedRoleCode:       "223366009",
+			expectedRoleCodeSystem: "http://snomed.info/sct",
+			expectedError:          errors.New("invalid aud. Found [https://partner-application.nl] but expected [invalid_audience]"),
 		},
 		{
-			name:               "Invalid issuer",
-			audience:           "https://partner-application.nl",
-			issuer:             "invalid_issuer",
-			expectedSubj:       "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
-			expectedBSN:        "999999205",
-			expectedWorkflowId: "test123-workflow-id",
-			expectedError:      errors.New("invalid iss. Found [urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8] but expected [invalid_issuer]"),
+			name:                   "Invalid issuer",
+			audience:               "https://partner-application.nl",
+			issuer:                 "invalid_issuer",
+			expectedSubj:           "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
+			expectedBSN:            "999999205",
+			expectedWorkflowId:     "test123-workflow-id",
+			expectedRoleCode:       "223366009",
+			expectedRoleCodeSystem: "http://snomed.info/sct",
+			expectedError:          errors.New("invalid iss. Found [urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8] but expected [invalid_issuer]"),
 		},
 	}
 
@@ -121,6 +130,32 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			} else {
 				require.NoError(t, err)
 				assert.Equal(t, tt.expectedWorkflowId, workflowID)
+			}
+
+			// Extract Practitioner Role
+			practitionerRole, err := s.extractPractitionerRole(decryptedAssertion)
+			if tt.expectedError != nil && err != nil {
+				assert.EqualError(t, err, tt.expectedError.Error())
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tt.expectedRoleCode, *practitionerRole.Code[0].Coding[0].Code)
+				assert.Equal(t, tt.expectedRoleCodeSystem, *practitionerRole.Code[0].Coding[0].System)
+
+				// Verify both identifiers are set
+				assert.Len(t, practitionerRole.Identifier, 2)
+				expectedParts := strings.Split(tt.expectedSubj, "@")
+				userIdentifier := fhir.Identifier{
+					System: to.Ptr(HIX_LOCALUSER_SYSTEM),
+					Value:  to.Ptr(expectedParts[0]),
+				}
+
+				orgIdentifier := fhir.Identifier{
+					System: to.Ptr(HIX_ORG_OID_SYSTEM),
+					Value:  to.Ptr(expectedParts[1]),
+				}
+
+				assert.Contains(t, practitionerRole.Identifier, userIdentifier)
+				assert.Contains(t, practitionerRole.Identifier, orgIdentifier)
 			}
 
 			//TODO: Add signature validation
