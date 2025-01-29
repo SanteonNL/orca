@@ -87,9 +87,8 @@ const taskProgressStore = create<StoreState>((set, get) => ({
 
                 set({ task, subTasks })
                 await fetchQuestionnaires(subTasks, set)
+                set({ initialized: true, loading: false, })
             }
-            set({ initialized: true, loading: false, })
-
         } catch (error: any) {
             set({ error: `Something went wrong while fetching all resources: ${error?.message || error}`, loading: false })
         }
