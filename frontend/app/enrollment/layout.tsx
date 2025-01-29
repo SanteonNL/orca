@@ -41,10 +41,10 @@ export default function EnrollmentLayout({ children }: { children: React.ReactNo
                     <>
                         {breadcrumb}
                         <ChevronRight className="h-4 w-4" />
-                        <span className={`capitalize ${isFirstStep ? 'text-muted-foreground' : ''}`}>{service}</span>
+                        <span className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{service}</span>
                     </>
                 </nav>
-                <div className='text-2xl pt-2 capitalize'>{title}</div>
+                <div className='text-2xl pt-2 first-letter:uppercase'>{title}</div>
             </div>
             <div className="h-px bg-gray-200 mb-10"></div>
             <div className="max-w-7xl px-5 w-full mx-auto">

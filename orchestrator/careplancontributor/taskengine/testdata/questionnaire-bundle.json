@@ -104,7 +104,7 @@
           },
           {
             "linkId": "245f3b7e-47d2-4b78-b751-fb04f38b17b9",
-            "text": "Selecteer het Meetprotocol",
+            "text": "Selecteer het meetprotocol",
             "type": "choice",
             "required": true,
             "answerOption": [
