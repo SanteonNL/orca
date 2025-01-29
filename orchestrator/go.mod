@@ -19,7 +19,6 @@ require (
 	github.com/rs/zerolog v1.33.0
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.35.0
-	github.com/twmb/franz-go v1.18.1
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250124114751-32aed7ae5408
 	go.uber.org/mock v0.5.0
 	golang.org/x/oauth2 v0.25.0
@@ -33,15 +32,13 @@ require (
 
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
+	github.com/Azure/go-amqp v1.3.0 // indirect
 	github.com/dprotaso/go-yit v0.0.0-20240618133044-5a0af90af097 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
-	github.com/pierrec/lz4/v4 v4.1.22 // indirect
 	github.com/speakeasy-api/openapi-overlay v0.9.0 // indirect
-	github.com/twmb/franz-go/pkg/kmsg v1.9.0 // indirect
 	github.com/vmware-labs/yaml-jsonpath v0.3.2 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect
-	github.com/Azure/go-amqp v1.3.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0 // indirect
 	go.opentelemetry.io/otel/sdk v1.24.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
