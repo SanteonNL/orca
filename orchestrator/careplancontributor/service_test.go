@@ -701,17 +701,19 @@ func TestService_handleGetContext(t *testing.T) {
 	httpResponse := httptest.NewRecorder()
 	Service{}.handleGetContext(httpResponse, nil, &user.SessionData{
 		StringValues: map[string]string{
-			"test":           "value",
-			"practitioner":   "the-doctor",
-			"serviceRequest": "ServiceRequest/1",
-			"patient":        "Patient/1",
-			"task":           "Task/1",
-			"taskIdentifier": "task-identifier-123",
+			"test":             "value",
+			"practitioner":     "the-doctor",
+			"practitionerRole": "the-doctor-role",
+			"serviceRequest":   "ServiceRequest/1",
+			"patient":          "Patient/1",
+			"task":             "Task/1",
+			"taskIdentifier":   "task-identifier-123",
 		},
 	})
 	assert.Equal(t, http.StatusOK, httpResponse.Code)
 	assert.JSONEq(t, `{
 		"practitioner": "the-doctor",
+		"practitionerRole": "the-doctor-role",
 		"serviceRequest": "ServiceRequest/1",	
 		"patient": "Patient/1",
 		"task": "Task/1",

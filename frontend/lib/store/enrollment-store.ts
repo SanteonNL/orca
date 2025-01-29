@@ -1,4 +1,4 @@
-import { CarePlan, Condition, Patient, Practitioner, ServiceRequest } from 'fhir/r4';
+import { CarePlan, Condition, Patient, Practitioner, PractitionerRole, ServiceRequest } from 'fhir/r4';
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import { createEhrClient } from '../fhirUtils';
@@ -6,6 +6,7 @@ import { createEhrClient } from '../fhirUtils';
 interface LaunchContext {
     patient: string
     practitioner: string
+    practitionerRole: string
     serviceRequest: string
     task?: string
     taskIdentifier?: string
@@ -16,6 +17,7 @@ interface StoreState {
     launchContext?: LaunchContext
     patient?: Patient
     practitioner?: Practitioner
+    practitionerRole?: PractitionerRole
     serviceRequest?: ServiceRequest
     selectedCarePlan?: CarePlan | null
     taskCondition?: Condition
@@ -32,6 +34,7 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     launchContext: undefined,
     patient: undefined,
     practitioner: undefined,
+    practitionerRole: undefined,
     serviceRequest: undefined,
     selectedCarePlan: undefined,
     taskCondition: undefined,
@@ -77,9 +80,9 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
         launchContext = {
             "patient": "Patient/6",
             "serviceRequest": "ServiceRequest/12",
-            "practitioner": "Practitioner/8"
+            "practitioner": "Practitioner/8",
+            "practitionerRole": "PractitionerRole/9"
         }
-
     }
 
     set({ launchContext });
@@ -96,9 +99,10 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
 
     const ehrClient = createEhrClient()
 
-    const [patient, practitioner, serviceRequest] = await Promise.all([
+    const [patient, practitioner, practitionerRole, serviceRequest] = await Promise.all([
         ehrClient.read({ resourceType: 'Patient', id: launchContext.patient.replace("Patient/", "") }),
         ehrClient.read({ resourceType: 'Practitioner', id: launchContext.practitioner.replace("Practitioner/", "") }),
+        ehrClient.read({ resourceType: 'PractitionerRole', id: launchContext.practitionerRole.replace("PractitionerRole/", "") }),
         ehrClient.read({ resourceType: 'ServiceRequest', id: launchContext.serviceRequest.replace("ServiceRequest/", "") }),
     ]);
 
@@ -115,9 +119,12 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
         console.warn(`No Task Condition found for ServiceRequest/${serviceRequest.id}`)
     }
 
+    debugger
+
     set({
         patient: patient as Patient,
         practitioner: practitioner as Practitioner,
+        practitionerRole: practitionerRole as PractitionerRole,
         serviceRequest: sr,
     });
 

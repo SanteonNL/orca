@@ -19,12 +19,16 @@ import (
 )
 
 type LaunchContext struct {
-	Bsn            string
-	SubjectNameId  string
-	Practitioner   fhir.Practitioner
-	ServiceRequest fhir.ServiceRequest
-	WorkflowId     string
+	Bsn              string
+	SubjectNameId    string
+	Practitioner     fhir.Practitioner
+	PractitionerRole fhir.PractitionerRole
+	ServiceRequest   fhir.ServiceRequest
+	WorkflowId       string
 }
+
+const HIX_LOCALUSER_SYSTEM = "https://www.cwz.nl/hix-user"
+const HIX_ORG_OID_SYSTEM = "https://www.cwz.nl/hix-org-oid"
 
 // parseSamlResponse takes a SAML Response, validates it and extracts the SAML assertion, which is then returned as LaunchContext.
 // If the SAML Assertion is encrypted, it decrypts it.
@@ -77,6 +81,11 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("unable to extract Practitioner from SAML Assertion.Subject: %w", err)
 	}
 
+	practitionerRole, err := s.extractPractitionerRole(assertion)
+	if err != nil {
+		return LaunchContext{}, fmt.Errorf("unable to extract PractitionerRole from SAML Assertion.Subject: %w", err)
+	}
+
 	// Extract resource-id claim to select the correct patient
 	resourceID, err := s.extractResourceID(assertion)
 	if err != nil {
@@ -93,9 +102,10 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	// }
 
 	return LaunchContext{
-		Bsn:          resourceID,
-		Practitioner: *practitioner,
-		WorkflowId:   workflowID,
+		Bsn:              resourceID,
+		Practitioner:     *practitioner,
+		PractitionerRole: *practitionerRole,
+		WorkflowId:       workflowID,
 	}, nil
 
 }
@@ -186,6 +196,64 @@ func (s *Service) validateIssuer(decryptedAssertion *etree.Element) error {
 		return nil
 	}
 	return fmt.Errorf("invalid iss. Found [%s] but expected [%s]", iss, s.config.DecryptConfig.Issuer)
+}
+
+func (s *Service) extractPractitionerRole(assertion *etree.Element) (*fhir.PractitionerRole, error) {
+	var result fhir.PractitionerRole
+
+	{
+		// Role (e.g.: <Role code="223366009" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT"/>)
+		el := assertion.FindElement("AttributeStatement/Attribute[@Name='urn:oasis:names:tc:xacml:2.0:subject:role']/AttributeValue/Role")
+		if el == nil {
+			return nil, errors.New("subject Role not found")
+		}
+		const snomedCodeSystem = "2.16.840.1.113883.6.96"
+		if el.SelectAttrValue("codeSystem", "") != snomedCodeSystem {
+			// We could map this, but Zorgplatform probably only returns this code?
+			return nil, errors.New("subject Role codeSystem is not " + snomedCodeSystem)
+		}
+		code := el.SelectAttrValue("code", "")
+		if strings.TrimSpace(code) == "" {
+			return nil, errors.New("subject Role code is empty")
+		}
+		result.Code = []fhir.CodeableConcept{
+			{
+				Coding: []fhir.Coding{
+					{
+						System:  to.Ptr("http://snomed.info/sct"),
+						Code:    to.Ptr(code),
+						Display: to.NilString(el.SelectAttrValue("displayName", "")),
+					},
+				},
+			},
+		}
+	}
+	// Identifier (e.g.: USER1@2.16.840.1.113883.2.4.3.124.8.50.8)
+	{
+		el := assertion.FindElement("//Subject/NameID")
+		if el == nil || strings.TrimSpace(el.Text()) == "" {
+			return nil, errors.New("Subject.NameID not found")
+		}
+		parts := strings.Split(el.Text(), "@")
+
+		if len(parts) != 2 {
+			return nil, errors.New("Subject.NameID is not in the correct format - Expecting 2 parts on splitting by '@'")
+		}
+
+		userIdentifier := fhir.Identifier{
+			System: to.Ptr(HIX_LOCALUSER_SYSTEM),
+			Value:  to.Ptr(parts[0]),
+		}
+
+		orgIdentifier := fhir.Identifier{
+			System: to.Ptr(HIX_ORG_OID_SYSTEM),
+			Value:  to.Ptr(parts[1]),
+		}
+
+		result.Identifier = []fhir.Identifier{userIdentifier, orgIdentifier}
+	}
+
+	return &result, nil
 }
 
 func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Element) (*fhir.Practitioner, error) {
