@@ -10,10 +10,10 @@ importers:
     dependencies:
       '@aehrc/sdc-populate':
         specifier: ^2.3.1
-        version: 2.3.1(@types/hapi@18.0.14)(@types/node@22.10.2)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))
+        version: 2.3.1(@types/hapi@18.0.14)(@types/node@22.12.0)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))
       '@aehrc/smart-forms-renderer':
         specifier: ^0.44.3
-        version: 0.44.3(6vlc2zob324wddwipa4qbfmt2m)
+        version: 0.44.3(bdc5t5f53qhfq6zaur3kijxzoy)
       '@babel/core':
         specifier: ^7.26.0
         version: 7.26.0
@@ -112,8 +112,8 @@ importers:
         specifier: ^0.0.41
         version: 0.0.41
       '@types/node':
-        specifier: ^22.10.2
-        version: 22.10.2
+        specifier: ^22.12.0
+        version: 22.12.0
       '@types/react':
         specifier: ^18.3.16
         version: 18.3.16
@@ -1378,8 +1378,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@mui/private-theming@6.4.1':
-    resolution: {integrity: sha512-DcT7mwK89owwgcEuiE7w458te4CIjHbYWW6Kn6PiR6eLtxBsoBYphA968uqsQAOBQDpbYxvkuFLwhgk4bxoN/Q==}
+  '@mui/private-theming@6.4.2':
+    resolution: {integrity: sha512-2CkQT0gNlogM50qGTBJgWA7hPPx4AeH8RE2xJa+PHtIOowiVPX52ZsQ0e7Ho18DAqEbkngQ6Uju037ER+TCY5A==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
       '@types/react': ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -1390,6 +1390,19 @@ packages:
 
   '@mui/styled-engine@6.4.0':
     resolution: {integrity: sha512-ek/ZrDujrger12P6o4luQIfRd2IziH7jQod2WMbLqGE03Iy0zUwYmckRTVhRQTLPNccpD8KXGcALJF+uaUQlbg==}
+    engines: {node: '>=14.0.0'}
+    peerDependencies:
+      '@emotion/react': ^11.4.1
+      '@emotion/styled': ^11.3.0
+      react: ^17.0.0 || ^18.0.0 || ^19.0.0
+    peerDependenciesMeta:
+      '@emotion/react':
+        optional: true
+      '@emotion/styled':
+        optional: true
+
+  '@mui/styled-engine@6.4.2':
+    resolution: {integrity: sha512-cgjQK2bkllSYoWUBv93ALhCPJ0NhfO3NctsBf13/b4XSeQVfKPBAnR+P9mNpdFMa5a5RWwtWuBD3cZ5vktsN+g==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
       '@emotion/react': ^11.4.1
@@ -1417,8 +1430,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@mui/system@6.4.1':
-    resolution: {integrity: sha512-rgQzgcsHCTtzF9MZ+sL0tOhf2ZBLazpjrujClcb4Siju5lTrK0xX4PsiropActzCemNfM+mOu+0jezAVnfRK8g==}
+  '@mui/system@6.4.2':
+    resolution: {integrity: sha512-wQbaPCtsxNsM5nR+NZpkFJBKVKH03GQnAjlkKENM8JQqGdWcRyM3f4fJZgzzNdIFpSQw4wpAQKnhfHkjf3d6yQ==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
       '@emotion/react': ^11.5.0
@@ -1451,8 +1464,8 @@ packages:
       '@types/react':
         optional: true
 
-  '@mui/utils@6.4.1':
-    resolution: {integrity: sha512-iQUDUeYh87SvR4lVojaRaYnQix8BbRV51MxaV6MBmqthecQoxwSbS5e2wnbDJUeFxY2ppV505CiqPLtd0OWkqw==}
+  '@mui/utils@6.4.2':
+    resolution: {integrity: sha512-5NkhzlJkmR5+5RSs/Irqin1GPy2Z8vbLk/UzQrH9FEAnm6OA9SvuXjzgklxUs7N65VwEkGpKK1jMZ5K84hRdzQ==}
     engines: {node: '>=14.0.0'}
     peerDependencies:
       '@types/react': ^17.0.0 || ^18.0.0 || ^19.0.0
@@ -1692,19 +1705,6 @@ packages:
 
   '@radix-ui/react-dismissable-layer@1.1.1':
     resolution: {integrity: sha512-QSxg29lfr/xcev6kSz7MAlmDnzbP1eI/Dwn3Tp1ip0KT5CUELsxkekFEMVBEoykI3oV39hKT4TKZzBNMbcTZYQ==}
-    peerDependencies:
-      '@types/react': '*'
-      '@types/react-dom': '*'
-      react: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
-      react-dom: ^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-      '@types/react-dom':
-        optional: true
-
-  '@radix-ui/react-dismissable-layer@1.1.3':
-    resolution: {integrity: sha512-onrWn/72lQoEucDmJnr8uczSNTujT0vJnA/X5+3AkChVPowr8n1yvIKIabhWyMQeMvvmdpsvcyDqx3X1LEXCPg==}
     peerDependencies:
       '@types/react': '*'
       '@types/react-dom': '*'
@@ -2249,9 +2249,6 @@ packages:
 
   '@types/node-forge@1.3.11':
     resolution: {integrity: sha512-FQx220y22OKNTqaByeBGqHWYz4cl94tpcxeFdvBo3wjG6XPBuZ0BNgNZRV5J5TFmmcsJ4IzsLkmGRiQbnYsBEQ==}
-
-  '@types/node@22.10.2':
-    resolution: {integrity: sha512-Xxr6BBRCAOQixvonOye19wnzyDiUtTeqldOOmj3CkeblonbccA12PFwlufvRdrpjXxqnmUaeiU5EOA+7s5diUQ==}
 
   '@types/node@22.12.0':
     resolution: {integrity: sha512-Fll2FZ1riMjNmlmJOdAyY5pUbkftXslB5DgEzlIuNaiWhXd00FhWxVC/r4yV/4wBb9JfImTu+jiSvXTkJ7F/gA==}
@@ -6325,11 +6322,11 @@ snapshots:
       graphql: 16.9.0
     optional: true
 
-  '@aehrc/sdc-populate@2.3.1(@types/hapi@18.0.14)(@types/node@22.10.2)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))':
+  '@aehrc/sdc-populate@2.3.1(@types/hapi@18.0.14)(@types/node@22.12.0)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))':
     dependencies:
       dayjs: 1.11.13
       fhir-sdc-helpers: 0.1.0
-      fhirclient: 2.5.4(@types/hapi@18.0.14)(@types/node@22.10.2)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))
+      fhirclient: 2.5.4(@types/hapi@18.0.14)(@types/node@22.12.0)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))
       fhirpath: 3.11.0
       js-base64: 3.7.7
       moment: 2.30.1
@@ -6341,20 +6338,20 @@ snapshots:
       - react-native
       - supports-color
 
-  '@aehrc/smart-forms-renderer@0.44.3(6vlc2zob324wddwipa4qbfmt2m)':
+  '@aehrc/smart-forms-renderer@0.44.3(bdc5t5f53qhfq6zaur3kijxzoy)':
     dependencies:
-      '@aehrc/sdc-populate': 2.3.1(@types/hapi@18.0.14)(@types/node@22.10.2)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))
+      '@aehrc/sdc-populate': 2.3.1(@types/hapi@18.0.14)(@types/node@22.12.0)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))
       '@emotion/react': 11.13.5(@types/react@18.3.16)(react@18.3.1)
       '@emotion/styled': 11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)
       '@iconify/react': 4.1.1(react@18.3.1)
       '@mui/icons-material': 6.1.8(@mui/material@6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)
       '@mui/lab': 6.0.0-beta.16(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@mui/material@6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@mui/material': 6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@mui/x-date-pickers': 7.22.3(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@mui/material@6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mui/system@6.4.1(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(dayjs@1.11.13)(moment@2.30.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@mui/x-date-pickers': 7.22.3(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@mui/material@6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mui/system@6.4.2(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(dayjs@1.11.13)(moment@2.30.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@tanstack/react-query': 5.64.2(react@18.3.1)
       dayjs: 1.11.13
       deep-diff: 1.0.2
-      fhirclient: 2.5.4(@types/hapi@18.0.14)(@types/node@22.10.2)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))
+      fhirclient: 2.5.4(@types/hapi@18.0.14)(@types/node@22.12.0)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))
       fhirpath: 3.11.0
       html-react-parser: 4.2.10(react@18.3.1)
       js-base64: 3.7.7
@@ -6367,7 +6364,7 @@ snapshots:
       nanoid: 5.0.9
       react: 18.3.1
       react-beautiful-dnd: 13.1.1(react-dom@18.3.1(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1)
-      react-dnd: 16.0.1(@types/hoist-non-react-statics@3.3.6)(@types/node@22.10.2)(@types/react@18.3.16)(react@18.3.1)
+      react-dnd: 16.0.1(@types/hoist-non-react-statics@3.3.6)(@types/node@22.12.0)(@types/react@18.3.16)(react@18.3.1)
       react-dnd-html5-backend: 16.0.1
       react-dom: 18.3.1(react@18.3.1)
       react-markdown: 8.0.7(@types/react@18.3.16)(react@18.3.1)
@@ -8188,7 +8185,7 @@ snapshots:
       '@babel/runtime': 7.26.7
       '@floating-ui/react-dom': 2.1.2(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@mui/types': 7.2.21(@types/react@18.3.16)
-      '@mui/utils': 6.4.1(@types/react@18.3.16)(react@18.3.1)
+      '@mui/utils': 6.4.2(@types/react@18.3.16)(react@18.3.1)
       '@popperjs/core': 2.11.8
       clsx: 2.1.1
       prop-types: 15.8.1
@@ -8212,9 +8209,9 @@ snapshots:
       '@babel/runtime': 7.26.7
       '@mui/base': 5.0.0-beta.62(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@mui/material': 6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@mui/system': 6.4.1(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)
+      '@mui/system': 6.4.2(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)
       '@mui/types': 7.2.21(@types/react@18.3.16)
-      '@mui/utils': 6.4.1(@types/react@18.3.16)(react@18.3.1)
+      '@mui/utils': 6.4.2(@types/react@18.3.16)(react@18.3.1)
       clsx: 2.1.1
       prop-types: 15.8.1
       react: 18.3.1
@@ -8254,10 +8251,10 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.16
 
-  '@mui/private-theming@6.4.1(@types/react@18.3.16)(react@18.3.1)':
+  '@mui/private-theming@6.4.2(@types/react@18.3.16)(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.7
-      '@mui/utils': 6.4.1(@types/react@18.3.16)(react@18.3.1)
+      '@mui/utils': 6.4.2(@types/react@18.3.16)(react@18.3.1)
       prop-types: 15.8.1
       react: 18.3.1
     optionalDependencies:
@@ -8266,6 +8263,19 @@ snapshots:
   '@mui/styled-engine@6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.0
+      '@emotion/cache': 11.14.0
+      '@emotion/serialize': 1.3.3
+      '@emotion/sheet': 1.4.0
+      csstype: 3.1.3
+      prop-types: 15.8.1
+      react: 18.3.1
+    optionalDependencies:
+      '@emotion/react': 11.13.5(@types/react@18.3.16)(react@18.3.1)
+      '@emotion/styled': 11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)
+
+  '@mui/styled-engine@6.4.2(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(react@18.3.1)':
+    dependencies:
+      '@babel/runtime': 7.26.7
       '@emotion/cache': 11.14.0
       '@emotion/serialize': 1.3.3
       '@emotion/sheet': 1.4.0
@@ -8292,13 +8302,13 @@ snapshots:
       '@emotion/styled': 11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)
       '@types/react': 18.3.16
 
-  '@mui/system@6.4.1(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)':
+  '@mui/system@6.4.2(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.7
-      '@mui/private-theming': 6.4.1(@types/react@18.3.16)(react@18.3.1)
-      '@mui/styled-engine': 6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(react@18.3.1)
+      '@mui/private-theming': 6.4.2(@types/react@18.3.16)(react@18.3.1)
+      '@mui/styled-engine': 6.4.2(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(react@18.3.1)
       '@mui/types': 7.2.21(@types/react@18.3.16)
-      '@mui/utils': 6.4.1(@types/react@18.3.16)(react@18.3.1)
+      '@mui/utils': 6.4.2(@types/react@18.3.16)(react@18.3.1)
       clsx: 2.1.1
       csstype: 3.1.3
       prop-types: 15.8.1
@@ -8324,7 +8334,7 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.16
 
-  '@mui/utils@6.4.1(@types/react@18.3.16)(react@18.3.1)':
+  '@mui/utils@6.4.2(@types/react@18.3.16)(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.7
       '@mui/types': 7.2.21(@types/react@18.3.16)
@@ -8336,12 +8346,12 @@ snapshots:
     optionalDependencies:
       '@types/react': 18.3.16
 
-  '@mui/x-date-pickers@7.22.3(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@mui/material@6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mui/system@6.4.1(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(dayjs@1.11.13)(moment@2.30.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@mui/x-date-pickers@7.22.3(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@mui/material@6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1))(@mui/system@6.4.2(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(dayjs@1.11.13)(moment@2.30.1)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.7
       '@mui/material': 6.4.0(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@mui/system': 6.4.1(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)
-      '@mui/utils': 6.4.1(@types/react@18.3.16)(react@18.3.1)
+      '@mui/system': 6.4.2(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@emotion/styled@11.13.5(@emotion/react@11.13.5(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1))(@types/react@18.3.16)(react@18.3.1)
+      '@mui/utils': 6.4.2(@types/react@18.3.16)(react@18.3.1)
       '@mui/x-internals': 7.21.0(@types/react@18.3.16)(react@18.3.1)
       '@types/react-transition-group': 4.4.12(@types/react@18.3.16)
       clsx: 2.1.1
@@ -8360,7 +8370,7 @@ snapshots:
   '@mui/x-internals@7.21.0(@types/react@18.3.16)(react@18.3.1)':
     dependencies:
       '@babel/runtime': 7.26.7
-      '@mui/utils': 6.4.1(@types/react@18.3.16)(react@18.3.1)
+      '@mui/utils': 6.4.2(@types/react@18.3.16)(react@18.3.1)
       react: 18.3.1
     transitivePeerDependencies:
       - '@types/react'
@@ -8529,19 +8539,6 @@ snapshots:
       '@radix-ui/primitive': 1.1.0
       '@radix-ui/react-compose-refs': 1.1.0(@types/react@18.3.16)(react@18.3.1)
       '@radix-ui/react-primitive': 2.0.0(@types/react-dom@18.3.5(@types/react@18.3.16))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
-      '@radix-ui/react-use-callback-ref': 1.1.0(@types/react@18.3.16)(react@18.3.1)
-      '@radix-ui/react-use-escape-keydown': 1.1.0(@types/react@18.3.16)(react@18.3.1)
-      react: 18.3.1
-      react-dom: 18.3.1(react@18.3.1)
-    optionalDependencies:
-      '@types/react': 18.3.16
-      '@types/react-dom': 18.3.5(@types/react@18.3.16)
-
-  '@radix-ui/react-dismissable-layer@1.1.3(@types/react-dom@18.3.5(@types/react@18.3.16))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
-    dependencies:
-      '@radix-ui/primitive': 1.1.1
-      '@radix-ui/react-compose-refs': 1.1.1(@types/react@18.3.16)(react@18.3.1)
-      '@radix-ui/react-primitive': 2.0.1(@types/react-dom@18.3.5(@types/react@18.3.16))(@types/react@18.3.16)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@radix-ui/react-use-callback-ref': 1.1.0(@types/react@18.3.16)(react@18.3.1)
       '@radix-ui/react-use-escape-keydown': 1.1.0(@types/react@18.3.16)(react@18.3.1)
       react: 18.3.1
@@ -9257,10 +9254,6 @@ snapshots:
     dependencies:
       '@types/node': 22.12.0
     optional: true
-
-  '@types/node@22.10.2':
-    dependencies:
-      undici-types: 6.20.0
 
   '@types/node@22.12.0':
     dependencies:
@@ -10973,10 +10966,10 @@ snapshots:
     dependencies:
       fhir-extension-helpers: 0.3.0
 
-  fhirclient@2.5.4(@types/hapi@18.0.14)(@types/node@22.10.2)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1)):
+  fhirclient@2.5.4(@types/hapi@18.0.14)(@types/node@22.12.0)(expo@52.0.11(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1))(react@18.3.1))(react-native@0.76.3(@babel/core@7.26.0)(@babel/preset-env@7.26.7(@babel/core@7.26.0))(@react-native-community/cli-server-api@15.1.2)(@types/react@18.3.16)(react@18.3.1)):
     dependencies:
       '@types/hapi': 18.0.14
-      '@types/node': 22.10.2
+      '@types/node': 22.12.0
       abortcontroller-polyfill: 1.7.8
       core-js: 3.39.0
       cross-fetch: 3.1.8
@@ -12954,7 +12947,7 @@ snapshots:
     dependencies:
       dnd-core: 16.0.1
 
-  react-dnd@16.0.1(@types/hoist-non-react-statics@3.3.6)(@types/node@22.10.2)(@types/react@18.3.16)(react@18.3.1):
+  react-dnd@16.0.1(@types/hoist-non-react-statics@3.3.6)(@types/node@22.12.0)(@types/react@18.3.16)(react@18.3.1):
     dependencies:
       '@react-dnd/invariant': 4.0.2
       '@react-dnd/shallowequal': 4.0.2
@@ -12964,7 +12957,7 @@ snapshots:
       react: 18.3.1
     optionalDependencies:
       '@types/hoist-non-react-statics': 3.3.6
-      '@types/node': 22.10.2
+      '@types/node': 22.12.0
       '@types/react': 18.3.16
 
   react-dom@18.3.1(react@18.3.1):
