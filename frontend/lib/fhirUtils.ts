@@ -178,17 +178,6 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
         // }
     }
 
-    if (practitionerRole) {
-
-        task.contained = [practitionerRole]
-
-        //TODO: This should be set, but currently breaks in orca. Leaving it as-is as this code will be removed with INT-558
-        // task.owner = {
-        //     type: "PractitionerRole",
-        //     reference: `#${practitionerRole.id}`
-        // }
-    }
-
     return task
 }
 
