@@ -22,6 +22,7 @@ export default async function BgzOverview() {
         const notificationBundles = getNotificationBundles();
         let entries = notificationBundles.flatMap(bundle => bundle.entry || []);
 
+        // TODO: This needs to be removed alongside the similar logic in accepted-task-overview.tsx. Ensure we do so when we have a mechanism to receive the bundle outside of zorgplatform launch
         // The list of entries is in-memory and volatile, so it may be empty
         // For convenience, use the existing fetch logic to try populate the list
         if (entries.length === 0) {

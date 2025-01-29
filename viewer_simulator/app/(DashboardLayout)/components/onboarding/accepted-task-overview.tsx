@@ -19,6 +19,7 @@ export default async function AcceptedTaskOverview() {
         let entries = notificationBundles.flatMap(bundle => bundle.entry || []);
         console.log(`Found [${entries?.length}] bundle resources`);
 
+        // TODO: This needs to be removed alongside the similar logic in bgz-overview.tsx. Ensure we do so when we have a mechanism to receive the bundle outside of zorgplatform launch
         // The list of entries is in-memory and volatile, so it may be empty
         // For convenience, use the existing fetch logic to try populate the list
         if (entries.length === 0) {
@@ -50,8 +51,9 @@ export default async function AcceptedTaskOverview() {
         }
 
         if (entries?.length) {
-            rows = entries.filter((entries) => entries.resource?.resourceType === "Task")
-                .map((entry: any) => {
+            rows = entries.
+            filter((entries) => entries.resource?.resourceType === "Task").
+            map((entry: any) => {
                 const task = entry.resource as Task;
                 const bsn = task.for?.identifier?.value || "Unknown";
 
