@@ -1,6 +1,6 @@
 import React from 'react';
 import EnrolledTaskTable from './enrolled-task-table';
-import { Bundle, Task } from 'fhir/r4';
+import { Bundle, PractitionerRole, Task } from 'fhir/r4';
 import {getNotificationBundles} from "@/app/api/delivery/storage";
 
 export default async function AcceptedTaskOverview() {
@@ -15,7 +15,6 @@ export default async function AcceptedTaskOverview() {
     try {
         // Get bundles from internal storage, join all entries
         const notificationBundles = getNotificationBundles();
-        console.log(`Found [${notificationBundles?.length}] NotificationBundle resources`);
         let entries = notificationBundles.flatMap(bundle => bundle.entry || []);
         console.log(`Found [${entries?.length}] bundle resources`);
 
@@ -57,11 +56,20 @@ export default async function AcceptedTaskOverview() {
                 const task = entry.resource as Task;
                 const bsn = task.for?.identifier?.value || "Unknown";
 
+                const practitionerRole = task.contained?.find((resource: any) => resource.resourceType === "PractitionerRole") as PractitionerRole | undefined;
+                let practitionerRoleIdentifiers
+                if (practitionerRole) {
+                    practitionerRoleIdentifiers = practitionerRole.identifier
+                        ?.map((identifier: any) => `${identifier.system}|${identifier.value}`)
+                        .join(', ') || "Unknown";
+                }
+
                 //TODO: An optional improvement would be to fetch & cache the task.requester by identifier if the display is not set
                 return {
                     id: task.id,
                     requesterUra: task.requester?.identifier?.value ?? "Unknown",
                     requesterName: task.requester?.display ?? "Unknown",
+                    practitionerRoleIdentifiers,
                     performerUra: task.owner?.identifier?.value ?? "Unknown",
                     performerName: task.owner?.display ?? "Unknown",
                     isSubtask: !!task.partOf,

@@ -3,8 +3,13 @@ package ehr
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/rs/zerolog/log"
+	"net/http"
 	"os"
 	"path"
 	"strings"
@@ -18,6 +23,7 @@ type ServiceBusConfig struct {
 	PingOnStartup    bool   `koanf:"ping" default:"false" description:"This enables pinging the ServiceBus client on startup."`
 	Hostname         string `koanf:"hostname"`
 	ConnectionString string `koanf:"connectionstring" description:"This is the connection string for connecting to ServiceBus."`
+	DemoEndpoint     string `koanf:"demoendpoint" description:"This is the endpoint for the demo client. If this is set then task notifications will be sent over http to this endpoint"`
 }
 
 // ServiceBusClient defines an interface for submitting messages to a Service Bus system.
@@ -34,6 +40,11 @@ type ServiceBusClientImpl struct {
 type DebugClient struct {
 }
 
+// DemoClient is an implementation of ServiceBusClient that simulates message submission by sending it over HTTP to the supplied endpoint
+type DemoClient struct {
+	messageEndpoint string
+}
+
 // NoopClient is a no-operation implementation of the ServiceBusClient interface, used when ServiceBus is disabled or unused.
 type NoopClient struct {
 }
@@ -43,6 +54,13 @@ type NoopClient struct {
 func NewClient(config ServiceBusConfig) (ServiceBusClient, error) {
 	ctx := context.Background()
 	if config.Enabled {
+		if config.DemoEndpoint != "" {
+			if globals.StrictMode {
+				return nil, errors.New("servicebus demo endpoint is not allowed in strict mode")
+			}
+			log.Ctx(ctx).Info().Msgf("Demo mode enabled, sending messages over http to %s", config.DemoEndpoint)
+			return &DemoClient{messageEndpoint: config.DemoEndpoint}, nil
+		}
 		if config.DebugOnly {
 			log.Ctx(ctx).Info().Msg("Debug mode enabled, writing messages to files in OS temp dir")
 			return &DebugClient{}, nil
@@ -113,6 +131,42 @@ func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value strin
 		log.Ctx(ctx).Warn().Msgf("DebugClient, failed to write to file: %s, err: %s", name, err.Error())
 		return err
 	}
+	return nil
+}
+
+// SubmitMessage submits a message to the configured endpoint over http.
+func (k *DemoClient) SubmitMessage(ctx context.Context, key string, value string) error {
+	// unmarshall and marshall the value to remove extra whitespace
+	var v interface{}
+	err := json.Unmarshal([]byte(value), &v)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msgf("DemoClient, failed to unmarshal value: %s", value)
+		return err
+	}
+
+	jsonValue, err := json.Marshal(v)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msgf("DemoClient, failed to marshal value: %s", value)
+		return err
+	}
+
+	log.Ctx(ctx).Debug().Msgf("DemoClient, submitting message %s - %s", key, jsonValue)
+	req, err := http.NewRequestWithContext(ctx, "POST", k.messageEndpoint, strings.NewReader(string(jsonValue)))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("DemoClient, received non-OK response: %d", resp.StatusCode)
+		return err
+	}
+	log.Ctx(ctx).Debug().Msgf("DemoClient, successfully sent message to endpoint")
 	return nil
 }
 

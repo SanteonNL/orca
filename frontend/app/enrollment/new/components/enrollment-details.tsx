@@ -1,32 +1,31 @@
 "use client"
 import React from 'react'
 import useEnrollmentStore from '@/lib/store/enrollment-store'
-import {Spinner} from '@/components/spinner'
-import {patientName, organizationName} from "@/lib/fhirRender";
+import { Spinner } from '@/components/spinner'
+import { patientName, organizationName } from "@/lib/fhirRender";
 
 export default function EnrollmentDetails() {
 
-    const {serviceRequest, taskCondition, patient, loading, launchContext} = useEnrollmentStore()
+    const { serviceRequest, taskCondition, patient, loading } = useEnrollmentStore()
 
-    if (loading) return <Spinner className="h-12 w-12 text-primary"/>
-
+    if (loading) return <Spinner className="h-12 w-12 text-primary" />
 
     return (
         (
-            <div className="grid grid-cols-[1fr,2fr] gap-y-4">
-                <div className="text-muted-foreground">Patient:</div>
-                <div className="font-bold">{patient ? patientName(patient) : "Onbekend"}</div>
+            <div className="grid grid-cols-[1fr,2fr] gap-y-4 w-[568px]">
+                <div>Patiënt:</div>
+                <div className="font-[500] capitalize">{patient ? patientName(patient) : "Onbekend"}</div>
 
-                <div className="text-muted-foreground">Verzoek:</div>
-                <div className="font-bold">{serviceRequest?.code?.coding?.[0].display || "Onbekend"}</div>
+                <div>Verzoek:</div>
+                <div className="font-[500]">{serviceRequest?.code?.coding?.[0].display || "Onbekend"}</div>
 
-                <div className="text-muted-foreground">Diagnose:</div>
-                <div className="font-bold">
+                <div>Diagnose:</div>
+                <div className="font-[500] capitalize">
                     {taskCondition?.code?.text || taskCondition?.code?.coding?.[0].display || "Onbekend"}
                 </div>
 
-                <div className="text-muted-foreground">Uitvoerende organisatie:</div>
-                <div className="font-bold">
+                <div>Uitvoerende organisatie:</div>
+                <div className="font-[500] capitalize">
                     {organizationName(serviceRequest?.performer?.[0])}
                 </div>
             </div>

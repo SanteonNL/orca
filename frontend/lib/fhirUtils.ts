@@ -1,5 +1,5 @@
 import Client from 'fhir-kit-client';
-import {Bundle, Condition, Patient, Questionnaire, Resource, ServiceRequest, Task} from 'fhir/r4';
+import { Bundle, Condition, Patient, PractitionerRole, Questionnaire, Resource, ServiceRequest, Task } from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -11,7 +11,7 @@ export const createEhrClient = () => {
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`
         : "http://localhost:9090/fhir";
 
-    return new Client({baseUrl});
+    return new Client({ baseUrl });
 };
 
 export const createCpsClient = () => {
@@ -19,7 +19,7 @@ export const createCpsClient = () => {
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
         : "http://localhost:9090/fhir";
 
-    return new Client({baseUrl});
+    return new Client({ baseUrl });
 };
 
 export const fetchAllBundlePages = async <T extends Resource>(
@@ -43,7 +43,7 @@ export const fetchAllBundlePages = async <T extends Resource>(
             bundle: {
                 resourceType: 'Bundle',
                 type: 'searchset',
-                link: [{relation: 'next', url: nextPageUrl}]
+                link: [{ relation: 'next', url: nextPageUrl }]
             }
         });
         const bundle = result as FhirBundle<T>;
@@ -63,7 +63,7 @@ export const findInBundle = (resourceType: string, bundle?: Bundle) => {
 }
 
 const cleanPatient = (patient: Patient) => {
-    const cleanedPatient = {...patient, id: undefined}
+    const cleanedPatient = { ...patient, id: undefined }
     if (cleanedPatient.contact) {
         for (const contact of cleanedPatient.contact) {
             if (contact.organization?.reference) {
@@ -96,7 +96,7 @@ const cleanPatient = (patient: Patient) => {
 
 const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string, taskIdentifier?: string) => {
     // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
-    const cleanedServiceRequest = {...serviceRequest, id: undefined};
+    const cleanedServiceRequest = { ...serviceRequest, id: undefined };
 
     if (serviceRequest.subject?.identifier?.system === BSN_SYSTEM && serviceRequest.subject?.identifier?.value !== getBsn(patient)) {
         throw new Error("Subject BSN in service request differs from Patient BSN");
@@ -130,7 +130,7 @@ const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, p
     return cleanedServiceRequest;
 }
 
-export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: string, serviceRequestReference: string, taskIdentifier?: string): Task => {
+export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: string, serviceRequestReference: string, taskIdentifier?: string, practitionerRole?: PractitionerRole): Task => {
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task");
 
@@ -167,6 +167,17 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
         task.identifier = parseTaskIdentifier(taskIdentifier);
     }
 
+    if (practitionerRole) {
+
+        task.contained = [practitionerRole]
+
+        //TODO: This should be set, but currently breaks in orca. Leaving it as-is as this code will be removed with INT-558
+        // task.owner = {
+        //     type: "PractitionerRole",
+        //     reference: `#${practitionerRole.id}`
+        // }
+    }
+
     return task
 }
 
@@ -179,7 +190,7 @@ const parseTaskIdentifier = (taskIdentifier: string) => {
     }];
 };
 
-export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, taskIdentifier?: string): Bundle & {
+export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondition: Condition, patient: Patient, practitionerRole?: PractitionerRole, taskIdentifier?: string): Bundle & {
     type: "transaction"
 } => {
     const cleanedPatient = cleanPatient(patient);
@@ -194,7 +205,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     }
     const taskEntry = {
         fullUrl: "urn:uuid:task",
-        resource: constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest", taskIdentifier),
+        resource: constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest", taskIdentifier, practitionerRole),
         request: {
             method: "POST",
             url: "Task",
@@ -205,6 +216,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         serviceRequestEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
         taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
     }
+
     const bundle = {
         resourceType: "Bundle",
         type: "transaction",
