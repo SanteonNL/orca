@@ -3,6 +3,7 @@ package ehr
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
@@ -52,7 +53,6 @@ type NoopClient struct {
 // Returns an error if configuration is invalid or initialization fails.
 func NewClient(config ServiceBusConfig) (ServiceBusClient, error) {
 	ctx := context.Background()
-	log.Ctx(ctx).Info().Msgf("DAVIDTEST - %s", config.DemoEndpoint)
 	if config.Enabled {
 		if config.DemoEndpoint != "" {
 			if globals.StrictMode {
@@ -136,11 +136,22 @@ func (k *DebugClient) SubmitMessage(ctx context.Context, key string, value strin
 
 // SubmitMessage submits a message to the configured endpoint over http.
 func (k *DemoClient) SubmitMessage(ctx context.Context, key string, value string) error {
-	jsonValue := strings.ReplaceAll(value, " ", "")
-	jsonValue = strings.ReplaceAll(jsonValue, "\n", "")
-	jsonValue = strings.ReplaceAll(jsonValue, "\t", "")
+	// unmarshall and marshall the value to remove extra whitespace
+	var v interface{}
+	err := json.Unmarshal([]byte(value), &v)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msgf("DemoClient, failed to unmarshal value: %s", value)
+		return err
+	}
+
+	jsonValue, err := json.Marshal(v)
+	if err != nil {
+		log.Ctx(ctx).Error().Err(err).Msgf("DemoClient, failed to marshal value: %s", value)
+		return err
+	}
+
 	log.Ctx(ctx).Debug().Msgf("DemoClient, submitting message %s - %s", key, jsonValue)
-	req, err := http.NewRequestWithContext(ctx, "POST", k.messageEndpoint, strings.NewReader(jsonValue))
+	req, err := http.NewRequestWithContext(ctx, "POST", k.messageEndpoint, strings.NewReader(string(jsonValue)))
 	if err != nil {
 		return err
 	}
