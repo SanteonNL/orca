@@ -29,7 +29,7 @@ export default function EnrollmentTaskPage() {
     const StatusElement = ({ label, value }: { label: string, value: string }) =>
         <>
             <div>{label}:</div>
-            <div className="font-[500] capitalize">{value}</div>
+            <div className="font-[500] first-letter:uppercase">{value}</div>
         </>
 
     if (task.status === "received") {

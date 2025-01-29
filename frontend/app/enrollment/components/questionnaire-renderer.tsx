@@ -73,7 +73,9 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
   }, [initialized, inputTask, questionnaire])
 
-  const submitQuestionnaireResponse = async () => {
+  const submitQuestionnaireResponse = async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
+
+    e.preventDefault()
 
     if (!inputTask || !updatableResponse) {
       toast.error("Cannot set QuestionnaireResponse, no Task provided")
@@ -214,7 +216,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         </QueryClientProvider>
 
         <div className='flex gap-3 mt-5'>
-          <Button variant='contained' disabled={isSubmitting || !responseIsValid} onClick={submitQuestionnaireResponse}>
+          <Button type="button" variant='contained' disabled={isSubmitting || !responseIsValid} onClick={submitQuestionnaireResponse}>
             {isSubmitting && <Spinner className='h-6 mr-2 text-inherit' />}
             Verzoek versturen
           </Button>

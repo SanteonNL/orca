@@ -14,18 +14,18 @@ export default function EnrollmentDetails() {
         (
             <div className="grid grid-cols-[1fr,2fr] gap-y-4 w-[568px]">
                 <div>Patiënt:</div>
-                <div className="font-[500] capitalize">{patient ? patientName(patient) : "Onbekend"}</div>
+                <div className="font-[500] first-letter:uppercase">{patient ? patientName(patient) : "Onbekend"}</div>
 
                 <div>Verzoek:</div>
-                <div className="font-[500]">{serviceRequest?.code?.coding?.[0].display || "Onbekend"}</div>
+                <div className="font-[500] first-letter:uppercase">{serviceRequest?.code?.coding?.[0].display || "Onbekend"}</div>
 
                 <div>Diagnose:</div>
-                <div className="font-[500] capitalize">
+                <div className="font-[500] first-letter:uppercase">
                     {taskCondition?.code?.text || taskCondition?.code?.coding?.[0].display || "Onbekend"}
                 </div>
 
                 <div>Uitvoerende organisatie:</div>
-                <div className="font-[500] capitalize">
+                <div className="font-[500] first-letter:uppercase">
                     {organizationName(serviceRequest?.performer?.[0])}
                 </div>
             </div>
