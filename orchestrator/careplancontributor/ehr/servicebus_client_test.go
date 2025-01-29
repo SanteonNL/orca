@@ -172,7 +172,7 @@ func TestDemoClient_SubmitMessage(t *testing.T) {
 					require.Equal(t, "/test-endpoint", r.URL.Path)
 					body, err := io.ReadAll(r.Body)
 					require.NoError(t, err)
-					require.Equal(t, "value", string(body))
+					require.Equal(t, `{"value":"value"}`, string(body))
 					w.WriteHeader(http.StatusOK)
 				}))
 				tt.config.DemoEndpoint = ts.URL + "/test-endpoint"
@@ -208,7 +208,7 @@ func TestDemoClient_SubmitMessage(t *testing.T) {
 			}
 			kafkaClient, err := NewClient(tt.config)
 			if err == nil {
-				err = kafkaClient.SubmitMessage(ctx, "key", "value")
+				err = kafkaClient.SubmitMessage(ctx, "key", `{"value": "value"}`)
 			}
 			if tt.expectError {
 				assert.Error(t, err, "Expected error but got none")
