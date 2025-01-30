@@ -259,7 +259,7 @@ func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolf
 	tx.AppendEntry(requestBundleEntry)
 	idx := len(tx.Entry) - 1
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(s.fhirClient, s.fhirURL, &requestBundleEntry, &txResult.Entry[idx], nil)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(request.Context, s.fhirClient, s.fhirURL, &requestBundleEntry, &txResult.Entry[idx], nil)
 		return result, nil, err
 	}, nil
 }
