@@ -1,6 +1,7 @@
 import React from 'react';
 import EnrolledTaskTable from './enrolled-task-table';
 import { Bundle, PractitionerRole, Task } from 'fhir/r4';
+import { headers } from 'next/headers'
 import {getNotificationBundles} from "@/app/api/delivery/storage";
 
 export default async function AcceptedTaskOverview() {
@@ -9,6 +10,9 @@ export default async function AcceptedTaskOverview() {
         console.error('FHIR_BASE_URL is not defined');
         return <>FHIR_BASE_URL is not defined</>;
     }
+
+    // prevent ssr from pre-rendering the page, as it won't be able to fetch resources from process.env.FHIR_BASE_URL
+    const headersList = headers()
 
     let rows: any[] = [];
 
