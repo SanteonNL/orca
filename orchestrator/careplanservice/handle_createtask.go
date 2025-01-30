@@ -223,9 +223,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			return nil, fmt.Errorf("failed to update CarePlan: %w", err)
 		}
 	}
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Task: %w", err)
-	}
+	
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdTask fhir.Task
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
