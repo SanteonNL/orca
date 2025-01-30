@@ -139,6 +139,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 					Location: to.Ptr("CareTeam/2"),
 					Status:   "204 Created",
 				},
+				Resource: json.RawMessage(`{"resourceType":"CareTeam","id":"2"}`),
 			},
 			{
 				Response: &fhir.BundleEntryResponse{
@@ -361,7 +362,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			require.NotNil(t, result)
 			response, notifications, err := result(returnedBundle)
 			require.NoError(t, err)
-			assert.Len(t, notifications, 1)
+			assert.Len(t, notifications, 2)
 			require.Equal(t, "Task/3", *response.Response.Location)
 			require.Equal(t, "204 Created", response.Response.Status)
 		})
