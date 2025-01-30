@@ -293,17 +293,17 @@ func NormalizeTransactionBundleResponseEntry(ctx context.Context, fhirClient fhi
 			}
 			resultEntry.Resource = resourceData
 		} else {
-			var resultBundle fhir.Bundle
-			if err := fhirClient.SearchWithContext(ctx, resourcePath, searchParams, &resultBundle); err != nil {
+			var searchResultBundle fhir.Bundle
+			if err := fhirClient.SearchWithContext(ctx, resourcePath, searchParams, &searchResultBundle); err != nil {
 				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to search for result Bundle entry (resource=%s): %w", resourcePath, err))
 			}
-			if len(resultBundle.Entry) == 0 {
+			if len(searchResultBundle.Entry) == 0 {
 				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("no result Bundle entry found (resource=%s)", resourcePath))
 			}
-			if len(resultBundle.Entry) > 1 {
+			if len(searchResultBundle.Entry) > 1 {
 				return nil, errors.New("multiple result Bundle entries found, expected 1")
 			}
-			resultEntry.Resource = resultBundle.Entry[0].Resource
+			resultEntry.Resource = searchResultBundle.Entry[0].Resource
 		}
 	}
 	if len(resultEntry.Resource) != 0 && result != nil {
