@@ -126,7 +126,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 	// Mimicks Questionnaire and HealthcareService search like it's done in FhirApiWorkflowProvider, but just in-memory filtering.
 	supported := false
 	for _, healthcareService := range e.healthcareServices {
-		if coolfhir.ContainsCoding(serviceCode, healthcareService.Category...) && coolfhir.ContainsCoding(conditionCode, healthcareService.Type...) {
+		if coolfhir.ConceptContainsCoding(serviceCode, healthcareService.Category...) && coolfhir.ConceptContainsCoding(conditionCode, healthcareService.Type...) {
 			supported = true
 			break
 		}
@@ -141,10 +141,10 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 			if usageContext.ValueCodeableConcept == nil {
 				continue
 			}
-			if coolfhir.ContainsCoding(serviceCode, *usageContext.ValueCodeableConcept) {
+			if coolfhir.ConceptContainsCoding(serviceCode, *usageContext.ValueCodeableConcept) {
 				matchesServiceCode = true
 			}
-			if coolfhir.ContainsCoding(conditionCode, *usageContext.ValueCodeableConcept) {
+			if coolfhir.ConceptContainsCoding(conditionCode, *usageContext.ValueCodeableConcept) {
 				matchesConditionCode = true
 			}
 		}

@@ -7,6 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -78,16 +79,31 @@ func TestRestHookChannel_Notify(t *testing.T) {
 	})
 }
 
-func TestInProcessChannelFactory_Create(t *testing.T) {
+func TestInProcessChannelFactory(t *testing.T) {
 	t.Run("local identity, in-process channel can be used", func(t *testing.T) {
 		factory := InProcessChannelFactory{
 			Profile: profile.Test(),
+		}
+
+		notificationsReceived := 0
+		capturedPrincipal := auth.Principal{}
+		pubsub.DefaultSubscribers.FhirSubscriptionNotify = func(ctx context.Context, _ any) error {
+			var err error
+			capturedPrincipal, err = auth.PrincipalFromContext(ctx)
+			require.NoError(t, err)
+			notificationsReceived++
+			return nil
 		}
 
 		channel, err := factory.Create(context.Background(), auth.TestPrincipal1.Organization.Identifier[0])
 
 		require.NoError(t, err)
 		require.NotNil(t, channel)
+
+		err = channel.Notify(context.Background(), coolfhir.SubscriptionNotification{})
+		require.NoError(t, err)
+		require.Equal(t, 1, notificationsReceived)
+		require.Equal(t, auth.TestPrincipal1.Organization, capturedPrincipal.Organization)
 	})
 	t.Run("no local identities match, in-process channel cannot be used", func(t *testing.T) {
 		prof := profile.TestProfile{

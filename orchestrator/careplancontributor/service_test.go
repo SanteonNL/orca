@@ -1,6 +1,7 @@
 package careplancontributor
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -394,12 +395,14 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
 	service.RegisterHandlers(frontServerMux)
+	ctx := context.Background()
+	httpClient, _ := prof.HttpClient(ctx, auth.TestPrincipal1.Organization.Identifier[0])
 
 	t.Run("invalid notification - wrong data type", func(t *testing.T) {
 		notification := fhir.Task{Id: to.Ptr("1")}
 		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
-		httpResponse, err := prof.HttpClient().Do(httpRequest)
+		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
 
@@ -411,7 +414,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
 		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
-		httpResponse, err := prof.HttpClient().Do(httpRequest)
+		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
 
@@ -423,7 +426,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/999"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
-		httpResponse, err := prof.HttpClient().Do(httpRequest)
+		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
 
@@ -435,7 +438,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/1"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
-		httpResponse, err := prof.HttpClient().Do(httpRequest)
+		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
 
@@ -447,7 +450,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/2"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
-		httpResponse, err := prof.HttpClient().Do(httpRequest)
+		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
 
@@ -462,7 +465,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	})
 	t.Run("invalid notification", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader("invalid"))
-		httpResponse, err := prof.HttpClient().Do(httpRequest)
+		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
 
@@ -481,6 +484,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	prof := profile.TestProfile{
 		Principal: auth.TestPrincipal2,
 	}
+	httpClient, _ := prof.HttpClient(nil, auth.TestPrincipal2.Organization.Identifier[0])
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -502,8 +506,11 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
-	service.cpsClientFactory = func(baseUrl *url.URL) fhirclient.Client {
-		capturedFhirBaseUrl = baseUrl.String()
+	t.Cleanup(func() {
+		fhirClientFactory = createFHIRClient
+	})
+	fhirClientFactory = func(fhirBaseURL *url.URL, _ *http.Client) fhirclient.Client {
+		capturedFhirBaseUrl = fhirBaseURL.String()
 		return mockFHIRClient
 	}
 
@@ -548,7 +555,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		})
 
 	httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
-	httpResponse, err := prof.HttpClient().Do(httpRequest)
+	httpResponse, err := httpClient.Do(httpRequest)
 
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
@@ -751,17 +758,11 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 
 		publicURL, _ := url.Parse("https://example.com")
 		service := &Service{
-			scpHttpClient: &http.Client{
-				Transport: auth.AuthenticatedTestRoundTripper(http.DefaultClient.Transport, auth.TestPrincipal2, ""),
-			},
 			orcaPublicURL: publicURL,
 			config: Config{
 				CarePlanService: CarePlanServiceConfig{
 					URL: remoteContributorFHIRAPI.URL + "/cps",
 				},
-			},
-			cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
-				return fhirclient.New(baseURL, http.DefaultClient, nil)
 			},
 			profile: profile.TestProfile{
 				Principal: auth.TestPrincipal2,

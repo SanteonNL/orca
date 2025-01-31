@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/test/vcrclient_mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	ssi "github.com/nuts-foundation/go-did"
@@ -17,26 +18,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 )
-
-func TestDutchNutsProfile_RegisterHTTPHandlers(t *testing.T) {
-	const basePath = "/basement"
-	var baseURL, _ = url.Parse("http://example.com" + basePath)
-	serverMux := http.NewServeMux()
-	DutchNutsProfile{}.RegisterHTTPHandlers("/basement", baseURL, serverMux)
-	server := httptest.NewServer(serverMux)
-
-	httpResponse, err := http.Get(server.URL + "/basement/.well-known/oauth-protected-resource")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-	data, _ := io.ReadAll(httpResponse.Body)
-	assert.JSONEq(t, `{"resource":"http://example.com/basement","authorization_servers":["oauth2"],"bearer_methods_supported":["header"]}`, string(data))
-}
 
 func TestDutchNutsProfile_identifiersFromCredential(t *testing.T) {
 	t.Run("NutsUraCredential", func(t *testing.T) {
@@ -296,6 +281,17 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 }
 
 func TestDutchNutsProfile_HttpClient(t *testing.T) {
+	serverIdentity := fhir.Identifier{System: to.Ptr(coolfhir.URANamingSystem), Value: to.Ptr("1234")}
+	ctrl := gomock.NewController(t)
+	mockCSD := csd.NewMockDirectory(ctrl)
+	mockCSD.EXPECT().LookupEndpoint(gomock.Any(), &serverIdentity, authzServerURLEndpointName).
+		Return([]fhir.Endpoint{
+			{
+				Address: "https://example.com/authz",
+			},
+		}, nil).
+		AnyTimes()
+	ctx := context.Background()
 	t.Run("without client cert", func(t *testing.T) {
 		// Create an HTTP test server that requires a TLS client certificate
 		httpServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -305,8 +301,10 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 
 		globals.DefaultTLSConfig = httpServer.Client().Transport.(*http.Transport).TLSClientConfig
 
-		profile := DutchNutsProfile{}
-		httpResponse, err := profile.HttpClient().Get(httpServer.URL)
+		profile := DutchNutsProfile{csd: mockCSD}
+		httpClient, err := profile.HttpClient(ctx, serverIdentity)
+		require.NoError(t, err)
+		httpResponse, err := httpClient.Get(httpServer.URL)
 
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
@@ -329,12 +327,53 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 		globals.DefaultTLSConfig.Certificates = []tls.Certificate{clientCert}
 		profile := DutchNutsProfile{
 			clientCert: &clientCert,
+			csd:        mockCSD,
 		}
-
-		httpResponse, err := profile.HttpClient().Get(httpServer.URL)
+		httpClient, err := profile.HttpClient(ctx, serverIdentity)
+		require.NoError(t, err)
+		httpResponse, err := httpClient.Get(httpServer.URL)
 
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("FHIR base URL as identity, AuthorizationServer URL lookup using CapabilityStatement", func(t *testing.T) {
+		var fhirBaseURL string
+		httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			coolfhir.SendResponse(w, 200, fhir.CapabilityStatement{
+				Rest: []fhir.CapabilityStatementRest{
+					{
+						Security: &fhir.CapabilityStatementRestSecurity{
+							Service: []fhir.CodeableConcept{
+								{
+									Coding: []fhir.Coding{
+										{
+											System: to.Ptr("http://hl7.org/fhir/ValueSet/restful-security-service"),
+											Code:   to.Ptr("OAuth"),
+										},
+									},
+								},
+							},
+							Extension: []fhir.Extension{
+								{
+									Url:         "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer",
+									ValueString: to.Ptr(fhirBaseURL + "/authz"),
+								},
+							},
+						},
+					},
+				},
+			})
+		}))
+		fhirBaseURL = httpServer.URL
+
+		serverIdentity := fhir.Identifier{
+			System: to.Ptr("https://build.fhir.org/http.html#root"),
+			Value:  to.Ptr(fhirBaseURL),
+		}
+		profile := DutchNutsProfile{}
+		httpClient, err := profile.HttpClient(ctx, serverIdentity)
+		require.NoError(t, err)
+		require.NotNil(t, httpClient)
 	})
 }
 
