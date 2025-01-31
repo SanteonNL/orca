@@ -341,7 +341,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			mockFHIRClient.EXPECT().Read("Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
 				data, _ := json.Marshal(tt.createdTask)
 				*(result.(*[]byte)) = data
 				return tt.errorFromRead

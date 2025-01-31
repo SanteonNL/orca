@@ -301,8 +301,8 @@ func TestService_DefaultOperationHandler(t *testing.T) {
 		}
 		ctrl := gomock.NewController(t)
 		fhirClient := mock.NewMockClient(ctrl)
-		fhirClient.EXPECT().Read("ServiceRequest/123", gomock.Any(), gomock.Any()).
-			DoAndReturn(func(_ string, resultResource interface{}, opts ...fhirclient.Option) error {
+		fhirClient.EXPECT().ReadWithContext(gomock.Any(), "ServiceRequest/123", gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, resultResource interface{}, opts ...fhirclient.Option) error {
 				reflect.ValueOf(resultResource).Elem().Set(reflect.ValueOf(expectedServiceRequestJson))
 				return nil
 			})

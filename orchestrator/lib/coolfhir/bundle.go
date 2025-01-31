@@ -1,6 +1,7 @@
 package coolfhir
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -208,17 +209,22 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 // - Change the response.location property to a relative URL if it was an absolute URL
 // - Read the resource being referenced and unmarshal it into the given result argument (so it can be used for notification).
 // - Set the response.resource property to the read resource
-func NormalizeTransactionBundleResponseEntry(fhirClient fhirclient.Client, fhirBaseURL *url.URL, requestEntry *fhir.BundleEntry, responseEntry *fhir.BundleEntry, result interface{}) (*fhir.BundleEntry, error) {
+func NormalizeTransactionBundleResponseEntry(ctx context.Context, fhirClient fhirclient.Client, fhirBaseURL *url.URL, requestEntry *fhir.BundleEntry, responseEntry *fhir.BundleEntry, result interface{}) (*fhir.BundleEntry, error) {
 	if responseEntry.Response == nil {
 		return nil, errors.New("entry.Response is nil")
 	}
 	resultEntry := *responseEntry
 	// Enrich result with resource from FHIR server
 	if resultEntry.Resource == nil {
-		// Microsoft Azure FHIR: when PUT-ing a resource, the resultEntry entry might not contain a location.
-		//                       in that case, the location is the same as the request URL.
+		// Microsoft Azure FHIR:
+		// - When PUT-ing a resource, the resultEntry entry might not contain a location.
+		//   In that case, the location is the same as the request URL.
+		// - When POST-ing a resource with IfNoneExist and the resource already exists, the resource itself isn't returned.
+		//   It only returns: {"response":{"status":"200"}}
+		//   In theory, this could be fixed with the 'Prefer: return=representation' header, but Azure FHIR doesn't support it.
+		//   See https://github.com/microsoft/fhir-server/issues/2431
 		var resourcePath string
-		var requestOptions []fhirclient.Option
+		var searchParams url.Values
 		if resultEntry.Response.Location != nil {
 			resourcePath = *resultEntry.Response.Location
 			// HAPI uses relative Location URLs, Microsoft Azure FHIR uses absolute URLs.
@@ -241,22 +247,64 @@ func NormalizeTransactionBundleResponseEntry(fhirClient fhirclient.Client, fhirB
 				return nil, err
 			}
 			resourcePath = entryRequestUrl.Path
-			for key, values := range entryRequestUrl.Query() {
-				for _, value := range values {
-					requestOptions = append(requestOptions, fhirclient.QueryParam(key, value))
-				}
+			searchParams = entryRequestUrl.Query()
+		} else if requestEntry.Request.IfNoneExist != nil {
+			// Azure FHIR behavior: conditional create matched existing resource, Azure FHIR only returns "200 OK".
+			// Need to find the existing resource by the IfNoneExist query parameters.
+			q, err := url.Parse("?" + *requestEntry.Request.IfNoneExist)
+			if err != nil {
+				return nil, err
 			}
+			resourcePath = requestEntry.Request.Url
+			searchParams = q.Query()
 		}
+
+		//if resourcePath == "" {
+		//	// Might be conditional update or create
+		//	if requestEntry.Request.IfNoneExist != nil {
+		//		// TODO: Might have to support the other conditional parameters as well?
+		//		// Azure FHIR (contrary to HAPI) only returns "200 OK" for conditional creates that match an existing resource.
+		//		// Need to find the existing resource by the IfNoneExist query parameters.
+		//		var resultBundle fhir.Bundle
+		//		if err := fhirClient.SearchWithContext(ctx, requestEntry.Request.Url, &resultBundle, requestOptions...); err != nil {
+		//		} else {
+		//			responseBundleEntryJson, _ := json.Marshal(responseEntry)
+		//			log.Error().Msgf("Failed to determine resource path from FHIR transaction resultEntry bundle: %s", string(responseBundleEntryJson))
+		//			return nil, errors.New("failed to determine resource for transaction response bundle entry, see log for more details")
+		//		}
+		//	} else {
+		//		// We have a path to the resource, just get it
+		//		var resourceData []byte
+		//		if err := fhirClient.Read(resourcePath, &resourceData, requestOptions...); err != nil {
+		//			return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", resourcePath, err))
+		//		}
+		//		resultEntry.Resource = resourceData
+		//	}
+
 		if resourcePath == "" {
 			responseBundleEntryJson, _ := json.Marshal(responseEntry)
 			log.Error().Msgf("Failed to determine resource path from FHIR transaction resultEntry bundle: %s", string(responseBundleEntryJson))
 			return nil, errors.New("failed to determine resource for transaction response bundle entry, see log for more details")
 		}
-		var resourceData []byte
-		if err := fhirClient.Read(resourcePath, &resourceData, requestOptions...); err != nil {
-			return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", resourcePath, err))
+		if len(searchParams) == 0 {
+			var resourceData []byte
+			if err := fhirClient.ReadWithContext(ctx, resourcePath, &resourceData); err != nil {
+				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", resourcePath, err))
+			}
+			resultEntry.Resource = resourceData
+		} else {
+			var searchResultBundle fhir.Bundle
+			if err := fhirClient.SearchWithContext(ctx, resourcePath, searchParams, &searchResultBundle); err != nil {
+				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to search for result Bundle entry (resource=%s): %w", resourcePath, err))
+			}
+			if len(searchResultBundle.Entry) == 0 {
+				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("no result Bundle entry found (resource=%s)", resourcePath))
+			}
+			if len(searchResultBundle.Entry) > 1 {
+				return nil, errors.New("multiple result Bundle entries found, expected 1")
+			}
+			resultEntry.Resource = searchResultBundle.Entry[0].Resource
 		}
-		resultEntry.Resource = resourceData
 	}
 	if len(resultEntry.Resource) != 0 && result != nil {
 		if err := json.Unmarshal(resultEntry.Resource, result); err != nil {
