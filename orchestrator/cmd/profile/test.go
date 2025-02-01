@@ -88,15 +88,13 @@ func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWrite
 	}
 }
 
-func (t TestProfile) HttpClient(_ context.Context, serverIdentity fhir.Identifier) (*http.Client, error) {
-	org := fhir.Organization{
-		Identifier: []fhir.Identifier{serverIdentity},
-		Name:       to.Ptr("Organization " + *serverIdentity.Value),
+func (t TestProfile) HttpClient(_ context.Context, _ fhir.Identifier) (*http.Client, error) {
+	p := t.Principal
+	if p != nil {
+		p = auth.TestPrincipal1
 	}
 	return &http.Client{
-		Transport: auth.AuthenticatedTestRoundTripper(nil, &auth.Principal{
-			Organization: org,
-		}, t.xSCPContextHeaderValue),
+		Transport: auth.AuthenticatedTestRoundTripper(nil, p, t.xSCPContextHeaderValue),
 	}, nil
 }
 
