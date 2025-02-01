@@ -7,6 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
@@ -29,6 +30,21 @@ type TestProfile struct {
 	Principal              *auth.Principal
 	xSCPContextHeaderValue string
 	CSD                    csd.Directory
+}
+
+func (t TestProfile) CapabilityStatement(cp *fhir.CapabilityStatement) {
+	cp.Rest[0].Security = &fhir.CapabilityStatementRestSecurity{
+		Service: []fhir.CodeableConcept{
+			{
+				Coding: []fhir.Coding{
+					{
+						System: to.Ptr("http://hl7.org/fhir/restful-security-service"),
+						Code:   to.Ptr("SMART-on-FHIR"),
+					},
+				},
+			},
+		},
+	}
 }
 
 func (t TestProfile) Identities(_ context.Context) ([]fhir.Organization, error) {
@@ -72,20 +88,14 @@ func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWrite
 	}
 }
 
-func (t TestProfile) RegisterHTTPHandlers(_ string, _ *url.URL, _ *http.ServeMux) {
-
-}
-
-func (t TestProfile) HttpClient() *http.Client {
-	var principal *auth.Principal
-	if t.Principal == nil {
-		principal = auth.TestPrincipal1
-	} else {
-		principal = t.Principal
+func (t TestProfile) HttpClient(_ context.Context, _ fhir.Identifier) (*http.Client, error) {
+	p := t.Principal
+	if p != nil {
+		p = auth.TestPrincipal1
 	}
 	return &http.Client{
-		Transport: auth.AuthenticatedTestRoundTripper(nil, principal, t.xSCPContextHeaderValue),
-	}
+		Transport: auth.AuthenticatedTestRoundTripper(nil, p, t.xSCPContextHeaderValue),
+	}, nil
 }
 
 var _ csd.Directory = TestCsdDirectory{}

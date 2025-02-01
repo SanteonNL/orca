@@ -21,7 +21,6 @@ func (d DutchNutsProfile) Authenticator(resourceServerURL *url.URL, fn func(writ
 	authConfig := middleware.Config{
 		TokenIntrospectionEndpoint: d.Config.API.Parse().JoinPath("internal/auth/v2/accesstoken/introspect").String(),
 		TokenIntrospectionClient:   tokenIntrospectionClient,
-		BaseURL:                    resourceServerURL,
 	}
 	return middleware.Secure(authConfig, func(response http.ResponseWriter, request *http.Request) {
 		userInfo := middleware.UserInfo(request.Context())

@@ -9,8 +9,8 @@ import (
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
@@ -39,7 +39,7 @@ func (d InProcessChannelFactory) Create(ctx context.Context, subscriber fhir.Ide
 		for _, localIdentity := range localIdentities {
 			for _, localIdentifier := range localIdentity.Identifier {
 				if coolfhir.IdentifierEquals(&localIdentifier, &subscriber) {
-					return InProcessPubSubChannel{}, nil
+					return InProcessPubSubChannel{identity: localIdentity}, nil
 				}
 			}
 		}
@@ -53,22 +53,24 @@ var _ ChannelFactory = CsdChannelFactory{}
 // In other words, it looks up the subscriber endpoint in an external registry, the CSD.
 // This is typically for out-of-band server-managed FHIR subscriptions.
 type CsdChannelFactory struct {
-	Directory csd.Directory
-	// ChannelHttpClient is the HTTP client used to deliver the notification to the subscriber.
-	ChannelHttpClient *http.Client
+	Profile profile.Provider
 }
 
 func (c CsdChannelFactory) Create(ctx context.Context, subscriber fhir.Identifier) (Channel, error) {
-	endpoint, err := c.Directory.LookupEndpoint(ctx, &subscriber, profile.FHIRNotificationURLEndpointName)
+	endpoint, err := c.Profile.CsdDirectory().LookupEndpoint(ctx, &subscriber, profile.FHIRNotificationURLEndpointName)
 	if err != nil {
 		return nil, fmt.Errorf("lookup notification endpoint in CSD: %w", err)
 	}
 	if len(endpoint) == 0 {
 		return nil, fmt.Errorf("no notification endpoint found in CSD for subscriber: %s", coolfhir.ToString(subscriber))
 	}
+	httpClient, err := c.Profile.HttpClient(ctx, subscriber)
+	if err != nil {
+		return nil, fmt.Errorf("create HTTP client to notify subscriber (subscriber=%s): %w", coolfhir.ToString(subscriber), err)
+	}
 	return &RestHookChannel{
 		Endpoint: endpoint[0].Address,
-		Client:   c.ChannelHttpClient,
+		Client:   httpClient,
 	}, nil
 }
 
@@ -112,8 +114,12 @@ func (r RestHookChannel) Notify(ctx context.Context, notification coolfhir.Subsc
 var _ Channel = InProcessPubSubChannel{}
 
 type InProcessPubSubChannel struct {
+	identity fhir.Organization
 }
 
 func (i InProcessPubSubChannel) Notify(ctx context.Context, notification coolfhir.SubscriptionNotification) error {
+	ctx = auth.WithPrincipal(ctx, auth.Principal{
+		Organization: i.identity,
+	})
 	return pubsub.DefaultSubscribers.FhirSubscriptionNotify(ctx, notification)
 }

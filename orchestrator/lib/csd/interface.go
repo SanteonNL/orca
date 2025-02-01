@@ -1,4 +1,4 @@
-//go:generate mockgen -destination=./interface_mock_test.go -package=csd -source=interface.go
+//go:generate mockgen -destination=./test.go -package=csd -source=interface.go
 package csd
 
 import (

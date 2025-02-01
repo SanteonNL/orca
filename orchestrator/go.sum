@@ -233,6 +233,8 @@ github.com/nuts-foundation/go-did v0.15.0 h1:aNl6KC8jiyRJGl9PPKFBboLLC0wUm5h+tjE
 github.com/nuts-foundation/go-did v0.15.0/go.mod h1:swjCJvcRxc+i1nyieIERWEb3vFb4N7iYC+qen2OIbNg=
 github.com/nuts-foundation/go-nuts-client v0.1.7 h1:o2ZZUckJhY4Ivvu03pLe+HmSpyDzrEvJMd4p0ZYIqVc=
 github.com/nuts-foundation/go-nuts-client v0.1.7/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
+github.com/nuts-foundation/go-nuts-client v0.1.8-0.20250131065931-7e2bd8fd5976 h1:okPfjaMRJWAkMMU5iowwivxf1V1XsOPsEBsh2GfWkzg=
+github.com/nuts-foundation/go-nuts-client v0.1.8-0.20250131065931-7e2bd8fd5976/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=

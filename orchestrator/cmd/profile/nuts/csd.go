@@ -18,6 +18,8 @@ var _ csd.Directory = &CsdDirectory{}
 
 const cacheTtl = 30 * time.Second
 
+const authzServerURLEndpointName = "authServerURL"
+
 func (d DutchNutsProfile) CsdDirectory() csd.Directory {
 	return d.csd
 }
