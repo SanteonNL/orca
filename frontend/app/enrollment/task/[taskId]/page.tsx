@@ -26,10 +26,10 @@ export default function EnrollmentTaskPage() {
         return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
     }
 
-    const StatusElement = ({ label, value }: { label: string, value: string }) =>
+    const StatusElement = ({label, value, noUpperCase}: { label: string, value: string, noUpperCase?: boolean | undefined }) =>
         <>
             <div>{label}:</div>
-            <div className="font-[500] first-letter:uppercase">{value}</div>
+            <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
 
     if (task.status === "received") {
@@ -47,7 +47,7 @@ export default function EnrollmentTaskPage() {
                     <p className="text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
             }
             <div className="grid grid-cols-[1fr,2fr] gap-y-4">
-                <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} />
+                <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} noUpperCase={true} />
                 <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
                 <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"} />
                 <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)} />
