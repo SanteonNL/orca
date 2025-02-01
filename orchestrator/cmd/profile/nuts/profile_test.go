@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
@@ -292,42 +293,36 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 		}, nil).
 		AnyTimes()
 	ctx := context.Background()
-	t.Run("without client cert", func(t *testing.T) {
-		// Create an HTTP test server that requires a TLS client certificate
-		httpServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer httpServer.Close()
-
-		globals.DefaultTLSConfig = httpServer.Client().Transport.(*http.Transport).TLSClientConfig
-
-		profile := DutchNutsProfile{csd: mockCSD}
-		httpClient, err := profile.HttpClient(ctx, serverIdentity)
-		require.NoError(t, err)
-		httpResponse, err := httpClient.Get(httpServer.URL)
-
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	httpMux := http.NewServeMux()
+	httpMux.HandleFunc("/internal/auth/v2/sub/request-service-access-token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "token",
+			"token_type":   "Bearer",
+		})
 	})
-	t.Run("with client cert", func(t *testing.T) {
-		// Create an HTTP test server that requires a TLS client certificate
-		httpServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer httpServer.Close()
-		clientCert, err := tls.LoadX509KeyPair("test_cert.pem", "test_cert_key.pem")
-		require.NoError(t, err)
-		httpServer.TLS = &tls.Config{}
-		httpServer.TLS.ClientCAs = x509.NewCertPool()
-		httpServer.TLS.ClientCAs.AppendCertsFromPEM(clientCert.Certificate[0])
-		httpServer.TLS.ClientAuth = tls.RequireAnyClientCert
-		httpServer.StartTLS()
+	capturedHeaders := make(http.Header)
+	httpMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.WriteHeader(http.StatusOK)
+	})
 
-		globals.DefaultTLSConfig = httpServer.Client().Transport.(*http.Transport).TLSClientConfig
-		globals.DefaultTLSConfig.Certificates = []tls.Certificate{clientCert}
+	t.Run("without client cert", func(t *testing.T) {
+		t.Cleanup(func() {
+			capturedHeaders = nil
+		})
+		httpServer := httptest.NewServer(httpMux)
+		defer httpServer.Close()
+
 		profile := DutchNutsProfile{
-			clientCert: &clientCert,
-			csd:        mockCSD,
+			csd: mockCSD,
+			Config: Config{
+				API: APIConfig{
+					URL: httpServer.URL,
+				},
+				OwnSubject: "sub",
+			},
 		}
 		httpClient, err := profile.HttpClient(ctx, serverIdentity)
 		require.NoError(t, err)
@@ -335,6 +330,43 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		require.Equal(t, "Bearer token", capturedHeaders.Get("Authorization"))
+	})
+	t.Run("with client cert", func(t *testing.T) {
+		t.Cleanup(func() {
+			capturedHeaders = nil
+		})
+		// Create an HTTP test server that requires a TLS client certificate
+		nutsNode := httptest.NewServer(httpMux)
+		// Create an HTTP test server that requires a TLS client certificate
+		resourceServer := httptest.NewUnstartedServer(httpMux)
+		defer resourceServer.Close()
+		clientCert, err := tls.LoadX509KeyPair("test_cert.pem", "test_cert_key.pem")
+		require.NoError(t, err)
+		resourceServer.TLS = &tls.Config{}
+		resourceServer.TLS.ClientCAs = x509.NewCertPool()
+		resourceServer.TLS.ClientCAs.AppendCertsFromPEM(clientCert.Certificate[0])
+		resourceServer.TLS.ClientAuth = tls.RequireAnyClientCert
+		resourceServer.StartTLS()
+
+		globals.DefaultTLSConfig = resourceServer.Client().Transport.(*http.Transport).TLSClientConfig
+		profile := DutchNutsProfile{
+			clientCert: &clientCert,
+			csd:        mockCSD,
+			Config: Config{
+				API: APIConfig{
+					URL: nutsNode.URL,
+				},
+				OwnSubject: "sub",
+			},
+		}
+		httpClient, err := profile.HttpClient(ctx, serverIdentity)
+		require.NoError(t, err)
+		httpResponse, err := httpClient.Get(resourceServer.URL)
+
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		require.Equal(t, "Bearer token", capturedHeaders.Get("Authorization"))
 	})
 	t.Run("FHIR base URL as identity, AuthorizationServer URL lookup using CapabilityStatement", func(t *testing.T) {
 		var fhirBaseURL string

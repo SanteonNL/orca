@@ -134,18 +134,26 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 	if err != nil {
 		return nil, err
 	}
-	client := oauth2.NewClient(nuts.OAuth2TokenSource{
-		NutsSubject: d.Config.OwnSubject,
-		NutsAPIURL:  d.Config.API.URL,
-	}, careplancontributor.CarePlanServiceOAuth2Scope, parsedAuthzServerURL)
+
+	var underlyingTransport *http.Transport
 	if d.clientCert != nil {
 		tlsConfig := globals.DefaultTLSConfig.Clone()
 		tlsConfig.Certificates = []tls.Certificate{*d.clientCert}
-		client.Transport = &http.Transport{TLSClientConfig: tlsConfig}
+		underlyingTransport = &http.Transport{TLSClientConfig: tlsConfig}
 	} else {
-		httpTransport := http.DefaultTransport.(*http.Transport).Clone()
-		httpTransport.TLSClientConfig = globals.DefaultTLSConfig
-		client.Transport = httpTransport
+		underlyingTransport = http.DefaultTransport.(*http.Transport).Clone()
+		underlyingTransport.TLSClientConfig = globals.DefaultTLSConfig
+	}
+	client := &http.Client{
+		Transport: &oauth2.Transport{
+			UnderlyingTransport: underlyingTransport,
+			TokenSource: nuts.OAuth2TokenSource{
+				NutsSubject: d.Config.OwnSubject,
+				NutsAPIURL:  d.Config.API.URL,
+			},
+			Scope:          careplancontributor.CarePlanServiceOAuth2Scope,
+			AuthzServerURL: parsedAuthzServerURL,
+		},
 	}
 	return client, nil
 }
