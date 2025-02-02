@@ -259,28 +259,6 @@ func NormalizeTransactionBundleResponseEntry(ctx context.Context, fhirClient fhi
 			searchParams = q.Query()
 		}
 
-		//if resourcePath == "" {
-		//	// Might be conditional update or create
-		//	if requestEntry.Request.IfNoneExist != nil {
-		//		// TODO: Might have to support the other conditional parameters as well?
-		//		// Azure FHIR (contrary to HAPI) only returns "200 OK" for conditional creates that match an existing resource.
-		//		// Need to find the existing resource by the IfNoneExist query parameters.
-		//		var resultBundle fhir.Bundle
-		//		if err := fhirClient.SearchWithContext(ctx, requestEntry.Request.Url, &resultBundle, requestOptions...); err != nil {
-		//		} else {
-		//			responseBundleEntryJson, _ := json.Marshal(responseEntry)
-		//			log.Error().Msgf("Failed to determine resource path from FHIR transaction resultEntry bundle: %s", string(responseBundleEntryJson))
-		//			return nil, errors.New("failed to determine resource for transaction response bundle entry, see log for more details")
-		//		}
-		//	} else {
-		//		// We have a path to the resource, just get it
-		//		var resourceData []byte
-		//		if err := fhirClient.Read(resourcePath, &resourceData, requestOptions...); err != nil {
-		//			return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", resourcePath, err))
-		//		}
-		//		resultEntry.Resource = resourceData
-		//	}
-
 		if resourcePath == "" {
 			responseBundleEntryJson, _ := json.Marshal(responseEntry)
 			log.Error().Msgf("Failed to determine resource path from FHIR transaction resultEntry bundle: %s", string(responseBundleEntryJson))
