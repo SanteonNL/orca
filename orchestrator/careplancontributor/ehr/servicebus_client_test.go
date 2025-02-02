@@ -229,14 +229,14 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 		mockConnectErr error
 		mockSendErr    error
 		expectErr      bool
-		setupMocks     func(mock *MockSbClient) func()
+		setupMocks     func(mock *MockServiceBusClientWrapper) func()
 	}{
 		{
 			"Successful submit",
 			nil,
 			nil,
 			false,
-			func(mock *MockSbClient) func() {
+			func(mock *MockServiceBusClientWrapper) func() {
 				var old = newServiceBusClient
 				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return mock, nil
@@ -252,7 +252,7 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 			"Connect error", errors.New("connection failed"),
 			nil,
 			true,
-			func(mock *MockSbClient) func() {
+			func(mock *MockServiceBusClientWrapper) func() {
 				var old = newServiceBusClient
 				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return nil, errors.New("connection failed")
@@ -263,7 +263,7 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 			},
 		},
 		{
-			"SendMessage error", nil, errors.New("send failed"), true, func(mock *MockSbClient) func() {
+			"SendMessage error", nil, errors.New("send failed"), true, func(mock *MockServiceBusClientWrapper) func() {
 				var old = newServiceBusClient
 				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return mock, nil
@@ -280,7 +280,7 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mockSbClient := NewMockSbClient(ctrl)
+			mockSbClient := NewMockServiceBusClientWrapper(ctrl)
 
 			client := &ServiceBusClientImpl{
 				config: ServiceBusConfig{Topic: "test-topic"},

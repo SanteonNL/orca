@@ -17,32 +17,32 @@ import (
 	gomock "go.uber.org/mock/gomock"
 )
 
-// MockSbClient is a mock of ServiceBusClientWrapper interface.
-type MockSbClient struct {
+// MockServiceBusClientWrapper is a mock of ServiceBusClientWrapper interface.
+type MockServiceBusClientWrapper struct {
 	ctrl     *gomock.Controller
-	recorder *MockSbClientMockRecorder
+	recorder *MockServiceBusClientWrapperMockRecorder
 	isgomock struct{}
 }
 
-// MockSbClientMockRecorder is the mock recorder for MockSbClient.
-type MockSbClientMockRecorder struct {
-	mock *MockSbClient
+// MockServiceBusClientWrapperMockRecorder is the mock recorder for MockServiceBusClientWrapper.
+type MockServiceBusClientWrapperMockRecorder struct {
+	mock *MockServiceBusClientWrapper
 }
 
-// NewMockSbClient creates a new mock instance.
-func NewMockSbClient(ctrl *gomock.Controller) *MockSbClient {
-	mock := &MockSbClient{ctrl: ctrl}
-	mock.recorder = &MockSbClientMockRecorder{mock}
+// NewMockServiceBusClientWrapper creates a new mock instance.
+func NewMockServiceBusClientWrapper(ctrl *gomock.Controller) *MockServiceBusClientWrapper {
+	mock := &MockServiceBusClientWrapper{ctrl: ctrl}
+	mock.recorder = &MockServiceBusClientWrapperMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockSbClient) EXPECT() *MockSbClientMockRecorder {
+func (m *MockServiceBusClientWrapper) EXPECT() *MockServiceBusClientWrapperMockRecorder {
 	return m.recorder
 }
 
 // Close mocks base method.
-func (m *MockSbClient) Close(ctx context.Context) error {
+func (m *MockServiceBusClientWrapper) Close(ctx context.Context) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Close", ctx)
 	ret0, _ := ret[0].(error)
@@ -50,13 +50,13 @@ func (m *MockSbClient) Close(ctx context.Context) error {
 }
 
 // Close indicates an expected call of Close.
-func (mr *MockSbClientMockRecorder) Close(ctx any) *gomock.Call {
+func (mr *MockServiceBusClientWrapperMockRecorder) Close(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockSbClient)(nil).Close), ctx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockServiceBusClientWrapper)(nil).Close), ctx)
 }
 
 // SendMessage mocks base method.
-func (m *MockSbClient) SendMessage(ctx context.Context, message *azservicebus.Message) error {
+func (m *MockServiceBusClientWrapper) SendMessage(ctx context.Context, message *azservicebus.Message) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SendMessage", ctx, message)
 	ret0, _ := ret[0].(error)
@@ -64,7 +64,7 @@ func (m *MockSbClient) SendMessage(ctx context.Context, message *azservicebus.Me
 }
 
 // SendMessage indicates an expected call of SendMessage.
-func (mr *MockSbClientMockRecorder) SendMessage(ctx, message any) *gomock.Call {
+func (mr *MockServiceBusClientWrapperMockRecorder) SendMessage(ctx, message any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMessage", reflect.TypeOf((*MockSbClient)(nil).SendMessage), ctx, message)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendMessage", reflect.TypeOf((*MockServiceBusClientWrapper)(nil).SendMessage), ctx, message)
 }
