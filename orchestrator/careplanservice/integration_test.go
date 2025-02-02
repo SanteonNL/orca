@@ -22,7 +22,7 @@ import (
 
 var notificationCounter = new(atomic.Int32)
 
-func Test_Integration_TaskLifecycle(t *testing.T) {
+func Test_Integration(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
@@ -94,6 +94,43 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		err = service.fhirClient.SearchWithContext(context.Background(), "Patient", url.Values{"identifier": {coolfhir.ToString(patient.Identifier[0])}}, &patientBundle)
 		require.NoError(t, err)
 		require.Len(t, patientBundle.Entry, 1)
+	})
+
+	t.Run("DELETE is supported when unmanaged operations are allowed", func(t *testing.T) {
+		t.Run("as single request", func(t *testing.T) {
+			t.Run("with ID", func(t *testing.T) {
+				serviceRequest := fhir.ServiceRequest{}
+				err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
+				require.NoError(t, err)
+				err = carePlanContributor1.Delete("ServiceRequest/"+*serviceRequest.Id, nil)
+				require.NoError(t, err)
+			})
+			t.Run("with ID as search parameter", func(t *testing.T) {
+				serviceRequest := fhir.ServiceRequest{}
+				err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
+				require.NoError(t, err)
+				err = carePlanContributor1.Delete("ServiceRequest", fhirclient.QueryParam("_id", *serviceRequest.Id))
+				require.NoError(t, err)
+			})
+		})
+		t.Run("as transaction entry", func(t *testing.T) {
+			serviceRequest := fhir.ServiceRequest{}
+			err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
+			require.NoError(t, err)
+			transaction := fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbDELETE,
+							Url:    "ServiceRequest/" + *serviceRequest.Id,
+						},
+					},
+				},
+			}
+			err = carePlanContributor1.Create(transaction, &transaction, fhirclient.AtPath("/"))
+			require.NoError(t, err)
+		})
 	})
 
 	// Patient not associated with any CarePlans or CareTeams for negative auth testing
@@ -681,14 +718,11 @@ func Test_Integration_TaskLifecycle(t *testing.T) {
 		require.Truef(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id), "Expected %s to end with %s", *searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id)
 	}
 
+	testBundleCreation(t, carePlanContributor1)
 }
 
-func Test_Integration_BundleCreation(t *testing.T) {
-	notificationEndpoint := setupNotificationEndpoint(t)
-	carePlanContributor1, _, _, _ := setupIntegrationTest(t, notificationEndpoint)
-
-	t.Log("Creating a bundle with Patient and Task should replace identifier with new local reference")
-	{
+func testBundleCreation(t *testing.T, carePlanContributor1 *fhirclient.BaseClient) {
+	t.Run("creating a bundle with Patient and Task should replace identifier with new local reference", func(t *testing.T) {
 		localRef := "urn:uuid:xyz"
 		patient := fhir.Patient{
 			Identifier: []fhir.Identifier{
@@ -768,18 +802,7 @@ func Test_Integration_BundleCreation(t *testing.T) {
 
 		// Verify that Task.For.Assigner.Identifier is not replaced
 		require.Equal(t, "Organization/1", *createdTask.For.Identifier.Assigner.Reference)
-	}
-}
-
-func testBundle(t *testing.T, fhirClient *fhirclient.BaseClient, data []byte) {
-	var bundle fhir.Bundle
-	err := json.Unmarshal(data, &bundle)
-	require.NoError(t, err)
-
-	err = fhirClient.Create(bundle, &bundle, fhirclient.AtPath("/"))
-	require.NoError(t, err)
-	responseData, _ := json.MarshalIndent(bundle, "  ", "")
-	println(string(responseData))
+	})
 }
 
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {

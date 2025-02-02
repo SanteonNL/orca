@@ -182,6 +182,16 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
 	}))
+	if s.allowUnmanagedFHIROperations {
+		mux.HandleFunc("DELETE "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+			resourceType := request.PathValue("type")
+			s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Delete"+resourceType)
+		}))
+		mux.HandleFunc("DELETE "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+			resourceType := request.PathValue("type")
+			s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Delete"+resourceType)
+		}))
+	}
 }
 
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
@@ -266,10 +276,14 @@ func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolf
 
 func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
 	tx := coolfhir.Transaction()
-	bodyBytes, err := io.ReadAll(httpRequest.Body)
-	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), fmt.Errorf("failed to read request body: %w", err), operationName, httpResponse)
-		return
+	var bodyBytes []byte
+	if httpRequest.Body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(httpRequest.Body)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), fmt.Errorf("failed to read request body: %w", err), operationName, httpResponse)
+			return
+		}
 	}
 	fhirRequest := FHIRHandlerRequest{
 		RequestUrl:   httpRequest.URL,
@@ -421,8 +435,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	}
 	// Validate: Only allow POST/PUT operations in Bundle
 	for _, entry := range bundle.Entry {
-		// TODO: Might have to support DELETE in future
-		if entry.Request == nil || (entry.Request.Method != fhir.HTTPVerbPOST && entry.Request.Method != fhir.HTTPVerbPUT) {
+		if entry.Request == nil || (entry.Request.Method != fhir.HTTPVerbPOST && entry.Request.Method != fhir.HTTPVerbPUT && entry.Request.Method != fhir.HTTPVerbDELETE) {
 			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("only write operations are supported in Bundle"), op, httpResponse)
 			return
 		}
