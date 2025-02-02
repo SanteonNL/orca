@@ -189,7 +189,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}))
 		mux.HandleFunc("DELETE "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 			resourceType := request.PathValue("type")
-			s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Delete"+resourceType)
+			resourceID := request.PathValue("id")
+			s.handleCreateOrUpdate(request, httpResponse, resourceType+"/"+resourceID, "CarePlanService/Delete"+resourceType)
 		}))
 	}
 }
@@ -326,9 +327,13 @@ func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse h
 	if fhirResponse.LastModified != nil {
 		headers["Last-Modified"] = []string{*fhirResponse.LastModified}
 	}
+	var resultResource any
+	if txResult.Entry[0].Resource != nil {
+		resultResource = txResult.Entry[0].Resource
+	}
 	s.pipeline.
 		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
-		DoAndWrite(httpResponse, txResult.Entry[0].Resource, statusCode)
+		DoAndWrite(httpResponse, resultResource, statusCode)
 }
 
 func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceId string, resourceType, operationName string) {
