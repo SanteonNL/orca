@@ -48,10 +48,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		fhirClient:    fhirClient,
 		subscriptionManager: subscriptions.DerivingManager{
 			FhirBaseURL: baseUrl,
-			Channels: subscriptions.CsdChannelFactory{
-				Directory:         profile.CsdDirectory(),
-				ChannelHttpClient: profile.HttpClient(),
-			},
+			Channels:    subscriptions.CsdChannelFactory{Profile: profile},
 		},
 		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
 		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
@@ -144,9 +141,25 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	s.proxy = coolfhir.NewProxy("CPS->FHIR proxy", s.fhirURL, basePath,
 		s.orcaPublicURL.JoinPath(basePath), s.transport, true)
 	baseUrl := s.baseUrl()
-	s.profile.RegisterHTTPHandlers(basePath, baseUrl, mux)
 
 	// Binding to actual routing
+	// Metadata
+	mux.HandleFunc("GET "+basePath+"/metadata", func(httpResponse http.ResponseWriter, request *http.Request) {
+		md := fhir.CapabilityStatement{
+			FhirVersion: fhir.FHIRVersion4_0_1,
+			Date:        time.Now().Format(time.RFC3339),
+			Status:      fhir.PublicationStatusActive,
+			Kind:        fhir.CapabilityStatementKindInstance,
+			Format:      []string{"json"},
+			Rest: []fhir.CapabilityStatementRest{
+				{
+					Mode: fhir.RestfulCapabilityModeServer,
+				},
+			},
+		}
+		s.profile.CapabilityStatement(&md)
+		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
+	})
 	// Creating a resource
 	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")

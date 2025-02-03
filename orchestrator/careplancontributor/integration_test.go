@@ -92,7 +92,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	cpsDataRequester := fhirclient.New(carePlanServiceURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 	cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 
-	t.Log("Reading task before accepted - Fails")
+	t.Log("Read data from EHR before Task is accepted - Fails")
 	{
 		var fetchedTask fhir.Task
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
@@ -119,7 +119,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.Equal(t, updatedTask.For.Identifier.Value, fetchedPatient.Identifier[0].Value)
 		require.Equal(t, *updatedTask.For.Reference, "Patient/"+*fetchedPatient.Id)
 	}
-	t.Log("Reading task after accepted")
+	t.Log("Read data from EHR after Task is accepted")
 	{
 		var fetchedTask fhir.Task
 

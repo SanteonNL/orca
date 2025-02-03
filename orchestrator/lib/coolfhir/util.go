@@ -390,13 +390,20 @@ func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource int
 	}
 }
 
-func ContainsCoding(code fhir.Coding, concepts ...fhir.CodeableConcept) bool {
+func ConceptContainsCoding(code fhir.Coding, concepts ...fhir.CodeableConcept) bool {
 	for _, codeableConcept := range concepts {
-		for _, currCoding := range codeableConcept.Coding {
-			if (code.Code != nil && currCoding.Code != nil && *code.Code == *currCoding.Code) &&
-				(code.System != nil && currCoding.System != nil && *code.System == *currCoding.System) {
-				return true
-			}
+		if ContainsCoding(code, codeableConcept.Coding...) {
+			return true
+		}
+	}
+	return false
+}
+
+func ContainsCoding(code fhir.Coding, codings ...fhir.Coding) bool {
+	for _, currCoding := range codings {
+		if (code.Code != nil && currCoding.Code != nil && *code.Code == *currCoding.Code) &&
+			(code.System != nil && currCoding.System != nil && *code.System == *currCoding.System) {
+			return true
 		}
 	}
 	return false

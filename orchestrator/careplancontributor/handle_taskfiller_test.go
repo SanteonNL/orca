@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 
@@ -307,12 +308,15 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			notifierMock := ehr.NewMockNotifier(ctrl)
+			t.Cleanup(func() {
+				fhirClientFactory = createFHIRClient
+			})
+			fhirClientFactory = func(_ *url.URL, _ *http.Client) fhirclient.Client {
+				return mockFHIRClient
+			}
 			service := &Service{
 				workflows: taskengine.DefaultTestWorkflowProvider(),
-				cpsClientFactory: func(baseURL *url.URL) fhirclient.Client {
-					return mockFHIRClient
-				},
-				notifier: notifierMock,
+				notifier:  notifierMock,
 			}
 			if tt.mock != nil {
 				tt.mock(mockFHIRClient)

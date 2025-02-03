@@ -21,7 +21,6 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
-	"path"
 	"regexp"
 	"slices"
 	"strings"
@@ -30,8 +29,13 @@ import (
 )
 
 const identitiesCacheTTL = 5 * time.Minute
+const nutsAuthorizationServerExtensionURL = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer"
 
 var uziOtherNameUraRegex = regexp.MustCompile("^[0-9.]+-\\d+-\\d+-S-(\\d+)-00\\.000-\\d+$")
+var oauthRestfulSecurityServiceCoding = fhir.Coding{
+	System: to.Ptr("http://terminology.hl7.org/CodeSystem/restful-security-service"),
+	Code:   to.Ptr("OAuth"),
+}
 
 // DutchNutsProfile is the Profile for running the SCP-node using the Nuts, with Dutch Verifiable Credential configuration and code systems.
 // - Authentication: Nuts RFC021 Access Tokens
@@ -85,45 +89,73 @@ func New(config Config) (*DutchNutsProfile, error) {
 	}, nil
 }
 
-// RegisterHTTPHandlers registers the well-known OAuth2 Protected Resource HTTP endpoint that is used by OAuth2 Relying Parties to discover the OAuth2 Authorization Server.
-func (d DutchNutsProfile) RegisterHTTPHandlers(basePath string, resourceServerURL *url.URL, mux *http.ServeMux) {
-	mux.HandleFunc("GET "+path.Join("/", basePath, "/.well-known/oauth-protected-resource"), func(writer http.ResponseWriter, request *http.Request) {
-		writer.Header().Add("Content-Type", "application/json")
-		writer.WriteHeader(http.StatusOK)
-		md := oauth2.ProtectedResourceMetadata{
-			Resource:               resourceServerURL.String(),
-			AuthorizationServers:   []string{d.Config.Public.Parse().JoinPath("oauth2", d.Config.OwnSubject).String()},
-			BearerMethodsSupported: []string{"header"},
+func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Identifier) (*http.Client, error) {
+	if serverIdentity.System == nil || serverIdentity.Value == nil {
+		return nil, fmt.Errorf("server identity must have system and value")
+	}
+	var authzServerURL string
+	switch to.EmptyString(serverIdentity.System) {
+	case "https://build.fhir.org/http.html#root":
+		// FHIR base URL: need to look up CapabilityStatement
+		capabilityStatement, err := d.readCapabilityStatement(ctx, *serverIdentity.Value)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read CapabilityStatement: %w", err)
 		}
-		_ = json.NewEncoder(writer).Encode(md)
-	})
-}
+	outer:
+		for _, rest := range capabilityStatement.Rest {
+			if rest.Security != nil {
+				for _, securityService := range rest.Security.Service {
+					if coolfhir.ContainsCoding(oauthRestfulSecurityServiceCoding, securityService.Coding...) {
+						for _, extension := range securityService.Extension {
+							if extension.Url == nutsAuthorizationServerExtensionURL && extension.ValueString != nil {
+								authzServerURL = *extension.ValueString
+								break outer
+							}
+						}
+					}
+				}
+			}
+		}
+	case coolfhir.URANamingSystem:
+		// Care Plan Contributor: need to look up authz server URL in CSD
+		authServerURLEndpoints, err := d.csd.LookupEndpoint(ctx, &serverIdentity, authzServerURLEndpointName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to lookup authz server URL (owner=%s): %w", coolfhir.ToString(serverIdentity), err)
+		}
+		if len(authServerURLEndpoints) == 0 {
+			return nil, fmt.Errorf("no authz server URL found for owner %s", coolfhir.ToString(serverIdentity))
+		}
+		authzServerURL = authServerURLEndpoints[0].Address
+	default:
+		return nil, fmt.Errorf("unsupported server identity system: %s", *serverIdentity.System)
+	}
 
-func (d DutchNutsProfile) HttpClient() *http.Client {
-	var roundTripper http.RoundTripper
+	parsedAuthzServerURL, err := url.Parse(authzServerURL)
+	if err != nil {
+		return nil, err
+	}
+
+	var underlyingTransport *http.Transport
 	if d.clientCert != nil {
 		tlsConfig := globals.DefaultTLSConfig.Clone()
 		tlsConfig.Certificates = []tls.Certificate{*d.clientCert}
-		roundTripper = &http.Transport{TLSClientConfig: tlsConfig}
+		underlyingTransport = &http.Transport{TLSClientConfig: tlsConfig}
 	} else {
-		httpTransport := http.DefaultTransport.(*http.Transport).Clone()
-		httpTransport.TLSClientConfig = globals.DefaultTLSConfig
-		roundTripper = httpTransport
+		underlyingTransport = http.DefaultTransport.(*http.Transport).Clone()
+		underlyingTransport.TLSClientConfig = globals.DefaultTLSConfig
 	}
-	return &http.Client{
+	client := &http.Client{
 		Transport: &oauth2.Transport{
-			UnderlyingTransport: roundTripper,
+			UnderlyingTransport: underlyingTransport,
 			TokenSource: nuts.OAuth2TokenSource{
 				NutsSubject: d.Config.OwnSubject,
 				NutsAPIURL:  d.Config.API.URL,
 			},
-			MetadataLoader: &oauth2.MetadataLoader{},
-			AuthzServerLocators: []oauth2.AuthorizationServerLocator{
-				oauth2.ProtectedResourceMetadataLocator,
-			},
-			Scope: careplancontributor.CarePlanServiceOAuth2Scope,
+			Scope:          careplancontributor.CarePlanServiceOAuth2Scope,
+			AuthzServerURL: parsedAuthzServerURL,
 		},
 	}
+	return client, nil
 }
 
 // Identities consults the Nuts node to retrieve the local identities of the SCP node, given the credentials in the subject's wallet.
@@ -142,6 +174,26 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 		}
 	}
 	return d.cachedIdentities, nil
+}
+
+func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseURL string) (*fhir.CapabilityStatement, error) {
+	httpRequest, err := http.NewRequestWithContext(ctx, "GET", fhirBaseURL+"/metadata", nil)
+	if err != nil {
+		return nil, err
+	}
+	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	if err != nil {
+		return nil, err
+	}
+	defer httpResponse.Body.Close()
+	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 299 {
+		return nil, fmt.Errorf("unexpected status code: %d", httpResponse.StatusCode)
+	}
+	var cp fhir.CapabilityStatement
+	if err := json.NewDecoder(httpResponse.Body).Decode(&cp); err != nil {
+		return nil, err
+	}
+	return &cp, nil
 }
 
 func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Organization, error) {
@@ -219,4 +271,21 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 		}
 	}
 	return results, nil
+}
+
+func (d DutchNutsProfile) CapabilityStatement(cp *fhir.CapabilityStatement) {
+	for _, rest := range cp.Rest {
+		if rest.Security == nil {
+			rest.Security = &fhir.CapabilityStatementRestSecurity{}
+		}
+		rest.Security.Service = append(rest.Security.Service, fhir.CodeableConcept{
+			Coding: []fhir.Coding{oauthRestfulSecurityServiceCoding},
+			Extension: []fhir.Extension{
+				{
+					Url:         nutsAuthorizationServerExtensionURL,
+					ValueString: to.Ptr(d.Config.Public.URL),
+				},
+			},
+		})
+	}
 }

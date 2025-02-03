@@ -4,10 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/test/vcrclient_mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	ssi "github.com/nuts-foundation/go-did"
@@ -17,26 +19,10 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-	"io"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 )
-
-func TestDutchNutsProfile_RegisterHTTPHandlers(t *testing.T) {
-	const basePath = "/basement"
-	var baseURL, _ = url.Parse("http://example.com" + basePath)
-	serverMux := http.NewServeMux()
-	DutchNutsProfile{}.RegisterHTTPHandlers("/basement", baseURL, serverMux)
-	server := httptest.NewServer(serverMux)
-
-	httpResponse, err := http.Get(server.URL + "/basement/.well-known/oauth-protected-resource")
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-	data, _ := io.ReadAll(httpResponse.Body)
-	assert.JSONEq(t, `{"resource":"http://example.com/basement","authorization_servers":["oauth2"],"bearer_methods_supported":["header"]}`, string(data))
-}
 
 func TestDutchNutsProfile_identifiersFromCredential(t *testing.T) {
 	t.Run("NutsUraCredential", func(t *testing.T) {
@@ -296,45 +282,130 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 }
 
 func TestDutchNutsProfile_HttpClient(t *testing.T) {
+	serverIdentity := fhir.Identifier{System: to.Ptr(coolfhir.URANamingSystem), Value: to.Ptr("1234")}
+	ctrl := gomock.NewController(t)
+	mockCSD := csd.NewMockDirectory(ctrl)
+	mockCSD.EXPECT().LookupEndpoint(gomock.Any(), &serverIdentity, authzServerURLEndpointName).
+		Return([]fhir.Endpoint{
+			{
+				Address: "https://example.com/authz",
+			},
+		}, nil).
+		AnyTimes()
+	ctx := context.Background()
+	httpMux := http.NewServeMux()
+	httpMux.HandleFunc("/internal/auth/v2/sub/request-service-access-token", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"access_token": "token",
+			"token_type":   "Bearer",
+		})
+	})
+	capturedHeaders := make(http.Header)
+	httpMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		capturedHeaders = r.Header
+		w.WriteHeader(http.StatusOK)
+	})
+
 	t.Run("without client cert", func(t *testing.T) {
-		// Create an HTTP test server that requires a TLS client certificate
-		httpServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
+		t.Cleanup(func() {
+			capturedHeaders = nil
+		})
+		httpServer := httptest.NewServer(httpMux)
 		defer httpServer.Close()
 
-		globals.DefaultTLSConfig = httpServer.Client().Transport.(*http.Transport).TLSClientConfig
-
-		profile := DutchNutsProfile{}
-		httpResponse, err := profile.HttpClient().Get(httpServer.URL)
+		profile := DutchNutsProfile{
+			csd: mockCSD,
+			Config: Config{
+				API: APIConfig{
+					URL: httpServer.URL,
+				},
+				OwnSubject: "sub",
+			},
+		}
+		httpClient, err := profile.HttpClient(ctx, serverIdentity)
+		require.NoError(t, err)
+		httpResponse, err := httpClient.Get(httpServer.URL)
 
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		require.Equal(t, "Bearer token", capturedHeaders.Get("Authorization"))
 	})
 	t.Run("with client cert", func(t *testing.T) {
+		t.Cleanup(func() {
+			capturedHeaders = nil
+		})
 		// Create an HTTP test server that requires a TLS client certificate
-		httpServer := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			w.WriteHeader(http.StatusOK)
-		}))
-		defer httpServer.Close()
+		nutsNode := httptest.NewServer(httpMux)
+		// Create an HTTP test server that requires a TLS client certificate
+		resourceServer := httptest.NewUnstartedServer(httpMux)
+		defer resourceServer.Close()
 		clientCert, err := tls.LoadX509KeyPair("test_cert.pem", "test_cert_key.pem")
 		require.NoError(t, err)
-		httpServer.TLS = &tls.Config{}
-		httpServer.TLS.ClientCAs = x509.NewCertPool()
-		httpServer.TLS.ClientCAs.AppendCertsFromPEM(clientCert.Certificate[0])
-		httpServer.TLS.ClientAuth = tls.RequireAnyClientCert
-		httpServer.StartTLS()
+		resourceServer.TLS = &tls.Config{}
+		resourceServer.TLS.ClientCAs = x509.NewCertPool()
+		resourceServer.TLS.ClientCAs.AppendCertsFromPEM(clientCert.Certificate[0])
+		resourceServer.TLS.ClientAuth = tls.RequireAnyClientCert
+		resourceServer.StartTLS()
 
-		globals.DefaultTLSConfig = httpServer.Client().Transport.(*http.Transport).TLSClientConfig
-		globals.DefaultTLSConfig.Certificates = []tls.Certificate{clientCert}
+		globals.DefaultTLSConfig = resourceServer.Client().Transport.(*http.Transport).TLSClientConfig
 		profile := DutchNutsProfile{
 			clientCert: &clientCert,
+			csd:        mockCSD,
+			Config: Config{
+				API: APIConfig{
+					URL: nutsNode.URL,
+				},
+				OwnSubject: "sub",
+			},
 		}
-
-		httpResponse, err := profile.HttpClient().Get(httpServer.URL)
+		httpClient, err := profile.HttpClient(ctx, serverIdentity)
+		require.NoError(t, err)
+		httpResponse, err := httpClient.Get(resourceServer.URL)
 
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		require.Equal(t, "Bearer token", capturedHeaders.Get("Authorization"))
+	})
+	t.Run("FHIR base URL as identity, AuthorizationServer URL lookup using CapabilityStatement", func(t *testing.T) {
+		var fhirBaseURL string
+		httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			coolfhir.SendResponse(w, 200, fhir.CapabilityStatement{
+				Rest: []fhir.CapabilityStatementRest{
+					{
+						Security: &fhir.CapabilityStatementRestSecurity{
+							Service: []fhir.CodeableConcept{
+								{
+									Coding: []fhir.Coding{
+										{
+											System: to.Ptr("http://hl7.org/fhir/ValueSet/restful-security-service"),
+											Code:   to.Ptr("OAuth"),
+										},
+									},
+								},
+							},
+							Extension: []fhir.Extension{
+								{
+									Url:         "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer",
+									ValueString: to.Ptr(fhirBaseURL + "/authz"),
+								},
+							},
+						},
+					},
+				},
+			})
+		}))
+		fhirBaseURL = httpServer.URL
+
+		serverIdentity := fhir.Identifier{
+			System: to.Ptr("https://build.fhir.org/http.html#root"),
+			Value:  to.Ptr(fhirBaseURL),
+		}
+		profile := DutchNutsProfile{}
+		httpClient, err := profile.HttpClient(ctx, serverIdentity)
+		require.NoError(t, err)
+		require.NotNil(t, httpClient)
 	})
 }
 
