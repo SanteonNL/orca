@@ -89,6 +89,17 @@ func TestService_Proxy(t *testing.T) {
 			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
 		})
 	})
+	t.Run("CapabilityStatement", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/metadata")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		var capabilityStatement fhir.CapabilityStatement
+		err = json.Unmarshal(responseData, &capabilityStatement)
+		require.NoError(t, err)
+		assert.Len(t, capabilityStatement.Rest, 1)
+		assert.Len(t, capabilityStatement.Rest[0].Security.Service, 1)
+	})
 	t.Run("it proxies query parameters", func(t *testing.T) {
 		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1?_identifier=foo|bar")
 		require.NoError(t, err)
