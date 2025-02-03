@@ -20,9 +20,13 @@ type Instance struct {
 
 // Do executes the pipeline, returning an error if marshalling fails.
 func (p Instance) Do(httpResponse *http.Response, resource any) error {
-	responseBody, err := marshalResponse(resource)
-	if err != nil {
-		return fmt.Errorf("failed to marshal response: %w", err)
+	var responseBody []byte
+	if resource != nil {
+		var err error
+		responseBody, err = marshalResponse(resource)
+		if err != nil {
+			return fmt.Errorf("failed to marshal response: %w", err)
+		}
 	}
 	responseHeaders := httpResponse.Header
 	for _, transformer := range p.httpResponseTransformers {
@@ -33,8 +37,10 @@ func (p Instance) Do(httpResponse *http.Response, resource any) error {
 	if httpResponse.Header.Get("Content-Type") == "" {
 		httpResponse.Header.Set("Content-Type", "application/fhir+json")
 	}
-	httpResponse.Header.Set("Content-Length", strconv.Itoa(len(responseBody)))
-	httpResponse.Body = io.NopCloser(bytes.NewReader(responseBody))
+	if resource != nil {
+		httpResponse.Header.Set("Content-Length", strconv.Itoa(len(responseBody)))
+		httpResponse.Body = io.NopCloser(bytes.NewReader(responseBody))
+	}
 	return nil
 }
 
@@ -47,7 +53,7 @@ func (p Instance) DoAndWrite(httpResponseWriter http.ResponseWriter, resource an
 	}
 	err := p.Do(httpResponse, resource)
 	var responseBody []byte
-	if err == nil {
+	if err == nil && httpResponse.Body != nil {
 		responseBody, err = io.ReadAll(httpResponse.Body)
 	}
 	if err != nil {
@@ -60,9 +66,11 @@ func (p Instance) DoAndWrite(httpResponseWriter http.ResponseWriter, resource an
 		httpResponseWriter.Header()[key] = value
 	}
 	httpResponseWriter.WriteHeader(httpResponse.StatusCode)
-	_, err = httpResponseWriter.Write(responseBody)
-	if err != nil {
-		log.Error().Err(err).Msgf("Failed to write response: %s", string(responseBody))
+	if responseBody != nil {
+		_, err = httpResponseWriter.Write(responseBody)
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to write response: %s", string(responseBody))
+		}
 	}
 }
 

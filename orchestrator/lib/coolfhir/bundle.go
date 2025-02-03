@@ -215,7 +215,9 @@ func NormalizeTransactionBundleResponseEntry(ctx context.Context, fhirClient fhi
 	}
 	resultEntry := *responseEntry
 	// Enrich result with resource from FHIR server
-	if resultEntry.Resource == nil {
+	if resultEntry.Resource == nil &&
+		// Don't try to resolve resource if server indicates 204 No Content
+		!strings.Contains(resultEntry.Response.Status, "204") {
 		// Microsoft Azure FHIR:
 		// - When PUT-ing a resource, the resultEntry entry might not contain a location.
 		//   In that case, the location is the same as the request URL.
@@ -261,10 +263,8 @@ func NormalizeTransactionBundleResponseEntry(ctx context.Context, fhirClient fhi
 
 		if resourcePath == "" {
 			responseBundleEntryJson, _ := json.Marshal(responseEntry)
-			log.Error().Msgf("Failed to determine resource path from FHIR transaction resultEntry bundle: %s", string(responseBundleEntryJson))
-			return nil, errors.New("failed to determine resource for transaction response bundle entry, see log for more details")
-		}
-		if len(searchParams) == 0 {
+			log.Ctx(ctx).Warn().Msgf("Failed to determine resource path from FHIR transaction resultEntry bundle: %s", string(responseBundleEntryJson))
+		} else if len(searchParams) == 0 {
 			var resourceData []byte
 			if err := fhirClient.ReadWithContext(ctx, resourcePath, &resourceData); err != nil {
 				return nil, errors.Join(ErrEntryNotFound, fmt.Errorf("failed to retrieve result Bundle entry (resource=%s): %w", resourcePath, err))

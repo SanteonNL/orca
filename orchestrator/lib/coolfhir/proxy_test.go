@@ -46,6 +46,13 @@ func TestProxy(t *testing.T) {
 		capturedHeaders = request.Header
 		writer.Write([]byte(`{"resourceType":"Patient"}`))
 	})
+	upstreamServerMux.HandleFunc("DELETE /fhir/DoDelete", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusNoContent)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+	})
 	upstreamServerMux.HandleFunc("POST /fhir/DoPost/_search", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
@@ -231,6 +238,14 @@ func TestProxy(t *testing.T) {
 			responseData, _ := io.ReadAll(httpResponse.Body)
 			assert.Contains(t, string(responseData), "Request body is required for PUT requests")
 		})
+	})
+	t.Run("DELETE request", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("DELETE", proxyServer.URL+"/localfhir/DoDelete", nil)
+		httpResponse, err := proxyServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		assert.Equal(t, http.StatusNoContent, httpResponse.StatusCode)
+		assert.Empty(t, capturedQueryParams)
+		assert.Empty(t, capturedCookies)
 	})
 	t.Run("Host header is rewritten to upstream server hostname", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("GET", proxyServer.URL+"/localfhir/DoGet", nil)

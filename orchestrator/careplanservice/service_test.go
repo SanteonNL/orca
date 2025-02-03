@@ -158,6 +158,22 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 		capturedHost = request.Host
 		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{})
 	})
+	var capturedBundle fhir.Bundle
+	fhirServerMux.HandleFunc("POST /fhir/", func(writer http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&capturedBundle); err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{
+			Entry: []fhir.BundleEntry{
+				{
+					Response: &fhir.BundleEntryResponse{
+						Status: "204 No Content",
+					},
+				},
+			},
+		})
+	})
 	var capturedBody []byte
 	fhirServerMux.HandleFunc("POST /fhir/SomeResource/_search", func(writer http.ResponseWriter, request *http.Request) {
 		capturedHost = request.Host
@@ -205,6 +221,24 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 			require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 			responseBody, _ := io.ReadAll(httpResponse.Body)
 			assert.Contains(t, string(responseBody), "invalid path")
+		})
+	})
+	t.Run("delete", func(t *testing.T) {
+		t.Run("by search parameter", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest(http.MethodDelete, frontServer.URL+"/cps/SomeResource?identifier=foo", nil)
+			httpResponse, err := httpClient.Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusNoContent, httpResponse.StatusCode)
+			require.Equal(t, "SomeResource?identifier=foo", capturedBundle.Entry[0].Request.Url)
+			require.Equal(t, fhir.HTTPVerbDELETE, capturedBundle.Entry[0].Request.Method)
+		})
+		t.Run("by ID", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest(http.MethodDelete, frontServer.URL+"/cps/SomeResource/1", nil)
+			httpResponse, err := httpClient.Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusNoContent, httpResponse.StatusCode)
+			require.Equal(t, "SomeResource/1", capturedBundle.Entry[0].Request.Url)
+			require.Equal(t, fhir.HTTPVerbDELETE, capturedBundle.Entry[0].Request.Method)
 		})
 	})
 }

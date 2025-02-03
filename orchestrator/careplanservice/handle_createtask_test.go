@@ -131,20 +131,20 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			{
 				Response: &fhir.BundleEntryResponse{
 					Location: to.Ptr("CarePlan/1"),
-					Status:   "204 Created",
+					Status:   "201 Created",
 				},
 			},
 			{
 				Response: &fhir.BundleEntryResponse{
 					Location: to.Ptr("CareTeam/2"),
-					Status:   "204 Created",
+					Status:   "201 Created",
 				},
 				Resource: json.RawMessage(`{"resourceType":"CareTeam","id":"2"}`),
 			},
 			{
 				Response: &fhir.BundleEntryResponse{
 					Location: to.Ptr("Task/3"),
-					Status:   "204 Created",
+					Status:   "201 Created",
 				},
 			},
 		},
@@ -364,7 +364,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			require.NoError(t, err)
 			assert.Len(t, notifications, 2)
 			require.Equal(t, "Task/3", *response.Response.Location)
-			require.Equal(t, "204 Created", response.Response.Status)
+			require.Equal(t, "201 Created", response.Response.Status)
 		})
 	}
 }
@@ -588,7 +588,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 			require.NoError(t, err)
 			assert.Len(t, notifications, 1)
 			require.Equal(t, "Task/3", *response.Response.Location)
-			require.Equal(t, "204 Created", response.Response.Status)
+			require.Equal(t, "201 Created", response.Response.Status)
 		})
 	}
 }

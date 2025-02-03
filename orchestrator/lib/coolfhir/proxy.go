@@ -150,6 +150,8 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		}
 	case http.MethodPut:
 		err = f.client.UpdateWithContext(request.Context(), outRequestUrl.Path, requestResource, &responseResource, params...)
+	case http.MethodDelete:
+		err = f.client.DeleteWithContext(request.Context(), outRequestUrl.Path, params...)
 	default:
 		SendResponse(httpResponseWriter, http.StatusMethodNotAllowed, BadRequest("Method not allowed: %s", request.Method))
 		return

@@ -145,7 +145,7 @@ func TestFetchBundleEntry(t *testing.T) {
 		require.NotEmpty(t, actualEntry.Resource)
 		require.Equal(t, "200", actualEntry.Response.Status)
 	})
-	t.Run("resource read from request BundleEntry.request.url, which doesn't contain a local reference nor logical identifier (not supported now)", func(t *testing.T) {
+	t.Run("delete with 204 No Content", func(t *testing.T) {
 		requestEntry := &fhir.BundleEntry{
 			Request: &fhir.BundleEntryRequest{
 				Url: "Task",
@@ -153,11 +153,14 @@ func TestFetchBundleEntry(t *testing.T) {
 		}
 		responseEntry := &fhir.BundleEntry{
 			Response: &fhir.BundleEntryResponse{
-				Status: "200",
+				Status: "204 No Content",
 			},
 		}
-		_, err := NormalizeTransactionBundleResponseEntry(ctx, fhirClient, fhirBaseUrl, requestEntry, responseEntry, nil)
-		require.EqualError(t, err, "failed to determine resource for transaction response bundle entry, see log for more details")
+		var actualResult fhir.Task
+		actualEntry, err := NormalizeTransactionBundleResponseEntry(ctx, fhirClient, fhirBaseUrl, requestEntry, responseEntry, &actualResult)
+		require.NoError(t, err)
+		require.Nil(t, actualEntry.Resource)
+		require.Equal(t, "204 No Content", actualEntry.Response.Status)
 	})
 	t.Run("result to unmarshal into is nil", func(t *testing.T) {
 		responseEntry := &fhir.BundleEntry{

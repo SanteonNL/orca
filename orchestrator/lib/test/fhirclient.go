@@ -160,6 +160,16 @@ func (s StubFHIRClient) UpdateWithContext(ctx context.Context, path string, reso
 	panic("implement me")
 }
 
+func (s StubFHIRClient) Delete(path string, opts ...fhirclient.Option) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (s StubFHIRClient) DeleteWithContext(ctx context.Context, path string, opts ...fhirclient.Option) error {
+	//TODO implement me
+	panic("implement me")
+}
+
 func (s StubFHIRClient) Path(path ...string) *url.URL {
 	panic("implement me")
 }
