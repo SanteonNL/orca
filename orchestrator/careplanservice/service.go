@@ -150,7 +150,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// Creating a resource
 	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
-		s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
+		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	}))
 	// Searching for a resource via POST
 	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
@@ -169,12 +169,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
-		s.handleCreateOrUpdate(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
+		s.handleModification(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 	}))
 	// Updating a resource by selecting it based on query params
 	mux.HandleFunc("PUT "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
-		s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
+		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
 	}))
 	// Handle reading a specific resource instance
 	mux.HandleFunc("GET "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
@@ -185,12 +185,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	if s.allowUnmanagedFHIROperations {
 		mux.HandleFunc("DELETE "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 			resourceType := request.PathValue("type")
-			s.handleCreateOrUpdate(request, httpResponse, resourceType, "CarePlanService/Delete"+resourceType)
+			s.handleModification(request, httpResponse, resourceType, "CarePlanService/Delete"+resourceType)
 		}))
 		mux.HandleFunc("DELETE "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 			resourceType := request.PathValue("type")
 			resourceID := request.PathValue("id")
-			s.handleCreateOrUpdate(request, httpResponse, resourceType+"/"+resourceID, "CarePlanService/Delete"+resourceType)
+			s.handleModification(request, httpResponse, resourceType+"/"+resourceID, "CarePlanService/Delete"+resourceType)
 		}))
 	}
 }
@@ -275,7 +275,7 @@ func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolf
 	}, nil
 }
 
-func (s *Service) handleCreateOrUpdate(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
+func (s *Service) handleModification(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
 	tx := coolfhir.Transaction()
 	var bodyBytes []byte
 	if httpRequest.Body != nil {
