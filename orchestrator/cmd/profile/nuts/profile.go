@@ -33,7 +33,7 @@ const nutsAuthorizationServerExtensionURL = "http://santeonnl.github.io/shared-c
 
 var uziOtherNameUraRegex = regexp.MustCompile("^[0-9.]+-\\d+-\\d+-S-(\\d+)-00\\.000-\\d+$")
 var oauthRestfulSecurityServiceCoding = fhir.Coding{
-	System: to.Ptr("http://terminology.hl7.org/CodeSystem/restful-security-service"),
+	System: to.Ptr("http://hl7.org/fhir/ValueSet/restful-security-service"),
 	Code:   to.Ptr("OAuth"),
 }
 

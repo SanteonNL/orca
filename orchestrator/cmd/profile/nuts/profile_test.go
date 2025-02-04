@@ -383,12 +383,12 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 											Code:   to.Ptr("OAuth"),
 										},
 									},
-								},
-							},
-							Extension: []fhir.Extension{
-								{
-									Url:         "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer",
-									ValueString: to.Ptr(fhirBaseURL + "/authz"),
+									Extension: []fhir.Extension{
+										{
+											Url:         "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer",
+											ValueString: to.Ptr(fhirBaseURL + "/authz"),
+										},
+									},
 								},
 							},
 						},
@@ -465,7 +465,7 @@ func TestDutchNutsProfile_CapabilityStatement(t *testing.T) {
             ],
             "coding": [
               {
-                "system": "http://terminology.hl7.org/CodeSystem/restful-security-service",
+                "system": "http://hl7.org/fhir/ValueSet/restful-security-service",
                 "code": "OAuth"
               }
             ]
