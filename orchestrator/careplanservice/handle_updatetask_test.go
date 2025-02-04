@@ -514,6 +514,18 @@ func Test_handleUpdateTask(t *testing.T) {
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
 	})
+	t.Run("task status isn't updated", func(t *testing.T) {
+		request := updateRequest(func(task *fhir.Task) {
+			task.Status = fhir.TaskStatusAccepted
+		})
+		tx := coolfhir.Transaction()
+
+		_, err := service.handleUpdateTask(ctx, request, tx)
+
+		require.NoError(t, err)
+		require.Len(t, tx.Entry, 2)
+		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
+	})
 	t.Run("original FHIR request headers are passed to outgoing Bundle entry", func(t *testing.T) {
 		request := updateRequest()
 		request.HttpHeaders = map[string][]string{
