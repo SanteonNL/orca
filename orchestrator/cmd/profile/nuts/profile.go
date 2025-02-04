@@ -96,7 +96,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 	var authzServerURL string
 	switch to.EmptyString(serverIdentity.System) {
 	case "https://build.fhir.org/http.html#root":
-		log.Ctx(ctx).Info().Msg("Using CSD lookup for OAuth2 token acquisition")
+		log.Ctx(ctx).Info().Msg("Using CapabilityStatement for OAuth2 token acquisition")
 		// FHIR base URL: need to look up CapabilityStatement
 		capabilityStatement, err := d.readCapabilityStatement(ctx, *serverIdentity.Value)
 		if err != nil {
