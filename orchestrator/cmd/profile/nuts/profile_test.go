@@ -427,3 +427,54 @@ func TestNew(t *testing.T) {
 		require.NotNil(t, profile.clientCert)
 	})
 }
+
+func TestDutchNutsProfile_CapabilityStatement(t *testing.T) {
+	md := fhir.CapabilityStatement{
+		Rest: []fhir.CapabilityStatementRest{
+			{
+				Mode: fhir.RestfulCapabilityModeServer,
+			},
+		},
+	}
+	profile := DutchNutsProfile{
+		Config: Config{
+			Public: PublicConfig{URL: "https://example.com"},
+		},
+	}
+	profile.CapabilityStatement(&md)
+	actual, err := json.Marshal(md)
+	require.NoError(t, err)
+	expected := `
+{
+  "status": "draft",
+  "date": "",
+  "kind": "instance",
+  "fhirVersion": "0.01",
+  "format": null,
+  "rest": [
+    {
+      "mode": "server",
+      "security": {
+        "service": [
+          {
+            "extension": [
+              {
+                "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer",
+                "valueString": "https://example.com"
+              }
+            ],
+            "coding": [
+              {
+                "system": "http://terminology.hl7.org/CodeSystem/restful-security-service",
+                "code": "OAuth"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "resourceType": "CapabilityStatement"
+}`
+	assert.JSONEq(t, expected, string(actual))
+}

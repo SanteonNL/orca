@@ -96,6 +96,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 	var authzServerURL string
 	switch to.EmptyString(serverIdentity.System) {
 	case "https://build.fhir.org/http.html#root":
+		log.Ctx(ctx).Info().Msg("Using CSD lookup for OAuth2 token acquisition")
 		// FHIR base URL: need to look up CapabilityStatement
 		capabilityStatement, err := d.readCapabilityStatement(ctx, *serverIdentity.Value)
 		if err != nil {
@@ -116,7 +117,11 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 				}
 			}
 		}
+		if authzServerURL == "" {
+			return nil, fmt.Errorf("no OAuth Authorization Server URL found in CapabilityStatement, expected at CapabilityStatement.rest.security.service.extension[%s]", nutsAuthorizationServerExtensionURL)
+		}
 	case coolfhir.URANamingSystem:
+		log.Ctx(ctx).Info().Msg("Using CSD lookup for OAuth2 token acquisition")
 		// Care Plan Contributor: need to look up authz server URL in CSD
 		authServerURLEndpoints, err := d.csd.LookupEndpoint(ctx, &serverIdentity, authzServerURLEndpointName)
 		if err != nil {
@@ -274,7 +279,7 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 }
 
 func (d DutchNutsProfile) CapabilityStatement(cp *fhir.CapabilityStatement) {
-	for _, rest := range cp.Rest {
+	for i, rest := range cp.Rest {
 		if rest.Security == nil {
 			rest.Security = &fhir.CapabilityStatementRestSecurity{}
 		}
@@ -287,5 +292,6 @@ func (d DutchNutsProfile) CapabilityStatement(cp *fhir.CapabilityStatement) {
 				},
 			},
 		})
+		cp.Rest[i] = rest
 	}
 }
