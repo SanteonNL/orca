@@ -383,12 +383,12 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 											Code:   to.Ptr("OAuth"),
 										},
 									},
-								},
-							},
-							Extension: []fhir.Extension{
-								{
-									Url:         "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer",
-									ValueString: to.Ptr(fhirBaseURL + "/authz"),
+									Extension: []fhir.Extension{
+										{
+											Url:         "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer",
+											ValueString: to.Ptr(fhirBaseURL + "/authz"),
+										},
+									},
 								},
 							},
 						},
@@ -426,4 +426,56 @@ func TestNew(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, profile.clientCert)
 	})
+}
+
+func TestDutchNutsProfile_CapabilityStatement(t *testing.T) {
+	md := fhir.CapabilityStatement{
+		Rest: []fhir.CapabilityStatementRest{
+			{
+				Mode: fhir.RestfulCapabilityModeServer,
+			},
+		},
+	}
+	profile := DutchNutsProfile{
+		Config: Config{
+			Public:     PublicConfig{URL: "https://example.com"},
+			OwnSubject: "sub",
+		},
+	}
+	profile.CapabilityStatement(&md)
+	actual, err := json.Marshal(md)
+	require.NoError(t, err)
+	expected := `
+{
+  "status": "draft",
+  "date": "",
+  "kind": "instance",
+  "fhirVersion": "0.01",
+  "format": null,
+  "rest": [
+    {
+      "mode": "server",
+      "security": {
+        "service": [
+          {
+            "extension": [
+              {
+                "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer",
+                "valueString": "https://example.com/oauth2/sub"
+              }
+            ],
+            "coding": [
+              {
+                "system": "http://hl7.org/fhir/ValueSet/restful-security-service",
+                "code": "OAuth"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "resourceType": "CapabilityStatement"
+}`
+	assert.JSONEq(t, expected, string(actual))
 }

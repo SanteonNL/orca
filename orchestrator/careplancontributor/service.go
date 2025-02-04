@@ -196,12 +196,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Since we should only call our own CPS, this should be a local call.
 		//       If not, this should be optimized so that we don't do it every call
-		identities, err := s.profile.Identities(request.Context())
-		if err != nil || len(identities) != 1 {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-		httpClient, err := s.profile.HttpClient(request.Context(), identities[0].Identifier[0])
+		_, httpClient, err := s.createFHIRClientForURL(request.Context(), s.localCarePlanServiceUrl)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
@@ -287,7 +282,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	if err != nil {
 		return coolfhir.BadRequestError(fmt.Errorf("invalid %s header: %w", carePlanURLHeaderKey, err))
 	}
-	cpsFHIRClient, err := s.createFHIRClientForURL(request.Context(), cpsBaseURL)
+	cpsFHIRClient, _, err := s.createFHIRClientForURL(request.Context(), cpsBaseURL)
 	if err != nil {
 		return err
 	}
@@ -393,7 +388,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		}
 	}
 
-	cpsFHIRClient, err := s.createFHIRClientForURL(request.Context(), cpsBaseURL)
+	cpsFHIRClient, _, err := s.createFHIRClientForURL(request.Context(), cpsBaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -546,7 +541,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 
 	switch *focusReference.Type {
 	case "Task":
-		fhirClient, err := s.createFHIRClientForIdentifier(ctx, fhirBaseURL, sender.Organization.Identifier[0])
+		fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, fhirBaseURL, sender.Organization.Identifier[0])
 		if err != nil {
 			return err
 		}
@@ -584,7 +579,7 @@ func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task 
 	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
 }
 
-func (s Service) createFHIRClientForURL(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, error) {
+func (s Service) createFHIRClientForURL(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
 	// We only have the FHIR base URL, we need to read the CapabilityStatement to find out the Authorization Server URL
 	identifier := fhir.Identifier{
 		System: to.Ptr("https://build.fhir.org/http.html#root"),
@@ -593,12 +588,12 @@ func (s Service) createFHIRClientForURL(ctx context.Context, fhirBaseURL *url.UR
 	return s.createFHIRClientForIdentifier(ctx, fhirBaseURL, identifier)
 }
 
-func (s Service) createFHIRClientForIdentifier(ctx context.Context, fhirBaseURL *url.URL, identifier fhir.Identifier) (fhirclient.Client, error) {
+func (s Service) createFHIRClientForIdentifier(ctx context.Context, fhirBaseURL *url.URL, identifier fhir.Identifier) (fhirclient.Client, *http.Client, error) {
 	httpClient, err := s.profile.HttpClient(ctx, identifier)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create HTTP client (identifier=%s): %w", coolfhir.ToString(identifier), err)
+		return nil, nil, fmt.Errorf("failed to create HTTP client (identifier=%s): %w", coolfhir.ToString(identifier), err)
 	}
-	return fhirClientFactory(fhirBaseURL, httpClient), nil
+	return fhirClientFactory(fhirBaseURL, httpClient), httpClient, nil
 }
 
 func createFHIRClient(fhirBaseURL *url.URL, httpClient *http.Client) fhirclient.Client {
