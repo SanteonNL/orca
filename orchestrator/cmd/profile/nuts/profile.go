@@ -135,6 +135,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		return nil, fmt.Errorf("unsupported server identity system: %s", *serverIdentity.System)
 	}
 
+	log.Ctx(ctx).Info().Msg("Authorization server URL: " + authzServerURL)
 	parsedAuthzServerURL, err := url.Parse(authzServerURL)
 	if err != nil {
 		return nil, err
