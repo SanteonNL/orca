@@ -96,7 +96,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 	var authzServerURL string
 	switch to.EmptyString(serverIdentity.System) {
 	case "https://build.fhir.org/http.html#root":
-		log.Ctx(ctx).Info().Msg("Using CapabilityStatement for OAuth2 token acquisition")
+		log.Ctx(ctx).Trace().Msg("Using CapabilityStatement for OAuth2 token acquisition")
 		// FHIR base URL: need to look up CapabilityStatement
 		capabilityStatement, err := d.readCapabilityStatement(ctx, *serverIdentity.Value)
 		if err != nil {
@@ -121,7 +121,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 			return nil, fmt.Errorf("no OAuth Authorization Server URL found in CapabilityStatement, expected at CapabilityStatement.rest.security.service.extension[%s]", nutsAuthorizationServerExtensionURL)
 		}
 	case coolfhir.URANamingSystem:
-		log.Ctx(ctx).Info().Msg("Using CSD lookup for OAuth2 token acquisition")
+		log.Ctx(ctx).Trace().Msg("Using CSD lookup for OAuth2 token acquisition")
 		// Care Plan Contributor: need to look up authz server URL in CSD
 		authServerURLEndpoints, err := d.csd.LookupEndpoint(ctx, &serverIdentity, authzServerURLEndpointName)
 		if err != nil {
@@ -135,7 +135,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		return nil, fmt.Errorf("unsupported server identity system: %s", *serverIdentity.System)
 	}
 
-	log.Ctx(ctx).Info().Msg("Authorization server URL: " + authzServerURL)
+	log.Ctx(ctx).Debug().Msgf("Using OAuth2 Authorization Server URL: %s", authzServerURL)
 	parsedAuthzServerURL, err := url.Parse(authzServerURL)
 	if err != nil {
 		return nil, err
