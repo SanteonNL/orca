@@ -74,25 +74,26 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		return s.handleCreateTask(ctx, request, tx)
 	}
 
-	// Prior to the Task update, we need this to validate the state transition
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
+	if task.Status != taskExisting.Status {
+		// If the status is changing, validate the transition
+		principal, err := auth.PrincipalFromContext(ctx)
+		if err != nil {
+			return nil, err
+		}
+		isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&taskExisting, principal.Organization.Identifier)
+		isScpSubTask := coolfhir.IsScpSubTask(&task)
+		if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester, isScpSubTask) {
+			return nil, errors.New(
+				fmt.Sprintf(
+					"invalid state transition from %s to %s, owner(%t) requester(%t) scpSubtask(%t)",
+					taskExisting.Status.String(),
+					task.Status.String(),
+					isOwner,
+					isRequester,
+					isScpSubTask,
+				))
+		}
 	}
-	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&taskExisting, principal.Organization.Identifier)
-	isScpSubTask := coolfhir.IsScpSubTask(&task)
-	if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester, isScpSubTask) {
-		return nil, errors.New(
-			fmt.Sprintf(
-				"invalid state transition from %s to %s, owner(%t) requester(%t) scpSubtask(%t)",
-				taskExisting.Status.String(),
-				task.Status.String(),
-				isOwner,
-				isRequester,
-				isScpSubTask,
-			))
-	}
-
 	// Check fields that aren't allowed to be changed: owner, requester, basedOn, partOf, for
 	if !deep.Equal(task.Requester, taskExisting.Requester) {
 		return nil, errors.New("Task.requester cannot be changed")
