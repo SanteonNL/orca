@@ -438,7 +438,8 @@ func TestDutchNutsProfile_CapabilityStatement(t *testing.T) {
 	}
 	profile := DutchNutsProfile{
 		Config: Config{
-			Public: PublicConfig{URL: "https://example.com"},
+			Public:     PublicConfig{URL: "https://example.com"},
+			OwnSubject: "sub",
 		},
 	}
 	profile.CapabilityStatement(&md)
@@ -460,7 +461,7 @@ func TestDutchNutsProfile_CapabilityStatement(t *testing.T) {
             "extension": [
               {
                 "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/Nuts#AuthorizationServer",
-                "valueString": "https://example.com"
+                "valueString": "https://example.com/oauth2/sub"
               }
             ],
             "coding": [

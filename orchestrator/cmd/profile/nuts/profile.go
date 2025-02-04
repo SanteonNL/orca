@@ -289,7 +289,7 @@ func (d DutchNutsProfile) CapabilityStatement(cp *fhir.CapabilityStatement) {
 			Extension: []fhir.Extension{
 				{
 					Url:         nutsAuthorizationServerExtensionURL,
-					ValueString: to.Ptr(d.Config.Public.URL),
+					ValueString: to.Ptr(d.Config.Public.Parse().JoinPath("oauth2", d.Config.OwnSubject).String()),
 				},
 			},
 		})
