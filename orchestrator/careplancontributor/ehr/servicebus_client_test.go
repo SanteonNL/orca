@@ -86,6 +86,16 @@ func TestNewClient(t *testing.T) {
 			expectType: &ServiceBusClientImpl{},
 			expectErr:  false,
 		},
+		{
+			name: "ServiceBusClientImpl with valid config and demo endpoint set",
+			config: ServiceBusConfig{
+				Enabled:      true,
+				DebugOnly:    false,
+				DemoEndpoint: "http://localhost:8080",
+			},
+			expectType: &ServiceBusClientImpl{},
+			expectErr:  false,
+		},
 	}
 
 	for _, tt := range tests {
