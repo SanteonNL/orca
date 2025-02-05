@@ -1,3 +1,4 @@
+//go:generate go run testdata/codegen/main.go
 package taskengine
 
 import (
@@ -27,7 +28,7 @@ func LoadTestQuestionnairesAndHealthcareSevices(t *testing.T, client fhirclient.
 	require.NoError(t, json.Unmarshal(data, &questionnaireBundle))
 	require.NoError(t, client.Create(questionnaireBundle, &questionnaireBundle, fhirclient.AtPath("/")))
 
-	data, err = testdata.FS.ReadFile("copd-asthma-questionnaire-bundle.json")
+	data, err = testdata.FS.ReadFile("extra-questionnaire-bundle.json")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &questionnaireBundle))
 	require.NoError(t, client.Create(questionnaireBundle, &questionnaireBundle, fhirclient.AtPath("/")))
@@ -49,7 +50,7 @@ func DefaultTestWorkflowProvider() TestWorkflowProvider {
 			"http://snomed.info/sct|84114007": {
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: "http://example.com/fhir/Questionnaire/zbj-questionnaire-telemonitoring-heartfailure-enrollment",
+						QuestionnaireUrl: "http://example.com/fhir/Questionnaire/zbj-telemonitoring-heartfailure-enrollment",
 					},
 				},
 			},
@@ -57,7 +58,7 @@ func DefaultTestWorkflowProvider() TestWorkflowProvider {
 			"http://snomed.info/sct|195967001": {
 				Steps: []WorkflowStep{
 					{
-						QuestionnaireUrl: "http://example.com/fhir/Questionnaire/questionnaire-asthma",
+						QuestionnaireUrl: "http://example.com/fhir/Questionnaire/zbj-telemonitoring-asthma-enrollment",
 					},
 				},
 			},
@@ -105,7 +106,7 @@ func (t TestQuestionnaireLoader) Load(ctx context.Context, u string) (*fhir.Ques
 	}
 
 	var questionnaireBundle fhir.Bundle
-	data, err = testdata.FS.ReadFile("copd-asthma-questionnaire-bundle.json")
+	data, err = testdata.FS.ReadFile("extra-questionnaire-bundle.json")
 	if err != nil {
 		return nil, err
 	}

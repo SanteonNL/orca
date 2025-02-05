@@ -80,6 +80,15 @@
           {
             "coding": [
               {
+                "code": "195967001",
+                "system": "http://snomed.info/sct",
+                "display": "astma (aandoening)"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
                 "code": "304527002",
                 "system": "http://snomed.info/sct",
                 "display": "acuut astma (aandoening)"
