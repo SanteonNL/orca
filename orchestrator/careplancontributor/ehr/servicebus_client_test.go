@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 	"io"
@@ -86,6 +85,16 @@ func TestNewClient(t *testing.T) {
 			expectType: &ServiceBusClientImpl{},
 			expectErr:  false,
 		},
+		{
+			name: "ServiceBusClientImpl with valid config and demo endpoint set",
+			config: ServiceBusConfig{
+				Enabled:      true,
+				DebugOnly:    false,
+				DemoEndpoint: "http://localhost:8080",
+			},
+			expectType: &ServiceBusClientImpl{},
+			expectErr:  false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -152,91 +161,27 @@ func TestNoopClient_SubmitMessage(t *testing.T) {
 	}
 }
 
-func TestDemoClient_SubmitMessage(t *testing.T) {
-	ctx := context.Background()
-	type testStruct struct {
-		name        string
-		config      ServiceBusConfig
-		expectError bool
-		mockSetup   func(tt *testStruct) func(tt *testStruct) // Optional setup and teardown for mocks
-	}
-	tests := []testStruct{
-		{
-			name: "send message - success",
-			config: ServiceBusConfig{
-				Enabled: true,
-			},
-			mockSetup: func(tt *testStruct) func(tt *testStruct) {
-				globals.StrictMode = false
-				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					require.Equal(t, "/test-endpoint", r.URL.Path)
-					body, err := io.ReadAll(r.Body)
-					require.NoError(t, err)
-					require.Equal(t, `{"value":"value"}`, string(body))
-					w.WriteHeader(http.StatusOK)
-				}))
-				tt.config.DemoEndpoint = ts.URL + "/test-endpoint"
-				return func(tt *testStruct) {
-					ts.Close()
-				}
-			},
-		},
-		{
-			name: "send message - error",
-			config: ServiceBusConfig{
-				Enabled: true,
-			},
-			expectError: true,
-			mockSetup: func(tt *testStruct) func(tt *testStruct) {
-				globals.StrictMode = false
-				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-					w.WriteHeader(http.StatusInternalServerError)
-				}))
-				tt.config.DemoEndpoint = ts.URL + "/test-endpoint"
-				return func(tt *testStruct) {
-					ts.Close()
-				}
-			},
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Setup mock if defined
-			if tt.mockSetup != nil {
-				teardown := tt.mockSetup(&tt)
-				defer teardown(&tt)
-			}
-			kafkaClient, err := NewClient(tt.config)
-			if err == nil {
-				err = kafkaClient.SubmitMessage(ctx, "key", `{"value": "value"}`)
-			}
-			if tt.expectError {
-				assert.Error(t, err, "Expected error but got none")
-			} else {
-				assert.NoError(t, err, "Unexpected error")
-			}
-		})
-	}
-}
-
 func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	tests := []struct {
+	type testStruct struct {
 		name           string
 		mockConnectErr error
 		mockSendErr    error
 		expectErr      bool
-		setupMocks     func(mock *MockServiceBusClientWrapper) func()
-	}{
+		config         *ServiceBusConfig
+		setupMocks     func(mock *MockServiceBusClientWrapper, tt *testStruct) func()
+	}
+
+	tests := []testStruct{
 		{
-			"Successful submit",
-			nil,
-			nil,
-			false,
-			func(mock *MockServiceBusClientWrapper) func() {
+			name:           "Successful submit",
+			mockConnectErr: nil,
+			mockSendErr:    nil,
+			expectErr:      false,
+			setupMocks: func(mock *MockServiceBusClientWrapper, tt *testStruct) func() {
 				var old = newServiceBusClient
 				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return mock, nil
@@ -249,10 +194,11 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 			},
 		},
 		{
-			"Connect error", errors.New("connection failed"),
-			nil,
-			true,
-			func(mock *MockServiceBusClientWrapper) func() {
+			name:           "Connect error",
+			mockConnectErr: errors.New("connection failed"),
+			mockSendErr:    nil,
+			expectErr:      true,
+			setupMocks: func(mock *MockServiceBusClientWrapper, tt *testStruct) func() {
 				var old = newServiceBusClient
 				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return nil, errors.New("connection failed")
@@ -263,7 +209,11 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 			},
 		},
 		{
-			"SendMessage error", nil, errors.New("send failed"), true, func(mock *MockServiceBusClientWrapper) func() {
+			name:           "SendMessage error",
+			mockConnectErr: nil,
+			mockSendErr:    errors.New("send failed"),
+			expectErr:      true,
+			setupMocks: func(mock *MockServiceBusClientWrapper, tt *testStruct) func() {
 				var old = newServiceBusClient
 				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return mock, nil
@@ -276,18 +226,50 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 
 			},
 		},
+		{
+			name:           "with demo client - success",
+			expectErr:      false,
+			mockConnectErr: nil,
+			mockSendErr:    nil,
+			setupMocks: func(mock *MockServiceBusClientWrapper, tt *testStruct) func() {
+				globals.StrictMode = false
+				ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					require.Equal(t, "/test-endpoint", r.URL.Path)
+					body, err := io.ReadAll(r.Body)
+					require.NoError(t, err)
+					require.Equal(t, `{"value":"value"}`, string(body))
+					w.WriteHeader(http.StatusOK)
+				}))
+
+				tt.config.DemoEndpoint = ts.URL + "/test-endpoint"
+
+				var old = newServiceBusClient
+				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
+					return mock, nil
+				}
+				mock.EXPECT().SendMessage(ctx, gomock.Any()).Return(nil)
+				mock.EXPECT().Close(ctx).Times(1)
+				return func() {
+					newServiceBusClient = old
+					ts.Close()
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			mockSbClient := NewMockServiceBusClientWrapper(ctrl)
 
+			if tt.config == nil {
+				tt.config = &ServiceBusConfig{Topic: "test-topic"}
+			}
 			client := &ServiceBusClientImpl{
-				config: ServiceBusConfig{Topic: "test-topic"},
+				config: *tt.config,
 			}
 
 			// Mock Connect method
-			f := tt.setupMocks(mockSbClient)
+			f := tt.setupMocks(mockSbClient, &tt)
 			defer f()
 
 			err := client.SubmitMessage(ctx, "key", "value")

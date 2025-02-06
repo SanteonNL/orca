@@ -33,7 +33,8 @@ type ServiceBusClient interface {
 
 // ServiceBusClientImpl provides an implementation for interacting with Azure Service Bus using the provided configuration.
 type ServiceBusClientImpl struct {
-	config ServiceBusConfig
+	config     ServiceBusConfig
+	demoClient *DemoClient
 }
 
 // DebugClient is an implementation of ServiceBusClient that simulates message submission by writing data to the OS TempDir.
@@ -53,13 +54,15 @@ type NoopClient struct {
 // Returns an error if configuration is invalid or initialization fails.
 func NewClient(config ServiceBusConfig) (ServiceBusClient, error) {
 	ctx := context.Background()
+	var demoClient *DemoClient
+
 	if config.Enabled {
 		if config.DemoEndpoint != "" {
 			if globals.StrictMode {
 				return nil, errors.New("servicebus demo endpoint is not allowed in strict mode")
 			}
 			log.Ctx(ctx).Info().Msgf("Demo mode enabled, sending messages over http to %s", config.DemoEndpoint)
-			return &DemoClient{messageEndpoint: config.DemoEndpoint}, nil
+			demoClient = &DemoClient{messageEndpoint: config.DemoEndpoint}
 		}
 		if config.DebugOnly {
 			log.Ctx(ctx).Info().Msg("Debug mode enabled, writing messages to files in OS temp dir")
@@ -73,7 +76,7 @@ func NewClient(config ServiceBusConfig) (ServiceBusClient, error) {
 				return nil, err
 			}
 		}
-		return kafkaClient, nil
+		return &ServiceBusClientImpl{config: config, demoClient: demoClient}, nil
 	}
 	return &NoopClient{}, nil
 }
@@ -118,6 +121,15 @@ func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, va
 		return err
 	}
 	log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitted key %s", key)
+
+	if k.demoClient != nil {
+		err = k.demoClient.SubmitMessage(ctx, key, value)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msgf("DemoClient submission failed with %s", err.Error())
+			return err
+		}
+	}
+
 	return nil
 }
 
