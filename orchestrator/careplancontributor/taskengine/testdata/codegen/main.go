@@ -16,6 +16,10 @@ func main() {
 	if err != nil {
 		panic("Unable to sync questionnaire-bundle.json" + err.Error())
 	}
+	err = download("https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Questionnaire-zbj-telemonitoring-heartfailure-enrollment.json", "testdata/questionnaire-heartfailure-enrollment.json")
+	if err != nil {
+		panic("Unable to sync questionnaire-heartfailure-enrollment.json" + err.Error())
+	}
 }
 
 func download(url string, target string) error {
