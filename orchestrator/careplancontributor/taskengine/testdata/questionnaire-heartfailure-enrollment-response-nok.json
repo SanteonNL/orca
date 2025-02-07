@@ -1,0 +1,80 @@
+{
+  "id": "d0579591-45b5-424b-a13c-7dd9039c83de",
+  "identifier": {
+    "system": "http://santeonnl.github.io/shared-care-planning/scp-identifier",
+    "value": "c656a1d1-3f68-4f1c-9cd4-ba309f99a8f4"
+  },
+  "item": [
+    {
+      "answer": [
+        {
+          "valueCoding": {
+            "code": "84114007",
+            "display": "Hartfalen",
+            "system": "http://snomed.info/sct"
+          }
+        }
+      ],
+      "linkId": "5c167c2d-f518-4bc1-adb7-ea06bc789a36",
+      "text": "Zorgpad"
+    },
+    {
+      "item": [
+        {
+          "answer": [
+            {
+              "valueCoding": {
+                "code": "373066001",
+                "display": "ja, titratie",
+                "system": "http://snomed.info/sct"
+              }
+            }
+          ],
+          "linkId": "1b81f13b-923e-4fc8-b758-08b3f172b2de",
+          "text": "Titratie"
+        }
+      ],
+      "linkId": "2f505566-ac92-4347-8731-840e6bc84851"
+    },
+    {
+      "item": [
+        {
+          "answer": [
+            {
+              "valueDecimal": 68
+            }
+          ],
+          "linkId": "4e973bcb-bbbb-4a9f-877b-fbf45ab94361",
+          "text": "Streefgewicht"
+        },
+        {
+          "answer": [
+            {
+              "valueCoding": {
+                "code": "373066001",
+                "display": "ja, patiënt beschikt over een weegschaal en bloeddrukmeter (of is bereid deze aan te schaffen)",
+                "system": "http://snomed.info/sct"
+              }
+            }
+          ],
+          "linkId": "345ca4a3-1bc8-4358-8d78-783c05953261",
+          "text": "Apparatuur beschikbaar"
+        }
+      ],
+      "linkId": "170292e5-3163-43b4-88af-affb3e4c27ab"
+    }
+  ],
+  "meta": {
+    "lastUpdated": "2025-01-30T13:15:26.719+00:00",
+    "versionId": "1"
+  },
+  "questionnaire": "https://zorgbijjou.github.io/scp-homemonitoring/Questionnaire-zbj-telemonitoring-heartfailure-enrollment|0.3",
+  "resourceType": "QuestionnaireResponse",
+  "status": "in-progress",
+  "subject": {
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+      "value": "999911120"
+    }
+  }
+}
