@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/webhook"
 	"net/http"
 	"net/url"
 	"strings"
@@ -95,7 +96,7 @@ func New(
 	// Register event handlers
 	eventManager := events.NewInMemoryManager()
 	for _, handler := range config.Events.WebHooks {
-		err := eventManager.Subscribe(handler.ResourceType, handler.Name, WebhookEventHandler{
+		err := eventManager.Subscribe(handler.ResourceType, handler.Name, webhook.EventHandler{
 			URL: handler.URL,
 		}.Handle)
 		if err != nil {

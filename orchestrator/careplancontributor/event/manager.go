@@ -40,6 +40,9 @@ type InMemoryManager struct {
 func (i *InMemoryManager) Subscribe(fhirResourceType string, handlerName string, handler HandleFunc) error {
 	i.mux.Lock()
 	defer i.mux.Unlock()
+	if fhirResourceType == "" {
+		fhirResourceType = "*"
+	}
 	handlers := i.handlers[fhirResourceType]
 	handlers = append(handlers, inMemoryHandler{
 		handlerName: handlerName,
@@ -52,12 +55,7 @@ func (i *InMemoryManager) Subscribe(fhirResourceType string, handlerName string,
 func (i *InMemoryManager) Notify(ctx context.Context, fhirResourceType string, event Instance) error {
 	i.mux.RLock()
 	defer i.mux.RUnlock()
-	for _, handler := range i.handlers[""] {
-		if err := handler.handler(ctx, event); err != nil {
-			log.Ctx(ctx).Err(err).Msgf("Failed to notify handler %s for event (source=%+v)", handler.handlerName, event.FHIRResourceSource)
-		}
-	}
-	for _, handler := range i.handlers[fhirResourceType] {
+	for _, handler := range append(i.handlers["*"], i.handlers[fhirResourceType]...) {
 		if err := handler.handler(ctx, event); err != nil {
 			log.Ctx(ctx).Err(err).Msgf("Failed to notify handler %s for event (source=%+v)", handler.handlerName, event.FHIRResourceSource)
 		}
