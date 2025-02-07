@@ -34,6 +34,7 @@ type Config struct {
 	Enabled                       bool                  `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
 	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`
+	Events                        EventsConfig          `koanf:"events"`
 	StaticBearerToken             string
 }
 
@@ -64,6 +65,20 @@ func (c TaskFillerConfig) Validate() error {
 		}
 	}
 	return nil
+}
+
+type EventsConfig struct {
+	WebHooks []WebHookEventHandlerConfig `koanf:"webhooks"`
+}
+
+type WebHookEventHandlerConfig struct {
+	// ResourceType is the FHIR resource type for which the event handler is triggered.
+	// If blank, it's triggered for all resource types.
+	ResourceType string
+	// Name is the unique name of the event handler, used for persisting retry state.
+	Name string
+	// URL is the URL to which the event should be sent.
+	URL string
 }
 
 type CarePlanServiceConfig struct {
