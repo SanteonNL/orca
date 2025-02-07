@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"sync"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/url"
-	"sync"
-	"time"
 )
 
 var timeFunc = time.Now
@@ -91,6 +92,14 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 				}
 			}
 		}
+	case "CarePlan":
+		carePlan := resource.(*fhir.CarePlan)
+		focus = fhir.Reference{
+			Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+			Type:      to.Ptr("CarePlan"),
+		}
+
+		log.Ctx(ctx).Info().Msgf("Notifying subscribers for CarePlan %s", *carePlan.Id)
 	default:
 		return fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
 	}
