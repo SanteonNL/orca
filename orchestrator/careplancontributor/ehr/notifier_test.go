@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/google/uuid"
-	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -67,177 +65,36 @@ func TestNotifyTaskAccepted(t *testing.T) {
 	tests := []struct {
 		name          string
 		task          fhir.Task
-		setupMocks    func(*mock.MockClient, *MockServiceBusClient)
+		setupMocks    func(*test.StubFHIRClient, *MockServiceBusClient)
 		expectedError error
 	}{
 		{
 			name: "successful notification",
 			task: primaryTask,
-			setupMocks: func(mockFHIRClient *mock.MockClient, mockServiceBusClient *MockServiceBusClient) {
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-						*bundle = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{
-									Resource: marshalToRawMessage(primaryTask),
-								},
-							},
-						}
-						return nil
-					}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-						*bundle = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{
-									Resource: marshalToRawMessage(primaryPatient),
-								},
-							},
-						}
-						return nil
-					}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "ServiceRequest", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-						*bundle = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{
-									Resource: marshalToRawMessage(serviceReq),
-								},
-							},
-						}
-						return nil
-					}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "Questionnaire", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-						*bundle = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{
-									Resource: marshalToRawMessage(questionnaire),
-								},
-							},
-						}
-						return nil
-					}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-						*bundle = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{
-									Resource: marshalToRawMessage(questionnaireResponse1),
-								},
-								{
-									Resource: marshalToRawMessage(questionnaireResponse2),
-								},
-							},
-						}
-						return nil
-					}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-						*bundle = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{
-									Resource: marshalToRawMessage(carePlan),
-								},
-							},
-						}
-						return nil
-					}).AnyTimes()
+			setupMocks: func(client *test.StubFHIRClient, mockServiceBusClient *MockServiceBusClient) {
+				client.Resources = append(client.Resources, primaryTask, primaryPatient, serviceReq,
+					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan)
+
 				mockServiceBusClient.EXPECT().
 					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
 					Return(nil)
 			},
 		},
 		{
-			name: "error fetching task",
-			task: primaryTask,
-			setupMocks: func(mockFHIRClient *mock.MockClient, mockServiceBusClient *MockServiceBusClient) {
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).
-					Return(errors.New("fetch error"))
-			},
+			name:          "error fetching task",
+			task:          primaryTask,
 			expectedError: errors.New("fetch error"),
+			setupMocks: func(client *test.StubFHIRClient, _ *MockServiceBusClient) {
+				client.Error = errors.New("fetch error")
+			},
 		},
 		{
 			name: "error sending to ServiceBus",
 			task: primaryTask,
-			setupMocks: func(mockFHIRClient *mock.MockClient, mockServiceBusClient *MockServiceBusClient) {
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-						*bundle = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{
-									Resource: marshalToRawMessage(primaryTask),
-								},
-							},
-						}
-						return nil
-					}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(primaryPatient),
-							},
-						},
-					}
-					return nil
-				}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "ServiceRequest", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(serviceReq),
-							},
-						},
-					}
-					return nil
-				}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "Questionnaire", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(questionnaire),
-							},
-						},
-					}
-					return nil
-				}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(questionnaireResponse1),
-							},
-							{
-								Resource: marshalToRawMessage(questionnaireResponse2),
-							},
-						},
-					}
-					return nil
-				}).AnyTimes()
-				mockFHIRClient.EXPECT().
-					SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, _ string, _ url.Values, bundle *fhir.Bundle, _ ...fhirclient.Option) error {
-					*bundle = fhir.Bundle{
-						Entry: []fhir.BundleEntry{
-							{
-								Resource: marshalToRawMessage(carePlan),
-							},
-						},
-					}
-					return nil
-				}).AnyTimes()
+			setupMocks: func(client *test.StubFHIRClient, mockServiceBusClient *MockServiceBusClient) {
+				client.Resources = append(client.Resources, primaryTask, primaryPatient, serviceReq,
+					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan)
+
 				mockServiceBusClient.EXPECT().
 					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
 					Return(errors.New("kafka error"))
@@ -251,15 +108,15 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockFHIRClient := mock.NewMockClient(ctrl)
 			mockServiceBusClient := NewMockServiceBusClient(ctrl)
+			fhirClient := &test.StubFHIRClient{}
 
 			if tt.setupMocks != nil {
-				tt.setupMocks(mockFHIRClient, mockServiceBusClient)
+				tt.setupMocks(fhirClient, mockServiceBusClient)
 			}
 			notifier := NewNotifier(mockServiceBusClient)
 
-			err := notifier.NotifyTaskAccepted(ctx, mockFHIRClient, &tt.task)
+			err := notifier.NotifyTaskAccepted(ctx, fhirClient, &tt.task)
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
 			} else {
