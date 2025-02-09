@@ -1,4 +1,4 @@
-package careplancontributor
+package taskengine
 
 import (
 	"context"
@@ -13,7 +13,6 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -315,7 +314,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				return mockFHIRClient
 			}
 			service := &Service{
-				workflows: taskengine.DefaultTestWorkflowProvider(),
+				workflows: DefaultTestWorkflowProvider(),
 				notifier:  notifierMock,
 			}
 			if tt.mock != nil {
@@ -417,7 +416,7 @@ func TestService_getSubTask(t *testing.T) {
 
 	// Create the service with the mock FHIR client
 	service := &Service{
-		workflows: taskengine.DefaultTestWorkflowProvider(),
+		workflows: DefaultTestWorkflowProvider(),
 	}
 
 	taskBytes, _ := json.Marshal(primaryTask)

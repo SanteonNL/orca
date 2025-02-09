@@ -567,18 +567,6 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			return err
 		}
 		focusResource = task
-		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
-		// TODO: Move this to a event.Handler implementation
-		err = s.handleTaskNotification(ctx, fhirClient, &task)
-		rejection := new(TaskRejection)
-		if errors.As(err, &rejection) || errors.As(err, rejection) {
-			if err := s.rejectTask(ctx, fhirClient, task, *rejection); err != nil {
-				// TODO: what to do here?
-				log.Ctx(ctx).Err(err).Msgf("Failed to reject task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
-			}
-		} else if err != nil {
-			return err
-		}
 	case "CarePlan":
 		var carePlan fhir.CarePlan
 		err = fhirClient.Read(*focusReference.Reference, &carePlan)
@@ -594,15 +582,6 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		FHIRResource:       focusResource,
 		FHIRResourceSource: *focusReference.Reference,
 	})
-}
-
-func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {
-	log.Ctx(ctx).Info().Msgf("Rejecting task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
-	task.Status = fhir.TaskStatusRejected
-	task.StatusReason = &fhir.CodeableConcept{
-		Text: to.Ptr(rejection.FormatReason()),
-	}
-	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
 }
 
 func (s Service) createFHIRClientForURL(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {

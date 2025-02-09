@@ -8,7 +8,7 @@ import (
 
 type Manager interface {
 	Subscribe(fhirResourceType string, handlerName string, handler HandleFunc) error
-	Notify(ctx context.Context, fhirResourceType string, event Instance) error
+	Notify(ctx context.Context, topic string, event Instance) error
 }
 
 // Instance describes an event.
@@ -37,25 +37,25 @@ type InMemoryManager struct {
 	handlers map[string][]inMemoryHandler
 }
 
-func (i *InMemoryManager) Subscribe(fhirResourceType string, handlerName string, handler HandleFunc) error {
+func (i *InMemoryManager) Subscribe(topic string, handlerName string, handler HandleFunc) error {
 	i.mux.Lock()
 	defer i.mux.Unlock()
-	if fhirResourceType == "" {
-		fhirResourceType = "*"
+	if topic == "" {
+		topic = "*"
 	}
-	handlers := i.handlers[fhirResourceType]
+	handlers := i.handlers[topic]
 	handlers = append(handlers, inMemoryHandler{
 		handlerName: handlerName,
 		handler:     handler,
 	})
-	i.handlers[fhirResourceType] = handlers
+	i.handlers[topic] = handlers
 	return nil
 }
 
-func (i *InMemoryManager) Notify(ctx context.Context, fhirResourceType string, event Instance) error {
+func (i *InMemoryManager) Notify(ctx context.Context, topic string, event Instance) error {
 	i.mux.RLock()
 	defer i.mux.RUnlock()
-	for _, handler := range append(i.handlers["*"], i.handlers[fhirResourceType]...) {
+	for _, handler := range append(i.handlers["*"], i.handlers[topic]...) {
 		if err := handler.handler(ctx, event); err != nil {
 			log.Ctx(ctx).Err(err).Msgf("Failed to notify handler %s for event (source=%+v)", handler.handlerName, event.FHIRResourceSource)
 		}

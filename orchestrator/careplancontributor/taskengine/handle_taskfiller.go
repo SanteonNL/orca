@@ -1,15 +1,15 @@
-package careplancontributor
+package taskengine
 
 import (
 	"context"
 	"errors"
 	"fmt"
+	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
@@ -38,7 +38,41 @@ func (t TaskRejection) Error() string {
 	return "task rejected by filler: " + t.FormatReason()
 }
 
-func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
+var _ events.Handler = &EventHandler{}
+
+type EventHandler struct {
+	eventManager events.Manager
+}
+
+func (s *EventHandler) Handle(ctx context.Context, event events.Instance) error {
+	task, ok := event.FHIRResource.(fhir.Task)
+	if !ok {
+		// shouldn't happen
+		return errors.New("task engine event handler expected a Task resource")
+	}
+	// TODO: Move this to a event.Handler implementation
+	err = s.handleTaskNotification(ctx, fhirClient, &task)
+	rejection := new(TaskRejection)
+	if errors.As(err, &rejection) || errors.As(err, rejection) {
+		if err := s.rejectTask(ctx, fhirClient, task, *rejection); err != nil {
+			// TODO: what to do here?
+			log.Ctx(ctx).Err(err).Msgf("Failed to reject task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+		}
+	} else if err != nil {
+		return err
+	}
+}
+
+func (s *EventHandler) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {
+	log.Ctx(ctx).Info().Msgf("Rejecting task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+	task.Status = fhir.TaskStatusRejected
+	task.StatusReason = &fhir.CodeableConcept{
+		Text: to.Ptr(rejection.FormatReason()),
+	}
+	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
+}
+
+func (s *EventHandler) handleTaskNotification(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 	log.Ctx(ctx).Info().Msgf("Running handleTaskNotification for Task %s", *task.Id)
 
 	if !coolfhir.IsScpTask(task) {
@@ -100,7 +134,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 }
 
 // TODO: This function now always expects a subtask, but it should also be able to handle primary tasks
-func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, primaryTaskRef string, identities []fhir.Identifier) error {
+func (s *EventHandler) handleSubtaskNotification(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, primaryTaskRef string, identities []fhir.Identifier) error {
 	if task.Status != fhir.TaskStatusCompleted {
 		log.Ctx(ctx).Debug().Msg("Task.status is not completed - skipping")
 		return nil
@@ -121,7 +155,7 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 
 }
 
-func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, primaryTask *fhir.Task) error {
+func (s *EventHandler) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, primaryTask *fhir.Task) error {
 	if primaryTask.Status != fhir.TaskStatusRequested && primaryTask.Status != fhir.TaskStatusReceived {
 		log.Ctx(ctx).Debug().Msg("primary Task.status != requested||received (workflow already started) - not processing in handleTaskNotification")
 		return nil
@@ -135,7 +169,11 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
 	}
 	log.Ctx(ctx).Debug().Msgf("Successfully accepted task (ref=%s)", ref)
-	err = s.notifier.NotifyTaskAccepted(ctx, cpsClient, primaryTask)
+	s.eventManager.Notify(ctx, "Task.Accepted", events.Instance{
+		Source:       TODO,
+		FHIRResource: primaryTask,
+	})
+	err = s.NotifyTaskAccepted(ctx, cpsClient, primaryTask)
 	if err != nil {
 		log.Ctx(ctx).Warn().Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
 		return nil
@@ -144,7 +182,7 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	return nil
 }
 
-func (s *Service) fetchQuestionnaireByID(ctx context.Context, cpsClient fhirclient.Client, ref string, questionnaire *fhir.Questionnaire) error {
+func (s *EventHandler) fetchQuestionnaireByID(ctx context.Context, cpsClient fhirclient.Client, ref string, questionnaire *fhir.Questionnaire) error {
 	log.Ctx(ctx).Debug().Msg("Fetching Questionnaire by ID")
 	err := cpsClient.Read(ref, &questionnaire)
 	if err != nil {
@@ -208,9 +246,9 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 		}
 	}
 	if workflow != nil {
-		var nextStep *taskengine.WorkflowStep
+		var nextStep *WorkflowStep
 		if isPrimaryTask {
-			nextStep = new(taskengine.WorkflowStep)
+			nextStep = new(WorkflowStep)
 			*nextStep = workflow.Start()
 		} else {
 			// For subtasks, we need to make sure it's completed, and if so, find out if more Questionnaires are needed.
@@ -306,7 +344,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 // selectWorkflow determines the workflow to use based on the Task's focus, and reasonCode or reasonReference.
 // It first selects the type of service, from the Task.focus (ServiceRequest), and then selects the workflow based on the Task.reasonCode or Task.reasonReference.
 // If it finds no, or multiple, matching workflows, it returns an error.
-func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) (*taskengine.Workflow, error) {
+func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) (*Workflow, error) {
 	// Determine service code from Task.focus
 	var serviceRequest fhir.ServiceRequest
 	if err := cpsClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
@@ -343,14 +381,14 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 		return *a.System == *b.System && *a.Code == *b.Code
 	})
 
-	var matchedWorkflows []*taskengine.Workflow
+	var matchedWorkflows []*Workflow
 	for _, serviceCoding := range serviceRequest.Code.Coding {
 		if serviceCoding.System == nil || serviceCoding.Code == nil {
 			continue
 		}
 		for _, reasonCoding := range taskReasonCodes {
 			workflow, err := s.workflows.Provide(ctx, serviceCoding, reasonCoding)
-			if errors.Is(err, taskengine.ErrWorkflowNotFound) {
+			if errors.Is(err, ErrWorkflowNotFound) {
 				log.Ctx(ctx).Debug().Err(err).Msgf("No workflow found (service=%s|%s, condition=%s|%s, task=%s)",
 					*serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, *task.Id)
 				continue
