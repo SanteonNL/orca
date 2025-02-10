@@ -101,6 +101,15 @@ func (k *ServiceBusClientImpl) Connect() (sender ServiceBusClientWrapper, err er
 // SubmitMessage sends a message with a specified key and value to the configured Azure Service Bus topic.
 func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
 	log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitting key %s", key)
+
+	if k.demoClient != nil {
+		err := k.demoClient.SubmitMessage(ctx, key, value)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msgf("DemoClient submission failed with %s", err.Error())
+			return err
+		}
+	}
+
 	sender, err := k.Connect()
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msgf("Connect failed with %s", err.Error())
@@ -121,14 +130,6 @@ func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, va
 		return err
 	}
 	log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitted key %s", key)
-
-	if k.demoClient != nil {
-		err = k.demoClient.SubmitMessage(ctx, key, value)
-		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Msgf("DemoClient submission failed with %s", err.Error())
-			return err
-		}
-	}
 
 	return nil
 }
