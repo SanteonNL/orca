@@ -101,29 +101,32 @@ func (k *ServiceBusClientImpl) Connect() (sender ServiceBusClientWrapper, err er
 // SubmitMessage sends a message with a specified key and value to the configured Azure Service Bus topic.
 func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, value string) error {
 	log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitting key %s", key)
-	sender, err := k.Connect()
-	if err != nil {
-		log.Ctx(ctx).Error().Err(err).Msgf("Connect failed with %s", err.Error())
-		return err
-	}
-	defer func(sender ServiceBusClientWrapper, ctx context.Context) {
-		err := sender.Close(ctx)
+	// TODO: if statement temporary while servicebus is down, remove ASAP
+	if k.demoClient == nil {
+		sender, err := k.Connect()
 		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Msgf("Close failed with %s", err.Error())
+			log.Ctx(ctx).Error().Err(err).Msgf("Connect failed with %s", err.Error())
+			return err
 		}
-	}(sender, ctx)
-	message := &azservicebus.Message{
-		Body:          []byte(value),
-		CorrelationID: &key,
+		defer func(sender ServiceBusClientWrapper, ctx context.Context) {
+			err := sender.Close(ctx)
+			if err != nil {
+				log.Ctx(ctx).Error().Err(err).Msgf("Close failed with %s", err.Error())
+			}
+		}(sender, ctx)
+		message := &azservicebus.Message{
+			Body:          []byte(value),
+			CorrelationID: &key,
+		}
+		err = sender.SendMessage(ctx, message)
+		if err != nil {
+			return err
+		}
+		log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitted key %s", key)
 	}
-	err = sender.SendMessage(ctx, message)
-	if err != nil {
-		return err
-	}
-	log.Ctx(ctx).Debug().Msgf("SubmitMessage, submitted key %s", key)
 
 	if k.demoClient != nil {
-		err = k.demoClient.SubmitMessage(ctx, key, value)
+		err := k.demoClient.SubmitMessage(ctx, key, value)
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msgf("DemoClient submission failed with %s", err.Error())
 			return err
