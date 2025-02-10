@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/webhook"
 	"net/http"
 	"net/url"
 	"strings"
@@ -91,6 +93,17 @@ func New(
 		workflowProvider = taskengine.FhirApiWorkflowProvider{Client: questionnaireFhirClient}
 	}
 
+	// Register event handlers
+	eventManager := events.NewInMemoryManager()
+	for _, handler := range config.Events.WebHooks {
+		err := eventManager.Subscribe(handler.ResourceType, handler.Name, webhook.EventHandler{
+			URL: handler.URL,
+		}.Handle)
+		if err != nil {
+			return nil, fmt.Errorf("failed to subscribe to event %s: %w", handler.Name, err)
+		}
+	}
+
 	serviceBusClient, err := ehr.NewClient(config.ServiceBusConfig)
 	if err != nil {
 		return nil, err
@@ -108,6 +121,7 @@ func New(
 		workflows:                     workflowProvider,
 		notifier:                      ehr.NewNotifier(serviceBusClient),
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
+		eventManager:                  eventManager,
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
@@ -130,6 +144,7 @@ type Service struct {
 	workflows                     taskengine.WorkflowProvider
 	healthdataviewEndpointEnabled bool
 	notifier                      ehr.Notifier
+	eventManager                  events.Manager
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -539,20 +554,21 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		return err
 	}
 
+	fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, fhirBaseURL, sender.Organization.Identifier[0])
+	if err != nil {
+		return err
+	}
+	var focusResource any
 	switch *focusReference.Type {
 	case "Task":
-		fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, fhirBaseURL, sender.Organization.Identifier[0])
-		if err != nil {
-			return err
-		}
-		// Get task
 		var task fhir.Task
 		err = fhirClient.Read(*focusReference.Reference, &task)
 		if err != nil {
 			return err
 		}
-
+		focusResource = task
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
+		// TODO: Move this to a event.Handler implementation
 		err = s.handleTaskNotification(ctx, fhirClient, &task)
 		rejection := new(TaskRejection)
 		if errors.As(err, &rejection) || errors.As(err, rejection) {
@@ -563,11 +579,21 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		} else if err != nil {
 			return err
 		}
+	case "CarePlan":
+		var carePlan fhir.CarePlan
+		err = fhirClient.Read(*focusReference.Reference, &carePlan)
+		if err != nil {
+			return err
+		}
+		focusResource = carePlan
 	default:
 		log.Ctx(ctx).Debug().Msgf("No handler for notification of type %s, ignoring", *focusReference.Type)
 	}
-
-	return nil
+	// TODO: Not sure if we should return an error here
+	return s.eventManager.Notify(ctx, *focusReference.Type, events.Instance{
+		FHIRResource:       focusResource,
+		FHIRResourceSource: *focusReference.Reference,
+	})
 }
 
 func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {
