@@ -30,6 +30,8 @@ type StubFHIRClient struct {
 	// CreatedResources is a list of resources that have been created using this client.
 	// It's not used by the client itself, but can be used by tests to verify that the client has been used correctly.
 	CreatedResources map[string][]any
+	// Error is an error that will be returned by all methods of this client.
+	Error error
 }
 
 func (s StubFHIRClient) Read(path string, target any, opts ...fhirclient.Option) error {
@@ -37,6 +39,9 @@ func (s StubFHIRClient) Read(path string, target any, opts ...fhirclient.Option)
 }
 
 func (s StubFHIRClient) ReadWithContext(ctx context.Context, path string, target any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
 	if path == "metadata" {
 		unmarshalInto(s.Metadata, &target)
 		return nil
@@ -63,6 +68,9 @@ func (s StubFHIRClient) Search(resourceType string, query url.Values, target any
 }
 
 func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType string, query url.Values, target any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
 	var candidates []BaseResource
 	for _, res := range s.Resources {
 		var baseResource BaseResource
@@ -99,6 +107,14 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 				}
 				return false
 			})
+		case "_id":
+			filterCandidates(func(candidate BaseResource) bool {
+				return candidate.Id == value
+			})
+		case "_include":
+			// ignored, might want to implement this?
+		case "_revinclude":
+			// ignored, might want to implement this?
 		case "url":
 			filterCandidates(func(candidate BaseResource) bool {
 				return candidate.URL == value
@@ -122,6 +138,10 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 }
 
 func (s *StubFHIRClient) CreateWithContext(_ context.Context, resource any, result any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
+
 	var baseResource BaseResource
 	unmarshalInto(resource, &baseResource)
 	resourceType := baseResource.Type
@@ -153,20 +173,30 @@ func (s *StubFHIRClient) CreateWithContext(_ context.Context, resource any, resu
 }
 
 func (s StubFHIRClient) Update(path string, resource any, result any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
 	panic("implement me")
 }
 
 func (s StubFHIRClient) UpdateWithContext(ctx context.Context, path string, resource any, result any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
 	panic("implement me")
 }
 
 func (s StubFHIRClient) Delete(path string, opts ...fhirclient.Option) error {
-	//TODO implement me
+	if s.Error != nil {
+		return s.Error
+	}
 	panic("implement me")
 }
 
 func (s StubFHIRClient) DeleteWithContext(ctx context.Context, path string, opts ...fhirclient.Option) error {
-	//TODO implement me
+	if s.Error != nil {
+		return s.Error
+	}
 	panic("implement me")
 }
 
