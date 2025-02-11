@@ -177,6 +177,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 
+		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("CarePlan service URL is not configured"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+
 		err := s.handleProxyExternalRequestToEHR(writer, request)
 		if err != nil {
 			log.Ctx(request.Context()).Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
@@ -209,6 +214,10 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	proxyBasePath := basePath + "/cps/fhir"
 
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("CarePlan service URL is not configured"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
 		// TODO: Since we should only call our own CPS, this should be a local call.
 		//       If not, this should be optimized so that we don't do it every call
 		_, httpClient, err := s.createFHIRClientForURL(request.Context(), s.localCarePlanServiceUrl)
