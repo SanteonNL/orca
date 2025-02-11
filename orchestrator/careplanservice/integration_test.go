@@ -12,9 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -97,16 +100,22 @@ func Test_Integration(t *testing.T) {
 	})
 
 	t.Run("DELETE is supported when unmanaged operations are allowed", func(t *testing.T) {
+		serviceRequest := fhir.ServiceRequest{
+			Subject: fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr(strconv.Itoa(rand.Int())),
+				},
+			},
+		}
 		t.Run("as single request", func(t *testing.T) {
 			t.Run("with ID", func(t *testing.T) {
-				serviceRequest := fhir.ServiceRequest{}
 				err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
 				require.NoError(t, err)
 				err = carePlanContributor1.Delete("ServiceRequest/"+*serviceRequest.Id, nil)
 				require.NoError(t, err)
 			})
 			t.Run("with ID as search parameter", func(t *testing.T) {
-				serviceRequest := fhir.ServiceRequest{}
 				err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
 				require.NoError(t, err)
 				err = carePlanContributor1.Delete("ServiceRequest", fhirclient.QueryParam("_id", *serviceRequest.Id))
@@ -114,7 +123,6 @@ func Test_Integration(t *testing.T) {
 			})
 		})
 		t.Run("as transaction entry", func(t *testing.T) {
-			serviceRequest := fhir.ServiceRequest{}
 			err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
 			require.NoError(t, err)
 			transaction := fhir.Bundle{
@@ -355,7 +363,6 @@ func Test_Integration(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 					Value:  to.Ptr("1333333337"),
 				},
-				//Reference: to.Ptr("Patient/" + *patient.Id),
 			},
 		}
 
@@ -806,7 +813,7 @@ func testBundleCreation(t *testing.T, carePlanContributor1 *fhirclient.BaseClien
 }
 
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
-	fhirBaseURL := test.SetupHAPI(t)
+	fhirBaseURL := test.SetupFHIRCandle(t)
 	activeProfile := profile.TestProfile{
 		Principal: auth.TestPrincipal1,
 		CSD:       profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
@@ -869,6 +876,9 @@ outer:
 
 func setupNotificationEndpoint(t *testing.T) *url.URL {
 	notificationEndpoint := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		JS, err := io.ReadAll(request.Body)
+		require.NoError(t, err)
+		t.Logf("Received notification: %s", JS)
 		notificationCounter.Add(1)
 		writer.WriteHeader(http.StatusOK)
 	}))

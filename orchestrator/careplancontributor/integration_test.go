@@ -174,7 +174,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 }
 
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL, *httptest.Server, *url.URL) {
-	fhirBaseURL := test.SetupHAPI(t)
+	fhirBaseURL := test.SetupFHIRCandle(t)
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()

@@ -9,19 +9,13 @@ import (
 	"testing"
 )
 
-// File for test helpers that can be shared between CPS and CPC
-
-func SetupHAPI(t *testing.T) *url.URL {
-	t.Log("Setting up HAPI")
+func SetupFHIRCandle(t *testing.T) *url.URL {
+	t.Log("Setting up FHIR Candle...")
 	ctx := context.Background()
 	req := tc.ContainerRequest{
-		Image:        "hapiproject/hapi:v7.2.0",
-		ExposedPorts: []string{"8080/tcp"},
-		Env: map[string]string{
-			"hapi.fhir.fhir_version":              "R4",
-			"hapi.fhir.allow_external_references": "true",
-		},
-		WaitingFor: wait.ForHTTP("/fhir/Task"),
+		Image:        "ghcr.io/fhir/fhir-candle:latest",
+		ExposedPorts: []string{"5826/tcp"},
+		WaitingFor:   wait.ForHTTP("/fhir/r4/Task"),
 	}
 	container, err := tc.GenericContainer(ctx, tc.GenericContainerRequest{
 		ContainerRequest: req,
@@ -37,5 +31,6 @@ func SetupHAPI(t *testing.T) *url.URL {
 	require.NoError(t, err)
 	u, err := url.Parse(endpoint)
 	require.NoError(t, err)
-	return u.JoinPath("fhir")
+	t.Log("FHIR Candle is ready.")
+	return u.JoinPath("fhir", "r4")
 }
