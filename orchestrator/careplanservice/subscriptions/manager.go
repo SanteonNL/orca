@@ -45,7 +45,6 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			Reference: to.Ptr("Task/" + *task.Id),
 			Type:      to.Ptr("Task"),
 		}
-		log.Ctx(ctx).Info().Msgf("Notifying subscribers for Task %s", *task.Id)
 		if task.Owner != nil {
 			if coolfhir.IsLogicalIdentifier(task.Owner.Identifier) {
 				subscribers = append(subscribers, *task.Owner.Identifier)
@@ -94,8 +93,6 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 				}
 			}
 		}
-
-		log.Ctx(ctx).Info().Msgf("Notifying subscribers for CarePlan %s", *carePlan.Id)
 	default:
 		return fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
 	}
