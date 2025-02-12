@@ -3,6 +3,13 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"sync/atomic"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -12,12 +19,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"strings"
-	"sync/atomic"
-	"testing"
 )
 
 var notificationCounter = new(atomic.Int32)
@@ -52,8 +53,6 @@ func Test_Integration(t *testing.T) {
 			require.NoError(t, err)
 		})
 	})
-
-	notificationCounter.Store(0)
 
 	participant1 := fhir.CareTeamParticipant{
 		Member: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
@@ -172,6 +171,8 @@ func Test_Integration(t *testing.T) {
 			},
 		}
 
+		notificationCounter.Store(0)
+
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
 		require.Equal(t, 0, int(notificationCounter.Load()))
@@ -251,7 +252,6 @@ func Test_Integration(t *testing.T) {
 
 		err := carePlanContributor1.Update("Task", primaryTask, &primaryTask, fhirclient.QueryParam("_id", "123"))
 		require.NoError(t, err)
-		notificationCounter.Store(0)
 		// Resolve created CarePlan through Task.basedOn
 		require.NoError(t, carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan))
 	}
@@ -268,7 +268,6 @@ func Test_Integration(t *testing.T) {
 		err = service.fhirClient.SearchWithContext(context.Background(), "Task", url.Values{"intent": {"order"}}, &taskBundle)
 		require.NoError(t, err)
 		require.Len(t, taskBundle.Entry, 1, "expected 1 Task in the FHIR server")
-		notificationCounter.Store(0)
 	})
 
 	t.Log("Create Subtask")
@@ -296,7 +295,6 @@ func Test_Integration(t *testing.T) {
 		}
 		err := carePlanContributor2.Create(subTask, &subTask)
 		require.NoError(t, err)
-		notificationCounter.Store(0)
 		// INT-440: CarePlan.activity should not contain subtasks
 		require.NoError(t, carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan))
 		require.Len(t, carePlan.Activity, 1)
@@ -334,7 +332,6 @@ func Test_Integration(t *testing.T) {
 
 	t.Log("Creating Task - No BasedOn, new CarePlan and CareTeam are created")
 	{
-		notificationCounter.Store(0)
 		primaryTask = fhir.Task{
 			Intent:    "order",
 			Status:    fhir.TaskStatusRequested,
@@ -359,6 +356,8 @@ func Test_Integration(t *testing.T) {
 			},
 		}
 
+		notificationCounter.Store(0)
+
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.NoError(t, err)
 		err = carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan)
@@ -381,9 +380,8 @@ func Test_Integration(t *testing.T) {
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 		})
-		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
-			require.Equal(t, 2, int(notificationCounter.Load()))
-			notificationCounter.Store(0)
+		t.Run("Check that 3 participants have been notified", func(t *testing.T) {
+			require.Equal(t, 3, int(notificationCounter.Load()))
 		})
 	}
 
@@ -468,6 +466,8 @@ func Test_Integration(t *testing.T) {
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
 
+		notificationCounter.Store(0)
+
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
 		require.Equal(t, 0, int(notificationCounter.Load()))
@@ -487,6 +487,8 @@ func Test_Integration(t *testing.T) {
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
+
+		notificationCounter.Store(0)
 
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
@@ -511,6 +513,8 @@ func Test_Integration(t *testing.T) {
 			},
 		}
 
+		notificationCounter.Store(0)
+
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.NoError(t, err)
 		err = carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan)
@@ -530,9 +534,8 @@ func Test_Integration(t *testing.T) {
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 		})
-		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
-			require.Equal(t, 2, int(notificationCounter.Load()))
-			notificationCounter.Store(0)
+		t.Run("Check that 3 participants have been notified", func(t *testing.T) {
+			require.Equal(t, 3, int(notificationCounter.Load()))
 		})
 	}
 
@@ -546,6 +549,8 @@ func Test_Integration(t *testing.T) {
 
 	t.Log("Accepting Task")
 	{
+		notificationCounter.Store(0)
+
 		primaryTask.Status = fhir.TaskStatusAccepted
 		var updatedTask fhir.Task
 		// Note: use FHIR search instead of specifying ID to test support for updating resources identified by logical identifiers
@@ -563,7 +568,6 @@ func Test_Integration(t *testing.T) {
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Equal(t, 2, int(notificationCounter.Load()))
-			notificationCounter.Store(0)
 		})
 	}
 
@@ -585,6 +589,8 @@ func Test_Integration(t *testing.T) {
 
 	t.Log("Valid state transition - Accepted -> In-progress, Owner")
 	{
+		notificationCounter.Store(0)
+
 		primaryTask.Status = fhir.TaskStatusInProgress
 		var updatedTask fhir.Task
 		err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
@@ -600,12 +606,13 @@ func Test_Integration(t *testing.T) {
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Equal(t, 2, int(notificationCounter.Load()))
-			notificationCounter.Store(0)
 		})
 	}
 
 	t.Log("Complete Task")
 	{
+		notificationCounter.Store(0)
+
 		primaryTask.Status = fhir.TaskStatusCompleted
 		var updatedTask fhir.Task
 		err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
@@ -621,7 +628,6 @@ func Test_Integration(t *testing.T) {
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Equal(t, 2, int(notificationCounter.Load()))
-			notificationCounter.Store(0)
 		})
 	}
 

@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/url"
+	"reflect"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -12,9 +16,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	"net/url"
-	"reflect"
-	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
@@ -341,6 +342,11 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			}
 			require.NoError(t, err)
 
+			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "CarePlan/1", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
+				*(result.(*[]byte)) = []byte{}
+				return tt.errorFromRead
+			})
+
 			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
 				data, _ := json.Marshal(tt.createdTask)
 				*(result.(*[]byte)) = data
@@ -362,7 +368,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			require.NotNil(t, result)
 			response, notifications, err := result(returnedBundle)
 			require.NoError(t, err)
-			assert.Len(t, notifications, 2)
+			assert.Len(t, notifications, 3)
 			require.Equal(t, "Task/3", *response.Response.Location)
 			require.Equal(t, "201 Created", response.Response.Status)
 		})
@@ -572,6 +578,11 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				return
 			}
 			require.NoError(t, err)
+
+			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "CarePlan/1", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
+				*(result.(*[]byte)) = []byte{}
+				return tt.errorFromRead
+			})
 
 			mockFHIRClient.EXPECT().Read("Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
 				data, _ := json.Marshal(tt.createdTask)
