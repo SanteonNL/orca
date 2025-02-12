@@ -327,8 +327,14 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 	fhirResponse := txResult.Entry[0].Response
 	statusParts := strings.Split(fhirResponse.Status, " ")
 	if statusCode, err = strconv.Atoi(statusParts[0]); err != nil {
-		log.Ctx(httpRequest.Context()).Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
-		statusCode = http.StatusOK
+		// TODO: this should be fixed in FHIR Candle: https://github.com/FHIR/fhir-candle/issues/26
+		switch statusParts[0] {
+		case "Created":
+			statusCode = http.StatusCreated
+		default:
+			log.Ctx(httpRequest.Context()).Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
+			statusCode = http.StatusOK
+		}
 	}
 	var headers = map[string][]string{}
 	if fhirResponse.Location != nil {
@@ -698,6 +704,10 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 	err := s.fhirClient.CreateWithContext(ctx, reindexParam, &response, fhirclient.AtPath("/$reindex"))
 	log.Ctx(ctx).Info().Msgf("Reindexing SearchParameter response %s", string(response))
 	if err != nil {
+		if strings.Contains(err.Error(), "Operation $reindex does not have an executable implementation on this server.") {
+			// FHIR Candle in-memory server doesn't support $reindex
+			return nil
+		}
 		return fmt.Errorf("batch reindex SearchParameter %s: %w", strings.Join(reindexURLs, ","), err)
 	}
 
