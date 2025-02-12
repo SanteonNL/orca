@@ -10,8 +10,8 @@ github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache v0.3.1 h1:Bk5uOhSAenHyR5P
 github.com/Azure/azure-sdk-for-go/sdk/azidentity/cache v0.3.1/go.mod h1:QZ4pw3or1WPmRBxf0cHd1tknzrT54WPBOQoGutCPvSU=
 github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 h1:ywEEhmNahHBihViHepv3xPBn1663uRv2t2q/ESv9seY=
 github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0/go.mod h1:iZDifYGJTIgIIkYRNWPENUnqx6bJ2xnSDFI2tjwZNuY=
-github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.7.4 h1:hdkk/8ztQDAJz1OGBJLp30j1HmW+oM5TPElRVMaGojM=
-github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.7.4/go.mod h1:6vUKmzY17h6dpn9ZLAhM4R/rcrltBeq52qZIkUR7Oro=
+github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.8.0 h1:JNgM3Tz592fUHU2vgwgvOgKxo5s9Ki0y2wicBeckn70=
+github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.8.0/go.mod h1:6vUKmzY17h6dpn9ZLAhM4R/rcrltBeq52qZIkUR7Oro=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.3.0 h1:/eDk/OHTzMWrfI22PrUIVhRarQJFDzGkOXO3wtDcPlw=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.3.0/go.mod h1:1lU5bExBU6ZracUdREjnlgMa9nfgzxTS0w8I7b1fhCY=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.3.0 h1:7rKG7UmnrxX4N53TFhkYqjc+kVUZuw0fL8I3Fh+Ld9E=
