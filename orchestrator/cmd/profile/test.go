@@ -111,6 +111,18 @@ func (t TestCsdDirectory) LookupEntity(ctx context.Context, identifier fhir.Iden
 
 func (t TestCsdDirectory) LookupEndpoint(_ context.Context, owner *fhir.Identifier, endpointName string) ([]fhir.Endpoint, error) {
 	if t.Endpoints != nil {
+		if owner == nil {
+			// Return all endpoints of this type
+			var endpoints []fhir.Endpoint
+			for _, endpointsByOwner := range t.Endpoints {
+				if endpoint, ok := endpointsByOwner[endpointName]; ok {
+					endpoints = append(endpoints, fhir.Endpoint{
+						Address: endpoint,
+					})
+				}
+			}
+			return endpoints, nil
+		}
 		if endpoints, ok := t.Endpoints[coolfhir.ToString(owner)]; ok {
 			if endpoint, ok := endpoints[endpointName]; ok {
 				return []fhir.Endpoint{

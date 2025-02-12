@@ -2,7 +2,6 @@ package subscriptions
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
@@ -36,21 +35,6 @@ type DerivingManager struct {
 	Channels    ChannelFactory
 }
 
-func verifyLogicalIdentifier(ctx context.Context, prefix string, id *fhir.Identifier) bool {
-	if coolfhir.IsLogicalIdentifier(id) {
-		return true
-	}
-
-	data, err := json.Marshal(id)
-	if err != nil {
-		log.Ctx(ctx).Error().Msgf("Failed to marshal %s to JSON: %s", prefix, err)
-	} else {
-		log.Ctx(ctx).Warn().Msgf("%s LogicalIdentifier is invalid: %s", prefix, string(data))
-	}
-
-	return false
-}
-
 func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error {
 	var focus fhir.Reference
 	var subscribers []fhir.Identifier
@@ -63,13 +47,13 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 		}
 		log.Ctx(ctx).Info().Msgf("Notifying subscribers for Task %s", *task.Id)
 		if task.Owner != nil {
-			if verifyLogicalIdentifier(ctx, "owner", task.Owner.Identifier) {
+			if coolfhir.IsLogicalIdentifier(task.Owner.Identifier) {
 				subscribers = append(subscribers, *task.Owner.Identifier)
 			}
 		}
 
 		if task.Requester != nil {
-			if verifyLogicalIdentifier(ctx, "requester", task.Requester.Identifier) {
+			if coolfhir.IsLogicalIdentifier(task.Requester.Identifier) {
 				subscribers = append(subscribers, *task.Requester.Identifier)
 			}
 		}
@@ -81,7 +65,7 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 		}
 
 		for _, participant := range careTeam.Participant {
-			if verifyLogicalIdentifier(ctx, "member", participant.Member.Identifier) {
+			if coolfhir.IsLogicalIdentifier(participant.Member.Identifier) {
 				subscribers = append(subscribers, *participant.Member.Identifier)
 			}
 		}
@@ -105,7 +89,7 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			}
 
 			for _, participant := range careTeam.Participant {
-				if verifyLogicalIdentifier(ctx, "member", participant.Member.Identifier) {
+				if coolfhir.IsLogicalIdentifier(participant.Member.Identifier) {
 					subscribers = append(subscribers, *participant.Member.Identifier)
 				}
 			}

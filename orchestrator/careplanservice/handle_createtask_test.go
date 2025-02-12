@@ -140,7 +140,6 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 					Location: to.Ptr("CareTeam/2"),
 					Status:   "201 Created",
 				},
-				Resource: json.RawMessage(`{"resourceType":"CareTeam","id":"2"}`),
 			},
 			{
 				Response: &fhir.BundleEntryResponse{
@@ -352,6 +351,10 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				*(result.(*[]byte)) = data
 				return tt.errorFromRead
 			})
+			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "CareTeam/2", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
+				*(result.(*[]byte)) = []byte(`{"id":"2"}`)
+				return tt.errorFromRead
+			})
 
 			var returnedBundle = defaultReturnedBundle
 			if tt.returnedBundle != nil {
@@ -371,6 +374,10 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			assert.Len(t, notifications, 3)
 			require.Equal(t, "Task/3", *response.Response.Location)
 			require.Equal(t, "201 Created", response.Response.Status)
+			require.Len(t, notifications, 3)
+			require.IsType(t, &fhir.Task{}, notifications[0])
+			require.IsType(t, &fhir.CarePlan{}, notifications[1])
+			require.IsType(t, &fhir.CareTeam{}, notifications[2])
 		})
 	}
 }

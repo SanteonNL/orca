@@ -7,7 +7,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"strings"
-	"sync/atomic"
 	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -19,17 +18,31 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"io"
+	"math/rand"
+	"strconv"
 )
-
-var notificationCounter = new(atomic.Int32)
 
 func Test_Integration(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
 	t.Log("This test creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
-	notificationEndpoint := setupNotificationEndpoint(t)
-	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, notificationEndpoint)
+	var cpc1Notifications []coolfhir.SubscriptionNotification
+	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
+		cpc1Notifications = append(cpc1Notifications, n)
+	})
+	var cpc2Notifications []coolfhir.SubscriptionNotification
+	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
+		cpc2Notifications = append(cpc2Notifications, n)
+	})
+	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint)
+	// subTest logs the message and resets the notifications
+	subTest := func(t *testing.T, msg string) {
+		t.Log(msg)
+		cpc1Notifications = nil
+		cpc2Notifications = nil
+	}
 
 	t.Run("custom search parameters", func(t *testing.T) {
 		t.Run("existence", func(t *testing.T) {
@@ -96,25 +109,33 @@ func Test_Integration(t *testing.T) {
 	})
 
 	t.Run("DELETE is supported when unmanaged operations are allowed", func(t *testing.T) {
+		serviceRequest := fhir.ServiceRequest{
+			Subject: fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr(strconv.Itoa(rand.Int())),
+				},
+			},
+		}
 		t.Run("as single request", func(t *testing.T) {
 			t.Run("with ID", func(t *testing.T) {
-				serviceRequest := fhir.ServiceRequest{}
-				err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
+				var actual fhir.ServiceRequest
+				err := carePlanContributor1.Create(serviceRequest, &actual)
 				require.NoError(t, err)
-				err = carePlanContributor1.Delete("ServiceRequest/"+*serviceRequest.Id, nil)
+				err = carePlanContributor1.Delete("ServiceRequest/"+*actual.Id, nil)
 				require.NoError(t, err)
 			})
 			t.Run("with ID as search parameter", func(t *testing.T) {
-				serviceRequest := fhir.ServiceRequest{}
-				err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
+				var actual fhir.ServiceRequest
+				err := carePlanContributor1.Create(serviceRequest, &actual)
 				require.NoError(t, err)
-				err = carePlanContributor1.Delete("ServiceRequest", fhirclient.QueryParam("_id", *serviceRequest.Id))
+				err = carePlanContributor1.Delete("ServiceRequest", fhirclient.QueryParam("_id", *actual.Id))
 				require.NoError(t, err)
 			})
 		})
 		t.Run("as transaction entry", func(t *testing.T) {
-			serviceRequest := fhir.ServiceRequest{}
-			err := carePlanContributor1.Create(serviceRequest, &serviceRequest)
+			var actual fhir.ServiceRequest
+			err := carePlanContributor1.Create(serviceRequest, &actual)
 			require.NoError(t, err)
 			transaction := fhir.Bundle{
 				Type: fhir.BundleTypeTransaction,
@@ -122,7 +143,7 @@ func Test_Integration(t *testing.T) {
 					{
 						Request: &fhir.BundleEntryRequest{
 							Method: fhir.HTTPVerbDELETE,
-							Url:    "ServiceRequest/" + *serviceRequest.Id,
+							Url:    "ServiceRequest/" + *actual.Id,
 						},
 					},
 				},
@@ -146,7 +167,7 @@ func Test_Integration(t *testing.T) {
 
 	var carePlan fhir.CarePlan
 	var primaryTask fhir.Task
-	t.Log("Creating Task - CarePlan does not exist")
+	subTest(t, "Creating Task - CarePlan does not exist")
 	{
 		primaryTask = fhir.Task{
 			BasedOn: []fhir.Reference{
@@ -171,14 +192,13 @@ func Test_Integration(t *testing.T) {
 			},
 		}
 
-		notificationCounter.Store(0)
-
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
-		require.Equal(t, 0, int(notificationCounter.Load()))
+		require.Empty(t, cpc1Notifications)
+		require.Empty(t, cpc2Notifications)
 	}
 
-	t.Log("Creating Task - No BasedOn, requester is not care organization so creation fails")
+	subTest(t, "Creating Task - No BasedOn, requester is not care organization so creation fails")
 	{
 		primaryTask = fhir.Task{
 			Intent:    "order",
@@ -201,7 +221,7 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	t.Log("Creating Task - No BasedOn, no Task.For so primaryTask creation fails")
+	subTest(t, "Creating Task - No BasedOn, no Task.For so primaryTask creation fails")
 	{
 		primaryTask = fhir.Task{
 			Intent:    "order",
@@ -224,7 +244,7 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	t.Log("Creating Task - Task is created through upsert (PUT on non-existing resource)")
+	subTest(t, "Creating Task - Task is created through upsert (PUT on non-existing resource)")
 	{
 		primaryTask = fhir.Task{
 			Intent:    "order",
@@ -270,7 +290,7 @@ func Test_Integration(t *testing.T) {
 		require.Len(t, taskBundle.Entry, 1, "expected 1 Task in the FHIR server")
 	})
 
-	t.Log("Create Subtask")
+	subTest(t, "Create Subtask")
 	{
 		subTask := fhir.Task{
 			Meta: &fhir.Meta{
@@ -305,14 +325,14 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 1)
 
-		t.Log("Completing Subtask")
+		subTest(t, "Completing Subtask")
 		{
 			subTask.Status = fhir.TaskStatusCompleted
 			err := carePlanContributor1.Update("Task/"+*subTask.Id, subTask, &subTask)
 			require.NoError(t, err)
 		}
 		// Here, the Task Filler checks the subtask questionnaire response (if there were any), and then accepts or rejects the Task
-		t.Log("Accepting Task")
+		subTest(t, "Accepting Task")
 		{
 			primaryTask.Status = fhir.TaskStatusAccepted
 			err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &primaryTask)
@@ -330,7 +350,7 @@ func Test_Integration(t *testing.T) {
 		}
 	}
 
-	t.Log("Creating Task - No BasedOn, new CarePlan and CareTeam are created")
+	subTest(t, "Creating Task - No BasedOn, new CarePlan and CareTeam are created")
 	{
 		primaryTask = fhir.Task{
 			Intent:    "order",
@@ -356,8 +376,6 @@ func Test_Integration(t *testing.T) {
 			},
 		}
 
-		notificationCounter.Store(0)
-
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.NoError(t, err)
 		err = carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan)
@@ -380,47 +398,52 @@ func Test_Integration(t *testing.T) {
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 		})
-		t.Run("Check that 3 participants have been notified", func(t *testing.T) {
-			require.Equal(t, 3, int(notificationCounter.Load()))
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Len(t, cpc1Notifications, 3)
+			assertContainsNotification(t, "Task", cpc1Notifications)
+			assertContainsNotification(t, "CareTeam", cpc1Notifications)
+			assertContainsNotification(t, "CarePlan", cpc1Notifications)
+			require.Len(t, cpc2Notifications, 1)
+			assertContainsNotification(t, "Task", cpc2Notifications)
 		})
 	}
 
-	t.Log("Search CarePlan")
+	subTest(t, "Search CarePlan")
 	{
 		var searchResult fhir.Bundle
 		err := carePlanContributor1.Search("CarePlan", url.Values{"_id": {*carePlan.Id}, "_include": {"CarePlan:care-team"}}, &searchResult)
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 2, "Expected 1 CarePlan and 1 CareTeam")
-		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "CarePlan/"+*carePlan.Id))
-		require.True(t, strings.HasSuffix(*searchResult.Entry[1].FullUrl, *carePlan.CareTeam[0].Reference))
+		require.NoError(t, coolfhir.ResourceInBundle(&searchResult, coolfhir.EntryIsOfType("CarePlan"), new(fhir.CarePlan)))
+		require.NoError(t, coolfhir.ResourceInBundle(&searchResult, coolfhir.EntryIsOfType("CareTeam"), new(fhir.CareTeam)))
 	}
 
-	t.Log("Read CarePlan - Not in participants")
+	subTest(t, "Read CarePlan - Not in participants")
 	{
 		var fetchedCarePlan fhir.CarePlan
 		err := invalidCarePlanContributor.Read("CarePlan/"+*carePlan.Id, &fetchedCarePlan)
 		require.Error(t, err)
 	}
-	t.Log("Read CareTeam")
+	subTest(t, "Read CareTeam")
 	{
 		var fetchedCareTeam fhir.CareTeam
 		err := carePlanContributor1.Read(*carePlan.CareTeam[0].Reference, &fetchedCareTeam)
 		require.NoError(t, err)
 		assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 	}
-	t.Log("Read CareTeam - Does not exist")
+	subTest(t, "Read CareTeam - Does not exist")
 	{
 		var fetchedCareTeam fhir.CareTeam
 		err := carePlanContributor1.Read("CarePlan/999", &fetchedCareTeam)
 		require.Error(t, err)
 	}
-	t.Log("Read CareTeam - Not in participants")
+	subTest(t, "Read CareTeam - Not in participants")
 	{
 		var fetchedCareTeam fhir.CareTeam
 		err := invalidCarePlanContributor.Read(*carePlan.CareTeam[0].Reference, &fetchedCareTeam)
 		require.Error(t, err)
 	}
-	t.Log("Read Task")
+	subTest(t, "Read Task")
 	{
 		var fetchedTask fhir.Task
 		err := carePlanContributor1.Read("Task/"+*primaryTask.Id, &fetchedTask)
@@ -429,7 +452,7 @@ func Test_Integration(t *testing.T) {
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
 		assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 	}
-	t.Log("Read Task - Non-creating referenced party")
+	subTest(t, "Read Task - Non-creating referenced party")
 	{
 		var fetchedTask fhir.Task
 		err := carePlanContributor2.Read("Task/"+*primaryTask.Id, &fetchedTask)
@@ -437,13 +460,13 @@ func Test_Integration(t *testing.T) {
 		require.NotNil(t, fetchedTask.Id)
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
 	}
-	t.Log("Read Task - Not in participants")
+	subTest(t, "Read Task - Not in participants")
 	{
 		var fetchedTask fhir.Task
 		err := invalidCarePlanContributor.Read("Task/"+*primaryTask.Id, &fetchedTask)
 		require.Error(t, err)
 	}
-	t.Log("Read Task - Does not exist")
+	subTest(t, "Read Task - Does not exist")
 	{
 		var fetchedTask fhir.Task
 		err := carePlanContributor1.Read("Task/999", &fetchedTask)
@@ -451,7 +474,7 @@ func Test_Integration(t *testing.T) {
 	}
 	previousTask := primaryTask
 
-	t.Log("Creating Task - Invalid status Accepted")
+	subTest(t, "Creating Task - Invalid status Accepted")
 	{
 		primaryTask = fhir.Task{
 			BasedOn: []fhir.Reference{
@@ -466,14 +489,13 @@ func Test_Integration(t *testing.T) {
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
 
-		notificationCounter.Store(0)
-
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
-		require.Equal(t, 0, int(notificationCounter.Load()))
+		require.Empty(t, cpc1Notifications)
+		require.Empty(t, cpc2Notifications)
 	}
 
-	t.Log("Creating Task - Invalid status Draft")
+	subTest(t, "Creating Task - Invalid status Draft")
 	{
 		primaryTask = fhir.Task{
 			BasedOn: []fhir.Reference{
@@ -488,14 +510,13 @@ func Test_Integration(t *testing.T) {
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 		}
 
-		notificationCounter.Store(0)
-
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
-		require.Equal(t, 0, int(notificationCounter.Load()))
+		require.Empty(t, cpc1Notifications)
+		require.Empty(t, cpc2Notifications)
 	}
 
-	t.Log("Creating Task - Existing CarePlan")
+	subTest(t, "Creating Task - Existing CarePlan")
 	{
 		primaryTask = fhir.Task{
 			BasedOn: []fhir.Reference{
@@ -512,8 +533,6 @@ func Test_Integration(t *testing.T) {
 				Profile: []string{coolfhir.SCPTaskProfile},
 			},
 		}
-
-		notificationCounter.Store(0)
 
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.NoError(t, err)
@@ -534,12 +553,16 @@ func Test_Integration(t *testing.T) {
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 		})
-		t.Run("Check that 3 participants have been notified", func(t *testing.T) {
-			require.Equal(t, 3, int(notificationCounter.Load()))
+		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
+			require.Len(t, cpc1Notifications, 2)
+			assertContainsNotification(t, "Task", cpc1Notifications)
+			assertContainsNotification(t, "CarePlan", cpc1Notifications)
+			require.Len(t, cpc2Notifications, 1)
+			assertContainsNotification(t, "Task", cpc2Notifications)
 		})
 	}
 
-	t.Log("Care Team Search")
+	subTest(t, "Care Team Search")
 	{
 		var searchResult fhir.Bundle
 		err := carePlanContributor1.Search("CareTeam", url.Values{}, &searchResult)
@@ -547,10 +570,8 @@ func Test_Integration(t *testing.T) {
 		require.Len(t, searchResult.Entry, 2, "Expected 1 team")
 	}
 
-	t.Log("Accepting Task")
+	subTest(t, "Accepting Task")
 	{
-		notificationCounter.Store(0)
-
 		primaryTask.Status = fhir.TaskStatusAccepted
 		var updatedTask fhir.Task
 		// Note: use FHIR search instead of specifying ID to test support for updating resources identified by logical identifiers
@@ -567,11 +588,14 @@ func Test_Integration(t *testing.T) {
 			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
-			require.Equal(t, 2, int(notificationCounter.Load()))
+			require.Len(t, cpc1Notifications, 1)
+			assertContainsNotification(t, "Task", cpc1Notifications)
+			require.Len(t, cpc2Notifications, 1)
+			assertContainsNotification(t, "Task", cpc2Notifications)
 		})
 	}
 
-	t.Log("Invalid state transition - Accepted -> Completed")
+	subTest(t, "Invalid state transition - Accepted -> Completed")
 	{
 		primaryTask.Status = fhir.TaskStatusCompleted
 		var updatedTask fhir.Task
@@ -579,7 +603,7 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	t.Log("Invalid state transition - Accepted -> In-progress, Requester")
+	subTest(t, "Invalid state transition - Accepted -> In-progress, Requester")
 	{
 		primaryTask.Status = fhir.TaskStatusInProgress
 		var updatedTask fhir.Task
@@ -587,10 +611,8 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 	}
 
-	t.Log("Valid state transition - Accepted -> In-progress, Owner")
+	subTest(t, "Valid state transition - Accepted -> In-progress, Owner")
 	{
-		notificationCounter.Store(0)
-
 		primaryTask.Status = fhir.TaskStatusInProgress
 		var updatedTask fhir.Task
 		err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
@@ -605,14 +627,15 @@ func Test_Integration(t *testing.T) {
 			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
-			require.Equal(t, 2, int(notificationCounter.Load()))
+			require.Len(t, cpc1Notifications, 1)
+			assertContainsNotification(t, "Task", cpc1Notifications)
+			require.Len(t, cpc2Notifications, 1)
+			assertContainsNotification(t, "Task", cpc2Notifications)
 		})
 	}
 
-	t.Log("Complete Task")
+	subTest(t, "Complete Task")
 	{
-		notificationCounter.Store(0)
-
 		primaryTask.Status = fhir.TaskStatusCompleted
 		var updatedTask fhir.Task
 		err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
@@ -627,11 +650,14 @@ func Test_Integration(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2WithEndDate)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
-			require.Equal(t, 2, int(notificationCounter.Load()))
+			require.Len(t, cpc1Notifications, 1)
+			assertContainsNotification(t, "Task", cpc1Notifications)
+			require.Len(t, cpc2Notifications, 1)
+			assertContainsNotification(t, "Task", cpc2Notifications)
 		})
 	}
 
-	t.Log("Creating Task - participant is part of CareTeam and is able to create a primaryTask in an existing CarePlan")
+	subTest(t, "Creating Task - participant is part of CareTeam and is able to create a primaryTask in an existing CarePlan")
 	{
 		newTask := fhir.Task{
 			BasedOn: []fhir.Reference{
@@ -673,7 +699,7 @@ func Test_Integration(t *testing.T) {
 	}
 
 	// TODO: Will move this into new integ test once Update methods have been implemented
-	t.Log("GET patient")
+	subTest(t, "GET patient")
 	{
 		// Get existing patient
 		var fetchedPatient fhir.Patient
@@ -811,11 +837,20 @@ func testBundleCreation(t *testing.T, carePlanContributor1 *fhirclient.BaseClien
 	})
 }
 
-func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
+func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2NotificationEndpoint string) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
 		Principal: auth.TestPrincipal1,
-		CSD:       profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
+		CSD: profile.TestCsdDirectory{
+			Endpoints: map[string]map[string]string{
+				auth.TestPrincipal1.ID(): {
+					"fhirNotificationURL": cpc1NotificationEndpoint,
+				},
+				auth.TestPrincipal2.ID(): {
+					"fhirNotificationURL": cpc2NotificationEndpoint,
+				},
+			},
+		},
 	}
 	config := DefaultConfig()
 	config.Enabled = true
@@ -873,14 +908,33 @@ outer:
 	}
 }
 
-func setupNotificationEndpoint(t *testing.T) *url.URL {
+func setupNotificationEndpoint(t *testing.T, handler func(n coolfhir.SubscriptionNotification)) string {
 	notificationEndpoint := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		notificationCounter.Add(1)
+		notificationData, err := io.ReadAll(request.Body)
+		require.NoError(t, err)
+		t.Logf("Received notification: %s", notificationData)
+		var notification coolfhir.SubscriptionNotification
+		if err := json.Unmarshal(notificationData, &notification); err != nil {
+			writer.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		handler(notification)
 		writer.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(func() {
 		notificationEndpoint.Close()
 	})
-	u, _ := url.Parse(notificationEndpoint.URL)
-	return u
+	return notificationEndpoint.URL
+}
+
+func assertContainsNotification(t *testing.T, resourceType string, notifications []coolfhir.SubscriptionNotification) {
+	t.Helper()
+	for _, notification := range notifications {
+		focus, err := notification.GetFocus()
+		require.NoError(t, err)
+		if focus.Type != nil && *focus.Type == resourceType {
+			return
+		}
+	}
+	assert.Fail(t, "notification not found", "expected notification for resource type %s", resourceType)
 }
