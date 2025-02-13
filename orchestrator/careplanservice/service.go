@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"io"
 	"net/http"
 	"net/url"
@@ -14,6 +12,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 
@@ -47,6 +48,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		transport:     transport,
 		fhirClient:    fhirClient,
 		subscriptionManager: subscriptions.DerivingManager{
+			FhirClient:  fhirClient,
 			FhirBaseURL: baseUrl,
 			Channels:    subscriptions.CsdChannelFactory{Profile: profile},
 		},
