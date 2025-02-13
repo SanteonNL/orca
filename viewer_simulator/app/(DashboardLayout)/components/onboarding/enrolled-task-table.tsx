@@ -4,12 +4,14 @@ import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { Button, Tooltip } from '@mui/material';
 import { IconEye, IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
 import ViewTaskOutput from './view-task-output';
+import {Bundle, BundleEntry, FhirResource} from "fhir/r4";
 
 interface Props {
     rows: any[]
+    notificationBundles: BundleEntry<FhirResource>[];
 }
 
-const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
+const EnrolledTaskTable: React.FC<Props> = ({ rows, notificationBundles }) => {
 
     const columns: GridColDef[] = [
 
@@ -45,7 +47,7 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows }) => {
 
                 if (!params.row.isSubtask) return <></>
 
-                return <ViewTaskOutput task={params.row.task} />
+                return <ViewTaskOutput task={params.row.task} notificationBundles={notificationBundles} />
             }
         }
     ];

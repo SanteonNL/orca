@@ -2,8 +2,7 @@ import React, { useState } from 'react'
 
 import { SmartFormsRenderer } from '@aehrc/smart-forms-renderer';
 import { IconCheckupList } from '@tabler/icons-react';
-import { Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
-import { fetchQuestionnaire, fetchQuestionnaireResponse } from '@/utils/fhirUtils';
+import {BundleEntry, FhirResource, Questionnaire, QuestionnaireResponse, Task} from 'fhir/r4';
 import Dialog from '@mui/material/Dialog';
 import AppBar from '@mui/material/AppBar';
 import Toolbar from '@mui/material/Toolbar';
@@ -23,7 +22,12 @@ const Transition = React.forwardRef(function Transition(
     return <Slide direction="up" ref={ref} {...props} />;
 });
 
-export default function ViewTaskOutput({ task }: { task: Task }) {
+interface ViewTaskOutputProps {
+    task: Task;
+    notificationBundles: BundleEntry<FhirResource>[];
+}
+
+export default function ViewTaskOutput({ task, notificationBundles }: ViewTaskOutputProps) {
     const [open, setOpen] = React.useState(false);
     const [questionnaire, setQuestionnaire] = useState<Questionnaire>()
     const [questionnaireResponse, setQuestionnaireResponse] = useState<QuestionnaireResponse>()
@@ -34,9 +38,32 @@ export default function ViewTaskOutput({ task }: { task: Task }) {
         setOpen(true);
 
         if (!fetched) {
-            const questionnaire = await fetchQuestionnaire(task)
-            setQuestionnaire(questionnaire)
-            setQuestionnaireResponse(await fetchQuestionnaireResponse(task, questionnaire))
+            if (task && task.input && task.output) {
+                const questionnaireRefs = task.input
+                    .filter((input) => input.valueReference?.reference?.startsWith("Questionnaire/"))
+                    .map((input) => input.valueReference?.reference)
+
+                if (questionnaireRefs.length > 1) console.warn("Found more than one Questionnaire for Task/" + task.id)
+
+                let q = notificationBundles.filter((entry) => entry.resource?.resourceType === "Questionnaire")
+                    .map((entry) => entry.resource as Questionnaire)
+                    .find((questionnaire) => questionnaire.id === questionnaireRefs[0]?.replace("Questionnaire/", ""))
+
+                setQuestionnaire(q)
+
+                const questionnaireResponseRefs = task.output
+                    .filter((output) => output.valueReference?.reference?.startsWith("QuestionnaireResponse/"))
+                    .map((output) => output.valueReference?.reference)
+
+                if (questionnaireResponseRefs.length > 1) console.warn("Found more than one QuestionnaireResponse for Task/" + task.id)
+
+                let qr = notificationBundles.filter((entry) => entry.resource?.resourceType === "QuestionnaireResponse")
+                    .map((entry) => entry.resource as QuestionnaireResponse)
+                    .find((questionnaireResponse) => questionnaireResponse.id === questionnaireResponseRefs[0]?.replace("QuestionnaireResponse/", ""))
+
+                setQuestionnaireResponse(qr)
+
+            }
             setFetched(true)
         }
     };
