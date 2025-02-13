@@ -42,9 +42,6 @@ func (c Config) Validate() error {
 	if !c.Enabled {
 		return nil
 	}
-	if c.CarePlanService.URL == "" {
-		return errors.New("careplancontributor.careplanservice.url is not configured")
-	}
 	return nil
 }
 

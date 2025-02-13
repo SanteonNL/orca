@@ -1,6 +1,7 @@
 package careplancontributor
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -20,6 +21,9 @@ import (
 )
 
 var notificationCounter = new(atomic.Int32)
+var fhirBaseURL *url.URL
+var httpService *httptest.Server
+var sessionManager *user.SessionManager
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	notificationEndpoint := setupNotificationEndpoint(t)
@@ -171,10 +175,33 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.Error(t, err)
 		require.Len(t, fetchedBundle.Entry, 0)
 	}
+	t.Log("CPC client without CPS URL, returns error")
+	{
+		cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
+
+		cpcConfig := DefaultConfig()
+		cpcConfig.Enabled = true
+		cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
+		cpcConfig.HealthDataViewEndpointEnabled = true
+		cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, cpsProxy)
+		require.NoError(t, err)
+
+		cpcServerMux := http.NewServeMux()
+		cpcHttpService := httptest.NewServer(cpcServerMux)
+		cpc.RegisterHandlers(cpcServerMux)
+		cpcURL, _ := url.Parse(cpcHttpService.URL + "/cpc/fhir")
+
+		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
+
+		var fetchedTask fhir.Task
+
+		err = cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
+		require.ErrorContains(t, err, "CarePlan service URL is not configured")
+	}
 }
 
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL, *httptest.Server, *url.URL) {
-	fhirBaseURL := test.SetupHAPI(t)
+	fhirBaseURL = test.SetupHAPI(t)
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
@@ -191,7 +218,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
-	httpService := httptest.NewServer(serverMux)
+	httpService = httptest.NewServer(serverMux)
 	service.RegisterHandlers(serverMux)
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
