@@ -2,17 +2,18 @@ package subscriptions
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"sync"
+	"time"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/url"
-	"sync"
-	"time"
 )
 
 var timeFunc = time.Now
@@ -30,6 +31,7 @@ var _ Manager = DerivingManager{}
 // TODO: It does not yet store the subscription notifications in the FHIR store, which is required to support monotonically increasing event numbers.
 type DerivingManager struct {
 	FhirBaseURL *url.URL
+	FhirClient  fhirclient.Client
 	Channels    ChannelFactory
 }
 
@@ -43,33 +45,15 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			Reference: to.Ptr("Task/" + *task.Id),
 			Type:      to.Ptr("Task"),
 		}
-		log.Ctx(ctx).Info().Msgf("Notifying subscribers for Task %s", *task.Id)
-		isOwnerValid := false
 		if task.Owner != nil {
-			isOwnerValid = coolfhir.IsLogicalIdentifier(task.Owner.Identifier)
-		}
-		if isOwnerValid {
-			subscribers = append(subscribers, *task.Owner.Identifier)
-		} else {
-			ownerJSON, err := json.Marshal(task.Owner)
-			if err != nil {
-				log.Ctx(ctx).Error().Msgf("Failed to marshal owner to JSON: %s", err)
-			} else {
-				log.Ctx(ctx).Warn().Msgf("Owner LogicalIdentifier is invalid: %s", string(ownerJSON))
+			if coolfhir.IsLogicalIdentifier(task.Owner.Identifier) {
+				subscribers = append(subscribers, *task.Owner.Identifier)
 			}
 		}
-		isRequesterValid := false
+
 		if task.Requester != nil {
-			isRequesterValid = coolfhir.IsLogicalIdentifier(task.Requester.Identifier)
-		}
-		if isRequesterValid {
-			subscribers = append(subscribers, *task.Requester.Identifier)
-		} else {
-			requesterJSON, err := json.Marshal(task.Requester)
-			if err != nil {
-				log.Ctx(ctx).Error().Msgf("Failed to marshal requester to JSON: %s", err)
-			} else {
-				log.Ctx(ctx).Warn().Msgf("Requester LogicalIdentifier is invalid: %s", string(requesterJSON))
+			if coolfhir.IsLogicalIdentifier(task.Requester.Identifier) {
+				subscribers = append(subscribers, *task.Requester.Identifier)
 			}
 		}
 	case "CareTeam":
@@ -78,16 +62,34 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			Reference: to.Ptr("CareTeam/" + *careTeam.Id),
 			Type:      to.Ptr("CareTeam"),
 		}
+
 		for _, participant := range careTeam.Participant {
-			isMemberValid := coolfhir.IsLogicalReference(participant.Member)
-			if isMemberValid {
+			if coolfhir.IsLogicalIdentifier(participant.Member.Identifier) {
 				subscribers = append(subscribers, *participant.Member.Identifier)
-			} else {
-				memberJSON, err := json.Marshal(participant.Member)
-				if err != nil {
-					log.Ctx(ctx).Error().Msgf("Failed to marshal member to JSON: %s", err)
-				} else {
-					log.Ctx(ctx).Warn().Msgf("Member LogicalReference is invalid: %s", string(memberJSON))
+			}
+		}
+	case "CarePlan":
+		carePlan := resource.(*fhir.CarePlan)
+		focus = fhir.Reference{
+			Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+			Type:      to.Ptr("CarePlan"),
+		}
+
+		for _, team := range carePlan.CareTeam {
+			if team.Reference == nil {
+				continue
+			}
+
+			var careTeam fhir.CareTeam
+
+			if err := r.FhirClient.ReadWithContext(ctx, *team.Reference, &careTeam); err != nil {
+				log.Ctx(ctx).Error().Msgf("failed to read CareTeam in FHIR store %s: %s", *team.Reference, err)
+				continue
+			}
+
+			for _, participant := range careTeam.Participant {
+				if coolfhir.IsLogicalIdentifier(participant.Member.Identifier) {
+					subscribers = append(subscribers, *participant.Member.Identifier)
 				}
 			}
 		}

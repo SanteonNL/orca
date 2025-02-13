@@ -3,6 +3,12 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"strings"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -14,12 +20,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"math/rand"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
 	"strconv"
-	"strings"
-	"testing"
 )
 
 func Test_Integration(t *testing.T) {
@@ -398,9 +399,10 @@ func Test_Integration(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
-			require.Len(t, cpc1Notifications, 2)
+			require.Len(t, cpc1Notifications, 3)
 			assertContainsNotification(t, "Task", cpc1Notifications)
 			assertContainsNotification(t, "CareTeam", cpc1Notifications)
+			assertContainsNotification(t, "CarePlan", cpc1Notifications)
 			require.Len(t, cpc2Notifications, 1)
 			assertContainsNotification(t, "Task", cpc2Notifications)
 		})
@@ -552,8 +554,9 @@ func Test_Integration(t *testing.T) {
 			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
-			require.Len(t, cpc1Notifications, 1)
+			require.Len(t, cpc1Notifications, 2)
 			assertContainsNotification(t, "Task", cpc1Notifications)
+			assertContainsNotification(t, "CarePlan", cpc1Notifications)
 			require.Len(t, cpc2Notifications, 1)
 			assertContainsNotification(t, "Task", cpc2Notifications)
 		})

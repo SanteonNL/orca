@@ -70,9 +70,14 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	}
 
 	// Resolve the CarePlan
-	var careTeamEntryIdx = -1
-	var taskEntryIdx = -1
-	var taskBundleEntry fhir.BundleEntry
+	var (
+		taskEntryIdx           = -1
+		taskBundleEntry        fhir.BundleEntry
+		carePlanBundleEntryIdx = -1
+		carePlanBundleEntry    *fhir.BundleEntry
+		careTeamEntryIdx       = -1
+	)
+
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
 
@@ -154,6 +159,8 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		careTeamEntryIdx = len(tx.Entry) - 2
 		taskEntryIdx = len(tx.Entry) - 1
 		taskBundleEntry = tx.Entry[taskEntryIdx]
+		carePlanBundleEntry = &tx.Entry[0]
+		carePlanBundleEntryIdx = 0
 	} else {
 		// Adding a task to an existing CarePlan
 		carePlanRef, err = basedOn(task)
@@ -220,6 +227,8 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				},
 			})
 			tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+			carePlanBundleEntry = &tx.Entry[len(tx.Entry)-1]
+			carePlanBundleEntryIdx = len(tx.Entry) - 1
 		}
 		if updated, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
 			return nil, fmt.Errorf("failed to update CarePlan: %w", err)
@@ -229,13 +238,31 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	}
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
-		var createdTask fhir.Task
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
-		if err != nil {
-			return nil, nil, err
+		var result *fhir.BundleEntry
+		var notifications []any
+
+		// Task
+		{
+			var createdTask fhir.Task
+			var err error
+			result, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
+			if err != nil {
+				return nil, nil, err
+			}
+			notifications = append(notifications, &createdTask)
 		}
-		var notifications = []any{&createdTask}
-		// If CareTeam was updated, notify about CareTeam
+
+		// If CarePlan was updated/created, notify about CarePlan
+		if carePlanBundleEntry != nil {
+			var createdCarePlan fhir.CarePlan
+			_, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, carePlanBundleEntry, &txResult.Entry[carePlanBundleEntryIdx], &createdCarePlan)
+			if err != nil {
+				return nil, nil, err
+			}
+			notifications = append(notifications, &createdCarePlan)
+		}
+
+		// If CareTeam was created/updated, notify about CareTeam
 		if careTeamEntryIdx != -1 {
 			var updatedCareTeam fhir.CareTeam
 			_, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[careTeamEntryIdx], &txResult.Entry[careTeamEntryIdx], &updatedCareTeam)
