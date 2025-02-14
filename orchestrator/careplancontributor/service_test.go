@@ -408,12 +408,24 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 
 		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 	})
-	t.Run("valid notification - unsupported type", func(t *testing.T) {
+	t.Run("valid notification (no trailing slash)", func(t *testing.T) {
 		notification := coolfhir.CreateSubscriptionNotification(carePlanServiceURL,
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
 		notificationJSON, _ := json.Marshal(notification)
 		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
+		httpResponse, err := httpClient.Do(httpRequest)
+
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("valid notification (with trailing slash)", func(t *testing.T) {
+		notification := coolfhir.CreateSubscriptionNotification(carePlanServiceURL,
+			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
+		notificationJSON, _ := json.Marshal(notification)
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -430,7 +442,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 
 		require.NoError(t, err)
 
-		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+		require.Equal(t, http.StatusInternalServerError, httpResponse.StatusCode)
 	})
 	t.Run("valid notification - task - not SCP", func(t *testing.T) {
 		notification := coolfhir.CreateSubscriptionNotification(carePlanServiceURL,
