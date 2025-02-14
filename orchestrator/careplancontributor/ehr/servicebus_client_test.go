@@ -3,6 +3,7 @@ package ehr
 import (
 	"context"
 	"errors"
+	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
@@ -186,7 +187,12 @@ func TestServiceBusClientImpl_SubmitMessage(t *testing.T) {
 				newAzureServiceBusClient = func(config ServiceBusConfig) (ServiceBusClientWrapper, error) {
 					return mock, nil
 				}
-				mock.EXPECT().SendMessage(ctx, gomock.Any()).Return(nil)
+				mock.EXPECT().SendMessage(ctx, gomock.Any()).DoAndReturn(func(ctx context.Context, message *azservicebus.Message) error {
+					require.Equal(t, "key", *message.CorrelationID)
+					require.Equal(t, "value", string(message.Body))
+					require.Equal(t, "application/json", *message.ContentType)
+					return nil
+				})
 				mock.EXPECT().Close(ctx).Times(1)
 				return func() {
 					newServiceBusClient = old

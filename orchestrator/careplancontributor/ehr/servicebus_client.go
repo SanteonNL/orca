@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
@@ -123,6 +124,7 @@ func (k *ServiceBusClientImpl) SubmitMessage(ctx context.Context, key string, va
 	}(sender, ctx)
 	message := &azservicebus.Message{
 		Body:          []byte(value),
+		ContentType:   to.Ptr("application/json"),
 		CorrelationID: &key,
 	}
 	err = sender.SendMessage(ctx, message)
