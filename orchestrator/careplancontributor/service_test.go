@@ -401,7 +401,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	t.Run("invalid notification - wrong data type", func(t *testing.T) {
 		notification := fhir.Task{Id: to.Ptr("1")}
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -413,7 +413,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -425,7 +425,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/999"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -437,7 +437,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/1"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -449,7 +449,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/2"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -464,7 +464,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 
 	})
 	t.Run("invalid notification", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader("invalid"))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader("invalid"))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -554,7 +554,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 			return nil
 		})
 
-	httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+	httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 	httpResponse, err := httpClient.Do(httpRequest)
 
 	require.NoError(t, err)

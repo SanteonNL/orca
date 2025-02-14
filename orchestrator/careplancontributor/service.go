@@ -152,16 +152,29 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// The section below defines endpoints specified by Shared Care Planning.
 	// These are secured through the profile (e.g. Nuts access tokens)
 	//
+	handleBundle := func(httpRequest *http.Request) error {
+		var notification fhir.Bundle
+		if err := json.NewDecoder(httpRequest.Body).Decode(&notification); err != nil {
+			return coolfhir.BadRequest("failed to decode bundle: %w", err)
+		}
+		if !coolfhir.IsSubscriptionNotification(&notification) {
+			return coolfhir.BadRequest("bundle type not supported: " + notification.Type.String())
+		}
+		if err := s.handleNotification(httpRequest.Context(), (*coolfhir.SubscriptionNotification)(&notification)); err != nil {
+			return err
+		}
+		return nil
+	}
 	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		var notification coolfhir.SubscriptionNotification
-		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
-			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to decode notification")
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
+		if err := handleBundle(request); err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 			return
 		}
-		if err := s.handleNotification(request.Context(), &notification); err != nil {
-			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to handle notification")
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
+		writer.WriteHeader(http.StatusOK)
+	}))
+	mux.HandleFunc("POST "+basePath+"/fhir/", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		if err := handleBundle(request); err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 			return
 		}
 		writer.WriteHeader(http.StatusOK)

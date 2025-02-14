@@ -7,6 +7,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
+	"slices"
 	"strconv"
 	"time"
 )
@@ -14,6 +15,13 @@ import (
 // SubscriptionNotification implements a SubscriptionNotification on FHIR R4 through a backport profile (http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification-r4).
 // It provides helper functions to access the contained data.
 type SubscriptionNotification fhir.Bundle
+
+func IsSubscriptionNotification(bundle *fhir.Bundle) bool {
+	return bundle != nil &&
+		bundle.Type == fhir.BundleTypeHistory &&
+		bundle.Meta != nil &&
+		slices.Contains(bundle.Meta.Profile, "http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification-r4")
+}
 
 func (s SubscriptionNotification) GetFocus() (*fhir.Reference, error) {
 	var notificationParams fhir.Parameters
