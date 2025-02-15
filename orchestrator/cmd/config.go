@@ -8,7 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
-	koanf "github.com/knadh/koanf/v2"
+	"github.com/knadh/koanf/v2"
 	"net/url"
 	"strings"
 
@@ -114,5 +114,6 @@ func DefaultConfig() Config {
 			URL:     "/",
 		},
 		CarePlanContributor: careplancontributor.DefaultConfig(),
+		CarePlanService:     careplanservice.DefaultConfig(),
 	}
 }

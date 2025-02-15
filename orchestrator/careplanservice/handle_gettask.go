@@ -86,7 +86,7 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 	}
 
 	taskRefs := make([]string, 0)
-	for ref, _ := range refs {
+	for ref := range refs {
 		for _, task := range tasks {
 			isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 			if !(isOwner || isRequester) {

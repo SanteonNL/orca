@@ -368,12 +368,6 @@ func (s *Service) extractWorkflowID(ctx context.Context, decryptedAssertion *etr
 	return workflowId, nil
 }
 
-func (s *Service) processAdditionalAttributes(decryptedAssertion *etree.Document) error {
-	// TODO: Implement the logic to process additional attributes (claims) from the assertion
-	// This is a placeholder implementation
-	return nil
-}
-
 func getSubjectAttribute(decryptedAssertion *etree.Element, name string) (string, error) {
 	el := decryptedAssertion.FindElement("//AttributeStatement/Attribute[@Name='" + name + "']/AttributeValue")
 	if el == nil || strings.TrimSpace(el.Text()) == "" {
