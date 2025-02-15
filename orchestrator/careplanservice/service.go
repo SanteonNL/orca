@@ -50,7 +50,10 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		subscriptionManager: subscriptions.DerivingManager{
 			FhirClient:  fhirClient,
 			FhirBaseURL: baseUrl,
-			Channels:    subscriptions.CsdChannelFactory{Profile: profile},
+			Channels: subscriptions.InProcessChannelFactory{
+				Profile:               profile,
+				DefaultChannelFactory: subscriptions.CsdChannelFactory{Profile: profile},
+			},
 		},
 		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
 		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,

@@ -86,10 +86,12 @@ func TestInProcessChannelFactory(t *testing.T) {
 		}
 
 		notificationsReceived := 0
-		capturedPrincipal := auth.Principal{}
-		pubsub.DefaultSubscribers.FhirSubscriptionNotify = func(ctx context.Context, _ any) error {
+		capturedSender := auth.Principal{}
+		capturedReceiver := fhir.Organization{}
+		pubsub.DefaultSubscribers.FhirSubscriptionNotify = func(ctx context.Context, receiver fhir.Organization, _ any) error {
 			var err error
-			capturedPrincipal, err = auth.PrincipalFromContext(ctx)
+			capturedReceiver = receiver
+			capturedSender, err = auth.PrincipalFromContext(ctx)
 			require.NoError(t, err)
 			notificationsReceived++
 			return nil
@@ -103,7 +105,8 @@ func TestInProcessChannelFactory(t *testing.T) {
 		err = channel.Notify(context.Background(), coolfhir.SubscriptionNotification{})
 		require.NoError(t, err)
 		require.Equal(t, 1, notificationsReceived)
-		require.Equal(t, auth.TestPrincipal1.Organization, capturedPrincipal.Organization)
+		require.Equal(t, auth.TestPrincipal1.Organization, capturedSender.Organization)
+		require.Equal(t, auth.TestPrincipal1.Organization, capturedReceiver)
 	})
 	t.Run("no local identities match, in-process channel cannot be used", func(t *testing.T) {
 		prof := profile.TestProfile{

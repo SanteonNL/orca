@@ -159,7 +159,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
 			return
 		}
-		if err := s.handleNotification(request.Context(), &notification); err != nil {
+		if err := s.handleNotification(request.Context(), fhir.Organization{}, &notification); err != nil {
 			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to handle notification")
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
 			return
@@ -502,7 +502,7 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 	}
 }
 
-func (s Service) handleNotification(ctx context.Context, resource any) error {
+func (s Service) handleNotification(ctx context.Context, _ fhir.Organization, resource any) error {
 	sender, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return err

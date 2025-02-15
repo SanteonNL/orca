@@ -121,5 +121,5 @@ func (i InProcessPubSubChannel) Notify(ctx context.Context, notification coolfhi
 	ctx = auth.WithPrincipal(ctx, auth.Principal{
 		Organization: i.identity,
 	})
-	return pubsub.DefaultSubscribers.FhirSubscriptionNotify(ctx, notification)
+	return pubsub.DefaultSubscribers.FhirSubscriptionNotify(ctx, i.identity, notification)
 }
