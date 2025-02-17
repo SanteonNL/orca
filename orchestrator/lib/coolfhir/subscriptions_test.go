@@ -90,3 +90,22 @@ func TestCreateSubscriptionNotification(t *testing.T) {
 	actual, _ := json.MarshalIndent(notification, "", "  ")
 	assert.JSONEq(t, expected, string(actual))
 }
+
+func TestIsSubscriptionNotification(t *testing.T) {
+	assert.True(t, IsSubscriptionNotification(&fhir.Bundle{
+		Type: fhir.BundleTypeHistory,
+		Meta: &fhir.Meta{
+			Profile: []string{"http://hl7.org/fhir/uv/subscriptions-backport/StructureDefinition/backport-subscription-notification-r4"},
+		},
+	}))
+	assert.False(t, IsSubscriptionNotification(&fhir.Bundle{
+		Type: fhir.BundleTypeHistory,
+		Meta: &fhir.Meta{
+			Profile: []string{"nope"},
+		},
+	}))
+	assert.False(t, IsSubscriptionNotification(&fhir.Bundle{
+		Type: fhir.BundleTypeHistory,
+	}))
+	assert.False(t, IsSubscriptionNotification(&fhir.Bundle{}))
+}

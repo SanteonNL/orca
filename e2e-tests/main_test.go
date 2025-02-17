@@ -42,7 +42,7 @@ func Test_Main(t *testing.T) {
 	const carePlanServiceBaseURL = hospitalBaseUrl + "/cps"
 
 	// Setup Clinic
-	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir/notify", false)
+	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir", false)
 	require.NoError(t, err)
 	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, carePlanServiceBaseURL, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 	clinicOrcaFHIRClient := fhirclient.New(clinicOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
@@ -51,7 +51,7 @@ func Test_Main(t *testing.T) {
 	// Questionnaires can't be created in HAPI FHIR server partitions, only in the default partition.
 	// Otherwise, the following error occurs: HAPI-1318: Resource type Questionnaire can not be partitioned
 	// This is why the hospital, running the CPS, stores its data in the default partition.
-	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir/notify", true)
+	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir", true)
 	require.NoError(t, err)
 	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, carePlanServiceBaseURL, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
