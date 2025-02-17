@@ -23,17 +23,6 @@ import (
 	"time"
 )
 
-type Task fhir.Task
-
-func (t Task) ToFHIR() (*fhir.Task, error) {
-	taskJSON, _ := json.Marshal(t)
-	var result fhir.Task
-	if err := json.Unmarshal(taskJSON, &result); err != nil {
-		return nil, fmt.Errorf("unmarshal Task: %w", err)
-	}
-	return &result, nil
-}
-
 var ErrEntryNotFound = errors.New("entry not found in FHIR Bundle")
 
 func LogicalReference(refType, system, identifier string) *fhir.Reference {

@@ -153,20 +153,6 @@ func (s *Service) fetchQuestionnaireByID(ctx context.Context, cpsClient fhirclie
 	return nil
 }
 
-func (s *Service) isScpTask(task *fhir.Task) bool {
-	if task.Meta == nil {
-		return false
-	}
-
-	for _, profile := range task.Meta.Profile {
-		if profile == coolfhir.SCPTaskProfile {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (s *Service) isValidTask(task *fhir.Task) error {
 	var errs []string
 

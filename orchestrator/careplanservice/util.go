@@ -12,28 +12,9 @@ import (
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
-
-// Writes an OperationOutcome based on the given error as HTTP response.
-func (s *Service) writeOperationOutcomeFromError(ctx context.Context, err error, desc string, httpResponse http.ResponseWriter) {
-	log.Ctx(ctx).Info().Msgf("%s failed: %v", desc, err)
-	diagnostics := fmt.Sprintf("%s failed: %s", desc, err.Error())
-
-	issue := fhir.OperationOutcomeIssue{
-		Severity:    fhir.IssueSeverityError,
-		Code:        fhir.IssueTypeProcessing,
-		Diagnostics: to.Ptr(diagnostics),
-	}
-
-	outcome := fhir.OperationOutcome{
-		Issue: []fhir.OperationOutcomeIssue{issue},
-	}
-
-	coolfhir.SendResponse(httpResponse, http.StatusBadRequest, outcome)
-}
 
 func GetCarePlanAndCareTeams(ctx context.Context, client fhirclient.Client, carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
 	bundle := fhir.Bundle{}
@@ -62,39 +43,6 @@ func GetCarePlanAndCareTeams(ctx context.Context, client fhirclient.Client, care
 	}
 
 	return carePlan, careTeams, headers, nil
-}
-
-// handleTaskBasedResourceAuth is a generic function to handle the authorization of a resource based on a Task
-// it will check if the resource is based on a Task, and if so, fetch the Task and in doing so - validate the requester has access to the Task
-// it returns an error if the Task is not found or the requester is not a participant of the CareTeam associated with the Task
-func (s *Service) handleTaskBasedResourceAuth(ctx context.Context, headers *fhirclient.Headers, basedOn []fhir.Reference, resourceType string) error {
-	if len(basedOn) != 1 {
-		return &coolfhir.ErrorWithCode{
-			Message:    fmt.Sprintf("%s has invalid number of BasedOn values", resourceType),
-			StatusCode: http.StatusInternalServerError,
-		}
-	}
-	if basedOn[0].Reference == nil {
-		return &coolfhir.ErrorWithCode{
-			Message:    fmt.Sprintf("%s has invalid BasedOn Reference", resourceType),
-			StatusCode: http.StatusInternalServerError,
-		}
-	}
-
-	// Fetch the task this questionnaireResponse is based on
-	// As long as we get a task back, we can assume the user has access to the service request
-	if !strings.HasPrefix(*basedOn[0].Reference, "Task/") {
-		return &coolfhir.ErrorWithCode{
-			Message:    fmt.Sprintf("%s BasedOn is not a Task", resourceType),
-			StatusCode: http.StatusInternalServerError,
-		}
-	}
-	taskId := strings.TrimPrefix(*basedOn[0].Reference, "Task/")
-	_, err := s.handleGetTask(ctx, taskId, headers)
-	if err != nil {
-		return err
-	}
-	return nil
 }
 
 // filterAuthorizedPatients will go through a list of patients and return the ones the requester has access to
@@ -188,19 +136,6 @@ func validatePrincipalInCareTeams(principal auth.Principal, careTeams []fhir.Car
 		return &coolfhir.ErrorWithCode{
 			Message:    "Participant is not part of CareTeam",
 			StatusCode: http.StatusForbidden,
-		}
-	}
-	return nil
-}
-
-// matchResourceIDs matches whether the ID in the request URL matches the ID in the resource.
-// This is important for PUT requests, where the ID in the URL is the ID of the resource to update.
-// They do not need to be set both, but if they are, they should match.
-func matchResourceIDs(request *FHIRHandlerRequest, idFromResource *string) error {
-	if (idFromResource != nil && request.ResourceId != "") && request.ResourceId != *idFromResource {
-		return &coolfhir.ErrorWithCode{
-			Message:    "ID in request URL does not match ID in resource",
-			StatusCode: http.StatusBadRequest,
 		}
 	}
 	return nil
