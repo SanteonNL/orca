@@ -107,13 +107,19 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 	}
 	log.Ctx(ctx).Info().Msg("SubTask.status is completed - processing")
 
-	// TODO: Doesn't support nested subtasks for now
 	primaryTask := new(fhir.Task)
 	err := cpsClient.Read(primaryTaskRef, primaryTask)
 	if err != nil {
 		return &TaskRejection{
 			Reason:       "Processing failed",
 			ReasonDetail: fmt.Errorf("failed to fetch primary Task of subtask (subtask.id=%s, primarytask.ref=%s): %w", *task.Id, primaryTaskRef, err),
+		}
+	}
+
+	if coolfhir.IsScpSubTask(primaryTask) {
+		return &TaskRejection{
+			Reason:       "Invalid Task",
+			ReasonDetail: errors.New("sub-task references another sub-task. Nested subtasks are not supported"),
 		}
 	}
 
