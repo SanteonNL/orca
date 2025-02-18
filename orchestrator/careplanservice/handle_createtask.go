@@ -137,6 +137,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 		carePlan.Subject = *task.For
 		carePlan.Status = fhir.RequestStatusActive
+		carePlan.Author = task.Requester
 
 		task.BasedOn = []fhir.Reference{
 			{
