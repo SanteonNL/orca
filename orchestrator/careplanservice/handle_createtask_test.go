@@ -300,7 +300,6 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-
 			if tt.returnedPatientBundle != nil || tt.errorFromPatientBundleRead != nil {
 				mockFHIRClient.EXPECT().Search("Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 					if tt.returnedPatientBundle != nil {
@@ -361,6 +360,20 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				returnedBundle = tt.returnedBundle
 			}
 			require.Len(t, tx.Entry, len(returnedBundle.Entry))
+
+			if tt.expectError == nil {
+				t.Run("verify CarePlan", func(t *testing.T) {
+					carePlanEntry := coolfhir.FirstBundleEntry((*fhir.Bundle)(tx), coolfhir.EntryIsOfType("CarePlan"))
+
+					var carePlan fhir.CarePlan
+					err := json.Unmarshal(carePlanEntry.Resource, &carePlan)
+					require.NoError(t, err)
+
+					require.Equal(t, fhir.RequestStatusActive, carePlan.Status)
+					require.Contains(t, *carePlan.Subject.Reference, "Patient/")
+					require.Equal(t, taskToCreate.Requester, carePlan.Author)
+				})
+			}
 
 			t.Run("original FHIR request headers are passed to outgoing Bundle entry", func(t *testing.T) {
 				taskEntry := coolfhir.FirstBundleEntry((*fhir.Bundle)(tx), coolfhir.EntryIsOfType("Task"))
