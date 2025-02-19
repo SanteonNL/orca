@@ -3,13 +3,14 @@ package careteamservice
 import (
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"slices"
-	"strings"
-	"time"
 )
 
 var nowFunc = time.Now
@@ -29,7 +30,6 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	if err := client.Read("CarePlan",
 		bundle,
 		fhirclient.QueryParam("_id", carePlanId),
-		fhirclient.QueryParam("_include", "CarePlan:care-team"),
 		fhirclient.QueryParam("_include", "CarePlan:activity-reference")); err != nil {
 		return false, fmt.Errorf("unable to resolve CarePlan and related resources: %w", err)
 	}
@@ -38,10 +38,12 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(carePlanId), carePlan); err != nil {
 		return false, fmt.Errorf("CarePlan not found (id=%s): %w", carePlanId, err)
 	}
-	careTeam, err := resolveCareTeam(bundle, carePlan)
+
+	careTeam, err := coolfhir.ResolveCareTeam(carePlan)
 	if err != nil {
 		return false, err
 	}
+
 	activities, err := resolveActivities(bundle, carePlan)
 	if err != nil {
 		return false, err
@@ -60,11 +62,21 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	if updateCareTeam(careTeam, otherActivities, updateTriggerTask) {
 		changed = true
 	}
+
 	if changed {
 		sortParticipants(careTeam.Participant)
-		tx.Update(*careTeam, "CareTeam/"+*careTeam.Id)
+
+		contained, err := coolfhir.UpdateContainedResource(carePlan.Contained, *carePlan.CareTeam[0].Reference, "CarePlan", careTeam)
+		if err != nil {
+			return false, fmt.Errorf("unable to update CarePlan.Contained")
+		}
+
+		carePlan.Contained = contained
+		tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+
 		return true, nil
 	}
+
 	return false, nil
 }
 
@@ -124,25 +136,6 @@ func deactivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference, otherA
 		}
 	}
 	return result
-}
-
-func resolveCareTeam(bundle *fhir.Bundle, carePlan *fhir.CarePlan) (*fhir.CareTeam, error) {
-	if len(carePlan.CareTeam) != 1 {
-		return nil, errors.New("CarePlan must have exactly one CareTeam")
-	}
-	var currentCareTeam fhir.CareTeam
-	if len(carePlan.CareTeam) == 1 {
-		// prevent nil deref
-		ref := carePlan.CareTeam[0].Reference
-		if ref == nil {
-			return nil, errors.New("CarePlan.CareTeam.Reference is required")
-		}
-		// Should be resolvable in Bundle
-		if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(*ref), &currentCareTeam); err != nil {
-			return nil, fmt.Errorf("unable to resolve CarePlan.CareTeam: %w", err)
-		}
-	}
-	return &currentCareTeam, nil
 }
 
 func resolveActivities(bundle *fhir.Bundle, carePlan *fhir.CarePlan) ([]fhir.Task, error) {

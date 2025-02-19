@@ -50,7 +50,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	}
 
 	carePlan := fhir.CarePlan{}
-	var carePlanRef *string
 	err = coolfhir.ValidateTaskRequiredFields(task)
 	if err != nil {
 		return nil, err
@@ -75,7 +74,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		taskBundleEntry        fhir.BundleEntry
 		carePlanBundleEntryIdx = -1
 		carePlanBundleEntry    *fhir.BundleEntry
-		careTeamEntryIdx       = -1
 	)
 
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
@@ -92,11 +90,11 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		// Create a new CarePlan (which will also create a new CareTeam) based on the Task reference
 		carePlanURL := "urn:uuid:" + uuid.NewString()
-		careTeamURL := "urn:uuid:" + uuid.NewString()
+		careTeamID := "cps-careteam"
 		taskURL := "urn:uuid:" + uuid.NewString()
-		careTeam := fhir.CareTeam{}
+		careTeam := fhir.CareTeam{Id: to.Ptr(careTeamID)}
 		carePlan.CareTeam = append(carePlan.CareTeam, fhir.Reference{
-			Reference: to.Ptr(careTeamURL),
+			Reference: to.Ptr("#" + careTeamID),
 			Type:      to.Ptr(coolfhir.ResourceType(careTeam)),
 		})
 		carePlan.Intent = fhir.CarePlanIntentOrder
@@ -135,16 +133,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				task.For.Reference = to.Ptr("Patient/" + *patients[0].Id)
 			}
 		}
-		carePlan.Subject = *task.For
-		carePlan.Status = fhir.RequestStatusActive
-		carePlan.Author = task.Requester
-
-		task.BasedOn = []fhir.Reference{
-			{
-				Type:      to.Ptr(coolfhir.ResourceType(carePlan)),
-				Reference: to.Ptr(carePlanURL),
-			},
-		}
 
 		ok := careteamservice.ActivateMembership(&careTeam, &fhir.Reference{
 			Identifier: &principal.Organization.Identifier[0],
@@ -154,25 +142,48 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			return nil, errors.New("failed to activate membership for new CareTeam")
 		}
 
+		data, err := json.Marshal([]any{careTeam})
+		if err != nil {
+			return nil, coolfhir.NewErrorWithCode("failed to marshal CareTeam", http.StatusInternalServerError)
+		}
+
+		carePlan.Subject = *task.For
+		carePlan.Status = fhir.RequestStatusActive
+		carePlan.Author = task.Requester
+		carePlan.Contained = data
+		// @FIXME: set careteam reference
+
+		task.BasedOn = []fhir.Reference{
+			{
+				Type:      to.Ptr(coolfhir.ResourceType(carePlan)),
+				Reference: to.Ptr(carePlanURL),
+			},
+		}
+
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL)).
-			Create(careTeam, coolfhir.WithFullUrl(careTeamURL)).
+			Create(careTeam, coolfhir.WithFullUrl(careTeamID)).
 			Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders))
-		careTeamEntryIdx = len(tx.Entry) - 2
+
 		taskEntryIdx = len(tx.Entry) - 1
 		taskBundleEntry = tx.Entry[taskEntryIdx]
 		carePlanBundleEntry = &tx.Entry[0]
 		carePlanBundleEntryIdx = 0
 	} else {
 		// Adding a task to an existing CarePlan
-		carePlanRef, err = basedOn(task)
+		carePlanRef, err := basedOn(task)
 		if err != nil {
 			return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 		}
 
-		var careTeams []fhir.CareTeam
-		err = s.fhirClient.Read(*carePlanRef, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams))
+		var carePlan fhir.CarePlan
+
+		if err := s.fhirClient.ReadWithContext(ctx, *carePlanRef, &carePlan); err != nil {
+			return nil, fmt.Errorf("failed to read CarePlan: %w", err)
+		}
+
+		careTeam, err := coolfhir.ResolveCareTeam(&carePlan)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to parse CareTeam in CarePlan.Contained: %w", err)
 		}
 
 		// Different validation logic for an SCP subtask
@@ -199,16 +210,12 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, coolfhir.NewErrorWithCode("owner is not the same as the parent task requester", http.StatusBadRequest)
 			}
 		} else {
-			// we have a valid reference to a CarePlan, use this to retrieve the CarePlan and CareTeam to validate the requester is a participant
-			if len(careTeams) == 0 {
-				return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
-			}
-
-			participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+			participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, principal.Organization.Identifier)
 			if participant == nil {
 				return nil, coolfhir.NewErrorWithCode("requester is not part of CareTeam", http.StatusUnauthorized)
 			}
 		}
+
 		// TODO: Manage time-outs properly
 		// Add Task to CarePlan.activities
 		taskBundleEntry = request.bundleEntryWithResource(task)
@@ -227,14 +234,18 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 					Type:      to.Ptr("Task"),
 				},
 			})
-			tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+
+			updated, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to update CarePlan: %w", err)
+			}
+
+			if !updated {
+				tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+			}
+
 			carePlanBundleEntry = &tx.Entry[len(tx.Entry)-1]
 			carePlanBundleEntryIdx = len(tx.Entry) - 1
-		}
-		if updated, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
-			return nil, fmt.Errorf("failed to update CarePlan: %w", err)
-		} else if updated {
-			careTeamEntryIdx = len(tx.Entry) - 1
 		}
 	}
 
@@ -261,16 +272,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, nil, err
 			}
 			notifications = append(notifications, &createdCarePlan)
-		}
-
-		// If CareTeam was created/updated, notify about CareTeam
-		if careTeamEntryIdx != -1 {
-			var updatedCareTeam fhir.CareTeam
-			_, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[careTeamEntryIdx], &txResult.Entry[careTeamEntryIdx], &updatedCareTeam)
-			if err != nil {
-				return nil, nil, err
-			}
-			notifications = append(notifications, &updatedCareTeam)
 		}
 
 		return result, notifications, nil
