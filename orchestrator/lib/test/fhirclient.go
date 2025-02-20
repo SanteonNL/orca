@@ -72,6 +72,7 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 		return s.Error
 	}
 	var candidates []BaseResource
+	var additionalResources []BaseResource
 	for _, res := range s.Resources {
 		var baseResource BaseResource
 		unmarshalInto(res, &baseResource)
@@ -114,7 +115,30 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 		case "_include":
 			// ignored, might want to implement this?
 		case "_revinclude":
-			// ignored, might want to implement this?
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type == "Task" {
+					if value == "Task:part-of" {
+						for _, res := range s.Resources {
+							task, ok := res.(fhir.Task)
+							if !ok {
+								continue
+							}
+							if task.PartOf == nil {
+								continue
+							}
+							for _, partOf := range task.PartOf {
+								if *partOf.Reference == "Task/"+candidate.Id {
+									var baseRes BaseResource
+									unmarshalInto(res, &baseRes)
+									additionalResources = append(additionalResources, baseRes)
+									return true
+								}
+							}
+						}
+					}
+				}
+				return false
+			})
 		case "url":
 			filterCandidates(func(candidate BaseResource) bool {
 				return candidate.URL == value
@@ -131,6 +155,11 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 	for _, candidate := range candidates {
 		result.Entry = append(result.Entry, fhir.BundleEntry{
 			Resource: candidate.Data,
+		})
+	}
+	for _, additionalResource := range additionalResources {
+		result.Entry = append(result.Entry, fhir.BundleEntry{
+			Resource: additionalResource.Data,
 		})
 	}
 	resultJSON, _ := json.Marshal(result)
