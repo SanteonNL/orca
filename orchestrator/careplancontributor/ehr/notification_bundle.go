@@ -37,6 +37,14 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 
 	bundle := fhir.Bundle{}
 
+	/**
+	 * VALIDATION RULES/RESOURCE EXPECTATIONS
+		- Exactly 1 Patient
+		- Exactly 1 CarePlan
+		- Exactly 1 ServiceRequest
+		- At least 2 Tasks (Task and Subtask)
+	*/
+
 	// All resources other than tasks are not returned.
 	values := url.Values{}
 	values.Set("_id", taskId)
@@ -44,6 +52,9 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	err := cpsClient.SearchWithContext(ctx, "Task", values, &bundle)
 	if err != nil {
 		return nil, err
+	}
+	if len(bundle.Entry) < 2 {
+		return nil, fmt.Errorf("expected at least 2 Tasks (1 primary, 1 subtask), got %d", len(bundle.Entry))
 	}
 	bundles.addBundle(bundle)
 	var tasks []fhir.Task
@@ -53,6 +64,9 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	}
 
 	patientForRefs := findForReferences(ctx, tasks)
+	if len(patientForRefs) != 1 {
+		return nil, fmt.Errorf("expected exactly 1 Patient, got %d", len(patientForRefs))
+	}
 	log.Ctx(ctx).Debug().Msgf("Found %d patientForRefs", len(patientForRefs))
 	result, err := fetchRefs(ctx, cpsClient, patientForRefs)
 	if err != nil {
@@ -61,6 +75,9 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	bundles.addBundle(*result...)
 
 	focusRefs := findFocusReferences(ctx, tasks)
+	if len(focusRefs) != 1 {
+		return nil, fmt.Errorf("expected exactly 1 ServiceRequest, got %d", len(focusRefs))
+	}
 	log.Ctx(ctx).Debug().Msgf("Found %d focusRefs", len(focusRefs))
 	result, err = fetchRefs(ctx, cpsClient, focusRefs)
 	if err != nil {
@@ -69,6 +86,9 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	bundles.addBundle(*result...)
 
 	basedOnRefs := findBasedOnReferences(ctx, tasks)
+	if len(basedOnRefs) != 1 {
+		return nil, fmt.Errorf("expected exactly 1 CarePlan, got %d", len(basedOnRefs))
+	}
 	log.Ctx(ctx).Debug().Msgf("Found %d basedOnRefs", len(basedOnRefs))
 	result, err = fetchRefs(ctx, cpsClient, basedOnRefs)
 	if err != nil {
