@@ -174,7 +174,8 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
     }
     const performerIdentifier = performer.identifier[0]
 
-    const patientBsn = Date.now();
+    let patientBsn = "" + Date.now()
+    patientBsn = patientBsn.substring(patientBsn.length - 9, patientBsn.length)
 
     return {
         "resourceType": "Bundle",
