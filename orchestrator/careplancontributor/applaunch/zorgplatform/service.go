@@ -173,6 +173,8 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager, co
 
 	result.secureTokenService = result
 	result.registerFhirClientFactory(config)
+	result.getSessionData = result.defaultGetSessionData
+
 	return result, nil
 }
 
@@ -189,6 +191,7 @@ type Service struct {
 	zorgplatformCert       *x509.Certificate
 	profile                profile.Provider
 	secureTokenService     SecureTokenService
+	getSessionData         func(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error)
 	// accessTokenCache stores the Zorgplatform access tokens a given CarePlan (from X-SCP-Context)
 	// Requesting an access token involves an, chained lookup, so we cache the result for some time.
 	accessTokenCache *ttlcache.Cache[string, string]
@@ -328,11 +331,21 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	log.Ctx(request.Context()).Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
-	sessionData, err := s.getSessionData(request.Context(), accessToken, launchContext)
-	if err != nil {
-		log.Ctx(request.Context()).Err(err).Msg("unable to create session data")
-		http.Error(response, "Application launch failed.", http.StatusInternalServerError)
-		return
+	var sessionData *user.SessionData
+	// INT-572: Adding a retry mechanism, as in some cases the Patient returns a 404 when a new workflow is created and directly launched in HiX
+	for i := 1; i <= 3; i++ {
+		sessionData, err = s.getSessionData(request.Context(), accessToken, launchContext)
+		if err == nil {
+			break
+		}
+		if i < 3 {
+			log.Ctx(request.Context()).Warn().Msg("unable to create session data, retrying")
+			time.Sleep(200 * time.Duration(i) * time.Millisecond)
+		} else {
+			log.Ctx(request.Context()).Err(err).Msg("unable to create session data - retry limit reached")
+			http.Error(response, "Application launch failed.", http.StatusInternalServerError)
+			return
+		}
 	}
 
 	s.sessionManager.Create(response, *sessionData)
@@ -434,7 +447,7 @@ func (s *Service) createZorgplatformApiClient(accessToken string) *http.Client {
 	}
 }
 
-func (s *Service) getSessionData(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
+func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
 	// New client that uses the access token
 	apiUrl, err := url.Parse(s.config.ApiUrl)
 	if err != nil {
