@@ -113,7 +113,32 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 				return candidate.Id == value
 			})
 		case "_include":
-			// ignored, might want to implement this?
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type == "CarePlan" {
+					if value == "CarePlan:care-team" {
+						for _, res := range s.Resources {
+							careTeam, ok := res.(fhir.CareTeam)
+							if !ok {
+								continue
+							}
+							var carePlan fhir.CarePlan
+							err := json.Unmarshal(candidate.Data, &carePlan)
+							if err != nil {
+								panic(err)
+							}
+							for _, reference := range carePlan.CareTeam {
+								if *reference.Reference == "CareTeam/"+*careTeam.Id {
+									var baseRes BaseResource
+									unmarshalInto(res, &baseRes)
+									additionalResources = append(additionalResources, baseRes)
+									return true
+								}
+							}
+						}
+					}
+				}
+				return false
+			})
 		case "_revinclude":
 			filterCandidates(func(candidate BaseResource) bool {
 				if candidate.Type == "Task" {

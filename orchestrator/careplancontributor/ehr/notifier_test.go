@@ -22,10 +22,12 @@ func TestNotifyTaskAccepted(t *testing.T) {
 	questionnaireResp1Id := uuid.NewString()
 	questionnaireResp2Id := uuid.NewString()
 	carePlanId := uuid.NewString()
+	careTeamId := uuid.NewString()
 	patientRef := "Patient/" + patientId
 	serviceReqRef := "ServiceRequest/" + focusReqId
 	questionnaireRef := "Questionnaire/" + questionnaireId
 	carePlanRef := "CarePlan/" + carePlanId
+	careTeamRef := "CareTeam/" + careTeamId
 	primaryTaskRef := "Task/" + taskId
 	primaryTask := fhir.Task{
 		Id:      &taskId,
@@ -50,6 +52,15 @@ func TestNotifyTaskAccepted(t *testing.T) {
 	}
 	carePlan := fhir.CarePlan{
 		Id: &carePlanId,
+		Subject: fhir.Reference{
+			Reference: &patientRef,
+		},
+		CareTeam: []fhir.Reference{
+			{Reference: &careTeamRef},
+		},
+	}
+	careTeam := fhir.CareTeam{
+		Id: &careTeamId,
 	}
 	serviceReq := fhir.ServiceRequest{
 		Id:      &focusReqId,
@@ -78,7 +89,7 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			task: primaryTask,
 			setupMocks: func(client *test.StubFHIRClient, mockServiceBusClient *MockServiceBusClient) {
 				client.Resources = append(client.Resources, primaryTask, primaryPatient, serviceReq,
-					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask)
+					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask, careTeam)
 
 				mockServiceBusClient.EXPECT().
 					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
@@ -98,7 +109,7 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			task: primaryTask,
 			setupMocks: func(client *test.StubFHIRClient, mockServiceBusClient *MockServiceBusClient) {
 				client.Resources = append(client.Resources, primaryTask, primaryPatient, serviceReq,
-					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask)
+					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask, careTeam)
 
 				mockServiceBusClient.EXPECT().
 					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
