@@ -40,6 +40,8 @@ const zorgplatformWorkflowIdSystem = "http://sts.zorgplatform.online/ws/claims/2
 // They expire after ca. 12 minutes, so this value is on the safe side.
 const accessTokenCacheTTL = time.Minute * 5
 
+var sleep = time.Sleep
+
 type workflowContext struct {
 	workflowId string
 	patientBsn string
@@ -333,14 +335,14 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	var sessionData *user.SessionData
 	// INT-572: Adding a retry mechanism, as in some cases the Patient returns a 404 when a new workflow is created and directly launched in HiX
-	for i := 1; i <= 3; i++ {
+	for i := 1; i <= 4; i++ {
 		sessionData, err = s.getSessionData(request.Context(), accessToken, launchContext)
 		if err == nil {
 			break
 		}
-		if i < 3 {
+		if i < 4 {
 			log.Ctx(request.Context()).Warn().Msg("unable to create session data, retrying")
-			time.Sleep(200 * time.Duration(i) * time.Millisecond)
+			sleep(200 * time.Duration(i) * time.Millisecond)
 		} else {
 			log.Ctx(request.Context()).Err(err).Msg("unable to create session data - retry limit reached")
 			http.Error(response, "Application launch failed.", http.StatusInternalServerError)

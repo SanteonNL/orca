@@ -276,6 +276,13 @@ func TestService(t *testing.T) {
 	t.Run("retry getSessionData 3 times - should work", func(t *testing.T) {
 		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
 
+		// Save the original sleep function and restore it after the test.
+		originalSleep := sleep
+
+		// Override sleep to collect the duration of the sleep requested duration instead of actually sleeping.
+		var sleeps []time.Duration
+		sleep = func(t time.Duration) { sleeps = append(sleeps, t) }
+
 		// Mock getSessionData to fail twice before succeeding
 		callCount := 0
 		service.getSessionData = func(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
@@ -293,10 +300,21 @@ func TestService(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
 		require.Equal(t, 3, callCount, "expected getSessionData to be called 3 times")
+		require.Equal(t, []time.Duration{200 * time.Millisecond, 400 * time.Millisecond}, sleeps, "expected 2 incremental sleeps")
+
+		t.Cleanup(func() { sleep = originalSleep })
+		t.Cleanup(func() { service.getSessionData = service.defaultGetSessionData })
 	})
 
 	t.Run("Consistent error - should fail after 3 retries", func(t *testing.T) {
 		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
+
+		// Save the original sleep function and restore it after the test.
+		originalSleep := sleep
+
+		// Override sleep to collect the duration of the sleep requested duration instead of actually sleeping.
+		var sleeps []time.Duration
+		sleep = func(t time.Duration) { sleeps = append(sleeps, t) }
 
 		callCount := 0
 		service.getSessionData = func(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
@@ -309,7 +327,11 @@ func TestService(t *testing.T) {
 		})
 
 		require.Equal(t, http.StatusInternalServerError, launchHttpResponse.StatusCode)
-		require.Equal(t, 3, callCount, "expected getSessionData to be called 3 times")
+		require.Equal(t, 4, callCount, "expected getSessionData to be called 4 times")
+		require.Equal(t, []time.Duration{200 * time.Millisecond, 400 * time.Millisecond, 600 * time.Millisecond}, sleeps, "expected 3 incremental sleeps")
+
+		t.Cleanup(func() { sleep = originalSleep })
+		t.Cleanup(func() { service.getSessionData = service.defaultGetSessionData })
 	})
 
 }
