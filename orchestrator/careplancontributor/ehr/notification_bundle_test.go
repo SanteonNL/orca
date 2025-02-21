@@ -78,7 +78,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			}
 			return nil
 		})
-
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -87,7 +86,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			}
 			return nil
 		})
-
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -97,7 +95,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			}
 			return nil
 		})
-
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "ServiceRequest", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -106,7 +103,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			}
 			return nil
 		})
-
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "Questionnaire", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -115,7 +111,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			}
 			return nil
 		})
-
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -130,6 +125,16 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 		require.NotNil(t, result)
 		require.Equal(t, "Task/1", result.task)
 		require.Equal(t, 6, len(result.Bundles))
+
+		// Check if the bundles are in the correct order
+		require.JSONEq(t, string(task1Raw), string(result.Bundles[0].Entry[0].Resource))
+		require.JSONEq(t, string(subtask1Raw), string(result.Bundles[0].Entry[1].Resource))
+		require.JSONEq(t, string(patient1Raw), string(result.Bundles[1].Entry[0].Resource))
+		require.JSONEq(t, string(serviceRequest1Raw), string(result.Bundles[2].Entry[0].Resource))
+		require.JSONEq(t, string(carePlan1Raw), string(result.Bundles[3].Entry[0].Resource))
+		require.JSONEq(t, string(careTeam1Raw), string(result.Bundles[3].Entry[1].Resource))
+		require.JSONEq(t, string(questionnaire1Raw), string(result.Bundles[4].Entry[0].Resource))
+		require.JSONEq(t, string(questionnaireResponse1Raw), string(result.Bundles[5].Entry[0].Resource))
 	})
 	t.Run("error fetching task - fails", func(t *testing.T) {
 		mockFHIRClient := mock.NewMockClient(ctrl)

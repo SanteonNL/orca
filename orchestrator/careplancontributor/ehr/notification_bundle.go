@@ -35,93 +35,132 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 		task: ref,
 	}
 
-	bundle := fhir.Bundle{}
+	taskBundle, tasks, err := fetchTasks(ctx, cpsClient, taskId)
+	if err != nil {
+		return nil, err
+	}
 
-	/**
-	 * VALIDATION RULES/RESOURCE EXPECTATIONS
-		- Exactly 1 Patient
-		- Exactly 1 CarePlan
-		- Exactly 1 ServiceRequest
-		- At least 2 Tasks (Task and Subtask)
-	*/
+	carePlanBundle, carePlan, err := fetchCarePlan(ctx, cpsClient, tasks)
+	if err != nil {
+		return nil, err
+	}
 
-	// TASK
+	patientBundle, err := fetchPatient(ctx, cpsClient, carePlan)
+	if err != nil {
+		return nil, err
+	}
+
+	serviceRequestBundle, err := fetchServiceRequest(ctx, cpsClient, tasks)
+	if err != nil {
+		return nil, err
+	}
+
+	questionnaireBundles, err := fetchQuestionnaires(ctx, cpsClient, tasks)
+	if err != nil {
+		return nil, err
+	}
+
+	questionnaireResponseBundles, err := fetchQuestionnaireResponses(ctx, cpsClient, tasks)
+	if err != nil {
+		return nil, err
+	}
+
+	// Bundle order is important for the ServiceBus message
+	bundles.addBundle(*taskBundle)
+	bundles.addBundle(*patientBundle)
+	bundles.addBundle(*serviceRequestBundle)
+	bundles.addBundle(*carePlanBundle)
+	bundles.addBundle(*questionnaireBundles...)
+	bundles.addBundle(*questionnaireResponseBundles...)
+
+	return &bundles, nil
+}
+
+func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*fhir.Bundle, []fhir.Task, error) {
+	var taskBundle fhir.Bundle
+
 	values := url.Values{}
 	values.Set("_id", taskId)
 	values.Set("_revinclude", "Task:part-of")
-	err := cpsClient.SearchWithContext(ctx, "Task", values, &bundle)
+	err := cpsClient.SearchWithContext(ctx, "Task", values, &taskBundle)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	if len(bundle.Entry) < 2 {
-		return nil, fmt.Errorf("expected at least 2 Tasks (1 primary, 1 subtask), got %d", len(bundle.Entry))
+	if len(taskBundle.Entry) < 2 {
+		return nil, nil, fmt.Errorf("expected at least 2 Tasks (1 primary, 1 subtask), got %d", len(taskBundle.Entry))
 	}
-	bundles.addBundle(bundle)
 	var tasks []fhir.Task
-	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("Task"), &tasks)
+	err = coolfhir.ResourcesInBundle(&taskBundle, coolfhir.EntryIsOfType("Task"), &tasks)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// CARE PLAN
+	return &taskBundle, tasks, nil
+}
+
+func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, *fhir.CarePlan, error) {
 	basedOnRefs := findBasedOnReferences(ctx, tasks)
 	if len(basedOnRefs) != 1 {
-		return nil, fmt.Errorf("expected exactly 1 CarePlan, got %d", len(basedOnRefs))
+		return nil, nil, fmt.Errorf("expected exactly 1 CarePlan, got %d", len(basedOnRefs))
 	}
 	log.Ctx(ctx).Debug().Msgf("Found %d basedOnRefs", len(basedOnRefs))
-	carePlanResult, err := fetchRefs(ctx, cpsClient, basedOnRefs)
+	carePlanBundle, err := fetchRef(ctx, cpsClient, basedOnRefs[0])
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	bundles.addBundle(*carePlanResult...)
 
-	// PATIENT
 	var carePlan fhir.CarePlan
-	err = coolfhir.ResourceInBundle(&(*carePlanResult)[0], coolfhir.EntryIsOfType("CarePlan"), &carePlan)
+	err = coolfhir.ResourceInBundle(carePlanBundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if carePlan.Subject.Reference == nil {
-		return nil, fmt.Errorf("could not find patient reference in CarePlan")
+		return nil, nil, fmt.Errorf("could not find patient reference in CarePlan")
 	}
 
+	return carePlanBundle, &carePlan, nil
+}
+
+func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
 	patientRef := *carePlan.Subject.Reference
-	patientResult, err := fetchRefs(ctx, cpsClient, []string{patientRef})
+	patientBundle, err := fetchRef(ctx, cpsClient, patientRef)
 	if err != nil {
 		return nil, err
 	}
-	bundles.addBundle(*patientResult...)
+	return patientBundle, nil
+}
 
-	// SERVICE REQUEST
+func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, error) {
 	focusRefs := findFocusReferences(ctx, tasks)
 	if len(focusRefs) != 1 {
 		return nil, fmt.Errorf("expected exactly 1 ServiceRequest, got %d", len(focusRefs))
 	}
 	log.Ctx(ctx).Debug().Msgf("Found %d focusRefs", len(focusRefs))
-	serviceRequestResult, err := fetchRefs(ctx, cpsClient, focusRefs)
+	serviceRequestBundle, err := fetchRef(ctx, cpsClient, focusRefs[0])
 	if err != nil {
 		return nil, err
 	}
-	bundles.addBundle(*serviceRequestResult...)
+	return serviceRequestBundle, nil
+}
 
-	// QUESTIONNAIRE
+func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
 	questionnaireRefs := findQuestionnaireInputs(tasks)
 	log.Ctx(ctx).Debug().Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
-	questionnaireResult, err := fetchRefs(ctx, cpsClient, questionnaireRefs)
+	questionnaireBundle, err := fetchRefs(ctx, cpsClient, questionnaireRefs)
 	if err != nil {
 		return nil, err
 	}
-	bundles.addBundle(*questionnaireResult...)
+	return questionnaireBundle, nil
+}
 
-	// QUESTIONNAIRE RESPONSE
+func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
 	questionnaireResponseRefs := findQuestionnaireOutputs(tasks)
-	questionnaireResponseResult, err := fetchRefs(ctx, cpsClient, questionnaireResponseRefs)
+	log.Ctx(ctx).Debug().Msgf("Found %d questionnaireResponseRefs", len(questionnaireResponseRefs))
+	questionnaireResponseBundle, err := fetchRefs(ctx, cpsClient, questionnaireResponseRefs)
 	if err != nil {
 		return nil, err
 	}
-	bundles.addBundle(*questionnaireResponseResult...)
-
-	return &bundles, nil
+	return questionnaireResponseBundle, nil
 }
 
 // findFocusReferences extracts and returns a list of focus references from the provided FHIR tasks, if available.
@@ -196,6 +235,38 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 	}
 
 	return &bundles, nil
+}
+
+// fetchRef performs the same operations as fetchRefs, but only for a single resource
+func fetchRef(ctx context.Context, cpsClient fhirclient.Client, ref string) (*fhir.Bundle, error) {
+	var refTypeMap = make(map[string][]string)
+	splits := strings.Split(ref, "/")
+	if len(splits) < 1 {
+		return nil, fmt.Errorf("invalid reference: %s", ref)
+	}
+	refType := splits[0]
+	refId := splits[1]
+	putMapListValue(refTypeMap, refType, refId)
+
+	expectedResourceCount := 1
+
+	var bundle fhir.Bundle
+	values := url.Values{}
+	values.Set("_id", refId)
+	if refType == "CarePlan" {
+		values.Set("_include", "CarePlan:care-team")
+		expectedResourceCount = 2
+	}
+	err := cpsClient.SearchWithContext(ctx, refType, values, &bundle)
+	if err != nil {
+		return nil, err
+	}
+
+	if expectedResourceCount != len(bundle.Entry) {
+		return nil, fmt.Errorf("failed to fetch all references of type %s, expected %d bundle entries, got %d", refType, expectedResourceCount, len(bundle.Entry))
+	}
+
+	return &bundle, nil
 }
 
 // putMapListValue adds a reference ID to a map of string slices if not already present, grouped by reference type.
