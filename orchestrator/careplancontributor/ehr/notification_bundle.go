@@ -99,12 +99,24 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 }
 
 func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, *fhir.CarePlan, error) {
-	basedOnRefs := findBasedOnReferences(ctx, tasks)
-	if len(basedOnRefs) != 1 {
-		return nil, nil, fmt.Errorf("expected exactly 1 CarePlan, got %d", len(basedOnRefs))
+	var carePlanRefs []string
+	for _, task := range tasks {
+		if task.Focus != nil {
+			basedOnReferences := task.BasedOn
+			for _, reference := range basedOnReferences {
+				basedOnReference := reference.Reference
+				if basedOnReference != nil && !slices.Contains(carePlanRefs, *basedOnReference) {
+					log.Ctx(ctx).Debug().Msgf("Found carePlanRef %s", *basedOnReference)
+					carePlanRefs = append(carePlanRefs, *basedOnReference)
+				}
+			}
+		}
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d basedOnRefs", len(basedOnRefs))
-	carePlanBundle, err := fetchRef(ctx, cpsClient, basedOnRefs[0])
+	if len(carePlanRefs) != 1 {
+		return nil, nil, fmt.Errorf("expected exactly 1 CarePlan, got %d", len(carePlanRefs))
+	}
+	log.Ctx(ctx).Debug().Msgf("Found %d carePlanRefs", len(carePlanRefs))
+	carePlanBundle, err := fetchRef(ctx, cpsClient, carePlanRefs[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -131,12 +143,21 @@ func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fh
 }
 
 func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, error) {
-	focusRefs := findFocusReferences(ctx, tasks)
-	if len(focusRefs) != 1 {
-		return nil, fmt.Errorf("expected exactly 1 ServiceRequest, got %d", len(focusRefs))
+	var serviceRequestRefs []string
+	for _, task := range tasks {
+		if task.Focus != nil {
+			focusReference := task.Focus.Reference
+			if focusReference != nil && !slices.Contains(serviceRequestRefs, *focusReference) {
+				log.Ctx(ctx).Debug().Msgf("Found serviceRequestRef %s", *focusReference)
+				serviceRequestRefs = append(serviceRequestRefs, *focusReference)
+			}
+		}
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d focusRefs", len(focusRefs))
-	serviceRequestBundle, err := fetchRef(ctx, cpsClient, focusRefs[0])
+	if len(serviceRequestRefs) != 1 {
+		return nil, fmt.Errorf("expected exactly 1 ServiceRequest, got %d", len(serviceRequestRefs))
+	}
+	log.Ctx(ctx).Debug().Msgf("Found %d serviceRequestRefs", len(serviceRequestRefs))
+	serviceRequestBundle, err := fetchRef(ctx, cpsClient, serviceRequestRefs[0])
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +165,10 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 }
 
 func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
-	questionnaireRefs := findQuestionnaireInputs(tasks)
+	var questionnaireRefs []string
+	for _, task := range tasks {
+		questionnaireRefs = append(questionnaireRefs, fetchTaskInputs(task)...)
+	}
 	log.Ctx(ctx).Debug().Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
 	questionnaireBundle, err := fetchRefs(ctx, cpsClient, questionnaireRefs)
 	if err != nil {
@@ -154,46 +178,16 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 }
 
 func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
-	questionnaireResponseRefs := findQuestionnaireOutputs(tasks)
+	var questionnaireResponseRefs []string
+	for _, task := range tasks {
+		questionnaireResponseRefs = append(questionnaireResponseRefs, fetchTaskOutputs(task)...)
+	}
 	log.Ctx(ctx).Debug().Msgf("Found %d questionnaireResponseRefs", len(questionnaireResponseRefs))
 	questionnaireResponseBundle, err := fetchRefs(ctx, cpsClient, questionnaireResponseRefs)
 	if err != nil {
 		return nil, err
 	}
 	return questionnaireResponseBundle, nil
-}
-
-// findFocusReferences extracts and returns a list of focus references from the provided FHIR tasks, if available.
-func findFocusReferences(ctx context.Context, tasks []fhir.Task) []string {
-	var focusRefs []string
-	for _, task := range tasks {
-		if task.Focus != nil {
-			focusReference := task.Focus.Reference
-			if focusReference != nil && !slices.Contains(focusRefs, *focusReference) {
-				log.Ctx(ctx).Debug().Msgf("Found focusReference %s", *focusReference)
-				focusRefs = append(focusRefs, *focusReference)
-			}
-		}
-	}
-	return focusRefs
-}
-
-// findBasedOnReferences retrieves a list of references from the "BasedOn" field of the given tasks, filtering out nil references.
-func findBasedOnReferences(ctx context.Context, tasks []fhir.Task) []string {
-	var basedOnRefs []string
-	for _, task := range tasks {
-		if task.Focus != nil {
-			basedOnReferences := task.BasedOn
-			for _, reference := range basedOnReferences {
-				basedOnReference := reference.Reference
-				if basedOnReference != nil && !slices.Contains(basedOnRefs, *basedOnReference) {
-					log.Ctx(ctx).Debug().Msgf("Found basedOnReference %s", *basedOnReference)
-					basedOnRefs = append(basedOnRefs, *basedOnReference)
-				}
-			}
-		}
-	}
-	return basedOnRefs
 }
 
 // fetchRefs retrieves FHIR Bundles for the provided resource references using the FHIR client and returns the resulting bundles.
@@ -278,24 +272,6 @@ func putMapListValue(refTypeMap map[string][]string, refType string, refId strin
 		values = append(values, refId)
 	}
 	refTypeMap[refType] = values
-}
-
-// findQuestionnaireInputs extracts and returns references to "Questionnaire" resources from the input tasks.
-func findQuestionnaireInputs(tasks []fhir.Task) []string {
-	var questionnaireRefs []string
-	for _, task := range tasks {
-		questionnaireRefs = append(questionnaireRefs, fetchTaskInputs(task)...)
-	}
-	return questionnaireRefs
-}
-
-// findQuestionnaireOutputs extracts references to "QuestionnaireResponse" outputs from a list of FHIR tasks.
-func findQuestionnaireOutputs(tasks []fhir.Task) []string {
-	var questionnaireResponseRefs []string
-	for _, task := range tasks {
-		questionnaireResponseRefs = append(questionnaireResponseRefs, fetchTaskOutputs(task)...)
-	}
-	return questionnaireResponseRefs
 }
 
 // fetchTaskOutputs retrieves unique references to `QuestionnaireResponse` outputs from a given FHIR Task.
