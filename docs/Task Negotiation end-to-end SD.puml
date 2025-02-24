@@ -1,0 +1,111 @@
+@startuml clinic-notification-1
+autonumber
+skinparam roundcorner 20
+skinparam defaultFontName Arial
+
+box Hospital\nTask Sender #e8d0a9
+    actor Practitioner1 as Practitioner1
+    participant "Care Plan Contributor" as CPC1 #LightGray
+    participant "<font color=white>Care Plan Service" as CPS #Gray
+end box
+
+box Clinic\nTask Receiver #acd1e9
+    participant "Care Plan Contributor" as CPC2 #LightGray
+    participant "Task Engine" as taskEngine
+    participant "EHR" as careprofs
+end box
+
+group Task Negotiation
+activate Practitioner1
+Practitioner1 -> CPC1 : Start Request\n referral
+activate CPC1
+    CPC1 -> CPS: create Task(main)\n[HTTP]
+activate CPS
+    CPS --> CPC1 : 200 OK
+    CPC1 --> Practitioner1 : 200 OK
+deactivate CPC1
+    CPS -> CPC2: notify Task(main)\n[HTTP]
+    note left: Risk of lost notification
+    activate CPC2
+        CPC2 -> CPS: fetch Task(main)\n[HTTP]
+        activate CPS
+            CPS --> CPC2: 200 OK
+        deactivate CPS
+        CPC2 --> CPS: 200 OK
+deactivate CPS
+    CPC2 -> taskEngine: notify Task(main)\n[event]
+    note left: Risk of lost notification
+deactivate CPC2
+
+activate taskEngine
+loop until questionnaires filled out
+    taskEngine -> taskEngine: evaluate Task
+    taskEngine -> CPC2: create Task(subtask)\ncreate Questionnaire\n[call]
+    activate CPC2
+        CPC2 -> CPS: create Task(subtask)\ncreate Questionnaire\n[HTTP]
+        activate CPS
+        CPS --> CPC2 : 200 OK
+        CPC2 --> taskEngine : 200 OK
+        deactivate CPC2
+        deactivate taskEngine
+        CPS -> CPC1: notify Task(subtask)\n[HTTP]
+        activate CPC1
+            note right: Risk of lost notification
+            CPC1 -> CPS: fetch Task(subtask)\n[HTTP]
+            activate CPS
+            CPS --> CPC1: 200 OK
+            deactivate CPS
+            CPC1 --> CPS : 200 OK
+        deactivate CPS
+        deactivate CPC1
+
+    CPC1 <-> Practitioner1: Fill Task(subtask)
+    activate CPC1
+        CPC1 -> CPS: update Task(subtask)\ncreate QuestionnaireResponse\n[HTTP]
+        activate CPS
+        CPS --> CPC1 : 200 OK
+        CPC1 --> Practitioner1: 200 OK
+    deactivate CPC1
+        CPS -> CPC2: notify Task(subtask)
+        note left: Risk of lost notification
+        activate CPC2
+            CPC2 ->  CPS: fetch Task(subtask)
+            activate CPS
+                CPS --> CPC2: 200 OK
+            deactivate CPS
+    deactivate CPS
+        CPC2 -> taskEngine: notify Task(subtask)\n[event]
+        note left: Risk of lost notification
+        deactivate CPC2
+        activate taskEngine
+end loop
+taskEngine -> CPC2: accept Task(main)\n[in-process call]
+activate CPC2
+    CPC2 -> CPS: update Task(main)\n[HTTP]
+    activate CPS
+        CPS --> CPC2: 200 OK
+        CPS --> Practitioner1 : Show Task Accepted
+    deactivate CPS
+    CPC2 --> taskEngine: 200 OK
+deactivate CPC2
+deactivate Practitioner1
+
+deactivate CPS
+end group
+group EHR Enrolment Bundle Delivery
+
+taskEngine -> taskEngine: collect enrolment bundle,\nsend to EHR
+activate taskEngine
+group Fetch all enrolment resources; ServiceRequest, Condition, etc...
+taskEngine -> CPC2: fetch resource\n[call]
+activate CPC2
+    CPC2 -> CPS: fetch resource\n[HTTP]
+    activate CPS
+    CPS --> CPC2: 200 OK
+    deactivate
+    CPC2 --> taskEngine: resources
+deactivate CPC2
+end loop
+taskEngine -> taskEngine: create enrolment\nbundle
+taskEngine -> careprofs: notify enrolment\nbundle\n[ServiceBus]
+@enduml
