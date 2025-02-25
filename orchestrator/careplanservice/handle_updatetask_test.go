@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
-	"os"
 	"reflect"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -451,11 +451,11 @@ func Test_isValidTransition(t *testing.T) {
 
 func Test_handleUpdateTask(t *testing.T) {
 	var task fhir.Task
-	taskData, _ := os.ReadFile("./testdata/task-update-accepted.json")
+	taskData := mustReadFile("./testdata/task-update-accepted.json")
 	require.NoError(t, json.Unmarshal(taskData, &task))
 
 	var carePlanBundle fhir.Bundle
-	carePlanBundleData, _ := os.ReadFile("./careteamservice/testdata/001-input.json")
+	carePlanBundleData := mustReadFile("./careteamservice/testdata/001-input.json")
 	require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
 
 	ctrl := gomock.NewController(t)
@@ -666,7 +666,7 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 		profile:    profile.Test(),
 	}
 
-	updateTaskAcceptedData, _ := os.ReadFile("./testdata/task-update-accepted.json")
+	updateTaskAcceptedData := mustReadFile("./testdata/task-update-accepted.json")
 
 	tests := []struct {
 		name          string

@@ -438,9 +438,9 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, err
 	}
 
-	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
+	// Use extract CarePlan ID to be used for our query that will get the CarePlan in a bundle
 	var bundle fhir.Bundle
-	err = cpsFHIRClient.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle)
+	err = cpsFHIRClient.Search("CarePlan", url.Values{"_id": {carePlanId}}, &bundle)
 	if err != nil {
 		return nil, err
 	}
@@ -449,20 +449,15 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, coolfhir.NewErrorWithCode("CarePlan not found", http.StatusNotFound)
 	}
 
-	var careTeams []fhir.CareTeam
-	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
-	if err != nil {
-		return nil, err
-	}
-	if len(careTeams) == 0 {
-		return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
-	}
-
 	var carePlan fhir.CarePlan
 	err = coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
-
 	if err != nil {
 		return nil, err
+	}
+
+	careTeam, err := coolfhir.ResolveCareTeam(&carePlan)
+	if err != nil {
+		return nil, coolfhir.NewErrorWithCode("unable to resolve CareTeam", http.StatusNotFound)
 	}
 
 	// Validate CareTeam participants against requester
@@ -472,7 +467,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 
 	// get the CareTeamParticipant, then check that it is active
-	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, principal.Organization.Identifier)
 	if participant == nil {
 		return nil, coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
@@ -487,7 +482,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 	return &ScpValidationResult{
 		carePlan:  &carePlan,
-		careTeams: &careTeams,
+		careTeams: &[]fhir.CareTeam{*careTeam},
 	}, nil
 }
 

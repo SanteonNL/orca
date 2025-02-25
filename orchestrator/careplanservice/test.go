@@ -3,13 +3,15 @@ package careplanservice
 import (
 	"context"
 	"fmt"
+	"net/url"
+	"os"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-	"net/url"
-	"testing"
 )
 
 type TestHandleGetStruct[T any] struct {
@@ -47,6 +49,15 @@ type TestHandleSearchStruct[T any] struct {
 	errorFromCarePlanRead  error
 	expectedBundle         *fhir.Bundle
 	expectedError          error
+}
+
+func mustReadFile(path string) []byte {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		panic(err)
+	}
+
+	return data
 }
 
 func testHelperHandleGetResource[T any](t *testing.T, params TestHandleGetStruct[T], handler func(ctx context.Context, id string, headers *fhirclient.Headers) (*T, error)) {

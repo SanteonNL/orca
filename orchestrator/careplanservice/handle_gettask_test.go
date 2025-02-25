@@ -4,27 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/url"
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-	"net/http"
-	"net/url"
-	"os"
-	"testing"
 )
 
 func TestService_handleGetTask(t *testing.T) {
-	task1Raw, _ := os.ReadFile("./testdata/task-1.json")
+	task1Raw := mustReadFile("./testdata/task-1.json")
 	var task1 fhir.Task
 	_ = json.Unmarshal(task1Raw, &task1)
-	carePlan1Raw, _ := os.ReadFile("./testdata/careplan-1.json")
+	carePlan1Raw := mustReadFile("./testdata/careplan1-careteam2.json")
 	var carePlan1 fhir.CarePlan
 	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
-	careTeam2Raw, _ := os.ReadFile("./testdata/careteam-2.json")
-	var careTeam2 fhir.CareTeam
-	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
 
 	tests := []TestHandleGetStruct[fhir.Task]{
 		{
@@ -56,9 +53,6 @@ func TestService_handleGetTask(t *testing.T) {
 				Entry: []fhir.BundleEntry{
 					{
 						Resource: carePlan1Raw,
-					},
-					{
-						Resource: careTeam2Raw,
 					},
 				},
 			},
@@ -95,10 +89,9 @@ func TestService_handleGetTask(t *testing.T) {
 }
 
 func TestService_handleSearchTask(t *testing.T) {
-	careplan1, _ := os.ReadFile("./testdata/careplan-1.json")
-	careteam2, _ := os.ReadFile("./testdata/careteam-2.json")
-	task1, _ := os.ReadFile("./testdata/task-1.json")
-	task2, _ := os.ReadFile("./testdata/task-2.json")
+	careplan1 := mustReadFile("./testdata/careplan1-careteam2.json")
+	task1 := mustReadFile("./testdata/task-1.json")
+	task2 := mustReadFile("./testdata/task-2.json")
 
 	tests := []TestHandleSearchStruct[fhir.Task]{
 		{
@@ -187,9 +180,6 @@ func TestService_handleSearchTask(t *testing.T) {
 					{
 						Resource: careplan1,
 					},
-					{
-						Resource: careteam2,
-					},
 				},
 			},
 			expectedBundle: &fhir.Bundle{
@@ -216,9 +206,6 @@ func TestService_handleSearchTask(t *testing.T) {
 				Entry: []fhir.BundleEntry{
 					{
 						Resource: careplan1,
-					},
-					{
-						Resource: careteam2,
 					},
 				},
 			},

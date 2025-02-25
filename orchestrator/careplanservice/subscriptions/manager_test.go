@@ -29,7 +29,6 @@ func TestDerivingManager_Notify(t *testing.T) {
 		channelFactory := NewMockChannelFactory(ctrl)
 
 		fhir := mock.NewMockClient(ctrl)
-		fhir.EXPECT().ReadWithContext(gomock.Any(), "CareTeam/20", gomock.Any())
 
 		manager := DerivingManager{
 			FhirClient:  fhir,

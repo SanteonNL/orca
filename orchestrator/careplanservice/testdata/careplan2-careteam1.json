@@ -1,0 +1,53 @@
+{
+  "resourceType": "CarePlan",
+  "id": "2",
+  "status": "draft",
+  "intent": "order",
+  "subject": {
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+      "value": "987654321"
+    },
+    "reference": "Patient/2"
+  },
+  "careTeam": [
+    {
+      "reference": "#careteam-1",
+      "type": "CareTeam"
+    }
+  ],
+  "contained": [
+    {
+      "resourceType": "CareTeam",
+      "id": "careteam-1",
+      "intent": "order",
+      "meta": {
+        "versionId": "1",
+        "lastUpdated": "2024-10-15T13:55:53.946+00:00",
+        "source": "#ZHSYrvpo4ZP1aMg7"
+      },
+      "participant": [
+        {
+          "member": {
+            "type": "Organization",
+            "identifier": {
+              "system": "http://fhir.nl/fhir/NamingSystem/ura",
+              "value": "999"
+            }
+          },
+          "period": {
+            "start": "2024-10-15T15:55:53+02:00"
+          }
+        }
+      ]
+    }
+  ],
+  "activity": [
+    {
+      "reference": {
+        "reference": "Task/999",
+        "type": "Task"
+      }
+    }
+  ]
+}
