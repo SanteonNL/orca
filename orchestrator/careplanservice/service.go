@@ -498,6 +498,24 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 				Type:      to.Ptr(resource.ResourceType),
 			}
 
+			// Create the query detail entity
+			queryEntity := fhir.AuditEventEntity{
+				Type: &fhir.Coding{
+					System:  to.Ptr("http://terminology.hl7.org/CodeSystem/audit-entity-type"),
+					Code:    to.Ptr("2"), // query parameters
+					Display: to.Ptr("Query Parameters"),
+				},
+				Detail: []fhir.AuditEventEntityDetail{},
+			}
+
+			// Add each query parameter as a detail
+			for param, values := range queryParams {
+				queryEntity.Detail = append(queryEntity.Detail, fhir.AuditEventEntityDetail{
+					Type:        param, // parameter name as string
+					ValueString: to.Ptr(strings.Join(values, ",")),
+				})
+			}
+
 			auditEvent, err := audit.AuditEvent(httpRequest.Context(),
 				fhir.AuditEventActionR, resourceRef, &fhir.Reference{
 					Identifier: &principal.Organization.Identifier[0],
@@ -507,6 +525,9 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 				coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 				return
 			}
+
+			// Add the query entity to the audit event
+			auditEvent.Entity = append(auditEvent.Entity, queryEntity)
 
 			err = s.fhirClient.Create(auditEvent, &auditEvent)
 			if err != nil {

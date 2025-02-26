@@ -754,7 +754,7 @@ func Test_Integration(t *testing.T) {
 	testBundleCreation(t, carePlanContributor1)
 }
 
-func Test_CreateTaskWithoutCarePlanAuditEvents(t *testing.T) {
+func Test_CRUD_AuditEvents(t *testing.T) {
 	// This method only tests the audit events, as Task lifecycle and data integrity is tested in Test_Integration
 
 	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, "", "")
@@ -821,7 +821,7 @@ func Test_CreateTaskWithoutCarePlanAuditEvents(t *testing.T) {
 			"CarePlan/" + *carePlan.Id:      fhir.AuditEventActionC,
 			*carePlan.CareTeam[0].Reference: fhir.AuditEventActionC,
 			"CarePlan/" + *carePlan.Id:      fhir.AuditEventActionR,
-		}, currentTime)
+		}, currentTime, nil)
 	}
 
 	subTest(t, "Create Task with existing CarePlan, and existing member in CareTeam")
@@ -866,7 +866,7 @@ func Test_CreateTaskWithoutCarePlanAuditEvents(t *testing.T) {
 		verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
 			"Task/" + *newTask.Id:      fhir.AuditEventActionC,
 			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionU,
-		}, currentTime)
+		}, currentTime, nil)
 	}
 
 	subTest(t, "Accept Task from Contributor 2")
@@ -885,7 +885,7 @@ func Test_CreateTaskWithoutCarePlanAuditEvents(t *testing.T) {
 			"Task/" + *task.Id:              fhir.AuditEventActionU,
 			"CarePlan/" + *carePlan.Id:      fhir.AuditEventActionU,
 			*carePlan.CareTeam[0].Reference: fhir.AuditEventActionU,
-		}, currentTime)
+		}, currentTime, nil)
 	}
 
 	subTest(t, "Search Task")
@@ -903,7 +903,9 @@ func Test_CreateTaskWithoutCarePlanAuditEvents(t *testing.T) {
 		// The encoded params get converted into a resource ID when the audit event is created
 		verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
 			"Task/" + *task.Id: fhir.AuditEventActionR,
-		}, currentTime)
+		}, currentTime, map[string][]string{
+			"_id": {*task.Id},
+		})
 	}
 
 	subTest(t, "Search CarePlan and include CareTeam")
@@ -921,7 +923,10 @@ func Test_CreateTaskWithoutCarePlanAuditEvents(t *testing.T) {
 		verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
 			"CarePlan/" + *carePlan.Id:      fhir.AuditEventActionR,
 			*carePlan.CareTeam[0].Reference: fhir.AuditEventActionR,
-		}, currentTime)
+		}, currentTime, map[string][]string{
+			"_id":      {*carePlan.Id},
+			"_include": {"CarePlan:care-team"},
+		})
 	}
 
 	subTest(t, "Separate Reads create separate audit events")
@@ -937,7 +942,7 @@ func Test_CreateTaskWithoutCarePlanAuditEvents(t *testing.T) {
 
 			verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
 				"CarePlan/" + *carePlan.Id: fhir.AuditEventActionR,
-			}, currentTime)
+			}, currentTime, nil)
 
 			currentTime = currentTime.Add(1 * time.Second)
 		}
@@ -971,7 +976,7 @@ func searchWithoutCache(t *testing.T, fhirClient fhirclient.Client, resourceType
 	return &bundle, nil
 }
 
-func verifyAuditEvent(t *testing.T, fhirClient fhirclient.Client, expectedActions map[string]fhir.AuditEventAction, after time.Time) {
+func verifyAuditEvent(t *testing.T, fhirClient fhirclient.Client, expectedActions map[string]fhir.AuditEventAction, after time.Time, queryParams map[string][]string) {
 	t.Helper()
 
 	// Log the verification attempt
@@ -1004,9 +1009,38 @@ func verifyAuditEvent(t *testing.T, fhirClient fhirclient.Client, expectedAction
 				continue
 			}
 
+			// Check for resource reference match
 			for _, entity := range auditEvent.Entity {
 				if entity.What != nil && entity.What.Reference != nil && *entity.What.Reference == resourceRef {
 					found = true
+
+					// If query params were provided, verify query entity exists
+					if queryParams != nil {
+						// Find query entity
+						var queryEntity *fhir.AuditEventEntity
+						for _, e := range auditEvent.Entity {
+							if e.Type != nil && e.Type.Code != nil && *e.Type.Code == "2" {
+								queryEntity = &e
+								break
+							}
+						}
+
+						require.NotNil(t, queryEntity, "Expected query parameters entity for search audit event")
+						require.Equal(t, "http://terminology.hl7.org/CodeSystem/audit-entity-type", *queryEntity.Type.System)
+						require.Equal(t, "Query Parameters", *queryEntity.Type.Display)
+
+						// Verify all expected params exist in details
+						for param, values := range queryParams {
+							paramFound := false
+							for _, detail := range queryEntity.Detail {
+								if detail.Type == param && *detail.ValueString == strings.Join(values, ",") {
+									paramFound = true
+									break
+								}
+							}
+							require.True(t, paramFound, "Expected query parameter %s with value %v", param, values)
+						}
+					}
 					break
 				}
 			}
