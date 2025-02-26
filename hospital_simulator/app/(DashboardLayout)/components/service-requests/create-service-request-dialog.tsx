@@ -1,5 +1,6 @@
 "use client"
 import * as React from 'react';
+import {useState} from 'react';
 import Button from '@mui/material/Button';
 import TextField from '@mui/material/TextField';
 import Dialog from '@mui/material/Dialog';
@@ -7,16 +8,11 @@ import DialogActions from '@mui/material/DialogActions';
 import DialogContent from '@mui/material/DialogContent';
 import DialogContentText from '@mui/material/DialogContentText';
 import DialogTitle from '@mui/material/DialogTitle';
-import { IconPlus } from '@tabler/icons-react';
-import { Alert, Grid, MenuItem, Select } from '@mui/material';
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import {IconPlus} from '@tabler/icons-react';
+import {Alert, Grid, MenuItem, Select} from '@mui/material';
+import {useRouter} from 'next/navigation';
 import {Coding, Organization} from 'fhir/r4';
-import {
-    getLocalOrganization,
-    getTaskPerformerOrganization
-} from "@/utils/config";
-
+import {getLocalOrganization, getTaskPerformerOrganization} from "@/utils/config";
 
 
 const CreateServiceRequestDialog: React.FC = () => {
@@ -164,6 +160,40 @@ const supportedConditions : Array<Coding> = [
     }
 ]
 
+function generatePatientBsn() {
+    let prefix = "99999";
+    // Ensure the tail is exactly 4 digits, pad with zeros if necessary.
+    const tail = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    // Concatenate to form an 8-digit candidate.
+    let bsn = prefix + tail;
+    while (!test11Proef(bsn)) {
+        const tail = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        bsn = prefix + tail;
+    }
+    return bsn
+}
+
+/**
+ * Nederlandse burgerservicenummers, de vroegere sofinummers, voldoen aan een variant van de elfproef.
+ * In de elfproef is het laatste cijfer het controlecijfer. Bij burgerservicenummers wordt het laatste
+ * getal met −1 vermenigvuldigd in plaats van met 1. Uitgaande van een nummer dat voldoet aan de elfproef
+ * kan geen nieuw geldig nummer worden gegenereerd door één cijfer te veranderen of door twee cijfers te verwisselen.
+ */
+function test11Proef(bsn:string) {
+    const reversed = bsn.split("").reverse().join("")
+    let total = 0
+    for (let i = 0; i < reversed.length; i++) {
+        let weight = i + 1
+        if (weight === 1) {
+            weight = -1
+        }
+        const digit = parseInt(reversed[i])
+        const sum = weight * digit
+        total += sum
+    }
+    return total % 11 === 0
+}
+
 function createServiceRequestBundle(firstName: string, lastName: string, conditionCode : Coding, requester: Organization, performer: Organization) {
     if (requester.identifier?.length !== 1) {
         throw new Error("Requester must have exactly one identifier")
@@ -174,8 +204,7 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
     }
     const performerIdentifier = performer.identifier[0]
 
-    let patientBsn = "" + Date.now()
-    patientBsn = patientBsn.substring(patientBsn.length - 9, patientBsn.length)
+    let patientBsn = generatePatientBsn();
 
     return {
         "resourceType": "Bundle",
