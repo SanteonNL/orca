@@ -307,6 +307,8 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
+	log.Ctx(request.Context()).Info().Msgf("Received SAMLResponse: %s", samlResponse)
+
 	launchContext, err := s.parseSamlResponse(request.Context(), samlResponse)
 
 	if err != nil {
