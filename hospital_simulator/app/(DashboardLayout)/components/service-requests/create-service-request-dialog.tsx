@@ -160,6 +160,12 @@ const supportedConditions : Array<Coding> = [
     }
 ]
 
+function generatePatientEmail(firstName: string, lastName: string) {
+    // remove characters not allowed in email addresses, concatenate first and lastname, add a random number
+    // to ensure uniqueness
+    return `${firstName.replace(/[^a-zA-Z0-9]/g, '')}.${lastName.replace(/[^a-zA-Z0-9]/g, '')}.${Math.floor(Math.random() * 1000)}@example.com`
+}
+
 function generatePatientBsn() {
     let prefix = "99999";
     // Ensure the tail is exactly 4 digits, pad with zeros if necessary.
@@ -204,7 +210,8 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
     }
     const performerIdentifier = performer.identifier[0]
 
-    let patientBsn = generatePatientBsn();
+    const patientBsn = generatePatientBsn();
+    const email = generatePatientEmail(firstName, lastName);
 
     return {
         "resourceType": "Bundle",
@@ -226,7 +233,6 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                             "family": lastName,
                             "given": [
                                 firstName,
-                                "MiddleName"
                             ],
                             "text": `${lastName}, ${firstName}`
                         }
@@ -252,7 +258,7 @@ function createServiceRequestBundle(firstName: string, lastName: string, conditi
                         },
                         {
                             "system": "email",
-                            "value": "patient@example.com",
+                            "value": email,
                             "use": "home"
                         }
                     ]
