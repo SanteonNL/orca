@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/google/uuid"
@@ -154,11 +156,47 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			return nil, errors.New("failed to activate membership for new CareTeam")
 		}
 
+		carePlanAuditEvent, err := audit.AuditEvent(ctx, fhir.AuditEventActionC, &fhir.Reference{
+			Reference: to.Ptr(carePlanURL),
+			Type:      to.Ptr("CarePlan"),
+		}, &fhir.Reference{
+			Identifier: task.Requester.Identifier,
+			Type:       to.Ptr("Organization"),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		careTeamAuditEvent, err := audit.AuditEvent(ctx, fhir.AuditEventActionC, &fhir.Reference{
+			Reference: to.Ptr(careTeamURL),
+			Type:      to.Ptr("CareTeam"),
+		}, &fhir.Reference{
+			Identifier: task.Requester.Identifier,
+			Type:       to.Ptr("Organization"),
+		})
+		if err != nil {
+			return nil, err
+		}
+
+		taskAuditEvent, err := audit.AuditEvent(ctx, fhir.AuditEventActionC, &fhir.Reference{
+			Reference: to.Ptr(taskURL),
+			Type:      to.Ptr("Task"),
+		}, &fhir.Reference{
+			Identifier: task.Requester.Identifier,
+			Type:       to.Ptr("Organization"),
+		})
+		if err != nil {
+			return nil, err
+		}
+
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL)).
 			Create(careTeam, coolfhir.WithFullUrl(careTeamURL)).
-			Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders))
-		careTeamEntryIdx = len(tx.Entry) - 2
-		taskEntryIdx = len(tx.Entry) - 1
+			Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders)).
+			Create(carePlanAuditEvent).
+			Create(careTeamAuditEvent).
+			Create(taskAuditEvent)
+		careTeamEntryIdx = len(tx.Entry) - 5
+		taskEntryIdx = len(tx.Entry) - 4
 		taskBundleEntry = tx.Entry[taskEntryIdx]
 		carePlanBundleEntry = &tx.Entry[0]
 		carePlanBundleEntryIdx = 0
@@ -216,9 +254,21 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 		}
 
+		taskAuditEvent, err := audit.AuditEvent(ctx, fhir.AuditEventActionC, &fhir.Reference{
+			Reference: taskBundleEntry.FullUrl,
+			Type:      to.Ptr("Task"),
+		}, &fhir.Reference{
+			Identifier: task.Requester.Identifier,
+			Type:       to.Ptr("Organization"),
+		})
+		if err != nil {
+			return nil, err
+		}
+
 		// TODO: Only if not updated
 		tx.AppendEntry(taskBundleEntry)
 		taskEntryIdx = len(tx.Entry) - 1
+		tx.Create(taskAuditEvent)
 		if len(task.PartOf) == 0 {
 			// Don't add subtasks to CarePlan.activity
 			carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
@@ -230,8 +280,20 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
 			carePlanBundleEntry = &tx.Entry[len(tx.Entry)-1]
 			carePlanBundleEntryIdx = len(tx.Entry) - 1
+
+			carePlanAuditEvent, err := audit.AuditEvent(ctx, fhir.AuditEventActionU, &fhir.Reference{
+				Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+				Type:      to.Ptr("CarePlan"),
+			}, &fhir.Reference{
+				Identifier: task.Requester.Identifier,
+				Type:       to.Ptr("Organization"),
+			})
+			if err != nil {
+				return nil, err
+			}
+			tx.Create(carePlanAuditEvent)
 		}
-		if updated, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
+		if updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, tx); err != nil {
 			return nil, fmt.Errorf("failed to update CarePlan: %w", err)
 		} else if updated {
 			careTeamEntryIdx = len(tx.Entry) - 1

@@ -1,9 +1,11 @@
 package careteamservice
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -19,7 +21,7 @@ var nowFunc = time.Now
 // updateTrigger is the Task that triggered the update, which is used to determine the CareTeam membership.
 // It's passed to the function, as the new Task is not yet stored in the FHIR server, since the update is to be done in a single transaction.
 // When the CareTeam is updated, it adds the update(s) to the given transaction and returns true. If no changes are made, it returns false.
-func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.Task, tx *coolfhir.BundleBuilder) (bool, error) {
+func Update(ctx context.Context, client fhirclient.Client, carePlanId string, updateTriggerTask fhir.Task, tx *coolfhir.BundleBuilder) (bool, error) {
 	if len(updateTriggerTask.PartOf) > 0 {
 		// Only update the CareTeam if the Task is not a subtask
 		return false, nil
@@ -62,7 +64,16 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	}
 	if changed {
 		sortParticipants(careTeam.Participant)
+
+		careTeamAuditEvent, err := audit.AuditEvent(ctx, fhir.AuditEventActionU, &fhir.Reference{
+			Reference: to.Ptr("CareTeam/" + *careTeam.Id),
+		}, updateTriggerTask.Requester)
+		if err != nil {
+			return false, fmt.Errorf("unable to create CareTeam audit event: %w", err)
+		}
+
 		tx.Update(*careTeam, "CareTeam/"+*careTeam.Id)
+		tx.Create(careTeamAuditEvent)
 		return true, nil
 	}
 	return false, nil
