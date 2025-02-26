@@ -162,10 +162,13 @@ const supportedConditions : Array<Coding> = [
 
 function generatePatientBsn() {
     let prefix = "99999";
-    let patientBsn = "" + Date.now()
-    let bsn = prefix + patientBsn.substring(patientBsn.length - (9-prefix.length), patientBsn.length)
+    // Ensure the tail is exactly 4 digits, pad with zeros if necessary.
+    const tail = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    // Concatenate to form an 8-digit candidate.
+    let bsn = prefix + tail;
     while (!test11Proef(bsn)) {
-        bsn = "" + (parseInt(bsn) + 1)
+        const tail = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+        bsn = prefix + tail;
     }
     return bsn
 }
