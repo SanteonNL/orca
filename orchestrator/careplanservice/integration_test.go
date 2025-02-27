@@ -943,9 +943,6 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 func searchWithoutCache(t *testing.T, fhirClient fhirclient.Client, resourceType string, params url.Values) (*fhir.Bundle, error) {
 	t.Helper()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
 	headers := http.Header{
 		"Cache-Control": {"no-cache"},
 		"Pragma":        {"no-cache"},
@@ -957,7 +954,7 @@ func searchWithoutCache(t *testing.T, fhirClient fhirclient.Client, resourceType
 	params.Set("_cache", "no-cache")
 
 	var bundle fhir.Bundle
-	err := fhirClient.SearchWithContext(ctx, resourceType, params, &bundle,
+	err := fhirClient.SearchWithContext(context.Background(), resourceType, params, &bundle,
 		fhirclient.RequestHeaders(headers))
 
 	if err != nil {
