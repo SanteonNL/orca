@@ -45,7 +45,7 @@ const CreateServiceRequestDialog: React.FC = () => {
     const [patientGender, setPatientGender] = useState<AdministrativeGender>("unknown")
     const [patientBirthdate, setPatientBirthdate] = useState(dayjs('1980-01-15'))
     const [selfSetPatientEmail, setSelfSetPatientEmail] = useState(false)
-    const [patientConditionCode, setPatientConditionCode] = useState<Coding>()
+    const [patientConditionCode, setPatientConditionCode] = useState<Coding>(supportedConditions[0])
 
     const [patientAdress, setPatientAddress] = useState('Hoofdstraat 123')
     const [patientCity, setPatientCity] = useState('Meerdijkerveen')
@@ -118,7 +118,6 @@ const CreateServiceRequestDialog: React.FC = () => {
 
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="nl">
-        <React.Fragment>
             <Button sx={{ position: 'absolute', top: '10px', right: '10px' }} variant="contained"
                 onClick={handleClickOpen}>
                 <IconPlus />
@@ -173,6 +172,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                             <TextField
                                 autoFocus
                                 required
+                                type='email'
                                 value={patientEmail}
                                 label="Patient email"
                                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
@@ -188,6 +188,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 autoFocus
                                 required
                                 value={patientPhone}
+                                type='tel'
                                 label="Patient phone"
                                 onChange={(event: React.ChangeEvent<HTMLInputElement>) => {
                                     setPatientPhone(event.target.value);
@@ -282,14 +283,14 @@ const CreateServiceRequestDialog: React.FC = () => {
                             </Select>
                         </Grid>
                         <Grid item xs={12}>
-                            <Select fullWidth onChange={(event) => {
+                            <Select fullWidth value={patientConditionCode.code} onChange={(event) => {
                                 const conditionCode = supportedConditions.find((condition) => condition.code === event.target.value)
                                 if (conditionCode) {
                                     setPatientConditionCode(conditionCode)
                                 }
                             }}>
                                 {supportedConditions.map((condition) => (
-                                    <MenuItem key={condition.code} value={condition.code} selected={condition.code === patientConditionCode?.code}>{condition.display}</MenuItem>
+                                    <MenuItem key={condition.code} value={condition.code}>{condition.display}</MenuItem>
                                 ))}
                             </Select>
                         </Grid>
@@ -302,7 +303,6 @@ const CreateServiceRequestDialog: React.FC = () => {
                     </Button>
                 </DialogActions>
             </Dialog>
-        </React.Fragment>
         </LocalizationProvider>
     );
 }
@@ -348,11 +348,11 @@ function generatePatientBsn() {
 }
 
 function generatePatientPhone() {
-    let prefix = "06";
+    let prefix = "+31 6 ";
     // Ensure the tail is exactly 4 digits, pad with zeros if necessary.
     const tail = Math.floor(Math.random() * 100000000).toString().padStart(8, '0');
     // Concatenate to form an 8-digit candidate.
-    let bsn = prefix + "-" + tail;
+    let bsn = prefix + tail;
     return bsn
 }
 /**
