@@ -516,11 +516,13 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 4)
+		require.Len(t, tx.Entry, 3)
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
-		require.True(t, audit.VerifyAuditEvent(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU))
-		require.True(t, audit.VerifyAuditEvent(t, &tx.Entry[3], *carePlan.CareTeam[0].Reference, fhir.AuditEventActionU))
+		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
+			Identifier: &auth.TestPrincipal2.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		})
 	})
 	t.Run("task status isn't updated", func(t *testing.T) {
 		request := updateRequest(func(task *fhir.Task) {
@@ -531,10 +533,12 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 4)
+		require.Len(t, tx.Entry, 3)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
-		require.True(t, audit.VerifyAuditEvent(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU))
-		require.True(t, audit.VerifyAuditEvent(t, &tx.Entry[3], *carePlan.CareTeam[0].Reference, fhir.AuditEventActionU))
+		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
+			Identifier: &auth.TestPrincipal2.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		})
 	})
 	t.Run("original FHIR request headers are passed to outgoing Bundle entry", func(t *testing.T) {
 		request := updateRequest()

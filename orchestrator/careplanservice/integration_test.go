@@ -783,9 +783,8 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	subTest(t, "Create Task without existing CarePlan")
 	{
 		currentTime := baseTime
-		audit.TimeNow = func() time.Time {
-			return currentTime
-		}
+		restore := audit.SetNowFuncForTest(func() time.Time { return currentTime })
+		defer restore()
 
 		task = fhir.Task{
 			Intent:    "order",
@@ -817,19 +816,17 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		require.NoError(t, err)
 
 		verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Task/" + *task.Id:              fhir.AuditEventActionC,
-			"CarePlan/" + *carePlan.Id:      fhir.AuditEventActionC,
-			*carePlan.CareTeam[0].Reference: fhir.AuditEventActionC,
-			"CarePlan/" + *carePlan.Id:      fhir.AuditEventActionR,
+			"Task/" + *task.Id:         fhir.AuditEventActionC,
+			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionC,
+			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionR,
 		}, currentTime, nil)
 	}
 
 	subTest(t, "Create Task with existing CarePlan, and existing member in CareTeam")
 	{
 		currentTime := baseTime.Add(10 * time.Second)
-		audit.TimeNow = func() time.Time {
-			return currentTime
-		}
+		restore := audit.SetNowFuncForTest(func() time.Time { return currentTime })
+		defer restore()
 
 		newTask := fhir.Task{
 			BasedOn: []fhir.Reference{
@@ -872,9 +869,8 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	subTest(t, "Accept Task from Contributor 2")
 	{
 		currentTime := baseTime.Add(20 * time.Second)
-		audit.TimeNow = func() time.Time {
-			return currentTime
-		}
+		restore := audit.SetNowFuncForTest(func() time.Time { return currentTime })
+		defer restore()
 
 		task.Status = fhir.TaskStatusAccepted
 
@@ -882,18 +878,16 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		require.NoError(t, err)
 
 		verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Task/" + *task.Id:              fhir.AuditEventActionU,
-			"CarePlan/" + *carePlan.Id:      fhir.AuditEventActionU,
-			*carePlan.CareTeam[0].Reference: fhir.AuditEventActionU,
+			"Task/" + *task.Id:         fhir.AuditEventActionU,
+			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionU,
 		}, currentTime, nil)
 	}
 
 	subTest(t, "Search Task")
 	{
 		currentTime := baseTime.Add(30 * time.Second)
-		audit.TimeNow = func() time.Time {
-			return currentTime
-		}
+		restore := audit.SetNowFuncForTest(func() time.Time { return currentTime })
+		defer restore()
 
 		var searchResult fhir.Bundle
 		err = carePlanContributor1.Search("Task", url.Values{"_id": {*task.Id}}, &searchResult)
@@ -911,9 +905,8 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	subTest(t, "Search CarePlan and include CareTeam")
 	{
 		currentTime := baseTime.Add(40 * time.Second)
-		audit.TimeNow = func() time.Time {
-			return currentTime
-		}
+		restore := audit.SetNowFuncForTest(func() time.Time { return currentTime })
+		defer restore()
 
 		var searchResult fhir.Bundle
 		err = carePlanContributor1.Search("CarePlan", url.Values{"_id": {*carePlan.Id}, "_include": {"CarePlan:care-team"}}, &searchResult)
@@ -921,8 +914,7 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		require.Len(t, searchResult.Entry, 2)
 
 		verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"CarePlan/" + *carePlan.Id:      fhir.AuditEventActionR,
-			*carePlan.CareTeam[0].Reference: fhir.AuditEventActionR,
+			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionR,
 		}, currentTime, map[string][]string{
 			"_id":      {*carePlan.Id},
 			"_include": {"CarePlan:care-team"},
@@ -932,9 +924,8 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	subTest(t, "Separate Reads create separate audit events")
 	{
 		currentTime := baseTime.Add(50 * time.Second)
-		audit.TimeNow = func() time.Time {
-			return currentTime
-		}
+		restore := audit.SetNowFuncForTest(func() time.Time { return currentTime })
+		defer restore()
 
 		for i := 0; i < 3; i++ {
 			err = carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan)
@@ -1214,6 +1205,8 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 	config.AllowUnmanagedFHIROperations = true
+	config.AuditObserverSystem = "orca"
+	config.AuditObserverValue = "test"
 	service, err := New(config, activeProfile, orcaPublicURL)
 	require.NoError(t, err)
 

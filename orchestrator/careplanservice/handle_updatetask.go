@@ -122,15 +122,12 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
-	taskUpdateAuditEvent, err := audit.AuditEvent(ctx, fhir.AuditEventActionU, &fhir.Reference{
+	taskUpdateAuditEvent := audit.Event(fhir.AuditEventActionU, &fhir.Reference{
 		Reference: to.Ptr("Task/" + *task.Id)},
 		&fhir.Reference{
 			Identifier: &principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		})
-	if err != nil {
-		return nil, fmt.Errorf("failed to create audit event: %w", err)
-	}
 
 	taskBundleEntry := request.bundleEntryWithResource(task)
 	tx = tx.AppendEntry(taskBundleEntry)

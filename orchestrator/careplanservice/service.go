@@ -35,6 +35,10 @@ const basePath = "/cps"
 var subscriberNotificationTimeout = 10 * time.Second
 
 func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Service, error) {
+	audit.Configure(audit.Config{
+		AuditObserverSystem: config.AuditObserverSystem,
+		AuditObserverValue:  config.AuditObserverValue,
+	})
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -220,7 +224,7 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBu
 		log.Ctx(request.Context()).Trace().Msgf("FHIR Transaction request: %s", txJson)
 	}
 	var txResult fhir.Bundle
-	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
+	if err := s.fhirClient.CreateWithContext(request.Context(), tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 		txResultJson, _ := json.Marshal(tx.Bundle())
 		log.Ctx(request.Context()).Error().Err(err).
@@ -396,7 +400,7 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		return
 	}
 
-	auditEvent, err := audit.AuditEvent(httpRequest.Context(),
+	auditEvent := audit.Event(
 		fhir.AuditEventActionR, &fhir.Reference{
 			Reference: to.Ptr(resourceType + "/" + resourceId),
 			Type:      to.Ptr(resourceType),
@@ -404,10 +408,6 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 			Identifier: &principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		})
-	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
-		return
-	}
 	err = s.fhirClient.Create(auditEvent, &auditEvent)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
@@ -516,15 +516,11 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 				})
 			}
 
-			auditEvent, err := audit.AuditEvent(httpRequest.Context(),
+			auditEvent := audit.Event(
 				fhir.AuditEventActionR, resourceRef, &fhir.Reference{
 					Identifier: &principal.Organization.Identifier[0],
 					Type:       to.Ptr("Organization"),
 				})
-			if err != nil {
-				coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
-				return
-			}
 
 			// Add the query entity to the audit event
 			auditEvent.Entity = append(auditEvent.Entity, queryEntity)
@@ -895,7 +891,7 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 // 		Type:      to.Ptr(resourceType),
 // 	}
 
-// 	auditEvent, localErr := audit.AuditEvent(ctx,
+// 	auditEvent, localErr := audit.Event(ctx,
 // 		action,
 // 		resourceRef,
 // 		&fhir.Reference{

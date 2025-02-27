@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"slices"
 	"strings"
 	"time"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 var nowFunc = time.Now
@@ -64,16 +64,7 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 	}
 	if changed {
 		sortParticipants(careTeam.Participant)
-
-		careTeamAuditEvent, err := audit.AuditEvent(ctx, fhir.AuditEventActionU, &fhir.Reference{
-			Reference: to.Ptr("CareTeam/" + *careTeam.Id),
-		}, updateTriggerTask.Requester)
-		if err != nil {
-			return false, fmt.Errorf("unable to create CareTeam audit event: %w", err)
-		}
-
 		tx.Update(*careTeam, "CareTeam/"+*careTeam.Id)
-		tx.Create(careTeamAuditEvent)
 		return true, nil
 	}
 	return false, nil
