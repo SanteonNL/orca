@@ -4,27 +4,24 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-	"net/http"
-	"os"
-	"testing"
 )
 
 func TestService_handleGetServiceRequest(t *testing.T) {
-	task1Raw, _ := os.ReadFile("./testdata/task-1.json")
+	task1Raw := mustReadFile("./testdata/task-1.json")
 	var task1 fhir.Task
 	_ = json.Unmarshal(task1Raw, &task1)
-	carePlan1Raw, _ := os.ReadFile("./testdata/careplan-1.json")
+	carePlan1Raw := mustReadFile("./testdata/careplan1-careteam2.json")
 	var carePlan1 fhir.CarePlan
 	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
-	careTeam2Raw, _ := os.ReadFile("./testdata/careteam-2.json")
-	var careTeam2 fhir.CareTeam
-	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
 
 	tests := []TestHandleGetStruct[fhir.ServiceRequest]{
 		{
@@ -65,9 +62,6 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 				Entry: []fhir.BundleEntry{
 					{
 						Resource: carePlan1Raw,
-					},
-					{
-						Resource: careTeam2Raw,
 					},
 				},
 			},

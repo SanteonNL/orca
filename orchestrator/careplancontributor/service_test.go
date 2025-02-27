@@ -98,7 +98,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			searchBodyReturnFile: "./testdata/careplan-bundle-careteam-missing.json",
 			searchStatusReturn:   http.StatusOK,
 			xSCPContext:          "CarePlan/cps-careplan-01",
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: unable to resolve CareTeam"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:                 "Fails: CareTeam not present in bundle - POST",
@@ -108,7 +108,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			xSCPContext:          "CarePlan/cps-careplan-01",
 			method:               to.Ptr("POST"),
 			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: unable to resolve CareTeam"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:                 "Fails: requester not part of CareTeam - GET",
@@ -315,8 +315,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			}
 			if tt.searchBodyReturnFile != "" {
 				expectedValues := url.Values{
-					"_include": {"CarePlan:care-team"},
-					"_id":      {carePlanId},
+					"_id": {carePlanId},
 				}
 				actualValues, err := url.ParseQuery(string(capturedBody))
 				require.NoError(t, err)
@@ -733,7 +732,7 @@ func TestService_handleGetContext(t *testing.T) {
 	assert.JSONEq(t, `{
 		"practitioner": "the-doctor",
 		"practitionerRole": "the-doctor-role",
-		"serviceRequest": "ServiceRequest/1",	
+		"serviceRequest": "ServiceRequest/1",
 		"patient": "Patient/1",
 		"task": "Task/1",
 		"taskIdentifier": "task-identifier-123"

@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/url"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -11,21 +15,17 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-	"net/http"
-	"net/url"
-	"os"
-	"testing"
 )
 
 func TestService_handleGetPatient(t *testing.T) {
-	carePlan1Raw, _ := os.ReadFile("./testdata/careplan-1.json")
+	carePlan1Raw := mustReadFile("./testdata/careplan1-careteam2.json")
 	var carePlan1 fhir.CarePlan
 	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
-	careTeam2Raw, _ := os.ReadFile("./testdata/careteam-2.json")
+	careTeam2Raw := mustReadFile("./testdata/careplan2-careteam1.json")
 	var careTeam2 fhir.CareTeam
 	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
 
-	patient1Raw, _ := os.ReadFile("./testdata/patient-1.json")
+	patient1Raw := mustReadFile("./testdata/patient-1.json")
 	var patient1 fhir.Patient
 	_ = json.Unmarshal(patient1Raw, &patient1)
 
@@ -128,12 +128,10 @@ func TestService_handleGetPatient(t *testing.T) {
 }
 
 func TestService_handleSearchPatient(t *testing.T) {
-	careTeam1, _ := os.ReadFile("./testdata/careteam-1.json")
-	careTeam2, _ := os.ReadFile("./testdata/careteam-2.json")
-	carePlan1, _ := os.ReadFile("./testdata/careplan-1.json")
-	carePlan2, _ := os.ReadFile("./testdata/careplan-2.json")
-	patient1, _ := os.ReadFile("./testdata/patient-1.json")
-	patient2, _ := os.ReadFile("./testdata/patient-2.json")
+	careplan1Careteam2 := mustReadFile("./testdata/careplan1-careteam2.json")
+	careplan2Careteam1 := mustReadFile("./testdata/careplan2-careteam1.json")
+	patient1 := mustReadFile("./testdata/patient-1.json")
+	patient2 := mustReadFile("./testdata/patient-2.json")
 
 	tests := []TestHandleSearchStruct[fhir.Patient]{
 		{
@@ -215,10 +213,7 @@ func TestService_handleSearchPatient(t *testing.T) {
 			returnedCarePlanBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{
-						Resource: carePlan1,
-					},
-					{
-						Resource: careTeam2,
+						Resource: careplan1Careteam2,
 					},
 				},
 			},
@@ -229,7 +224,7 @@ func TestService_handleSearchPatient(t *testing.T) {
 		{
 			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			resourceType: "Patient",
-			name:         "Patient returned, careplan and careteam returned, correct principal",
+			name:         "Patient returned, careplan returned, correct principal",
 			searchParams: url.Values{},
 			returnedBundle: &fhir.Bundle{
 				Link: []fhir.BundleLink{
@@ -248,10 +243,7 @@ func TestService_handleSearchPatient(t *testing.T) {
 			returnedCarePlanBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{
-						Resource: carePlan1,
-					},
-					{
-						Resource: careTeam2,
+						Resource: careplan1Careteam2,
 					},
 				},
 			},
@@ -288,16 +280,10 @@ func TestService_handleSearchPatient(t *testing.T) {
 			returnedCarePlanBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{
-						Resource: carePlan1,
+						Resource: careplan1Careteam2,
 					},
 					{
-						Resource: careTeam2,
-					},
-					{
-						Resource: carePlan2,
-					},
-					{
-						Resource: careTeam1,
+						Resource: careplan2Careteam1,
 					},
 				},
 			},

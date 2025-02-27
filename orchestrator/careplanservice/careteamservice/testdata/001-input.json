@@ -5,18 +5,18 @@
       "resource": {
         "resourceType": "CarePlan",
         "id": "1",
+        "contained": [
+          {
+            "resourceType": "CareTeam",
+            "id": "contained-careteam-10"
+          }
+        ],
         "careTeam": [
           {
             "type": "CareTeam",
-            "reference": "CareTeam/10"
+            "reference": "#contained-careteam-10"
           }
         ]
-      }
-    },
-    {
-      "resource": {
-        "resourceType": "CareTeam",
-        "id": "10"
       }
     }
   ]

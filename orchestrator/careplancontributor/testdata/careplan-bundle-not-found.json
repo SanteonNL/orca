@@ -8,6 +8,6 @@
   "total": 0,
   "link": [ {
     "relation": "self",
-    "url": "http://localhost:8080/fhir/CarePlan?_id=cp1&_include=CarePlan%3Acare-team"
+    "url": "http://localhost:8080/fhir/CarePlan?_id=cp1"
   } ]
 }
