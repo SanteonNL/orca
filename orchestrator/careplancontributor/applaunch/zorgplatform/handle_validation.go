@@ -46,6 +46,11 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("unable to parse XML: %w", err)
 	}
 
+	if doc.Root().Tag == "Error" {
+		log.Ctx(ctx).Error().Msgf("error tag as SAMLResponse: %s", decodedResponse)
+		return LaunchContext{}, errors.New("SAMLResponse from server contains an error, see log for details")
+	}
+
 	//TODO: Do we want to trim/cleanup values before validating?
 	assertion, err := s.decryptAssertion(doc)
 	if err != nil {
