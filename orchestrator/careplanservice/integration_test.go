@@ -9,6 +9,10 @@ import (
 	"strings"
 	"testing"
 
+	"io"
+	"math/rand"
+	"strconv"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -18,10 +22,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"io"
-	"math/rand"
-	"strconv"
 )
+
+var patientReference = fhir.Reference{
+	Identifier: &fhir.Identifier{
+		System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+		Value:  to.Ptr("1333333337"),
+	},
+}
 
 func Test_Integration(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
@@ -86,10 +94,7 @@ func Test_Integration(t *testing.T) {
 	// Create patient, this will be used as the subject of the CarePlan
 	patient := fhir.Patient{
 		Identifier: []fhir.Identifier{
-			{
-				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-				Value:  to.Ptr("1333333337"),
-			},
+			*patientReference.Identifier,
 		},
 	}
 	err := carePlanContributor1.Create(patient, &patient)
@@ -157,10 +162,7 @@ func Test_Integration(t *testing.T) {
 	var patient2 fhir.Patient
 	err = carePlanContributor1.Create(fhir.Patient{
 		Identifier: []fhir.Identifier{
-			{
-				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-				Value:  to.Ptr("12345"),
-			},
+			*patientReference.Identifier,
 		},
 	}, &patient2)
 	require.NoError(t, err)
@@ -261,13 +263,7 @@ func Test_Integration(t *testing.T) {
 					Value:  to.Ptr("99534756439"),
 				},
 			},
-			For: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-				//Reference: to.Ptr("Patient/" + *patient.Id),
-			},
+			For: &patientReference,
 		}
 
 		err := carePlanContributor1.Update("Task", primaryTask, &primaryTask, fhirclient.QueryParam("_id", "123"))
@@ -312,6 +308,7 @@ func Test_Integration(t *testing.T) {
 					Reference: to.Ptr("Task/" + *primaryTask.Id),
 				},
 			},
+			For: &patientReference,
 		}
 		err := carePlanContributor2.Create(subTask, &subTask)
 		require.NoError(t, err)
@@ -367,13 +364,7 @@ func Test_Integration(t *testing.T) {
 					Value:  to.Ptr("99534756439"),
 				},
 			},
-			For: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-				//Reference: to.Ptr("Patient/" + *patient.Id),
-			},
+			For: &patientReference,
 		}
 
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
@@ -384,7 +375,7 @@ func Test_Integration(t *testing.T) {
 		t.Run("Check CarePlan properties", func(t *testing.T) {
 			require.Equal(t, fhir.CarePlanIntentOrder, carePlan.Intent)
 			require.Equal(t, fhir.RequestStatusActive, carePlan.Status)
-			require.Equal(t, *primaryTask.For, carePlan.Subject)
+			require.Equal(t, patientReference, carePlan.Subject)
 		})
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, primaryTask.Id)
@@ -508,12 +499,69 @@ func Test_Integration(t *testing.T) {
 			Status:    fhir.TaskStatusDraft,
 			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
 			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			For:       &patientReference,
 		}
 
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
 		require.Empty(t, cpc1Notifications)
 		require.Empty(t, cpc2Notifications)
+	}
+
+	subTest(t, "Creating Task - Task.For does not match CarePlan.subject - Fails")
+	{
+		invalidTask := fhir.Task{
+			BasedOn: []fhir.Reference{
+				{
+					Type:      to.Ptr("CarePlan"),
+					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+				},
+			},
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			For: &fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("9876543210"),
+				},
+			},
+		}
+
+		err = carePlanContributor1.Create(invalidTask, &invalidTask)
+		require.Error(t, err)
+		var operationOutcome fhirclient.OperationOutcomeError
+		require.ErrorAs(t, err, &operationOutcome)
+		require.Contains(t, *operationOutcome.Issue[0].Diagnostics, "Task.for must reference the same patient as CarePlan.subject")
+	}
+
+	subTest(t, "Creating Task - Task.For is nil - Fails")
+	{
+		invalidTask := fhir.Task{
+			BasedOn: []fhir.Reference{
+				{
+					Type:      to.Ptr("CarePlan"),
+					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+				},
+			},
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+		}
+
+		err = carePlanContributor1.Create(invalidTask, &invalidTask)
+		require.Error(t, err)
+		var operationOutcome fhirclient.OperationOutcomeError
+		require.ErrorAs(t, err, &operationOutcome)
+		require.Contains(t, *operationOutcome.Issue[0].Diagnostics, "Task.for must reference the same patient as CarePlan.subject")
 	}
 
 	subTest(t, "Creating Task - Existing CarePlan")
@@ -532,6 +580,7 @@ func Test_Integration(t *testing.T) {
 			Meta: &fhir.Meta{
 				Profile: []string{coolfhir.SCPTaskProfile},
 			},
+			For: &patientReference,
 		}
 
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
@@ -680,6 +729,7 @@ func Test_Integration(t *testing.T) {
 					Value:  to.Ptr("99534756439"),
 				},
 			},
+			For: &patientReference,
 		}
 
 		err := carePlanContributor2.Create(newTask, &newTask)
@@ -758,10 +808,7 @@ func testBundleCreation(t *testing.T, carePlanContributor1 *fhirclient.BaseClien
 		localRef := "urn:uuid:xyz"
 		patient := fhir.Patient{
 			Identifier: []fhir.Identifier{
-				{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
+				*patientReference.Identifier,
 			},
 		}
 		patientRaw, err := json.Marshal(patient)

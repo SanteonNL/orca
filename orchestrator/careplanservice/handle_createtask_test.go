@@ -558,6 +558,54 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 						Reference: to.Ptr("CareTeam/2"),
 					},
 				},
+				Subject: fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
+			},
+			returnedBundle: &fhir.Bundle{},
+			errorFromRead:  nil,
+			expectError:    true,
+		},
+		{
+			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			name: "error: Task.for does not match CarePlan.subject",
+			taskToCreate: fhir.Task{
+				BasedOn: []fhir.Reference{
+					{
+						Type:      to.Ptr("CarePlan"),
+						Reference: to.Ptr("CarePlan/1"),
+					},
+				},
+				Intent:    "order",
+				Status:    fhir.TaskStatusRequested,
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+				Meta: &fhir.Meta{
+					Profile: []string{coolfhir.SCPTaskProfile},
+				},
+				For: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
+			},
+			returnedCarePlan: &fhir.CarePlan{
+				Id: to.Ptr("1"),
+				CareTeam: []fhir.Reference{
+					{
+						Reference: to.Ptr("CareTeam/2"),
+					},
+				},
+				Subject: fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1234567890"),
+					},
+				},
 			},
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,

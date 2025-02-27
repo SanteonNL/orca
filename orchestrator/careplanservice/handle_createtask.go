@@ -120,7 +120,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		// Validate Task.For: identifier (with system and value), and/or reference must be set
 		if task.For == nil || !coolfhir.ValidateReference(*task.For) {
-			return nil, coolfhir.NewErrorWithCode(fmt.Sprintf("Task.For must be set with a local reference, or a logical identifier, referencing a patient"), http.StatusBadRequest)
+			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
 		}
 		if task.For.Reference == nil {
 			headers := fhirclient.Headers{}
@@ -173,6 +173,11 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		err = s.fhirClient.Read(*carePlanRef, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams))
 		if err != nil {
 			return nil, err
+		}
+
+		// Validate Task.for matches CarePlan.subject
+		if task.For == nil || !coolfhir.LogicalReferenceEquals(*task.For, carePlan.Subject) {
+			return nil, coolfhir.NewErrorWithCode("Task.for must reference the same patient as CarePlan.subject", http.StatusBadRequest)
 		}
 
 		// Different validation logic for an SCP subtask
