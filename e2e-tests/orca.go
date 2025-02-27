@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	testcontainers "github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"net/url"
 	"os"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	testcontainers "github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, cpsFhirBaseUrl string, fhirStoreURL string, questionnaireFhirStoreUrl string, allowUnmanagedFHIROperations bool) *url.URL {
@@ -46,6 +47,8 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS": "file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json",
 			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":                          "true",
 			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":                "valid",
+			"ORCA_AUDITOBSERVERSYSTEM":                                  "orca",
+			"ORCA_AUDITOBSERVERVALUE":                                   "clinic",
 		},
 		Files: []testcontainers.ContainerFile{
 			// Questionnaire and HealthcareService bundles required by Task Filler Engine
