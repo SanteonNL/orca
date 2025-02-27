@@ -375,7 +375,7 @@ func Test_Integration(t *testing.T) {
 		t.Run("Check CarePlan properties", func(t *testing.T) {
 			require.Equal(t, fhir.CarePlanIntentOrder, carePlan.Intent)
 			require.Equal(t, fhir.RequestStatusActive, carePlan.Status)
-			require.Equal(t, patientReference, carePlan.Subject)
+			require.Equal(t, *primaryTask.For, carePlan.Subject)
 		})
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, primaryTask.Id)
