@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
@@ -51,6 +50,10 @@ func (s staticTokenRequestDoer) Do(req *http.Request) (*http.Response, error) {
 	return http.DefaultClient.Do(req)
 }
 
+type BaseResource struct {
+	Id string `json:"id"`
+}
+
 func deleteResourcesOfType(client fhirclient.Client, resourceType string) error {
 	do := true
 	for do {
@@ -61,7 +64,7 @@ func deleteResourcesOfType(client fhirclient.Client, resourceType string) error 
 		// Keep repeating until no more results are returned
 		do = len(searchResults.Entry) > 0
 		for _, entry := range searchResults.Entry {
-			var resource test.BaseResource
+			var resource BaseResource
 			if err := json.Unmarshal(entry.Resource, &resource); err != nil {
 				return fmt.Errorf("failed to unmarshal resource: %w", err)
 			}
