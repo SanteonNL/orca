@@ -1129,4 +1129,13 @@ func TestService_validateSearchRequest(t *testing.T) {
 
 		assert.NoError(t, err)
 	})
+
+	t.Run("empty body - succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", nil)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		err := service.validateSearchRequest(req)
+
+		assert.NoError(t, err)
+	})
 }

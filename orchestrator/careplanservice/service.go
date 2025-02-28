@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -399,13 +400,20 @@ func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
 		return coolfhir.BadRequest("Content-Type must be 'application/x-www-form-urlencoded'")
 	}
 
-	// Custom validation to ensure the encoded body parameters are in the correct format
+	// Read the body
 	body, err := io.ReadAll(httpRequest.Body)
 	if err != nil {
 		return coolfhir.BadRequest("Failed to read request body: %w", err)
 	}
 
 	bodyString := string(body)
+
+	// Restore the body for later use
+	httpRequest.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	if bodyString == "" {
+		return nil
+	}
 
 	// Custom validation to ensure the encoded body parameters are in the correct format
 	split := strings.Split(bodyString, "&")
@@ -414,10 +422,6 @@ func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
 		if len(parts) != 2 {
 			return coolfhir.BadRequest("Invalid encoded body parameters")
 		}
-	}
-
-	if err := httpRequest.ParseForm(); err != nil {
-		return coolfhir.BadRequest("Invalid encoded body parameters")
 	}
 	return nil
 }
@@ -428,6 +432,10 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		return
 	}
 	headers := new(fhirclient.Headers)
+	if err := httpRequest.ParseForm(); err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
 	queryParams := httpRequest.PostForm
 
 	var bundle *fhir.Bundle
