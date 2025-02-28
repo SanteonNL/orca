@@ -1202,8 +1202,6 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 	config.AllowUnmanagedFHIROperations = true
-	config.AuditObserverSystem = "orca"
-	config.AuditObserverValue = "test"
 	service, err := New(config, activeProfile, orcaPublicURL)
 	require.NoError(t, err)
 

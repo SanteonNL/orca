@@ -16,16 +16,8 @@ func TestConfig_Validate(t *testing.T) {
 		err := Config{Enabled: true}.Validate()
 		require.EqualError(t, err, "careplanservice.fhir.url is not configured")
 	})
-	t.Run("audit observer system not configured", func(t *testing.T) {
-		err := Config{Enabled: true, FHIR: coolfhir.ClientConfig{BaseURL: "http://example.com"}}.Validate()
-		require.EqualError(t, err, "careplanservice.auditobserversystem is not configured")
-	})
-	t.Run("audit observer value not configured", func(t *testing.T) {
-		err := Config{Enabled: true, FHIR: coolfhir.ClientConfig{BaseURL: "http://example.com"}, AuditObserverSystem: "orca"}.Validate()
-		require.EqualError(t, err, "careplanservice.auditobservervalue is not configured")
-	})
 	t.Run("ok", func(t *testing.T) {
-		err := Config{Enabled: true, FHIR: coolfhir.ClientConfig{BaseURL: "http://example.com"}, AuditObserverSystem: "orca", AuditObserverValue: "clinic"}.Validate()
+		err := Config{Enabled: true, FHIR: coolfhir.ClientConfig{BaseURL: "http://example.com"}}.Validate()
 		require.NoError(t, err)
 	})
 }

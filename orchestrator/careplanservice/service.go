@@ -35,10 +35,6 @@ const basePath = "/cps"
 var subscriberNotificationTimeout = 10 * time.Second
 
 func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Service, error) {
-	audit.Configure(audit.Config{
-		AuditObserverSystem: config.AuditObserverSystem,
-		AuditObserverValue:  config.AuditObserverValue,
-	})
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -80,6 +76,19 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 	if err != nil {
 		return nil, err
 	}
+
+	localIdentity, err := profile.Identities(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if len(localIdentity) == 0 || localIdentity[0].Identifier == nil || len(localIdentity[0].Identifier) == 0 {
+		return nil, errors.New("no local identity found")
+	}
+
+	audit.Configure(audit.Config{
+		AuditObserverSystem: *localIdentity[0].Identifier[0].System,
+		AuditObserverValue:  *localIdentity[0].Identifier[0].Value,
+	})
 	return &s, nil
 }
 
