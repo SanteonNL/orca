@@ -1,8 +1,10 @@
 package careteamservice
 
 import (
+	"context"
 	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -86,7 +88,7 @@ func TestUpdate(t *testing.T) {
 
 			// Perform
 			tx := coolfhir.Transaction()
-			updated, err := Update(fhirClient, "1", *tc.UpdatedTask(), tx)
+			updated, err := Update(auth.WithPrincipal(context.Background(), *auth.TestPrincipal1), fhirClient, "1", *tc.UpdatedTask(), tx)
 			require.NoError(t, err)
 
 			// Assert

@@ -4,12 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
 	"os"
 	"reflect"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -458,6 +460,10 @@ func Test_handleUpdateTask(t *testing.T) {
 	carePlanBundleData, _ := os.ReadFile("./careteamservice/testdata/001-input.json")
 	require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
 
+	var carePlan fhir.CarePlan
+	err := json.Unmarshal(carePlanBundle.Entry[0].Resource, &carePlan)
+	require.NoError(t, err)
+
 	ctrl := gomock.NewController(t)
 	fhirClient := mock.NewMockClient(ctrl)
 	service := &Service{
@@ -510,9 +516,13 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 2)
+		require.Len(t, tx.Entry, 3)
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
+		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
+			Identifier: &auth.TestPrincipal2.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		})
 	})
 	t.Run("task status isn't updated", func(t *testing.T) {
 		request := updateRequest(func(task *fhir.Task) {
@@ -523,8 +533,12 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 2)
+		require.Len(t, tx.Entry, 3)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
+		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
+			Identifier: &auth.TestPrincipal2.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		})
 	})
 	t.Run("original FHIR request headers are passed to outgoing Bundle entry", func(t *testing.T) {
 		request := updateRequest()

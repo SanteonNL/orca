@@ -2,16 +2,17 @@ package main
 
 import (
 	"encoding/json"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/stretchr/testify/require"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel/to"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel/to"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 const URANamingSystem = "http://fhir.nl/fhir/NamingSystem/ura"

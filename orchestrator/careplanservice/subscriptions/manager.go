@@ -119,6 +119,7 @@ func (r DerivingManager) notifyAll(ctx context.Context, instant time.Time, focus
 				Reference: to.Ptr("Subscription/" + uuid.NewString()),
 			}
 			// TODO: Read event number from store
+			// TODO: Do we need an audit event for subscription notifications?
 			notification := coolfhir.CreateSubscriptionNotification(r.FhirBaseURL, instant, subscription, 0, focus)
 			if err = channel.Notify(ctx, notification); err != nil {
 				errs <- fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(subscriber), err)

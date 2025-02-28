@@ -2,13 +2,14 @@ package main
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
-	testcontainers "github.com/testcontainers/testcontainers-go"
-	"github.com/testcontainers/testcontainers-go/wait"
 	"net/url"
 	"os"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/require"
+	testcontainers "github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
 func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, cpsFhirBaseUrl string, fhirStoreURL string, questionnaireFhirStoreUrl string, allowUnmanagedFHIROperations bool) *url.URL {
