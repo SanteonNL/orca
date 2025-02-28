@@ -397,21 +397,29 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 
 	// Ensure the Content-Type header is set correctly
 	contentType := httpRequest.Header.Get("Content-Type")
-	if strings.Contains(contentType, ",") {
-		contentType = strings.Split(contentType, ",")[0]
-		httpRequest.Header.Set("Content-Type", contentType)
-	}
-	if contentType != "application/x-www-form-urlencoded" {
+
+	if !strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("Content-Type must be 'application/x-www-form-urlencoded'"), operationName, httpResponse)
 		return
 	}
 
 	// Parse URL-encoded parameters from the request body
 	if err := httpRequest.ParseForm(); err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), fmt.Errorf("failed to parse form: %w", err), operationName, httpResponse)
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("Invalid encoded body parameters"), operationName, httpResponse)
 		return
 	}
 	queryParams := httpRequest.PostForm
+	hasNonEmptyValue := false
+	for _, values := range queryParams {
+		if len(values) > 0 && values[0] != "" {
+			hasNonEmptyValue = true
+			break
+		}
+	}
+	if !hasNonEmptyValue {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("Invalid encoded body parameters"), operationName, httpResponse)
+		return
+	}
 
 	var bundle *fhir.Bundle
 	var err error

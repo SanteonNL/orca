@@ -1066,35 +1066,74 @@ func TestService_handleSearch_ContentType(t *testing.T) {
 		},
 	}, profile.Test(), orcaPublicURL)
 	require.NoError(t, err)
-	t.Run("valid content type", func(t *testing.T) {
-		// Setup request with valid content type
-		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", nil)
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		w := httptest.NewRecorder()
-
-		// Call handleSearch
-		service.handleSearch(req, w, "CarePlan", "test")
-
-		// Content-Type validation should pass (other errors may occur)
-		assert.NotEqual(t, http.StatusBadRequest, w.Code)
-	})
 
 	t.Run("invalid content type", func(t *testing.T) {
-		// Setup request with invalid content type
 		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", nil)
 		req.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 
-		// Call handleSearch
 		service.handleSearch(req, w, "CarePlan", "test")
 
-		// Should return 400 Bad Request
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 
-		// Verify error message
 		var outcome fhir.OperationOutcome
 		err := json.NewDecoder(w.Body).Decode(&outcome)
 		require.NoError(t, err)
 		assert.Contains(t, *outcome.Issue[0].Diagnostics, "Content-Type must be 'application/x-www-form-urlencoded'")
+	})
+
+	t.Run("invalid encoded body parameters", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader(`{"invalid":"param"}`))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+
+		service.handleSearch(req, w, "CarePlan", "test")
+
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		var outcome fhir.OperationOutcome
+		err := json.NewDecoder(w.Body).Decode(&outcome)
+		require.NoError(t, err)
+		assert.Contains(t, *outcome.Issue[0].Diagnostics, "Invalid encoded body parameters")
+	})
+
+	t.Run("valid encoded body parameters", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+
+		service.handleSearch(req, w, "CarePlan", "test")
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("valid encoded body parameters with multiple values", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param1&valid=param2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+
+		service.handleSearch(req, w, "CarePlan", "test")
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("valid encoded body parameters with charset", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param1&valid=param2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+		w := httptest.NewRecorder()
+
+		service.handleSearch(req, w, "CarePlan", "test")
+
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("valid encoded body parameters with empty values", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid1=&valid2="))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+
+		service.handleSearch(req, w, "CarePlan", "test")
+
+		assert.Equal(t, http.StatusOK, w.Code)
 	})
 }
