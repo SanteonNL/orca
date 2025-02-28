@@ -5,6 +5,7 @@ import (
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/pem"
 	"errors"
 	"os"
@@ -270,4 +271,21 @@ func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
 
 	err = s.validateZorgplatformSignature(forgedSignedAssertion)
 	require.EqualError(t, err, "unable to validate signature: Could not verify certificate against trusted certs")
+}
+
+func TestService_parseSamlResponse(t *testing.T) {
+	t.Run("<Error> response", func(t *testing.T) {
+		s := &Service{}
+		doc := etree.NewDocument()
+		root := doc.CreateElement("Error")
+		root.CreateAttr("LogId", "0002297112")
+		ctx := context.Background()
+		xmlStr, _ := doc.WriteToString()
+		xmlBase64Encoded := base64.StdEncoding.EncodeToString([]byte(xmlStr))
+
+		actual, err := s.parseSamlResponse(ctx, xmlBase64Encoded)
+
+		assert.Empty(t, actual)
+		require.EqualError(t, err, "SAMLResponse from server contains an error, see log for details")
+	})
 }

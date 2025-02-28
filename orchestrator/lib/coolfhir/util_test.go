@@ -990,3 +990,85 @@ func TestTokenToIdentifier(t *testing.T) {
 		assert.Nil(t, identifier)
 	})
 }
+
+func TestReferenceValueEquals(t *testing.T) {
+	t.Run("equal references and types", func(t *testing.T) {
+		ref := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+			Type:      to.Ptr("Patient"),
+		}
+		other := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+			Type:      to.Ptr("Patient"),
+		}
+		assert.True(t, ReferenceValueEquals(ref, other))
+	})
+
+	t.Run("different references", func(t *testing.T) {
+		ref := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+			Type:      to.Ptr("Patient"),
+		}
+		other := fhir.Reference{
+			Reference: to.Ptr("Patient/456"),
+			Type:      to.Ptr("Patient"),
+		}
+		assert.False(t, ReferenceValueEquals(ref, other))
+	})
+
+	t.Run("different types", func(t *testing.T) {
+		ref := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+			Type:      to.Ptr("Patient"),
+		}
+		other := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+			Type:      to.Ptr("Observation"),
+		}
+		assert.False(t, ReferenceValueEquals(ref, other))
+	})
+
+	t.Run("nil reference in ref", func(t *testing.T) {
+		ref := fhir.Reference{
+			Type: to.Ptr("Patient"),
+		}
+		other := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+			Type:      to.Ptr("Patient"),
+		}
+		assert.False(t, ReferenceValueEquals(ref, other))
+	})
+
+	t.Run("nil reference in other", func(t *testing.T) {
+		ref := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+			Type:      to.Ptr("Patient"),
+		}
+		other := fhir.Reference{
+			Type: to.Ptr("Patient"),
+		}
+		assert.False(t, ReferenceValueEquals(ref, other))
+	})
+
+	t.Run("nil type in ref", func(t *testing.T) {
+		ref := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+		}
+		other := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+			Type:      to.Ptr("Patient"),
+		}
+		assert.False(t, ReferenceValueEquals(ref, other))
+	})
+
+	t.Run("nil type in other", func(t *testing.T) {
+		ref := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+			Type:      to.Ptr("Patient"),
+		}
+		other := fhir.Reference{
+			Reference: to.Ptr("Patient/123"),
+		}
+		assert.False(t, ReferenceValueEquals(ref, other))
+	})
+}

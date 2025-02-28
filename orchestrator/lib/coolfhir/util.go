@@ -217,6 +217,12 @@ func LogicalReferenceEquals(ref, other fhir.Reference) bool {
 		ref.Identifier.Value != nil && other.Identifier.Value != nil && *ref.Identifier.Value == *other.Identifier.Value
 }
 
+// ReferenceValueEquals checks if two references are equal based on their reference and type.
+func ReferenceValueEquals(ref, other fhir.Reference) bool {
+	return ref.Reference != nil && other.Reference != nil && *ref.Reference == *other.Reference &&
+		ref.Type != nil && other.Type != nil && *ref.Type == *other.Type
+}
+
 // IdentifierEquals compares two logical identifiers based on their system and value.
 // If any of the identifiers is nil or any of the system or value fields is nil, it returns false.
 // If the system and value fields of both identifiers are equal, it returns true.
