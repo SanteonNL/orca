@@ -561,7 +561,7 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 		var operationOutcome fhirclient.OperationOutcomeError
 		require.ErrorAs(t, err, &operationOutcome)
-		require.Contains(t, *operationOutcome.Issue[0].Diagnostics, "Task.for must reference the same patient as CarePlan.subject")
+		require.Contains(t, *operationOutcome.Issue[0].Diagnostics, "Task.For must be set with a local reference, or a logical identifier, referencing a patient")
 	}
 
 	subTest(t, "Creating Task - Existing CarePlan")

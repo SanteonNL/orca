@@ -175,8 +175,20 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			return nil, err
 		}
 
-		// Validate Task.for matches CarePlan.subject
-		if task.For == nil || !coolfhir.LogicalReferenceEquals(*task.For, carePlan.Subject) {
+		if task.For == nil {
+			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
+		}
+
+		samePatient := false
+		// If either task.For or CarePlan.Subject contains an identifier, they must be equal
+		// If neither contain an identifier, the reference must be equal
+		if task.For.Identifier != nil || carePlan.Subject.Identifier != nil {
+			samePatient = coolfhir.LogicalReferenceEquals(*task.For, carePlan.Subject)
+		} else {
+			samePatient = coolfhir.ReferenceValueEquals(*task.For, carePlan.Subject)
+		}
+
+		if !samePatient {
 			return nil, coolfhir.NewErrorWithCode("Task.for must reference the same patient as CarePlan.subject", http.StatusBadRequest)
 		}
 
