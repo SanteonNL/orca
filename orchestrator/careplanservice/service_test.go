@@ -4,6 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -13,14 +22,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"reflect"
-	"strings"
-	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/stretchr/testify/require"
@@ -1051,5 +1052,49 @@ func TestService_ensureCustomSearchParametersExists(t *testing.T) {
 		// We only expect 1 param that needs to be re-indexed
 		require.Len(t, params, 1)
 		assert.Equal(t, "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier", params[0])
+	})
+}
+
+func TestService_handleSearch_ContentType(t *testing.T) {
+	fhirServerMux := http.NewServeMux()
+	mockCustomSearchParams(fhirServerMux)
+	fhirServer := httptest.NewServer(fhirServerMux)
+	// Setup: create the service
+	service, err := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+	}, profile.Test(), orcaPublicURL)
+	require.NoError(t, err)
+	t.Run("valid content type", func(t *testing.T) {
+		// Setup request with valid content type
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", nil)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		w := httptest.NewRecorder()
+
+		// Call handleSearch
+		service.handleSearch(req, w, "CarePlan", "test")
+
+		// Content-Type validation should pass (other errors may occur)
+		assert.NotEqual(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("invalid content type", func(t *testing.T) {
+		// Setup request with invalid content type
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", nil)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+
+		// Call handleSearch
+		service.handleSearch(req, w, "CarePlan", "test")
+
+		// Should return 400 Bad Request
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+
+		// Verify error message
+		var outcome fhir.OperationOutcome
+		err := json.NewDecoder(w.Body).Decode(&outcome)
+		require.NoError(t, err)
+		assert.Contains(t, *outcome.Issue[0].Diagnostics, "Content-Type must be 'application/x-www-form-urlencoded'")
 	})
 }

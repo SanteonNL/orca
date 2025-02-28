@@ -401,6 +401,10 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		contentType = strings.Split(contentType, ",")[0]
 		httpRequest.Header.Set("Content-Type", contentType)
 	}
+	if contentType != "application/x-www-form-urlencoded" {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("Content-Type must be 'application/x-www-form-urlencoded'"), operationName, httpResponse)
+		return
+	}
 
 	// Parse URL-encoded parameters from the request body
 	if err := httpRequest.ParseForm(); err != nil {
