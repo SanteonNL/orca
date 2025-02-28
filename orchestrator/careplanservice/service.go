@@ -392,22 +392,17 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		DoAndWrite(httpResponse, resource, http.StatusOK)
 }
 
-func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
-	headers := new(fhirclient.Headers)
-
-	// Ensure the Content-Type header is set correctly
+func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
 	contentType := httpRequest.Header.Get("Content-Type")
 
 	if !strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("Content-Type must be 'application/x-www-form-urlencoded'"), operationName, httpResponse)
-		return
+		return coolfhir.BadRequest("Content-Type must be 'application/x-www-form-urlencoded'")
 	}
 
-	// Parse URL-encoded parameters from the request body
 	if err := httpRequest.ParseForm(); err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("Invalid encoded body parameters"), operationName, httpResponse)
-		return
+		return coolfhir.BadRequest("Invalid encoded body parameters")
 	}
+
 	queryParams := httpRequest.PostForm
 	hasNonEmptyValue := false
 	for _, values := range queryParams {
@@ -416,10 +411,22 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 			break
 		}
 	}
+	if len(queryParams) == 0 {
+		hasNonEmptyValue = true
+	}
 	if !hasNonEmptyValue {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("Invalid encoded body parameters"), operationName, httpResponse)
+		return coolfhir.BadRequest("Invalid encoded body parameters")
+	}
+	return nil
+}
+
+func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
+	if err := s.validateSearchRequest(httpRequest); err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
 	}
+	headers := new(fhirclient.Headers)
+	queryParams := httpRequest.PostForm
 
 	var bundle *fhir.Bundle
 	var err error
