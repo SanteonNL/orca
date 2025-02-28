@@ -1,6 +1,7 @@
 package careplanservice
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -420,7 +421,44 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		DoAndWrite(httpResponse, resource, http.StatusOK)
 }
 
+func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
+	contentType := httpRequest.Header.Get("Content-Type")
+
+	if !strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
+		return coolfhir.BadRequest("Content-Type must be 'application/x-www-form-urlencoded'")
+	}
+
+	// Read the body
+	body, err := io.ReadAll(httpRequest.Body)
+	if err != nil {
+		return coolfhir.BadRequest("Failed to read request body: %w", err)
+	}
+
+	bodyString := string(body)
+
+	// Restore the body for later use
+	httpRequest.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	if bodyString == "" {
+		return nil
+	}
+
+	// Custom validation to ensure the encoded body parameters are in the correct format
+	split := strings.Split(bodyString, "&")
+	for _, param := range split {
+		parts := strings.Split(param, "=")
+		if len(parts) != 2 {
+			return coolfhir.BadRequest("Invalid encoded body parameters")
+		}
+	}
+	return nil
+}
+
 func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
+	if err := s.validateSearchRequest(httpRequest); err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
 	headers := new(fhirclient.Headers)
 
 	principal, err := auth.PrincipalFromContext(httpRequest.Context())
@@ -438,7 +476,7 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 
 	// Parse URL-encoded parameters from the request body
 	if err := httpRequest.ParseForm(); err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), fmt.Errorf("failed to parse form: %w", err), operationName, httpResponse)
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
 	}
 	queryParams := httpRequest.PostForm

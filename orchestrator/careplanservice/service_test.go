@@ -4,6 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"reflect"
+	"strings"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -13,14 +22,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/mock/gomock"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"reflect"
-	"strings"
-	"testing"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/stretchr/testify/require"
@@ -1051,5 +1052,90 @@ func TestService_ensureCustomSearchParametersExists(t *testing.T) {
 		// We only expect 1 param that needs to be re-indexed
 		require.Len(t, params, 1)
 		assert.Equal(t, "http://zorgbijjou.nl/SearchParameter/CarePlan-subject-identifier", params[0])
+	})
+}
+
+func TestService_validateSearchRequest(t *testing.T) {
+	fhirServerMux := http.NewServeMux()
+	mockCustomSearchParams(fhirServerMux)
+	fhirServer := httptest.NewServer(fhirServerMux)
+	// Setup: create the service
+	service, err := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+	}, profile.Test(), orcaPublicURL)
+	require.NoError(t, err)
+
+	t.Run("invalid content type - fails", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", nil)
+		req.Header.Set("Content-Type", "application/json")
+
+		err := service.validateSearchRequest(req)
+
+		assert.EqualError(t, err, "Content-Type must be 'application/x-www-form-urlencoded'")
+	})
+
+	t.Run("invalid encoded body parameters JSON - fails", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader(`{"invalid":"param"}`))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		err := service.validateSearchRequest(req)
+
+		assert.EqualError(t, err, "Invalid encoded body parameters")
+	})
+
+	t.Run("invalid encoded body parameters - fails", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param&invalid"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		err := service.validateSearchRequest(req)
+
+		assert.EqualError(t, err, "Invalid encoded body parameters")
+	})
+
+	t.Run("valid encoded body parameters - succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		err := service.validateSearchRequest(req)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("valid encoded body parameters with multiple values - succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param1&valid=param2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		err := service.validateSearchRequest(req)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("valid encoded body parameters with charset - succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param1&valid=param2"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
+
+		err := service.validateSearchRequest(req)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("valid encoded body parameters with empty values - succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid1=&valid2="))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		err := service.validateSearchRequest(req)
+
+		assert.NoError(t, err)
+	})
+
+	t.Run("empty body - succeeds", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", nil)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		err := service.validateSearchRequest(req)
+
+		assert.NoError(t, err)
 	})
 }
