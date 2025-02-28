@@ -1,6 +1,7 @@
 package audit
 
 import (
+	"errors"
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -10,18 +11,7 @@ import (
 
 var nowFunc = time.Now
 
-type Config struct {
-	AuditObserverSystem string
-	AuditObserverValue  string
-}
-
-var config Config
-
-func Configure(cfg Config) {
-	config = cfg
-}
-
-func Event(action fhir.AuditEventAction, resourceReference *fhir.Reference, actingAgentRef *fhir.Reference) *fhir.AuditEvent {
+func Event(localIdentity *fhir.Identifier, action fhir.AuditEventAction, resourceReference *fhir.Reference, actingAgentRef *fhir.Reference) (*fhir.AuditEvent, error) {
 	// Map AuditEventAction to restful-interaction code
 	var interactionCode, interactionDisplay string
 	switch action {
@@ -37,6 +27,10 @@ func Event(action fhir.AuditEventAction, resourceReference *fhir.Reference, acti
 	default:
 		interactionCode = "search"
 		interactionDisplay = "Search"
+	}
+
+	if localIdentity == nil {
+		return nil, errors.New("localIdentity is required")
 	}
 
 	auditEvent := fhir.AuditEvent{
@@ -64,11 +58,8 @@ func Event(action fhir.AuditEventAction, resourceReference *fhir.Reference, acti
 		},
 		Source: fhir.AuditEventSource{
 			Observer: fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr(config.AuditObserverSystem),
-					Value:  to.Ptr(config.AuditObserverValue),
-				},
-				Type: to.Ptr("Device"),
+				Identifier: localIdentity,
+				Type:       to.Ptr("Device"),
 			},
 		},
 		Entity: []fhir.AuditEventEntity{
@@ -81,5 +72,5 @@ func Event(action fhir.AuditEventAction, resourceReference *fhir.Reference, acti
 		},
 	}
 
-	return &auditEvent
+	return &auditEvent, nil
 }

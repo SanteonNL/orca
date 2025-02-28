@@ -76,19 +76,6 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 	if err != nil {
 		return nil, err
 	}
-
-	localIdentity, err := profile.Identities(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	if len(localIdentity) == 0 || localIdentity[0].Identifier == nil || len(localIdentity[0].Identifier) == 0 {
-		return nil, errors.New("no local identity found")
-	}
-
-	audit.Configure(audit.Config{
-		AuditObserverSystem: *localIdentity[0].Identifier[0].System,
-		AuditObserverValue:  *localIdentity[0].Identifier[0].Value,
-	})
 	return &s, nil
 }
 
@@ -409,14 +396,20 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		return
 	}
 
-	auditEvent := audit.Event(
-		fhir.AuditEventActionR, &fhir.Reference{
-			Reference: to.Ptr(resourceType + "/" + resourceId),
-			Type:      to.Ptr(resourceType),
-		}, &fhir.Reference{
-			Identifier: &principal.Organization.Identifier[0],
-			Type:       to.Ptr("Organization"),
-		})
+	localIdentity, err := s.getLocalIdentity()
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
+	auditEvent, err := audit.Event(localIdentity, fhir.AuditEventActionR, &fhir.Reference{
+		Reference: to.Ptr(resourceType + "/" + resourceId),
+		Type:      to.Ptr(resourceType),
+	}, &fhir.Reference{
+		Identifier: &principal.Organization.Identifier[0],
+		Type:       to.Ptr("Organization"),
+	})
+
 	err = s.fhirClient.Create(auditEvent, &auditEvent)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
@@ -525,11 +518,16 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 				})
 			}
 
-			auditEvent := audit.Event(
-				fhir.AuditEventActionR, resourceRef, &fhir.Reference{
-					Identifier: &principal.Organization.Identifier[0],
-					Type:       to.Ptr("Organization"),
-				})
+			localIdentity, err := s.getLocalIdentity()
+			if err != nil {
+				coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+				return
+			}
+
+			auditEvent, err := audit.Event(localIdentity, fhir.AuditEventActionR, resourceRef, &fhir.Reference{
+				Identifier: &principal.Organization.Identifier[0],
+				Type:       to.Ptr("Organization"),
+			})
 
 			// Add the query entity to the audit event
 			auditEvent.Entity = append(auditEvent.Entity, queryEntity)
@@ -938,4 +936,15 @@ func collectLiteralReferences(resource any, path []string, result map[string]str
 			result[strings.Join(path, ".")] = r
 		}
 	}
+}
+
+func (s *Service) getLocalIdentity() (*fhir.Identifier, error) {
+	localIdentity, err := s.profile.Identities(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if len(localIdentity) == 0 || localIdentity[0].Identifier == nil || len(localIdentity[0].Identifier) == 0 {
+		return nil, errors.New("no local identity found")
+	}
+	return &localIdentity[0].Identifier[0], nil
 }
