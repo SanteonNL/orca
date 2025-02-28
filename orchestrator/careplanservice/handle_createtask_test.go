@@ -147,6 +147,18 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 					Status:   "201 Created",
 				},
 			},
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("AuditEvent/4"),
+					Status:   "201 Created",
+				},
+			},
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("AuditEvent/5"),
+					Status:   "201 Created",
+				},
+			},
 		},
 	}
 	defaultTask := fhir.Task{

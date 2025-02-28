@@ -5,29 +5,33 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"strings"
 )
 
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msgf("Updating Task: %s", request.RequestUrl)
 	var task fhir.Task
-	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
+	var err error
+	if err = json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
 	}
 	// Check we're only allowing secure external literal references
-	if err := s.validateLiteralReferences(ctx, &task); err != nil {
+	if err = s.validateLiteralReferences(ctx, &task); err != nil {
 		return nil, err
 	}
 
 	// Validate fields on updated Task
-	err := coolfhir.ValidateTaskRequiredFields(task)
+	err = coolfhir.ValidateTaskRequiredFields(task)
 	if err != nil {
 		return nil, fmt.Errorf("invalid Task: %w", err)
 	}
@@ -74,12 +78,12 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		return s.handleCreateTask(ctx, request, tx)
 	}
 
+	principal, err := auth.PrincipalFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if task.Status != taskExisting.Status {
 		// If the status is changing, validate the transition
-		principal, err := auth.PrincipalFromContext(ctx)
-		if err != nil {
-			return nil, err
-		}
 		isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&taskExisting, principal.Organization.Identifier)
 		isScpSubTask := coolfhir.IsScpSubTask(&task)
 		if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester, isScpSubTask) {
@@ -118,11 +122,27 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
+	localIdentity, err := s.getLocalIdentity()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get local identity: %w", err)
+	}
+
+	taskUpdateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
+		&fhir.Reference{
+			Reference: to.Ptr("Task/" + *task.Id),
+		},
+		&fhir.Reference{
+			Identifier: &principal.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		},
+	)
+
 	taskBundleEntry := request.bundleEntryWithResource(task)
 	tx = tx.AppendEntry(taskBundleEntry)
 	idx := len(tx.Entry) - 1
+	tx = tx.Create(taskUpdateAuditEvent)
 	// Update care team
-	_, err = careteamservice.Update(s.fhirClient, carePlanId, task, tx)
+	_, err = careteamservice.Update(ctx, s.fhirClient, carePlanId, task, tx)
 	if err != nil {
 		return nil, fmt.Errorf("update CareTeam: %w", err)
 	}

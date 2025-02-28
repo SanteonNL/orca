@@ -1,9 +1,10 @@
 package careplanservice
 
 import (
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestConfig_Validate(t *testing.T) {
