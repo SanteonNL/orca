@@ -399,22 +399,24 @@ func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
 		return coolfhir.BadRequest("Content-Type must be 'application/x-www-form-urlencoded'")
 	}
 
-	if err := httpRequest.ParseForm(); err != nil {
-		return coolfhir.BadRequest("Invalid encoded body parameters")
+	// Custom validation to ensure the encoded body parameters are in the correct format
+	body, err := io.ReadAll(httpRequest.Body)
+	if err != nil {
+		return coolfhir.BadRequest("Failed to read request body: %w", err)
 	}
 
-	queryParams := httpRequest.PostForm
-	hasNonEmptyValue := false
-	for _, values := range queryParams {
-		if len(values) > 0 && values[0] != "" {
-			hasNonEmptyValue = true
-			break
+	bodyString := string(body)
+
+	// Custom validation to ensure the encoded body parameters are in the correct format
+	split := strings.Split(bodyString, "&")
+	for _, param := range split {
+		parts := strings.Split(param, "=")
+		if len(parts) != 2 {
+			return coolfhir.BadRequest("Invalid encoded body parameters")
 		}
 	}
-	if len(queryParams) == 0 {
-		hasNonEmptyValue = true
-	}
-	if !hasNonEmptyValue {
+
+	if err := httpRequest.ParseForm(); err != nil {
 		return coolfhir.BadRequest("Invalid encoded body parameters")
 	}
 	return nil

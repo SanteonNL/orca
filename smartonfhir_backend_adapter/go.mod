@@ -1,7 +1,8 @@
 module github.com/SanteonNL/orca/smartonfhir_backend_adapter
 
-go 1.22.2
-toolchain go1.23.6
+go 1.23.0
+
+toolchain go1.24.0
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.17.0

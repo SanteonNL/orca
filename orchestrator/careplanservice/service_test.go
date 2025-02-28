@@ -1067,7 +1067,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 	}, profile.Test(), orcaPublicURL)
 	require.NoError(t, err)
 
-	t.Run("invalid content type", func(t *testing.T) {
+	t.Run("invalid content type - fails", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", nil)
 		req.Header.Set("Content-Type", "application/json")
 
@@ -1076,7 +1076,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 		assert.EqualError(t, err, "Content-Type must be 'application/x-www-form-urlencoded'")
 	})
 
-	t.Run("invalid encoded body parameters", func(t *testing.T) {
+	t.Run("invalid encoded body parameters JSON - fails", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader(`{"invalid":"param"}`))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -1085,7 +1085,16 @@ func TestService_validateSearchRequest(t *testing.T) {
 		assert.EqualError(t, err, "Invalid encoded body parameters")
 	})
 
-	t.Run("valid encoded body parameters", func(t *testing.T) {
+	t.Run("invalid encoded body parameters - fails", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param&invalid"))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		err := service.validateSearchRequest(req)
+
+		assert.EqualError(t, err, "Invalid encoded body parameters")
+	})
+
+	t.Run("valid encoded body parameters - succeeds", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -1094,7 +1103,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("valid encoded body parameters with multiple values", func(t *testing.T) {
+	t.Run("valid encoded body parameters with multiple values - succeeds", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param1&valid=param2"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
@@ -1103,7 +1112,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("valid encoded body parameters with charset", func(t *testing.T) {
+	t.Run("valid encoded body parameters with charset - succeeds", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param1&valid=param2"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded; charset=utf-8")
 
@@ -1112,12 +1121,12 @@ func TestService_validateSearchRequest(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("valid encoded body parameters with empty values", func(t *testing.T) {
+	t.Run("valid encoded body parameters with empty values - succeeds", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid1=&valid2="))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 		err := service.validateSearchRequest(req)
 
-		assert.EqualError(t, err, "Invalid encoded body parameters")
+		assert.NoError(t, err)
 	})
 }
