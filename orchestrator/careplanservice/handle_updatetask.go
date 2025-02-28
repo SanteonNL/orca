@@ -127,7 +127,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, fmt.Errorf("failed to get local identity: %w", err)
 	}
 
-	taskUpdateAuditEvent, err := audit.Event(localIdentity, fhir.AuditEventActionU,
+	taskUpdateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
 		&fhir.Reference{
 			Reference: to.Ptr("Task/" + *task.Id),
 		},
@@ -136,9 +136,6 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 			Type:       to.Ptr("Organization"),
 		},
 	)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create task update audit event: %w", err)
-	}
 
 	taskBundleEntry := request.bundleEntryWithResource(task)
 	tx = tx.AppendEntry(taskBundleEntry)

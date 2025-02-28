@@ -161,27 +161,21 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			return nil, errors.New("failed to activate membership for new CareTeam")
 		}
 
-		carePlanAuditEvent, err := audit.Event(localIdentity, fhir.AuditEventActionC, &fhir.Reference{
+		carePlanAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionC, &fhir.Reference{
 			Reference: to.Ptr(carePlanURL),
 			Type:      to.Ptr("CarePlan"),
 		}, &fhir.Reference{
 			Identifier: task.Requester.Identifier,
 			Type:       to.Ptr("Organization"),
 		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create care plan audit event: %w", err)
-		}
 
-		taskAuditEvent, err := audit.Event(localIdentity, fhir.AuditEventActionC, &fhir.Reference{
+		taskAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionC, &fhir.Reference{
 			Reference: to.Ptr(taskURL),
 			Type:      to.Ptr("Task"),
 		}, &fhir.Reference{
 			Identifier: task.Requester.Identifier,
 			Type:       to.Ptr("Organization"),
 		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create task audit event: %w", err)
-		}
 
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL)).
 			Create(careTeam, coolfhir.WithFullUrl(careTeamURL)).
@@ -247,16 +241,13 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 		}
 
-		taskAuditEvent, err := audit.Event(localIdentity, fhir.AuditEventActionC, &fhir.Reference{
+		taskAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionC, &fhir.Reference{
 			Reference: taskBundleEntry.FullUrl,
 			Type:      to.Ptr("Task"),
 		}, &fhir.Reference{
 			Identifier: task.Requester.Identifier,
 			Type:       to.Ptr("Organization"),
 		})
-		if err != nil {
-			return nil, fmt.Errorf("failed to create task audit event: %w", err)
-		}
 
 		// TODO: Only if not updated
 		tx.AppendEntry(taskBundleEntry)
@@ -274,16 +265,13 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			carePlanBundleEntry = &tx.Entry[len(tx.Entry)-1]
 			carePlanBundleEntryIdx = len(tx.Entry) - 1
 
-			carePlanAuditEvent, err := audit.Event(localIdentity, fhir.AuditEventActionU, &fhir.Reference{
+			carePlanAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU, &fhir.Reference{
 				Reference: to.Ptr("CarePlan/" + *carePlan.Id),
 				Type:      to.Ptr("CarePlan"),
 			}, &fhir.Reference{
 				Identifier: task.Requester.Identifier,
 				Type:       to.Ptr("Organization"),
 			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to create care plan audit event: %w", err)
-			}
 			tx.Create(carePlanAuditEvent)
 		}
 		if updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, tx); err != nil {

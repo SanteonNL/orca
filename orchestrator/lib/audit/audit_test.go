@@ -38,7 +38,7 @@ func TestAuditEvent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Event(tt.action, tt.resourceRef, tt.actingAgentRef)
+			got := Event(auth.TestPrincipal2.Organization.Identifier[0], tt.action, tt.resourceRef, tt.actingAgentRef)
 
 			assert.Equal(t, fixedTime.Format(time.RFC3339), got.Recorded)
 			assert.Equal(t, tt.action, *got.Action)

@@ -402,7 +402,7 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		return
 	}
 
-	auditEvent, err := audit.Event(localIdentity, fhir.AuditEventActionR, &fhir.Reference{
+	auditEvent := audit.Event(*localIdentity, fhir.AuditEventActionR, &fhir.Reference{
 		Reference: to.Ptr(resourceType + "/" + resourceId),
 		Type:      to.Ptr(resourceType),
 	}, &fhir.Reference{
@@ -524,7 +524,7 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 				return
 			}
 
-			auditEvent, err := audit.Event(localIdentity, fhir.AuditEventActionR, resourceRef, &fhir.Reference{
+			auditEvent := audit.Event(*localIdentity, fhir.AuditEventActionR, resourceRef, &fhir.Reference{
 				Identifier: &principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			})
