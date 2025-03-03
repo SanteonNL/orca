@@ -1,12 +1,13 @@
 package careplancontributor
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"sync/atomic"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/user"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
