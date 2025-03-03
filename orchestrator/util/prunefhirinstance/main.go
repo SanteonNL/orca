@@ -7,11 +7,12 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
+	"os"
 )
 
 // main deletes all resources of the specified types from the FHIR server.
 // It performs a search for each resource type and deletes all resources of that type.
-// Remember to set the token and baseURL variables before running this script.
+// Remember to set the FHIR_BASEURL and FHIR_BEARER_TOKEN environment variables before running this script.
 func main() {
 	resourceTypesToDelete := []string{
 		"Patient",
@@ -24,10 +25,15 @@ func main() {
 		"Organization",
 	}
 
-	var token = ""
-	var baseURL = ""
-
-	parsedBaseURL, err := url.Parse(baseURL)
+	var fhirBaseURL = os.Getenv("FHIR_BASEURL")
+	if fhirBaseURL == "" {
+		panic("FHIR_BASEURL environment variable is not set")
+	}
+	var token = os.Getenv("FHIR_BEARER_TOKEN")
+	if token == "" {
+		panic("FHIR_BEARER_TOKEN environment variable is not set")
+	}
+	parsedBaseURL, err := url.Parse(fhirBaseURL)
 	if err != nil {
 		panic(err)
 	}
