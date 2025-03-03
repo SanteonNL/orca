@@ -2,23 +2,28 @@ package careplanservice
 
 import (
 	"context"
-	"fmt"
+	"net/url"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
-	"slices"
 )
 
 // handleGetCarePlan fetches the requested CarePlan and validates if the requester has access to the resource (is a participant of one of the CareTeams of the care plan)
 // if the requester is valid, return the CarePlan, else return an error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.CarePlan, error) {
-	// fetch CarePlan + CareTeam, validate requester is participant of CareTeam
+	var carePlan fhir.CarePlan
+
+	// fetch CarePlan, validate requester is participant of CareTeam
 	// headers are passed in by reference and returned to the calling method
-	carePlan, careTeams, headers, err := GetCarePlanAndCareTeams(ctx, s.fhirClient, "CarePlan/"+id)
+	err := s.fhirClient.ReadWithContext(ctx, "CarePlan/"+id, &carePlan)
+	if err != nil {
+		return nil, err
+	}
+
+	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
 	if err != nil {
 		return nil, err
 	}
@@ -27,7 +32,8 @@ func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhi
 	if err != nil {
 		return nil, err
 	}
-	err = validatePrincipalInCareTeams(principal, careTeams)
+
+	err = validatePrincipalInCareTeam(principal, careTeam)
 	if err != nil {
 		return nil, err
 	}
@@ -44,13 +50,6 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 	if err != nil {
 		return nil, err
 	}
-	// Check if CareTeam is included in the response, if not add it to the query
-	includeCareTeamInResponse := false
-	if slices.Contains(queryParams["_include"], "CarePlan:care-team") {
-		includeCareTeamInResponse = true
-	} else {
-		queryParams.Add("_include", "CarePlan:care-team")
-	}
 
 	carePlans, bundle, err := handleSearchResource[fhir.CarePlan](ctx, s, "CarePlan", queryParams, headers)
 	if err != nil {
@@ -61,35 +60,24 @@ func (s *Service) handleSearchCarePlan(ctx context.Context, queryParams url.Valu
 		return &fhir.Bundle{Entry: []fhir.BundleEntry{}}, nil
 	}
 
-	var careTeams []fhir.CareTeam
-	err = coolfhir.ResourcesInBundle(bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
-	if err != nil {
-		return nil, err
-	}
-	if len(careTeams) == 0 {
-		return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
-	}
-
 	// For each CareTeam in bundle, validate the requester is a participant, and if not remove it from the bundle
 	// This will be done by adding the IDs we do want to keep to a list, and then filtering the bundle based on this list
 	filterRefs := make([]string, 0)
-	for _, ct := range careTeams {
-		err = validatePrincipalInCareTeams(principal, []fhir.CareTeam{ct})
+	for _, cp := range carePlans {
+		ct, err := coolfhir.CareTeamFromCarePlan(&cp)
 		if err != nil {
 			continue
 		}
-		if includeCareTeamInResponse {
-			filterRefs = append(filterRefs, "CareTeam/"+*ct.Id)
+
+		err = validatePrincipalInCareTeam(principal, ct)
+		if err != nil {
+			continue
 		}
-		for _, cp := range carePlans {
-			for _, cpct := range cp.CareTeam {
-				if *cpct.Reference == fmt.Sprintf("CareTeam/%s", *ct.Id) {
-					filterRefs = append(filterRefs, "CarePlan/"+*cp.Id)
-				}
-			}
-		}
+
+		filterRefs = append(filterRefs, "CarePlan/"+*cp.Id)
 	}
-	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"CarePlan", "CareTeam"}, filterRefs)
+
+	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"CarePlan"}, filterRefs)
 
 	return &retBundle, nil
 }

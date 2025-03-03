@@ -188,17 +188,19 @@ func parseTimestamp(timestampString string) (time.Time, error) {
 
 // FindMatchingParticipantInCareTeam loops through each Participant of each CareTeam present in the CarePlan, trying to match it to the Principal Organization Identifiers provided
 // if a valid Participant is found, return it. This can be used for further validation e.g. for the Period
-func FindMatchingParticipantInCareTeam(careTeams []fhir.CareTeam, principalOrganizationIdentifiers []fhir.Identifier) *fhir.CareTeamParticipant {
-	for _, careTeam := range careTeams {
-		for _, participant := range careTeam.Participant {
-			for _, identifier := range principalOrganizationIdentifiers {
-				if IdentifierEquals(participant.Member.Identifier, &identifier) {
-					return &participant
-				}
+func FindMatchingParticipantInCareTeam(careTeam *fhir.CareTeam, principalOrganizationIdentifiers []fhir.Identifier) *fhir.CareTeamParticipant {
+	for _, participant := range careTeam.Participant {
+		for _, identifier := range principalOrganizationIdentifiers {
+			if IdentifierEquals(participant.Member.Identifier, &identifier) {
+				return &participant
 			}
 		}
 	}
 	return nil
+}
+
+func IsLocalRelativeReference(reference *fhir.Reference) bool {
+	return reference != nil && reference.Reference != nil && strings.HasPrefix(*reference.Reference, "#")
 }
 
 func IsLogicalReference(reference *fhir.Reference) bool {

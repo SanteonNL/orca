@@ -31,7 +31,6 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 	if err := client.Read("CarePlan",
 		bundle,
 		fhirclient.QueryParam("_id", carePlanId),
-		fhirclient.QueryParam("_include", "CarePlan:care-team"),
 		fhirclient.QueryParam("_include", "CarePlan:activity-reference")); err != nil {
 		return false, fmt.Errorf("unable to resolve CarePlan and related resources: %w", err)
 	}
@@ -40,10 +39,12 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(carePlanId), carePlan); err != nil {
 		return false, fmt.Errorf("CarePlan not found (id=%s): %w", carePlanId, err)
 	}
-	careTeam, err := resolveCareTeam(bundle, carePlan)
+
+	careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 	if err != nil {
 		return false, err
 	}
+
 	activities, err := resolveActivities(bundle, carePlan)
 	if err != nil {
 		return false, err
@@ -62,11 +63,21 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 	if updateCareTeam(careTeam, otherActivities, updateTriggerTask) {
 		changed = true
 	}
+
 	if changed {
 		sortParticipants(careTeam.Participant)
-		tx.Update(*careTeam, "CareTeam/"+*careTeam.Id)
+
+		contained, err := coolfhir.UpdateContainedResource(carePlan.Contained, &carePlan.CareTeam[0], careTeam)
+		if err != nil {
+			return false, fmt.Errorf("unable to update CarePlan.Contained: %w", err)
+		}
+
+		carePlan.Contained = contained
+		tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+
 		return true, nil
 	}
+
 	return false, nil
 }
 
@@ -126,25 +137,6 @@ func deactivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference, otherA
 		}
 	}
 	return result
-}
-
-func resolveCareTeam(bundle *fhir.Bundle, carePlan *fhir.CarePlan) (*fhir.CareTeam, error) {
-	if len(carePlan.CareTeam) != 1 {
-		return nil, errors.New("CarePlan must have exactly one CareTeam")
-	}
-	var currentCareTeam fhir.CareTeam
-	if len(carePlan.CareTeam) == 1 {
-		// prevent nil deref
-		ref := carePlan.CareTeam[0].Reference
-		if ref == nil {
-			return nil, errors.New("CarePlan.CareTeam.Reference is required")
-		}
-		// Should be resolvable in Bundle
-		if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(*ref), &currentCareTeam); err != nil {
-			return nil, fmt.Errorf("unable to resolve CarePlan.CareTeam: %w", err)
-		}
-	}
-	return &currentCareTeam, nil
 }
 
 func resolveActivities(bundle *fhir.Bundle, carePlan *fhir.CarePlan) ([]fhir.Task, error) {

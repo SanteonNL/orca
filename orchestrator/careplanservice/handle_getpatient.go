@@ -2,12 +2,13 @@ package careplanservice
 
 import (
 	"context"
+	"net/http"
+	"net/url"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
 )
 
 // handleGetPatient fetches the requested Patient and validates if the requester has access to the resource (is a participant of one of the CareTeams associated with the patient)
@@ -15,7 +16,7 @@ import (
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleGetPatient(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.Patient, error) {
 	var patient fhir.Patient
-	err := s.fhirClient.Read("Patient/"+id, &patient, fhirclient.ResponseHeaders(headers))
+	err := s.fhirClient.ReadWithContext(ctx, "Patient/"+id, &patient, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, err
 	}

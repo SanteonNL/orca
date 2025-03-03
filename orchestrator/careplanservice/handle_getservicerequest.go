@@ -2,11 +2,12 @@ package careplanservice
 
 import (
 	"context"
+	"net/http"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
 )
 
 func (s *Service) handleGetServiceRequest(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.ServiceRequest, error) {
@@ -17,7 +18,7 @@ func (s *Service) handleGetServiceRequest(ctx context.Context, id string, header
 	}
 
 	var serviceRequest fhir.ServiceRequest
-	err = s.fhirClient.Read("ServiceRequest/"+id, &serviceRequest, fhirclient.ResponseHeaders(headers))
+	err = s.fhirClient.ReadWithContext(ctx, "ServiceRequest/"+id, &serviceRequest, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, err
 	}

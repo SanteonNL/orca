@@ -4,257 +4,237 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"net/url"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-	"net/http"
-	"net/url"
-	"os"
-	"testing"
 )
 
 func TestService_handleGetPatient(t *testing.T) {
-	carePlan1Raw, _ := os.ReadFile("./testdata/careplan-1.json")
+	carePlan1Raw := mustReadFile("./testdata/careplan1-careteam2.json")
 	var carePlan1 fhir.CarePlan
 	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
-	careTeam2Raw, _ := os.ReadFile("./testdata/careteam-2.json")
-	var careTeam2 fhir.CareTeam
-	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
 
-	patient1Raw, _ := os.ReadFile("./testdata/patient-1.json")
+	patient1Raw := mustReadFile("./testdata/patient-1.json")
 	var patient1 fhir.Patient
 	_ = json.Unmarshal(patient1Raw, &patient1)
 
-	tests := []TestHandleGetStruct[fhir.Patient]{
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:         "error: Patient does not exist",
-			id:           "1",
-			resourceType: "Patient",
-			errorFromRead: fhirclient.OperationOutcomeError{
-				HttpStatusCode: http.StatusNotFound,
-			},
+	tests := map[string]struct {
+		context       context.Context
+		expectedError error
+		setup         func(ctx context.Context, client *mock.MockClient)
+	}{
+		"error: Patient does not exist": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			expectedError: fhirclient.OperationOutcomeError{
 				HttpStatusCode: http.StatusNotFound,
 			},
-		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:         "error: Patient exists, auth, error fetching CarePlan",
-			id:           "1",
-			resourceType: "Patient",
-			errorFromCarePlanRead: fhirclient.OperationOutcomeError{
-				HttpStatusCode: http.StatusNotFound,
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).Return(fhirclient.OperationOutcomeError{
+					HttpStatusCode: http.StatusNotFound,
+				})
 			},
+		},
+		"error: Patient exists, auth, error fetching CarePlan": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			expectedError: fhirclient.OperationOutcomeError{
 				HttpStatusCode: http.StatusNotFound,
 			},
-			returnedResource: &patient1,
-		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:         "error: Patient exists, auth, No CarePlans returned",
-			id:           "1",
-			resourceType: "Patient",
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{},
+			// returnedResource: &patient1,
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Patient) = patient1
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(fhirclient.OperationOutcomeError{
+						HttpStatusCode: http.StatusNotFound,
+					})
 			},
+		},
+		"error: Patient exists, auth, No CarePlans returned": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			expectedError: &coolfhir.ErrorWithCode{
 				Message:    "Participant does not have access to Patient",
 				StatusCode: http.StatusForbidden,
 			},
-			returnedResource: &patient1,
-		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
-			name:         "error: Patient exists, auth, CarePlan and CareTeam returned, not a participant",
-			id:           "1",
-			resourceType: "Patient",
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: carePlan1Raw,
-					},
-					{
-						Resource: careTeam2Raw,
-					},
-				},
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Patient) = patient1
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+						return nil
+					})
 			},
+		},
+		"error: Patient exists, auth, CarePlan returned, not a participant": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			expectedError: &coolfhir.ErrorWithCode{
 				Message:    "Participant does not have access to Patient",
 				StatusCode: http.StatusForbidden,
 			},
-			returnedResource: &patient1,
-		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			name:         "ok: Patient exists, auth, CarePlan and CareTeam returned, correct principal",
-			id:           "1",
-			resourceType: "Patient",
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: carePlan1Raw,
-					},
-					{
-						Resource: careTeam2Raw,
-					},
-				},
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Patient) = patient1
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
+						return nil
+					})
 			},
-			expectedError:    nil,
-			returnedResource: &patient1,
+		},
+		"ok: Patient exists, auth, CarePlan returned, correct principal": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Patient) = patient1
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
+						return nil
+					})
+			},
 		},
 	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	// Create a mock FHIR client using the generated mock
-	mockFHIRClient := mock.NewMockClient(ctrl)
+			client := mock.NewMockClient(ctrl)
+			tt.setup(tt.context, client)
 
-	// Create the service with the mock FHIR client
-	service := &Service{
-		fhirClient: mockFHIRClient,
-	}
+			service := &Service{fhirClient: client}
+			patient, err := service.handleGetPatient(tt.context, "1", &fhirclient.Headers{})
 
-	for _, tt := range tests {
-		tt.mockClient = mockFHIRClient
-		testHelperHandleGetResource[fhir.Patient](t, tt, service.handleGetPatient)
+			if tt.expectedError != nil {
+				require.Equal(t, tt.expectedError, err)
+				require.Nil(t, patient)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, patient)
+			}
+		})
 	}
 }
 
 func TestService_handleSearchPatient(t *testing.T) {
-	careTeam1, _ := os.ReadFile("./testdata/careteam-1.json")
-	careTeam2, _ := os.ReadFile("./testdata/careteam-2.json")
-	carePlan1, _ := os.ReadFile("./testdata/careplan-1.json")
-	carePlan2, _ := os.ReadFile("./testdata/careplan-2.json")
-	patient1, _ := os.ReadFile("./testdata/patient-1.json")
-	patient2, _ := os.ReadFile("./testdata/patient-2.json")
+	careplan1Careteam2 := mustReadFile("./testdata/careplan1-careteam2.json")
+	careplan2Careteam1 := mustReadFile("./testdata/careplan2-careteam1.json")
+	patient1 := mustReadFile("./testdata/patient-1.json")
+	patient2 := mustReadFile("./testdata/patient-2.json")
 
-	tests := []TestHandleSearchStruct[fhir.Patient]{
-		{
-			ctx:           context.Background(),
-			resourceType:  "Patient",
-			name:          "No auth",
-			searchParams:  url.Values{},
+	tests := map[string]struct {
+		context        context.Context
+		expectedError  error
+		expectedBundle *fhir.Bundle
+		setup          func(ctx context.Context, client *mock.MockClient)
+	}{
+		"No auth": {
+			context:       context.Background(),
 			expectedError: errors.New("not authenticated"),
+			setup:         func(ctx context.Context, client *mock.MockClient) {},
 		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			resourceType: "Patient",
-			name:         "Empty bundle",
-			searchParams: url.Values{},
-			returnedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{},
-			},
+		"Empty bundle": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			expectedBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{},
 			},
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+						return nil
+					})
+			},
 		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			resourceType: "Patient",
-			name:         "fhirclient error",
-			searchParams: url.Values{},
-			returnedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{},
+		"fhirclient error": {
+			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			expectedError: errors.New("error"),
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(errors.New("error"))
 			},
-			errorFromSearch: errors.New("error"),
-			expectedError:   errors.New("error"),
 		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			resourceType: "Patient",
-			name:         "Patient returned, error from CarePlan read",
-			searchParams: url.Values{},
-			returnedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1,
-					},
-				},
+		"Patient returned, error from CarePlan read": {
+			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			expectedError: errors.New("error"),
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+							{Resource: patient1},
+						}}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(errors.New("error"))
 			},
-			errorFromCarePlanRead: errors.New("error"),
-			expectedError:         errors.New("error"),
 		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			resourceType: "Patient",
-			name:         "Patient returned, no careplan or careteam returned",
-			searchParams: url.Values{},
-			returnedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1,
-					},
-				},
-			},
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{},
-			},
+		"Patient returned, no careplan or careteam returned": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			expectedBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{},
 			},
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+							{Resource: patient1},
+						}}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+						return nil
+					})
+			},
 		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
-			resourceType: "Patient",
-			name:         "Patient returned, careplan and careteam returned, incorrect principal",
-			searchParams: url.Values{},
-			returnedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1,
-					},
-				},
-			},
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: carePlan1,
-					},
-					{
-						Resource: careTeam2,
-					},
-				},
-			},
+		"Patient returned, careplan and careteam returned, incorrect principal": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			expectedBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{},
 			},
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+							{Resource: patient1},
+						}}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+							{Resource: careplan1Careteam2},
+						}}
+						return nil
+					})
+			},
 		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			resourceType: "Patient",
-			name:         "Patient returned, careplan and careteam returned, correct principal",
-			searchParams: url.Values{},
-			returnedBundle: &fhir.Bundle{
-				Link: []fhir.BundleLink{
-					{
-						Relation: "self",
-						Url:      "http://example.com/fhir/Patient?some-query-params",
-					},
-				},
-				Timestamp: to.Ptr("2021-09-01T12:00:00Z"),
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1,
-					},
-				},
-			},
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: carePlan1,
-					},
-					{
-						Resource: careTeam2,
-					},
-				},
-			},
+		"Patient returned, careplan returned, correct principal": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			expectedBundle: &fhir.Bundle{
 				Link: []fhir.BundleLink{
 					{
@@ -269,63 +249,82 @@ func TestService_handleSearchPatient(t *testing.T) {
 					},
 				},
 			},
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{
+							Link: []fhir.BundleLink{
+								{
+									Relation: "self",
+									Url:      "http://example.com/fhir/Patient?some-query-params",
+								},
+							},
+							Timestamp: to.Ptr("2021-09-01T12:00:00Z"),
+							Entry: []fhir.BundleEntry{
+								{Resource: patient1},
+							},
+						}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+							{Resource: careplan1Careteam2},
+						}}
+						return nil
+					})
+			},
 		},
-		{
-			ctx:          auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			resourceType: "Patient",
-			name:         "Multiple resources returned, correctly filtered",
-			searchParams: url.Values{},
-			returnedBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1,
-					},
-					{
-						Resource: patient2,
-					},
-				},
-			},
-			returnedCarePlanBundle: &fhir.Bundle{
-				Entry: []fhir.BundleEntry{
-					{
-						Resource: carePlan1,
-					},
-					{
-						Resource: careTeam2,
-					},
-					{
-						Resource: carePlan2,
-					},
-					{
-						Resource: careTeam1,
-					},
-				},
-			},
+		"Multiple resources returned, correctly filtered": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			expectedBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
-					{
-						Resource: patient1,
-					},
+					{Resource: patient1},
 				},
+			},
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{Resource: patient1},
+								{Resource: patient2},
+							},
+						}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+							{Resource: careplan1Careteam2},
+							{Resource: careplan2Careteam1},
+						}}
+						return nil
+					})
 			},
 		},
 	}
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
 
-	// Create a mock FHIR client using the generated mock
-	mockFHIRClient := mock.NewMockClient(ctrl)
+			client := mock.NewMockClient(ctrl)
+			tt.setup(tt.context, client)
 
-	// Create the service with the mock FHIR client
-	service := &Service{
-		fhirClient: mockFHIRClient,
-	}
+			service := &Service{fhirClient: client}
+			bundle, err := service.handleSearchPatient(tt.context, url.Values{}, &fhirclient.Headers{})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.mockClient = mockFHIRClient
-			testHelperHandleSearchResource[fhir.Patient](t, tt, service.handleSearchPatient)
+			if tt.expectedError != nil {
+				require.Equal(t, tt.expectedError, err)
+				require.Nil(t, bundle)
+			} else {
+				require.Nil(t, err)
+				require.Equal(t, tt.expectedBundle, bundle)
+			}
+
+			// testHelperHandleSearchResource[fhir.Patient](t, tt, service.handleSearchPatient)
 		})
 	}
 }
