@@ -1,5 +1,15 @@
 import Client from 'fhir-kit-client';
-import { Bundle, Condition, Patient, PractitionerRole, Questionnaire, Resource, ServiceRequest, Task } from 'fhir/r4';
+import {
+    Bundle,
+    Condition,
+    Patient,
+    PractitionerRole,
+    Questionnaire,
+    Reference,
+    Resource,
+    ServiceRequest,
+    Task
+} from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
@@ -130,7 +140,7 @@ const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, p
     return cleanedServiceRequest;
 }
 
-export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: string, serviceRequestReference: string, taskIdentifier?: string, practitionerRole?: PractitionerRole): Task => {
+export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: Reference, serviceRequestReference: string, taskIdentifier?: string, practitionerRole?: PractitionerRole): Task => {
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task");
 
@@ -141,10 +151,7 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
                 "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
             ]
         },
-        for: {
-            type: "Patient",
-            reference: patientReference,
-        },
+        for: patientReference,
         status: "requested",
         intent: "order",
         reasonCode: {
@@ -194,9 +201,14 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     type: "transaction"
 } => {
     const cleanedPatient = cleanPatient(patient);
+    const patientReference : Reference = {
+        type: "Patient",
+        reference: "urn:uuid:patient",
+        identifier: patient.identifier?.filter((identifier) => identifier.system === BSN_SYSTEM)[0]!
+    }
     const serviceRequestEntry = {
         fullUrl: "urn:uuid:serviceRequest",
-        resource: cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient", taskIdentifier),
+        resource: cleanServiceRequest(serviceRequest, patient, patientReference.reference!, taskIdentifier),
         request: {
             method: "POST",
             url: "ServiceRequest",
@@ -205,7 +217,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     }
     const taskEntry = {
         fullUrl: "urn:uuid:task",
-        resource: constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest", taskIdentifier, practitionerRole),
+        resource: constructBundleTask(serviceRequest, primaryCondition, patientReference, "urn:uuid:serviceRequest", taskIdentifier, practitionerRole),
         request: {
             method: "POST",
             url: "Task",
