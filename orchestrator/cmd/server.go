@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
@@ -44,6 +45,18 @@ func Start(ctx context.Context, config Config) error {
 		return err
 	}
 
+	// Initialize Message Broker.
+	// Collect topics so the message broker implementation can do checks on start-up whether it can actually publish to them.
+	// Otherwise, things only break later at runtime.
+	var messagingTopics []string
+	if config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic != "" {
+		messagingTopics = append(messagingTopics, config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic)
+	}
+	messageBroker, err := messaging.New(config.Messaging, messagingTopics)
+	if err != nil {
+		return fmt.Errorf("message broker initialization: %w", err)
+	}
+
 	// Register services
 	var services []Service
 
@@ -75,6 +88,7 @@ func Start(ctx context.Context, config Config) error {
 			activeProfile,
 			config.Public.ParseURL(),
 			sessionManager,
+			messageBroker,
 			ehrFhirProxy)
 		if err != nil {
 			return err

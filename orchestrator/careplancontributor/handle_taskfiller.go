@@ -141,10 +141,12 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
 	}
 	log.Ctx(ctx).Debug().Msgf("Successfully accepted task (ref=%s)", ref)
-	err = s.notifier.NotifyTaskAccepted(ctx, cpsClient, primaryTask)
-	if err != nil {
-		log.Ctx(ctx).Warn().Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
-		return nil
+	if s.notifier != nil {
+		err = s.notifier.NotifyTaskAccepted(ctx, cpsClient, primaryTask)
+		if err != nil {
+			log.Ctx(ctx).Warn().Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
+			return nil
+		}
 	}
 	log.Ctx(ctx).Debug().Msgf("Successfully accepted Task (ref=%s)", ref)
 	return nil

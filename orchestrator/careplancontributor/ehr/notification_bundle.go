@@ -28,7 +28,7 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 
 func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*BundleSet, error) {
 	ref := "Task/" + taskId
-	log.Ctx(ctx).Debug().Msgf("NotifyTaskAccepted Task (ref=%s) to ServiceBus", ref)
+	log.Ctx(ctx).Debug().Msgf("NotifyTaskAccepted Task (ref=%s) to message broker", ref)
 	id := uuid.NewString()
 	bundles := BundleSet{
 		Id:   id,
@@ -65,7 +65,7 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 		return nil, err
 	}
 
-	// Bundle order is important for the ServiceBus message
+	// Bundle order is important for the message
 	bundles.addBundle(*taskBundle)
 	bundles.addBundle(*patientBundle)
 	bundles.addBundle(*serviceRequestBundle)

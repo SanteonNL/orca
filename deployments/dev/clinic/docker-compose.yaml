@@ -43,17 +43,14 @@ services:
       - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
       - ORCA_PUBLIC_URL=${NUTS_URL}/orca
       - ORCA_STRICTMODE=false
+      - ORCA_MESSAGING_HTTP_ENDPOINT=${NUTS_URL}/viewer/api/delivery
       - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       # Note: clinic re-uses the FHIR store of the Hospital, so we don't need to start a second one making things even slower
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL=${HOSPITAL_URL}/fhir
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_ENABLED=true
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_TOPIC=orca-patient-enrollment-events
       # If this value is set, the clinic will send task notifications over http to the provided endpoint. Cannot be used in conjunction with the strict mode
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_DEMOENDPOINT=${NUTS_URL}/viewer/api/delivery
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_HOSTNAME=
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_CONNECTIONSTRING=Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC=enrolment-accepted
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json
     volumes:
       # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
@@ -71,24 +68,4 @@ services:
       FHIR_AGGREGATE_URL: http://orchestrator:8080/cpc/aggregate/fhir
       FHIR_AUTHORIZATION_TOKEN: valid
       NEXT_ALLOWED_ORIGINS: localhost:7080
-  servicebus-emulator:
-    container_name: "servicebus-emulator"
-    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
-    volumes:
-      - "./config/servicebus-emulator.json:/ServiceBus_Emulator/ConfigFiles/Config.json"
-    ports:
-      - "5672:5672"
-    environment:
-      SQL_SERVER: mssql
-      MSSQL_SA_PASSWORD: "Z4perS3!cr3!t"
-      ACCEPT_EULA: "Y"
-    depends_on:
-      - mssql
-  mssql:
-        container_name: "mssql"
-        image: "mcr.microsoft.com/mssql/server:2022-latest"
-        platform: linux/amd64
-        environment:
-          ACCEPT_EULA:  "Y"
-          MSSQL_SA_PASSWORD: "Z4perS3!cr3!t"
-          DOCKER_DEFAULT_PLATFORM: linux/amd64
+

@@ -122,10 +122,9 @@ When integrating with the ORCA system, the EHR (and its FHIR API) needs to suppo
 
 ### Orca Care Plan Contributor task notification
 When the local Task filler accepts a new Task, ORCA will notify the EHR so it can process it. The following messaging protocols are supported:
-- Kafka
-- Azure Event Hub (through Kafka)
+- Azure Service Bus
 
-Configure the `ORCA_CAREPLANCONTRIBUTOR_KAFKA` properties to enable delivery through Kafka.
+Configure the `ORCA_MESSAGING_AZURESERVICEBUS` and `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER` properties to enable delivery.
 
 The message contains the Task and several FHIR bundles that contain the FHIR resources related to the Task.
 Note: the bundles with the related FHIR resources might be removed in future.
