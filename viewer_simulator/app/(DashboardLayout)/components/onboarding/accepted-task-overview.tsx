@@ -1,8 +1,8 @@
 import React from 'react';
 import EnrolledTaskTable from './enrolled-task-table';
-import {Bundle, BundleEntry, FhirResource, PractitionerRole, Task} from 'fhir/r4';
+import {BundleEntry, FhirResource, PractitionerRole, Task} from 'fhir/r4';
 import { headers } from 'next/headers'
-import {getNotificationBundles} from "@/app/api/delivery/storage";
+import {getNotificationBundles} from "@/app/api/delivery/orca-enroll-patient/storage";
 
 export default async function AcceptedTaskOverview() {
 
@@ -15,7 +15,7 @@ export default async function AcceptedTaskOverview() {
     const headersList = headers()
 
     let rows: any[] = [];
-    let entries: BundleEntry<FhirResource>[] = [];
+    let entries: BundleEntry[] = [];
 
     try {
         // Get bundles from internal storage, join all entries

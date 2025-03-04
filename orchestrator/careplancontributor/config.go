@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
-
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 )
@@ -30,7 +28,6 @@ type Config struct {
 	// to be made available through the CarePlanContributor.
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
 	TaskFiller                    TaskFillerConfig      `koanf:"taskfiller"`
-	ServiceBusConfig              ehr.ServiceBusConfig  `koanf:"servicebus"`
 	Enabled                       bool                  `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
 	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`
@@ -51,6 +48,9 @@ type TaskFillerConfig struct {
 	// also because HAPI doesn't allow storing Questionnaires in partitions.
 	QuestionnaireFHIR     coolfhir.ClientConfig `koanf:"questionnairefhir"`
 	QuestionnaireSyncURLs []string              `koanf:"questionnairesyncurls"`
+	// TaskAcceptedBundleTopic is a Message Broker topic to which the TaskFiller will publish a message when a Task is accepted.
+	// The bundle will contain the Task, Patient, and other relevant resources.
+	TaskAcceptedBundleTopic string `koanf:"taskacceptedbundletopic"`
 }
 
 func (c TaskFillerConfig) Validate() error {
