@@ -16,7 +16,7 @@ type Notifier interface {
 	NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error
 }
 
-// notifier is a type that uses a ServiceBusClient to send messages to a Kafka service.
+// notifier is a type that uses a ServiceBusClient to send messages to a message broker.
 type notifier struct {
 	broker messaging.Broker
 	topic  string
@@ -30,7 +30,7 @@ func NewNotifier(messageBroker messaging.Broker, topic string) Notifier {
 	}
 }
 
-// NotifyTaskAccepted sends notification data comprehensively related to a specific FHIR Task to a Kafka service bus.
+// NotifyTaskAccepted sends notification data comprehensively related to a specific FHIR Task to a message broker.
 func (n *notifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
 	bundles, err := TaskNotificationBundleSet(ctx, cpsClient, *task.Id)
 	if err != nil {
