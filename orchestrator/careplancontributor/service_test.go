@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	"github.com/rs/zerolog/log"
 
@@ -224,6 +225,8 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			fhirServer := httptest.NewServer(fhirServerMux)
 			fhirServerURL, _ := url.Parse(fhirServer.URL)
 			sessionManager, _ := createTestSession()
+			messageBroker, err := messaging.New(messaging.Config{}, nil)
+			require.NoError(t, err)
 
 			carePlanServiceMux := http.NewServeMux()
 			carePlanService := httptest.NewServer(carePlanServiceMux)
@@ -252,7 +255,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 					URL: carePlanServiceURL.String(),
 				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.Test(), orcaPublicURL, sessionManager, proxy)
+			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, proxy)
 
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
@@ -344,6 +347,8 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
 
 	carePlanServiceMux := http.NewServeMux()
 	carePlanServiceMux.HandleFunc("GET /cps/Task/999", func(writer http.ResponseWriter, request *http.Request) {
@@ -390,7 +395,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{})
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -505,6 +510,9 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
 
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
+
 	service, _ := New(Config{
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
@@ -514,7 +522,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
-	}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{})
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
@@ -595,9 +603,11 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 			BaseURL: fhirServerURL,
 		}
 	}
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{})
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -660,13 +670,15 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
 	carePlanServiceURL.Path = "/fhir"
 
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
 	service, err := New(Config{
 		CarePlanService: CarePlanServiceConfig{
 			URL: carePlanServiceURL.String(),
 		},
-	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{})
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()
