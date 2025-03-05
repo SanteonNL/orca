@@ -231,8 +231,6 @@ github.com/multiformats/go-multibase v0.2.0 h1:isdYCVLvksgWlMW9OZRYJEa9pZETFivnc
 github.com/multiformats/go-multibase v0.2.0/go.mod h1:bFBZX4lKCA/2lyOFSAoKH5SS6oPyjtnzK/XTFDPkNuk=
 github.com/nuts-foundation/go-did v0.15.0 h1:aNl6KC8jiyRJGl9PPKFBboLLC0wUm5h+tjE1UBDQEPw=
 github.com/nuts-foundation/go-did v0.15.0/go.mod h1:swjCJvcRxc+i1nyieIERWEb3vFb4N7iYC+qen2OIbNg=
-github.com/nuts-foundation/go-nuts-client v0.1.8 h1:sBzq6A20cda2bFhHG6x/+TtVtyV9Tm3IlzL8gkMTF00=
-github.com/nuts-foundation/go-nuts-client v0.1.8/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
 github.com/nuts-foundation/go-nuts-client v0.1.9 h1:008GwYhBieMGlwyrf/lZ+NkqBlHkXTuIKiv43MXlJeU=
 github.com/nuts-foundation/go-nuts-client v0.1.9/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=

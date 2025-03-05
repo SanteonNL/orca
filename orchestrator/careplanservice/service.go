@@ -379,8 +379,6 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		resource, err = s.handleGetQuestionnaireResponse(httpRequest.Context(), resourceId, headers)
 	case "ServiceRequest":
 		resource, err = s.handleGetServiceRequest(httpRequest.Context(), resourceId, headers)
-	case "Condition":
-		resource, err = s.handleGetCondition(httpRequest.Context(), resourceId, headers)
 	default:
 		log.Ctx(httpRequest.Context()).Warn().
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
@@ -419,6 +417,48 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 
 	s.pipeline.PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers.Header)).
 		DoAndWrite(httpResponse, resource, http.StatusOK)
+}
+
+func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	resourceType := getResourceType(resourcePath)
+
+	switch resourceType {
+	case "Task":
+		return s.handleCreateTask
+	case "ServiceRequest":
+		return s.handleCreateServiceRequest
+	case "Patient":
+		return s.handleCreatePatient
+	case "Questionnaire":
+		return s.handleCreateQuestionnaire
+	case "QuestionnaireResponse":
+		return s.handleCreateQuestionnaireResponse
+	default:
+		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+			return s.handleUnmanagedOperation(request, tx)
+		}
+	}
+}
+
+func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	resourceType := getResourceType(resourcePath)
+
+	switch resourceType {
+	case "Task":
+		return s.handleUpdateTask
+	case "ServiceRequest":
+		return s.handleUpdateServiceRequest
+	case "Patient":
+		return s.handleUpdatePatient
+	case "Questionnaire":
+		return s.handleUpdateQuestionnaire
+	case "QuestionnaireResponse":
+		return s.handleUpdateQuestionnaireResponse
+	default:
+		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+			return s.handleUnmanagedOperation(request, tx)
+		}
+	}
 }
 
 func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
@@ -662,15 +702,9 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	switch method {
 	case http.MethodPost:
-		switch getResourceType(resourcePath) {
-		case "Task":
-			return s.handleCreateTask
-		}
+		return s.handleCreate(resourcePath)
 	case http.MethodPut:
-		switch getResourceType(resourcePath) {
-		case "Task":
-			return s.handleUpdateTask
-		}
+		return s.handleUpdate(resourcePath)
 	}
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		return s.handleUnmanagedOperation(request, tx)

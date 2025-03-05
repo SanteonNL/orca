@@ -47,3 +47,128 @@ func TestAuditEvent(t *testing.T) {
 		})
 	}
 }
+
+func TestIsCreator(t *testing.T) {
+	tests := []struct {
+		name          string
+		auditEvent    fhir.AuditEvent
+		principal     *auth.Principal
+		wantIsCreator bool
+	}{
+		{
+			name: "principal is creator",
+			auditEvent: fhir.AuditEvent{
+				Agent: []fhir.AuditEventAgent{
+					{
+						Who: &fhir.Reference{
+							Identifier: &fhir.Identifier{
+								System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+								Value:  to.Ptr("12345"),
+							},
+						},
+					},
+				},
+			},
+			principal: &auth.Principal{
+				Organization: fhir.Organization{
+					Identifier: []fhir.Identifier{
+						{
+							System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+							Value:  to.Ptr("12345"),
+						},
+					},
+				},
+			},
+			wantIsCreator: true,
+		},
+		{
+			name: "principal is not creator - different identifier",
+			auditEvent: fhir.AuditEvent{
+				Agent: []fhir.AuditEventAgent{
+					{
+						Who: &fhir.Reference{
+							Identifier: &fhir.Identifier{
+								System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+								Value:  to.Ptr("12345"),
+							},
+						},
+					},
+				},
+			},
+			principal: &auth.Principal{
+				Organization: fhir.Organization{
+					Identifier: []fhir.Identifier{
+						{
+							System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+							Value:  to.Ptr("67890"),
+						},
+					},
+				},
+			},
+			wantIsCreator: false,
+		},
+		{
+			name: "principal is not creator - different system",
+			auditEvent: fhir.AuditEvent{
+				Agent: []fhir.AuditEventAgent{
+					{
+						Who: &fhir.Reference{
+							Identifier: &fhir.Identifier{
+								System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+								Value:  to.Ptr("12345"),
+							},
+						},
+					},
+				},
+			},
+			principal: &auth.Principal{
+				Organization: fhir.Organization{
+					Identifier: []fhir.Identifier{
+						{
+							System: to.Ptr("http://fhir.nl/fhir/NamingSystem/agb"),
+							Value:  to.Ptr("12345"),
+						},
+					},
+				},
+			},
+			wantIsCreator: false,
+		},
+		{
+			name: "principal has multiple identifiers - one matches",
+			auditEvent: fhir.AuditEvent{
+				Agent: []fhir.AuditEventAgent{
+					{
+						Who: &fhir.Reference{
+							Identifier: &fhir.Identifier{
+								System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+								Value:  to.Ptr("12345"),
+							},
+						},
+					},
+				},
+			},
+			principal: &auth.Principal{
+				Organization: fhir.Organization{
+					Identifier: []fhir.Identifier{
+						{
+							System: to.Ptr("http://fhir.nl/fhir/NamingSystem/agb"),
+							Value:  to.Ptr("67890"),
+						},
+						{
+							System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+							Value:  to.Ptr("12345"),
+						},
+					},
+				},
+			},
+			wantIsCreator: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsCreator(tt.auditEvent, tt.principal)
+			assert.Equal(t, tt.wantIsCreator, got)
+		})
+	}
+}
