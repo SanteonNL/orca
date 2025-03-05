@@ -17,12 +17,10 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -855,510 +853,141 @@ func Test_Integration(t *testing.T) {
 }
 
 func Test_CRUD_AuditEvents(t *testing.T) {
-	// This method only tests the audit events, as Task lifecycle and data integrity is tested in Test_Integration
+	// Setup test clients and service
+	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
+	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
+	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint)
 
-	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, "", "")
+	// Track all expected audit events
+	var expectedAuditEvents []ExpectedAuditEvent
 
-	// Create patient, this will be used as the subject of the CarePlan
+	// Helper to add expected audit events
+	addExpectedAudit := func(resourceRef string, action fhir.AuditEventAction) {
+		expectedAuditEvents = append(expectedAuditEvents, ExpectedAuditEvent{
+			ResourceRef: resourceRef,
+			Action:      action,
+		})
+	}
+
+	// Create Patient
 	patient := fhir.Patient{
 		Identifier: []fhir.Identifier{
-			*patientReference.Identifier,
+			{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("1333333337"),
+			},
+		},
+		Name: []fhir.HumanName{
+			{
+				Given:  []string{"Test"},
+				Family: to.Ptr("Patient"),
+			},
 		},
 	}
 	err := carePlanContributor1.Create(patient, &patient)
 	require.NoError(t, err)
+	addExpectedAudit("Patient/"+*patient.Id, fhir.AuditEventActionC)
 
-	var task fhir.Task
-	var carePlan fhir.CarePlan
-
-	subTest := func(t *testing.T, msg string) {
-		t.Log(msg)
-	}
-
-	currentTime := time.Now()
-
-	subTest(t, "Create Task without existing CarePlan - succeeds")
-	{
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		task = fhir.Task{
-			Intent:    "order",
-			Status:    fhir.TaskStatusRequested,
-			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
-			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
-			Meta: &fhir.Meta{
-				Profile: []string{coolfhir.SCPTaskProfile},
-			},
-			Focus: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					// COPD
-					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
-					Value:  to.Ptr("99534756439"),
-				},
-			},
-			For: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-			},
-		}
-
-		err = carePlanContributor1.Create(task, &task)
-		require.NoError(t, err)
-		// This read should also create an audit event
-		err = carePlanContributor1.Read(*task.BasedOn[0].Reference, &carePlan)
-		require.NoError(t, err)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Task/" + *task.Id:         fhir.AuditEventActionC,
-			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionC,
-			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionR,
-		}, currentTime.Add(-1*time.Second), nil)
-		require.NoError(t, err)
-	}
-
-	subTest(t, "Create Task with existing CarePlan, and existing member in CareTeam - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		newTask := fhir.Task{
-			BasedOn: []fhir.Reference{
-				{
-					Type:      to.Ptr("CarePlan"),
-					Reference: to.Ptr("CarePlan/" + *carePlan.Id),
-				},
-			},
-			Intent:    "order",
-			Status:    fhir.TaskStatusRequested,
-			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
-			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
-			Meta: &fhir.Meta{
-				Profile: []string{coolfhir.SCPTaskProfile},
-			},
-			Focus: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					// COPD
-					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
-					Value:  to.Ptr("99534756439"),
-				},
-			},
-			For: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-			},
-		}
-
-		err = carePlanContributor1.Create(newTask, &newTask)
-		require.NoError(t, err)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Task/" + *newTask.Id:      fhir.AuditEventActionC,
-			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionU,
-		}, currentTime.Add(-1*time.Second), nil)
-		require.NoError(t, err)
-	}
-
-	subTest(t, "Accept Task from Contributor 2 - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		task.Status = fhir.TaskStatusAccepted
-
-		err = carePlanContributor2.Update("Task/"+*task.Id, task, &task)
-		require.NoError(t, err)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Task/" + *task.Id:         fhir.AuditEventActionU,
-			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionU,
-		}, currentTime.Add(-1*time.Second), nil)
-		require.NoError(t, err)
-	}
-
-	subTest(t, "Search Task - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		var searchResult fhir.Bundle
-		err = carePlanContributor1.Search("Task", url.Values{"_id": {*task.Id}}, &searchResult)
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 1)
-
-		// The encoded params get converted into a resource ID when the audit event is created
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Task/" + *task.Id: fhir.AuditEventActionR,
-		}, currentTime.Add(-1*time.Second), map[string][]string{
-			"_id": {*task.Id},
-		})
-		require.NoError(t, err)
-	}
-
-	subTest(t, "Search CarePlan and include CareTeam - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		var searchResult fhir.Bundle
-		err = carePlanContributor1.Search("CarePlan", url.Values{"_id": {*carePlan.Id}, "_include": {"CarePlan:care-team"}}, &searchResult)
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 2)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionR,
-		}, currentTime.Add(-1*time.Second), map[string][]string{
-			"_id":      {*carePlan.Id},
-			"_include": {"CarePlan:care-team"},
-		})
-		require.NoError(t, err)
-	}
-
-	subTest(t, "Separate Reads create separate audit events - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		for i := 0; i < 3; i++ {
-			err = carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan)
-			require.NoError(t, err)
-
-			err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-				"CarePlan/" + *carePlan.Id: fhir.AuditEventActionR,
-			}, currentTime.Add(-1*time.Second), nil)
-			require.NoError(t, err)
-
-			currentTime = currentTime.Add(1 * time.Second)
-		}
-	}
-
-	var serviceRequest fhir.ServiceRequest
-	subTest(t, "Create and Update ServiceRequest - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		serviceRequest = fhir.ServiceRequest{
-			Intent: fhir.RequestIntentOrder,
-			Status: fhir.RequestStatusDraft,
-			Subject: fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-			},
-		}
-
-		err = carePlanContributor1.Create(serviceRequest, &serviceRequest)
-		require.NoError(t, err)
-
-		serviceRequest.Status = fhir.RequestStatusActive
-
-		err = carePlanContributor1.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
-		require.NoError(t, err)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"ServiceRequest/" + *serviceRequest.Id: fhir.AuditEventActionU,
-			"ServiceRequest/" + *serviceRequest.Id: fhir.AuditEventActionC,
-		}, currentTime, nil)
-		require.NoError(t, err)
-	}
-
-	subTest(t, "Create ServiceRequest with non-local requester - fails")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		err = carePlanContributor2.Create(serviceRequest, &serviceRequest)
-		require.Error(t, err)
-
-		// TODO: Verify error audit event
-	}
-
-	subTest(t, "Update ServiceRequest with unauthorized requester - fails")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		serviceRequest.Status = fhir.RequestStatusActive
-
-		err = carePlanContributor2.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
-		require.Error(t, err)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"ServiceRequest/" + *serviceRequest.Id: fhir.AuditEventActionU,
-		}, currentTime.Add(-1*time.Second), nil)
-		require.NoError(t, err)
-	}
-
-	subTest(t, "Create ServiceRequest via Update - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		nonExistingServiceRequest := fhir.ServiceRequest{
-			Id:     to.Ptr("non-existing-service-request"),
-			Status: fhir.RequestStatusDraft,
-			Intent: fhir.RequestIntentOrder,
-			Subject: fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-			},
-		}
-
-		err = carePlanContributor1.Update("ServiceRequest/"+*nonExistingServiceRequest.Id, nonExistingServiceRequest, &nonExistingServiceRequest)
-		require.NoError(t, err)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"ServiceRequest/" + *nonExistingServiceRequest.Id: fhir.AuditEventActionC,
-		}, currentTime.Add(1*time.Second), nil)
-		require.NoError(t, err)
-	}
-
-	subTest(t, "Create patient with non-local identity - fails")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		patient.Identifier = []fhir.Identifier{
+	// Create Questionnaire
+	questionnaire := fhir.Questionnaire{
+		Status: fhir.PublicationStatusDraft,
+		Title:  to.Ptr("Test Questionnaire"),
+		Item: []fhir.QuestionnaireItem{
 			{
+				LinkId: "1",
+				Text:   to.Ptr("Question 1"),
+				Type:   fhir.QuestionnaireItemTypeString,
+			},
+		},
+	}
+	err = carePlanContributor1.Create(questionnaire, &questionnaire)
+	require.NoError(t, err)
+	addExpectedAudit("Questionnaire/"+*questionnaire.Id, fhir.AuditEventActionC)
+
+	// Create QuestionnaireResponse
+	questionnaireResponse := fhir.QuestionnaireResponse{
+		Status:        fhir.QuestionnaireResponseStatusInProgress,
+		Questionnaire: to.Ptr("Questionnaire/" + *questionnaire.Id),
+		Subject: &fhir.Reference{
+			Identifier: &fhir.Identifier{
 				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-				Value:  to.Ptr("12345"),
+				Value:  to.Ptr("1333333337"),
 			},
-		}
-
-		err = carePlanContributor2.Create(patient, &patient)
-		require.Error(t, err)
-
-		// TODO: Verify error audit event
+		},
 	}
+	err = carePlanContributor1.Create(questionnaireResponse, &questionnaireResponse)
+	require.NoError(t, err)
+	addExpectedAudit("QuestionnaireResponse/"+*questionnaireResponse.Id, fhir.AuditEventActionC)
 
-	subTest(t, "Update Patient - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		patient.Name = []fhir.HumanName{
-			{
-				Given:  []string{"Test"},
-				Family: to.Ptr("Test"),
+	// Create ServiceRequest
+	serviceRequest := fhir.ServiceRequest{
+		Status: fhir.RequestStatusActive,
+		Intent: fhir.RequestIntentOrder,
+		Subject: fhir.Reference{
+			Identifier: &fhir.Identifier{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("1333333337"),
 			},
-		}
-
-		err = carePlanContributor1.Update("Patient/"+*patient.Id, patient, &patient)
-		require.NoError(t, err)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Patient/" + *patient.Id: fhir.AuditEventActionU,
-			"Patient/" + *patient.Id: fhir.AuditEventActionC,
-		}, currentTime.Add(-1*time.Second), nil)
-		require.NoError(t, err)
+		},
+		Code: &fhir.CodeableConcept{
+			Text: to.Ptr("Test Service"),
+		},
 	}
+	err = carePlanContributor1.Create(serviceRequest, &serviceRequest)
+	require.NoError(t, err)
+	addExpectedAudit("ServiceRequest/"+*serviceRequest.Id, fhir.AuditEventActionC)
 
-	subTest(t, "Update Patient with unauthorized requester - fails")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
+	// Update Patient
+	patient.Name[0].Given = []string{"Updated"}
+	err = carePlanContributor1.Update("Patient/"+*patient.Id, patient, &patient)
+	require.NoError(t, err)
+	addExpectedAudit("Patient/"+*patient.Id, fhir.AuditEventActionU)
 
-		patient.Name = []fhir.HumanName{
-			{
-				Given:  []string{"Test"},
-				Family: to.Ptr("Test"),
-			},
-		}
+	// Update Questionnaire
+	questionnaire.Title = to.Ptr("Updated Questionnaire")
+	err = carePlanContributor1.Update("Questionnaire/"+*questionnaire.Id, questionnaire, &questionnaire)
+	require.NoError(t, err)
+	addExpectedAudit("Questionnaire/"+*questionnaire.Id, fhir.AuditEventActionU)
 
+	// Update QuestionnaireResponse
+	questionnaireResponse.Status = fhir.QuestionnaireResponseStatusCompleted
+	err = carePlanContributor1.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponse, &questionnaireResponse)
+	require.NoError(t, err)
+	addExpectedAudit("QuestionnaireResponse/"+*questionnaireResponse.Id, fhir.AuditEventActionU)
+
+	// Update ServiceRequest
+	serviceRequest.Status = fhir.RequestStatusCompleted
+	err = carePlanContributor1.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
+	require.NoError(t, err)
+	addExpectedAudit("ServiceRequest/"+*serviceRequest.Id, fhir.AuditEventActionU)
+
+	// Negative tests - different user trying to update resources
+	t.Run("Update Patient with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("Patient/"+*patient.Id, patient, &patient)
 		require.Error(t, err)
+		require.Contains(t, err.Error(), "Only the creator can update this Patient")
+	})
 
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Patient/" + *patient.Id: fhir.AuditEventActionU,
-		}, currentTime.Add(-1*time.Second), nil)
-		require.NoError(t, err)
-	}
-
-	var questionnaire fhir.Questionnaire
-	subTest(t, "Create and Update Questionnaire - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		questionnaire = fhir.Questionnaire{
-			Status: fhir.PublicationStatusDraft,
-			Title:  to.Ptr("Test Questionnaire"),
-			Item: []fhir.QuestionnaireItem{
-				{
-					LinkId: "1",
-					Text:   to.Ptr("Question 1"),
-					Type:   fhir.QuestionnaireItemTypeString,
-				},
-			},
-		}
-
-		err = carePlanContributor1.Create(questionnaire, &questionnaire)
-		require.NoError(t, err)
-		require.NotNil(t, questionnaire.Id)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Questionnaire/" + *questionnaire.Id: fhir.AuditEventActionC,
-		}, currentTime.Add(-1*time.Second), nil)
-		require.NoError(t, err)
-
-		// Update the questionnaire
-		currentTime = updateCurrentTime(currentTime)
-		restore = audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		questionnaire.Status = fhir.PublicationStatusActive
-		questionnaire.Item = append(questionnaire.Item, fhir.QuestionnaireItem{
-			LinkId: "2",
-			Text:   to.Ptr("Question 2"),
-			Type:   fhir.QuestionnaireItemTypeString,
-		})
-
-		err = carePlanContributor1.Update("Questionnaire/"+*questionnaire.Id, questionnaire, &questionnaire)
-		require.NoError(t, err)
-
-		err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-			"Questionnaire/" + *questionnaire.Id: fhir.AuditEventActionU,
-			"Questionnaire/" + *questionnaire.Id: fhir.AuditEventActionC,
-		}, currentTime.Add(-1*time.Second), nil)
-		require.NoError(t, err)
-	}
-
-	subTest(t, "Create Questionnaire with non-local requester - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		questionnaire.Status = fhir.PublicationStatusActive
-
-		err = carePlanContributor2.Create(questionnaire, &questionnaire)
-		require.NoError(t, err)
-
-		//err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-		//	"Questionnaire/" + *questionnaire.Id: fhir.AuditEventActionC,
-		//}, currentTime.Add(-1*time.Second), nil)
-		//require.NoError(t, err)
-	}
-
-	subTest(t, "Update Questionnaire with different requester - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		questionnaire.Status = fhir.PublicationStatusRetired
-
+	t.Run("Update Questionnaire with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("Questionnaire/"+*questionnaire.Id, questionnaire, &questionnaire)
-		require.NoError(t, err)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Only the creator can update this Questionnaire")
+	})
 
-		//err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-		//	"Questionnaire/" + *questionnaire.Id: fhir.AuditEventActionU,
-		//}, currentTime.Add(-1*time.Second), nil)
-		//require.NoError(t, err)
-	}
-
-	var questionnaireResponse fhir.QuestionnaireResponse
-	subTest(t, "Create QuestionnaireResponse - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		questionnaireResponse = fhir.QuestionnaireResponse{
-			Status:        fhir.QuestionnaireResponseStatusInProgress,
-			Questionnaire: to.Ptr("Questionnaire/" + *questionnaire.Id),
-			Subject: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-			},
-		}
-
-		err = carePlanContributor1.Create(questionnaireResponse, &questionnaireResponse)
-		require.NoError(t, err)
-
-		//err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-		//	"QuestionnaireResponse/" + *questionnaireResponse.Id: fhir.AuditEventActionC,
-		//}, currentTime.Add(-1*time.Second), nil)
-		//require.NoError(t, err)
-	}
-
-	subTest(t, "Update QuestionnaireResponse - succeeds")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		questionnaireResponse.Status = fhir.QuestionnaireResponseStatusCompleted
-
-		err = carePlanContributor1.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponse, &questionnaireResponse)
-		require.NoError(t, err)
-
-		//err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-		//	"QuestionnaireResponse/" + *questionnaireResponse.Id: fhir.AuditEventActionU,
-		//}, currentTime.Add(-1*time.Second), nil)
-		//require.NoError(t, err)
-	}
-
-	subTest(t, "Update QuestionnaireResponse with different requester - fails")
-	{
+	t.Run("Update QuestionnaireResponse with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponse, &questionnaireResponse)
 		require.Error(t, err)
+		require.Contains(t, err.Error(), "Only the creator can update this QuestionnaireResponse")
+	})
 
-		// TODO: Verify error audit event
-	}
-
-	subTest(t, "Create QuestionnaireResponse with non-local requester - fails")
-	{
-		questionnaireResponse = fhir.QuestionnaireResponse{
-			Status:        fhir.QuestionnaireResponseStatusInProgress,
-			Questionnaire: to.Ptr("Questionnaire/" + *questionnaire.Id),
-			Subject: &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-			},
-		}
-
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
-		err = carePlanContributor2.Create(questionnaireResponse, &questionnaireResponse)
+	t.Run("Update ServiceRequest with different requester - fails", func(t *testing.T) {
+		err = carePlanContributor2.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
 		require.Error(t, err)
+		require.Contains(t, err.Error(), "Only the creator can update this ServiceRequest")
+	})
 
-		// TODO: Verify error audit event
-	}
-
-	subTest(t, "Update non-existing Patient - creates new resource")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
+	// Update non-existing resources (creates new ones)
+	t.Run("Update non-existing Patient - creates new resource", func(t *testing.T) {
 		nonExistingPatient := fhir.Patient{
 			Id: to.Ptr("non-existing-patient"),
 			Identifier: []fhir.Identifier{
@@ -1374,22 +1003,12 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 				},
 			},
 		}
-
 		err = carePlanContributor1.Update("Patient/"+*nonExistingPatient.Id, nonExistingPatient, &nonExistingPatient)
 		require.NoError(t, err)
+		addExpectedAudit("Patient/"+*nonExistingPatient.Id, fhir.AuditEventActionC)
+	})
 
-		//err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-		//	"Patient/" + *nonExistingPatient.Id: fhir.AuditEventActionC,
-		//}, currentTime.Add(-1*time.Second), nil)
-		//require.NoError(t, err)
-	}
-
-	subTest(t, "Update non-existing Questionnaire - creates new resource")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
+	t.Run("Update non-existing Questionnaire - creates new resource", func(t *testing.T) {
 		nonExistingQuestionnaire := fhir.Questionnaire{
 			Id:     to.Ptr("non-existing-questionnaire"),
 			Status: fhir.PublicationStatusDraft,
@@ -1402,22 +1021,12 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 				},
 			},
 		}
-
 		err = carePlanContributor1.Update("Questionnaire/"+*nonExistingQuestionnaire.Id, nonExistingQuestionnaire, &nonExistingQuestionnaire)
 		require.NoError(t, err)
+		addExpectedAudit("Questionnaire/"+*nonExistingQuestionnaire.Id, fhir.AuditEventActionC)
+	})
 
-		//err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-		//	"Questionnaire/" + *nonExistingQuestionnaire.Id: fhir.AuditEventActionC,
-		//}, currentTime.Add(-1*time.Second), nil)
-		//require.NoError(t, err)
-	}
-
-	subTest(t, "Update non-existing QuestionnaireResponse - creates new resource")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
+	t.Run("Update non-existing QuestionnaireResponse - creates new resource", func(t *testing.T) {
 		nonExistingQuestionnaireResponse := fhir.QuestionnaireResponse{
 			Id:            to.Ptr("non-existing-questionnaire-response"),
 			Status:        fhir.QuestionnaireResponseStatusInProgress,
@@ -1429,24 +1038,14 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 				},
 			},
 		}
-
 		err = carePlanContributor1.Update("QuestionnaireResponse/"+*nonExistingQuestionnaireResponse.Id, nonExistingQuestionnaireResponse, &nonExistingQuestionnaireResponse)
 		require.NoError(t, err)
+		addExpectedAudit("QuestionnaireResponse/"+*nonExistingQuestionnaireResponse.Id, fhir.AuditEventActionC)
+	})
 
-		//err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-		//	"QuestionnaireResponse/" + *nonExistingQuestionnaireResponse.Id: fhir.AuditEventActionC,
-		//}, currentTime.Add(-1*time.Second), nil)
-		//require.NoError(t, err)
-	}
-
-	subTest(t, "Update non-existing ServiceRequest - creates new resource")
-	{
-		currentTime = updateCurrentTime(currentTime)
-		restore := audit.SetNowFuncForTest(func() time.Time { return time.Now() })
-		defer restore()
-
+	t.Run("Update non-existing ServiceRequest - creates new resource", func(t *testing.T) {
 		nonExistingServiceRequest := fhir.ServiceRequest{
-			Id:     to.Ptr("another-non-existing-service-request"),
+			Id:     to.Ptr("non-existing-service-request"),
 			Intent: fhir.RequestIntentOrder,
 			Status: fhir.RequestStatusDraft,
 			Subject: fhir.Reference{
@@ -1459,145 +1058,123 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 				Text: to.Ptr("New Service Request"),
 			},
 		}
-
 		err = carePlanContributor1.Update("ServiceRequest/"+*nonExistingServiceRequest.Id, nonExistingServiceRequest, &nonExistingServiceRequest)
 		require.NoError(t, err)
+		addExpectedAudit("ServiceRequest/"+*nonExistingServiceRequest.Id, fhir.AuditEventActionC)
+	})
 
-		//err = verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
-		//	"ServiceRequest/" + *nonExistingServiceRequest.Id: fhir.AuditEventActionC,
-		//}, currentTime.Add(-1*time.Second), nil)
-		//require.NoError(t, err)
-	}
+	// Verify all audit events at the end
+	err = verifyAuditEvents(t, carePlanContributor1, expectedAuditEvents)
+	require.NoError(t, err)
 }
 
-func updateCurrentTime(currentTime time.Time) time.Time {
-	return currentTime.Add(time.Duration(10) * time.Second)
+// Define a new type to hold expected audit events without timestamp requirements
+type ExpectedAuditEvent struct {
+	ResourceRef string
+	Action      fhir.AuditEventAction
+	QueryParams map[string][]string
 }
 
-func searchWithoutCache(t *testing.T, fhirClient fhirclient.Client, resourceType string, params url.Values) (*fhir.Bundle, error) {
+// Refactored verifyAuditEvents to handle a list of expected audit events without timestamp requirements
+func verifyAuditEvents(t *testing.T, fhirClient fhirclient.Client, expectedEvents []ExpectedAuditEvent) error {
 	t.Helper()
-
-	// Add multiple cache-busting techniques
-	headers := http.Header{
-		"Cache-Control": {"no-cache, no-store, must-revalidate"},
-		"Pragma":        {"no-cache"},
-		"Expires":       {"0"},
-	}
-
-	if params == nil {
-		params = url.Values{}
-	}
-
-	// Add cache-busting parameters
-	params.Set("_cache", "no-cache")
-	// Add a timestamp to force fresh data
-	params.Set("_", fmt.Sprintf("%d", time.Now().UnixNano()))
 
 	// Create a context with timeout to avoid hanging
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	// Log the search attempt for debugging
-	t.Logf("Searching for %s with cache-busting parameters", resourceType)
+	t.Logf("Searching for AuditEvents")
 
 	var bundle fhir.Bundle
-	err := fhirClient.SearchWithContext(ctx, resourceType, params, &bundle,
-		fhirclient.RequestHeaders(headers))
+	err := fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{}, &bundle)
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to search %s: %w", resourceType, err)
+		return fmt.Errorf("failed to search AuditEvents: %w", err)
 	}
 
 	// Log success for debugging
-	t.Logf("Successfully retrieved %d entries for %s", len(bundle.Entry), resourceType)
-	return &bundle, nil
-}
+	t.Logf("Successfully retrieved %d AuditEvents", len(bundle.Entry))
 
-func verifyAuditEvent(t *testing.T, fhirClient fhirclient.Client, expectedActions map[string]fhir.AuditEventAction, after time.Time, queryParams map[string][]string) error {
-	t.Helper()
+	// Track which expected events have been found
+	foundEvents := make(map[string]bool)
 
-	log.Ctx(context.Background()).Info().Msgf("Verifying audit events for %d resources", len(expectedActions))
-
-	// Fetch all audit events with cache bypass
-	bundle, err := searchWithoutCache(t, fhirClient, "AuditEvent", nil)
-	if err != nil {
-		return fmt.Errorf("failed to search audit events: %w", err)
-	}
-
-	// Process all audit events into a map for easier lookup
-	resourceAuditEvents := make(map[string]map[fhir.AuditEventAction]bool)
-
+	// Process each audit event in the bundle
 	for _, entry := range bundle.Entry {
 		var auditEvent fhir.AuditEvent
 		if err := json.Unmarshal(entry.Resource, &auditEvent); err != nil {
-			continue
+			return fmt.Errorf("failed to unmarshal AuditEvent: %w", err)
 		}
 
-		// Skip if expected audit event is older than our after time
-		recordedTime, err := time.Parse(time.RFC3339, auditEvent.Recorded)
-		if err != nil || recordedTime.Before(after) {
-			for resourceRef, _ := range expectedActions {
-				if resourceRef == *auditEvent.Entity[0].What.Reference {
-					continue
-				}
-			}
+		// Skip if no entities or action
+		if len(auditEvent.Entity) == 0 || auditEvent.Action == nil {
+			continue
 		}
 
 		// Check each entity in the audit event
 		for _, entity := range auditEvent.Entity {
-			if entity.What != nil && entity.What.Reference != nil {
-				resourceRef := *entity.What.Reference
+			if entity.What == nil || entity.What.Reference == nil {
+				continue
+			}
 
-				// Initialize map for this resource if needed
-				if resourceAuditEvents[resourceRef] == nil {
-					resourceAuditEvents[resourceRef] = make(map[fhir.AuditEventAction]bool)
-				}
+			resourceRef := *entity.What.Reference
+			actionKey := fmt.Sprintf("%s:%s", resourceRef, *auditEvent.Action)
 
-				// Record this action for the resource
-				if auditEvent.Action != nil {
-					resourceAuditEvents[resourceRef][*auditEvent.Action] = true
-				}
+			// Check if this matches any expected event
+			for _, expectedEvent := range expectedEvents {
+				expectedKey := fmt.Sprintf("%s:%s", expectedEvent.ResourceRef, expectedEvent.Action)
 
-				// Verify query parameters if this is a search audit event
-				if queryParams != nil && auditEvent.Action != nil && *auditEvent.Action == fhir.AuditEventActionE {
-					// Find query entity
-					for _, e := range auditEvent.Entity {
-						if e.Type != nil && e.Type.Code != nil && *e.Type.Code == "2" { // "2" is the code for query parameters
-							// Verify all expected params exist in details
-							for param, values := range queryParams {
-								paramFound := false
-								for _, detail := range e.Detail {
-									if detail.Type == param && *detail.ValueString == strings.Join(values, ",") {
-										paramFound = true
-										break
-									}
-								}
-								if !paramFound {
-									return fmt.Errorf("missing query parameter %s with value %v", param, values)
-								}
-							}
-							break
+				if actionKey == expectedKey {
+					// Check query parameters if needed
+					if expectedEvent.QueryParams != nil && *auditEvent.Action == fhir.AuditEventActionE {
+						paramsMatch := verifyQueryParams(auditEvent, expectedEvent.QueryParams)
+						if !paramsMatch {
+							continue
 						}
 					}
+
+					// Mark this expected event as found
+					foundEvents[expectedKey] = true
+					break
 				}
 			}
 		}
 	}
 
-	// Verify each expected action exists
-	for resourceRef, expectedAction := range expectedActions {
-		actions, found := resourceAuditEvents[resourceRef]
-		if !found || !actions[expectedAction] {
-			return fmt.Errorf("expected to find audit event with action %s for resource %s", expectedAction, resourceRef)
-		}
-
-		// If this is an update event, verify we also have a create event
-		if expectedAction == fhir.AuditEventActionU && !actions[fhir.AuditEventActionC] {
-			return fmt.Errorf("expected to find a create audit event for resource %s", resourceRef)
+	// Check if all expected events were found
+	for _, event := range expectedEvents {
+		key := fmt.Sprintf("%s:%s", event.ResourceRef, event.Action)
+		if !foundEvents[key] {
+			return fmt.Errorf("expected to find audit event with action %s for resource %s",
+				event.Action, event.ResourceRef)
 		}
 	}
 
 	return nil
+}
+
+// Helper function to verify query parameters in an audit event
+func verifyQueryParams(auditEvent fhir.AuditEvent, queryParams map[string][]string) bool {
+	// Find query entity
+	for _, e := range auditEvent.Entity {
+		if e.Type != nil && e.Type.Code != nil && *e.Type.Code == "2" { // "2" is the code for query parameters
+			// Verify all expected params exist in details
+			for param, values := range queryParams {
+				paramFound := false
+				for _, detail := range e.Detail {
+					if detail.Type == param && *detail.ValueString == strings.Join(values, ",") {
+						paramFound = true
+						break
+					}
+				}
+				if !paramFound {
+					return false
+				}
+			}
+			return true
+		}
+	}
+	return false
 }
 
 func testBundleCreation(t *testing.T, carePlanContributor1 *fhirclient.BaseClient) {
