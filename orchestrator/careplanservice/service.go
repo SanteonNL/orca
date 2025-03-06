@@ -367,8 +367,6 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 	switch resourceType {
 	case "CarePlan":
 		resource, err = s.handleGetCarePlan(httpRequest.Context(), resourceId, headers)
-	case "CareTeam":
-		resource, err = s.handleGetCareTeam(httpRequest.Context(), resourceId, headers)
 	case "Task":
 		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
 	case "Patient":
@@ -525,8 +523,6 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 	switch resourceType {
 	case "CarePlan":
 		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), queryParams, headers)
-	case "CareTeam":
-		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), queryParams, headers)
 	case "Task":
 		bundle, err = s.handleSearchTask(httpRequest.Context(), queryParams, headers)
 	case "Patient":

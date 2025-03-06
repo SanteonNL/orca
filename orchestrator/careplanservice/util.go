@@ -4,46 +4,18 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"net/http"
 	"net/url"
 	"slices"
 	"strings"
 
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
-
-func GetCarePlanAndCareTeams(ctx context.Context, client fhirclient.Client, carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
-	bundle := fhir.Bundle{}
-	var carePlan fhir.CarePlan
-	var careTeams []fhir.CareTeam
-	headers := new(fhirclient.Headers)
-
-	carePlanId := strings.TrimPrefix(carePlanReference, "CarePlan/")
-
-	err := client.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle, fhirclient.ResponseHeaders(headers))
-	if err != nil {
-		return fhir.CarePlan{}, nil, nil, err
-	}
-
-	err = coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
-	if err != nil {
-		return fhir.CarePlan{}, nil, nil, err
-	}
-
-	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
-	if len(careTeams) == 0 {
-		return fhir.CarePlan{}, nil, nil, &coolfhir.ErrorWithCode{
-			Message:    "CareTeam not found in bundle",
-			StatusCode: http.StatusNotFound,
-		}
-	}
-
-	return carePlan, careTeams, headers, nil
-}
 
 // filterAuthorizedPatients will go through a list of patients and return the ones the requester has access to
 func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.Patient) ([]fhir.Patient, error) {
@@ -53,21 +25,15 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 		patientRefs[i] = fmt.Sprintf("Patient/%s", *patient.Id)
 	}
 	params.Add("subject", strings.Join(patientRefs, ","))
-	params.Add("_include", "CarePlan:care-team")
 
 	// Fetch all CarePlans associated with the Patient, get the CareTeams associated with the CarePlans
 	// Get the CarePlan for which the Patient is the subject, get the CareTeams associated with the CarePlan
 	var verificationBundle fhir.Bundle
-	err := s.fhirClient.Search("CarePlan", params, &verificationBundle)
+	err := s.fhirClient.SearchWithContext(ctx, "CarePlan", params, &verificationBundle)
 	if err != nil {
 		return nil, err
 	}
 
-	var careTeams []fhir.CareTeam
-	err = coolfhir.ResourcesInBundle(&verificationBundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
-	if err != nil {
-		return nil, err
-	}
 	var carePlans []fhir.CarePlan
 	err = coolfhir.ResourcesInBundle(&verificationBundle, coolfhir.EntryIsOfType("CarePlan"), &carePlans)
 	if err != nil {
@@ -83,15 +49,12 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 
 	// Iterate through each CareTeam to see if the requester is a participant, if not, remove any patients from the bundle that are part of the CareTeam
 	for _, cp := range carePlans {
-		var ct fhir.CareTeam
-		for _, c := range careTeams {
-			if *cp.CareTeam[0].Reference == fmt.Sprintf("CareTeam/%s", *c.Id) {
-				ct = c
-				break
-			}
+		ct, err := coolfhir.CareTeamFromCarePlan(&cp)
+		if err != nil {
+			return nil, err
 		}
 
-		participant := coolfhir.FindMatchingParticipantInCareTeam([]fhir.CareTeam{ct}, principal.Organization.Identifier)
+		participant := coolfhir.FindMatchingParticipantInCareTeam(ct, principal.Organization.Identifier)
 		if participant != nil {
 			for _, patient := range patients {
 				if "Patient/"+*patient.Id == *cp.Subject.Reference {
@@ -116,7 +79,7 @@ func handleSearchResource[T any](ctx context.Context, s *Service, resourceType s
 	}
 
 	var bundle fhir.Bundle
-	err := s.fhirClient.Search(resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
+	err := s.fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, &fhir.Bundle{}, err
 	}
@@ -130,8 +93,8 @@ func handleSearchResource[T any](ctx context.Context, s *Service, resourceType s
 	return resources, &bundle, nil
 }
 
-func validatePrincipalInCareTeams(principal auth.Principal, careTeams []fhir.CareTeam) error {
-	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+func validatePrincipalInCareTeam(principal auth.Principal, careTeam *fhir.CareTeam) error {
+	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, principal.Organization.Identifier)
 	if participant == nil {
 		return &coolfhir.ErrorWithCode{
 			Message:    "Participant is not part of CareTeam",

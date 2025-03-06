@@ -1,7 +1,7 @@
 "use client"
 import useCpsClient from '@/hooks/use-cps-client'
 import useEhrClient from '@/hooks/use-ehr-fhir-client'
-import { findInBundle, getBsn, constructTaskBundle } from '@/lib/fhirUtils'
+import { findInBundle, getPatientIdentifier, constructTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
 import { Bundle, Condition, PractitionerRole } from 'fhir/r4'
 import React, { useEffect, useState } from 'react'
@@ -67,7 +67,7 @@ export default function EnrollInCpsButton({ className }: Props) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
-        if (!patient || !getBsn(patient) || !taskCondition || !serviceRequest) {
+        if (!patient || !getPatientIdentifier(patient) || !taskCondition || !serviceRequest) {
             toast.error("Error: Missing required items for Task creation", { richColors: true })
             throw new Error("Missing required items for Task creation")
         }

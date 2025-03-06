@@ -75,22 +75,15 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 			Type:      to.Ptr("CarePlan"),
 		}
 
-		for _, team := range carePlan.CareTeam {
-			if team.Reference == nil {
-				continue
-			}
+		careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
+		if err != nil {
+			log.Ctx(ctx).Err(err).Msg("failed to read CareTeam in CarePlan")
+			return nil
+		}
 
-			var careTeam fhir.CareTeam
-
-			if err := r.FhirClient.ReadWithContext(ctx, *team.Reference, &careTeam); err != nil {
-				log.Ctx(ctx).Error().Msgf("failed to read CareTeam in FHIR store %s: %s", *team.Reference, err)
-				continue
-			}
-
-			for _, participant := range careTeam.Participant {
-				if coolfhir.IsLogicalIdentifier(participant.Member.Identifier) {
-					subscribers = append(subscribers, *participant.Member.Identifier)
-				}
+		for _, participant := range careTeam.Participant {
+			if coolfhir.IsLogicalIdentifier(participant.Member.Identifier) {
+				subscribers = append(subscribers, *participant.Member.Identifier)
 			}
 		}
 	default:

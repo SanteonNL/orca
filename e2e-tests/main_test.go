@@ -200,21 +200,21 @@ func Test_Main(t *testing.T) {
 				require.Equal(t, len(questionnaireResponse.Item), len(fetchedQuestionnaireResponse.Item))
 			}
 			t.Run("Check Task requester and owner are in the CareTeam", func(t *testing.T) {
-				var carePlansAndCareTeams fhir.Bundle
-				err := hospitalOrcaFHIRClient.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &carePlansAndCareTeams)
+				var carePlans fhir.Bundle
+				err := hospitalOrcaFHIRClient.Search("CarePlan", url.Values{"_id": {carePlanId}}, &carePlans)
 				require.NoError(t, err)
-				require.Len(t, carePlansAndCareTeams.Entry, 2, "Expected 2 entries in bundle")
-				// Assume CareTeam is 2nd resource
-				var careTeam fhir.CareTeam
-				require.NoError(t, json.Unmarshal(carePlansAndCareTeams.Entry[1].Resource, &careTeam))
-				require.Len(t, careTeam.Participant, 2)
-			})
+				require.Len(t, carePlans.Entry, 1, "Expected a single entry in bundle")
 
-			//t.Log("Filler adding Questionnaire sub-Task...")
-			//subTask := fhir.Task{}
-			//{
-			//
-			//}
+				var carePlan struct {
+					Contained []fhir.CareTeam `json:"contained"`
+				}
+
+				err = json.Unmarshal(carePlans.Entry[0].Resource, &carePlan)
+				require.NoError(t, err)
+
+				// Assume CareTeam is 1st contained resource
+				require.Len(t, carePlan.Contained[0].Participant, 2)
+			})
 		})
 	})
 	t.Run("Clinic attempts to create a CarePlan at Hospital's CarePlanService, which isn't allowed", func(t *testing.T) {
