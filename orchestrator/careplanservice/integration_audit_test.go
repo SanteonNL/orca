@@ -33,6 +33,14 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		})
 	}
 
+	addExpectedSearchAudit := func(resourceRef string, queryParams map[string][]string) {
+		expectedAuditEvents = append(expectedAuditEvents, ExpectedAuditEvent{
+			ResourceRef: resourceRef,
+			Action:      fhir.AuditEventActionE,
+			QueryParams: queryParams,
+		})
+	}
+
 	// Create Patient
 	patient := fhir.Patient{
 		Identifier: []fhir.Identifier{
@@ -151,8 +159,9 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	})
 
 	// Update non-existing resources (creates new ones)
+	var nonExistingPatient fhir.Patient
 	t.Run("Update non-existing Patient - creates new resource", func(t *testing.T) {
-		nonExistingPatient := fhir.Patient{
+		nonExistingPatient = fhir.Patient{
 			Id: to.Ptr("non-existing-patient"),
 			Identifier: []fhir.Identifier{
 				{
@@ -172,8 +181,9 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedAudit("Patient/"+*nonExistingPatient.Id, fhir.AuditEventActionC)
 	})
 
+	var nonExistingQuestionnaire fhir.Questionnaire
 	t.Run("Update non-existing Questionnaire - creates new resource", func(t *testing.T) {
-		nonExistingQuestionnaire := fhir.Questionnaire{
+		nonExistingQuestionnaire = fhir.Questionnaire{
 			Id:     to.Ptr("non-existing-questionnaire"),
 			Status: fhir.PublicationStatusDraft,
 			Title:  to.Ptr("New Test Questionnaire"),
@@ -190,8 +200,9 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedAudit("Questionnaire/"+*nonExistingQuestionnaire.Id, fhir.AuditEventActionC)
 	})
 
+	var nonExistingQuestionnaireResponse fhir.QuestionnaireResponse
 	t.Run("Update non-existing QuestionnaireResponse - creates new resource", func(t *testing.T) {
-		nonExistingQuestionnaireResponse := fhir.QuestionnaireResponse{
+		nonExistingQuestionnaireResponse = fhir.QuestionnaireResponse{
 			Id:            to.Ptr("non-existing-questionnaire-response"),
 			Status:        fhir.QuestionnaireResponseStatusInProgress,
 			Questionnaire: to.Ptr("Questionnaire/" + *questionnaire.Id),
@@ -207,8 +218,9 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedAudit("QuestionnaireResponse/"+*nonExistingQuestionnaireResponse.Id, fhir.AuditEventActionC)
 	})
 
+	var nonExistingServiceRequest fhir.ServiceRequest
 	t.Run("Update non-existing ServiceRequest - creates new resource", func(t *testing.T) {
-		nonExistingServiceRequest := fhir.ServiceRequest{
+		nonExistingServiceRequest = fhir.ServiceRequest{
 			Id:     to.Ptr("non-existing-service-request"),
 			Intent: fhir.RequestIntentOrder,
 			Status: fhir.RequestStatusDraft,
@@ -225,6 +237,111 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		err = carePlanContributor1.Update("ServiceRequest/"+*nonExistingServiceRequest.Id, nonExistingServiceRequest, &nonExistingServiceRequest)
 		require.NoError(t, err)
 		addExpectedAudit("ServiceRequest/"+*nonExistingServiceRequest.Id, fhir.AuditEventActionC)
+	})
+
+	t.Run("Read Patient by id", func(t *testing.T) {
+		var readPatient fhir.Patient
+		err := carePlanContributor1.Read("Patient/"+*patient.Id, &readPatient)
+		require.NoError(t, err)
+		require.NotNil(t, readPatient)
+
+		addExpectedAudit("Patient/"+*readPatient.Id, fhir.AuditEventActionR)
+
+		// Read Patient by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("Patient/"+*patient.Id, &readPatient)
+		require.NoError(t, err)
+		require.NotNil(t, readPatient)
+
+		addExpectedAudit("Patient/"+*readPatient.Id, fhir.AuditEventActionR)
+	})
+
+	t.Run("Read Questionnaire by id", func(t *testing.T) {
+		var readQuestionnaire fhir.Questionnaire
+		err := carePlanContributor1.Read("Questionnaire/"+*questionnaire.Id, &readQuestionnaire)
+		require.NoError(t, err)
+		require.NotNil(t, readQuestionnaire)
+
+		addExpectedAudit("Questionnaire/"+*readQuestionnaire.Id, fhir.AuditEventActionR)
+
+		// Read Questionnaire by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("Questionnaire/"+*questionnaire.Id, &readQuestionnaire)
+		require.NoError(t, err)
+		require.NotNil(t, readQuestionnaire)
+
+		addExpectedAudit("Questionnaire/"+*readQuestionnaire.Id, fhir.AuditEventActionR)
+	})
+
+	t.Run("Read QuestionnaireResponse by id", func(t *testing.T) {
+		var readQuestionnaireResponse fhir.QuestionnaireResponse
+		err := carePlanContributor1.Read("QuestionnaireResponse/"+*questionnaireResponse.Id, &readQuestionnaireResponse)
+		require.NoError(t, err)
+		require.NotNil(t, readQuestionnaireResponse)
+
+		addExpectedAudit("QuestionnaireResponse/"+*readQuestionnaireResponse.Id, fhir.AuditEventActionR)
+
+		// Read QuestionnaireResponse by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("QuestionnaireResponse/"+*questionnaireResponse.Id, &readQuestionnaireResponse)
+		require.NoError(t, err)
+		require.NotNil(t, readQuestionnaireResponse)
+
+		addExpectedAudit("QuestionnaireResponse/"+*readQuestionnaireResponse.Id, fhir.AuditEventActionR)
+	})
+
+	t.Run("Read ServiceRequest by id", func(t *testing.T) {
+		var readServiceRequest fhir.ServiceRequest
+		err := carePlanContributor1.Read("ServiceRequest/"+*serviceRequest.Id, &readServiceRequest)
+		require.NoError(t, err)
+		require.NotNil(t, readServiceRequest)
+
+		addExpectedAudit("ServiceRequest/"+*readServiceRequest.Id, fhir.AuditEventActionR)
+
+		// Read ServiceRequest by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("ServiceRequest/"+*serviceRequest.Id, &readServiceRequest)
+		require.NoError(t, err)
+		require.NotNil(t, readServiceRequest)
+
+		addExpectedAudit("ServiceRequest/"+*readServiceRequest.Id, fhir.AuditEventActionR)
+	})
+
+	var searchResult fhir.Bundle
+	t.Run("Search Patient by id", func(t *testing.T) {
+		err := carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}}, &searchResult)
+		require.NoError(t, err)
+		require.NotEmpty(t, searchResult.Entry)
+
+		addExpectedSearchAudit("Patient", url.Values{"_id": {*patient.Id}})
+		addExpectedSearchAudit("Patient", url.Values{"_id": {*nonExistingPatient.Id}})
+		// TODO: Do we add an error audit event for "fake-id"
+	})
+
+	t.Run("Search Questionnaire by id", func(t *testing.T) {
+		err := carePlanContributor1.Search("Questionnaire", url.Values{"_id": {*questionnaire.Id, *nonExistingQuestionnaire.Id, "fake-id"}}, &searchResult)
+		require.NoError(t, err)
+		require.NotEmpty(t, searchResult.Entry)
+
+		addExpectedSearchAudit("Questionnaire", url.Values{"_id": {*questionnaire.Id}})
+		addExpectedSearchAudit("Questionnaire", url.Values{"_id": {*nonExistingQuestionnaire.Id}})
+		// TODO: Do we add an error audit event for "fake-id"
+	})
+
+	t.Run("Search QuestionnaireResponse by id", func(t *testing.T) {
+		err := carePlanContributor1.Search("QuestionnaireResponse", url.Values{"_id": {*questionnaireResponse.Id, *nonExistingQuestionnaireResponse.Id, "fake-id"}}, &searchResult)
+		require.NoError(t, err)
+		require.NotEmpty(t, searchResult.Entry)
+
+		addExpectedSearchAudit("QuestionnaireResponse", url.Values{"_id": {*questionnaireResponse.Id}})
+		addExpectedSearchAudit("QuestionnaireResponse", url.Values{"_id": {*nonExistingQuestionnaireResponse.Id}})
+		// TODO: Do we add an error audit event for "fake-id"
+	})
+
+	t.Run("Search ServiceRequest by id", func(t *testing.T) {
+		err := carePlanContributor1.Search("ServiceRequest", url.Values{"_id": {*serviceRequest.Id, *nonExistingServiceRequest.Id, "fake-id"}}, &searchResult)
+		require.NoError(t, err)
+		require.NotEmpty(t, searchResult.Entry)
+
+		addExpectedSearchAudit("ServiceRequest", url.Values{"_id": {*serviceRequest.Id}})
+		addExpectedSearchAudit("ServiceRequest", url.Values{"_id": {*nonExistingServiceRequest.Id}})
+		// TODO: Do we add an error audit event for "fake-id"
 	})
 
 	// Verify all audit events at the end

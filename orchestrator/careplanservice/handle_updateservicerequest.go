@@ -36,7 +36,7 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 
 	// Search for the existing ServiceRequest
 	var searchBundle fhir.Bundle
-	err = s.fhirClient.Search("ServiceRequest", url.Values{
+	err = s.fhirClient.SearchWithContext(ctx, "ServiceRequest", url.Values{
 		"_id": []string{*serviceRequest.Id},
 	}, &searchBundle)
 	if err != nil {
@@ -56,34 +56,11 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 		return nil, fmt.Errorf("failed to unmarshal existing ServiceRequest: %w", err)
 	}
 
-	// Find the creation AuditEvent for this ServiceRequest
-	var auditBundle fhir.Bundle
-	err = s.fhirClient.Search("AuditEvent", url.Values{
-		"entity": []string{"ServiceRequest/" + *serviceRequest.Id},
-		"action": []string{fhir.AuditEventActionC.String()},
-	}, &auditBundle)
+	isCreator, err := s.isCreatorOfResource(ctx, "ServiceRequest", *serviceRequest.Id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find creation AuditEvent: %w", err)
+		return nil, fmt.Errorf("failed to check if current user is creator of ServiceRequest: %w", err)
 	}
-
-	// Check if there's a creation audit event
-	if len(auditBundle.Entry) == 0 {
-		return nil, coolfhir.NewErrorWithCode("No creation audit event found for ServiceRequest", http.StatusForbidden)
-	}
-
-	// Get the creator from the audit event
-	var creationAuditEvent fhir.AuditEvent
-	err = json.Unmarshal(auditBundle.Entry[0].Resource, &creationAuditEvent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal AuditEvent: %w", err)
-	}
-
-	// Check if the current user is the creator
-	if len(creationAuditEvent.Agent) == 0 || creationAuditEvent.Agent[0].Who == nil || creationAuditEvent.Agent[0].Who.Identifier == nil {
-		return nil, errors.New("invalid AuditEvent: missing agent information")
-	}
-
-	if !audit.IsCreator(creationAuditEvent, &principal) {
+	if !isCreator {
 		return nil, coolfhir.NewErrorWithCode("Only the creator can update this ServiceRequest", http.StatusForbidden)
 	}
 

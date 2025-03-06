@@ -35,7 +35,7 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 
 	// Search for the existing Patient
 	var searchBundle fhir.Bundle
-	err = s.fhirClient.Search("Patient", url.Values{
+	err = s.fhirClient.SearchWithContext(ctx, "Patient", url.Values{
 		"_id": []string{*patient.Id},
 	}, &searchBundle)
 	if err != nil {
@@ -55,30 +55,11 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 		return nil, fmt.Errorf("failed to unmarshal existing Patient: %w", err)
 	}
 
-	// Find the creation AuditEvent for this Patient
-	var auditBundle fhir.Bundle
-	err = s.fhirClient.Search("AuditEvent", url.Values{
-		"entity": []string{"Patient/" + *patient.Id},
-		"action": []string{fhir.AuditEventActionC.String()},
-	}, &auditBundle)
+	isCreator, err := s.isCreatorOfResource(ctx, "Patient", *patient.Id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to find creation AuditEvent: %w", err)
+		return nil, fmt.Errorf("failed to check if current user is creator of Patient: %w", err)
 	}
-
-	// Check if there's a creation audit event
-	if len(auditBundle.Entry) == 0 {
-		return nil, coolfhir.NewErrorWithCode("No creation audit event found for Patient", http.StatusForbidden)
-	}
-
-	// Get the creator from the audit event
-	var creationAuditEvent fhir.AuditEvent
-	err = json.Unmarshal(auditBundle.Entry[0].Resource, &creationAuditEvent)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal AuditEvent: %w", err)
-	}
-
-	// Check if the current user is the creator
-	if !audit.IsCreator(creationAuditEvent, &principal) {
+	if !isCreator {
 		return nil, coolfhir.NewErrorWithCode("Only the creator can update this Patient", http.StatusForbidden)
 	}
 
