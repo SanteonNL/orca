@@ -126,9 +126,7 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 func handleSearchResource[T any](ctx context.Context, s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
 	form := url.Values{}
 	for k, v := range queryParams {
-		for _, value := range v {
-			form.Add(k, value)
-		}
+		form.Add(k, strings.Join(v, ","))
 	}
 
 	var bundle fhir.Bundle

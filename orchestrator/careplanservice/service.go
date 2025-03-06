@@ -377,6 +377,8 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		resource, err = s.handleGetQuestionnaireResponse(httpRequest.Context(), resourceId, headers)
 	case "ServiceRequest":
 		resource, err = s.handleGetServiceRequest(httpRequest.Context(), resourceId, headers)
+	case "Condition":
+		resource, err = s.handleGetCondition(httpRequest.Context(), resourceId, headers)
 	default:
 		log.Ctx(httpRequest.Context()).Warn().
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())

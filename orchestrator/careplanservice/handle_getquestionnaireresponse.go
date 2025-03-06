@@ -26,6 +26,15 @@ func (s *Service) handleGetQuestionnaireResponse(ctx context.Context, id string,
 
 	// If the user has access to the task, they have access to the questionnaire response
 	if len(bundle.Entry) == 0 {
+		// If the user created the questionnaire response, they have access to it
+		isCreator, err := s.isCreatorOfResource(ctx, "QuestionnaireResponse", id)
+		if err != nil {
+			return nil, err
+		}
+		if isCreator {
+			return &questionnaireResponse, nil
+		}
+
 		return nil, &coolfhir.ErrorWithCode{
 			Message:    "Participant does not have access to QuestionnaireResponse",
 			StatusCode: http.StatusForbidden,

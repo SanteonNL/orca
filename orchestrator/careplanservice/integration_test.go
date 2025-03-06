@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strings"
 	"testing"
 
 	"io"
@@ -779,58 +778,6 @@ func Test_Integration(t *testing.T) {
 			require.Equal(t, "Task", *carePlan.Activity[2].Reference.Type)
 			require.Equal(t, "Task/"+*newTask.Id, *carePlan.Activity[2].Reference.Reference)
 		})
-	}
-
-	// TODO: Will move this into new integ test once Update methods have been implemented
-	subTest(t, "GET patient")
-	{
-		// Get existing patient
-		var fetchedPatient fhir.Patient
-		err = carePlanContributor1.Read("Patient/"+*patient.Id, &fetchedPatient)
-		require.NoError(t, err)
-		require.True(t, coolfhir.IdentifierEquals(&patient.Identifier[0], &fetchedPatient.Identifier[0]))
-
-		// Get non-existing patient
-		err = carePlanContributor1.Read("Patient/999", &fetchedPatient)
-		require.Error(t, err)
-
-		// Search for existing patient - by ID
-		var searchResult fhir.Bundle
-		err = carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id}}, &searchResult)
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 1)
-		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
-
-		// Search for existing patient - by BSN
-		searchResult = fhir.Bundle{}
-		err = carePlanContributor1.Search("Patient", url.Values{"identifier": {"http://fhir.nl/fhir/NamingSystem/bsn|1333333337"}}, &searchResult)
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 1)
-		require.True(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id))
-
-		// Get existing patient - no access
-		searchResult = fhir.Bundle{}
-		err = carePlanContributor1.Read("Patient/"+*patient2.Id, &fetchedPatient)
-		require.Error(t, err)
-
-		// Search for existing patient - by ID - no access
-		searchResult = fhir.Bundle{}
-		err = carePlanContributor1.Search("Patient", url.Values{"_id": {*patient2.Id}}, &searchResult)
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 0)
-
-		// Search for existing patient - by BSN - no access
-		searchResult = fhir.Bundle{}
-		err = carePlanContributor1.Search("Patient", url.Values{"identifier": {"http://fhir.nl/fhir/NamingSystem/bsn|12345"}}, &searchResult)
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 0)
-
-		searchResult = fhir.Bundle{}
-		// Search for patients, one with access one without
-		err = carePlanContributor1.Search("Patient", url.Values{"identifier": {"http://fhir.nl/fhir/NamingSystem/bsn|1333333337,http://fhir.nl/fhir/NamingSystem/bsn|12345"}}, &searchResult)
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 1)
-		require.Truef(t, strings.HasSuffix(*searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id), "Expected %s to end with %s", *searchResult.Entry[0].FullUrl, "Patient/"+*patient.Id)
 	}
 
 	testBundleCreation(t, carePlanContributor1)

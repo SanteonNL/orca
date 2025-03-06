@@ -179,14 +179,14 @@ func Test_handleUpdateQuestionnaireResponse(t *testing.T) {
 			}
 
 			if tt.existingQuestionnaireResBundle != nil || tt.errorFromSearch != nil {
-				mockFHIRClient.EXPECT().Search("QuestionnaireResponse", gomock.Any(), gomock.Any()).DoAndReturn(func(resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 					if tt.errorFromSearch != nil {
 						return tt.errorFromSearch
 					}
 					*(result.(*fhir.Bundle)) = *tt.existingQuestionnaireResBundle
 
 					if len(tt.existingQuestionnaireResBundle.Entry) > 0 {
-						mockFHIRClient.EXPECT().Search("AuditEvent", gomock.Any(), gomock.Any()).DoAndReturn(func(resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
+						mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 							if tt.errorFromAuditQuery != nil {
 								return tt.errorFromAuditQuery
 							}

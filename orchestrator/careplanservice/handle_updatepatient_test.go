@@ -194,14 +194,14 @@ func Test_handleUpdatePatient(t *testing.T) {
 			}
 
 			if tt.existingPatientBundle != nil || tt.errorFromSearch != nil {
-				mockFHIRClient.EXPECT().Search("Patient", gomock.Any(), gomock.Any()).DoAndReturn(func(resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 					if tt.errorFromSearch != nil {
 						return tt.errorFromSearch
 					}
 					*(result.(*fhir.Bundle)) = *tt.existingPatientBundle
 
 					if len(tt.existingPatientBundle.Entry) > 0 {
-						mockFHIRClient.EXPECT().Search("AuditEvent", gomock.Any(), gomock.Any()).DoAndReturn(func(resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
+						mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 							if tt.errorFromAuditQuery != nil {
 								return tt.errorFromAuditQuery
 							}

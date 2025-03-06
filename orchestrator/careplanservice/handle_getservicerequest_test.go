@@ -26,6 +26,29 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 	var carePlan1 fhir.CarePlan
 	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
 
+	auditEvent := fhir.AuditEvent{
+		Id:     to.Ptr("1"),
+		Action: to.Ptr(fhir.AuditEventActionC),
+		Entity: []fhir.AuditEventEntity{
+			{
+				What: &fhir.Reference{
+					Reference: to.Ptr("ServiceRequest/1"),
+				},
+			},
+		},
+		Agent: []fhir.AuditEventAgent{
+			{
+				Who: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+						Value:  to.Ptr("3"),
+					},
+				},
+			},
+		},
+	}
+	auditEventRaw, _ := json.Marshal(auditEvent)
+
 	tests := map[string]struct {
 		context       context.Context
 		expectedError error
@@ -55,7 +78,7 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		"error: ServiceRequest exists, fetched task, incorrect principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			expectedError: &coolfhir.ErrorWithCode{
-				Message:    "Participant does not have access to ServiceRequest",
+				Message:    "No creation audit event found for ServiceRequest",
 				StatusCode: http.StatusForbidden,
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
@@ -75,6 +98,37 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 					})
 				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
 					Return(errors.New("fhir error: no response"))
+				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+						return nil
+					})
+			},
+		},
+		"ok: ServiceRequest exists, fetched task, incorrect principal, but is creator": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().ReadWithContext(ctx, "ServiceRequest/1", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.ServiceRequest) = fhir.ServiceRequest{Id: to.Ptr("1")}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{Resource: task1Raw},
+							},
+						}
+						return nil
+					})
+				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
+					Return(errors.New("fhir error: no response"))
+				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
+						return nil
+					})
 			},
 		},
 		"ok: ServiceRequest exists, fetched task, task owner": {

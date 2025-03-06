@@ -31,6 +31,16 @@ func (s *Service) handleGetServiceRequest(ctx context.Context, id string, header
 	}
 	// If bundle is empty, the user does not have access to the ServiceRequest
 	if len(bundle.Entry) == 0 {
+
+		// If the user created the service request, they have access to it
+		isCreator, err := s.isCreatorOfResource(ctx, "ServiceRequest", id)
+		if err != nil {
+			return nil, err
+		}
+		if isCreator {
+			return &serviceRequest, nil
+		}
+
 		return nil, &coolfhir.ErrorWithCode{
 			Message:    "Participant does not have access to ServiceRequest",
 			StatusCode: http.StatusForbidden,
