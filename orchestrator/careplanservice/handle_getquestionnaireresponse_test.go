@@ -78,7 +78,7 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 		"error: QuestionnaireResponse exists, fetched task, incorrect principal (not task onwer or requester)": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			expectedError: &coolfhir.ErrorWithCode{
-				Message:    "No creation audit event found for QuestionnaireResponse",
+				Message:    "Participant does not have access to QuestionnaireResponse",
 				StatusCode: http.StatusForbidden,
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {

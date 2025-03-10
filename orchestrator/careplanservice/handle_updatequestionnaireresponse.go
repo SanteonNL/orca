@@ -57,10 +57,10 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 
 	isCreator, err := s.isCreatorOfResource(ctx, "QuestionnaireResponse", *questionnaireResponse.Id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check if current user is creator of QuestionnaireResponse: %w", err)
+		log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of QuestionnaireResponse")
 	}
 	if !isCreator {
-		return nil, coolfhir.NewErrorWithCode("Only the creator can update this QuestionnaireResponse", http.StatusForbidden)
+		return nil, coolfhir.NewErrorWithCode("Participant does not have access to QuestionnaireResponse", http.StatusForbidden)
 	}
 
 	// Get local identity for audit

@@ -78,7 +78,7 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		"error: ServiceRequest exists, fetched task, incorrect principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			expectedError: &coolfhir.ErrorWithCode{
-				Message:    "No creation audit event found for ServiceRequest",
+				Message:    "Participant does not have access to ServiceRequest",
 				StatusCode: http.StatusForbidden,
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {

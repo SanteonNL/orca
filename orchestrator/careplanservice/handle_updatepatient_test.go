@@ -138,7 +138,7 @@ func Test_handleUpdatePatient(t *testing.T) {
 			existingPatientBundle: &existingPatientBundle,
 			auditBundle:           &creationAuditBundle,
 			wantErr:               true,
-			errorMessage:          "Only the creator can update this Patient",
+			errorMessage:          "Participant does not have access to Patient",
 		},
 		{
 			name: "invalid update - error searching existing resource - fails",
@@ -163,7 +163,7 @@ func Test_handleUpdatePatient(t *testing.T) {
 			existingPatientBundle: &existingPatientBundle,
 			errorFromAuditQuery:   errors.New("failed to find creation AuditEvent"),
 			wantErr:               true,
-			errorMessage:          "failed to find creation AuditEvent",
+			errorMessage:          "Participant does not have access to Patient",
 		},
 		{
 			name: "invalid update - no creation audit event - fails",
@@ -176,7 +176,7 @@ func Test_handleUpdatePatient(t *testing.T) {
 			existingPatientBundle: &existingPatientBundle,
 			auditBundle:           &fhir.Bundle{Entry: []fhir.BundleEntry{}},
 			wantErr:               true,
-			errorMessage:          "No creation audit event found for Patient",
+			errorMessage:          "Participant does not have access to Patient",
 		},
 	}
 

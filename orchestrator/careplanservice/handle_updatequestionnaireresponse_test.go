@@ -123,7 +123,7 @@ func Test_handleUpdateQuestionnaireResponse(t *testing.T) {
 			existingQuestionnaireResBundle: &existingQuestionnaireResponseBundle,
 			auditBundle:                    &creationAuditBundle,
 			wantErr:                        true,
-			errorMessage:                   "Only the creator can update this QuestionnaireResponse",
+			errorMessage:                   "Participant does not have access to QuestionnaireResponse",
 		},
 		{
 			name: "invalid update - error searching existing resource - fails",
@@ -148,7 +148,7 @@ func Test_handleUpdateQuestionnaireResponse(t *testing.T) {
 			existingQuestionnaireResBundle: &existingQuestionnaireResponseBundle,
 			errorFromAuditQuery:            errors.New("failed to find creation AuditEvent"),
 			wantErr:                        true,
-			errorMessage:                   "failed to find creation AuditEvent",
+			errorMessage:                   "Participant does not have access to QuestionnaireResponse",
 		},
 		{
 			name: "invalid update - no creation audit event - fails",
@@ -161,7 +161,7 @@ func Test_handleUpdateQuestionnaireResponse(t *testing.T) {
 			existingQuestionnaireResBundle: &existingQuestionnaireResponseBundle,
 			auditBundle:                    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
 			wantErr:                        true,
-			errorMessage:                   "No creation audit event found for QuestionnaireResponse",
+			errorMessage:                   "Participant does not have access to QuestionnaireResponse",
 		},
 	}
 

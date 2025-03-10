@@ -137,19 +137,19 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	t.Run("Update Patient with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("Patient/"+*patient.Id, patient, &patient)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Only the creator can update this Patient")
+		require.Contains(t, err.Error(), "Participant does not have access to Patient")
 	})
 
 	t.Run("Update QuestionnaireResponse with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponse, &questionnaireResponse)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Only the creator can update this QuestionnaireResponse")
+		require.Contains(t, err.Error(), "Participant does not have access to QuestionnaireResponse")
 	})
 
 	t.Run("Update ServiceRequest with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Only the creator can update this ServiceRequest")
+		require.Contains(t, err.Error(), "Participant does not have access to ServiceRequest")
 	})
 
 	// Update non-existing resources (creates new ones)
@@ -408,7 +408,7 @@ func verifyAuditEvents(t *testing.T, fhirClient fhirclient.Client, expectedEvent
 			for _, entry := range specificBundle.Entry {
 				var auditEvent fhir.AuditEvent
 				if err := json.Unmarshal(entry.Resource, &auditEvent); err != nil {
-					continue
+					return err
 				}
 
 				if auditEvent.Action != nil && *auditEvent.Action == event.Action {

@@ -7,6 +7,7 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -28,11 +29,11 @@ func (s *Service) handleGetQuestionnaireResponse(ctx context.Context, id string,
 	if len(bundle.Entry) == 0 {
 		// If the user created the questionnaire response, they have access to it
 		isCreator, err := s.isCreatorOfResource(ctx, "QuestionnaireResponse", id)
-		if err != nil {
-			return nil, err
-		}
 		if isCreator {
 			return &questionnaireResponse, nil
+		}
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of QuestionnaireResponse")
 		}
 
 		return nil, &coolfhir.ErrorWithCode{

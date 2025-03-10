@@ -7,6 +7,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -34,11 +35,11 @@ func (s *Service) handleGetServiceRequest(ctx context.Context, id string, header
 
 		// If the user created the service request, they have access to it
 		isCreator, err := s.isCreatorOfResource(ctx, "ServiceRequest", id)
-		if err != nil {
-			return nil, err
-		}
 		if isCreator {
 			return &serviceRequest, nil
+		}
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of ServiceRequest")
 		}
 
 		return nil, &coolfhir.ErrorWithCode{

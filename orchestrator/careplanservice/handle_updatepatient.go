@@ -57,10 +57,10 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 
 	isCreator, err := s.isCreatorOfResource(ctx, "Patient", *patient.Id)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check if current user is creator of Patient: %w", err)
+		log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of Patient")
 	}
 	if !isCreator {
-		return nil, coolfhir.NewErrorWithCode("Only the creator can update this Patient", http.StatusForbidden)
+		return nil, coolfhir.NewErrorWithCode("Participant does not have access to Patient", http.StatusForbidden)
 	}
 
 	// Get local identity for audit
