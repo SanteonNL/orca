@@ -122,8 +122,8 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 			expectedBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1}}},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: carePlan1},
 							},
@@ -137,8 +137,8 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 			expectedBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1}}},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: carePlan1},
 								{Resource: carePlan2},

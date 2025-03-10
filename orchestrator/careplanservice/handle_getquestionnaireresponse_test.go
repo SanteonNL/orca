@@ -85,8 +85,8 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
 					Return(nil)
 				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: task1Raw},
 							},
@@ -107,8 +107,8 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
 					Return(nil)
 				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: task1Raw},
 							},
@@ -118,8 +118,8 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
 					Return(errors.New("fhir error: no response"))
 				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
 						return nil
 					})
 			},
@@ -130,8 +130,8 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
 					Return(nil)
 				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: task1Raw},
 							},

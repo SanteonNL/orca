@@ -120,11 +120,11 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 			}
 
 			if tt.existingQuestionnaireBundle != nil || tt.errorFromSearch != nil {
-				mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "Questionnaire", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "Questionnaire", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
 					if tt.errorFromSearch != nil {
 						return tt.errorFromSearch
 					}
-					*(result.(*fhir.Bundle)) = *tt.existingQuestionnaireBundle
+					*result = *tt.existingQuestionnaireBundle
 					return nil
 				})
 			}

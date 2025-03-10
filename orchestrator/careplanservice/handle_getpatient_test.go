@@ -74,8 +74,8 @@ func TestService_handleGetPatient(t *testing.T) {
 			// returnedResource: &patient1,
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Patient) = patient1
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Patient, _ ...fhirclient.Option) error {
+						*target = patient1
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
@@ -92,17 +92,17 @@ func TestService_handleGetPatient(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Patient) = patient1
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Patient, _ ...fhirclient.Option) error {
+						*target = patient1
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{}}
 						return nil
 					})
 			},
@@ -115,17 +115,17 @@ func TestService_handleGetPatient(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Patient) = patient1
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Patient, _ ...fhirclient.Option) error {
+						*target = patient1
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
 						return nil
 					})
 			},
@@ -134,18 +134,18 @@ func TestService_handleGetPatient(t *testing.T) {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Patient) = patient1
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Patient, _ ...fhirclient.Option) error {
+						*target = patient1
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
 						return nil
 					})
 			},
@@ -154,13 +154,13 @@ func TestService_handleGetPatient(t *testing.T) {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Patient) = patient1
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Patient, _ ...fhirclient.Option) error {
+						*target = patient1
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
 						return nil
 					})
 			},
@@ -236,8 +236,8 @@ func TestService_handleSearchPatient(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{}}
 						return nil
 					})
 			},
@@ -255,8 +255,8 @@ func TestService_handleSearchPatient(t *testing.T) {
 			expectedError: errors.New("error"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{Resource: patient1},
 						}}
 						return nil
@@ -272,19 +272,19 @@ func TestService_handleSearchPatient(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{Resource: patient1},
 						}}
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{}}
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						return nil
 					})
 			},
@@ -296,21 +296,21 @@ func TestService_handleSearchPatient(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{Resource: patient1},
 						}}
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{Resource: careplan1Careteam2},
 						}}
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						return nil
 					})
 			},
@@ -333,8 +333,8 @@ func TestService_handleSearchPatient(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Link: []fhir.BundleLink{
 								{
 									Relation: "self",
@@ -349,15 +349,15 @@ func TestService_handleSearchPatient(t *testing.T) {
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{Resource: careplan1Careteam2},
 						}}
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
 						return nil
 					})
 			},
@@ -380,8 +380,8 @@ func TestService_handleSearchPatient(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Link: []fhir.BundleLink{
 								{
 									Relation: "self",
@@ -396,8 +396,8 @@ func TestService_handleSearchPatient(t *testing.T) {
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{Resource: careplan1Careteam2},
 						}}
 						return nil
@@ -413,8 +413,8 @@ func TestService_handleSearchPatient(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: patient1},
 								{Resource: patient2},
@@ -423,15 +423,15 @@ func TestService_handleSearchPatient(t *testing.T) {
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{Entry: []fhir.BundleEntry{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{Resource: careplan1Careteam2},
 							{Resource: careplan2Careteam1},
 						}}
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						return nil
 					})
 			},
@@ -456,8 +456,6 @@ func TestService_handleSearchPatient(t *testing.T) {
 				require.Nil(t, err)
 				require.Equal(t, tt.expectedBundle, bundle)
 			}
-
-			// testHelperHandleSearchResource[fhir.Patient](t, tt, service.handleSearchPatient)
 		})
 	}
 }
