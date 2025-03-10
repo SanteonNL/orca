@@ -35,7 +35,6 @@ func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHan
 		return nil, err
 	}
 
-	// Get local identity for audit
 	localIdentity, err := s.getLocalIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get local identity: %w", err)
@@ -48,7 +47,6 @@ func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHan
 		questionnaireBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
-	// Create audit event for the creation
 	createAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionC,
 		&fhir.Reference{
 			Reference: questionnaireBundleEntry.FullUrl,
@@ -60,7 +58,6 @@ func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHan
 		},
 	)
 
-	// Add to transaction
 	tx.Create(questionnaire, coolfhir.WithFullUrl(*questionnaireBundleEntry.FullUrl))
 	questionnaireEntryIdx := len(tx.Entry) - 1
 	tx.Create(createAuditEvent)

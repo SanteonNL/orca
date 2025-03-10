@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
@@ -27,13 +26,11 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 		return nil, err
 	}
 
-	// Get the current principal
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	// Search for the existing Questionnaire
 	var searchBundle fhir.Bundle
 	err = s.fhirClient.SearchWithContext(ctx, "Questionnaire", url.Values{
 		"_id": []string{*questionnaire.Id},
@@ -48,19 +45,12 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 		return s.handleCreateQuestionnaire(ctx, request, tx)
 	}
 
-	// Extract the existing Questionnaire from the bundle
+	// As long as the user is authorised, they may update the questionnaire
+
 	var existingQuestionnaire fhir.Questionnaire
 	err = json.Unmarshal(searchBundle.Entry[0].Resource, &existingQuestionnaire)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal existing Questionnaire: %w", err)
-	}
-
-	isCreator, err := s.isCreatorOfResource(ctx, "Questionnaire", *questionnaire.Id)
-	if err != nil {
-		return nil, fmt.Errorf("failed to check if current user is creator of Questionnaire: %w", err)
-	}
-	if !isCreator {
-		return nil, coolfhir.NewErrorWithCode("Only the creator can update this Questionnaire", http.StatusForbidden)
 	}
 
 	// Get local identity for audit
@@ -69,7 +59,6 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 		return nil, fmt.Errorf("failed to get local identity: %w", err)
 	}
 
-	// Create audit event for the update
 	updateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
 		&fhir.Reference{
 			Reference: to.Ptr("Questionnaire/" + *questionnaire.Id),
@@ -81,7 +70,6 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 		},
 	)
 
-	// Add to transaction
 	questionnaireBundleEntry := request.bundleEntryWithResource(questionnaire)
 	tx.AppendEntry(questionnaireBundleEntry)
 	idx := len(tx.Entry) - 1
