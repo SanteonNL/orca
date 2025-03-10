@@ -20,12 +20,13 @@ func (s *Service) handleGetQuestionnaireResponse(ctx context.Context, id string,
 	}
 
 	// Fetch tasks where the QuestionnaireResponse is in the task Output
+	// If the user has access to the task, they have access to the questionnaire response
 	bundle, err := s.handleSearchTask(ctx, url.Values{"output-reference": []string{"QuestionnaireResponse/" + id}}, headers)
 	if err != nil {
 		return nil, err
 	}
 
-	// If the user has access to the task, they have access to the questionnaire response
+	// If the user does not have access to the task, check if they are the creator of the questionnaire response
 	if len(bundle.Entry) == 0 {
 		// If the user created the questionnaire response, they have access to it
 		isCreator, err := s.isCreatorOfResource(ctx, "QuestionnaireResponse", id)
