@@ -59,7 +59,7 @@ func Test_handleCreateQuestionnaireResponse(t *testing.T) {
 		returnedBundle                     *fhir.Bundle
 		errorFromCreate                    error
 		expectError                        error
-		ctx                                context.Context
+		principal                          *auth.Principal
 	}{
 		{
 			name:                          "happy flow - success",
@@ -74,15 +74,9 @@ func Test_handleCreateQuestionnaireResponse(t *testing.T) {
 			returnedBundle: defaultReturnedBundle,
 		},
 		{
-			name:                          "unauthorised - fails",
-			questionnaireResponseToCreate: defaultQuestionnaireResponse,
-			ctx:                           context.Background(),
-			expectError:                   errors.New("not authenticated"),
-		},
-		{
 			name:                          "non-local requester - fails",
 			questionnaireResponseToCreate: defaultQuestionnaireResponse,
-			ctx:                           auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
+			principal:                     auth.TestPrincipal2,
 			expectError:                   errors.New("Only the local care organization can create a QuestionnaireResponse"),
 		},
 	}
@@ -103,6 +97,11 @@ func Test_handleCreateQuestionnaireResponse(t *testing.T) {
 				HttpHeaders: map[string][]string{
 					"If-None-Exist": {"ifnoneexist"},
 				},
+				Principal: auth.TestPrincipal1,
+				LocalIdentity: to.Ptr(fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				}),
 			}
 
 			tx := coolfhir.Transaction()
@@ -116,8 +115,8 @@ func Test_handleCreateQuestionnaireResponse(t *testing.T) {
 			}
 
 			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
-			if tt.ctx != nil {
-				ctx = tt.ctx
+			if tt.principal != nil {
+				fhirRequest.Principal = tt.principal
 			}
 
 			result, err := service.handleCreateQuestionnaireResponse(ctx, fhirRequest, tx)

@@ -10,7 +10,6 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -78,13 +77,9 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		return s.handleCreateTask(ctx, request, tx)
 	}
 
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
 	if task.Status != taskExisting.Status {
 		// If the status is changing, validate the transition
-		isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&taskExisting, principal.Organization.Identifier)
+		isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&taskExisting, request.Principal.Organization.Identifier)
 		isScpSubTask := coolfhir.IsScpSubTask(&task)
 		if !isValidTransition(taskExisting.Status, task.Status, isOwner, isRequester, isScpSubTask) {
 			return nil, errors.New(
@@ -122,17 +117,12 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
-	localIdentity, err := s.getLocalIdentity()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get local identity: %w", err)
-	}
-
-	taskUpdateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
+	taskUpdateAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU,
 		&fhir.Reference{
 			Reference: to.Ptr("Task/" + *task.Id),
 		},
 		&fhir.Reference{
-			Identifier: &principal.Organization.Identifier[0],
+			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		},
 	)

@@ -503,6 +503,11 @@ func Test_handleUpdateTask(t *testing.T) {
 			ResourceId:   *updatedTask.Id,
 			RequestUrl:   requestUrl,
 			HttpMethod:   "PUT",
+			Principal:    auth.TestPrincipal2,
+			LocalIdentity: &fhir.Identifier{
+				System: to.Ptr(coolfhir.URANamingSystem),
+				Value:  to.Ptr("2"),
+			},
 		}
 	}
 
@@ -696,6 +701,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task", "status":`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			wantErr: true,
 		},
@@ -706,6 +716,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task"}`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			wantErr: true,
 		},
@@ -716,6 +731,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task", "status": "received", "intent":"order"}`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Id:     to.Ptr("1"),
@@ -732,6 +752,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task", "status": "completed", "intent":"order"}`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Status: fhir.TaskStatusRequested,
@@ -746,6 +771,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task", "status": "completed", "intent":"order"}`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Status: fhir.TaskStatusRequested,
@@ -760,6 +790,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: updateTaskAcceptedData,
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal3,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("3"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Owner:  &fhir.Reference{Identifier: &auth.TestPrincipal2.Organization.Identifier[0]},
@@ -775,6 +810,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: updateTaskAcceptedData,
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Owner:  &fhir.Reference{Identifier: &auth.TestPrincipal1.Organization.Identifier[0]},

@@ -83,8 +83,6 @@ func Test_handleUpdatePatient(t *testing.T) {
 
 	tests := []struct {
 		name                  string
-		ctx                   context.Context
-		request               FHIRHandlerRequest
 		existingPatientBundle *fhir.Bundle
 		errorFromSearch       error
 		errorFromAuditQuery   error
@@ -92,87 +90,47 @@ func Test_handleUpdatePatient(t *testing.T) {
 		wantErr               bool
 		errorMessage          string
 		mockCreateBehavior    func(mockFHIRClient *mock.MockClient)
+		principal             *auth.Principal
 	}{
 		{
-			name: "valid update - creator - success",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updatePatientData,
-				ResourcePath: "Patient/1",
-			},
+			name:                  "valid update - creator - success",
+			principal:             auth.TestPrincipal1,
 			existingPatientBundle: &existingPatientBundle,
 			auditBundle:           &creationAuditBundle,
 			wantErr:               false,
 		},
 		{
-			name: "resource not found - creates new resource - success",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updatePatientData,
-				ResourcePath: "Patient/1",
-			},
+			name:                  "resource not found - creates new resource - success",
+			principal:             auth.TestPrincipal1,
 			existingPatientBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{}},
 			wantErr:               false,
 		},
 		{
-			name: "invalid update - not authenticated - fails",
-			ctx:  context.Background(),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updatePatientData,
-				ResourcePath: "Patient/1",
-			},
-			wantErr:      true,
-			errorMessage: "not authenticated",
-		},
-		{
-			name: "invalid update - not creator - fails",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updatePatientData,
-				ResourcePath: "Patient/1",
-			},
+			name:                  "invalid update - not creator - fails",
+			principal:             auth.TestPrincipal2,
 			existingPatientBundle: &existingPatientBundle,
 			auditBundle:           &creationAuditBundle,
 			wantErr:               true,
 			errorMessage:          "Participant does not have access to Patient",
 		},
 		{
-			name: "invalid update - error searching existing resource - fails",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updatePatientData,
-				ResourcePath: "Patient/1",
-			},
+			name:            "invalid update - error searching existing resource - fails",
+			principal:       auth.TestPrincipal1,
 			errorFromSearch: errors.New("failed to search for Patient"),
 			wantErr:         true,
 			errorMessage:    "failed to search for Patient",
 		},
 		{
-			name: "invalid update - error querying audit events - fails",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updatePatientData,
-				ResourcePath: "Patient/1",
-			},
+			name:                  "invalid update - error querying audit events - fails",
+			principal:             auth.TestPrincipal1,
 			existingPatientBundle: &existingPatientBundle,
 			errorFromAuditQuery:   errors.New("failed to find creation AuditEvent"),
 			wantErr:               true,
 			errorMessage:          "Participant does not have access to Patient",
 		},
 		{
-			name: "invalid update - no creation audit event - fails",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updatePatientData,
-				ResourcePath: "Patient/1",
-			},
+			name:                  "invalid update - no creation audit event - fails",
+			principal:             auth.TestPrincipal1,
 			existingPatientBundle: &existingPatientBundle,
 			auditBundle:           &fhir.Bundle{Entry: []fhir.BundleEntry{}},
 			wantErr:               true,
@@ -194,14 +152,14 @@ func Test_handleUpdatePatient(t *testing.T) {
 			}
 
 			if tt.existingPatientBundle != nil || tt.errorFromSearch != nil {
-				mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().SearchWithContext(gomock.Any(), "Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
 					if tt.errorFromSearch != nil {
 						return tt.errorFromSearch
 					}
 					*result = *tt.existingPatientBundle
 
 					if len(tt.existingPatientBundle.Entry) > 0 {
-						mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
+						mockFHIRClient.EXPECT().SearchWithContext(gomock.Any(), "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
 							if tt.errorFromAuditQuery != nil {
 								return tt.errorFromAuditQuery
 							}
@@ -218,7 +176,24 @@ func Test_handleUpdatePatient(t *testing.T) {
 				tt.mockCreateBehavior(mockFHIRClient)
 			}
 
-			result, err := service.handleUpdatePatient(tt.ctx, tt.request, tx)
+			fhirRequest := FHIRHandlerRequest{
+				ResourceId:   "1",
+				ResourceData: updatePatientData,
+				ResourcePath: "Patient/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: to.Ptr(fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				}),
+			}
+
+			if tt.principal != nil {
+				fhirRequest.Principal = tt.principal
+			}
+
+			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+
+			result, err := service.handleUpdatePatient(ctx, fhirRequest, tx)
 
 			if tt.wantErr {
 				require.Error(t, err)

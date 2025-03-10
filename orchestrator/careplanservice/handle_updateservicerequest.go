@@ -9,7 +9,6 @@ import (
 	"net/url"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
@@ -28,15 +27,9 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 		return nil, err
 	}
 
-	// Get the current principal
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Search for the existing ServiceRequest
 	var searchBundle fhir.Bundle
-	err = s.fhirClient.SearchWithContext(ctx, "ServiceRequest", url.Values{
+	err := s.fhirClient.SearchWithContext(ctx, "ServiceRequest", url.Values{
 		"_id": []string{*serviceRequest.Id},
 	}, &searchBundle)
 	if err != nil {
@@ -56,7 +49,7 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 		return nil, fmt.Errorf("failed to unmarshal existing ServiceRequest: %w", err)
 	}
 
-	isCreator, err := s.isCreatorOfResource(ctx, "ServiceRequest", *serviceRequest.Id)
+	isCreator, err := s.isCreatorOfResource(ctx, *request.Principal, "ServiceRequest", *serviceRequest.Id)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of ServiceRequest")
 	}
@@ -77,7 +70,7 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 			Type:      to.Ptr("ServiceRequest"),
 		},
 		&fhir.Reference{
-			Identifier: &principal.Organization.Identifier[0],
+			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		},
 	)

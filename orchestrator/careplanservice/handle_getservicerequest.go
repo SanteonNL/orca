@@ -13,7 +13,7 @@ import (
 
 func (s *Service) handleGetServiceRequest(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.ServiceRequest, error) {
 	// Verify requester is authenticated
-	_, err := auth.PrincipalFromContext(ctx)
+	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -30,11 +30,11 @@ func (s *Service) handleGetServiceRequest(ctx context.Context, id string, header
 	if err != nil {
 		return nil, err
 	}
-	// If bundle is empty, the user does not have access to the ServiceRequest
+	// If the user does not have access to the Task, check if they are the creator of the ServiceRequest
 	if len(bundle.Entry) == 0 {
 
 		// If the user created the service request, they have access to it
-		isCreator, err := s.isCreatorOfResource(ctx, "ServiceRequest", id)
+		isCreator, err := s.isCreatorOfResource(ctx, principal, "ServiceRequest", id)
 		if isCreator {
 			return &serviceRequest, nil
 		}

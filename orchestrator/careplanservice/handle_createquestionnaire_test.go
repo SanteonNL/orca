@@ -3,7 +3,6 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/url"
 	"testing"
 
@@ -60,7 +59,6 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 		returnedBundle             *fhir.Bundle
 		errorFromCreate            error
 		expectError                error
-		ctx                        context.Context
 	}{
 		{
 			name:                  "happy flow - success",
@@ -73,12 +71,6 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 				},
 			},
 			returnedBundle: defaultReturnedBundle,
-		},
-		{
-			name:                  "unauthorised - fails",
-			questionnaireToCreate: defaultQuestionnaire,
-			ctx:                   context.Background(),
-			expectError:           errors.New("not authenticated"),
 		},
 	}
 
@@ -98,6 +90,11 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 				HttpHeaders: map[string][]string{
 					"If-None-Exist": {"ifnoneexist"},
 				},
+				Principal: auth.TestPrincipal1,
+				LocalIdentity: to.Ptr(fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				}),
 			}
 
 			tx := coolfhir.Transaction()
@@ -111,9 +108,6 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 			}
 
 			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
-			if tt.ctx != nil {
-				ctx = tt.ctx
-			}
 
 			result, err := service.handleCreateQuestionnaire(ctx, fhirRequest, tx)
 

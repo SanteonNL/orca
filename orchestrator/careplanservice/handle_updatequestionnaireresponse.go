@@ -8,7 +8,6 @@ import (
 	"net/url"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
@@ -27,15 +26,9 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 		return nil, err
 	}
 
-	// Get the current principal
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Search for the existing QuestionnaireResponse
 	var searchBundle fhir.Bundle
-	err = s.fhirClient.SearchWithContext(ctx, "QuestionnaireResponse", url.Values{
+	err := s.fhirClient.SearchWithContext(ctx, "QuestionnaireResponse", url.Values{
 		"_id": []string{*questionnaireResponse.Id},
 	}, &searchBundle)
 	if err != nil {
@@ -55,7 +48,7 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 		return nil, fmt.Errorf("failed to unmarshal existing QuestionnaireResponse: %w", err)
 	}
 
-	isCreator, err := s.isCreatorOfResource(ctx, "QuestionnaireResponse", *questionnaireResponse.Id)
+	isCreator, err := s.isCreatorOfResource(ctx, *request.Principal, "QuestionnaireResponse", *questionnaireResponse.Id)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of QuestionnaireResponse")
 	}
@@ -76,7 +69,7 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 			Type:      to.Ptr("QuestionnaireResponse"),
 		},
 		&fhir.Reference{
-			Identifier: &principal.Organization.Identifier[0],
+			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		},
 	)

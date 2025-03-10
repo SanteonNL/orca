@@ -50,59 +50,33 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 
 	tests := []struct {
 		name                        string
-		ctx                         context.Context
-		request                     FHIRHandlerRequest
 		existingQuestionnaireBundle *fhir.Bundle
 		errorFromSearch             error
 		errorFromAuditQuery         error
 		wantErr                     bool
 		errorMessage                string
 		mockCreateBehavior          func(mockFHIRClient *mock.MockClient)
+		principal                   *auth.Principal
 	}{
 		{
-			name: "valid update - success",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updateQuestionnaireData,
-				ResourcePath: "Questionnaire/1",
-			},
+			name:                        "valid update - success",
+			principal:                   auth.TestPrincipal1,
 			existingQuestionnaireBundle: &existingQuestionnaireBundle,
 			wantErr:                     false,
 		},
 		{
-			name: "resource not found - creates new resource - success",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updateQuestionnaireData,
-				ResourcePath: "Questionnaire/1",
-			},
+			name:                        "resource not found - creates new resource - success",
+			principal:                   auth.TestPrincipal1,
 			existingQuestionnaireBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{}},
 			wantErr:                     false,
 		},
 		{
-			name: "invalid update - not authenticated - fails",
-			ctx:  context.Background(),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updateQuestionnaireData,
-				ResourcePath: "Questionnaire/1",
-			},
-			wantErr:      true,
-			errorMessage: "not authenticated",
-		},
-		{
-			name: "invalid update - error searching existing resource - fails",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updateQuestionnaireData,
-				ResourcePath: "Questionnaire/1",
-			},
-			errorFromSearch: errors.New("failed to search for Questionnaire"),
-			wantErr:         true,
-			errorMessage:    "failed to search for Questionnaire",
+			name:                        "invalid update - error searching existing resource - fails",
+			principal:                   auth.TestPrincipal1,
+			existingQuestionnaireBundle: &existingQuestionnaireBundle,
+			errorFromSearch:             errors.New("failed to search for Questionnaire"),
+			wantErr:                     true,
+			errorMessage:                "failed to search for Questionnaire",
 		},
 	}
 
@@ -119,8 +93,25 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 				fhirURL:    fhirBaseUrl,
 			}
 
+			fhirRequest := FHIRHandlerRequest{
+				ResourceId:   "1",
+				ResourceData: updateQuestionnaireData,
+				ResourcePath: "Questionnaire/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: to.Ptr(fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				}),
+			}
+
+			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+			if tt.principal != nil {
+				fhirRequest.Principal = tt.principal
+				ctx = auth.WithPrincipal(ctx, *tt.principal)
+			}
+
 			if tt.existingQuestionnaireBundle != nil || tt.errorFromSearch != nil {
-				mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "Questionnaire", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().SearchWithContext(gomock.Any(), "Questionnaire", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
 					if tt.errorFromSearch != nil {
 						return tt.errorFromSearch
 					}
@@ -133,7 +124,7 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 				tt.mockCreateBehavior(mockFHIRClient)
 			}
 
-			result, err := service.handleUpdateQuestionnaire(tt.ctx, tt.request, tx)
+			result, err := service.handleUpdateQuestionnaire(ctx, fhirRequest, tx)
 
 			if tt.wantErr {
 				require.Error(t, err)

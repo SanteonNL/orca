@@ -18,14 +18,10 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) isCreatorOfResource(ctx context.Context, resourceType string, resourceID string) (bool, error) {
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return false, fmt.Errorf("failed to get principal: %w", err)
-	}
+func (s *Service) isCreatorOfResource(ctx context.Context, principal auth.Principal, resourceType string, resourceID string) (bool, error) {
 
 	var auditBundle fhir.Bundle
-	err = s.fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{
+	err := s.fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{
 		"entity": []string{resourceType + "/" + resourceID},
 		"action": []string{fhir.AuditEventActionC.String()},
 	}, &auditBundle)
@@ -54,7 +50,7 @@ func (s *Service) isCreatorOfResource(ctx context.Context, resourceType string, 
 }
 
 // filterAuthorizedPatients will go through a list of patients and return the ones the requester has access to
-func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.Patient) ([]fhir.Patient, error) {
+func (s *Service) filterAuthorizedPatients(ctx context.Context, principal auth.Principal, patients []fhir.Patient) ([]fhir.Patient, error) {
 	params := url.Values{}
 	patientRefs := make([]string, len(patients))
 	for i, patient := range patients {
@@ -77,11 +73,6 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 	}
 
 	retPatients := make([]fhir.Patient, 0)
-
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
 
 	// Iterate through each CareTeam to see if the requester is a participant, if not, remove any patients from the bundle that are part of the CareTeam
 	for _, cp := range carePlans {
@@ -111,7 +102,7 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 		}
 
 		// Check if requester is the creator
-		isCreator, err := s.isCreatorOfResource(ctx, "Patient", *patient.Id)
+		isCreator, err := s.isCreatorOfResource(ctx, principal, "Patient", *patient.Id)
 		if err == nil && isCreator {
 			log.Ctx(ctx).Debug().Msgf("User is creator of Patient/%s", *patient.Id)
 			retPatients = append(retPatients, patient)

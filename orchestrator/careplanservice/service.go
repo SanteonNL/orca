@@ -101,14 +101,16 @@ type Service struct {
 type FHIRHandler func(http.ResponseWriter, *http.Request, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
 type FHIRHandlerRequest struct {
-	ResourceId   string
-	ResourcePath string
-	ResourceData json.RawMessage
-	HttpMethod   string
-	HttpHeaders  http.Header
-	RequestUrl   *url.URL
-	FullUrl      string
-	Context      context.Context
+	ResourceId    string
+	ResourcePath  string
+	ResourceData  json.RawMessage
+	HttpMethod    string
+	HttpHeaders   http.Header
+	RequestUrl    *url.URL
+	FullUrl       string
+	Context       context.Context
+	Principal     *auth.Principal
+	LocalIdentity *fhir.Identifier
 }
 
 func (r FHIRHandlerRequest) bundleEntryWithResource(res any) fhir.BundleEntry {
@@ -304,14 +306,28 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 			return
 		}
 	}
+
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+	localIdentity, err := s.getLocalIdentity()
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
 	fhirRequest := FHIRHandlerRequest{
-		RequestUrl:   httpRequest.URL,
-		HttpMethod:   httpRequest.Method,
-		HttpHeaders:  coolfhir.FilterRequestHeaders(httpRequest.Header),
-		ResourceId:   httpRequest.PathValue("id"),
-		ResourcePath: resourcePath,
-		ResourceData: bodyBytes,
-		Context:      httpRequest.Context(),
+		RequestUrl:    httpRequest.URL,
+		HttpMethod:    httpRequest.Method,
+		HttpHeaders:   coolfhir.FilterRequestHeaders(httpRequest.Header),
+		ResourceId:    httpRequest.PathValue("id"),
+		ResourcePath:  resourcePath,
+		ResourceData:  bodyBytes,
+		Context:       httpRequest.Context(),
+		Principal:     &principal,
+		LocalIdentity: localIdentity,
 	}
 	result, err := s.handleTransactionEntry(httpRequest.Context(), fhirRequest, tx)
 	if err != nil {
@@ -666,13 +682,25 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 			return
 		}
 
+		principal, err := auth.PrincipalFromContext(httpRequest.Context())
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
+			return
+		}
+		localIdentity, err := s.getLocalIdentity()
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
+			return
+		}
 		fhirRequest := FHIRHandlerRequest{
-			HttpMethod:   entry.Request.Method.Code(),
-			HttpHeaders:  coolfhir.HeadersFromBundleEntryRequest(entry.Request),
-			RequestUrl:   requestUrl,
-			ResourcePath: resourcePath,
-			ResourceData: entry.Resource,
-			Context:      httpRequest.Context(),
+			HttpMethod:    entry.Request.Method.Code(),
+			HttpHeaders:   coolfhir.HeadersFromBundleEntryRequest(entry.Request),
+			RequestUrl:    requestUrl,
+			ResourcePath:  resourcePath,
+			ResourceData:  entry.Resource,
+			Context:       httpRequest.Context(),
+			Principal:     &principal,
+			LocalIdentity: localIdentity,
 		}
 		if len(resourcePathParts) == 2 {
 			fhirRequest.ResourceId = resourcePathParts[1]

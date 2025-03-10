@@ -6,6 +6,7 @@ import (
 	"net/url"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -26,10 +27,15 @@ func (s *Service) handleGetQuestionnaireResponse(ctx context.Context, id string,
 		return nil, err
 	}
 
+	principal, err := auth.PrincipalFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	// If the user does not have access to the task, check if they are the creator of the questionnaire response
 	if len(bundle.Entry) == 0 {
 		// If the user created the questionnaire response, they have access to it
-		isCreator, err := s.isCreatorOfResource(ctx, "QuestionnaireResponse", id)
+		isCreator, err := s.isCreatorOfResource(ctx, principal, "QuestionnaireResponse", id)
 		if isCreator {
 			return &questionnaireResponse, nil
 		}
