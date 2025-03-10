@@ -19,6 +19,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -861,6 +862,215 @@ func testBundleCreation(t *testing.T, carePlanContributor1 *fhirclient.BaseClien
 
 		// Verify that Task.For.Assigner.Identifier is not replaced
 		require.Equal(t, "Organization/1", *createdTask.For.Identifier.Assigner.Reference)
+	})
+}
+
+// Verify that URL
+func Test_HandleSearchResource(t *testing.T) {
+
+	// Setup test environment
+	fhirBaseURL := test.SetupHAPI(t)
+	activeProfile := profile.Test()
+	config := DefaultConfig()
+	config.Enabled = true
+	config.FHIR.BaseURL = fhirBaseURL.String()
+	config.AllowUnmanagedFHIROperations = true
+	service, err := New(config, activeProfile, orcaPublicURL)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+	log.Ctx(ctx).Debug().Msg("Testing handleSearchResource function with real FHIR server")
+
+	patients := []fhir.Patient{
+		{
+			Name: []fhir.HumanName{
+				{
+					Family: to.Ptr("Smith"),
+					Given:  []string{"John"},
+				},
+			},
+			Gender: to.Ptr(fhir.AdministrativeGenderMale),
+		},
+		{
+			Name: []fhir.HumanName{
+				{
+					Family: to.Ptr("Jones"),
+					Given:  []string{"Sarah"},
+				},
+			},
+			Gender: to.Ptr(fhir.AdministrativeGenderFemale),
+		},
+		{
+			Name: []fhir.HumanName{
+				{
+					Family: to.Ptr("Brown"),
+					Given:  []string{"Michael"},
+				},
+			},
+			Gender: to.Ptr(fhir.AdministrativeGenderMale),
+		},
+	}
+
+	createdPatients := make([]fhir.Patient, len(patients))
+	for i, patient := range patients {
+		err = service.fhirClient.Create(patient, &createdPatients[i])
+		require.NoError(t, err)
+		require.NotNil(t, createdPatients[i].Id)
+		log.Ctx(ctx).Debug().Msgf("Created test patient with ID: %s", *createdPatients[i].Id)
+	}
+
+	carePlans := []fhir.CarePlan{
+		{
+			Intent: fhir.CarePlanIntentPlan,
+			Subject: fhir.Reference{
+				Reference: to.Ptr(fmt.Sprintf("Patient/%s", *createdPatients[0].Id)),
+			},
+			Title: to.Ptr("Care Plan 1"),
+		},
+		{
+			Intent: fhir.CarePlanIntentPlan,
+			Subject: fhir.Reference{
+				Reference: to.Ptr(fmt.Sprintf("Patient/%s", *createdPatients[1].Id)),
+			},
+			Title: to.Ptr("Care Plan 2"),
+		},
+		{
+			Intent: fhir.CarePlanIntentPlan,
+			Subject: fhir.Reference{
+				Reference: to.Ptr(fmt.Sprintf("Patient/%s", *createdPatients[2].Id)),
+			},
+			Title: to.Ptr("Care Plan 3"),
+		},
+	}
+
+	createdCarePlans := make([]fhir.CarePlan, len(carePlans))
+	for i, carePlan := range carePlans {
+		err = service.fhirClient.Create(carePlan, &createdCarePlans[i])
+		require.NoError(t, err)
+		require.NotNil(t, createdCarePlans[i].Id)
+		log.Ctx(ctx).Debug().Msgf("Created test care plan with ID: %s", *createdCarePlans[i].Id)
+	}
+
+	t.Run("search patients with multiple IDs", func(t *testing.T) {
+		queryParams := url.Values{"_id": []string{*createdPatients[0].Id, *createdPatients[1].Id}}
+
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+
+		require.NoError(t, err)
+		require.NotNil(t, bundle)
+		require.Len(t, patients, 2)
+
+		patientIDs := []string{*patients[0].Id, *patients[1].Id}
+		require.Contains(t, patientIDs, *createdPatients[0].Id)
+		require.Contains(t, patientIDs, *createdPatients[1].Id)
+	})
+
+	t.Run("search patients with gender parameter", func(t *testing.T) {
+		queryParams := url.Values{"gender": []string{fhir.AdministrativeGenderMale.Code()}}
+
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+
+		require.NoError(t, err)
+		require.NotNil(t, bundle)
+		require.GreaterOrEqual(t, len(patients), 2) // At least our 2 male test patients
+
+		for _, patient := range patients {
+			require.Equal(t, fhir.AdministrativeGenderMale, *patient.Gender)
+		}
+	})
+
+	t.Run("search patients with ID and gender parameters", func(t *testing.T) {
+		queryParams := url.Values{
+			"_id":    []string{*createdPatients[0].Id},
+			"gender": []string{fhir.AdministrativeGenderMale.Code()},
+		}
+
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+
+		require.NoError(t, err)
+		require.NotNil(t, bundle)
+		require.Len(t, patients, 1)
+		require.Equal(t, *createdPatients[0].Id, *patients[0].Id)
+		require.Equal(t, fhir.AdministrativeGenderMale, *patients[0].Gender)
+
+		// Test with mismatched criteria (ID exists but gender doesn't match)
+		queryParams = url.Values{
+			"_id":    []string{*createdPatients[0].Id, *createdPatients[2].Id},
+			"gender": []string{fhir.AdministrativeGenderFemale.Code()},
+		}
+
+		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+
+		require.NoError(t, err)
+		require.NotNil(t, bundle)
+		require.Empty(t, patients, "Should return no results when ID and gender don't match")
+
+		// Test with all patients and one gender, should return only patients of that gender
+		queryParams = url.Values{
+			"_id":    []string{*createdPatients[0].Id, *createdPatients[1].Id, *createdPatients[2].Id},
+			"gender": []string{fhir.AdministrativeGenderFemale.Code()},
+		}
+
+		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+
+		require.NoError(t, err)
+		require.NotNil(t, bundle)
+		require.Len(t, patients, 1)
+		require.Equal(t, *createdPatients[1].Id, *patients[0].Id)
+		require.Equal(t, fhir.AdministrativeGenderFemale, *patients[0].Gender)
+
+		// Test with all patients and all genders, should return all patients
+		queryParams = url.Values{
+			"_id":    []string{*createdPatients[0].Id, *createdPatients[1].Id, *createdPatients[2].Id},
+			"gender": []string{fhir.AdministrativeGenderMale.Code(), fhir.AdministrativeGenderFemale.Code()},
+		}
+
+		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+
+		require.NoError(t, err)
+		require.NotNil(t, bundle)
+		require.Len(t, patients, 3)
+	})
+
+	t.Run("search careplans with multiple parameters", func(t *testing.T) {
+		queryParams := url.Values{"subject": []string{*createdPatients[0].Id, *createdPatients[1].Id}}
+
+		carePlans, bundle, err := handleSearchResource[fhir.CarePlan](ctx, service, "CarePlan", queryParams, &fhirclient.Headers{})
+
+		require.NoError(t, err)
+		require.NotNil(t, bundle)
+		require.Len(t, carePlans, 2)
+
+		for _, cp := range carePlans {
+			subjectRef := *cp.Subject.Reference
+			require.True(t,
+				subjectRef == fmt.Sprintf("Patient/%s", *createdPatients[0].Id) ||
+					subjectRef == fmt.Sprintf("Patient/%s", *createdPatients[1].Id),
+				"Unexpected subject reference: %s", subjectRef)
+		}
+	})
+
+	t.Run("search with custom headers", func(t *testing.T) {
+		queryParams := url.Values{"_id": []string{*createdPatients[0].Id}}
+
+		customHeaders := &fhirclient.Headers{}
+
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, customHeaders)
+
+		require.NoError(t, err)
+		require.NotNil(t, bundle)
+		require.Len(t, patients, 1)
+		require.Equal(t, *createdPatients[0].Id, *patients[0].Id)
+	})
+
+	t.Run("search with non-existent ID", func(t *testing.T) {
+		queryParams := url.Values{"_id": []string{"non-existent-id"}}
+
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+
+		require.NoError(t, err)
+		require.NotNil(t, bundle)
+		require.Empty(t, patients)
 	})
 }
 
