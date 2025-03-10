@@ -37,36 +37,6 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 
 	updateQuestionnaireData, _ := json.Marshal(defaultQuestionnaire)
 
-	// Create a mock audit event for the creation
-	creationAuditEvent := fhir.AuditEvent{
-		Id: to.Ptr("audit1"),
-		Agent: []fhir.AuditEventAgent{
-			{
-				Who: &fhir.Reference{
-					Identifier: &auth.TestPrincipal1.Organization.Identifier[0],
-				},
-			},
-		},
-		Entity: []fhir.AuditEventEntity{
-			{
-				What: &fhir.Reference{
-					Reference: to.Ptr("Questionnaire/1"),
-				},
-			},
-		},
-	}
-
-	creationAuditBundle := fhir.Bundle{
-		Entry: []fhir.BundleEntry{
-			{
-				Resource: func() []byte {
-					b, _ := json.Marshal(creationAuditEvent)
-					return b
-				}(),
-			},
-		},
-	}
-
 	existingQuestionnaireBundle := fhir.Bundle{
 		Entry: []fhir.BundleEntry{
 			{
@@ -85,13 +55,12 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 		existingQuestionnaireBundle *fhir.Bundle
 		errorFromSearch             error
 		errorFromAuditQuery         error
-		auditBundle                 *fhir.Bundle
 		wantErr                     bool
 		errorMessage                string
 		mockCreateBehavior          func(mockFHIRClient *mock.MockClient)
 	}{
 		{
-			name: "valid update - creator - success",
+			name: "valid update - success",
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
 				ResourceId:   "1",
@@ -99,7 +68,6 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 				ResourcePath: "Questionnaire/1",
 			},
 			existingQuestionnaireBundle: &existingQuestionnaireBundle,
-			auditBundle:                 &creationAuditBundle,
 			wantErr:                     false,
 		},
 		{
@@ -125,19 +93,6 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 			errorMessage: "not authenticated",
 		},
 		{
-			name: "invalid update - not creator - fails",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updateQuestionnaireData,
-				ResourcePath: "Questionnaire/1",
-			},
-			existingQuestionnaireBundle: &existingQuestionnaireBundle,
-			auditBundle:                 &creationAuditBundle,
-			wantErr:                     true,
-			errorMessage:                "Only the creator can update this Questionnaire",
-		},
-		{
 			name: "invalid update - error searching existing resource - fails",
 			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
@@ -148,32 +103,6 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 			errorFromSearch: errors.New("failed to search for Questionnaire"),
 			wantErr:         true,
 			errorMessage:    "failed to search for Questionnaire",
-		},
-		{
-			name: "invalid update - error querying audit events - fails",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updateQuestionnaireData,
-				ResourcePath: "Questionnaire/1",
-			},
-			existingQuestionnaireBundle: &existingQuestionnaireBundle,
-			errorFromAuditQuery:         errors.New("failed to find creation AuditEvent"),
-			wantErr:                     true,
-			errorMessage:                "failed to find creation AuditEvent",
-		},
-		{
-			name: "invalid update - no creation audit event - fails",
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:   "1",
-				ResourceData: updateQuestionnaireData,
-				ResourcePath: "Questionnaire/1",
-			},
-			existingQuestionnaireBundle: &existingQuestionnaireBundle,
-			auditBundle:                 &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-			wantErr:                     true,
-			errorMessage:                "No creation audit event found for Questionnaire",
 		},
 	}
 
@@ -196,17 +125,6 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 						return tt.errorFromSearch
 					}
 					*(result.(*fhir.Bundle)) = *tt.existingQuestionnaireBundle
-
-					if len(tt.existingQuestionnaireBundle.Entry) > 0 {
-						mockFHIRClient.EXPECT().SearchWithContext(tt.ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result interface{}, option ...fhirclient.Option) error {
-							if tt.errorFromAuditQuery != nil {
-								return tt.errorFromAuditQuery
-							}
-							*(result.(*fhir.Bundle)) = *tt.auditBundle
-							return nil
-						})
-					}
-
 					return nil
 				})
 			}

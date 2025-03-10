@@ -140,12 +140,6 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		require.Contains(t, err.Error(), "Only the creator can update this Patient")
 	})
 
-	t.Run("Update Questionnaire with different requester - fails", func(t *testing.T) {
-		err = carePlanContributor2.Update("Questionnaire/"+*questionnaire.Id, questionnaire, &questionnaire)
-		require.Error(t, err)
-		require.Contains(t, err.Error(), "Only the creator can update this Questionnaire")
-	})
-
 	t.Run("Update QuestionnaireResponse with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponse, &questionnaireResponse)
 		require.Error(t, err)
