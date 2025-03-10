@@ -18,6 +18,7 @@
     "@mui/lab": "^5.0.0-alpha.174",
     "@mui/material": "^5.16.14",
     "@mui/x-data-grid": "^5.17.26",
+    "@mui/x-date-pickers": "^6.20.2",
     "@tabler/icons-react": "3.24.0",
     "@types/fhir": "^0.0.41",
     "@types/node": "22.13.4",
@@ -26,6 +27,7 @@
     "apexcharts": "4.2.0",
     "fhir": "^4.12.0",
     "fhir-kit-client": "^1.9.2",
+    "jsonpath-plus": "^10.3.0",
     "lodash": "4.17.21",
     "next": "^15.1.6",
     "react": "^18.3.1",
@@ -33,9 +35,12 @@
     "react-dom": "^18.3.1",
     "react-helmet-async": "2.0.5",
     "typescript": "5.7.2",
+    "uuid": "^11.1.0",
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@eslint/eslintrc": "^3.3.0",
+    "@eslint/js": "^9.21.0",
     "@types/lodash": "4.17.13",
     "eslint": "^9.19.0",
     "eslint-config-next": "^15.1.0"
