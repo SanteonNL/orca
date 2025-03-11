@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/google/uuid"
 	"testing"
 
@@ -81,18 +82,18 @@ func TestNotifyTaskAccepted(t *testing.T) {
 	tests := []struct {
 		name          string
 		task          fhir.Task
-		setupMocks    func(*test.StubFHIRClient, *MockServiceBusClient)
+		setupMocks    func(*test.StubFHIRClient, *messaging.MockBroker)
 		expectedError error
 	}{
 		{
 			name: "successful notification",
 			task: primaryTask,
-			setupMocks: func(client *test.StubFHIRClient, mockServiceBusClient *MockServiceBusClient) {
+			setupMocks: func(client *test.StubFHIRClient, mockMessageBroker *messaging.MockBroker) {
 				client.Resources = append(client.Resources, primaryTask, primaryPatient, serviceReq,
 					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask, careTeam)
 
-				mockServiceBusClient.EXPECT().
-					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
+				mockMessageBroker.EXPECT().
+					SendMessage(ctx, "test-topic", gomock.Any()).
 					Return(nil)
 			},
 		},
@@ -100,22 +101,22 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			name:          "error fetching task",
 			task:          primaryTask,
 			expectedError: errors.New("failed to create task notification bundle: fetch error"),
-			setupMocks: func(client *test.StubFHIRClient, _ *MockServiceBusClient) {
+			setupMocks: func(client *test.StubFHIRClient, _ *messaging.MockBroker) {
 				client.Error = errors.New("fetch error")
 			},
 		},
 		{
-			name: "error sending to ServiceBus",
+			name: "error sending to message broker",
 			task: primaryTask,
-			setupMocks: func(client *test.StubFHIRClient, mockServiceBusClient *MockServiceBusClient) {
+			setupMocks: func(client *test.StubFHIRClient, mockMessageBroker *messaging.MockBroker) {
 				client.Resources = append(client.Resources, primaryTask, primaryPatient, serviceReq,
 					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask, careTeam)
 
-				mockServiceBusClient.EXPECT().
-					SubmitMessage(ctx, gomock.Any(), gomock.Any()).
-					Return(errors.New("kafka error"))
+				mockMessageBroker.EXPECT().
+					SendMessage(ctx, "test-topic", gomock.Any()).
+					Return(errors.New("broker error"))
 			},
-			expectedError: errors.New("failed to send task to ServiceBus: kafka error"),
+			expectedError: errors.New("failed to send task to message broker: broker error"),
 		},
 	}
 
@@ -124,13 +125,13 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockServiceBusClient := NewMockServiceBusClient(ctrl)
+			mockMessageBroker := messaging.NewMockBroker(ctrl)
 			fhirClient := &test.StubFHIRClient{}
 
 			if tt.setupMocks != nil {
-				tt.setupMocks(fhirClient, mockServiceBusClient)
+				tt.setupMocks(fhirClient, mockMessageBroker)
 			}
-			notifier := NewNotifier(mockServiceBusClient)
+			notifier := NewNotifier(mockMessageBroker, "test-topic")
 
 			err := notifier.NotifyTaskAccepted(ctx, fhirClient, &tt.task)
 			if tt.expectedError != nil {

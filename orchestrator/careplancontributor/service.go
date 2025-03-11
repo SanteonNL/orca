@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/http"
 	"net/url"
 	"strings"
@@ -47,6 +48,7 @@ func New(
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager,
+	messageBroker messaging.Broker,
 	ehrFhirProxy coolfhir.HttpProxy) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
@@ -101,10 +103,6 @@ func New(
 		}
 	}
 
-	serviceBusClient, err := ehr.NewClient(config.ServiceBusConfig)
-	if err != nil {
-		return nil, err
-	}
 	result := &Service{
 		config:                        config,
 		orcaPublicURL:                 orcaPublicURL,
@@ -116,9 +114,11 @@ func New(
 		ehrFhirProxy:                  ehrFhirProxy,
 		transport:                     localFhirStoreTransport,
 		workflows:                     workflowProvider,
-		notifier:                      ehr.NewNotifier(serviceBusClient),
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 		eventManager:                  eventManager,
+	}
+	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
+		result.notifier = ehr.NewNotifier(messageBroker, config.TaskFiller.TaskAcceptedBundleTopic)
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
