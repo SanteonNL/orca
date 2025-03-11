@@ -1,10 +1,11 @@
 "use client"
-import React, { useState } from 'react';
+import React from 'react';
 import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
-import { Button, Tooltip } from '@mui/material';
+import { Tooltip } from '@mui/material';
 import { IconEye, IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
 import ViewTaskOutput from './view-task-output';
-import {Bundle, BundleEntry, FhirResource} from "fhir/r4";
+import { BundleEntry, FhirResource } from "fhir/r4";
+import CreateTaskObservation from './create-task-observation';
 
 interface Props {
     rows: any[]
@@ -45,7 +46,7 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows, notificationBundles }) => {
             flex: 1,
             renderCell: (params) => {
 
-                if (!params.row.isSubtask) return <></>
+                if (!params.row.isSubtask) return <CreateTaskObservation task={params.row.task} />
 
                 return <ViewTaskOutput task={params.row.task} notificationBundles={notificationBundles} />
             }
