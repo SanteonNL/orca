@@ -111,6 +111,7 @@ type FHIRHandlerRequest struct {
 	Context       context.Context
 	// Principal contains the identity of the client invoking the FHIR operation.
 	Principal     *auth.Principal
+	// LocalIdentity contains the identifier of the local care organization handling the FHIR operation invocation.
 	LocalIdentity *fhir.Identifier
 }
 
