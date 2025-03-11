@@ -16,10 +16,18 @@ import (
 
 func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msgf("Updating QuestionnaireResponse: %s", request.RequestUrl)
+
+	// Log the raw request data for debugging
+	log.Ctx(ctx).Debug().Msgf("resourceData: %s", string(request.ResourceData))
+
 	var questionnaireResponse fhir.QuestionnaireResponse
 	if err := json.Unmarshal(request.ResourceData, &questionnaireResponse); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", questionnaireResponse, coolfhir.BadRequestError(err))
 	}
+
+	// Log the parsed QuestionnaireResponse for debugging
+	responseJSON, _ := json.Marshal(questionnaireResponse)
+	log.Ctx(ctx).Debug().Msgf("questionnaireResponse: %s", string(responseJSON))
 
 	// Check we're only allowing secure external literal references
 	if err := s.validateLiteralReferences(ctx, &questionnaireResponse); err != nil {
@@ -28,27 +36,34 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 
 	// Search for the existing QuestionnaireResponse
 	var searchBundle fhir.Bundle
-	err := s.fhirClient.SearchWithContext(ctx, "QuestionnaireResponse", url.Values{
-		"_id": []string{*questionnaireResponse.Id},
-	}, &searchBundle)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search for QuestionnaireResponse: %w", err)
+	questionnaireResponseId := ""
+	if questionnaireResponse.Id != nil {
+		questionnaireResponseId = *questionnaireResponse.Id
+	}
+
+	if questionnaireResponseId != "" {
+		err := s.fhirClient.SearchWithContext(ctx, "QuestionnaireResponse", url.Values{
+			"_id": []string{questionnaireResponseId},
+		}, &searchBundle)
+		if err != nil {
+			return nil, fmt.Errorf("failed to search for QuestionnaireResponse: %w", err)
+		}
 	}
 
 	// If no entries found, handle as a create operation
-	if len(searchBundle.Entry) == 0 {
-		log.Ctx(ctx).Info().Msgf("QuestionnaireResponse not found, handling as create: %s", *questionnaireResponse.Id)
+	if len(searchBundle.Entry) == 0 || questionnaireResponseId == "" {
+		log.Ctx(ctx).Info().Msgf("QuestionnaireResponse not found, handling as create: %s", questionnaireResponseId)
 		return s.handleCreateQuestionnaireResponse(ctx, request, tx)
 	}
 
 	// Extract the existing QuestionnaireResponse from the bundle
 	var existingQuestionnaireResponse fhir.QuestionnaireResponse
-	err = json.Unmarshal(searchBundle.Entry[0].Resource, &existingQuestionnaireResponse)
+	err := json.Unmarshal(searchBundle.Entry[0].Resource, &existingQuestionnaireResponse)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal existing QuestionnaireResponse: %w", err)
 	}
 
-	isCreator, err := s.isCreatorOfResource(ctx, *request.Principal, "QuestionnaireResponse", *questionnaireResponse.Id)
+	isCreator, err := s.isCreatorOfResource(ctx, *request.Principal, "QuestionnaireResponse", questionnaireResponseId)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of QuestionnaireResponse")
 	}
@@ -65,7 +80,7 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 	// Create audit event for the update
 	updateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
 		&fhir.Reference{
-			Reference: to.Ptr("QuestionnaireResponse/" + *questionnaireResponse.Id),
+			Reference: to.Ptr("QuestionnaireResponse/" + questionnaireResponseId),
 			Type:      to.Ptr("QuestionnaireResponse"),
 		},
 		&fhir.Reference{

@@ -28,27 +28,33 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 
 	// Search for the existing Patient
 	var searchBundle fhir.Bundle
-	err := s.fhirClient.SearchWithContext(ctx, "Patient", url.Values{
-		"_id": []string{*patient.Id},
-	}, &searchBundle)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search for Patient: %w", err)
+	patientId := ""
+	if patient.Id != nil {
+		patientId = *patient.Id
+	}
+	if patientId != "" {
+		err := s.fhirClient.SearchWithContext(ctx, "Patient", url.Values{
+			"_id": []string{patientId},
+		}, &searchBundle)
+		if err != nil {
+			return nil, fmt.Errorf("failed to search for Patient: %w", err)
+		}
 	}
 
 	// If no entries found, handle as a create operation
-	if len(searchBundle.Entry) == 0 {
-		log.Ctx(ctx).Info().Msgf("Patient not found, handling as create: %s", *patient.Id)
+	if len(searchBundle.Entry) == 0 || patientId == "" {
+		log.Ctx(ctx).Info().Msgf("Patient not found, handling as create: %s", patientId)
 		return s.handleCreatePatient(ctx, request, tx)
 	}
 
 	// Extract the existing Patient from the bundle
 	var existingPatient fhir.Patient
-	err = json.Unmarshal(searchBundle.Entry[0].Resource, &existingPatient)
+	err := json.Unmarshal(searchBundle.Entry[0].Resource, &existingPatient)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal existing Patient: %w", err)
 	}
 
-	isCreator, err := s.isCreatorOfResource(ctx, *request.Principal, "Patient", *patient.Id)
+	isCreator, err := s.isCreatorOfResource(ctx, *request.Principal, "Patient", patientId)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of Patient")
 	}
@@ -56,16 +62,10 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 		return nil, coolfhir.NewErrorWithCode("Participant does not have access to Patient", http.StatusForbidden)
 	}
 
-	// Get local identity for audit
-	localIdentity, err := s.getLocalIdentity()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get local identity: %w", err)
-	}
-
 	// Create audit event for the update
-	updateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
+	updateAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU,
 		&fhir.Reference{
-			Reference: to.Ptr("Patient/" + *patient.Id),
+			Reference: to.Ptr("Patient/" + patientId),
 			Type:      to.Ptr("Patient"),
 		},
 		&fhir.Reference{

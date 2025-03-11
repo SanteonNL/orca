@@ -29,27 +29,35 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 
 	// Search for the existing ServiceRequest
 	var searchBundle fhir.Bundle
-	err := s.fhirClient.SearchWithContext(ctx, "ServiceRequest", url.Values{
-		"_id": []string{*serviceRequest.Id},
-	}, &searchBundle)
-	if err != nil {
-		return nil, fmt.Errorf("failed to search for ServiceRequest: %w", err)
+
+	serviceRequestId := ""
+	if serviceRequest.Id != nil {
+		serviceRequestId = *serviceRequest.Id
+	}
+
+	if serviceRequestId != "" {
+		err := s.fhirClient.SearchWithContext(ctx, "ServiceRequest", url.Values{
+			"_id": []string{serviceRequestId},
+		}, &searchBundle)
+		if err != nil {
+			return nil, fmt.Errorf("failed to search for ServiceRequest: %w", err)
+		}
 	}
 
 	// If no entries found, handle as a create operation
 	if len(searchBundle.Entry) == 0 {
-		log.Ctx(ctx).Info().Msgf("ServiceRequest not found, handling as create: %s", *serviceRequest.Id)
+		log.Ctx(ctx).Info().Msgf("ServiceRequest not found, handling as create: %s", serviceRequestId)
 		return s.handleCreateServiceRequest(ctx, request, tx)
 	}
 
 	// Extract the existing ServiceRequest from the bundle
 	var existingServiceRequest fhir.ServiceRequest
-	err = json.Unmarshal(searchBundle.Entry[0].Resource, &existingServiceRequest)
+	err := json.Unmarshal(searchBundle.Entry[0].Resource, &existingServiceRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal existing ServiceRequest: %w", err)
 	}
 
-	isCreator, err := s.isCreatorOfResource(ctx, *request.Principal, "ServiceRequest", *serviceRequest.Id)
+	isCreator, err := s.isCreatorOfResource(ctx, *request.Principal, "ServiceRequest", serviceRequestId)
 	if err != nil {
 		log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of ServiceRequest")
 	}
@@ -66,7 +74,7 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 	// Create audit event for the update
 	updateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
 		&fhir.Reference{
-			Reference: to.Ptr("ServiceRequest/" + *serviceRequest.Id),
+			Reference: to.Ptr("ServiceRequest/" + serviceRequestId),
 			Type:      to.Ptr("ServiceRequest"),
 		},
 		&fhir.Reference{
