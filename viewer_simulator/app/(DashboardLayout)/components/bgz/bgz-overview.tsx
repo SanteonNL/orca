@@ -44,7 +44,7 @@ export default async function BgzOverview() {
                 }
 
                 return {
-                    id: careTeam?.id || "Uknown",
+                    id: careTeam?.id || "Unknown",
                     bsn: getBsn(carePlan),
                     category: carePlan.category?.[0]?.coding?.map(coding => coding.display).join(', ') ?? "Unknown",
                     carePlan,
