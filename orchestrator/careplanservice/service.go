@@ -109,6 +109,7 @@ type FHIRHandlerRequest struct {
 	RequestUrl    *url.URL
 	FullUrl       string
 	Context       context.Context
+	// Principal contains the identity of the client invoking the FHIR operation.
 	Principal     *auth.Principal
 	LocalIdentity *fhir.Identifier
 }
