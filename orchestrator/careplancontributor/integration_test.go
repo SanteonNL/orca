@@ -1,8 +1,6 @@
 package careplancontributor
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/messaging"
-	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -17,6 +15,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
+	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )

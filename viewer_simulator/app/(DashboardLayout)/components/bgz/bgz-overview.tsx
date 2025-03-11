@@ -19,7 +19,7 @@ export default async function BgzOverview() {
 
     try {
         // Get bundles from internal storage, join all entries
-        const notificationBundles = getNotificationBundles();
+        const notificationBundles = await getNotificationBundles();
         let entries = notificationBundles.flatMap(bundle => bundle.entry || []);
 
         //map all the resources to their reference as it contains CarePlans, Patients, Tasks and CareTeams
@@ -33,21 +33,25 @@ export default async function BgzOverview() {
         rows = entries?.filter((entries) => entries.resource?.resourceType === "CarePlan")
             .map((entry: any) => entry.resource as CarePlan)
             .map((carePlan: CarePlan) => {
-                const careTeam = carePlan.careTeam?.[0]?.reference ? resourceMap?.get(carePlan.careTeam[0].reference) : undefined;
+
+                // Find the careteam, first as a contained resource, otherwise as a referenced resource that has been notified
+                const careTeam =
+                    carePlan.contained?.find((resource: any) => resource.resourceType === "CareTeam") ??
+                    (carePlan.careTeam?.[0]?.reference ? resourceMap?.get(carePlan.careTeam[0].reference) : undefined);
 
                 if (!careTeam) {
                     console.warn(`No CareTeam found for CarePlan/${carePlan.id}`);
                 }
 
                 return {
-                    id: careTeam.id,
+                    id: careTeam?.id || "Unknown",
                     bsn: getBsn(carePlan),
                     category: carePlan.category?.[0]?.coding?.map(coding => coding.display).join(', ') ?? "Unknown",
                     carePlan,
                     careTeam,
                     status: carePlan.status,
                     lastUpdated: carePlan.meta?.lastUpdated ? new Date(carePlan.meta.lastUpdated) : new Date(),
-                    careTeamMembers: careTeam.participant?.map((participant: any) => {
+                    careTeamMembers: careTeam?.participant?.map((participant: any) => {
                         const display = participant.member.display ? participant.member.display + ' ' : '';
                         const ura = `(URA ${participant.member.identifier?.value || 'Unknown'})`;
                         return display + ura;

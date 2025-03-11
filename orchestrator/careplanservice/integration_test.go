@@ -3,15 +3,15 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strconv"
 	"strings"
 	"testing"
-
-	"io"
-	"math/rand"
-	"strconv"
 	"time"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -330,6 +330,7 @@ func Test_Integration(t *testing.T) {
 			err := carePlanContributor1.Update("Task/"+*subTask.Id, subTask, &subTask)
 			require.NoError(t, err)
 		}
+
 		// Here, the Task Filler checks the subtask questionnaire response (if there were any), and then accepts or rejects the Task
 		subTest(t, "Accepting Task")
 		{
@@ -337,10 +338,7 @@ func Test_Integration(t *testing.T) {
 			err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &primaryTask)
 			require.NoError(t, err)
 			t.Run("INT-516: check CareTeam contains both parties, and that both are active", func(t *testing.T) {
-				var careTeam fhir.CareTeam
-				err := carePlanContributor1.Read(*carePlan.CareTeam[0].Reference, &careTeam)
-				require.NoError(t, err)
-				assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2)
+				careTeam := assertCareTeam(t, carePlanContributor1, *carePlan.Id, participant1, participant2)
 				assert.NotNil(t, careTeam.Participant[0].Period.Start)
 				assert.Nil(t, careTeam.Participant[0].Period.End)
 				assert.NotNil(t, careTeam.Participant[1].Period.Start)
@@ -389,12 +387,11 @@ func Test_Integration(t *testing.T) {
 			require.Equal(t, "Task/"+*primaryTask.Id, *carePlan.Activity[0].Reference.Reference)
 		})
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
+			assertCareTeam(t, carePlanContributor1, *carePlan.Id, participant1)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
-			require.Len(t, cpc1Notifications, 3)
+			require.Len(t, cpc1Notifications, 2)
 			assertContainsNotification(t, "Task", cpc1Notifications)
-			assertContainsNotification(t, "CareTeam", cpc1Notifications)
 			assertContainsNotification(t, "CarePlan", cpc1Notifications)
 			require.Len(t, cpc2Notifications, 1)
 			assertContainsNotification(t, "Task", cpc2Notifications)
@@ -404,11 +401,10 @@ func Test_Integration(t *testing.T) {
 	subTest(t, "Search CarePlan")
 	{
 		var searchResult fhir.Bundle
-		err := carePlanContributor1.Search("CarePlan", url.Values{"_id": {*carePlan.Id}, "_include": {"CarePlan:care-team"}}, &searchResult)
+		err := carePlanContributor1.Search("CarePlan", url.Values{"_id": {*carePlan.Id}}, &searchResult)
 		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 2, "Expected 1 CarePlan and 1 CareTeam")
+		require.Len(t, searchResult.Entry, 1, "Expected 1 CarePlan")
 		require.NoError(t, coolfhir.ResourceInBundle(&searchResult, coolfhir.EntryIsOfType("CarePlan"), new(fhir.CarePlan)))
-		require.NoError(t, coolfhir.ResourceInBundle(&searchResult, coolfhir.EntryIsOfType("CareTeam"), new(fhir.CareTeam)))
 	}
 
 	subTest(t, "Read CarePlan - Not in participants")
@@ -419,10 +415,7 @@ func Test_Integration(t *testing.T) {
 	}
 	subTest(t, "Read CareTeam")
 	{
-		var fetchedCareTeam fhir.CareTeam
-		err := carePlanContributor1.Read(*carePlan.CareTeam[0].Reference, &fetchedCareTeam)
-		require.NoError(t, err)
-		assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
+		assertCareTeam(t, carePlanContributor1, *carePlan.Id, participant1)
 	}
 	subTest(t, "Read CareTeam - Does not exist")
 	{
@@ -443,7 +436,7 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, fetchedTask.Id)
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
-		assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
+		assertCareTeam(t, carePlanContributor1, *carePlan.Id, participant1)
 	}
 	subTest(t, "Read Task - Non-creating referenced party")
 	{
@@ -602,7 +595,7 @@ func Test_Integration(t *testing.T) {
 			}
 		})
 		t.Run("Check that CareTeam now contains the requesting party", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1)
+			assertCareTeam(t, carePlanContributor1, *carePlan.Id, participant1)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Len(t, cpc1Notifications, 2)
@@ -611,14 +604,6 @@ func Test_Integration(t *testing.T) {
 			require.Len(t, cpc2Notifications, 1)
 			assertContainsNotification(t, "Task", cpc2Notifications)
 		})
-	}
-
-	subTest(t, "Care Team Search")
-	{
-		var searchResult fhir.Bundle
-		err := carePlanContributor1.Search("CareTeam", url.Values{}, &searchResult)
-		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 2, "Expected 1 team")
 	}
 
 	subTest(t, "Accepting Task")
@@ -636,7 +621,7 @@ func Test_Integration(t *testing.T) {
 			require.Equal(t, fhir.TaskStatusAccepted, updatedTask.Status)
 		})
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
+			assertCareTeam(t, carePlanContributor2, *carePlan.Id, participant1, participant2)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Len(t, cpc1Notifications, 1)
@@ -675,7 +660,7 @@ func Test_Integration(t *testing.T) {
 			require.Equal(t, fhir.TaskStatusInProgress, updatedTask.Status)
 		})
 		t.Run("Check that CareTeam still contains the 2 parties", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor2, *carePlan.CareTeam[0].Reference, participant1, participant2)
+			assertCareTeam(t, carePlanContributor2, *carePlan.Id, participant1, participant2)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Len(t, cpc1Notifications, 1)
@@ -698,7 +683,7 @@ func Test_Integration(t *testing.T) {
 			require.Equal(t, fhir.TaskStatusCompleted, updatedTask.Status)
 		})
 		t.Run("Check that CareTeam now contains the 2 parties", func(t *testing.T) {
-			assertCareTeam(t, carePlanContributor1, *carePlan.CareTeam[0].Reference, participant1, participant2WithEndDate)
+			assertCareTeam(t, carePlanContributor1, *carePlan.Id, participant1, participant2WithEndDate)
 		})
 		t.Run("Check that 2 parties have been notified", func(t *testing.T) {
 			require.Len(t, cpc1Notifications, 1)
@@ -953,16 +938,16 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		})
 	}
 
-	subTest(t, "Search CarePlan and include CareTeam")
+	subTest(t, "Search CarePlan")
 	{
 		currentTime := baseTime.Add(40 * time.Second)
 		restore := audit.SetNowFuncForTest(func() time.Time { return currentTime })
 		defer restore()
 
 		var searchResult fhir.Bundle
-		err = carePlanContributor1.Search("CarePlan", url.Values{"_id": {*carePlan.Id}, "_include": {"CarePlan:care-team"}}, &searchResult)
+		err = carePlanContributor1.Search("CarePlan", url.Values{"_id": {*carePlan.Id}}, &searchResult)
 		require.NoError(t, err)
-		require.Len(t, searchResult.Entry, 2)
+		require.Len(t, searchResult.Entry, 1)
 
 		verifyAuditEvent(t, carePlanContributor1, map[string]fhir.AuditEventAction{
 			"CarePlan/" + *carePlan.Id: fhir.AuditEventActionR,
@@ -1269,12 +1254,21 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	return carePlanContributor1, carePlanContributor2, carePlanContributor3, service
 }
 
-func assertCareTeam(t *testing.T, fhirClient fhirclient.Client, careTeamRef string, expectedMembers ...fhir.CareTeamParticipant) {
+func assertCareTeam(t *testing.T, fhirClient fhirclient.Client, carePlanId string, expectedMembers ...fhir.CareTeamParticipant) *fhir.CareTeam {
 	t.Helper()
 
-	var careTeam fhir.CareTeam
-	err := fhirClient.Read(careTeamRef, &careTeam)
-	require.NoError(t, err)
+	var carePlan fhir.CarePlan
+
+	err := fhirClient.Read(fmt.Sprintf("CarePlan/%s", carePlanId), &carePlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	require.Lenf(t, careTeam.Participant, len(expectedMembers), "expected %d participants, got %d", len(expectedMembers), len(careTeam.Participant))
 	for _, participant := range careTeam.Participant {
 		require.NoError(t, coolfhir.ValidateLogicalReference(participant.Member, "Organization", coolfhir.URANamingSystem))
@@ -1300,6 +1294,8 @@ outer:
 		}
 		t.Errorf("expected participant not found: %s", *expectedMember.Member.Identifier.Value)
 	}
+
+	return careTeam
 }
 
 func setupNotificationEndpoint(t *testing.T, handler func(n coolfhir.SubscriptionNotification)) string {

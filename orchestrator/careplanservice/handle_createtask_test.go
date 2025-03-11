@@ -137,12 +137,6 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			},
 			{
 				Response: &fhir.BundleEntryResponse{
-					Location: to.Ptr("CareTeam/2"),
-					Status:   "201 Created",
-				},
-			},
-			{
-				Response: &fhir.BundleEntryResponse{
 					Location: to.Ptr("Task/3"),
 					Status:   "201 Created",
 				},
@@ -298,7 +292,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			name: "Task location in transaction response bundle contains an absolute URL (Microsoft Azure FHIR behavior)",
 			returnedBundle: deep.AlterCopy(defaultReturnedBundle, func(bundle **fhir.Bundle) {
 				b := *bundle
-				b.Entry[2].Response.Location = to.Ptr(fhirBaseUrl.JoinPath("Task/3").String())
+				b.Entry[1].Response.Location = to.Ptr(fhirBaseUrl.JoinPath("Task/3").String())
 			}),
 			returnedPatientBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -312,8 +306,13 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+			if tt.ctx != nil {
+				ctx = tt.ctx
+			}
+
 			if tt.returnedPatientBundle != nil || tt.errorFromPatientBundleRead != nil {
-				mockFHIRClient.EXPECT().Search("Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(path string, params url.Values, result interface{}, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, path string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 					if tt.returnedPatientBundle != nil {
 						reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedPatientBundle))
 					}
@@ -339,11 +338,6 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 
 			tx := coolfhir.Transaction()
 
-			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
-			if tt.ctx != nil {
-				ctx = tt.ctx
-			}
-
 			result, err := service.handleCreateTask(ctx, fhirRequest, tx)
 
 			if tt.expectError != nil {
@@ -360,10 +354,6 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
 				data, _ := json.Marshal(tt.createdTask)
 				*(result.(*[]byte)) = data
-				return tt.errorFromRead
-			})
-			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "CareTeam/2", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
-				*(result.(*[]byte)) = []byte(`{"id":"2"}`)
 				return tt.errorFromRead
 			})
 
@@ -396,13 +386,12 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			require.NotNil(t, result)
 			response, notifications, err := result(returnedBundle)
 			require.NoError(t, err)
-			assert.Len(t, notifications, 3)
+			assert.Len(t, notifications, 2)
 			require.Equal(t, "Task/3", *response.Response.Location)
 			require.Equal(t, "201 Created", response.Response.Status)
-			require.Len(t, notifications, 3)
+			require.Len(t, notifications, 2)
 			require.IsType(t, &fhir.Task{}, notifications[0])
 			require.IsType(t, &fhir.CarePlan{}, notifications[1])
-			require.IsType(t, &fhir.CareTeam{}, notifications[2])
 		})
 	}
 }
@@ -641,8 +630,8 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 			tx := coolfhir.Transaction()
 
 			if tt.returnedCarePlan != nil || tt.returnedCarePlanError != nil {
-				mockFHIRClient.EXPECT().Read(*tt.taskToCreate.BasedOn[0].Reference, gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ string, resultResource interface{}, opts ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), *tt.taskToCreate.BasedOn[0].Reference, gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, resultResource interface{}, opts ...fhirclient.Option) error {
 						// The FHIR client reads the resource from the FHIR server, to return it to the client.
 						// In this test, we return the expected ServiceRequest.
 						if tt.returnedCarePlan != nil {
@@ -664,7 +653,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				return tt.errorFromRead
 			})
 
-			mockFHIRClient.EXPECT().Read("Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
+			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result interface{}, option ...fhirclient.Option) error {
 				data, _ := json.Marshal(tt.createdTask)
 				*(result.(*[]byte)) = data
 				return tt.errorFromRead

@@ -5,6 +5,26 @@
       "resource": {
         "resourceType": "CarePlan",
         "id": "1",
+        "contained": [
+          {
+            "resourceType": "CareTeam",
+            "id": "contained-careteam-10",
+            "participant": [
+              {
+                "member": {
+                  "type": "Organization",
+                  "identifier": {
+                    "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                    "value": "1"
+                  }
+                },
+                "period": {
+                  "start": "1999-01-01T00:00:00Z"
+                }
+              }
+            ]
+          }
+        ],
         "activity": [
           {
             "reference": {
@@ -16,7 +36,7 @@
         "careTeam": [
           {
             "type": "CareTeam",
-            "reference": "CareTeam/10"
+            "reference": "#contained-careteam-10"
           }
         ]
       }
@@ -40,26 +60,6 @@
             "value": "2"
           }
         }
-      }
-    },
-    {
-      "resource": {
-        "resourceType": "CareTeam",
-        "id": "10",
-        "participant": [
-          {
-            "member": {
-              "type": "Organization",
-              "identifier": {
-                "system": "http://fhir.nl/fhir/NamingSystem/ura",
-                "value": "1"
-              }
-            },
-            "period": {
-              "start": "1999-01-01T00:00:00Z"
-            }
-          }
-        ]
       }
     }
   ]

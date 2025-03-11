@@ -15,8 +15,6 @@ import (
 	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/webhook"
 
-	"github.com/SanteonNL/orca/orchestrator/careplanservice"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
@@ -331,24 +329,30 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	if err != nil {
 		return err
 	}
-	_, careTeams, _, err := careplanservice.GetCarePlanAndCareTeams(request.Context(), cpsFHIRClient, carePlanRef)
+
+	var carePlan fhir.CarePlan
+
+	err = cpsFHIRClient.ReadWithContext(request.Context(), carePlanRef, &carePlan)
 	if err != nil {
-		return fmt.Errorf("failed to get CarePlan and CareTeams for X-SCP-Context: %w", err)
+		return fmt.Errorf("failed to get CarePlan %s for X-SCP-Context: %w", carePlanRef, err)
+	}
+
+	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
+	if err != nil {
+		return fmt.Errorf("failed to resolve CareTeam (carePlan=%s): %w", carePlanRef, err)
 	}
 
 	// Collect participants. Use a map to ensure we don't send the same request to the same participant multiple times.
 	participantIdentifiers := make(map[string]fhir.Identifier)
-	for _, careTeam := range careTeams {
-		for _, participant := range careTeam.Participant {
-			if !coolfhir.IsLogicalReference(participant.Member) {
-				continue
-			}
-			activeMember, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
-			if err != nil {
-				log.Ctx(request.Context()).Warn().Err(err).Msg("Failed to validate CareTeam participant period")
-			} else if activeMember {
-				participantIdentifiers[coolfhir.ToString(participant.Member.Identifier)] = *participant.Member.Identifier
-			}
+	for _, participant := range careTeam.Participant {
+		if !coolfhir.IsLogicalReference(participant.Member) {
+			continue
+		}
+		activeMember, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
+		if err != nil {
+			log.Ctx(request.Context()).Warn().Err(err).Msg("Failed to validate CareTeam participant period")
+		} else if activeMember {
+			participantIdentifiers[coolfhir.ToString(participant.Member.Identifier)] = *participant.Member.Identifier
 		}
 	}
 	if len(participantIdentifiers) == 0 {
@@ -423,11 +427,10 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 
 	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
-	var carePlanId string
 	if err != nil {
 		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
 	} else {
-		_, carePlanId, err = coolfhir.ParseLocalReference(carePlanRef)
+		_, _, err = coolfhir.ParseLocalReference(carePlanRef)
 		if err != nil {
 			return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
 		}
@@ -438,29 +441,20 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, err
 	}
 
-	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
-	var bundle fhir.Bundle
-	err = cpsFHIRClient.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(bundle.Entry) == 0 {
-		return nil, coolfhir.NewErrorWithCode("CarePlan not found", http.StatusNotFound)
-	}
-
-	var careTeams []fhir.CareTeam
-	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
-	if err != nil {
-		return nil, err
-	}
-	if len(careTeams) == 0 {
-		return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
-	}
-
 	var carePlan fhir.CarePlan
-	err = coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
 
+	err = cpsFHIRClient.ReadWithContext(request.Context(), carePlanRef, &carePlan)
+	if err != nil {
+		var outcomeError fhirclient.OperationOutcomeError
+
+		if errors.As(err, &outcomeError); err != nil {
+			return nil, coolfhir.NewErrorWithCode(outcomeError.Error(), outcomeError.HttpStatusCode)
+		}
+
+		return nil, err
+	}
+
+	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
 	if err != nil {
 		return nil, err
 	}
@@ -472,7 +466,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 
 	// get the CareTeamParticipant, then check that it is active
-	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, principal.Organization.Identifier)
 	if participant == nil {
 		return nil, coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
@@ -487,7 +481,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 	return &ScpValidationResult{
 		carePlan:  &carePlan,
-		careTeams: &careTeams,
+		careTeams: &[]fhir.CareTeam{*careTeam},
 	}, nil
 }
 

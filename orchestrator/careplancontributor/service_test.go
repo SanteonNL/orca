@@ -46,8 +46,8 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 		healthDataViewEndpointEnabled *bool
 		expectedStatus                int
 		xSCPContext                   string
-		searchBodyReturnFile          string
-		searchStatusReturn            int
+		readBodyReturnFile            string
+		readStatusReturn              int
 		// Allows us to test both GET and POST requests
 		patientRequestURL   *string
 		patientStatusReturn *int
@@ -76,146 +76,146 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: CarePlan in header not found - GET",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-not-found.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/not-exists",
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: CarePlan in header not found - GET",
+			expectedStatus:     http.StatusNotFound,
+			readStatusReturn:   http.StatusNotFound,
+			readBodyReturnFile: "./testdata/careplan-not-found.json",
+			xSCPContext:        "CarePlan/not-exists",
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: CarePlan in header not found - POST",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-not-found.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/not-exists",
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: CarePlan in header not found - POST",
+			expectedStatus:     http.StatusNotFound,
+			readStatusReturn:   http.StatusNotFound,
+			readBodyReturnFile: "./testdata/careplan-not-found.json",
+			xSCPContext:        "CarePlan/not-exists",
+			method:             to.Ptr("POST"),
+			url:                to.Ptr("/cpc/fhir/Patient/_search"),
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: CareTeam not present in bundle - GET",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-careteam-missing.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: CareTeam not present in bundle - GET",
+			expectedStatus:     http.StatusInternalServerError,
+			readBodyReturnFile: "./testdata/careplan-careteam-missing.json",
+			readStatusReturn:   http.StatusOK,
+			xSCPContext:        "CarePlan/cps-careplan-01",
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: invalid CareTeam reference: CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: CareTeam not present in bundle - POST",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-careteam-missing.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: CareTeam not present in bundle - POST",
+			expectedStatus:     http.StatusInternalServerError,
+			readBodyReturnFile: "./testdata/careplan-careteam-missing.json",
+			readStatusReturn:   http.StatusOK,
+			xSCPContext:        "CarePlan/cps-careplan-01",
+			method:             to.Ptr("POST"),
+			url:                to.Ptr("/cpc/fhir/Patient/_search"),
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: invalid CareTeam reference: CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: requester not part of CareTeam - GET",
-			principal:            auth.TestPrincipal3,
-			expectedStatus:       http.StatusForbidden,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: requester not part of CareTeam - GET",
+			principal:          auth.TestPrincipal3,
+			expectedStatus:     http.StatusForbidden,
+			readBodyReturnFile: "./testdata/careplan-valid.json",
+			readStatusReturn:   http.StatusOK,
+			xSCPContext:        "CarePlan/cps-careplan-01",
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: requester not part of CareTeam - POST",
-			principal:            auth.TestPrincipal3,
-			expectedStatus:       http.StatusForbidden,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: requester not part of CareTeam - POST",
+			principal:          auth.TestPrincipal3,
+			expectedStatus:     http.StatusForbidden,
+			readBodyReturnFile: "./testdata/careplan-valid.json",
+			readStatusReturn:   http.StatusOK,
+			xSCPContext:        "CarePlan/cps-careplan-01",
+			method:             to.Ptr("POST"),
+			url:                to.Ptr("/cpc/fhir/Patient/_search"),
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: proxied request returns error - GET",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientRequestURL:    to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn:  to.Ptr(http.StatusNotFound),
+			name:                "Fails: proxied request returns error - GET",
+			expectedStatus:      http.StatusNotFound,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
+			patientStatusReturn: to.Ptr(http.StatusNotFound),
 		},
 		{
-			name:                 "Fails: proxied request returns error - POST",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientRequestURL:    to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn:  to.Ptr(http.StatusNotFound),
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
+			name:                "Fails: proxied request returns error - POST",
+			expectedStatus:      http.StatusNotFound,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
+			patientStatusReturn: to.Ptr(http.StatusNotFound),
+			method:              to.Ptr("POST"),
+			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
 		},
 		{
-			name:                 "Fails: requester is CareTeam member but Period is expired - GET",
-			principal:            auth.TestPrincipal2,
-			expectedStatus:       http.StatusForbidden,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientRequestURL:    to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:                "Fails: requester is CareTeam member but Period is expired - GET",
+			principal:           auth.TestPrincipal2,
+			expectedStatus:      http.StatusForbidden,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			expectedJSON:        `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: requester is CareTeam member but Period is expired - POST",
-			principal:            auth.TestPrincipal2,
-			expectedStatus:       http.StatusForbidden,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientRequestURL:    to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:                "Fails: requester is CareTeam member but Period is expired - POST",
+			principal:           auth.TestPrincipal2,
+			expectedStatus:      http.StatusForbidden,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			method:              to.Ptr("POST"),
+			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
+			expectedJSON:        `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Success: valid request - GET",
-			expectedStatus:       http.StatusOK,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/1"),
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientStatusReturn:  to.Ptr(http.StatusOK),
+			name:                "Success: valid request - GET",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/1"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
 		},
 		{
-			name:                 "Success: valid request - GET - Allow caching",
-			expectedStatus:       http.StatusOK,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/1"),
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			allowCaching:         true,
+			name:                "Success: valid request - GET - Allow caching",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/1"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			allowCaching:        true,
 		},
 		{
-			name:                 "Success: valid request - POST",
-			expectedStatus:       http.StatusOK,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/_search"),
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
+			name:                "Success: valid request - POST",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/_search"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			method:              to.Ptr("POST"),
+			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
 		},
 		{
-			name:                 "Success: valid request - POST - Allow caching",
-			expectedStatus:       http.StatusOK,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/_search"),
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			allowCaching:         true,
+			name:                "Success: valid request - POST - Allow caching",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/_search"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			method:              to.Ptr("POST"),
+			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
+			allowCaching:        true,
 		},
 	}
 
@@ -260,16 +260,11 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
 
-			var capturedBody []byte
-			if tt.searchBodyReturnFile != "" {
-				carePlanServiceMux.HandleFunc("POST /cps/CarePlan/_search", func(writer http.ResponseWriter, request *http.Request) {
-					capturedBody, _ = io.ReadAll(request.Body)
-					rawJson, _ := os.ReadFile(tt.searchBodyReturnFile)
-					var data fhir.Bundle
-					_ = json.Unmarshal(rawJson, &data)
-					responseData, _ := json.Marshal(data)
-					writer.WriteHeader(http.StatusOK)
-					_, _ = writer.Write(responseData)
+			if tt.readBodyReturnFile != "" {
+				carePlanServiceMux.HandleFunc(fmt.Sprintf("GET /cps/%s", tt.xSCPContext), func(writer http.ResponseWriter, request *http.Request) {
+					rawJson, _ := os.ReadFile(tt.readBodyReturnFile)
+					writer.WriteHeader(tt.readStatusReturn)
+					_, _ = writer.Write(rawJson)
 				})
 			}
 			if tt.patientRequestURL != nil && tt.patientStatusReturn != nil {
@@ -282,9 +277,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			service.RegisterHandlers(frontServerMux)
 			frontServer := httptest.NewServer(frontServerMux)
 
-			carePlanId := ""
 			if tt.xSCPContext != "" {
-				carePlanId = strings.TrimPrefix(tt.xSCPContext, "CarePlan/")
 				tt.xSCPContext = fmt.Sprintf("%s/%s", carePlanServiceURL, tt.xSCPContext)
 			}
 
@@ -310,21 +303,13 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			httpRequest, _ := http.NewRequest(method, frontServer.URL+reqURL, nil)
 			httpResponse, err := httpClient.Do(httpRequest)
 			require.Equal(t, err, tt.expectedError)
-			require.Equal(t, httpResponse.StatusCode, tt.expectedStatus)
+			require.Equal(t, tt.expectedStatus, httpResponse.StatusCode)
 
 			if tt.expectedJSON != "" {
 				body, _ := io.ReadAll(httpResponse.Body)
 				require.JSONEq(t, tt.expectedJSON, string(body))
 			}
-			if tt.searchBodyReturnFile != "" {
-				expectedValues := url.Values{
-					"_include": {"CarePlan:care-team"},
-					"_id":      {carePlanId},
-				}
-				actualValues, err := url.ParseQuery(string(capturedBody))
-				require.NoError(t, err)
-				require.Equal(t, expectedValues, actualValues)
-
+			if tt.readBodyReturnFile != "" {
 				if tt.expectedStatus == http.StatusOK {
 					if tt.allowCaching {
 						assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
@@ -745,7 +730,7 @@ func TestService_handleGetContext(t *testing.T) {
 	assert.JSONEq(t, `{
 		"practitioner": "the-doctor",
 		"practitionerRole": "the-doctor-role",
-		"serviceRequest": "ServiceRequest/1",	
+		"serviceRequest": "ServiceRequest/1",
 		"patient": "Patient/1",
 		"task": "Task/1",
 		"taskIdentifier": "task-identifier-123"
@@ -768,13 +753,15 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 			coolfhir.SendResponse(writer, http.StatusOK, results)
 		})
 		// CPS endpoints
-		carePlanBundleData, err := os.ReadFile("./testdata/careplan-bundle-valid.json")
+		carePlanData, err := os.ReadFile("./testdata/careplan-valid.json")
 		require.NoError(t, err)
-		var carePlanBundle fhir.Bundle
-		require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
-		remoteContributorFHIRAPIMux.HandleFunc("POST /cps/fhir/CarePlan/_search", func(writer http.ResponseWriter, request *http.Request) {
-			coolfhir.SendResponse(writer, http.StatusOK, carePlanBundle)
+		var carePlan fhir.CarePlan
+		require.NoError(t, json.Unmarshal(carePlanData, &carePlan))
+
+		remoteContributorFHIRAPIMux.HandleFunc("GET /cps/fhir/CarePlan/1", func(writer http.ResponseWriter, request *http.Request) {
+			coolfhir.SendResponse(writer, http.StatusOK, carePlan)
 		})
+
 		remoteContributorFHIRAPI := httptest.NewServer(remoteContributorFHIRAPIMux)
 		cpcBaseURL := remoteContributorFHIRAPI.URL + "/cpc/fhir"
 		cpsBaseURL := remoteContributorFHIRAPI.URL + "/cps/fhir"
@@ -802,9 +789,7 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 				},
 			},
 		}
-		expectedBody := url.Values{
-			"_include": {"CarePlan:care-team"},
-		}
+		expectedBody := url.Values{}
 
 		httpRequest := httptest.NewRequest("POST", publicURL.JoinPath("/cpc/aggregate/fhir/Patient/_search").String(), strings.NewReader(expectedBody.Encode()))
 		httpRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
