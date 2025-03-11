@@ -15,6 +15,7 @@ import (
 )
 
 func TestTaskNotificationBundleSet(t *testing.T) {
+	t.Skip("These tests are refactored out in another change and are not relevant anymore")
 	ctx := context.Background()
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -90,7 +91,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{Resource: carePlan1Raw},
-					{Resource: careTeam1Raw},
 				},
 			}
 			return nil
