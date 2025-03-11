@@ -1,5 +1,4 @@
 //go:build slowtests
-// +build slowtests
 
 package messaging
 
@@ -22,7 +21,7 @@ func TestAzureServiceBusBroker(t *testing.T) {
 
 	broker, err := newAzureServiceBusBroker(AzureServiceBusConfig{
 		ConnectionString: "Endpoint=sb://" + serviceBus + ";SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
-	}, []string{"orca-patient-enrollment-events"})
+	}, []string{"orca-patient-enrollment-events", "not-existing-in-servicebus"})
 	require.NoError(t, err)
 	// When the container signals ready, the Service Bus emulator actually isn't ready yet.
 	// See https://github.com/Azure/azure-service-bus-emulator-installer/issues/35
@@ -39,6 +38,20 @@ func TestAzureServiceBusBroker(t *testing.T) {
 			ContentType: "application/json",
 		})
 		require.NoError(t, err)
+	})
+	t.Run("unknown topic in ORCA", func(t *testing.T) {
+		err := broker.SendMessage(context.Background(), "unknown-topic", &Message{
+			Body:        []byte(`{"patient_id": "123"}`),
+			ContentType: "application/json",
+		})
+		require.EqualError(t, err, "AzureServiceBus: sender not found (topic=unknown-topic)")
+	})
+	t.Run("unknown topic in Azure ServiceBus", func(t *testing.T) {
+		err := broker.SendMessage(context.Background(), "not-existing-in-servicebus", &Message{
+			Body:        []byte(`{"patient_id": "123"}`),
+			ContentType: "application/json",
+		})
+		require.ErrorContains(t, err, "amqp:not-found")
 	})
 	t.Run("shutdown", func(t *testing.T) {
 		err := broker.Close(context.Background())
@@ -57,7 +70,6 @@ func setupSQLServer(t *testing.T, dockerNetwork *tc.DockerNetwork) string {
 			"ACCEPT_EULA":       "Y",
 			"MSSQL_SA_PASSWORD": "Z4perS3!cr3!t",
 		},
-		// WaitingFor: wait.ForLog("SQL Server is now ready for client connections"),
 	}
 	container, err := tc.GenericContainer(ctx, tc.GenericContainerRequest{
 		ContainerRequest: req,

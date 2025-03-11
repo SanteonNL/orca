@@ -3,11 +3,12 @@ package messaging
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 var _ Broker = &HTTPBroker{}
@@ -36,17 +37,16 @@ func (h HTTPBroker) Close(ctx context.Context) error {
 }
 
 func (h HTTPBroker) SendMessage(ctx context.Context, topic string, message *Message) error {
-	go func(msg *Message) {
-		if err := h.doSend(ctx, topic, msg); err != nil {
-			log.Ctx(ctx).Err(err).Msg("Messaging: failed to send message to HTTP endpoint")
-		} else {
-			log.Ctx(ctx).Debug().Msgf("Messaging: successfully sent message to HTTP endpoint")
-		}
-	}(message)
-	if h.underlyingBroker == nil {
-		return nil
+	var errs []error
+	if err := h.doSend(ctx, topic, message); err != nil {
+		errs = append(errs, fmt.Errorf("failed to send message over HTTP: %w", err))
 	}
-	return h.underlyingBroker.SendMessage(ctx, topic, message)
+	if h.underlyingBroker != nil {
+		if err := h.underlyingBroker.SendMessage(ctx, topic, message); err != nil {
+			errs = append(errs, err)
+		}
+	}
+	return errors.Join(errs...)
 }
 
 func (h HTTPBroker) doSend(ctx context.Context, topic string, message *Message) error {
@@ -65,7 +65,9 @@ func (h HTTPBroker) doSend(ctx context.Context, topic string, message *Message) 
 	if err != nil {
 		return nil
 	}
-	req, err := http.NewRequestWithContext(ctx, "POST", endpoint.JoinPath(topic).String(), strings.NewReader(string(jsonValue)))
+	httpRequestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	req, err := http.NewRequestWithContext(httpRequestCtx, "POST", endpoint.JoinPath(topic).String(), strings.NewReader(string(jsonValue)))
 	if err != nil {
 		return err
 	}

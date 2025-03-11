@@ -6,7 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
-	"sync"
+	"strings"
 	"testing"
 )
 
@@ -16,19 +16,21 @@ func TestHTTPBroker(t *testing.T) {
 	var capturedContentType string
 	var capturedTopic string
 	var capturedHTTPMethod string
-	wg := &sync.WaitGroup{}
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		defer wg.Done()
-		capturedTopic = r.URL.Path
-		capturedHTTPMethod = r.Method
-		capturedContentType = r.Header.Get("Content-Type")
+	testServer := httptest.NewServer(http.HandlerFunc(func(httpResponse http.ResponseWriter, httpRequest *http.Request) {
+		capturedTopic = httpRequest.URL.Path
+		capturedHTTPMethod = httpRequest.Method
+		capturedContentType = httpRequest.Header.Get("Content-Type")
 		var err error
-		capturedBody, err = io.ReadAll(r.Body)
+		capturedBody, err = io.ReadAll(httpRequest.Body)
 		if err != nil {
-			w.WriteHeader(http.StatusInternalServerError)
+			httpResponse.WriteHeader(http.StatusInternalServerError)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+		if strings.Contains(httpRequest.URL.Path, "500") {
+			httpResponse.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+		httpResponse.WriteHeader(http.StatusOK)
 	}))
 	defer testServer.Close()
 
@@ -43,13 +45,15 @@ func TestHTTPBroker(t *testing.T) {
 	}
 
 	t.Run("ok", func(t *testing.T) {
-		wg.Add(1)
 		err := broker.SendMessage(context.Background(), "test-topic", message)
-		wg.Wait()
 		require.NoError(t, err)
 		require.JSONEq(t, `{"key":"value"}`, string(capturedBody))
 		require.Equal(t, "application/json", capturedContentType)
 		require.Equal(t, "/test-topic", capturedTopic)
 		require.Equal(t, http.MethodPost, capturedHTTPMethod)
+	})
+	t.Run("non-200 OK response", func(t *testing.T) {
+		err := broker.SendMessage(context.Background(), "test-topic/500", message)
+		require.Error(t, err)
 	})
 }
