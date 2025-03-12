@@ -15,8 +15,9 @@ import (
 var _ Broker = &HTTPBroker{}
 
 type HTTPBrokerConfig struct {
-	Endpoint string   `koanf:"endpoint"`
-	Topics   []string `koanf:"topics"`
+	Endpoint string `koanf:"endpoint"`
+	// TopicFilter is a list of topics that should be sent over HTTP. If empty, all topics are sent.
+	TopicFilter []string `koanf:"topicfilter"`
 }
 
 func NewHTTPBroker(config HTTPBrokerConfig, underlyingBroker Broker) Broker {
@@ -29,7 +30,7 @@ func NewHTTPBroker(config HTTPBrokerConfig, underlyingBroker Broker) Broker {
 type HTTPBroker struct {
 	underlyingBroker Broker
 	endpoint         string
-	topics           []string
+	topicFilter      []string
 }
 
 func (h HTTPBroker) Close(ctx context.Context) error {
@@ -40,7 +41,7 @@ func (h HTTPBroker) Close(ctx context.Context) error {
 }
 
 func (h HTTPBroker) SendMessage(ctx context.Context, topic string, message *Message) error {
-	if len(h.topics) != 0 && !slices.Contains(h.topics, topic) {
+	if len(h.topicFilter) != 0 && !slices.Contains(h.topicFilter, topic) {
 		return nil
 	}
 	var errs []error

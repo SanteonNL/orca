@@ -36,8 +36,8 @@ func TestHTTPBroker(t *testing.T) {
 
 	// Configure the HTTPBroker to use the test server's URL
 	broker := HTTPBroker{
-		endpoint: testServer.URL,
-		topics:   []string{"test-topic", "test-topic/500"},
+		endpoint:    testServer.URL,
+		topicFilter: []string{"test-topic", "test-topic/500"},
 	}
 
 	message := &Message{
