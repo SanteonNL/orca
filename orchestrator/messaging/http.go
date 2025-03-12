@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 )
@@ -14,7 +15,8 @@ import (
 var _ Broker = &HTTPBroker{}
 
 type HTTPBrokerConfig struct {
-	Endpoint string `koanf:"endpoint"`
+	Endpoint string   `koanf:"endpoint"`
+	Topics   []string `koanf:"topics"`
 }
 
 func NewHTTPBroker(config HTTPBrokerConfig, underlyingBroker Broker) Broker {
@@ -27,6 +29,7 @@ func NewHTTPBroker(config HTTPBrokerConfig, underlyingBroker Broker) Broker {
 type HTTPBroker struct {
 	underlyingBroker Broker
 	endpoint         string
+	topics           []string
 }
 
 func (h HTTPBroker) Close(ctx context.Context) error {
@@ -37,6 +40,9 @@ func (h HTTPBroker) Close(ctx context.Context) error {
 }
 
 func (h HTTPBroker) SendMessage(ctx context.Context, topic string, message *Message) error {
+	if len(h.topics) != 0 && !slices.Contains(h.topics, topic) {
+		return nil
+	}
 	var errs []error
 	if err := h.doSend(ctx, topic, message); err != nil {
 		errs = append(errs, fmt.Errorf("failed to send message over HTTP: %w", err))

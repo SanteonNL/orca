@@ -56,7 +56,8 @@ For production environments, it's recommended to use Azure ServiceBus.
 
 * `ORCA_MESSAGING_AZURESERVICEBUS_HOSTNAME`: The hostname of the Azure ServiceBus instance, setting this (or the connection string) enables use of Azure ServiceBus as message broker.
 * `ORCA_MESSAGING_AZURESERVICEBUS_CONNECTIONSTRING`: The connection string of the Azure ServiceBus instance, setting this (or the hostname) enables use of Azure ServiceBus as message broker.
-* `ORCA_MESSAGING_HTTP_ENDPOINT`: For demo purposes: an URL pointing HTTP endpoint, to which messages will also be delivered. It appends the topic name to this URL.
+* `ORCA_MESSAGING_HTTP_ENDPOINT`: For demo purposes: a URL pointing HTTP endpoint, to which messages will also be delivered. It appends the topic name to this URL.
+* `ORCA_MESSAGING_HTTP_TOPICS`: For demo purposes: topics to enable the HTTP endpoint for (separator: `,`). If not set, all topics are enabled.
 
 ## App Launch options
 
