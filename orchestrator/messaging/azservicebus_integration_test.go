@@ -40,7 +40,7 @@ func TestAzureServiceBusBroker(t *testing.T) {
 		capturedMessages := make(chan Message, 10)
 		redeliveryCount := &atomic.Int32{}
 		const simulatedDeliveryFailures = 2
-		err := broker.Receive(queueName, func(message Message) error {
+		err := broker.Receive(queueName, func(_ context.Context, message Message) error {
 			if strings.Contains(string(message.Body), "redelivery") {
 				if redeliveryCount.Load() < simulatedDeliveryFailures {
 					redeliveryCount.Add(1)
