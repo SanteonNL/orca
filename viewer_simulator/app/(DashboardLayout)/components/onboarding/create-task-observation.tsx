@@ -232,7 +232,10 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
       const observation: Observation = {
         resourceType: "Observation",
         status: status as Observation["status"],
-        identifier: [scpContextIdentifier || { system: "urn:uuid", value: "uuid" }],
+        basedOn: [{
+          type: "CarePlan",
+          identifier: scpContextIdentifier
+        }],
         category: [
           {
             coding: [
@@ -269,24 +272,6 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
         observation.note = [
           {
             text: note,
-          },
-        ]
-      }
-
-      // Link to task using basedOn with identifier when possible
-      if (taskFullUrl) {
-        observation.basedOn = [
-          {
-            type: "Task",
-            reference: taskFullUrl,
-            display: taskFullUrl,
-          },
-        ]
-      } else if (task.id) {
-        observation.basedOn = [
-          {
-            reference: `Task/${task.id}`,
-            type: "Task",
           },
         ]
       }
