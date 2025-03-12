@@ -89,11 +89,17 @@ func setupSQLServer(t *testing.T, dockerNetwork *tc.DockerNetwork) string {
 func setupAzureServiceBus(t *testing.T, dockerNetwork *tc.DockerNetwork, sqlServerHost string) string {
 	t.Log("Starting Azure Service Bus...")
 	ctx := context.Background()
+	const port = "5672/tcp"
+	const httpPort = "5300/tcp"
 	req := tc.ContainerRequest{
-		Image:        "mcr.microsoft.com/azure-messaging/servicebus-emulator:latest",
-		ExposedPorts: []string{"5672/tcp"},
-		WaitingFor:   wait.ForLog("Emulator Service is Successfully Up"),
-		Networks:     []string{dockerNetwork.Name},
+		Image:        "mcr.microsoft.com/azure-messaging/servicebus-emulator:1.1.2",
+		ExposedPorts: []string{port, httpPort},
+		WaitingFor: wait.ForAll(
+			wait.ForListeningPort(port),
+			wait.ForListeningPort(httpPort),
+			wait.ForHTTP("/health").WithPort(httpPort),
+		),
+		Networks: []string{dockerNetwork.Name},
 		Files: []tc.ContainerFile{
 			{
 				HostFilePath:      "servicebus-emulator.json",
@@ -105,7 +111,7 @@ func setupAzureServiceBus(t *testing.T, dockerNetwork *tc.DockerNetwork, sqlServ
 			"SQL_SERVER":        sqlServerHost,
 			"MSSQL_SA_PASSWORD": "Z4perS3!cr3!t",
 			"ACCEPT_EULA":       "Y",
-			"DELAY_STARTUP_FOR_HEALTH_CHECKS_IN_SECONDS": "1",
+			"SQL_WAIT_INTERVAL": "0",
 		},
 	}
 	container, err := tc.GenericContainer(ctx, tc.GenericContainerRequest{
@@ -118,7 +124,7 @@ func setupAzureServiceBus(t *testing.T, dockerNetwork *tc.DockerNetwork, sqlServ
 			panic(err)
 		}
 	})
-	endpoint, err := container.Endpoint(ctx, "")
+	endpoint, err := container.PortEndpoint(ctx, port, "")
 	require.NoError(t, err)
 	return endpoint
 }
