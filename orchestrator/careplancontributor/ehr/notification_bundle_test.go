@@ -26,7 +26,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			Reference: to.Ptr("Patient/1"),
 		},
 	})
-	careTeam1Raw, _ := json.Marshal(fhir.CareTeam{Id: to.Ptr("1")})
 	serviceRequest1Raw, _ := json.Marshal(fhir.ServiceRequest{Id: to.Ptr("1")})
 	questionnaire1Raw, _ := json.Marshal(fhir.Questionnaire{Id: to.Ptr("1")})
 	questionnaireResponse1Raw, _ := json.Marshal(fhir.QuestionnaireResponse{Id: to.Ptr("1")})
@@ -90,7 +89,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{Resource: carePlan1Raw},
-					{Resource: careTeam1Raw},
 				},
 			}
 			return nil
@@ -132,7 +130,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 		require.JSONEq(t, string(patient1Raw), string(result.Bundles[1].Entry[0].Resource))
 		require.JSONEq(t, string(serviceRequest1Raw), string(result.Bundles[2].Entry[0].Resource))
 		require.JSONEq(t, string(carePlan1Raw), string(result.Bundles[3].Entry[0].Resource))
-		require.JSONEq(t, string(careTeam1Raw), string(result.Bundles[3].Entry[1].Resource))
 		require.JSONEq(t, string(questionnaire1Raw), string(result.Bundles[4].Entry[0].Resource))
 		require.JSONEq(t, string(questionnaireResponse1Raw), string(result.Bundles[5].Entry[0].Resource))
 	})
@@ -178,7 +175,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{Resource: carePlan1Raw},
-					{Resource: careTeam1Raw},
 				},
 			}
 			return nil
@@ -225,7 +221,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{Resource: carePlan1Raw},
-					{Resource: careTeam1Raw},
 				},
 			}
 			return nil
@@ -258,7 +253,6 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{Resource: carePlan1Raw},
-					{Resource: careTeam1Raw},
 				},
 			}
 			return nil
