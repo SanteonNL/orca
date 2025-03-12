@@ -36,7 +36,8 @@ func TestHTTPBroker(t *testing.T) {
 
 	// Configure the HTTPBroker to use the test server's URL
 	broker := HTTPBroker{
-		endpoint: testServer.URL,
+		endpoint:    testServer.URL,
+		topicFilter: []string{"test-topic", "test-topic/500"},
 	}
 
 	message := &Message{
@@ -55,5 +56,21 @@ func TestHTTPBroker(t *testing.T) {
 	t.Run("non-200 OK response", func(t *testing.T) {
 		err := broker.SendMessage(context.Background(), "test-topic/500", message)
 		require.Error(t, err)
+	})
+	t.Run("topic filtered out (not configured)", func(t *testing.T) {
+		capturedBody = nil
+		err := broker.SendMessage(context.Background(), "other-topic", message)
+		require.NoError(t, err)
+		require.Empty(t, capturedBody)
+	})
+	t.Run("no filter configured", func(t *testing.T) {
+		capturedBody = nil
+		broker := HTTPBroker{
+			endpoint: testServer.URL,
+		}
+		err := broker.SendMessage(context.Background(), "test-topic", message)
+		require.NoError(t, err)
+		require.NoError(t, err)
+		require.NotEmpty(t, capturedBody)
 	})
 }
