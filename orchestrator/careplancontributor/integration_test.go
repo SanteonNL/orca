@@ -187,7 +187,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		cpcConfig.Enabled = true
 		cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 		cpcConfig.HealthDataViewEndpointEnabled = true
-		cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy)
+		cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy, carePlanServiceURL)
 		require.NoError(t, err)
 
 		cpcServerMux := http.NewServeMux()
@@ -236,9 +236,8 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
-	cpcConfig.CarePlanService.URL = carePlanServiceURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy)
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy, carePlanServiceURL)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()

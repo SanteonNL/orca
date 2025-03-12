@@ -103,7 +103,6 @@ EOF
 echo "Creating stack for Hospital..."
 echo "  Creating devtunnel"
 export HOSPITAL_URL=$(createTunnel ./hospital 9080)
-export CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${HOSPITAL_URL}/orca/cps"
 echo "  Creating Discovery Service definition"
 HOSPITAL_URL_ESCAPED=$(sed 's/[&/\]/\\&/g' <<<"${HOSPITAL_URL}")
 sed "s/DiscoveryServerURL/${HOSPITAL_URL_ESCAPED}/" shared_config/discovery_input/homemonitoring.json > shared_config/discovery/homemonitoring.json
@@ -111,7 +110,6 @@ echo "  Starting services"
 pushd hospital
 echo NUTS_URL="${HOSPITAL_URL}" > .env
 echo HOSPITAL_URL="${HOSPITAL_URL}" >> .env
-echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
 docker compose --env-file .env pull
 docker compose --env-file .env up --wait --build --remove-orphans
 echo "  Creating DID document"
@@ -132,7 +130,6 @@ echo "  Starting services"
 pushd clinic
 echo HOSPITAL_URL="${HOSPITAL_URL}" > .env # required for hacking into Hospital's FHIR API, for storing Questionnaires
 echo NUTS_URL="${CLINIC_URL}" >> .env
-echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
 docker compose --env-file .env pull
 docker compose --env-file .env up --wait --build --remove-orphans
 echo "  Creating DID document"

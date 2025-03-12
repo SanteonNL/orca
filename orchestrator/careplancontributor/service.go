@@ -49,10 +49,10 @@ func New(
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager,
 	messageBroker messaging.Broker,
-	ehrFhirProxy coolfhir.HttpProxy) (*Service, error) {
+	ehrFhirProxy coolfhir.HttpProxy,
+	localCarePlanServiceURL *url.URL) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
-	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 
 	localFhirStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
 	if err != nil {
@@ -106,7 +106,7 @@ func New(
 	result := &Service{
 		config:                        config,
 		orcaPublicURL:                 orcaPublicURL,
-		localCarePlanServiceUrl:       cpsURL,
+		localCarePlanServiceUrl:       localCarePlanServiceURL,
 		SessionManager:                sessionManager,
 		profile:                       profile,
 		frontendUrl:                   config.FrontendConfig.URL,
@@ -234,7 +234,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("CarePlan service URL is not configured"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 		// TODO: Since we should only call our own CPS, this should be a local call.
