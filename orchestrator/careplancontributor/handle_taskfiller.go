@@ -142,7 +142,7 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	}
 	log.Ctx(ctx).Debug().Msgf("Successfully accepted task (ref=%s)", ref)
 	if s.notifier != nil {
-		err = s.notifier.NotifyTaskAccepted(ctx, cpsClient, primaryTask)
+		err = s.notifier.NotifyTaskAccepted(ctx, cpsClient.Path().String(), primaryTask)
 		if err != nil {
 			log.Ctx(ctx).Warn().Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
 			return nil

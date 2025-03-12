@@ -2,10 +2,14 @@ package ehr
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/google/uuid"
+	"net/http"
+	"net/url"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -13,7 +17,7 @@ import (
 	"go.uber.org/mock/gomock"
 )
 
-func TestNotifyTaskAccepted(t *testing.T) {
+func TestNotifier_NotifyTaskAccepted(t *testing.T) {
 	ctx := context.Background()
 	taskId := uuid.NewString()
 	subtaskId := uuid.NewString()
@@ -80,43 +84,39 @@ func TestNotifyTaskAccepted(t *testing.T) {
 	}
 
 	tests := []struct {
-		name          string
-		task          fhir.Task
-		setupMocks    func(*test.StubFHIRClient, *messaging.MockBroker)
-		expectedError error
+		name  string
+		task  fhir.Task
+		setup func(*test.StubFHIRClient, *messaging.MemoryBroker)
+		// expectedSendMessageError is the error expected when sending a message to the broker.
+		expectedSendMessageError error
+		// expectedProcessMessageError is the error expected when processing a message from the broker (the message handler creating the bundle).
+		expectedProcessMessageError error
 	}{
 		{
 			name: "successful notification",
 			task: primaryTask,
-			setupMocks: func(client *test.StubFHIRClient, mockMessageBroker *messaging.MockBroker) {
+			setup: func(client *test.StubFHIRClient, messageBroker *messaging.MemoryBroker) {
 				client.Resources = append(client.Resources, primaryTask, primaryPatient, serviceReq,
 					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask, careTeam)
-
-				mockMessageBroker.EXPECT().
-					SendMessage(ctx, "test-topic", gomock.Any()).
-					Return(nil)
 			},
 		},
 		{
-			name:          "error fetching task",
-			task:          primaryTask,
-			expectedError: errors.New("failed to create task notification bundle: fetch error"),
-			setupMocks: func(client *test.StubFHIRClient, _ *messaging.MockBroker) {
+			name:                        "error fetching task",
+			task:                        primaryTask,
+			expectedProcessMessageError: errors.New("failed to create task notification bundle: fetch error"),
+			setup: func(client *test.StubFHIRClient, messageBroker *messaging.MemoryBroker) {
 				client.Error = errors.New("fetch error")
 			},
 		},
 		{
 			name: "error sending to message broker",
 			task: primaryTask,
-			setupMocks: func(client *test.StubFHIRClient, mockMessageBroker *messaging.MockBroker) {
+			setup: func(client *test.StubFHIRClient, messageBroker *messaging.MemoryBroker) {
 				client.Resources = append(client.Resources, primaryTask, primaryPatient, serviceReq,
 					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask, careTeam)
-
-				mockMessageBroker.EXPECT().
-					SendMessage(ctx, "test-topic", gomock.Any()).
-					Return(errors.New("broker error"))
+				_ = messageBroker.Close(nil)
 			},
-			expectedError: errors.New("failed to send task to message broker: broker error"),
+			expectedSendMessageError: errors.New("no handlers for topic orca.taskengine.task~accepted"),
 		},
 	}
 
@@ -125,19 +125,45 @@ func TestNotifyTaskAccepted(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			mockMessageBroker := messaging.NewMockBroker(ctrl)
+			messageBroker := messaging.NewMemoryBroker()
 			fhirClient := &test.StubFHIRClient{}
 
-			if tt.setupMocks != nil {
-				tt.setupMocks(fhirClient, mockMessageBroker)
-			}
-			notifier := NewNotifier(mockMessageBroker, "test-topic")
+			bundleTopic := "bundle-topic"
+			var capturedBundleJSON string
+			require.NoError(t, messageBroker.Receive(bundleTopic, func(ctx context.Context, message messaging.Message) error {
+				capturedBundleJSON = string(message.Body)
+				return nil
+			}))
 
-			err := notifier.NotifyTaskAccepted(ctx, fhirClient, &tt.task)
-			if tt.expectedError != nil {
-				require.EqualError(t, err, tt.expectedError.Error())
+			notifier, _ := NewNotifier(messageBroker, bundleTopic, func(_ context.Context, _ *url.URL) (fhirclient.Client, *http.Client, error) {
+				return fhirClient, nil, nil
+			})
+
+			if tt.setup != nil {
+				tt.setup(fhirClient, messageBroker)
+			}
+
+			err := notifier.NotifyTaskAccepted(ctx, fhirClient.Path().String(), &tt.task)
+			if tt.expectedSendMessageError != nil {
+				// Bundle instruction message couldn't be sent to receiver
+				require.EqualError(t, err, tt.expectedSendMessageError.Error())
 			} else {
+				// Bundle instruction message is sent to receiver
 				require.NoError(t, err)
+				if tt.expectedProcessMessageError != nil {
+					// Bundle creation should fail
+					handlerError := messageBroker.LastHandlerError.Load()
+					require.NotNil(t, handlerError)
+					require.EqualError(t, *handlerError, tt.expectedProcessMessageError.Error())
+				} else {
+					// Bundle creation should succeed
+					if messageBroker.LastHandlerError.Load() != nil {
+						require.NoError(t, *messageBroker.LastHandlerError.Load())
+					}
+					// Result should be a valid bundle
+					var resultBundle BundleSet
+					require.NoError(t, json.Unmarshal([]byte(capturedBundleJSON), &resultBundle))
+				}
 			}
 		})
 	}

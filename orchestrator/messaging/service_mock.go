@@ -54,6 +54,20 @@ func (mr *MockBrokerMockRecorder) Close(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockBroker)(nil).Close), ctx)
 }
 
+// Receive mocks base method.
+func (m *MockBroker) Receive(queue string, handler func(context.Context, Message) error) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Receive", queue, handler)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Receive indicates an expected call of Receive.
+func (mr *MockBrokerMockRecorder) Receive(queue, handler any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Receive", reflect.TypeOf((*MockBroker)(nil).Receive), queue, handler)
+}
+
 // SendMessage mocks base method.
 func (m *MockBroker) SendMessage(ctx context.Context, topic string, message *Message) error {
 	m.ctrl.T.Helper()

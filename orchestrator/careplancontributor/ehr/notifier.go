@@ -4,39 +4,80 @@ package ehr
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/http"
+	"net/url"
 )
+
+const taskEngineTaskAcceptedQueueName = "orca.taskengine.task~accepted"
 
 // Notifier is an interface for sending notifications regarding task acceptance within a FHIR-based system.
 type Notifier interface {
-	NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error
+	NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, task *fhir.Task) error
 }
 
 // notifier is a type that uses a ServiceBusClient to send messages to a message broker.
 type notifier struct {
-	broker messaging.Broker
-	topic  string
+	broker            messaging.Broker
+	fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
+}
+
+type acceptedTaskEvent struct {
+	FHIRBaseURL string    `json:"fhirBaseURL"`
+	Task        fhir.Task `json:"task"`
 }
 
 // NewNotifier creates and returns a Notifier implementation using the provided ServiceBusClient for message handling.
-func NewNotifier(messageBroker messaging.Broker, topic string) Notifier {
-	return &notifier{
-		broker: messageBroker,
-		topic:  topic,
+func NewNotifier(messageBroker messaging.Broker, topic string, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
+	n := &notifier{
+		broker:            messageBroker,
+		fhirClientFactory: fhirClientFactory,
 	}
+	if err := n.start(topic); err != nil {
+		return nil, err
+	}
+	return n, nil
 }
 
 // NotifyTaskAccepted sends notification data comprehensively related to a specific FHIR Task to a message broker.
-func (n *notifier) NotifyTaskAccepted(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
-	bundles, err := TaskNotificationBundleSet(ctx, cpsClient, *task.Id)
-	if err != nil {
-		return errors.Wrap(err, "failed to create task notification bundle")
-	}
-	return sendBundle(ctx, n.topic, *bundles, n.broker)
+func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, task *fhir.Task) error {
+	payload, _ := json.Marshal(acceptedTaskEvent{
+		FHIRBaseURL: fhirBaseURL,
+		Task:        *task,
+	})
+	return n.broker.SendMessage(ctx, taskEngineTaskAcceptedQueueName, &messaging.Message{
+		Body:        payload,
+		ContentType: "application/json",
+	})
+}
+
+func (n *notifier) start(sendToTopic string) error {
+	return n.broker.Receive(taskEngineTaskAcceptedQueueName, func(ctx context.Context, message messaging.Message) error {
+		var event acceptedTaskEvent
+		if err := json.Unmarshal(message.Body, &event); err != nil {
+			return fmt.Errorf("failed to unmarshal message into %T: %w", event, err)
+		}
+		fhirBaseURL, err := url.Parse(event.FHIRBaseURL)
+		if err != nil {
+			return err
+		}
+
+		cpsClient, _, err := n.fhirClientFactory(ctx, fhirBaseURL)
+		if err != nil {
+			return errors.Wrap(err, "failed to create FHIR client for invoking CarePlanService")
+		}
+
+		bundles, err := TaskNotificationBundleSet(ctx, cpsClient, *event.Task.Id)
+		if err != nil {
+			return errors.Wrap(err, "failed to create task notification bundle")
+		}
+		return sendBundle(ctx, sendToTopic, *bundles, n.broker)
+	})
 }
 
 // sendBundle sends a serialized BundleSet to a Service Bus using the provided ServiceBusClient.
