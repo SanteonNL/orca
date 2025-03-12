@@ -9,8 +9,8 @@ export function storeNotificationBundle(bundle: Bundle) {
 export async function getNotificationBundles(): Promise<Bundle[]> {
 
     //fetch all data when developing on the dev server, so we don't have to constantly create new resources in the hospital simulator
-    if (!notificationBundles?.length && process.env.NODE_ENV === 'development') {
-        console.info('[NODE_ENV === "development"] No notification bundles found - Fetching resources from FHIR server');
+    if (process.env.DISABLE_NOTIFICATION_BUNDLE === 'true') {
+        console.info('[DISABLE_NOTIFICATION_BUNDLE === "true"] No notification bundles found - Fetching resources from FHIR server');
         await fetchAllResources()
     }
 
