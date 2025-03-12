@@ -332,7 +332,7 @@ export default function CreateTaskObservation({ task }: { task: Task }) {
         observation.encounter = createExternalReference(task.encounter)
       }
 
-      const resp = await fetch("/api/fhir/Observation", {
+      const resp = await fetch("/viewer/api/fhir/Observation", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

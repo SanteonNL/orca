@@ -89,7 +89,8 @@ func Start(ctx context.Context, config Config) error {
 			config.Public.ParseURL(),
 			sessionManager,
 			messageBroker,
-			ehrFhirProxy)
+			ehrFhirProxy,
+			config.Public.ParseURL().JoinPath("cps"))
 		if err != nil {
 			return err
 		}
