@@ -17,6 +17,10 @@ type AzureServiceBusConfig struct {
 	ConnectionString string `koanf:"connectionstring" description:"This is the connection string for connecting to AzureServiceBus."`
 }
 
+func (a AzureServiceBusConfig) Enabled() bool {
+	return a.Hostname != "" || a.ConnectionString != ""
+}
+
 func newAzureServiceBusBroker(conf AzureServiceBusConfig, topics []string, topicPrefix string) (*AzureServiceBusBroker, error) {
 	var client *azservicebus.Client
 	var err error

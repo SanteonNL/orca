@@ -11,7 +11,7 @@ import (
 func New(config Config, topics []string) (Broker, error) {
 	var broker Broker
 	var err error
-	if config.AzureServiceBus.ConnectionString != "" || config.AzureServiceBus.Hostname != "" {
+	if config.AzureServiceBus.Enabled() {
 		broker, err = newAzureServiceBusBroker(config.AzureServiceBus, topics, config.TopicPrefix)
 		if err != nil {
 			return nil, fmt.Errorf("azure service bus: %w", err)
@@ -41,6 +41,9 @@ type Config struct {
 func (c Config) Validate(strictMode bool) error {
 	if strictMode && c.HTTP.Endpoint != "" {
 		return errors.New("http endpoint is not allowed in strict mode")
+	}
+	if !c.AzureServiceBus.Enabled() && strictMode {
+		return errors.New("production-grade messaging configuration (Azure ServiceBus) is required in strict mode")
 	}
 	return nil
 }
