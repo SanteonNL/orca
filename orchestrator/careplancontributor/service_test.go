@@ -245,7 +245,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 				"/cpc/cps/fhir",
 				orcaPublicURL.JoinPath("/cpc/cps/fhir"),
 				http.DefaultTransport,
-				tt.allowCaching,
+				tt.allowCaching, false,
 			)
 
 			service, _ := New(Config{
@@ -641,7 +641,14 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
 		capturedBody, _ = io.ReadAll(request.Body)
-		_ = json.NewEncoder(writer).Encode(fhir.Patient{})
+		_ = json.NewEncoder(writer).Encode(fhir.Bundle{})
+	})
+	carePlanServiceMux.HandleFunc("GET /fhir/Patient/1", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		_ = json.NewEncoder(writer).Encode(fhir.Patient{
+			Id: to.Ptr("1"),
+		})
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
@@ -676,6 +683,23 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 	actualValues, err := url.ParseQuery(string(capturedBody))
 	require.NoError(t, err)
 	require.Equal(t, expectedValues, actualValues)
+
+	t.Run("check meta.source is set for read operations", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/cps/fhir/Patient/1", nil)
+		httpRequest.AddCookie(&http.Cookie{
+			Name:  "sid",
+			Value: sessionID,
+		})
+		httpResponse, err := frontServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		responseData, err := io.ReadAll(httpResponse.Body)
+		require.NoError(t, err)
+		var patient fhir.Patient
+		err = json.Unmarshal(responseData, &patient)
+		require.NoError(t, err)
+		require.NotNil(t, patient.Meta)
+		require.NotNil(t, patient.Meta.Source)
+	})
 
 	t.Run("caching is not allowed", func(t *testing.T) {
 		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))

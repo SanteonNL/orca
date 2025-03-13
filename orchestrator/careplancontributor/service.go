@@ -245,7 +245,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 		carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", s.localCarePlanServiceUrl,
-			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false)
+			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false, true)
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
 
@@ -281,7 +281,7 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
 	proxyBasePath := basePath + "/ehr/fhir"
 	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", clientFactory.BaseURL, proxyBasePath,
-		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false)
+		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false, false)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -402,7 +402,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	}
 	const proxyBasePath = basePath + "/aggregate/fhir/"
 	for _, target := range queryTargets {
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true)
+		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	}
 	return nil
