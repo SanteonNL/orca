@@ -46,13 +46,8 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
 	}
 
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	carePlan := fhir.CarePlan{}
-	err = coolfhir.ValidateTaskRequiredFields(task)
+	err := coolfhir.ValidateTaskRequiredFields(task)
 	if err != nil {
 		return nil, err
 	}
@@ -78,11 +73,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		carePlanBundleEntry    *fhir.BundleEntry
 	)
 
-	localIdentity, err := s.getLocalIdentity()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get local identity: %w", err)
-	}
-
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
 
@@ -91,7 +81,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		if err != nil {
 			return nil, err
 		}
-		if !isRequesterLocalCareOrganization(ids, principal) {
+		if !isRequesterLocalCareOrganization(ids, *request.Principal) {
 			return nil, errors.New("requester must be local care organization in order to create new CarePlan and CareTeam")
 		}
 
@@ -142,14 +132,14 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 
 		ok := careteamservice.ActivateMembership(&careTeam, &fhir.Reference{
-			Identifier: &principal.Organization.Identifier[0],
+			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		})
 		if !ok {
 			return nil, errors.New("failed to activate membership for new CareTeam")
 		}
 
-		carePlanAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionC, &fhir.Reference{
+		carePlanAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
 			Reference: to.Ptr(carePlanURL),
 			Type:      to.Ptr("CarePlan"),
 		}, &fhir.Reference{
@@ -157,7 +147,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			Type:       to.Ptr("Organization"),
 		})
 
-		taskAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionC, &fhir.Reference{
+		taskAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
 			Reference: to.Ptr(taskURL),
 			Type:      to.Ptr("Task"),
 		}, &fhir.Reference{
@@ -233,7 +223,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, err
 			}
 			// Verify the owner of the parent task is the same as the org creating the subtask
-			isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(&parentTask, principal.Organization.Identifier)
+			isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(&parentTask, request.Principal.Organization.Identifier)
 			if !isOwner {
 				return nil, coolfhir.NewErrorWithCode("requester is not the owner of the parent task", http.StatusUnauthorized)
 			}
@@ -250,7 +240,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, fmt.Errorf("failed to parse CareTeam in CarePlan.Contained: %w", err)
 			}
 
-			participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, principal.Organization.Identifier)
+			participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, request.Principal.Organization.Identifier)
 			if participant == nil {
 				return nil, coolfhir.NewErrorWithCode("requester is not part of CareTeam", http.StatusUnauthorized)
 			}
@@ -263,7 +253,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 		}
 
-		taskAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionC, &fhir.Reference{
+		taskAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
 			Reference: taskBundleEntry.FullUrl,
 			Type:      to.Ptr("Task"),
 		}, &fhir.Reference{
@@ -297,7 +287,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			carePlanBundleEntry = &tx.Entry[len(tx.Entry)-1]
 			carePlanBundleEntryIdx = len(tx.Entry) - 1
 
-			carePlanAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU, &fhir.Reference{
+			carePlanAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU, &fhir.Reference{
 				Reference: to.Ptr("CarePlan/" + *carePlan.Id),
 				Type:      to.Ptr("CarePlan"),
 			}, &fhir.Reference{

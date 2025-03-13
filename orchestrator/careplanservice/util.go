@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -18,8 +19,39 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
+func (s *Service) isCreatorOfResource(ctx context.Context, principal auth.Principal, resourceType string, resourceID string) (bool, error) {
+
+	var auditBundle fhir.Bundle
+	err := s.fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{
+		"entity": []string{resourceType + "/" + resourceID},
+		"action": []string{fhir.AuditEventActionC.String()},
+	}, &auditBundle)
+	if err != nil {
+		return false, fmt.Errorf("failed to find creation AuditEvent: %w", err)
+	}
+
+	// Check if there's a creation audit event
+	if len(auditBundle.Entry) == 0 {
+		return false, coolfhir.NewErrorWithCode(fmt.Sprintf("No creation audit event found for %s", resourceType), http.StatusForbidden)
+	}
+
+	// Get the creator from the audit event
+	var creationAuditEvent fhir.AuditEvent
+	err = json.Unmarshal(auditBundle.Entry[0].Resource, &creationAuditEvent)
+	if err != nil {
+		return false, fmt.Errorf("failed to unmarshal AuditEvent: %w", err)
+	}
+
+	// Check if the current user is the creator
+	if !audit.IsCreator(creationAuditEvent, &principal) {
+		return false, coolfhir.NewErrorWithCode(fmt.Sprintf("Only the creator can update this %s", resourceType), http.StatusForbidden)
+	}
+
+	return true, nil
+}
+
 // filterAuthorizedPatients will go through a list of patients and return the ones the requester has access to
-func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.Patient) ([]fhir.Patient, error) {
+func (s *Service) filterAuthorizedPatients(ctx context.Context, principal auth.Principal, patients []fhir.Patient) ([]fhir.Patient, error) {
 	params := url.Values{}
 	patientRefs := make([]string, len(patients))
 	for i, patient := range patients {
@@ -60,11 +92,6 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 
 	retPatients := make([]fhir.Patient, 0)
 
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Iterate through each CareTeam to see if the requester is a participant, if not, remove any patients from the bundle that are part of the CareTeam
 	for _, cp := range carePlans {
 		ct, err := coolfhir.CareTeamFromCarePlan(&cp)
@@ -86,6 +113,23 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 		}
 	}
 
+	// For patients not yet authorized, check if the requester is the creator
+	for _, patient := range patients {
+		// Skip if patient is already authorized through CareTeam
+		if slices.ContainsFunc(retPatients, func(p fhir.Patient) bool {
+			return *p.Id == *patient.Id
+		}) {
+			continue
+		}
+
+		// Check if requester is the creator
+		isCreator, err := s.isCreatorOfResource(ctx, principal, "Patient", *patient.Id)
+		if err == nil && isCreator {
+			log.Ctx(ctx).Debug().Msgf("User is creator of Patient/%s", *patient.Id)
+			retPatients = append(retPatients, patient)
+		}
+	}
+
 	return retPatients, nil
 }
 
@@ -94,9 +138,7 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 func handleSearchResource[T any](ctx context.Context, s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
 	form := url.Values{}
 	for k, v := range queryParams {
-		for _, value := range v {
-			form.Add(k, value)
-		}
+		form.Add(k, strings.Join(v, ","))
 	}
 
 	var bundle fhir.Bundle

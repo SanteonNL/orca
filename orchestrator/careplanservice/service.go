@@ -101,14 +101,18 @@ type Service struct {
 type FHIRHandler func(http.ResponseWriter, *http.Request, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
 type FHIRHandlerRequest struct {
-	ResourceId   string
-	ResourcePath string
-	ResourceData json.RawMessage
-	HttpMethod   string
-	HttpHeaders  http.Header
-	RequestUrl   *url.URL
-	FullUrl      string
-	Context      context.Context
+	ResourceId    string
+	ResourcePath  string
+	ResourceData  json.RawMessage
+	HttpMethod    string
+	HttpHeaders   http.Header
+	RequestUrl    *url.URL
+	FullUrl       string
+	Context       context.Context
+	// Principal contains the identity of the client invoking the FHIR operation.
+	Principal     *auth.Principal
+	// LocalIdentity contains the identifier of the local care organization handling the FHIR operation invocation.
+	LocalIdentity *fhir.Identifier
 }
 
 func (r FHIRHandlerRequest) bundleEntryWithResource(res any) fhir.BundleEntry {
@@ -304,14 +308,28 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 			return
 		}
 	}
+
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+	localIdentity, err := s.getLocalIdentity()
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
 	fhirRequest := FHIRHandlerRequest{
-		RequestUrl:   httpRequest.URL,
-		HttpMethod:   httpRequest.Method,
-		HttpHeaders:  coolfhir.FilterRequestHeaders(httpRequest.Header),
-		ResourceId:   httpRequest.PathValue("id"),
-		ResourcePath: resourcePath,
-		ResourceData: bodyBytes,
-		Context:      httpRequest.Context(),
+		RequestUrl:    httpRequest.URL,
+		HttpMethod:    httpRequest.Method,
+		HttpHeaders:   coolfhir.FilterRequestHeaders(httpRequest.Header),
+		ResourceId:    httpRequest.PathValue("id"),
+		ResourcePath:  resourcePath,
+		ResourceData:  bodyBytes,
+		Context:       httpRequest.Context(),
+		Principal:     &principal,
+		LocalIdentity: localIdentity,
 	}
 	result, err := s.handleTransactionEntry(httpRequest.Context(), fhirRequest, tx)
 	if err != nil {
@@ -417,6 +435,48 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 
 	s.pipeline.PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers.Header)).
 		DoAndWrite(httpResponse, resource, http.StatusOK)
+}
+
+func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	resourceType := getResourceType(resourcePath)
+
+	switch resourceType {
+	case "Task":
+		return s.handleCreateTask
+	case "ServiceRequest":
+		return s.handleCreateServiceRequest
+	case "Patient":
+		return s.handleCreatePatient
+	case "Questionnaire":
+		return s.handleCreateQuestionnaire
+	case "QuestionnaireResponse":
+		return s.handleCreateQuestionnaireResponse
+	default:
+		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+			return s.handleUnmanagedOperation(request, tx)
+		}
+	}
+}
+
+func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	resourceType := getResourceType(resourcePath)
+
+	switch resourceType {
+	case "Task":
+		return s.handleUpdateTask
+	case "ServiceRequest":
+		return s.handleUpdateServiceRequest
+	case "Patient":
+		return s.handleUpdatePatient
+	case "Questionnaire":
+		return s.handleUpdateQuestionnaire
+	case "QuestionnaireResponse":
+		return s.handleUpdateQuestionnaireResponse
+	default:
+		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+			return s.handleUnmanagedOperation(request, tx)
+		}
+	}
 }
 
 func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
@@ -624,13 +684,25 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 			return
 		}
 
+		principal, err := auth.PrincipalFromContext(httpRequest.Context())
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
+			return
+		}
+		localIdentity, err := s.getLocalIdentity()
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
+			return
+		}
 		fhirRequest := FHIRHandlerRequest{
-			HttpMethod:   entry.Request.Method.Code(),
-			HttpHeaders:  coolfhir.HeadersFromBundleEntryRequest(entry.Request),
-			RequestUrl:   requestUrl,
-			ResourcePath: resourcePath,
-			ResourceData: entry.Resource,
-			Context:      httpRequest.Context(),
+			HttpMethod:    entry.Request.Method.Code(),
+			HttpHeaders:   coolfhir.HeadersFromBundleEntryRequest(entry.Request),
+			RequestUrl:    requestUrl,
+			ResourcePath:  resourcePath,
+			ResourceData:  entry.Resource,
+			Context:       httpRequest.Context(),
+			Principal:     &principal,
+			LocalIdentity: localIdentity,
 		}
 		if len(resourcePathParts) == 2 {
 			fhirRequest.ResourceId = resourcePathParts[1]
@@ -658,15 +730,9 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	switch method {
 	case http.MethodPost:
-		switch getResourceType(resourcePath) {
-		case "Task":
-			return s.handleCreateTask
-		}
+		return s.handleCreate(resourcePath)
 	case http.MethodPut:
-		switch getResourceType(resourcePath) {
-		case "Task":
-			return s.handleUpdateTask
-		}
+		return s.handleUpdate(resourcePath)
 	}
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		return s.handleUnmanagedOperation(request, tx)
