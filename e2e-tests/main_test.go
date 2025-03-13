@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"github.com/nuts-foundation/go-nuts-client/nuts"
+	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -19,6 +21,7 @@ const URANamingSystem = "http://fhir.nl/fhir/NamingSystem/ura"
 
 func Test_Main(t *testing.T) {
 	dockerNetwork, err := setupDockerNetwork(t)
+	require.NoError(t, err)
 	// Setup HAPI FHIR server
 	hapiBaseURL := setupHAPI(t, dockerNetwork.Name)
 	hapiFhirClient := fhirclient.New(hapiBaseURL, http.DefaultClient, nil)
@@ -40,13 +43,10 @@ func Test_Main(t *testing.T) {
 	const hospitalBaseUrl = "http://hospital-orchestrator:8080"
 	const hospitalURA = 2
 
-	const carePlanServiceBaseURL = hospitalBaseUrl + "/cps"
-
 	// Setup Clinic
 	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir", false)
 	require.NoError(t, err)
-	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, carePlanServiceBaseURL, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
-	clinicOrcaFHIRClient := fhirclient.New(clinicOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
+	_ = setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 
 	// Setup Hospital
 	// Questionnaires can't be created in HAPI FHIR server partitions, only in the default partition.
@@ -54,9 +54,24 @@ func Test_Main(t *testing.T) {
 	// This is why the hospital, running the CPS, stores its data in the default partition.
 	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir", true)
 	require.NoError(t, err)
-	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, carePlanServiceBaseURL, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
+	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
 	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
+
+	// Set up FHIR client for clinic that can interact with hospital's CPS
+	hospitalAuthServerURL, _ := url.Parse("http://nutsnode:8080/oauth2/hospital")
+	clinicHTTPClient := &http.Client{
+		Transport: &oauth2.Transport{
+			UnderlyingTransport: http.DefaultTransport,
+			TokenSource: nuts.OAuth2TokenSource{
+				NutsSubject: "clinic",
+				NutsAPIURL:  nutsInternalURL,
+			},
+			Scope:          "careplanservice",
+			AuthzServerURL: hospitalAuthServerURL,
+		},
+	}
+	clinicOrcaCPSFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cps"), clinicHTTPClient, nil)
 
 	var patient fhir.Patient
 	var task fhir.Task
@@ -256,7 +271,7 @@ func Test_Main(t *testing.T) {
 			}
 			task.Intent = "order"
 			task.Status = fhir.TaskStatusRequested
-			err := clinicOrcaFHIRClient.Create(task, &task)
+			err := clinicOrcaCPSFHIRClient.Create(task, &task)
 			var operationOutcome fhirclient.OperationOutcomeError
 			require.ErrorAs(t, err, &operationOutcome)
 			require.Len(t, operationOutcome.Issue, 1)
@@ -272,7 +287,7 @@ func Test_Main(t *testing.T) {
 		require.Equal(t, *patient.Id, *fetchedPatient.Id)
 		require.Equal(t, *patient.Identifier[0].Value, *fetchedPatient.Identifier[0].Value)
 
-		err = clinicOrcaFHIRClient.Read("Patient/"+*patient.Id, &fetchedPatient)
+		err = clinicOrcaCPSFHIRClient.Read("Patient/"+*patient.Id, &fetchedPatient)
 		require.NoError(t, err)
 		require.Equal(t, *patient.Id, *fetchedPatient.Id)
 		require.Equal(t, *patient.Identifier[0].Value, *fetchedPatient.Identifier[0].Value)
@@ -284,7 +299,7 @@ func Test_Main(t *testing.T) {
 		require.Equal(t, *serviceRequest.Id, *fetchedServiceRequest.Id)
 		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
 
-		err = clinicOrcaFHIRClient.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
+		err = clinicOrcaCPSFHIRClient.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
 		require.NoError(t, err)
 		require.Equal(t, *serviceRequest.Id, *fetchedServiceRequest.Id)
 		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
