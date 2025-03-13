@@ -178,7 +178,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	}
 	t.Log("CPC client without CPS URL, returns error")
 	{
-		cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
+		cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true, false)
 
 		messageBroker, err := messaging.New(messaging.Config{}, nil)
 		require.NoError(t, err)
@@ -231,7 +231,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	sessionManager, _ := createTestSession()
 
 	// TODO: Tests using the Zorgplatform service
-	cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
+	cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true, false)
 
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true
