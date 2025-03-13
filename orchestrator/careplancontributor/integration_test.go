@@ -187,7 +187,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		cpcConfig.Enabled = true
 		cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 		cpcConfig.HealthDataViewEndpointEnabled = true
-		cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy, carePlanServiceURL)
+		cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy, nil)
 		require.NoError(t, err)
 
 		cpcServerMux := http.NewServeMux()
@@ -200,7 +200,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		var fetchedTask fhir.Task
 
 		err = cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
-		require.ErrorContains(t, err, "CarePlan service URL is not configured")
+		require.ErrorContains(t, err, "This ORCA instance has no local CarePlanService, API can't be used.")
 	}
 }
 

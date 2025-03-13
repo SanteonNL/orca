@@ -197,7 +197,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 
 		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("CarePlan service URL is not configured"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 
