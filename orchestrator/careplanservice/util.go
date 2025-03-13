@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -25,6 +26,9 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 		patientRefs[i] = fmt.Sprintf("Patient/%s", *patient.Id)
 	}
 	params.Add("subject", strings.Join(patientRefs, ","))
+	// If we're missing a CarePlan due to too low page count, we might incorrectly deny access
+	const carePlanSearchPageSize = 10000
+	params.Add("_count", strconv.Itoa(carePlanSearchPageSize))
 
 	// Fetch all CarePlans associated with the Patient, get the CareTeams associated with the CarePlans
 	// Get the CarePlan for which the Patient is the subject, get the CareTeams associated with the CarePlan
@@ -32,6 +36,20 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 	err := s.fhirClient.SearchWithContext(ctx, "CarePlan", params, &verificationBundle)
 	if err != nil {
 		return nil, err
+	}
+
+	// If there's more search results we didn't use, make sure we log this
+	carePlanSearchHasNext := false
+	for _, link := range verificationBundle.Link {
+		if link.Relation == "next" {
+			carePlanSearchHasNext = true
+			break
+		}
+	}
+	if carePlanSearchHasNext ||
+		len(verificationBundle.Entry) > carePlanSearchPageSize-1 ||
+		(verificationBundle.Total != nil && *verificationBundle.Total > carePlanSearchPageSize) {
+		log.Ctx(ctx).Warn().Msgf("Too many CarePlans found for patient(s), only the first %d will taken into account for granting access", carePlanSearchPageSize)
 	}
 
 	var carePlans []fhir.CarePlan
