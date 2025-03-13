@@ -50,8 +50,11 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 	// Iterate through each CareTeam to see if the requester is a participant, if not, remove any patients from the bundle that are part of the CareTeam
 	for _, cp := range carePlans {
 		ct, err := coolfhir.CareTeamFromCarePlan(&cp)
+		// INT-630: We changed CareTeam to be contained within the CarePlan, but old test data in the CarePlan resource does not have CareTeam.
+		//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
 		if err != nil {
-			return nil, err
+			log.Ctx(ctx).Warn().Err(err).Msgf("Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource (carePlanID=%s)", *cp.Id)
+			continue
 		}
 
 		participant := coolfhir.FindMatchingParticipantInCareTeam(ct, principal.Organization.Identifier)

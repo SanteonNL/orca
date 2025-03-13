@@ -75,7 +75,7 @@ func CareTeamFromCarePlan(carePlan *fhir.CarePlan) (*fhir.CareTeam, error) {
 	careTeamRef := carePlan.CareTeam[0]
 
 	if !IsLocalRelativeReference(&careTeamRef) {
-		return nil, fmt.Errorf("invalid CareTeam reference: %s", *careTeamRef.Reference)
+		return nil, fmt.Errorf("invalid CareTeam reference (must be a reference to a contained resource): %s", *careTeamRef.Reference)
 	}
 
 	for _, resource := range resources {

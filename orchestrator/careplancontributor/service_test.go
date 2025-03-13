@@ -100,7 +100,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readBodyReturnFile: "./testdata/careplan-careteam-missing.json",
 			readStatusReturn:   http.StatusOK,
 			xSCPContext:        "CarePlan/cps-careplan-01",
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: invalid CareTeam reference: CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: CareTeam not present in bundle - POST",
@@ -110,7 +110,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			xSCPContext:        "CarePlan/cps-careplan-01",
 			method:             to.Ptr("POST"),
 			url:                to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: invalid CareTeam reference: CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: requester not part of CareTeam - GET",
