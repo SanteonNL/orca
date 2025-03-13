@@ -6,11 +6,6 @@ import { getNotificationBundles } from "@/app/api/delivery/orca-enroll-patient/s
 
 export default async function AcceptedTaskOverview() {
 
-    if (!process.env.FHIR_BASE_URL) {
-        console.error('FHIR_BASE_URL is not defined');
-        return <>FHIR_BASE_URL is not defined</>;
-    }
-
     // prevent ssr from pre-rendering the page, as it won't be able to fetch resources from process.env.FHIR_BASE_URL
     const headersList = headers()
 
