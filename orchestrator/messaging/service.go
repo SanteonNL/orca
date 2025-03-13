@@ -42,9 +42,10 @@ func (c Config) Validate(strictMode bool) error {
 	if strictMode && c.HTTP.Endpoint != "" {
 		return errors.New("http endpoint is not allowed in strict mode")
 	}
-	if !c.AzureServiceBus.Enabled() && strictMode {
-		return errors.New("production-grade messaging configuration (Azure ServiceBus) is required in strict mode")
-	}
+	// TODO: enable when Azure ServiceBus is required for robust operation
+	//if !c.AzureServiceBus.Enabled() && strictMode {
+	//	return errors.New("production-grade messaging configuration (Azure ServiceBus) is required in strict mode")
+	//}
 	return nil
 }
 
