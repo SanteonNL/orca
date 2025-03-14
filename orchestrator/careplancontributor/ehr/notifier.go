@@ -103,6 +103,6 @@ func sendBundle(ctx context.Context, topic messaging.Topic, set BundleSet, messa
 		return errors.Wrap(err, "failed to send task to message broker")
 	}
 
-	log.Ctx(ctx).Debug().Msgf("Successfully sent task (ref=%s) to message broker", set.task)
+	log.Ctx(ctx).Info().Msgf("Notified EHR of accepted Task with bundle (ref=%s)", set.task)
 	return nil
 }
