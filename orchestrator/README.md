@@ -40,7 +40,9 @@ These FHIR resources can be read from a different FHIR API than configured in `O
 
 #### EHR integration
 If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
-to the messaging topic on which the task bundle will be delivered. See "Messaging configuration" for more information.  
+to the messaging topic on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
+
+See "Messaging configuration" for more information.  
 
 ### Care Plan Service configuration
 - `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
@@ -55,6 +57,7 @@ For production environments, it's recommended to use Azure ServiceBus.
 
 * `ORCA_MESSAGING_AZURESERVICEBUS_HOSTNAME`: The hostname of the Azure ServiceBus instance, setting this (or the connection string) enables use of Azure ServiceBus as message broker.
 * `ORCA_MESSAGING_AZURESERVICEBUS_CONNECTIONSTRING`: The connection string of the Azure ServiceBus instance, setting this (or the hostname) enables use of Azure ServiceBus as message broker.
+* `ORCA_MESSAGING_TOPICPREFIX`: Optional prefix for topics, which allows multi-tenancy (using the same underlying message broker infrastructure for multiple ORCA instances) by prefixing the topic names with a tenant identifier.
 * `ORCA_MESSAGING_HTTP_ENDPOINT`: For demo purposes: a URL pointing HTTP endpoint, to which messages will also be delivered. It appends the topic name to this URL.
 * `ORCA_MESSAGING_HTTP_TOPICFILTER`: For demo purposes: topics to enable the HTTP endpoint for (separator: `,`). If not set, all topics are enabled.
 
