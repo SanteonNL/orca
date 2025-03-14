@@ -218,7 +218,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 		Principal: auth.TestPrincipal1,
 		CSD:       profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
 	}
-	service, err := careplanservice.New(config, activeProfile, orcaPublicURL)
+	service, err := careplanservice.New(config, activeProfile, orcaPublicURL, messaging.NewMemoryBroker())
 	require.NoError(t, err)
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)

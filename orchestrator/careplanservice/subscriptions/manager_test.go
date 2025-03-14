@@ -2,10 +2,10 @@ package subscriptions
 
 import (
 	"context"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/url"
 	"testing"
 
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
@@ -28,15 +28,10 @@ func TestDerivingManager_Notify(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		channelFactory := NewMockChannelFactory(ctrl)
 
-		fhir := mock.NewMockClient(ctrl)
+		manager, err := NewManager(fhirBaseURL, channelFactory, messaging.NewMemoryBroker())
+		require.NoError(t, err)
 
-		manager := DerivingManager{
-			FhirClient:  fhir,
-			FhirBaseURL: fhirBaseURL,
-			Channels:    channelFactory,
-		}
-
-		err := manager.Notify(context.Background(), carePlan)
+		err = manager.Notify(context.Background(), carePlan)
 
 		require.NoError(t, err)
 	})
@@ -70,12 +65,10 @@ func TestDerivingManager_Notify(t *testing.T) {
 		member3Channel.EXPECT().Notify(gomock.Any(), gomock.Any()).Return(nil)
 		channelFactory.EXPECT().Create(gomock.Any(), *careTeam.Participant[2].Member.Identifier).Return(member3Channel, nil)
 
-		manager := DerivingManager{
-			FhirBaseURL: fhirBaseURL,
-			Channels:    channelFactory,
-		}
+		manager, err := NewManager(fhirBaseURL, channelFactory, messaging.NewMemoryBroker())
+		require.NoError(t, err)
 
-		err := manager.Notify(context.Background(), careTeam)
+		err = manager.Notify(context.Background(), careTeam)
 
 		require.NoError(t, err)
 		focus, _ := capturedMember1Notification.GetFocus()
