@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
@@ -51,22 +50,16 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 		serviceRequestBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
-	// Create audit event for the creation
-	createAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC,
-		&fhir.Reference{
-			Reference: serviceRequestBundleEntry.FullUrl,
-			Type:      to.Ptr("ServiceRequest"),
-		},
-		&fhir.Reference{
+	// Add to transaction
+	tx.Create(serviceRequest, coolfhir.WithFullUrl(*serviceRequestBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		ActingAgent: &fhir.Reference{
 			Identifier: request.LocalIdentity,
 			Type:       to.Ptr("Organization"),
 		},
-	)
-
-	// Add to transaction
-	tx.Create(serviceRequest, coolfhir.WithFullUrl(*serviceRequestBundleEntry.FullUrl))
-	serviceRequestEntryIdx := len(tx.Entry) - 1
-	tx.Create(createAuditEvent)
+		Observer: *request.LocalIdentity,
+		Action:   fhir.AuditEventActionC,
+	}))
+	serviceRequestEntryIdx := 0
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdServiceRequest fhir.ServiceRequest

@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
@@ -22,25 +23,49 @@ func TestService_handleGetCarePlan(t *testing.T) {
 	var carePlan1 fhir.CarePlan
 	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
 
+	var auditEventRaw []byte
+	auditEventRaw, _ = json.Marshal(fhir.AuditEvent{
+		Id: to.Ptr("2"),
+	})
+
+	defaultReturnedBundle := &fhir.Bundle{
+		Entry: []fhir.BundleEntry{
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("CarePlan/1"),
+					Status:   "200 OK",
+				},
+				Resource: carePlan1Raw,
+			},
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("AuditEvent/2"),
+					Status:   "200 OK",
+				},
+				Resource: auditEventRaw,
+			},
+		},
+	}
+
 	tests := map[string]struct {
 		expectedError error
 		readError     error
-		context       context.Context
+		principal     *auth.Principal
 	}{
 		"error: CarePlan does not exist": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			principal:     auth.TestPrincipal1,
 			readError:     errors.New("careplan not found"),
 			expectedError: errors.New("careplan not found"),
 		},
 		"error: CarePlan returned, incorrect principal": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			principal: auth.TestPrincipal3,
 			expectedError: &coolfhir.ErrorWithCode{
 				Message:    "Participant is not part of CareTeam",
 				StatusCode: http.StatusForbidden,
 			},
 		},
 		"ok: CarePlan returned, correct principal": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			principal: auth.TestPrincipal1,
 		},
 	}
 
@@ -50,20 +75,39 @@ func TestService_handleGetCarePlan(t *testing.T) {
 			defer ctrl.Finish()
 
 			client := mock.NewMockClient(ctrl)
-			client.EXPECT().ReadWithContext(tt.context, "CarePlan/1", gomock.Any()).DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
+			client.EXPECT().ReadWithContext(gomock.Any(), "CarePlan/1", gomock.Any()).DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
 				*target.(*fhir.CarePlan) = carePlan1
 				return tt.readError
 			})
 
+			tx := coolfhir.Transaction()
 			service := &Service{fhirClient: client}
-			carePlan, err := service.handleGetCarePlan(tt.context, "1", &fhirclient.Headers{})
+			result, err := service.handleGetCarePlan(auth.WithPrincipal(context.Background(), *tt.principal), FHIRHandlerRequest{
+				ResourceId: "1",
+				Principal:  tt.principal,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			}, tx)
 
 			if tt.expectedError != nil {
-				require.Nil(t, carePlan)
+				require.Len(t, tx.Entry, 0)
 				require.Equal(t, tt.expectedError, err)
 			} else {
-				require.Equal(t, carePlan1, *carePlan)
+
+				res, _, err := result(defaultReturnedBundle)
 				require.NoError(t, err)
+				require.JSONEq(t, string(carePlan1Raw), string(res.Resource))
+				//require.Len(t, notifications, 2)
+				//require.IsType(t, &fhir.CarePlan{}, notifications[0])
+				//require.IsType(t, &fhir.AuditEvent{}, notifications[1])
+
+				require.Len(t, tx.Entry, 2)
+				require.Equal(t, "CarePlan/1", tx.Entry[0].Request.Url)
+				require.Equal(t, fhir.HTTPVerbGET, tx.Entry[0].Request.Method)
+				require.Equal(t, "AuditEvent", tx.Entry[1].Request.Url)
+				require.Equal(t, fhir.HTTPVerbPOST, tx.Entry[1].Request.Method)
 			}
 		})
 	}

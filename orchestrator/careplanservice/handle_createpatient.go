@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
@@ -41,22 +40,16 @@ func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRe
 		patientBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
-	// Create audit event for the creation
-	createAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC,
-		&fhir.Reference{
-			Reference: patientBundleEntry.FullUrl,
-			Type:      to.Ptr("Patient"),
-		},
-		&fhir.Reference{
+	// Add to transaction
+	tx.Create(patient, coolfhir.WithFullUrl(*patientBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		ActingAgent: &fhir.Reference{
 			Identifier: request.LocalIdentity,
 			Type:       to.Ptr("Organization"),
 		},
-	)
-
-	// Add to transaction
-	tx.Create(patient, coolfhir.WithFullUrl(*patientBundleEntry.FullUrl))
-	patientEntryIdx := len(tx.Entry) - 1
-	tx.Create(createAuditEvent)
+		Observer: *request.LocalIdentity,
+		Action:   fhir.AuditEventActionC,
+	}))
+	patientEntryIdx := 0
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdPatient fhir.Patient

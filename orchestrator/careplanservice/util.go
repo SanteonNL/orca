@@ -51,6 +51,10 @@ func (s *Service) isCreatorOfResource(ctx context.Context, principal auth.Princi
 
 // filterAuthorizedPatients will go through a list of patients and return the ones the requester has access to
 func (s *Service) filterAuthorizedPatients(ctx context.Context, principal auth.Principal, patients []fhir.Patient) ([]fhir.Patient, error) {
+	if len(patients) == 0 {
+		return []fhir.Patient{}, nil
+	}
+
 	params := url.Values{}
 	patientRefs := make([]string, len(patients))
 	for i, patient := range patients {

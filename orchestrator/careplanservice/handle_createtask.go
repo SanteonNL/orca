@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/google/uuid"
@@ -139,22 +137,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			return nil, errors.New("failed to activate membership for new CareTeam")
 		}
 
-		carePlanAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
-			Reference: to.Ptr(carePlanURL),
-			Type:      to.Ptr("CarePlan"),
-		}, &fhir.Reference{
-			Identifier: task.Requester.Identifier,
-			Type:       to.Ptr("Organization"),
-		})
-
-		taskAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
-			Reference: to.Ptr(taskURL),
-			Type:      to.Ptr("Task"),
-		}, &fhir.Reference{
-			Identifier: task.Requester.Identifier,
-			Type:       to.Ptr("Organization"),
-		})
-
 		data, err := json.Marshal([]any{careTeam})
 		if err != nil {
 			return nil, coolfhir.NewErrorWithCode("failed to marshal CareTeam", http.StatusInternalServerError)
@@ -172,12 +154,23 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			},
 		}
 
-		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL)).
-			Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders)).
-			Create(carePlanAuditEvent).
-			Create(taskAuditEvent)
-
-		taskEntryIdx = len(tx.Entry) - 3
+		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			ActingAgent: &fhir.Reference{
+				Identifier: request.LocalIdentity,
+				Type:       to.Ptr("Organization"),
+			},
+			Observer: *request.LocalIdentity,
+			Action:   fhir.AuditEventActionC,
+		})).
+			Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+				ActingAgent: &fhir.Reference{
+					Identifier: request.LocalIdentity,
+					Type:       to.Ptr("Organization"),
+				},
+				Observer: *request.LocalIdentity,
+				Action:   fhir.AuditEventActionC,
+			}))
+		taskEntryIdx = 2
 		taskBundleEntry = tx.Entry[taskEntryIdx]
 		carePlanBundleEntry = &tx.Entry[0]
 		carePlanBundleEntryIdx = 0
@@ -253,18 +246,17 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 		}
 
-		taskAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
-			Reference: taskBundleEntry.FullUrl,
-			Type:      to.Ptr("Task"),
-		}, &fhir.Reference{
-			Identifier: task.Requester.Identifier,
-			Type:       to.Ptr("Organization"),
-		})
-
 		// TODO: Only if not updated
-		tx.AppendEntry(taskBundleEntry)
-		taskEntryIdx = len(tx.Entry) - 1
-		tx.Create(taskAuditEvent)
+		tx.AppendEntry(taskBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			ActingAgent: &fhir.Reference{
+				Identifier: request.LocalIdentity,
+				Type:       to.Ptr("Organization"),
+			},
+			Observer: *request.LocalIdentity,
+			Action:   fhir.AuditEventActionC,
+		}))
+		taskEntryIdx = 0
+		// tx.Create(taskAuditEvent)
 
 		if len(task.PartOf) == 0 {
 			// Don't add subtasks to CarePlan.activity
@@ -275,26 +267,23 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				},
 			})
 
-			updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, tx)
+			updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, request.LocalIdentity, tx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to update CareTeam: %w", err)
 			}
 
 			if !updated {
-				tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+				tx.Update(carePlan, "CarePlan/"+*carePlan.Id, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+					ActingAgent: &fhir.Reference{
+						Identifier: request.LocalIdentity,
+						Type:       to.Ptr("Organization"),
+					},
+					Observer: *request.LocalIdentity,
+					Action:   fhir.AuditEventActionU,
+				}))
 			}
-
-			carePlanBundleEntry = &tx.Entry[len(tx.Entry)-1]
-			carePlanBundleEntryIdx = len(tx.Entry) - 1
-
-			carePlanAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU, &fhir.Reference{
-				Reference: to.Ptr("CarePlan/" + *carePlan.Id),
-				Type:      to.Ptr("CarePlan"),
-			}, &fhir.Reference{
-				Identifier: task.Requester.Identifier,
-				Type:       to.Ptr("Organization"),
-			})
-			tx.Create(carePlanAuditEvent)
+			carePlanBundleEntryIdx = 2
+			carePlanBundleEntry = &tx.Entry[carePlanBundleEntryIdx]
 		}
 	}
 
@@ -306,6 +295,15 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		{
 			var createdTask fhir.Task
 			var err error
+
+			// Find the Task in the transaction result
+			for idx, entry := range txResult.Entry {
+				if strings.HasPrefix(*entry.Response.Location, "Task/") {
+					taskEntryIdx = idx
+					break
+				}
+			}
+
 			result, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
 			if err != nil {
 				return nil, nil, err
@@ -315,6 +313,15 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		// If CarePlan was updated/created, notify about CarePlan
 		if carePlanBundleEntry != nil {
+
+			// Find the CarePlan in the transaction result
+			for idx, entry := range txResult.Entry {
+				if strings.HasPrefix(*entry.Response.Location, "CarePlan/") {
+					carePlanBundleEntryIdx = idx
+					break
+				}
+			}
+
 			var createdCarePlan fhir.CarePlan
 			_, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, carePlanBundleEntry, &txResult.Entry[carePlanBundleEntryIdx], &createdCarePlan)
 			if err != nil {

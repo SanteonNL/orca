@@ -56,18 +56,6 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 				subscribers = append(subscribers, *task.Requester.Identifier)
 			}
 		}
-	case "CareTeam":
-		careTeam := resource.(*fhir.CareTeam)
-		focus = fhir.Reference{
-			Reference: to.Ptr("CareTeam/" + *careTeam.Id),
-			Type:      to.Ptr("CareTeam"),
-		}
-
-		for _, participant := range careTeam.Participant {
-			if coolfhir.IsLogicalIdentifier(participant.Member.Identifier) {
-				subscribers = append(subscribers, *participant.Member.Identifier)
-			}
-		}
 	case "CarePlan":
 		carePlan := resource.(*fhir.CarePlan)
 		focus = fhir.Reference{

@@ -101,18 +101,20 @@ type Service struct {
 type FHIRHandler func(http.ResponseWriter, *http.Request, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
 type FHIRHandlerRequest struct {
-	ResourceId    string
-	ResourcePath  string
-	ResourceData  json.RawMessage
-	HttpMethod    string
-	HttpHeaders   http.Header
-	RequestUrl    *url.URL
-	FullUrl       string
-	Context       context.Context
+	ResourceId   string
+	ResourcePath string
+	ResourceData json.RawMessage
+	HttpMethod   string
+	HttpHeaders  http.Header
+	RequestUrl   *url.URL
+	FullUrl      string
+	Context      context.Context
 	// Principal contains the identity of the client invoking the FHIR operation.
-	Principal     *auth.Principal
+	Principal *auth.Principal
 	// LocalIdentity contains the identifier of the local care organization handling the FHIR operation invocation.
 	LocalIdentity *fhir.Identifier
+	QueryParams   url.Values
+	FHIRHeaders   *fhirclient.Headers
 }
 
 func (r FHIRHandlerRequest) bundleEntryWithResource(res any) fhir.BundleEntry {
@@ -383,20 +385,20 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 
 	var resource interface{}
 	switch resourceType {
-	case "CarePlan":
-		resource, err = s.handleGetCarePlan(httpRequest.Context(), resourceId, headers)
-	case "Task":
-		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
-	case "Patient":
-		resource, err = s.handleGetPatient(httpRequest.Context(), resourceId, headers)
-	case "Questionnaire":
-		resource, err = s.handleGetQuestionnaire(httpRequest.Context(), resourceId, headers)
-	case "QuestionnaireResponse":
-		resource, err = s.handleGetQuestionnaireResponse(httpRequest.Context(), resourceId, headers)
-	case "ServiceRequest":
-		resource, err = s.handleGetServiceRequest(httpRequest.Context(), resourceId, headers)
-	case "Condition":
-		resource, err = s.handleGetCondition(httpRequest.Context(), resourceId, headers)
+	// case "CarePlan":
+	// 	resource, err = s.handleGetCarePlan(httpRequest.Context(), resourceId, headers)
+	//case "Task":
+	//	resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
+	//case "Patient":
+	//	resource, err = s.handleGetPatient(httpRequest.Context(), resourceId, headers)
+	//case "Questionnaire":
+	//	resource, err = s.handleGetQuestionnaire(httpRequest.Context(), resourceId, headers)
+	//case "QuestionnaireResponse":
+	//	resource, err = s.handleGetQuestionnaireResponse(httpRequest.Context(), resourceId, headers)
+	//case "ServiceRequest":
+	//	resource, err = s.handleGetServiceRequest(httpRequest.Context(), resourceId, headers)
+	//case "Condition":
+	//	resource, err = s.handleGetCondition(httpRequest.Context(), resourceId, headers)
 	default:
 		log.Ctx(httpRequest.Context()).Warn().
 			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
@@ -545,8 +547,8 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), queryParams, headers)
 	case "Task":
 		bundle, err = s.handleSearchTask(httpRequest.Context(), queryParams, headers)
-	case "Patient":
-		bundle, err = s.handleSearchPatient(httpRequest.Context(), queryParams, headers)
+	// case "Patient":
+	// 	bundle, err = s.handleSearchPatient(httpRequest.Context(), queryParams, headers)
 	default:
 		httpRequest.Body = io.NopCloser(strings.NewReader(queryParams.Encode()))
 		log.Ctx(httpRequest.Context()).Warn().

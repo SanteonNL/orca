@@ -22,12 +22,11 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 	task1Raw := mustReadFile("./testdata/task-1.json")
 	var task1 fhir.Task
 	_ = json.Unmarshal(task1Raw, &task1)
-	carePlan1Raw := mustReadFile("./testdata/careplan1-careteam2.json")
-	var carePlan1 fhir.CarePlan
-	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
-	careTeam2Raw := mustReadFile("./testdata/careplan2-careteam1.json")
-	var careTeam2 fhir.CareTeam
-	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
+
+	questionnaireResponse := fhir.QuestionnaireResponse{
+		Id: to.Ptr("1"),
+	}
+	questionnaireResponseRaw, _ := json.Marshal(questionnaireResponse)
 
 	auditEvent := fhir.AuditEvent{
 		Id:     to.Ptr("1"),
@@ -35,7 +34,7 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 		Entity: []fhir.AuditEventEntity{
 			{
 				What: &fhir.Reference{
-					Reference: to.Ptr("QuestionnaireResponse/1"),
+					Reference: to.Ptr("Patient/1"),
 				},
 			},
 		},
@@ -44,7 +43,7 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 				Who: &fhir.Reference{
 					Identifier: &fhir.Identifier{
 						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-						Value:  to.Ptr("3"),
+						Value:  to.Ptr("1"),
 					},
 				},
 			},
@@ -52,39 +51,67 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 	}
 	auditEventRaw, _ := json.Marshal(auditEvent)
 
+	defaultReturnedBundle := &fhir.Bundle{
+		Entry: []fhir.BundleEntry{
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("QuestionnaireResponse/1"),
+					Status:   "200 OK",
+				},
+				Resource: questionnaireResponseRaw,
+			},
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("AuditEvent/2"),
+					Status:   "200 OK",
+				},
+				Resource: auditEventRaw,
+			},
+		},
+	}
+
 	tests := map[string]struct {
-		context       context.Context
 		expectedError error
+		readError     error
+		principal     *auth.Principal
 		setup         func(ctx context.Context, client *mock.MockClient)
 	}{
 		"error: QuestionnaireResponse does not exist": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			principal:     auth.TestPrincipal1,
+			readError:     errors.New("fhir error: QuestionnaireResponse not found"),
 			expectedError: errors.New("fhir error: QuestionnaireResponse not found"),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
-					Return(errors.New("fhir error: QuestionnaireResponse not found"))
-			},
 		},
 		"error: QuestionnaireResponse exists, error fetching task": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			expectedError: errors.New("fhir error: no response"),
+			principal:     auth.TestPrincipal1,
+			expectedError: errors.New("fhir error: task search failed"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
-					Return(nil)
-				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(errors.New("fhir error: no response"))
+				client.EXPECT().SearchWithContext(gomock.Any(), "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(errors.New("fhir error: task search failed"))
 			},
 		},
-		"error: QuestionnaireResponse exists, fetched task, incorrect principal (not task onwer or requester)": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+		"error: QuestionnaireResponse exists, no tasks, not creator": {
+			principal: auth.TestPrincipal3,
 			expectedError: &coolfhir.ErrorWithCode{
 				Message:    "Participant does not have access to QuestionnaireResponse",
 				StatusCode: http.StatusForbidden,
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
-					Return(nil)
-				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+				client.EXPECT().SearchWithContext(gomock.Any(), "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(gomock.Any(), "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+						return nil
+					})
+			},
+		},
+		"ok: QuestionnaireResponse exists, task found": {
+			principal: auth.TestPrincipal1,
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(gomock.Any(), "Task", gomock.Any(), gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
@@ -93,47 +120,23 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 						}
 						return nil
 					})
-				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
-					Return(errors.New("fhir error: no response"))
-				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						return nil
-					})
 			},
 		},
-		"ok: QuestionnaireResponse exists, fetched task, incorrect principal, is creator": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+		"ok: QuestionnaireResponse exists, no tasks, is creator": {
+			principal: auth.TestPrincipal1,
 			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
-					Return(nil)
-				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+				client.EXPECT().SearchWithContext(gomock.Any(), "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(gomock.Any(), "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
-								{Resource: task1Raw},
-							},
-						}
-						return nil
-					})
-				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
-					Return(errors.New("fhir error: no response"))
-				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
-						return nil
-					})
-			},
-		},
-		"ok: QuestionnaireResponse exists, fetched task, task owner": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
-					Return(nil)
-				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-						*target = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{Resource: task1Raw},
+								{
+									Resource: auditEventRaw,
+								},
 							},
 						}
 						return nil
@@ -148,17 +151,39 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 			defer ctrl.Finish()
 
 			client := mock.NewMockClient(ctrl)
-			tt.setup(tt.context, client)
+			client.EXPECT().ReadWithContext(gomock.Any(), "QuestionnaireResponse/1", gomock.Any()).DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
+				*target.(*fhir.QuestionnaireResponse) = questionnaireResponse
+				return tt.readError
+			}).AnyTimes()
 
+			if tt.setup != nil && tt.readError == nil {
+				tt.setup(auth.WithPrincipal(context.Background(), *tt.principal), client)
+			}
+
+			tx := coolfhir.Transaction()
 			service := &Service{fhirClient: client}
-			response, err := service.handleGetQuestionnaireResponse(tt.context, "1", &fhirclient.Headers{})
+			result, err := service.handleGetQuestionnaireResponse(auth.WithPrincipal(context.Background(), *tt.principal), FHIRHandlerRequest{
+				ResourceId: "1",
+				Principal:  tt.principal,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			}, tx)
 
 			if tt.expectedError != nil {
-				require.Nil(t, response)
+				require.Len(t, tx.Entry, 0)
 				require.Equal(t, tt.expectedError, err)
 			} else {
+				res, _, err := result(defaultReturnedBundle)
 				require.NoError(t, err)
-				require.NotNil(t, response)
+				require.JSONEq(t, string(questionnaireResponseRaw), string(res.Resource))
+
+				require.Len(t, tx.Entry, 2)
+				require.Equal(t, "QuestionnaireResponse/1", tx.Entry[0].Request.Url)
+				require.Equal(t, fhir.HTTPVerbGET, tx.Entry[0].Request.Method)
+				require.Equal(t, "AuditEvent", tx.Entry[1].Request.Url)
+				require.Equal(t, fhir.HTTPVerbPOST, tx.Entry[1].Request.Method)
 			}
 		})
 	}
