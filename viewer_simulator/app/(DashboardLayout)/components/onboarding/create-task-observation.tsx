@@ -30,7 +30,7 @@ import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers"
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs"
 import dayjs from "dayjs"
 import "dayjs/locale/nl"
-import { getAbsoluteCarePlanReference } from "@/utils/fhirUtils"
+import { getScpContext } from "@/utils/fhirUtils"
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & {
@@ -174,7 +174,7 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
   }, [task])
 
   useEffect(() => {
-    setScpContextIdentifier(getAbsoluteCarePlanReference(task, taskFullUrl))
+    setScpContextIdentifier(getScpContext(task, taskFullUrl))
   }, [task, taskFullUrl])
 
   const handleClickOpen = () => {

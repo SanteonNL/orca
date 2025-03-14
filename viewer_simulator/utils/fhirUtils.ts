@@ -12,7 +12,7 @@ export function getBsn(carePlan?: CarePlan) {
 //This function takes in a Task and searches for a Task.basedOn CarePlan reference OR identifier. 
 //This can be used to, e.g. map a Task to its SCP context.
 //If the task contains a relative reference, the taskFullUrl is used to construct an absolute reference.
-export function getAbsoluteCarePlanReference(task: Task, taskFullUrl?: string) {
+export function getScpContext(task: Task, taskFullUrl?: string) {
 
     const basedOnRefs = task.basedOn?.filter(basedOn => basedOn.reference?.includes("CarePlan/"))
     if (!basedOnRefs || basedOnRefs.length === 0) return
@@ -42,7 +42,8 @@ export function getAbsoluteCarePlanReference(task: Task, taskFullUrl?: string) {
         throw new Error("Task has a basedOn reference that is not a CarePlan reference. Unable to determine SCP context.")
     }
 
-    const baseUrl = taskFullUrl?.split("Task/")[0]
+    //TODO: There is a mismatch between the fullUrl sent as a notification, and the expected SCP context provided by the CPC
+    const baseUrl = taskFullUrl?.split("Task/")[0].replace("/fhir", "/orca/cps")
 
     return {
         "system": FHIR_SCP_CONTEXT_SYSTEM,
