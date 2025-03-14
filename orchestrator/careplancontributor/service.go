@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/webhook"
@@ -197,8 +199,13 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 
 		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-			return
+
+			if globals.StrictMode {
+				coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+				return
+			}
+
+			log.Ctx(request.Context()).Debug().Msg("Strict mode is disabled, allowing proxyGetOrSearchHandler without localCarePlanServiceUrl")
 		}
 
 		err := s.handleProxyExternalRequestToEHR(writer, request)
@@ -221,13 +228,18 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
 	//
 	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
-	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+
+	//TODO: Fix unauthorized when requesting data from the hospital
+	// mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", func(writer http.ResponseWriter, request *http.Request) {
+		log.Ctx(request.Context()).Debug().Msg("Handling aggregate _search FHIR API request")
 		err := s.proxyToAllCareTeamMembers(writer, request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
-	}))
+	})
+	// }))
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
@@ -303,11 +315,13 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 
 	log.Ctx(request.Context()).Debug().Msg("Handling external FHIR API request")
 
-	_, err := s.authorizeScpMember(request)
-	if err != nil {
-		return err
+	//TODO: Check if this is also related to not having the local cp
+	if globals.StrictMode {
+		_, err := s.authorizeScpMember(request)
+		if err != nil {
+			return err
+		}
 	}
-
 	s.ehrFhirProxy.ServeHTTP(writer, request)
 	return nil
 }

@@ -52,7 +52,8 @@ export default async function AcceptedTaskOverview() {
                         condition: task?.reasonCode?.text ?? task?.reasonCode?.coding?.[0].display ?? "",
                         status: task.status,
                         lastUpdated: task.meta?.lastUpdated ? new Date(task.meta.lastUpdated) : new Date(),
-                        task: task
+                        task: task,
+                        fullUrl: entry.fullUrl
                     };
                 });
         }

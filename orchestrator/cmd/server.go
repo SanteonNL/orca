@@ -4,9 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"os"
@@ -15,10 +12,15 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
+	"github.com/rs/zerolog/log"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/dataview"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
@@ -70,10 +72,11 @@ func Start(ctx context.Context, config Config) error {
 		// App Launches
 		frontendUrl, _ := url.Parse(config.CarePlanContributor.FrontendConfig.URL)
 		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, frontendUrl))
+
+		var ehrFhirProxy coolfhir.HttpProxy //TODO: Rewrite to an array so we can support multiple login mechanisms and multiple EHR proxies
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
 			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, frontendUrl))
 		}
-		var ehrFhirProxy coolfhir.HttpProxy
 		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
 			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, frontendUrl, activeProfile)
 			if err != nil {
@@ -81,6 +84,10 @@ func Start(ctx context.Context, config Config) error {
 			}
 			ehrFhirProxy = service.EhrFhirProxy()
 			services = append(services, service)
+		}
+		if config.CarePlanContributor.DataView.Enabled {
+			service := dataview.New(config.CarePlanContributor.DataView, config.Public.URL)
+			ehrFhirProxy = service.EhrFhirProxy()
 		}
 		//
 		var cpsURL *url.URL

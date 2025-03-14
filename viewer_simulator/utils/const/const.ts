@@ -1,0 +1,2 @@
+//TODO: The SCP standard does not have a defined system for the SCP context identifier. This should probably be added.
+export const FHIR_SCP_CONTEXT_SYSTEM = "http://santeonnl.github.io/shared-care-planning/CarePlan/SCPContext";

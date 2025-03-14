@@ -30,6 +30,7 @@ import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers"
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs"
 import dayjs from "dayjs"
 import "dayjs/locale/nl"
+import { getScpContext } from "@/utils/fhirUtils"
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & {
@@ -142,41 +143,13 @@ function getDisplayFromReference(reference: Reference | undefined): string {
   return "Unknown"
 }
 
-/**
- * Creates a task identifier that can be used for cross-system references
- */
-function createTaskIdentifier(task: Task): Identifier | undefined {
-  // If task already has an identifier, use it
-  if (task.identifier && task.identifier.length > 0) {
-    return task.identifier[0]
-  }
-
-  // If task has a meta.source, use it to create an identifier
-  if (task.meta?.source) {
-    return {
-      system: `urn:source:${task.meta.source.replace(/^#/, "")}`,
-      value: task.id || "unknown",
-    }
-  }
-
-  // If task has an id but no other identifiers, create a basic one
-  if (task.id) {
-    return {
-      system: "urn:uuid:task",
-      value: task.id,
-    }
-  }
-
-  return undefined
-}
-
-export default function CreateTaskObservation({ task }: { task: Task }) {
+export default function CreateTaskObservation({ task, taskFullUrl }: { task: Task, taskFullUrl: string }) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [patientDisplay, setPatientDisplay] = useState<string>("")
   const [loading, setLoading] = useState(false)
-  const [taskIdentifier, setTaskIdentifier] = useState<Identifier | undefined>()
+  const [scpContextIdentifier, setScpContextIdentifier] = useState<Identifier | undefined>()
 
   // Form state
   const [status, setStatus] = useState<string>("preliminary")
@@ -197,11 +170,12 @@ export default function CreateTaskObservation({ task }: { task: Task }) {
       if (task.for) {
         setPatientDisplay(getDisplayFromReference(task.for))
       }
-
-      // Create task identifier for cross-system references
-      setTaskIdentifier(createTaskIdentifier(task))
     }
   }, [task])
+
+  useEffect(() => {
+    setScpContextIdentifier(getScpContext(task, taskFullUrl))
+  }, [task, taskFullUrl])
 
   const handleClickOpen = () => {
     setOpen(true)
@@ -246,6 +220,8 @@ export default function CreateTaskObservation({ task }: { task: Task }) {
   const handleSave = async () => {
     if (!validateForm()) return
 
+    if (!scpContextIdentifier) throw Error("SCP Context Identifier is required - it's undefined")
+
     setSaving(true)
 
     try {
@@ -256,6 +232,10 @@ export default function CreateTaskObservation({ task }: { task: Task }) {
       const observation: Observation = {
         resourceType: "Observation",
         status: status as Observation["status"],
+        basedOn: [{
+          type: "CarePlan",
+          identifier: scpContextIdentifier
+        }],
         category: [
           {
             coding: [
@@ -292,24 +272,6 @@ export default function CreateTaskObservation({ task }: { task: Task }) {
         observation.note = [
           {
             text: note,
-          },
-        ]
-      }
-
-      // Link to task using basedOn with identifier when possible
-      if (taskIdentifier) {
-        observation.basedOn = [
-          {
-            type: "Task",
-            identifier: taskIdentifier,
-            display: `Task ${task.id}`,
-          },
-        ]
-      } else if (task.id) {
-        observation.basedOn = [
-          {
-            reference: `Task/${task.id}`,
-            type: "Task",
           },
         ]
       }
@@ -392,11 +354,11 @@ export default function CreateTaskObservation({ task }: { task: Task }) {
                 <Box sx={{ p: 2, bgcolor: "background.paper", borderRadius: 1, mb: 2 }}>
                   <Typography variant="subtitle2" color="text.secondary">
                     Task ID: {task.id}
-                    {taskIdentifier && (
+                    {scpContextIdentifier && (
                       <Chip
                         color="primary"
                         size="small"
-                        label={`${taskIdentifier.system?.split("/").pop()}: ${taskIdentifier.value}`}
+                        label={`SCP Context: ${scpContextIdentifier.system?.split("/").pop()}: ${scpContextIdentifier.value}`}
                         sx={{ ml: 1 }}
                       />
                     )}

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {Bundle} from "fhir/r4";
+import { Bundle } from "fhir/r4";
 import { storeNotificationBundle } from './storage';
 
 export async function POST(req: NextRequest) {
@@ -10,12 +10,12 @@ export async function POST(req: NextRequest) {
         // @ts-ignore
         const { bundles } = await req.json() as Bundle[];
 
-        console.log('Bundle: ', bundles);
+        console.log('Bundle: ', JSON.stringify(bundles, undefined, 2));
         for (const bundle of bundles) {
             storeNotificationBundle(bundle);
         }
 
-        return NextResponse.json({message: 'Notification bundle received successfully'}, {status: 200});
+        return NextResponse.json({ message: 'Notification bundle received successfully' }, { status: 200 });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return NextResponse.json({ error: errorMessage }, { status: 500 });
