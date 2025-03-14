@@ -19,7 +19,6 @@ func TestStart(t *testing.T) {
 	cfg.Nuts.OwnSubject = "subject"
 	cfg.Nuts.Public.URL = "http://example.com"
 	cfg.Nuts.DiscoveryService = "http://example.com"
-	cfg.CarePlanContributor.CarePlanService.URL = "http://example.com"
 
 	t.Run("ok", func(t *testing.T) {
 		cfg.Public.Address = ":" + strconv.Itoa(freeTCPPort())

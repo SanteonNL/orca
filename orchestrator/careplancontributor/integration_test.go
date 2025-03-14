@@ -178,7 +178,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	}
 	t.Log("CPC client without CPS URL, returns error")
 	{
-		cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
+		cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true, false)
 
 		messageBroker, err := messaging.New(messaging.Config{}, nil)
 		require.NoError(t, err)
@@ -187,7 +187,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		cpcConfig.Enabled = true
 		cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 		cpcConfig.HealthDataViewEndpointEnabled = true
-		cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy)
+		cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy, nil)
 		require.NoError(t, err)
 
 		cpcServerMux := http.NewServeMux()
@@ -200,7 +200,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		var fetchedTask fhir.Task
 
 		err = cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
-		require.ErrorContains(t, err, "CarePlan service URL is not configured")
+		require.ErrorContains(t, err, "This ORCA instance has no local CarePlanService, API can't be used.")
 	}
 }
 
@@ -231,14 +231,13 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	sessionManager, _ := createTestSession()
 
 	// TODO: Tests using the Zorgplatform service
-	cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
+	cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true, false)
 
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
-	cpcConfig.CarePlanService.URL = carePlanServiceURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy)
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy, carePlanServiceURL)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()

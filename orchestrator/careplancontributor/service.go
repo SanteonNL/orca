@@ -49,10 +49,10 @@ func New(
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager,
 	messageBroker messaging.Broker,
-	ehrFhirProxy coolfhir.HttpProxy) (*Service, error) {
+	ehrFhirProxy coolfhir.HttpProxy,
+	localCarePlanServiceURL *url.URL) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
-	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 
 	localFhirStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
 	if err != nil {
@@ -106,7 +106,7 @@ func New(
 	result := &Service{
 		config:                        config,
 		orcaPublicURL:                 orcaPublicURL,
-		localCarePlanServiceUrl:       cpsURL,
+		localCarePlanServiceUrl:       localCarePlanServiceURL,
 		SessionManager:                sessionManager,
 		profile:                       profile,
 		frontendUrl:                   config.FrontendConfig.URL,
@@ -200,7 +200,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 
 		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("CarePlan service URL is not configured"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 
@@ -237,7 +237,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("CarePlan service URL is not configured"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 		// TODO: Since we should only call our own CPS, this should be a local call.
@@ -248,7 +248,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 		carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", s.localCarePlanServiceUrl,
-			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false)
+			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false, true)
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
 
@@ -284,7 +284,7 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
 	proxyBasePath := basePath + "/ehr/fhir"
 	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", clientFactory.BaseURL, proxyBasePath,
-		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false)
+		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false, false)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -405,7 +405,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	}
 	const proxyBasePath = basePath + "/aggregate/fhir/"
 	for _, target := range queryTargets {
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true)
+		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	}
 	return nil

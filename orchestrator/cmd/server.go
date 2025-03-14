@@ -86,13 +86,18 @@ func Start(ctx context.Context, config Config) error {
 			services = append(services, service)
 		}
 		//
+		var cpsURL *url.URL
+		if config.CarePlanService.Enabled {
+			cpsURL = config.Public.ParseURL().JoinPath("cps")
+		}
 		carePlanContributor, err := careplancontributor.New(
 			config.CarePlanContributor,
 			activeProfile,
 			config.Public.ParseURL(),
 			sessionManager,
 			messageBroker,
-			ehrFhirProxy)
+			ehrFhirProxy,
+			cpsURL)
 		if err != nil {
 			return err
 		}

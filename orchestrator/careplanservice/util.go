@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -25,6 +26,9 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 		patientRefs[i] = fmt.Sprintf("Patient/%s", *patient.Id)
 	}
 	params.Add("subject", strings.Join(patientRefs, ","))
+	// If we're missing a CarePlan due to too low page count, we might incorrectly deny access
+	const carePlanSearchPageSize = 10000
+	params.Add("_count", strconv.Itoa(carePlanSearchPageSize))
 
 	// Fetch all CarePlans associated with the Patient, get the CareTeams associated with the CarePlans
 	// Get the CarePlan for which the Patient is the subject, get the CareTeams associated with the CarePlan
@@ -32,6 +36,20 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 	err := s.fhirClient.SearchWithContext(ctx, "CarePlan", params, &verificationBundle)
 	if err != nil {
 		return nil, err
+	}
+
+	// If there's more search results we didn't use, make sure we log this
+	carePlanSearchHasNext := false
+	for _, link := range verificationBundle.Link {
+		if link.Relation == "next" {
+			carePlanSearchHasNext = true
+			break
+		}
+	}
+	if carePlanSearchHasNext ||
+		len(verificationBundle.Entry) > carePlanSearchPageSize-1 ||
+		(verificationBundle.Total != nil && *verificationBundle.Total > carePlanSearchPageSize) {
+		log.Ctx(ctx).Warn().Msgf("Too many CarePlans found for patient(s), only the first %d will taken into account for granting access", carePlanSearchPageSize)
 	}
 
 	var carePlans []fhir.CarePlan
@@ -50,8 +68,11 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 	// Iterate through each CareTeam to see if the requester is a participant, if not, remove any patients from the bundle that are part of the CareTeam
 	for _, cp := range carePlans {
 		ct, err := coolfhir.CareTeamFromCarePlan(&cp)
+		// INT-630: We changed CareTeam to be contained within the CarePlan, but old test data in the CarePlan resource does not have CareTeam.
+		//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
 		if err != nil {
-			return nil, err
+			log.Ctx(ctx).Warn().Err(err).Msgf("Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource (carePlanID=%s)", *cp.Id)
+			continue
 		}
 
 		participant := coolfhir.FindMatchingParticipantInCareTeam(ct, principal.Organization.Identifier)
