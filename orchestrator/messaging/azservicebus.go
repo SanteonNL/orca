@@ -21,7 +21,7 @@ func (a AzureServiceBusConfig) Enabled() bool {
 	return a.Hostname != "" || a.ConnectionString != ""
 }
 
-func newAzureServiceBusBroker(conf AzureServiceBusConfig, topics []string, topicPrefix string) (*AzureServiceBusBroker, error) {
+func newAzureServiceBusBroker(conf AzureServiceBusConfig, topics []Topic, topicPrefix string) (*AzureServiceBusBroker, error) {
 	var client *azservicebus.Client
 	var err error
 	if conf.ConnectionString != "" {
@@ -41,11 +41,11 @@ func newAzureServiceBusBroker(conf AzureServiceBusConfig, topics []string, topic
 	}
 	senders := map[string]*azservicebus.Sender{}
 	for _, topic := range topics {
-		sender, err := client.NewSender(topic, nil)
+		sender, err := client.NewSender(topic.FullName(topicPrefix), nil)
 		if err != nil {
-			return nil, fmt.Errorf("create topic (name=%s)", topic)
+			return nil, fmt.Errorf("create topic (name=%s)", topic.FullName(topicPrefix))
 		}
-		senders[topic] = sender
+		senders[topic.Name] = sender
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	return &AzureServiceBusBroker{
@@ -104,10 +104,11 @@ func (c *AzureServiceBusBroker) Close(ctx context.Context) error {
 	return nil
 }
 
-func (c *AzureServiceBusBroker) Receive(queue string, handler func(context.Context, Message) error) error {
-	receiver, err := c.client.NewReceiverForQueue(c.topicName(queue), &azservicebus.ReceiverOptions{})
+func (c *AzureServiceBusBroker) Receive(queue Topic, handler func(context.Context, Message) error) error {
+	fullTopicName := queue.FullName(c.topicPrefix)
+	receiver, err := c.client.NewReceiverForQueue(fullTopicName, &azservicebus.ReceiverOptions{})
 	if err != nil {
-		return fmt.Errorf("AzureServiceBus: create receiver (queue=%s)", queue)
+		return fmt.Errorf("AzureServiceBus: create receiver (queue=%s)", fullTopicName)
 	}
 	c.receivers.Add(1)
 	go func() {
@@ -117,7 +118,7 @@ func (c *AzureServiceBusBroker) Receive(queue string, handler func(context.Conte
 			if err != nil {
 				const backoffTime = time.Minute
 				if !errors.Is(err, context.Canceled) {
-					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: receive message failed, backing off for %s (queue: %s)", backoffTime, queue)
+					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: receive message failed, backing off for %s (queue: %s)", backoffTime, fullTopicName)
 				}
 				// Sleep for a minute before retrying, to avoid spamming the logs.
 				// But, the server might be instructed to shut down in the meantime, and we don't want the sleep to block the shutdown.
@@ -138,13 +139,13 @@ func (c *AzureServiceBusBroker) Receive(queue string, handler func(context.Conte
 				message.ContentType = *azMessage.ContentType
 			}
 			if err := handler(c.ctx, message); err != nil {
-				log.Ctx(c.ctx).Warn().Err(err).Msgf("AzureServiceBus: message handler failed (queue: %s), message will be sent to DLQ", queue)
+				log.Ctx(c.ctx).Warn().Err(err).Msgf("AzureServiceBus: message handler failed (queue: %s), message will be sent to DLQ", fullTopicName)
 				if err := receiver.AbandonMessage(c.ctx, azMessage, &azservicebus.AbandonMessageOptions{}); err != nil {
-					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: abandon message (for redelivery) failed (queue: %s)", queue)
+					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: abandon message (for redelivery) failed (queue: %s)", fullTopicName)
 				}
 			} else {
 				if err := receiver.CompleteMessage(c.ctx, azMessage, &azservicebus.CompleteMessageOptions{}); err != nil {
-					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: complete message failed (queue: %s)", queue)
+					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: complete message failed (queue: %s)", fullTopicName)
 				}
 			}
 		}
@@ -153,12 +154,12 @@ func (c *AzureServiceBusBroker) Receive(queue string, handler func(context.Conte
 }
 
 // SendMessage sends a message to the associated Azure Service Bus senders client. It returns an error if the operation fails.
-func (c *AzureServiceBusBroker) SendMessage(ctx context.Context, topic string, message *Message) error {
+func (c *AzureServiceBusBroker) SendMessage(ctx context.Context, topic Topic, message *Message) error {
 	c.senderLock.RLock()
 	defer c.senderLock.RUnlock()
-	sender, ok := c.senders[c.topicName(topic)]
+	sender, ok := c.senders[topic.Name]
 	if !ok {
-		return fmt.Errorf("AzureServiceBus: sender not found (topic=%s)", topic)
+		return fmt.Errorf("AzureServiceBus: sender not found (topic=%s)", topic.Name)
 	}
 	serviceBusMsg := &azservicebus.Message{
 		Body:          message.Body,
@@ -166,8 +167,4 @@ func (c *AzureServiceBusBroker) SendMessage(ctx context.Context, topic string, m
 		CorrelationID: message.CorrelationID,
 	}
 	return sender.SendMessage(ctx, serviceBusMsg, nil)
-}
-
-func (c *AzureServiceBusBroker) topicName(topic string) string {
-	return c.topicPrefix + topic
 }

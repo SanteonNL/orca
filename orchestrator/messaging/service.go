@@ -8,7 +8,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func New(config Config, topics []string) (Broker, error) {
+type Topic struct {
+	Name string
+	// Prefix indicates whether the topic name should be prefixed with the TopicPrefix from the messaging configuration.
+	Prefix bool
+}
+
+// FullName returns the full name of the topic, optionally prefixed with the provided prefix.
+func (t Topic) FullName(prefix string) string {
+	if t.Prefix {
+		return prefix + t.Name
+	}
+	return t.Name
+}
+
+func New(config Config, topics []Topic) (Broker, error) {
 	var broker Broker
 	var err error
 	if config.AzureServiceBus.Enabled() {
@@ -58,8 +72,8 @@ type Message struct {
 // Broker defines an interface for interacting with a message broker, including sending messages and closing connections.
 type Broker interface {
 	Close(ctx context.Context) error
-	SendMessage(ctx context.Context, topic string, message *Message) error
+	SendMessage(ctx context.Context, topic Topic, message *Message) error
 	// Receive subscribes to a queue and calls the handler function for each message received.
 	// The handler function should return an error if the message processing fails, which will cause the message to be retried or sent to the DLQ.
-	Receive(queue string, handler func(context.Context, Message) error) error
+	Receive(queue Topic, handler func(context.Context, Message) error) error
 }

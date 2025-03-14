@@ -118,7 +118,7 @@ func New(
 		eventManager:                  eventManager,
 	}
 	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
-		result.notifier, err = ehr.NewNotifier(messageBroker, config.TaskFiller.TaskAcceptedBundleTopic, result.createFHIRClientForURL)
+		result.notifier, err = ehr.NewNotifier(messageBroker, messaging.Topic{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
 		if err != nil {
 			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
 		}

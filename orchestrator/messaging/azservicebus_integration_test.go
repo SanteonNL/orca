@@ -21,10 +21,10 @@ func TestAzureServiceBusBroker(t *testing.T) {
 	sqlServerContainer := setupSQLServer(t, dockerNetwork)
 	serviceBus := setupAzureServiceBus(t, dockerNetwork, sqlServerContainer)
 
-	const queueName = "orca-patient-enrollment-events"
+	queue := Topic{Name: "orca-patient-enrollment-events"}
 	broker, err := newAzureServiceBusBroker(AzureServiceBusConfig{
 		ConnectionString: "Endpoint=sb://" + serviceBus + ";SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
-	}, []string{queueName, "not-existing-in-servicebus"}, "")
+	}, []Topic{queue, {Name: "not-existing-in-servicebus"}}, "")
 	require.NoError(t, err)
 	// When the container signals ready, the Service Bus emulator actually isn't ready yet.
 	// See https://github.com/Azure/azure-service-bus-emulator-installer/issues/35
@@ -40,7 +40,7 @@ func TestAzureServiceBusBroker(t *testing.T) {
 		capturedMessages := make(chan Message, 10)
 		redeliveryCount := &atomic.Int32{}
 		const simulatedDeliveryFailures = 2
-		err := broker.Receive(queueName, func(_ context.Context, message Message) error {
+		err := broker.Receive(queue, func(_ context.Context, message Message) error {
 			if strings.Contains(string(message.Body), "redelivery") {
 				if redeliveryCount.Load() < simulatedDeliveryFailures {
 					redeliveryCount.Add(1)
@@ -53,12 +53,12 @@ func TestAzureServiceBusBroker(t *testing.T) {
 		require.NoError(t, err)
 		t.Run("ok", func(t *testing.T) {
 			// Send 2 messages
-			err = broker.SendMessage(ctx, queueName, &Message{
+			err = broker.SendMessage(ctx, queue, &Message{
 				Body:        []byte(`{"patient_id": "message 1"}`),
 				ContentType: "application/json",
 			})
 			require.NoError(t, err)
-			err = broker.SendMessage(ctx, queueName, &Message{
+			err = broker.SendMessage(ctx, queue, &Message{
 				Body:        []byte(`{"patient_id": "message 2"}`),
 				ContentType: "application/json",
 			})
@@ -71,7 +71,7 @@ func TestAzureServiceBusBroker(t *testing.T) {
 			require.Equal(t, `{"patient_id": "message 2"}`, string(message2.Body))
 		})
 		t.Run("handler returns not-OK, abandoned for redelivery", func(t *testing.T) {
-			err = broker.SendMessage(ctx, queueName, &Message{
+			err = broker.SendMessage(ctx, queue, &Message{
 				Body:        []byte(`redelivery`),
 				ContentType: "application/json",
 			})
@@ -82,14 +82,14 @@ func TestAzureServiceBusBroker(t *testing.T) {
 		})
 	})
 	t.Run("unknown topic in ORCA", func(t *testing.T) {
-		err := broker.SendMessage(ctx, "unknown-topic", &Message{
+		err := broker.SendMessage(ctx, Topic{Name: "unknown-topic"}, &Message{
 			Body:        []byte(`{"patient_id": "123"}`),
 			ContentType: "application/json",
 		})
 		require.EqualError(t, err, "AzureServiceBus: sender not found (topic=unknown-topic)")
 	})
 	t.Run("unknown topic in Azure ServiceBus", func(t *testing.T) {
-		err := broker.SendMessage(ctx, "not-existing-in-servicebus", &Message{
+		err := broker.SendMessage(ctx, Topic{Name: "not-existing-in-servicebus"}, &Message{
 			Body:        []byte(`{"patient_id": "123"}`),
 			ContentType: "application/json",
 		})

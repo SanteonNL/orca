@@ -14,7 +14,10 @@ import (
 	"net/url"
 )
 
-const taskEngineTaskAcceptedQueueName = "orca.taskengine.task~accepted"
+var TaskEngineTaskAcceptedQueueName = messaging.Topic{
+	Name:   "orca.taskengine.task~accepted",
+	Prefix: true,
+}
 
 // Notifier is an interface for sending notifications regarding task acceptance within a FHIR-based system.
 type Notifier interface {
@@ -33,7 +36,7 @@ type acceptedTaskEvent struct {
 }
 
 // NewNotifier creates and returns a Notifier implementation using the provided ServiceBusClient for message handling.
-func NewNotifier(messageBroker messaging.Broker, topic string, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
+func NewNotifier(messageBroker messaging.Broker, topic messaging.Topic, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
 	n := &notifier{
 		broker:            messageBroker,
 		fhirClientFactory: fhirClientFactory,
@@ -50,14 +53,14 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 		FHIRBaseURL: fhirBaseURL,
 		Task:        *task,
 	})
-	return n.broker.SendMessage(ctx, taskEngineTaskAcceptedQueueName, &messaging.Message{
+	return n.broker.SendMessage(ctx, TaskEngineTaskAcceptedQueueName, &messaging.Message{
 		Body:        payload,
 		ContentType: "application/json",
 	})
 }
 
-func (n *notifier) start(sendToTopic string) error {
-	return n.broker.Receive(taskEngineTaskAcceptedQueueName, func(ctx context.Context, message messaging.Message) error {
+func (n *notifier) start(sendToTopic messaging.Topic) error {
+	return n.broker.Receive(TaskEngineTaskAcceptedQueueName, func(ctx context.Context, message messaging.Message) error {
 		var event acceptedTaskEvent
 		if err := json.Unmarshal(message.Body, &event); err != nil {
 			return fmt.Errorf("failed to unmarshal message into %T: %w", event, err)
@@ -83,7 +86,7 @@ func (n *notifier) start(sendToTopic string) error {
 // sendBundle sends a serialized BundleSet to a Service Bus using the provided ServiceBusClient.
 // It logs the process and errors during submission while wrapping and returning them.
 // Returns an error if serialization or message submission fails.
-func sendBundle(ctx context.Context, topic string, set BundleSet, messageBroker messaging.Broker) error {
+func sendBundle(ctx context.Context, topic messaging.Topic, set BundleSet, messageBroker messaging.Broker) error {
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
 		return err

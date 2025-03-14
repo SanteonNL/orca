@@ -128,7 +128,7 @@ func TestNotifier_NotifyTaskAccepted(t *testing.T) {
 			messageBroker := messaging.NewMemoryBroker()
 			fhirClient := &test.StubFHIRClient{}
 
-			bundleTopic := "bundle-topic"
+			bundleTopic := messaging.Topic{Name: "bundle-topic"}
 			var capturedBundleJSON string
 			require.NoError(t, messageBroker.Receive(bundleTopic, func(ctx context.Context, message messaging.Message) error {
 				capturedBundleJSON = string(message.Body)
