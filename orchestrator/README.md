@@ -41,7 +41,7 @@ These FHIR resources can be read from a different FHIR API than configured in `O
 
 #### EHR integration
 If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
-to the messaging topic on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task~accepted` on your broker.
+to the messaging topic on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
 
 See "Messaging configuration" for more information.  
 

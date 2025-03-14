@@ -116,7 +116,7 @@ func TestNotifier_NotifyTaskAccepted(t *testing.T) {
 					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask, careTeam)
 				_ = messageBroker.Close(nil)
 			},
-			expectedSendMessageError: errors.New("no handlers for topic orca.taskengine.task~accepted"),
+			expectedSendMessageError: errors.New("no handlers for topic orca.taskengine.task-accepted"),
 		},
 	}
 

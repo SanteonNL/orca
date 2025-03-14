@@ -15,7 +15,7 @@ import (
 )
 
 var TaskEngineTaskAcceptedQueueName = messaging.Topic{
-	Name:   "orca.taskengine.task~accepted",
+	Name:   "orca.taskengine.task-accepted",
 	Prefix: true,
 }
 
