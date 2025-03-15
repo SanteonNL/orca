@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
 	"net/url"
@@ -35,7 +36,7 @@ const basePath = "/cps"
 // We might want to make this configurable at some point.
 var subscriberNotificationTimeout = 10 * time.Second
 
-func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Service, error) {
+func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messageBroker messaging.Broker) (*Service, error) {
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -44,17 +45,19 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		return nil, err
 	}
 	baseUrl := orcaPublicURL.JoinPath(basePath)
+
+	subscriptionMgr, err := subscriptions.NewManager(baseUrl, subscriptions.CsdChannelFactory{Profile: profile}, messageBroker)
+	if err != nil {
+		return nil, fmt.Errorf("SubscriptionManager initialization: %w", err)
+	}
+
 	s := Service{
-		profile:       profile,
-		fhirURL:       upstreamFhirBaseUrl,
-		orcaPublicURL: orcaPublicURL,
-		transport:     transport,
-		fhirClient:    fhirClient,
-		subscriptionManager: subscriptions.DerivingManager{
-			FhirClient:  fhirClient,
-			FhirBaseURL: baseUrl,
-			Channels:    subscriptions.CsdChannelFactory{Profile: profile},
-		},
+		profile:                      profile,
+		fhirURL:                      upstreamFhirBaseUrl,
+		orcaPublicURL:                orcaPublicURL,
+		transport:                    transport,
+		fhirClient:                   fhirClient,
+		subscriptionManager:          subscriptionMgr,
 		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
 		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
 	}
