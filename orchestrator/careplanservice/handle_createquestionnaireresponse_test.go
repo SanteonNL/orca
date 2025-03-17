@@ -158,6 +158,9 @@ func Test_handleCreateQuestionnaireResponse(t *testing.T) {
 				fhirRequest.Principal = tt.principal
 			}
 
+			if tt.expectedMethod == "PUT" {
+				fhirRequest.HttpMethod = "PUT"
+			}
 			result, err := service.handleCreateQuestionnaireResponse(ctx, fhirRequest, tx)
 
 			if tt.expectError != nil {

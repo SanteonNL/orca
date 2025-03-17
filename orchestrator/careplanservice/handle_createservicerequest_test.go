@@ -151,6 +151,10 @@ func Test_handleCreateServiceRequest(t *testing.T) {
 			if tt.principal != nil {
 				fhirRequest.Principal = tt.principal
 			}
+
+			if tt.expectedMethod == "PUT" {
+				fhirRequest.HttpMethod = "PUT"
+			}
 			result, err := service.handleCreateServiceRequest(ctx, fhirRequest, tx)
 
 			if tt.expectError != nil {

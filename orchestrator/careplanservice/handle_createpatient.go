@@ -51,7 +51,7 @@ func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRe
 	)
 
 	// If patient has an ID, treat as PUT operation
-	if patient.Id != nil {
+	if patient.Id != nil && request.HttpMethod == "PUT" {
 		tx.Append(patient, &fhir.BundleEntryRequest{
 			Method: fhir.HTTPVerbPUT,
 			Url:    "Patient/" + *patient.Id,

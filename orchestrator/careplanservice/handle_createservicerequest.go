@@ -51,7 +51,7 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 	)
 
 	// If serviceRequest has an ID, treat as PUT operation
-	if serviceRequest.Id != nil {
+	if serviceRequest.Id != nil && request.HttpMethod == "PUT" {
 		tx.Append(serviceRequest, &fhir.BundleEntryRequest{
 			Method: fhir.HTTPVerbPUT,
 			Url:    "ServiceRequest/" + *serviceRequest.Id,
