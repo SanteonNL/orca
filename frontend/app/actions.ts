@@ -7,7 +7,7 @@ export async function getSupportContactLink() {
 }
 
 export async function viewerFeatureIsEnabled() {
-    return process.env.VIEWER_ENABLED === "true"
+    return process.env.DATA_VIEWER_ENABLED === "true"
 }
 
 export async function getAggregationUrl() {

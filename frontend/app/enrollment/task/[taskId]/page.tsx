@@ -25,15 +25,12 @@ export default function EnrollmentTaskPage() {
     }, [taskId, setSelectedTaskId])
 
     useEffect(() => {
-        //TODO: make feature toggle work
-        // setShowViewer(viewerFeatureEnabled && !!task && (task.status === "accepted" || task.status === "in-progress"))
-        setShowViewer(!!task && (task.status === "accepted" || task.status === "in-progress"))
+        setShowViewer(viewerFeatureEnabled && !!task && (task.status === "accepted" || task.status === "in-progress"))
     }, [task, viewerFeatureEnabled])
 
     useEffect(() => {
         viewerFeatureIsEnabled()
             .then((enabled) => {
-                console.log("Viewer feature enabled: ", enabled)
                 setViewerFeatureEnabled(enabled)
             })
     }, [])
