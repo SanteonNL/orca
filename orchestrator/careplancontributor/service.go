@@ -190,22 +190,13 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if !s.healthdataviewEndpointEnabled {
+		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
+		if !s.healthdataviewEndpointEnabled || globals.StrictMode {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), &coolfhir.ErrorWithCode{
-				Message:    "health data view proxy endpoint is disabled",
+				Message:    "health data view proxy endpoint is disabled or strict mode is enabled",
 				StatusCode: http.StatusMethodNotAllowed,
 			}, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
-		}
-
-		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
-
-			if globals.StrictMode {
-				coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-				return
-			}
-
-			log.Ctx(request.Context()).Debug().Msg("Strict mode is disabled, allowing proxyGetOrSearchHandler without localCarePlanServiceUrl")
 		}
 
 		err := s.handleProxyExternalRequestToEHR(writer, request)
@@ -314,11 +305,9 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	log.Ctx(request.Context()).Debug().Msg("Handling external FHIR API request")
 
 	//TODO: Check if this is also related to not having the local cp
-	if globals.StrictMode {
-		_, err := s.authorizeScpMember(request)
-		if err != nil {
-			return err
-		}
+	_, err := s.authorizeScpMember(request)
+	if err != nil {
+		return err
 	}
 	s.ehrFhirProxy.ServeHTTP(writer, request)
 	return nil
@@ -434,9 +423,6 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header can't contain multiple values", carePlanURLHeaderKey))
 	}
 	carePlanURL := carePlanURLValue[0]
-	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
-		return nil, coolfhir.BadRequest("invalid CarePlan URL in header. Got: " + carePlanURL + " expected: " + s.localCarePlanServiceUrl.String())
-	}
 
 	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
 	if err != nil {
