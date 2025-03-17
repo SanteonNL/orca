@@ -18,10 +18,12 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
+	"github.com/SanteonNL/orca/orchestrator/lib/policy"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/fhirpolicy"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -35,7 +37,16 @@ const basePath = "/cps"
 // We might want to make this configurable at some point.
 var subscriberNotificationTimeout = 10 * time.Second
 
+type Context struct {
+	Principal    fhir.Identifier   `json:"principal"`
+	CarePlans    []json.RawMessage `json:"carePlans"`
+	Method       string            `json:"method"`
+	ResourceType string            `json:"path"`
+}
+
 func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Service, error) {
+	ctx := context.Background()
+
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -43,6 +54,12 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 	if err != nil {
 		return nil, err
 	}
+
+	agent, err := policy.NewAgent(ctx, fhirpolicy.Module)
+	if err != nil {
+		return nil, err
+	}
+
 	baseUrl := orcaPublicURL.JoinPath(basePath)
 	s := Service{
 		profile:       profile,
@@ -50,6 +67,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		orcaPublicURL: orcaPublicURL,
 		transport:     transport,
 		fhirClient:    fhirClient,
+		policyAgent:   agent,
 		subscriptionManager: subscriptions.DerivingManager{
 			FhirClient:  fhirClient,
 			FhirBaseURL: baseUrl,
@@ -73,7 +91,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 			New: baseUrl.String(),
 		})
 	s.handlerProvider = s.defaultHandlerProvider
-	err = s.ensureCustomSearchParametersExists(context.Background())
+	err = s.ensureCustomSearchParametersExists(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -89,6 +107,7 @@ type Service struct {
 	subscriptionManager          subscriptions.Manager
 	maxReadBodySize              int
 	proxy                        coolfhir.HttpProxy
+	policyAgent                  policy.Agent
 	allowUnmanagedFHIROperations bool
 	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	pipeline                     pipeline.Instance
@@ -142,10 +161,45 @@ func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
 // - a list of resources that should be notified to subscribers
 type FHIRHandlerResult func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error)
 
+func (s *Service) extractContext(r *http.Request) (any, error) {
+	principal, err := auth.PrincipalFromContext(r.Context())
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract principal from context: %w", err)
+	}
+
+	var bundle fhir.Bundle
+
+	if err := s.fhirClient.SearchWithContext(r.Context(), "CarePlan", url.Values{}, &bundle); err != nil {
+		return nil, fmt.Errorf("failed to search for careplans: %w", err)
+	}
+
+	var carePlans []json.RawMessage
+
+	for _, entry := range bundle.Entry {
+		if entry.Resource != nil {
+			carePlans = append(carePlans, entry.Resource)
+		}
+	}
+
+	return Context{
+		CarePlans: carePlans,
+		Principal: principal.Organization.Identifier[0],
+		Method:    r.Method,
+		// In most cases `{type}` will be assigned to the resource type
+		ResourceType: r.PathValue("type"),
+	}, nil
+}
+
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	s.proxy = coolfhir.NewProxy("CPS->FHIR proxy", s.fhirURL, basePath,
 		s.orcaPublicURL.JoinPath(basePath), s.transport, true, false)
 	baseUrl := s.baseUrl()
+	useAuth := func(next http.HandlerFunc) http.HandlerFunc {
+		return s.profile.Authenticator(baseUrl, next)
+	}
+	usePolicy := func(next http.HandlerFunc) http.HandlerFunc {
+		return useAuth(s.policyAgent.WrapWithPolicyCheck(s.extractContext, next))
+	}
 
 	// Binding to actual routing
 	// Metadata
@@ -166,17 +220,17 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
 	})
 	// Creating a resource
-	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/{type}", useAuth(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	}))
 	// Searching for a resource via POST
-	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/{type}/_search", useAuth(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
 	}))
 	// Handle bundle
-	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/", useAuth(func(httpResponse http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != basePath+"/" {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("invalid path"), "CarePlanService/POST", httpResponse)
 			return
@@ -184,28 +238,28 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		s.handleBundle(request, httpResponse)
 	}))
 	// Updating a resource by ID
-	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", useAuth(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleModification(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 	}))
 	// Updating a resource by selecting it based on query params
-	mux.HandleFunc("PUT "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePath+"/{type}", useAuth(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
 	}))
 	// Handle reading a specific resource instance
-	mux.HandleFunc("GET "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/{type}/{id}", usePolicy(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
 	}))
 	if s.allowUnmanagedFHIROperations {
-		mux.HandleFunc("DELETE "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		mux.HandleFunc("DELETE "+basePath+"/{type}", useAuth(func(httpResponse http.ResponseWriter, request *http.Request) {
 			resourceType := request.PathValue("type")
 			s.handleModification(request, httpResponse, resourceType, "CarePlanService/Delete"+resourceType)
 		}))
-		mux.HandleFunc("DELETE "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		mux.HandleFunc("DELETE "+basePath+"/{type}/{id}", useAuth(func(httpResponse http.ResponseWriter, request *http.Request) {
 			resourceType := request.PathValue("type")
 			resourceID := request.PathValue("id")
 			s.handleModification(request, httpResponse, resourceType+"/"+resourceID, "CarePlanService/Delete"+resourceType)
