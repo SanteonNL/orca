@@ -52,6 +52,27 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 	}
 	defaultQuestionnaireJSON, _ := json.Marshal(defaultQuestionnaire)
 
+	questionnaireWithID := deep.Copy(defaultQuestionnaire)
+	questionnaireWithID.Id = to.Ptr("existing-questionnaire-id")
+	questionnaireWithIDJSON, _ := json.Marshal(questionnaireWithID)
+
+	returnedBundleForUpdate := &fhir.Bundle{
+		Entry: []fhir.BundleEntry{
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("Questionnaire/existing-questionnaire-id"),
+					Status:   "200 OK",
+				},
+			},
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("AuditEvent/2"),
+					Status:   "201 Created",
+				},
+			},
+		},
+	}
+
 	tests := []struct {
 		name                       string
 		questionnaireToCreate      fhir.Questionnaire
@@ -59,6 +80,8 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 		returnedBundle             *fhir.Bundle
 		errorFromCreate            error
 		expectError                error
+		expectedMethod             string
+		expectedURL                string
 	}{
 		{
 			name:                  "happy flow - success",
@@ -71,6 +94,22 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 				},
 			},
 			returnedBundle: defaultReturnedBundle,
+			expectedMethod: "POST",
+			expectedURL:    "Questionnaire",
+		},
+		{
+			name:                  "questionnaire with existing ID - update",
+			questionnaireToCreate: questionnaireWithID,
+			createdQuestionnaireBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: questionnaireWithIDJSON,
+					},
+				},
+			},
+			returnedBundle: returnedBundleForUpdate,
+			expectedMethod: "PUT",
+			expectedURL:    "Questionnaire/existing-questionnaire-id",
 		},
 	}
 
@@ -117,10 +156,20 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "Questionnaire/1", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
-				*(result.(*[]byte)) = tt.createdQuestionnaireBundle.Entry[0].Resource
-				return nil
-			}).AnyTimes()
+			// For resources with ID, expect a read from the specific ID path
+			expectedLocation := "Questionnaire/1"
+			if questionnaireToCreate.Id != nil {
+				expectedLocation = "Questionnaire/" + *questionnaireToCreate.Id
+				mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), expectedLocation, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
+					*(result.(*[]byte)) = tt.createdQuestionnaireBundle.Entry[0].Resource
+					return nil
+				}).AnyTimes()
+			} else {
+				mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "Questionnaire/1", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
+					*(result.(*[]byte)) = tt.createdQuestionnaireBundle.Entry[0].Resource
+					return nil
+				}).AnyTimes()
+			}
 
 			var returnedBundle = defaultReturnedBundle
 			if tt.returnedBundle != nil {
@@ -135,14 +184,21 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 					_ = json.Unmarshal(questionnaireEntry.Resource, &questionnaire)
 					require.Equal(t, questionnaireToCreate, questionnaire)
 				})
+
+				// Verify the request method and URL for the questionnaire entry
+				if tt.expectedMethod != "" {
+					questionnaireEntry := coolfhir.FirstBundleEntry((*fhir.Bundle)(tx), coolfhir.EntryIsOfType("Questionnaire"))
+					require.Equal(t, tt.expectedMethod, questionnaireEntry.Request.Method.String())
+					require.Equal(t, tt.expectedURL, questionnaireEntry.Request.Url)
+				}
 			}
 
 			// Process result
 			require.NotNil(t, result)
 			response, notifications, err := result(returnedBundle)
 			require.NoError(t, err)
-			require.Equal(t, "Questionnaire/1", *response.Response.Location)
-			require.Equal(t, "201 Created", response.Response.Status)
+			require.Equal(t, *returnedBundle.Entry[0].Response.Location, *response.Response.Location)
+			require.Equal(t, returnedBundle.Entry[0].Response.Status, response.Response.Status)
 			require.Len(t, notifications, 1)
 		})
 	}

@@ -49,50 +49,68 @@ func Test_handleCreateServiceRequest(t *testing.T) {
 				Value:  to.Ptr("1333333337"),
 			},
 		},
-		Code: &fhir.CodeableConcept{
-			Coding: []fhir.Coding{
-				{
-					System:  to.Ptr("http://snomed.info/sct"),
-					Code:    to.Ptr("123456"),
-					Display: to.Ptr("Test Service"),
+	}
+
+	serviceRequestWithID := deep.Copy(defaultServiceRequest)
+	serviceRequestWithID.Id = to.Ptr("existing-servicerequest-id")
+	serviceRequestWithIDJSON, _ := json.Marshal(serviceRequestWithID)
+
+	returnedBundleForUpdate := &fhir.Bundle{
+		Entry: []fhir.BundleEntry{
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("ServiceRequest/existing-servicerequest-id"),
+					Status:   "200 OK",
+				},
+			},
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("AuditEvent/2"),
+					Status:   "201 Created",
 				},
 			},
 		},
-		Requester: &fhir.Reference{
-			Identifier: &fhir.Identifier{
-				System: to.Ptr("Organization"),
-				Value:  to.Ptr("1234567890"),
-			},
-		},
 	}
-	defaultServiceRequestJSON, _ := json.Marshal(defaultServiceRequest)
 
 	tests := []struct {
 		name                        string
 		serviceRequestToCreate      fhir.ServiceRequest
+		createdServiceRequest       fhir.ServiceRequest
 		createdServiceRequestBundle *fhir.Bundle
 		returnedBundle              *fhir.Bundle
-		errorFromCreate             error
 		expectError                 error
 		principal                   *auth.Principal
+		expectedMethod              string
+		expectedURL                 string
 	}{
 		{
-			name:                   "happy flow - success",
-			serviceRequestToCreate: defaultServiceRequest,
+			name: "happy flow",
 			createdServiceRequestBundle: &fhir.Bundle{
 				Entry: []fhir.BundleEntry{
 					{
-						Resource: defaultServiceRequestJSON,
+						Resource: []byte(`{"status":"active","intent":"order","subject":{"identifier":{"system":"http://fhir.nl/fhir/NamingSystem/bsn","value":"1333333337"}}}`),
 					},
 				},
 			},
-			returnedBundle: defaultReturnedBundle,
 		},
 		{
-			name:                   "non-local requester - fails",
-			serviceRequestToCreate: defaultServiceRequest,
-			principal:              auth.TestPrincipal2,
-			expectError:            errors.New("Only the local care organization can create a ServiceRequest"),
+			name:        "error: requester is not a local organization",
+			principal:   auth.TestPrincipal2,
+			expectError: errors.New("Only the local care organization can create a ServiceRequest"),
+		},
+		{
+			name:                   "serviceRequest with existing ID - update",
+			serviceRequestToCreate: serviceRequestWithID,
+			createdServiceRequestBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: serviceRequestWithIDJSON,
+					},
+				},
+			},
+			returnedBundle: returnedBundleForUpdate,
+			expectedMethod: "PUT",
+			expectedURL:    "ServiceRequest/existing-servicerequest-id",
 		},
 	}
 
@@ -133,7 +151,6 @@ func Test_handleCreateServiceRequest(t *testing.T) {
 			if tt.principal != nil {
 				fhirRequest.Principal = tt.principal
 			}
-
 			result, err := service.handleCreateServiceRequest(ctx, fhirRequest, tx)
 
 			if tt.expectError != nil {
@@ -142,10 +159,20 @@ func Test_handleCreateServiceRequest(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "ServiceRequest/1", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
-				*(result.(*[]byte)) = tt.createdServiceRequestBundle.Entry[0].Resource
-				return nil
-			}).AnyTimes()
+			// For serviceRequest with ID, expect a different location path
+			expectedLocation := "ServiceRequest/1"
+			if serviceRequestToCreate.Id != nil {
+				expectedLocation = "ServiceRequest/" + *serviceRequestToCreate.Id
+				mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), expectedLocation, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
+					*(result.(*[]byte)) = tt.createdServiceRequestBundle.Entry[0].Resource
+					return nil
+				}).AnyTimes()
+			} else {
+				mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "ServiceRequest/1", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
+					*(result.(*[]byte)) = tt.createdServiceRequestBundle.Entry[0].Resource
+					return nil
+				}).AnyTimes()
+			}
 
 			var returnedBundle = defaultReturnedBundle
 			if tt.returnedBundle != nil {
@@ -160,14 +187,21 @@ func Test_handleCreateServiceRequest(t *testing.T) {
 					_ = json.Unmarshal(serviceRequestEntry.Resource, &serviceRequest)
 					require.Equal(t, serviceRequestToCreate, serviceRequest)
 				})
+
+				// Verify the request method and URL for the serviceRequest entry
+				if tt.expectedMethod != "" {
+					serviceRequestEntry := coolfhir.FirstBundleEntry((*fhir.Bundle)(tx), coolfhir.EntryIsOfType("ServiceRequest"))
+					require.Equal(t, tt.expectedMethod, serviceRequestEntry.Request.Method.String())
+					require.Equal(t, tt.expectedURL, serviceRequestEntry.Request.Url)
+				}
 			}
 
 			// Process result
 			require.NotNil(t, result)
 			response, notifications, err := result(returnedBundle)
 			require.NoError(t, err)
-			require.Equal(t, "ServiceRequest/1", *response.Response.Location)
-			require.Equal(t, "201 Created", response.Response.Status)
+			require.Equal(t, *returnedBundle.Entry[0].Response.Location, *response.Response.Location)
+			require.Equal(t, returnedBundle.Entry[0].Response.Status, response.Response.Status)
 			require.Len(t, notifications, 1)
 		})
 	}

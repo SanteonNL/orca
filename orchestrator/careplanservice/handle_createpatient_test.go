@@ -56,6 +56,27 @@ func Test_handleCreatePatient(t *testing.T) {
 	}
 	defaultPatientJSON, _ := json.Marshal(defaultPatient)
 
+	patientWithID := deep.Copy(defaultPatient)
+	patientWithID.Id = to.Ptr("existing-patient-id")
+	patientWithIDJSON, _ := json.Marshal(patientWithID)
+
+	returnedBundleForUpdate := &fhir.Bundle{
+		Entry: []fhir.BundleEntry{
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("Patient/existing-patient-id"),
+					Status:   "200 OK",
+				},
+			},
+			{
+				Response: &fhir.BundleEntryResponse{
+					Location: to.Ptr("AuditEvent/3"),
+					Status:   "201 Created",
+				},
+			},
+		},
+	}
+
 	tests := []struct {
 		name                 string
 		patientToCreate      fhir.Patient
@@ -64,6 +85,8 @@ func Test_handleCreatePatient(t *testing.T) {
 		errorFromCreate      error
 		expectError          error
 		principal            *auth.Principal
+		expectedMethod       string
+		expectedURL          string
 	}{
 		{
 			name:            "happy flow - success",
@@ -76,12 +99,28 @@ func Test_handleCreatePatient(t *testing.T) {
 				},
 			},
 			returnedBundle: defaultReturnedBundle,
+			expectedMethod: "POST",
+			expectedURL:    "Patient",
 		},
 		{
 			name:            "non-local requester - fails",
 			patientToCreate: defaultPatient,
 			principal:       auth.TestPrincipal2,
 			expectError:     errors.New("Only the local care organization can create a Patient"),
+		},
+		{
+			name:            "patient with existing ID - update",
+			patientToCreate: patientWithID,
+			createdPatientBundle: &fhir.Bundle{
+				Entry: []fhir.BundleEntry{
+					{
+						Resource: patientWithIDJSON,
+					},
+				},
+			},
+			returnedBundle: returnedBundleForUpdate,
+			expectedMethod: "PUT",
+			expectedURL:    "Patient/existing-patient-id",
 		},
 	}
 
@@ -130,10 +169,20 @@ func Test_handleCreatePatient(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "Patient/1", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
-				*(result.(*[]byte)) = tt.createdPatientBundle.Entry[0].Resource
-				return nil
-			}).AnyTimes()
+			// For patient with ID, expect a different location path
+			expectedLocation := "Patient/1"
+			if patientToCreate.Id != nil {
+				expectedLocation = "Patient/" + *patientToCreate.Id
+				mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), expectedLocation, gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
+					*(result.(*[]byte)) = tt.createdPatientBundle.Entry[0].Resource
+					return nil
+				}).AnyTimes()
+			} else {
+				mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), "Patient/1", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, result interface{}, option ...fhirclient.Option) error {
+					*(result.(*[]byte)) = tt.createdPatientBundle.Entry[0].Resource
+					return nil
+				}).AnyTimes()
+			}
 
 			var returnedBundle = defaultReturnedBundle
 			if tt.returnedBundle != nil {
@@ -148,14 +197,21 @@ func Test_handleCreatePatient(t *testing.T) {
 					_ = json.Unmarshal(patientEntry.Resource, &patient)
 					require.Equal(t, patientToCreate, patient)
 				})
+
+				// Verify the request method and URL for the patient entry
+				if tt.expectedMethod != "" {
+					patientEntry := coolfhir.FirstBundleEntry((*fhir.Bundle)(tx), coolfhir.EntryIsOfType("Patient"))
+					require.Equal(t, tt.expectedMethod, patientEntry.Request.Method.String())
+					require.Equal(t, tt.expectedURL, patientEntry.Request.Url)
+				}
 			}
 
 			// Process result
 			require.NotNil(t, result)
 			response, notifications, err := result(returnedBundle)
 			require.NoError(t, err)
-			require.Equal(t, "Patient/1", *response.Response.Location)
-			require.Equal(t, "201 Created", response.Response.Status)
+			require.Equal(t, *returnedBundle.Entry[0].Response.Location, *response.Response.Location)
+			require.Equal(t, returnedBundle.Entry[0].Response.Status, response.Response.Status)
 			require.Len(t, notifications, 1)
 		})
 	}

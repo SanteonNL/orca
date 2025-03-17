@@ -173,6 +173,9 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		err = carePlanContributor1.Update("Patient/"+*nonExistingPatient.Id, nonExistingPatient, &nonExistingPatient)
 		require.NoError(t, err)
 		addExpectedAudit("Patient/"+*nonExistingPatient.Id, fhir.AuditEventActionC)
+
+		// Validate that the supplied ID was used
+		require.Equal(t, *nonExistingPatient.Id, "non-existing-patient")
 	})
 
 	t.Run("Update non-existing Questionnaire - creates new resource", func(t *testing.T) {
