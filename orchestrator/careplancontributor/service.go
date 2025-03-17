@@ -230,16 +230,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
 
 	//TODO: Fix unauthorized when requesting data from the hospital
-	// mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
-	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		log.Ctx(request.Context()).Debug().Msg("Handling aggregate _search FHIR API request")
 		err := s.proxyToAllCareTeamMembers(writer, request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
-	})
-	// }))
+	}))
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"

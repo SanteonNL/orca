@@ -1,14 +1,21 @@
 import React, { useEffect } from 'react'
-import { Task } from 'fhir/r4'
-import { getViewerData } from '@/app/actions'
+import { Bundle, Task } from 'fhir/r4'
+import { getAggregationUrl } from '@/app/actions'
 import { Alert, Button } from '@mui/material'
-import { LoaderIcon, RefreshCw } from 'lucide-react'
+import { RefreshCw } from 'lucide-react'
 
 export default function DataViewer({ task }: { task: Task }) {
 
     const [data, setData] = React.useState<any[]>([])
+    const [aggregationEndpoint, setAggegationEndpoint] = React.useState<string | undefined>()
     const [scpContext, setScpContext] = React.useState<string | null>(null) // used to determine the SCP context of an aggregate request
     const [error, setError] = React.useState<string | null>(null)
+
+    useEffect(() => {
+        getAggregationUrl().then((url) => {
+            setAggegationEndpoint(url)
+        })
+    }, [])
 
     useEffect(() => {
         console.log("Task changed")
@@ -42,30 +49,46 @@ export default function DataViewer({ task }: { task: Task }) {
     }, [task])
 
     useEffect(() => {
-        fetchViewerData()
-    }, [scpContext])
 
-    const fetchViewerData = () => {
+        if (!aggregationEndpoint) {
+            return
+        }
 
-        if (!scpContext) return
+        const requestUrl = `${aggregationEndpoint}/Observation/_search`;
+        console.log(`Sending request to ${requestUrl} with X-Scp-Context: ${scpContext}`);
 
-        getViewerData(scpContext).then(({ data, error, message }) => {
-            if (error) {
-                setError(message)
+        if (!scpContext) {
+            setError('SCP context is not set');
+            return;
+        }
+
+        fetch(requestUrl, {
+            method: 'POST',
+            headers: {
+                "X-Scp-Context": scpContext,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+        }).then(async (response) => {
+            if (!response.ok) {
+                setError(`Failed to fetch ${requestUrl}: ${response.statusText}`);
                 return
-            } else {
-                setData(data || [])
-                setError(null)
             }
+
+            const result = await response.json() as Bundle
+
+            const entries = result.entry
+                ?.filter((entry) => entry.resource?.resourceType === "Observation")
+                ?.map((entry) => entry.resource)
+
+            setData(entries || [])
         })
-    }
+    }, [aggregationEndpoint, scpContext])
+
 
     return (
-
         <div className='w-full'>
             <h2>Data Viewer</h2>
             {error && <Alert severity="error">{error}</Alert>}
-            <Button onClick={fetchViewerData}><RefreshCw /></Button>
             {data.length}
         </div>
     )
