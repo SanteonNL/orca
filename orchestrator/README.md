@@ -19,7 +19,6 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 
 ### Care Plan Contributor configuration
-- `ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL`: FHIR base URL of the CarePlan service.
 - `ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN`: Secures the EHR-facing endpoints with a static HTTP Bearer token. Only intended for development and testing purposes, since they're unpractical to change often.
 - `ORCA_CAREPLANCONTRIBUTOR_FHIR_URL`: Base URL of the FHIR API the CPC uses for storage.
 - `ORCA_CAREPLANCONTRIBUTOR_FHIR_AUTH_TYPE`: Authentication type for the CPC FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
@@ -41,7 +40,9 @@ These FHIR resources can be read from a different FHIR API than configured in `O
 
 #### EHR integration
 If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
-to the messaging topic on which the task bundle will be delivered. See "Messaging configuration" for more information.  
+to the messaging topic on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
+
+See "Messaging configuration" for more information.  
 
 ### Care Plan Service configuration
 - `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
@@ -56,7 +57,9 @@ For production environments, it's recommended to use Azure ServiceBus.
 
 * `ORCA_MESSAGING_AZURESERVICEBUS_HOSTNAME`: The hostname of the Azure ServiceBus instance, setting this (or the connection string) enables use of Azure ServiceBus as message broker.
 * `ORCA_MESSAGING_AZURESERVICEBUS_CONNECTIONSTRING`: The connection string of the Azure ServiceBus instance, setting this (or the hostname) enables use of Azure ServiceBus as message broker.
-* `ORCA_MESSAGING_HTTP_ENDPOINT`: For demo purposes: an URL pointing HTTP endpoint, to which messages will also be delivered. It appends the topic name to this URL.
+* `ORCA_MESSAGING_TOPICPREFIX`: Optional prefix for topics, which allows multi-tenancy (using the same underlying message broker infrastructure for multiple ORCA instances) by prefixing the topic names with a tenant identifier.
+* `ORCA_MESSAGING_HTTP_ENDPOINT`: For demo purposes: a URL pointing HTTP endpoint, to which messages will also be delivered. It appends the topic name to this URL.
+* `ORCA_MESSAGING_HTTP_TOPICFILTER`: For demo purposes: topics to enable the HTTP endpoint for (separator: `,`). If not set, all topics are enabled.
 
 ## App Launch options
 

@@ -213,7 +213,7 @@ func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 		cpsFhirClient:      s.cpsFhirClient,
 		secureTokenService: s.secureTokenService,
 		accessTokenCache:   s.accessTokenCache,
-	}, true)
+	}, true, false)
 	// Zorgplatform's FHIR API only allows GET-based FHIR searches, while ORCA only allows POST-based FHIR searches.
 	// If the request is a POST-based search, we need to rewrite the request to a GET-based search.
 	result.HTTPRequestModifier = func(req *http.Request) (*http.Request, error) {

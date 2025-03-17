@@ -21,9 +21,8 @@ func DefaultConfig() Config {
 }
 
 type Config struct {
-	CarePlanService CarePlanServiceConfig `koanf:"careplanservice"`
-	FrontendConfig  FrontendConfig        `koanf:"frontend"`
-	AppLaunch       applaunch.Config      `koanf:"applaunch"`
+	FrontendConfig FrontendConfig   `koanf:"frontend"`
+	AppLaunch      applaunch.Config `koanf:"applaunch"`
 	// FHIR contains the configuration to connect to the FHIR API holding EHR data,
 	// to be made available through the CarePlanContributor.
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
@@ -76,11 +75,6 @@ type WebHookEventHandlerConfig struct {
 	Name string
 	// URL is the URL to which the event should be sent.
 	URL string
-}
-
-type CarePlanServiceConfig struct {
-	// URL is the base URL of the CarePlanService at which the CarePlanContributor creates/reads CarePlans.
-	URL string `koanf:"url"`
 }
 
 type FrontendConfig struct {

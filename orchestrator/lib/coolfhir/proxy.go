@@ -31,6 +31,7 @@ type FHIRClientProxy struct {
 	proxyBaseUrl    *url.URL
 	upstreamBaseUrl *url.URL
 	allowCaching    bool
+	setMetaSource   bool
 	// HTTPRequestModifier allows modification of the HTTP request before it is proxied to the upstream server.
 	// It can be used to build smarter proxies (e.g. changing HTTP methods or other semantics).
 	// It must either return the modified (or the original request), or an error.
@@ -194,6 +195,10 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 			"Cache-Control": {"no-store"},
 		})
 	}
+	if f.setMetaSource && request.Method == http.MethodGet {
+		// Note: only for read operations
+		pipe = pipe.AppendResponseTransformer(pipeline.MetaSourceSetter{URI: outRequestUrl.String()})
+	}
 	pipe.DoAndWrite(httpResponseWriter, responseResource, responseStatusCode)
 }
 
@@ -239,7 +244,7 @@ func (f *FHIRClientProxy) sanitizeRequestHeaders(header http.Header) http.Header
 //   - if the proxy is on /, and the reverse proxy binds to /fhir, then proxyBasePath = / and rewriteUrl = /fhir.
 //   - if the proxy is on /fhir, and the reverse proxy binds to /app/fhir, then proxyBasePath = /fhir and rewriteUrl = /app/fhir.
 func NewProxy(name string, upstreamBaseUrl *url.URL, proxyBasePath string, rewriteUrl *url.URL,
-	transport http.RoundTripper, allowCaching bool) *FHIRClientProxy {
+	transport http.RoundTripper, allowCaching bool, setMetaSource bool) *FHIRClientProxy {
 	httpClient := &http.Client{
 		Transport: &loggingRoundTripper{
 			name: name,
@@ -252,6 +257,7 @@ func NewProxy(name string, upstreamBaseUrl *url.URL, proxyBasePath string, rewri
 		proxyBaseUrl:    rewriteUrl,
 		upstreamBaseUrl: upstreamBaseUrl,
 		allowCaching:    allowCaching,
+		setMetaSource:   setMetaSource,
 	}
 }
 

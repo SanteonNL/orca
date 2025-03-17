@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/rs/zerolog/log"
@@ -48,9 +49,11 @@ func Start(ctx context.Context, config Config) error {
 	// Initialize Message Broker.
 	// Collect topics so the message broker implementation can do checks on start-up whether it can actually publish to them.
 	// Otherwise, things only break later at runtime.
-	var messagingTopics []string
+	var messagingTopics []messaging.Topic
 	if config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic != "" {
-		messagingTopics = append(messagingTopics, config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic)
+		messagingTopics = append(messagingTopics, messaging.Topic{
+			Name: config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic,
+		}, ehr.TaskEngineTaskAcceptedQueueName)
 	}
 	messageBroker, err := messaging.New(config.Messaging, messagingTopics)
 	if err != nil {
@@ -83,13 +86,18 @@ func Start(ctx context.Context, config Config) error {
 			services = append(services, service)
 		}
 		//
+		var cpsURL *url.URL
+		if config.CarePlanService.Enabled {
+			cpsURL = config.Public.ParseURL().JoinPath("cps")
+		}
 		carePlanContributor, err := careplancontributor.New(
 			config.CarePlanContributor,
 			activeProfile,
 			config.Public.ParseURL(),
 			sessionManager,
 			messageBroker,
-			ehrFhirProxy)
+			ehrFhirProxy,
+			cpsURL)
 		if err != nil {
 			return err
 		}
