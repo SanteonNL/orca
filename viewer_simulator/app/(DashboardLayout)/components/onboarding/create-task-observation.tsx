@@ -25,12 +25,18 @@ import {
   CircularProgress,
   Chip,
   Portal,
+  RadioGroup,
+  FormControlLabel,
+  Radio,
+  Divider,
+  Tooltip,
 } from "@mui/material"
 import { DateTimePicker, LocalizationProvider } from "@mui/x-date-pickers"
 import { AdapterDayjs } from "@mui/x-date-pickers/AdapterDayjs"
 import dayjs from "dayjs"
 import "dayjs/locale/nl"
 import { getScpContext } from "@/utils/fhirUtils"
+import { observationCategories, getObservationCodes, getUnitSuggestions, interpretationOptions } from "./observation-icons"
 
 const Transition = React.forwardRef(function Transition(
   props: TransitionProps & {
@@ -40,29 +46,6 @@ const Transition = React.forwardRef(function Transition(
 ) {
   return <Slide direction="up" ref={ref} {...props} />
 })
-
-// Common observation categories in FHIR
-const observationCategories = [
-  { display: "Vital Signs", code: "vital-signs", system: "http://terminology.hl7.org/CodeSystem/observation-category" },
-  { display: "Laboratory", code: "laboratory", system: "http://terminology.hl7.org/CodeSystem/observation-category" },
-  { display: "Exam", code: "exam", system: "http://terminology.hl7.org/CodeSystem/observation-category" },
-  {
-    display: "Social History", code: "social-history", system: "http://terminology.hl7.org/CodeSystem/observation-category",
-  },
-  { display: "Imaging", code: "imaging", system: "http://terminology.hl7.org/CodeSystem/observation-category" },
-]
-
-// Common observation codes (LOINC)
-const observationCodes = [
-  { display: "Body Weight", code: "29463-7", system: "http://loinc.org" },
-  { display: "Body Height", code: "8302-2", system: "http://loinc.org" },
-  { display: "Heart rate", code: "8867-4", system: "http://loinc.org" },
-  { display: "Blood Pressure", code: "85354-9", system: "http://loinc.org" },
-  { display: "Body Temperature", code: "8310-5", system: "http://loinc.org" },
-  { display: "Respiratory Rate", code: "9279-1", system: "http://loinc.org" },
-  { display: "Oxygen Saturation", code: "59408-5", system: "http://loinc.org" },
-  { display: "Blood Glucose", code: "15074-8", system: "http://loinc.org" },
-]
 
 // Observation status options
 const statusOptions: Observation["status"][] = [
@@ -75,30 +58,6 @@ const statusOptions: Observation["status"][] = [
   "entered-in-error",
   "unknown",
 ]
-
-const getUnitSuggestions = (code: string): string[] => {
-  // Return appropriate units based on the selected observation code
-  switch (code) {
-    case "29463-7": // Body Weight
-      return ["kg", "g", "lb"]
-    case "8302-2": // Body Height
-      return ["cm", "m", "in"]
-    case "8867-4": // Heart rate
-      return ["beats/min"]
-    case "85354-9": // Blood Pressure
-      return ["mmHg"]
-    case "8310-5": // Body Temperature
-      return ["°C", "°F"]
-    case "9279-1": // Respiratory Rate
-      return ["breaths/min"]
-    case "59408-5": // Oxygen Saturation
-      return ["%"]
-    case "15074-8": // Blood Glucose
-      return ["mg/dL", "mmol/L"]
-    default:
-      return []
-  }
-}
 
 /**
  * Creates a reference if an identifier and/or absolute reference is present for cross-system compatibility.
@@ -143,7 +102,7 @@ function getDisplayFromReference(reference: Reference | undefined): string {
   return "Unknown"
 }
 
-export default function CreateTaskObservation({ task, taskFullUrl }: { task: Task, taskFullUrl: string }) {
+export default function CreateTaskObservation({ task, taskFullUrl }: { task: Task; taskFullUrl: string }) {
   const [open, setOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -159,6 +118,12 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
   const [valueQuantity, setValueQuantity] = useState<string>("")
   const [valueUnit, setValueUnit] = useState<string>("")
   const [note, setNote] = useState<string>("")
+  const [interpretation, setInterpretation] = useState<string>("N") // Default to Normal
+  const [referenceRangeLow, setReferenceRangeLow] = useState<string>("")
+  const [referenceRangeHigh, setReferenceRangeHigh] = useState<string>("")
+
+  // Get observation codes from shared utility
+  const observationCodes = getObservationCodes()
 
   // Form validation
   const [errors, setErrors] = useState<Record<string, string>>({})
@@ -203,19 +168,69 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
     setValueQuantity("")
     setValueUnit("")
     setNote("")
+    setInterpretation("N")
+    setReferenceRangeLow("")
+    setReferenceRangeHigh("")
     setErrors({})
   }
 
   const validateForm = (): boolean => {
     const newErrors: Record<string, string> = {}
 
-    if (!code) newErrors.code = "Observation code is required"
-    if (!effectiveDateTime) newErrors.effectiveDateTime = "Date and time are required"
-    if (!valueQuantity) newErrors.valueQuantity = "Value is required"
+    if (!code) newErrors.code = "Observatiecode is verplicht"
+    if (!effectiveDateTime) newErrors.effectiveDateTime = "Datum en tijdstip zijn verplicht"
+    if (!valueQuantity) newErrors.valueQuantity = "Waarde is verplicht"
+
+    // If reference range is partially filled, ensure both low and high are provided
+    if ((referenceRangeLow && !referenceRangeHigh) || (!referenceRangeLow && referenceRangeHigh)) {
+      newErrors.referenceRange = "Zowel een ondergrens als bovengrens is nodig voor een referentiewaarde"
+    }
 
     setErrors(newErrors)
     return Object.keys(newErrors).length === 0
   }
+
+  // Check if the current value is outside the reference range
+  const isValueOutsideRange = (): boolean => {
+    if (!valueQuantity || (!referenceRangeLow && !referenceRangeHigh)) return false
+
+    const value = Number.parseFloat(valueQuantity)
+    const low = referenceRangeLow ? Number.parseFloat(referenceRangeLow) : null
+    const high = referenceRangeHigh ? Number.parseFloat(referenceRangeHigh) : null
+
+    if (low !== null && value < low) return true
+    if (high !== null && value > high) return true
+
+    return false
+  }
+
+  // Suggest interpretation based on value and reference range
+  const suggestInterpretation = (): string => {
+    if (!valueQuantity || (!referenceRangeLow && !referenceRangeHigh)) return interpretation
+
+    const value = Number.parseFloat(valueQuantity)
+    const low = referenceRangeLow ? Number.parseFloat(referenceRangeLow) : null
+    const high = referenceRangeHigh ? Number.parseFloat(referenceRangeHigh) : null
+
+    // Critical values (20% beyond reference range)
+    if (low !== null && value < low * 0.8) return "LL"
+    if (high !== null && value > high * 1.2) return "HH"
+
+    // High/Low values
+    if (low !== null && value < low) return "L"
+    if (high !== null && value > high) return "H"
+
+    // Within range
+    return "N"
+  }
+
+  // Update interpretation when value or reference range changes
+  useEffect(() => {
+    if (valueQuantity && (referenceRangeLow || referenceRangeHigh)) {
+      const suggested = suggestInterpretation()
+      setInterpretation(suggested)
+    }
+  }, [valueQuantity, referenceRangeLow, referenceRangeHigh])
 
   const handleSave = async () => {
     if (!validateForm()) return
@@ -226,16 +241,25 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
 
     try {
       // Create the FHIR Observation resource
-      const selectedCategory = observationCategories.find((c) => c.code === category)
+      interface ObservationCategory {
+        code: string;
+        display: string;
+        system?: string;
+      }
+
+      const selectedCategory: ObservationCategory | undefined = observationCategories.find((c: ObservationCategory) => c.code === category)
       const selectedCode = observationCodes.find((c) => c.code === code)
+      const selectedInterpretation = interpretationOptions.find((i) => i.code === interpretation)
 
       const observation: Observation = {
         resourceType: "Observation",
         status: status as Observation["status"],
-        basedOn: [{
-          type: "CarePlan",
-          identifier: scpContextIdentifier
-        }],
+        basedOn: [
+          {
+            type: "CarePlan",
+            identifier: scpContextIdentifier,
+          },
+        ],
         category: [
           {
             coding: [
@@ -265,6 +289,46 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
           system: "http://unitsofmeasure.org",
           code: valueUnit,
         },
+      }
+
+      // Add interpretation if not normal
+      if (interpretation !== "N") {
+        observation.interpretation = [
+          {
+            coding: [
+              {
+                system: "http://terminology.hl7.org/CodeSystem/v3-ObservationInterpretation",
+                code: selectedInterpretation?.code,
+                display: selectedInterpretation?.display,
+              },
+            ],
+            text: selectedInterpretation?.display,
+          },
+        ]
+      }
+
+      // Add reference range if provided
+      if (referenceRangeLow || referenceRangeHigh) {
+        observation.referenceRange = [
+          {
+            low: referenceRangeLow
+              ? {
+                value: Number.parseFloat(referenceRangeLow),
+                unit: valueUnit,
+                system: "http://unitsofmeasure.org",
+                code: valueUnit,
+              }
+              : undefined,
+            high: referenceRangeHigh
+              ? {
+                value: Number.parseFloat(referenceRangeHigh),
+                unit: valueUnit,
+                system: "http://unitsofmeasure.org",
+                code: valueUnit,
+              }
+              : undefined,
+          },
+        ]
       }
 
       // Add note if provided
@@ -304,7 +368,9 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
 
       if (!resp.ok) {
         const errorMsg = JSON.stringify(await resp.json(), undefined, 2)
-        throw new Error(`Failed to save observation: [${resp.status}] ${errorMsg || resp.statusText || "No server message"}`)
+        throw new Error(
+          `Failed to save observation: [${resp.status}] ${errorMsg || resp.statusText || "No server message"}`,
+        )
       }
 
       setShowSuccess(true)
@@ -318,6 +384,24 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Get the color for interpretation display
+  const getInterpretationColor = (code: string): string => {
+    switch (code) {
+      case "N":
+        return "success"
+      case "A":
+        return "error"
+      case "H":
+      case "L":
+        return "warning"
+      case "HH":
+      case "LL":
+        return "error"
+      default:
+        return "default"
     }
   }
 
@@ -402,14 +486,14 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
               {/* Category */}
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth error={!!errors.category}>
-                  <InputLabel id="category-label">Category</InputLabel>
+                  <InputLabel id="category-label">Categorie</InputLabel>
                   <Select
                     labelId="category-label"
                     value={category}
-                    label="Category"
+                    label="Categorie"
                     onChange={(e) => setCategory(e.target.value)}
                   >
-                    {observationCategories.map((category) => (
+                    {observationCategories.map((category: { code: string; display: string }) => (
                       <MenuItem key={category.code} value={category.code}>
                         {category.display}
                       </MenuItem>
@@ -422,7 +506,7 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
               {/* Observation Code */}
               <Grid item xs={12}>
                 <FormControl fullWidth error={!!errors.code}>
-                  <InputLabel id="code-label">Observation Type</InputLabel>
+                  <InputLabel id="code-label">Observatietype</InputLabel>
                   <Select
                     labelId="code-label"
                     value={code}
@@ -433,7 +517,7 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
                       setValueUnit("")
                     }}
                   >
-                    {observationCodes.map((code) => (
+                    {observationCodes.map((code: { code: string; display: string }) => (
                       <MenuItem key={code.code} value={code.code}>
                         {code.display}
                       </MenuItem>
@@ -447,7 +531,7 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
               <Grid item xs={12}>
                 <DateTimePicker
                   maxDate={dayjs()}
-                  label="Date and Time"
+                  label="Datum en tijdstip"
                   value={effectiveDateTime}
                   onChange={(newValue) => setEffectiveDateTime(newValue)}
                   slotProps={{
@@ -459,11 +543,12 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
                   }}
                 />
               </Grid>
+
               {/* Value */}
               <Grid item xs={12} md={6}>
                 <TextField
                   fullWidth
-                  label="Value"
+                  label="Waarde"
                   type="number"
                   value={valueQuantity}
                   onChange={(e) => setValueQuantity(e.target.value)}
@@ -475,14 +560,14 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
               {/* Unit */}
               <Grid item xs={12} md={6}>
                 <FormControl fullWidth error={!!errors.valueUnit}>
-                  <InputLabel id="unit-label">Unit</InputLabel>
+                  <InputLabel id="unit-label">Eenheid</InputLabel>
                   <Select
                     labelId="unit-label"
                     value={valueUnit}
-                    label="Unit"
+                    label="Eenheid"
                     onChange={(e) => setValueUnit(e.target.value)}
                   >
-                    {getUnitSuggestions(code).map((unit) => (
+                    {getUnitSuggestions(code).map((unit: string) => (
                       <MenuItem key={unit} value={unit}>
                         {unit}
                       </MenuItem>
@@ -492,11 +577,83 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
                 </FormControl>
               </Grid>
 
+              {/* Reference Range */}
+              <Grid item xs={12}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Referentiewaarden
+                </Typography>
+                <Grid container spacing={2}>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Ondergrens"
+                      type="number"
+                      value={referenceRangeLow}
+                      onChange={(e) => setReferenceRangeLow(e.target.value)}
+                      InputProps={{
+                        endAdornment: valueUnit ? (
+                          <Typography variant="body2" color="text.secondary">
+                            {valueUnit}
+                          </Typography>
+                        ) : null,
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={6}>
+                    <TextField
+                      fullWidth
+                      label="Bovengrens"
+                      type="number"
+                      value={referenceRangeHigh}
+                      onChange={(e) => setReferenceRangeHigh(e.target.value)}
+                      InputProps={{
+                        endAdornment: valueUnit ? (
+                          <Typography variant="body2" color="text.secondary">
+                            {valueUnit}
+                          </Typography>
+                        ) : null,
+                      }}
+                      error={!!errors.referenceRange}
+                      helperText={errors.referenceRange}
+                    />
+                  </Grid>
+                </Grid>
+              </Grid>
+
+              {/* Interpretation */}
+              <Grid item xs={12}>
+                <Divider sx={{ my: 2 }} />
+                <Box sx={{ display: "flex", alignItems: "center", mb: 2 }}>
+                  <Typography variant="subtitle1" sx={{ mr: 2 }}>
+                    Interpretation
+                  </Typography>
+                  <Chip
+                    label={interpretationOptions.find((i) => i.code === interpretation)?.display || "Unknown"}
+                    color={getInterpretationColor(interpretation) as any}
+                    size="small"
+                  />
+                  {isValueOutsideRange() && interpretation === "N" && (
+                    <Tooltip title="Waarde valt buiten de referentiewaarden maar is gemarkeerd als normaal">
+                      <Chip label="Waarschuwing: Waarde valt niet binnen de referentiewaarden" color="warning" size="small" sx={{ ml: 1 }} />
+                    </Tooltip>
+                  )}
+                </Box>
+                <FormControl component="fieldset">
+                  <RadioGroup row value={interpretation} onChange={(e) => setInterpretation(e.target.value)}>
+                    {interpretationOptions.map((option) => (
+                      <Tooltip key={option.code} title={option.description}>
+                        <FormControlLabel value={option.code} control={<Radio />} label={option.display} />
+                      </Tooltip>
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+              </Grid>
+
               {/* Notes */}
               <Grid item xs={12}>
                 <TextField
                   fullWidth
-                  label="Notes"
+                  label="Notities"
                   multiline
                   rows={4}
                   value={note}
@@ -516,7 +673,6 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
       </Dialog>
 
       <Portal>
-
         <Snackbar
           open={showSuccess}
           autoHideDuration={4000}
@@ -524,7 +680,7 @@ export default function CreateTaskObservation({ task, taskFullUrl }: { task: Tas
           anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
         >
           <Alert onClose={() => setShowSuccess(false)} severity="success">
-            Observation successfully registered
+            Observatie succesvol geregistreerd
           </Alert>
         </Snackbar>
       </Portal>

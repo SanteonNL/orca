@@ -2,6 +2,7 @@ import Client from 'fhir-kit-client';
 import {
     Bundle,
     Condition,
+    Identifier,
     Patient,
     PractitionerRole,
     Questionnaire,
@@ -204,7 +205,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     type: "transaction"
 } => {
     const cleanedPatient = cleanPatient(patient);
-    const patientReference : Reference = {
+    const patientReference: Reference = {
         type: "Patient",
         reference: "urn:uuid:patient",
         identifier: getPatientIdentifier(patient)!
@@ -273,3 +274,16 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
     })
 }
 
+/**
+ * Returns a string representation of an Identifier ONLY if both the system and value are set. Otherwise, returns undefined.
+ * @param identifier 
+ * @returns 
+ */
+export function identifierToString(identifier?: Identifier) {
+
+    if (!identifier?.system || !identifier.value) {
+        return
+    }
+
+    return `${identifier.system}|${identifier.value}`
+}
