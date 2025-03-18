@@ -46,7 +46,7 @@ func TestHTTPBroker(t *testing.T) {
 	}
 
 	t.Run("ok", func(t *testing.T) {
-		err := broker.SendMessage(context.Background(), "test-topic", message)
+		err := broker.SendMessage(context.Background(), Topic{Name: "test-topic"}, message)
 		require.NoError(t, err)
 		require.JSONEq(t, `{"key":"value"}`, string(capturedBody))
 		require.Equal(t, "application/json", capturedContentType)
@@ -54,12 +54,12 @@ func TestHTTPBroker(t *testing.T) {
 		require.Equal(t, http.MethodPost, capturedHTTPMethod)
 	})
 	t.Run("non-200 OK response", func(t *testing.T) {
-		err := broker.SendMessage(context.Background(), "test-topic/500", message)
+		err := broker.SendMessage(context.Background(), Topic{Name: "test-topic/500"}, message)
 		require.Error(t, err)
 	})
 	t.Run("topic filtered out (not configured)", func(t *testing.T) {
 		capturedBody = nil
-		err := broker.SendMessage(context.Background(), "other-topic", message)
+		err := broker.SendMessage(context.Background(), Topic{Name: "other-topic"}, message)
 		require.NoError(t, err)
 		require.Empty(t, capturedBody)
 	})
@@ -68,7 +68,7 @@ func TestHTTPBroker(t *testing.T) {
 		broker := HTTPBroker{
 			endpoint: testServer.URL,
 		}
-		err := broker.SendMessage(context.Background(), "test-topic", message)
+		err := broker.SendMessage(context.Background(), Topic{Name: "test-topic"}, message)
 		require.NoError(t, err)
 		require.NoError(t, err)
 		require.NotEmpty(t, capturedBody)

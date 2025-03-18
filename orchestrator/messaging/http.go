@@ -33,6 +33,13 @@ type HTTPBroker struct {
 	topicFilter      []string
 }
 
+func (h HTTPBroker) Receive(topic Topic, handler func(context.Context, Message) error) error {
+	if h.underlyingBroker == nil {
+		return nil
+	}
+	return h.underlyingBroker.Receive(topic, handler)
+}
+
 func (h HTTPBroker) Close(ctx context.Context) error {
 	if h.underlyingBroker == nil {
 		return nil
@@ -40,8 +47,8 @@ func (h HTTPBroker) Close(ctx context.Context) error {
 	return h.underlyingBroker.Close(ctx)
 }
 
-func (h HTTPBroker) SendMessage(ctx context.Context, topic string, message *Message) error {
-	if len(h.topicFilter) != 0 && !slices.Contains(h.topicFilter, topic) {
+func (h HTTPBroker) SendMessage(ctx context.Context, topic Topic, message *Message) error {
+	if len(h.topicFilter) != 0 && !slices.Contains(h.topicFilter, topic.Name) {
 		return nil
 	}
 	var errs []error
@@ -56,7 +63,7 @@ func (h HTTPBroker) SendMessage(ctx context.Context, topic string, message *Mess
 	return errors.Join(errs...)
 }
 
-func (h HTTPBroker) doSend(ctx context.Context, topic string, message *Message) error {
+func (h HTTPBroker) doSend(ctx context.Context, topic Topic, message *Message) error {
 	// unmarshall and marshall the value to remove extra whitespace
 	var v interface{}
 	err := json.Unmarshal(message.Body, &v)
@@ -74,7 +81,7 @@ func (h HTTPBroker) doSend(ctx context.Context, topic string, message *Message) 
 	}
 	httpRequestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(httpRequestCtx, "POST", endpoint.JoinPath(topic).String(), strings.NewReader(string(jsonValue)))
+	req, err := http.NewRequestWithContext(httpRequestCtx, "POST", endpoint.JoinPath(topic.Name).String(), strings.NewReader(string(jsonValue)))
 	if err != nil {
 		return err
 	}

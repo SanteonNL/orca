@@ -101,7 +101,7 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
       - hapi.fhir.allow_external_references=true
-      - hapi.fhir.server_address=${HOSPITAL_URL}/fhir
+      - hapi.fhir.server_address=http://fhirstore:8080/fhir
   # The HAPI image has no binaries such as curl, so we use the curl image to perform the health check
   fhirstore-healthcheck:
     image: curlimages/curl:7.87.0

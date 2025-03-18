@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/url"
 	"strings"
 
@@ -255,7 +256,7 @@ func (s StubFHIRClient) DeleteWithContext(ctx context.Context, path string, opts
 }
 
 func (s StubFHIRClient) Path(path ...string) *url.URL {
-	panic("implement me")
+	return must.ParseURL("stub:" + strings.Join(path, "/"))
 }
 
 func unmarshalInto(resource interface{}, target interface{}) {
