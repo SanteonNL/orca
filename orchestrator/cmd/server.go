@@ -20,7 +20,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/dataview"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
@@ -85,11 +84,6 @@ func Start(ctx context.Context, config Config) error {
 			ehrFhirProxy = service.EhrFhirProxy()
 			services = append(services, service)
 		}
-		if config.CarePlanContributor.DataView.Enabled {
-			service := dataview.New(config.CarePlanContributor.DataView, config.Public.URL)
-			ehrFhirProxy = service.EhrFhirProxy()
-		}
-		//
 		var cpsURL *url.URL
 		if config.CarePlanService.Enabled {
 			cpsURL = config.Public.ParseURL().JoinPath("cps")

@@ -60,13 +60,18 @@ func New(
 	if err != nil {
 		return nil, err
 	}
-	if config.HealthDataViewEndpointEnabled && ehrFhirProxy == nil {
-		ehrFhirProxy = coolfhir.NewProxy("App->EHR (DataView)", fhirURL, basePath+"/fhir", orcaPublicURL.JoinPath(basePath, "fhir"), localFhirStoreTransport, false, false)
+	ctx := context.Background()
+	if config.HealthDataViewEndpointEnabled {
+		if ehrFhirProxy != nil {
+			//TODO: Currently the application gracefully starts up - decide if this needs to be enforced
+			log.Ctx(ctx).Error().Msg("ehrFhirProxy should be nil when HealthDataViewEndpointEnabled is true")
+		} else {
+			ehrFhirProxy = coolfhir.NewProxy("App->EHR (DataView)", fhirURL, basePath+"/fhir", orcaPublicURL.JoinPath(basePath, "fhir"), localFhirStoreTransport, false, false)
+		}
 	}
 
 	// Initialize workflow provider, which is used to select FHIR Questionnaires by the Task Filler engine
 	var workflowProvider taskengine.WorkflowProvider
-	ctx := context.Background()
 	if config.TaskFiller.QuestionnaireFHIR.BaseURL == "" {
 		// Use embedded workflow provider
 		memoryWorkflowProvider := &taskengine.MemoryWorkflowProvider{}

@@ -47,8 +47,7 @@ services:
       - ORCA_MESSAGING_HTTP_TOPICFILTER=orca-enroll-patient
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
-      - ORCA_CAREPLANCONTRIBUTOR_DATAVIEW_ENABLED=true
-      - ORCA_CAREPLANCONTRIBUTOR_DATAVIEW_FHIRURL=http://viewer:3000/viewer/api/fhir
+      - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://viewer:3000/viewer/api/fhir
       # Note: clinic re-uses the FHIR store of the Hospital, so we don't need to start a second one making things even slower
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL=${HOSPITAL_URL}/fhir
       # If this value is set, the clinic will send task notifications over http to the provided endpoint. Cannot be used in conjunction with the strict mode
