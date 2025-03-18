@@ -60,6 +60,9 @@ func New(
 	if err != nil {
 		return nil, err
 	}
+	if config.HealthDataViewEndpointEnabled && ehrFhirProxy == nil {
+		ehrFhirProxy = coolfhir.NewProxy("App->EHR (DataView)", fhirURL, basePath+"/fhir", orcaPublicURL.JoinPath(basePath, "fhir"), localFhirStoreTransport, false, false)
+	}
 
 	// Initialize workflow provider, which is used to select FHIR Questionnaires by the Task Filler engine
 	var workflowProvider taskengine.WorkflowProvider
