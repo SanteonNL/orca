@@ -49,6 +49,22 @@ const getStatusColor = (status: Observation["status"]) => {
     return statusColorMap[status] || statusColorMap.unknown
 }
 
+// Helper function to get Dutch text for the status
+const getStatusText = (status: Observation["status"]) => {
+    const statusTextMap: Record<string, string> = {
+        final: "Definitief",
+        preliminary: "Voorlopig",
+        amended: "Gewijzigd",
+        corrected: "Gecorrigeerd",
+        cancelled: "Geannuleerd",
+        "entered-in-error": "Foutief ingevoerd",
+        unknown: "Onbekend",
+        registered: "Geregistreerd",
+    }
+
+    return statusTextMap[status] || statusTextMap.unknown
+}
+
 // Helper function to check if value is abnormal
 const isAbnormal = (observation: Observation) => {
     if (!observation.interpretation?.length) return false
@@ -97,7 +113,7 @@ export default function ObservationCard({
                         <CardTitle className="text-lg">{observationName}</CardTitle>
                     </div>
                     <Badge className={getStatusColor(observation.status)}>
-                        {observation.status.charAt(0).toUpperCase() + observation.status.slice(1).replace(/-/g, " ")}
+                        {getStatusText(observation.status)}
                     </Badge>
                 </div>
                 <CardDescription className="flex items-center gap-1 mt-1">
@@ -139,7 +155,7 @@ export default function ObservationCard({
                             onClick={() => setExpanded(!expanded)}
                             className="p-1 h-8"
                             aria-expanded={expanded}
-                            aria-label={expanded ? "Collapse details" : "Expand details"}
+                            aria-label={expanded ? "Meer details" : "Minder details"}
                         >
                             <motion.div animate={{ rotate: expanded ? 180 : 0 }} transition={{ duration: 0.3 }}>
                                 <ChevronDown className="h-5 w-5" />
@@ -150,7 +166,7 @@ export default function ObservationCard({
 
                 {observation.referenceRange && observation.referenceRange.length > 0 && (
                     <div className="mt-2 text-sm text-muted-foreground">
-                        <span>Reference: </span>
+                        <span>Referentie: </span>
                         {observation.referenceRange.map((range, i) => (
                             <span key={i}>
                                 {range.text || (
@@ -188,7 +204,7 @@ export default function ObservationCard({
                                             <div className="flex flex-wrap gap-1 mt-1">
                                                 {observation.category.map((cat, i) => (
                                                     <Badge key={i} variant="outline">
-                                                        {cat.text || cat.coding?.[0]?.display || "Unknown"}
+                                                        {cat.text || cat.coding?.[0]?.display || "Onbekend"}
                                                     </Badge>
                                                 ))}
                                             </div>
@@ -204,7 +220,7 @@ export default function ObservationCard({
                                 >
                                     <User className="h-4 w-4 mt-0.5 text-muted-foreground" />
                                     <div>
-                                        <p className="font-medium">Subject</p>
+                                        <p className="font-medium">Betrokkene</p>
                                         <p>
                                             {observation.subject?.display ||
                                                 identifierToString(observation.subject?.identifier) ||
@@ -255,7 +271,6 @@ export default function ObservationCard({
                                 >
                                     <div className="pt-0 text-xs text-muted-foreground">ID: {observation.id}</div>
                                 </motion.div>
-
                             </div>
                         </motion.div>
                     )}
@@ -264,4 +279,3 @@ export default function ObservationCard({
         </Card>
     )
 }
-
