@@ -39,6 +39,8 @@ services:
     # build:
     #  context: ../../../frontend
     #  dockerfile: Dockerfile
+    environment:
+      - DATA_VIEWER_ENABLED=true
      # Make sure to copy the .env.secrets.example and fill in the terminology server credentials for the tx server to work
     env_file:
       - path: ../../../frontend/.env.secrets
