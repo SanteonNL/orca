@@ -2,14 +2,15 @@ package nuts
 
 import (
 	"errors"
+	"net/http"
+	"net/url"
+
 	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
 )
 
 var tokenIntrospectionClient = http.DefaultClient
@@ -40,7 +41,7 @@ func (d DutchNutsProfile) Authenticator(resourceServerURL *url.URL, fn func(writ
 		principal := auth.Principal{
 			Organization: *organization,
 		}
-		log.Ctx(request.Context()).Debug().Msgf("Authenticated user: %v", principal)
+		log.Ctx(request.Context()).Debug().Msgf("Authenticated user: %v on route %s", principal, request.URL.Path)
 		fn(response, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 	})
 }
