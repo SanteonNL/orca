@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect } from 'react'
 import { Bundle, Task } from 'fhir/r4'
-import { getAggregationUrl } from '@/app/actions'
+import { getAggregationUrl, getSupportContactLink } from '@/app/actions'
 import { Alert } from '@mui/material'
 import ObservationCard from './observation-card'
 import NoObservationsFound from './no-observations-found'
@@ -13,15 +13,21 @@ export default function DataViewer({ task }: { task: Task }) {
 
     const [data, setData] = React.useState<any[]>([])
     const [loading, setLoading] = React.useState<boolean>(true)
-    const [aggregationEndpoint, setAggegationEndpoint] = React.useState<string | undefined>()
+    const [aggregationEndpoint, setAggegationEndpoint] = React.useState<string>()
     const [scpContext, setScpContext] = React.useState<string | null>(null) // used to determine the SCP context of an aggregate request
-    const [error, setError] = React.useState<string | null>(null)
+    const [error, setError] = React.useState<string | JSX.Element | null>(null)
+    const [supportContactLink, setSupportContactLink] = React.useState<string>()
 
     useEffect(() => {
-        getAggregationUrl().then((url) => {
+        Promise.all([getAggregationUrl(), getSupportContactLink()]).then(([url, link]) => {
             setAggegationEndpoint(url)
+            setSupportContactLink(link)
         })
     }, [])
+
+    const setSupportErrorMessage = useCallback((error: string) => {
+        setError(<p>Helaas is er iets misgegaan bij het ophalen van de data. Indien het probleem aanhoudt, neem dan contact op met {supportContactLink ? <a href={supportContactLink} target='_blank' rel="noopener noreferrer">{supportContactLink}</a> : 'support'}. Vermeld hierbij de volgende foutmelding: {error}</p>)
+    }, [supportContactLink]);
 
 
     const fetchObservations = useCallback(async () => {
@@ -29,7 +35,7 @@ export default function DataViewer({ task }: { task: Task }) {
         setLoading(true)
 
         if (!aggregationEndpoint) {
-            setError('No aggregation endpoint found');
+            setSupportErrorMessage('No aggregation endpoint found');
             setLoading(false)
             return
         }
@@ -37,7 +43,7 @@ export default function DataViewer({ task }: { task: Task }) {
         const requestUrl = `${aggregationEndpoint}/Observation/_search`;
 
         if (!scpContext) {
-            setError('SCP context is not set');
+            setSupportErrorMessage('SCP context is not set for Task/' + task.id);
             setLoading(false)
             return;
         }
@@ -54,7 +60,7 @@ export default function DataViewer({ task }: { task: Task }) {
             setLoading(false)
 
             if (!response.ok) {
-                setError(`Failed to fetch ${requestUrl}: ${response.statusText}`);
+                setSupportErrorMessage(`Failed to fetch ${requestUrl}: [${response.status}] ${response.statusText}`);
                 return
             }
 
@@ -68,31 +74,31 @@ export default function DataViewer({ task }: { task: Task }) {
             setError(null)
         } catch (e) {
             setLoading(false)
-            setError(`Failed to fetch ${requestUrl}`);
+            setSupportErrorMessage(`Failed to fetch ${requestUrl}`);
         }
-    }, [aggregationEndpoint, scpContext])
+    }, [aggregationEndpoint, scpContext, setSupportErrorMessage, task.id])
 
     useEffect(() => {
         if (!task.basedOn) {
-            setError('Task has no basedOn reference')
+            setSupportErrorMessage(`Task (id=${task.id}) has no basedOn reference`)
             return
         }
 
         const taskWithCarePlanBasedOn = task.basedOn.find(ref => ref.reference?.includes("CarePlan/"))
         if (!taskWithCarePlanBasedOn) {
-            setError('Task has no CarePlan as basedOn reference')
+            setSupportErrorMessage(`Task (id=${task.id}) has no CarePlan as basedOn reference`)
             return
         }
 
         const carePlanId = taskWithCarePlanBasedOn.reference?.replace(/.*CarePlan\/([^?\/]+).*/, "$1")
 
         if (!carePlanId) {
-            setError(`Unable to detect a CarePlan id for Task.basedOn (Task/${task.id})`)
+            setSupportErrorMessage(`Unable to detect a CarePlan id for Task.basedOn (id=${task.id})`)
             return
         }
 
         if (!task.meta?.source) {
-            setError(`Task.meta.source is not defined, this is required to determine the SCP context`)
+            setSupportErrorMessage(`Task.meta.source (id=${task.id}) is not defined, this is required to determine the SCP context`)
             return
         }
 
@@ -102,10 +108,10 @@ export default function DataViewer({ task }: { task: Task }) {
             setScpContext(taskSourceUrl.toString())
             setError(null)
         } catch (e) {
-            setError(`Task.meta.source is not a valid URL: ${task.meta.source}`)
+            setSupportErrorMessage(`Task.meta.source (id=${task.id}) is not a valid URL: ${task.meta.source}`)
             return
         }
-    }, [task])
+    }, [setSupportErrorMessage, task])
 
     useEffect(() => {
         fetchObservations()

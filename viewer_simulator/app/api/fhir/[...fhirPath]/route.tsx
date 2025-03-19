@@ -21,7 +21,6 @@ import { FHIR_SCP_CONTEXT_SYSTEM } from "@/utils/const/const";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ fhirPath: string }> }) {
     try {
-        console.log("In the GET function of the FHIR server");
         const { fhirPath } = await params;
         const fhirPathUrlSegment = Array.isArray(fhirPath) ? fhirPath.join('/') : fhirPath;
         const [resourceType, resourceId] = fhirPathUrlSegment.replace("/_search", "").split('/');
@@ -79,7 +78,6 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ fhi
             return GET(req, { params });
         }
 
-        console.log("In the POST function of the FHIR server");
         const resource: Resource = await req.json();
         if (!supportedResourceTypes.includes(resource.resourceType)) {
             const error: OperationOutcome = {
