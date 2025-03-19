@@ -46,7 +46,7 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows, notificationBundles }) => {
             flex: 1,
             renderCell: (params) => {
 
-                if (!params.row.isSubtask) return <CreateTaskObservation task={params.row.task} />
+                if (!params.row.isSubtask) return <CreateTaskObservation task={params.row.task} taskFullUrl={params.row.fullUrl} />
 
                 return <ViewTaskOutput task={params.row.task} notificationBundles={notificationBundles} />
             }
