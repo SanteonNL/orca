@@ -313,7 +313,6 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 
 	log.Ctx(request.Context()).Debug().Msg("Handling external FHIR API request")
 
-	//TODO: Check if this is also related to not having the local cp
 	_, err := s.authorizeScpMember(request)
 	if err != nil {
 		return err
