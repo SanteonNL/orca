@@ -374,8 +374,7 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 		var failedEntry FailedBundleEntry
 		if err := json.Unmarshal(entry.Resource, &failedEntry); err == nil {
 			if failedEntry.Error != "" {
-				return fhir.Bundle{}, fmt.Errorf("bundle contains failed entry: resource=%s, id=%s, method=%s, error=%s",
-					failedEntry.ResourceType, failedEntry.ID, failedEntry.Method, failedEntry.Error)
+				return fhir.Bundle{}, fmt.Errorf("bundle contains failed entry: %s", string(entry.Resource))
 			}
 		}
 	}
