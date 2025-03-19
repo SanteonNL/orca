@@ -367,7 +367,19 @@ func ResourceInBundle(bundle *fhir.Bundle, filter func(entry fhir.BundleEntry) b
 }
 
 // ExecuteTransaction performs a FHIR transaction and returns the result bundle.
+// If the bundle contains a FailedBundleEntry, it returns an error with the failure details.
 func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.Bundle, error) {
+	// Check for any FailedBundleEntry in the bundle
+	for _, entry := range bundle.Entry {
+		var failedEntry FailedBundleEntry
+		if err := json.Unmarshal(entry.Resource, &failedEntry); err == nil {
+			if failedEntry.Error != "" {
+				return fhir.Bundle{}, fmt.Errorf("bundle contains failed entry: resource=%s, id=%s, method=%s, error=%s",
+					failedEntry.ResourceType, failedEntry.ID, failedEntry.Method, failedEntry.Error)
+			}
+		}
+	}
+
 	// Perform the FHIR transaction by creating the bundle
 	var resultBundle fhir.Bundle
 	if err := fhirClient.Create(bundle, &resultBundle, fhirclient.AtPath("/")); err != nil {

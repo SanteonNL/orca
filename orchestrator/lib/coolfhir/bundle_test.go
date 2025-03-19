@@ -467,3 +467,154 @@ func TestFailedBundleEntry(t *testing.T) {
 		assert.Contains(t, resource.Error, "Unable to create proper reference for audit event, missing both FullUrl and resource ID")
 	})
 }
+
+func TestExecuteTransaction(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	fhirClient := mock.NewMockClient(ctrl)
+
+	failedEntry := FailedBundleEntry{
+		ResourceType: "Patient",
+		ID:           "test-patient",
+		Method:       fhir.HTTPVerbPOST,
+		Error:        "Test failure message",
+	}
+
+	failedEntryJSON, err := json.Marshal(failedEntry)
+	require.NoError(t, err)
+
+	testPatientJSON, err := json.Marshal(fhir.Patient{
+		Id: to.Ptr("test-patient"),
+	})
+	require.NoError(t, err)
+
+	t.Run("successful transaction", func(t *testing.T) {
+		bundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransaction,
+			Entry: []fhir.BundleEntry{
+				{
+					Resource: testPatientJSON,
+				},
+			},
+		}
+		expectedResultBundle := fhir.Bundle{
+			Entry: []fhir.BundleEntry{
+				{
+					Response: &fhir.BundleEntryResponse{
+						Status:   "201 Created",
+						Location: to.Ptr("Patient/test-patient"),
+					},
+				},
+			},
+		}
+
+		fhirClient.EXPECT().
+			Create(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(bundle interface{}, result interface{}, opts ...interface{}) error {
+				resultBundle := result.(*fhir.Bundle)
+				*resultBundle = expectedResultBundle
+				return nil
+			})
+
+		result, err := ExecuteTransaction(fhirClient, bundle)
+
+		require.NoError(t, err)
+		assert.Equal(t, expectedResultBundle, result)
+		require.Len(t, result.Entry, 1)
+		assert.Equal(t, "201 Created", result.Entry[0].Response.Status)
+		assert.Equal(t, "Patient/test-patient", *result.Entry[0].Response.Location)
+	})
+
+	t.Run("bundle with failed entry", func(t *testing.T) {
+		bundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransaction,
+			Entry: []fhir.BundleEntry{
+				{
+					Resource: failedEntryJSON,
+				},
+			},
+		}
+
+		result, err := ExecuteTransaction(fhirClient, bundle)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "bundle contains failed entry")
+		assert.Contains(t, err.Error(), "Patient")
+		assert.Contains(t, err.Error(), "test-patient")
+		assert.Contains(t, err.Error(), fhir.HTTPVerbPOST.String())
+		assert.Contains(t, err.Error(), "Test failure message")
+		assert.Equal(t, fhir.Bundle{}, result)
+	})
+
+	t.Run("Bundle with successful and failed entries", func(t *testing.T) {
+		bundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransaction,
+			Entry: []fhir.BundleEntry{
+				{
+					Resource: json.RawMessage(`{"resourceType": "Patient", "id": "test-patient"}`),
+				},
+				{
+					Resource: failedEntryJSON,
+				},
+			},
+		}
+
+		result, err := ExecuteTransaction(fhirClient, bundle)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "bundle contains failed entry")
+		assert.Contains(t, err.Error(), "Patient")
+		assert.Contains(t, err.Error(), "test-patient")
+		assert.Contains(t, err.Error(), fhir.HTTPVerbPOST.String())
+		assert.Contains(t, err.Error(), "Test failure message")
+		assert.Equal(t, fhir.Bundle{}, result)
+
+		require.Len(t, result.Entry, 0)
+	})
+
+	t.Run("FHIR client error", func(t *testing.T) {
+		bundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransaction,
+			Entry: []fhir.BundleEntry{
+				{
+					Resource: testPatientJSON,
+				},
+			},
+		}
+		expectedError := errors.New("FHIR server connection error")
+		fhirClient.EXPECT().
+			Create(gomock.Any(), gomock.Any(), gomock.Any()).
+			Return(expectedError)
+
+		result, err := ExecuteTransaction(fhirClient, bundle)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to execute FHIR transaction")
+		assert.ErrorIs(t, errors.Unwrap(err), expectedError)
+		assert.Equal(t, fhir.Bundle{}, result)
+	})
+
+	t.Run("nil entries in result bundle", func(t *testing.T) {
+		bundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransaction,
+			Entry: []fhir.BundleEntry{
+				{},
+			},
+		}
+		fhirClient.EXPECT().
+			Create(gomock.Any(), gomock.Any(), gomock.Any()).
+			DoAndReturn(func(bundle interface{}, result interface{}, opts ...interface{}) error {
+				resultBundle := result.(*fhir.Bundle)
+				*resultBundle = fhir.Bundle{
+					Type:  fhir.BundleTypeTransactionResponse,
+					Entry: nil,
+				}
+				return nil
+			})
+
+		result, err := ExecuteTransaction(fhirClient, bundle)
+
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "result bundle is nil")
+		assert.Equal(t, fhir.Bundle{}, result)
+	})
+}
