@@ -227,9 +227,6 @@ func WithAuditEvent(ctx context.Context, t *BundleBuilder, info AuditEventInfo) 
 					What: &resourceRef,
 				},
 			},
-			Meta: &fhir.Meta{
-				VersionId: to.Ptr("1"),
-			},
 		}
 
 		if info.QueryParams != nil {
