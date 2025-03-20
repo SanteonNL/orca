@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	"github.com/rs/zerolog/log"
@@ -99,7 +100,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readBodyReturnFile: "./testdata/careplan-careteam-missing.json",
 			readStatusReturn:   http.StatusOK,
 			xSCPContext:        "CarePlan/cps-careplan-01",
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: invalid CareTeam reference: CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: CareTeam not present in bundle - POST",
@@ -109,7 +110,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			xSCPContext:        "CarePlan/cps-careplan-01",
 			method:             to.Ptr("POST"),
 			url:                to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: invalid CareTeam reference: CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: requester not part of CareTeam - GET",
@@ -244,18 +245,15 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 				"/cpc/cps/fhir",
 				orcaPublicURL.JoinPath("/cpc/cps/fhir"),
 				http.DefaultTransport,
-				tt.allowCaching,
+				tt.allowCaching, false,
 			)
 
 			service, _ := New(Config{
 				FHIR: coolfhir.ClientConfig{
 					BaseURL: fhirServer.URL + "/fhir",
 				},
-				CarePlanService: CarePlanServiceConfig{
-					URL: carePlanServiceURL.String(),
-				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, proxy)
+			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, proxy, carePlanServiceURL)
 
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
@@ -377,10 +375,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{})
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -502,12 +497,9 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: fhirServerURL.String(),
-		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
-	}, orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{})
+	}, orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
@@ -592,7 +584,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{})
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -649,7 +641,14 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
 		capturedBody, _ = io.ReadAll(request.Body)
-		_ = json.NewEncoder(writer).Encode(fhir.Patient{})
+		_ = json.NewEncoder(writer).Encode(fhir.Bundle{})
+	})
+	carePlanServiceMux.HandleFunc("GET /fhir/Patient/1", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		_ = json.NewEncoder(writer).Encode(fhir.Patient{
+			Id: to.Ptr("1"),
+		})
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
@@ -659,11 +658,7 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{})
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, carePlanServiceURL)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()
@@ -688,6 +683,23 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 	actualValues, err := url.ParseQuery(string(capturedBody))
 	require.NoError(t, err)
 	require.Equal(t, expectedValues, actualValues)
+
+	t.Run("check meta.source is set for read operations", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/cps/fhir/Patient/1", nil)
+		httpRequest.AddCookie(&http.Cookie{
+			Name:  "sid",
+			Value: sessionID,
+		})
+		httpResponse, err := frontServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		responseData, err := io.ReadAll(httpResponse.Body)
+		require.NoError(t, err)
+		var patient fhir.Patient
+		err = json.Unmarshal(responseData, &patient)
+		require.NoError(t, err)
+		require.NotNil(t, patient.Meta)
+		require.NotNil(t, patient.Meta.Source)
+	})
 
 	t.Run("caching is not allowed", func(t *testing.T) {
 		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
@@ -770,11 +782,6 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 		publicURL, _ := url.Parse("https://example.com")
 		service := &Service{
 			orcaPublicURL: publicURL,
-			config: Config{
-				CarePlanService: CarePlanServiceConfig{
-					URL: remoteContributorFHIRAPI.URL + "/cps",
-				},
-			},
 			profile: profile.TestProfile{
 				Principal: auth.TestPrincipal2,
 				CSD: profile.TestCsdDirectory{

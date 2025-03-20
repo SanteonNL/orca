@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/webhook"
@@ -49,19 +51,27 @@ func New(
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager,
 	messageBroker messaging.Broker,
-	ehrFhirProxy coolfhir.HttpProxy) (*Service, error) {
+	ehrFhirProxy coolfhir.HttpProxy,
+	localCarePlanServiceURL *url.URL) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
-	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 
 	localFhirStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
 	if err != nil {
 		return nil, err
 	}
+	ctx := context.Background()
+	if config.HealthDataViewEndpointEnabled {
+		if ehrFhirProxy != nil {
+			//TODO: Currently the application gracefully starts up - decide if this needs to be enforced
+			log.Ctx(ctx).Error().Msg("ehrFhirProxy should be nil when HealthDataViewEndpointEnabled is true")
+		} else {
+			ehrFhirProxy = coolfhir.NewProxy("App->EHR (DataView)", fhirURL, basePath+"/fhir", orcaPublicURL.JoinPath(basePath, "fhir"), localFhirStoreTransport, false, false)
+		}
+	}
 
 	// Initialize workflow provider, which is used to select FHIR Questionnaires by the Task Filler engine
 	var workflowProvider taskengine.WorkflowProvider
-	ctx := context.Background()
 	if config.TaskFiller.QuestionnaireFHIR.BaseURL == "" {
 		// Use embedded workflow provider
 		memoryWorkflowProvider := &taskengine.MemoryWorkflowProvider{}
@@ -106,7 +116,7 @@ func New(
 	result := &Service{
 		config:                        config,
 		orcaPublicURL:                 orcaPublicURL,
-		localCarePlanServiceUrl:       cpsURL,
+		localCarePlanServiceUrl:       localCarePlanServiceURL,
 		SessionManager:                sessionManager,
 		profile:                       profile,
 		frontendUrl:                   config.FrontendConfig.URL,
@@ -118,7 +128,10 @@ func New(
 		eventManager:                  eventManager,
 	}
 	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
-		result.notifier = ehr.NewNotifier(messageBroker, config.TaskFiller.TaskAcceptedBundleTopic)
+		result.notifier, err = ehr.NewNotifier(messageBroker, messaging.Topic{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
+		if err != nil {
+			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
+		}
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
@@ -188,16 +201,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if !s.healthdataviewEndpointEnabled {
+		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
+		if !s.healthdataviewEndpointEnabled || globals.StrictMode {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), &coolfhir.ErrorWithCode{
-				Message:    "health data view proxy endpoint is disabled",
+				Message:    "health data view proxy endpoint is disabled or strict mode is enabled",
 				StatusCode: http.StatusMethodNotAllowed,
 			}, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-
-		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("CarePlan service URL is not configured"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 
@@ -222,6 +231,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
 	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+		log.Ctx(request.Context()).Debug().Msg("Handling aggregate _search FHIR API request")
 		err := s.proxyToAllCareTeamMembers(writer, request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
@@ -234,7 +244,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("CarePlan service URL is not configured"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
 		// TODO: Since we should only call our own CPS, this should be a local call.
@@ -245,7 +255,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 		carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", s.localCarePlanServiceUrl,
-			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false)
+			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false, true)
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
 
@@ -281,7 +291,7 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
 	proxyBasePath := basePath + "/ehr/fhir"
 	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", clientFactory.BaseURL, proxyBasePath,
-		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false)
+		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false, false)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -307,7 +317,6 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	if err != nil {
 		return err
 	}
-
 	s.ehrFhirProxy.ServeHTTP(writer, request)
 	return nil
 }
@@ -402,7 +411,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	}
 	const proxyBasePath = basePath + "/aggregate/fhir/"
 	for _, target := range queryTargets {
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true)
+		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	}
 	return nil
@@ -422,9 +431,6 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header can't contain multiple values", carePlanURLHeaderKey))
 	}
 	carePlanURL := carePlanURLValue[0]
-	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
-		return nil, coolfhir.BadRequest("invalid CarePlan URL in header. Got: " + carePlanURL + " expected: " + s.localCarePlanServiceUrl.String())
-	}
 
 	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
 	if err != nil {

@@ -1,16 +1,20 @@
 "use client"
-import React, { useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import useTaskProgressStore from '@/lib/store/task-progress-store'
 import { useParams } from 'next/navigation'
 import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
 import { patientName, organizationName } from "@/lib/fhirRender";
+import DataViewer from '@/components/data-viewer'
+import { viewerFeatureIsEnabled } from '@/app/actions'
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
     const { patient } = useEnrollmentStore()
+    const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
+    const [showViewer, setShowViewer] = useState(false)
 
     useEffect(() => {
         if (taskId) {
@@ -20,13 +24,24 @@ export default function EnrollmentTaskPage() {
         }
     }, [taskId, setSelectedTaskId])
 
+    useEffect(() => {
+        setShowViewer(viewerFeatureEnabled && !!task && (task.status === "accepted" || task.status === "in-progress"))
+    }, [task, viewerFeatureEnabled])
+
+    useEffect(() => {
+        viewerFeatureIsEnabled()
+            .then((enabled) => {
+                setViewerFeatureEnabled(enabled)
+            })
+    }, [])
+
     if (loading || !initialized) return <Loading />
 
     if (!task) {
         return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
     }
 
-    const StatusElement = ({label, value, noUpperCase}: { label: string, value: string, noUpperCase?: boolean | undefined }) =>
+    const StatusElement = ({ label, value, noUpperCase }: { label: string, value: string, noUpperCase?: boolean | undefined }) =>
         <>
             <div>{label}:</div>
             <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
@@ -41,12 +56,12 @@ export default function EnrollmentTaskPage() {
             inputTask={subTasks[0]}
         />
     } else {
-        return <div className='w-[568px] flex flex-col auto-cols-max'>
+        return <div className='w-full flex flex-col auto-cols-max'>
             {
                 task && executionText(task.status) ?
-                    <p className="text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
+                    <p className="w-[568px] text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
             }
-            <div className="grid grid-cols-[1fr,2fr] gap-y-4">
+            <div className="w-[568px] grid grid-cols-[1fr,2fr] gap-y-4">
                 <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} noUpperCase={true} />
                 <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
                 <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"} />
@@ -59,6 +74,7 @@ export default function EnrollmentTaskPage() {
                     : <></>
                 }
             </div>
+            {showViewer && <DataViewer task={task} />}
         </div>
     }
 }

@@ -144,7 +144,7 @@ type FHIRHandlerResult func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, er
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	s.proxy = coolfhir.NewProxy("CPS->FHIR proxy", s.fhirURL, basePath,
-		s.orcaPublicURL.JoinPath(basePath), s.transport, true)
+		s.orcaPublicURL.JoinPath(basePath), s.transport, true, false)
 	baseUrl := s.baseUrl()
 
 	// Binding to actual routing

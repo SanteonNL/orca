@@ -47,7 +47,7 @@ export default function EnrollmentLayout({ children }: { children: React.ReactNo
                 <div className='text-2xl pt-2 first-letter:uppercase'>{title}</div>
             </div>
             <div className="h-px bg-gray-200 mb-10"></div>
-            <div className="max-w-7xl px-5 w-full mx-auto">
+            <div className="max-w-7xl px-5 w-full mx-auto mb-5">
                 {children}
             </div>
         </div>
