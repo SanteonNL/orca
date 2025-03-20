@@ -7,6 +7,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
 	"github.com/rs/zerolog/log"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -140,7 +141,11 @@ func (c *AzureServiceBusBroker) Receive(queue Topic, handler func(context.Contex
 			}
 			if err := handler(c.ctx, message); err != nil {
 				log.Ctx(c.ctx).Warn().Err(err).Msgf("AzureServiceBus: message handler failed (queue: %s), message will be sent to DLQ", fullTopicName)
-				if err := receiver.AbandonMessage(c.ctx, azMessage, &azservicebus.AbandonMessageOptions{}); err != nil {
+				if err := receiver.AbandonMessage(c.ctx, azMessage, &azservicebus.AbandonMessageOptions{
+					PropertiesToModify: map[string]any{
+						"deliveryfailure-" + strconv.Itoa(int(azMessage.DeliveryCount)): err.Error(),
+					},
+				}); err != nil {
 					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: abandon message (for redelivery) failed (queue: %s)", fullTopicName)
 				}
 			} else {
