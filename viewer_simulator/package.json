@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@aehrc/smart-forms-renderer": "^0.44.3",
+    "@aehrc/smart-forms-renderer": "^0.45.1",
     "@emotion/cache": "11.14.0",
     "@emotion/react": "^11.14.0",
     "@emotion/server": "11.11.0",
