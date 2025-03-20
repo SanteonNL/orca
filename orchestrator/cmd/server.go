@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,19 +13,18 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
-	"github.com/rs/zerolog/log"
-
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
 )
 
@@ -56,6 +56,7 @@ func Start(ctx context.Context, config Config) error {
 			Name: config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic,
 		}, ehr.TaskEngineTaskAcceptedQueueName)
 	}
+	messagingTopics = append(messagingTopics, subscriptions.SendNotificationTopic)
 	messageBroker, err := messaging.New(config.Messaging, messagingTopics)
 	if err != nil {
 		return fmt.Errorf("message broker initialization: %w", err)
@@ -113,7 +114,7 @@ func Start(ctx context.Context, config Config) error {
 		}()
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL())
+		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL(), messaging.NewMemoryBroker())
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

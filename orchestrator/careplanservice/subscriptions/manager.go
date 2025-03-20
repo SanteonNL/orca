@@ -2,13 +2,14 @@ package subscriptions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/url"
 	"sync"
 	"time"
 
-	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
@@ -16,26 +17,48 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
+var SendNotificationTopic = messaging.Topic{
+	Name:   "orca.subscriptionmgr.notification",
+	Prefix: true,
+}
+
 var timeFunc = time.Now
 
 type Manager interface {
 	Notify(ctx context.Context, resource interface{}) error
 }
 
-var _ Manager = DerivingManager{}
+func NewManager(fhirBaseURL *url.URL, channels ChannelFactory, messageBroker messaging.Broker) (*RetryableManager, error) {
+	mgr := &RetryableManager{
+		FhirBaseURL:   fhirBaseURL,
+		Channels:      channels,
+		MessageBroker: messageBroker,
+	}
+	if err := messageBroker.Receive(SendNotificationTopic, mgr.receiveMessage); err != nil {
+		return nil, err
+	}
+	return mgr, nil
+}
 
-// DerivingManager is a Manager derives Subscriptions from the properties of FHIR resource
+var _ Manager = RetryableManager{}
+
+// RetryableManager is a Manager derives Subscriptions from the properties of FHIR resource
 // that triggered the notification:
 // - Task: it notifies the Task filler and owner
 // - CareTeam: it notifies all participants
 // TODO: It does not yet store the subscription notifications in the FHIR store, which is required to support monotonically increasing event numbers.
-type DerivingManager struct {
-	FhirBaseURL *url.URL
-	FhirClient  fhirclient.Client
-	Channels    ChannelFactory
+type RetryableManager struct {
+	FhirBaseURL   *url.URL
+	Channels      ChannelFactory
+	MessageBroker messaging.Broker
 }
 
-func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error {
+type NotificationEvent struct {
+	Subscriber fhir.Identifier `json:"subscriber"`
+	Focus      fhir.Reference  `json:"focus"`
+}
+
+func (r RetryableManager) Notify(ctx context.Context, resource interface{}) error {
 	var focus fhir.Reference
 	var subscribers []fhir.Identifier
 	switch coolfhir.ResourceType(resource) {
@@ -92,31 +115,35 @@ func (r DerivingManager) Notify(ctx context.Context, resource interface{}) error
 
 	log.Ctx(ctx).Info().Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)
 
-	return r.notifyAll(ctx, timeFunc(), focus, subscribers)
+	var errs []error
+	for _, subscriber := range subscribers {
+		data, _ := json.Marshal(NotificationEvent{
+			Subscriber: subscriber,
+			Focus:      focus,
+		})
+		if err := r.MessageBroker.SendMessage(ctx, SendNotificationTopic, &messaging.Message{
+			Body:        data,
+			ContentType: "application/json",
+		}); err != nil {
+			errs = append(errs, fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(subscriber), err))
+		}
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("couldn't notify all subscribers (this is non-recoverable!): %w", errors.Join(errs...))
+	} else {
+		return nil
+	}
 }
 
-func (r DerivingManager) notifyAll(ctx context.Context, instant time.Time, focus fhir.Reference, subscribers []fhir.Identifier) error {
+func (r RetryableManager) notifyAll(ctx context.Context, instant time.Time, focus fhir.Reference, subscribers []fhir.Identifier) error {
 	errs := make(chan error, len(subscribers))
 	notifyFinished := &sync.WaitGroup{}
 	for _, subscriber := range subscribers {
 		notifyFinished.Add(1)
 		go func(subscriber fhir.Identifier) {
 			defer notifyFinished.Done()
-			channel, err := r.Channels.Create(ctx, subscriber)
-			if err != nil {
-				errs <- fmt.Errorf("notification-channel for subscriber %s: %w", coolfhir.ToString(subscriber), err)
-				return
-			}
-			// TODO: refer to stored subscription
-			subscription := fhir.Reference{
-				Reference: to.Ptr("Subscription/" + uuid.NewString()),
-			}
-			// TODO: Read event number from store
-			// TODO: Do we need an audit event for subscription notifications?
-			notification := coolfhir.CreateSubscriptionNotification(r.FhirBaseURL, instant, subscription, 0, focus)
-			if err = channel.Notify(ctx, notification); err != nil {
-				errs <- fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(subscriber), err)
-			}
+
 		}(subscriber)
 	}
 	notifyFinished.Wait()
@@ -126,6 +153,29 @@ func (r DerivingManager) notifyAll(ctx context.Context, instant time.Time, focus
 	}
 	if len(result) > 0 {
 		return errors.Join(result...)
+	}
+	return nil
+}
+
+func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.Message) error {
+	var evt NotificationEvent
+	if err := json.Unmarshal(message.Body, &evt); err != nil {
+		return fmt.Errorf("failed to unmarshal message into %T: %w", evt, err)
+	}
+
+	channel, err := r.Channels.Create(ctx, evt.Subscriber)
+	if err != nil {
+		return fmt.Errorf("notification-channel for subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err)
+	}
+	// TODO: refer to stored subscription
+	subscription := fhir.Reference{
+		Reference: to.Ptr("Subscription/" + uuid.NewString()),
+	}
+	// TODO: Read event number from store
+	// TODO: Do we need an audit event for subscription notifications?
+	notification := coolfhir.CreateSubscriptionNotification(r.FhirBaseURL, timeFunc(), subscription, 0, evt.Focus)
+	if err = channel.Notify(ctx, notification); err != nil {
+		return fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err)
 	}
 	return nil
 }

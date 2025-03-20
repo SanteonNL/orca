@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"math/rand"
 	"net/http"
@@ -1235,7 +1236,7 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 	config.AllowUnmanagedFHIROperations = true
-	service, err := New(config, activeProfile, orcaPublicURL)
+	service, err := New(config, activeProfile, orcaPublicURL, messaging.NewMemoryBroker())
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
