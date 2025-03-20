@@ -118,7 +118,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/russellhaering/goxmldsig v1.4.0
+	github.com/russellhaering/goxmldsig v1.5.0
 	github.com/segmentio/asm v1.2.0
 	github.com/shengdoushi/base58 v1.0.0 // indirect
 	github.com/shirou/gopsutil/v3 v3.24.5 // indirect
