@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
@@ -32,31 +31,31 @@ func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHan
 		questionnaireBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
-	createAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC,
-		&fhir.Reference{
-			Reference: questionnaireBundleEntry.FullUrl,
-			Type:      to.Ptr("Questionnaire"),
-		},
-		&fhir.Reference{
-			Identifier: request.LocalIdentity,
-			Type:       to.Ptr("Organization"),
-		},
-	)
-
-	// If the questionnaire has an ID and the upsert flag is set, treat as PUT operation
-	// As per FHIR spec, this is how we can create a resource with a client supplied ID: https://hl7.org/fhir/http.html#upsert
-	if questionnaire.Id != nil && request.Upsert {
+	// If questionnaire has an ID, treat as PUT operation
+	if questionnaire.Id != nil && request.HttpMethod == "PUT" {
 		tx.Append(questionnaire, &fhir.BundleEntryRequest{
 			Method: fhir.HTTPVerbPUT,
 			Url:    "Questionnaire/" + *questionnaire.Id,
-		}, nil, coolfhir.WithFullUrl("Questionnaire/"+*questionnaire.Id))
-		createAuditEvent.Entity[0].What.Reference = to.Ptr("Questionnaire/" + *questionnaire.Id)
+		}, nil, coolfhir.WithFullUrl(*questionnaireBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			ActingAgent: &fhir.Reference{
+				Identifier: request.LocalIdentity,
+				Type:       to.Ptr("Organization"),
+			},
+			Observer: *request.LocalIdentity,
+			Action:   fhir.AuditEventActionC,
+		}))
 	} else {
-		tx.Create(questionnaire, coolfhir.WithFullUrl(*questionnaireBundleEntry.FullUrl))
+		tx.Create(questionnaire, coolfhir.WithFullUrl(*questionnaireBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			ActingAgent: &fhir.Reference{
+				Identifier: request.LocalIdentity,
+				Type:       to.Ptr("Organization"),
+			},
+			Observer: *request.LocalIdentity,
+			Action:   fhir.AuditEventActionC,
+		}))
 	}
 
-	questionnaireEntryIdx := len(tx.Entry) - 1
-	tx.Create(createAuditEvent)
+	questionnaireEntryIdx := 0
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdQuestionnaire fhir.Questionnaire
