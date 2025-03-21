@@ -17,9 +17,6 @@ import (
 func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msgf("Updating QuestionnaireResponse: %s", request.RequestUrl)
 
-	// Log the raw request data for debugging
-	log.Ctx(ctx).Debug().Msgf("resourceData: %s", string(request.ResourceData))
-
 	var questionnaireResponse fhir.QuestionnaireResponse
 	if err := json.Unmarshal(request.ResourceData, &questionnaireResponse); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", questionnaireResponse, coolfhir.BadRequestError(err))
