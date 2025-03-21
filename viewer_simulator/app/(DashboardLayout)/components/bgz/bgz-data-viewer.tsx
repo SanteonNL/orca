@@ -26,14 +26,14 @@ const Transition = React.forwardRef(function Transition(
     return <Slide direction="up" ref={ref} {...props} />;
 });
 
-export default function BgzDataViewer({ carePlan, careTeam }: { carePlan: CarePlan, careTeam: CareTeam }) {
+export default function BgzDataViewer({ name, carePlan }: { name: string, carePlan: CarePlan }) {
     const [open, setOpen] = React.useState(false);
     const { addBgzData, clearBgzData, loaded, setLoaded } = useBgzStore()
 
     const handleClickOpen = async () => {
         setOpen(true);
         clearBgzData()
-        const bgzData = await getBgzData(carePlan, careTeam)
+        const bgzData = await getBgzData(name, carePlan)
 
         // console.log('bgzData', JSON.stringify(bgzData, null, 2))
         addBgzData(bgzData)

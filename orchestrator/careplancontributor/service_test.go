@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
@@ -723,6 +724,97 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 	httpResponse, err = frontServer.Client().Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
+}
+
+func TestService_ProxyToExternalCPS(t *testing.T) {
+	// Test that providing an X-Cps-Url header will proxy to an external CPS via NUTS authz
+	// Setup: configure a "local" CarePlanService
+	localCarePlanServiceMux := http.NewServeMux()
+	localCarePlanService := httptest.NewServer(localCarePlanServiceMux)
+	localCarePlanServiceURL, _ := url.Parse(localCarePlanService.URL)
+
+	// Setup: configure a "remote" CarePlanService
+	remoteCarePlanServiceMux := http.NewServeMux()
+	var capturedHost string
+	var capturedBody []byte
+	remoteCarePlanServiceMux.HandleFunc("POST /fhir/Patient/_search", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		capturedBody, _ = io.ReadAll(request.Body)
+		searchBundle := fhir.Bundle{
+			Entry: []fhir.BundleEntry{
+				{
+					Resource: func() json.RawMessage {
+						b, _ := json.Marshal(fhir.Patient{
+							Id: to.Ptr("1"),
+						})
+						return b
+					}(),
+				},
+			},
+		}
+		_ = json.NewEncoder(writer).Encode(searchBundle)
+	})
+	remoteCarePlanService := httptest.NewServer(remoteCarePlanServiceMux)
+	remoteCarePlanServiceURL, _ := url.Parse(remoteCarePlanService.URL)
+	remoteCarePlanServiceURL.Path = "/fhir"
+
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
+	sessionManager, sessionID := createTestSession()
+
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, localCarePlanServiceURL)
+	require.NoError(t, err)
+
+	// Setup: configure the service to proxy to the upstream CarePlanService
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+
+	params := url.Values{
+		"foo": {"bar"},
+	}
+	httpRequest, _ := http.NewRequest("POST", frontServer.URL+"/cpc/cps/fhir/Patient/_search", strings.NewReader(params.Encode()))
+	httpRequest.Header.Add("X-Cps-Url", remoteCarePlanServiceURL.String())
+	httpRequest.AddCookie(&http.Cookie{
+		Name:  "sid",
+		Value: sessionID,
+	})
+	httpResponse, err := frontServer.Client().Do(httpRequest)
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	require.Equal(t, remoteCarePlanServiceURL.Host, capturedHost)
+	expectedValues := url.Values{
+		"foo": {"bar"},
+	}
+	actualValues, err := url.ParseQuery(string(capturedBody))
+	require.NoError(t, err)
+	require.Equal(t, expectedValues, actualValues)
+
+	var bundle fhir.Bundle
+	err = json.NewDecoder(httpResponse.Body).Decode(&bundle)
+	require.NoError(t, err)
+	require.Len(t, bundle.Entry, 1)
+
+	patientBytes, err := json.Marshal(bundle.Entry[0].Resource)
+	require.NoError(t, err)
+	var patient fhir.Patient
+	err = json.Unmarshal(patientBytes, &patient)
+	require.NoError(t, err)
+	require.NotNil(t, patient.Id)
+	require.Equal(t, "1", *patient.Id)
+
+	t.Run("it should fail with invalid URL", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+"/cpc/cps/fhir/Patient/_search", strings.NewReader(params.Encode()))
+		httpRequest.Header.Add("X-Cps-Url", "invalid-url")
+		httpRequest.AddCookie(&http.Cookie{
+			Name:  "sid",
+			Value: sessionID,
+		})
+		httpResponse, err := frontServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	})
 }
 
 func TestService_handleGetContext(t *testing.T) {

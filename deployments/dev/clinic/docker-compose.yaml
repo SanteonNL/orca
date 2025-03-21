@@ -66,4 +66,7 @@ services:
       FHIR_AGGREGATE_URL: http://orchestrator:8080/cpc/aggregate/fhir
       FHIR_AUTHORIZATION_TOKEN: valid
       NEXT_ALLOWED_ORIGINS: localhost:7080
+      ORCA_CPC_URL: http://orchestrator:8080/cpc
+      FAUXCARE_CAREPLANSERVICE_URL: ${HOSPITAL_URL}/orca/cps
+      FAUXCARE_BEARER_TOKEN: valid
 
