@@ -10,11 +10,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"testing"
-
-	"io"
-	"math/rand"
 	"strconv"
+	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -878,7 +875,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 	config.AllowUnmanagedFHIROperations = true
-	service, err := New(config, activeProfile, orcaPublicURL)
+	service, err := New(config, activeProfile, orcaPublicURL, messaging.NewMemoryBroker())
 	require.NoError(t, err)
 
 	ctx := context.Background()
