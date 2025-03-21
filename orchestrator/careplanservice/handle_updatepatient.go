@@ -44,6 +44,7 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 	// If no entries found, handle as a create operation
 	if len(searchBundle.Entry) == 0 || patientId == "" {
 		log.Ctx(ctx).Info().Msgf("Patient not found, handling as create: %s", patientId)
+		request.Upsert = true
 		return s.handleCreatePatient(ctx, request, tx)
 	}
 

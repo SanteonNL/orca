@@ -43,8 +43,9 @@ func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHan
 		},
 	)
 
-	// If questionnaire has an ID, treat as PUT operation
-	if questionnaire.Id != nil && request.HttpMethod == "PUT" {
+	// If the questionnaire has an ID and the upsert flag is set, treat as PUT operation
+	// As per FHIR spec, this is how we can create a resource with a client supplied ID: https://hl7.org/fhir/http.html#upsert
+	if questionnaire.Id != nil && request.Upsert {
 		tx.Append(questionnaire, &fhir.BundleEntryRequest{
 			Method: fhir.HTTPVerbPUT,
 			Url:    "Questionnaire/" + *questionnaire.Id,

@@ -43,6 +43,7 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 	// If no entries found, handle as a create operation
 	if len(searchBundle.Entry) == 0 || questionnaireId == "" {
 		log.Ctx(ctx).Info().Msgf("Questionnaire not found, handling as create: %s", questionnaireId)
+		request.Upsert = true
 		return s.handleCreateQuestionnaire(ctx, request, tx)
 	}
 

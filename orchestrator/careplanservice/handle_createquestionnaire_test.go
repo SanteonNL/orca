@@ -150,6 +150,7 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 
 			if tt.expectedMethod == "PUT" {
 				fhirRequest.HttpMethod = "PUT"
+				fhirRequest.Upsert = true
 			}
 			result, err := service.handleCreateQuestionnaire(ctx, fhirRequest, tx)
 

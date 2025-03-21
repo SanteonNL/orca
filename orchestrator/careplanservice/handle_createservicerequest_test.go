@@ -154,6 +154,7 @@ func Test_handleCreateServiceRequest(t *testing.T) {
 
 			if tt.expectedMethod == "PUT" {
 				fhirRequest.HttpMethod = "PUT"
+				fhirRequest.Upsert = true
 			}
 			result, err := service.handleCreateServiceRequest(ctx, fhirRequest, tx)
 

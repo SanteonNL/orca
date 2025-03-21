@@ -163,6 +163,7 @@ func Test_handleCreatePatient(t *testing.T) {
 			}
 			if tt.expectedMethod == "PUT" {
 				fhirRequest.HttpMethod = "PUT"
+				fhirRequest.Upsert = true
 			}
 			result, err := service.handleCreatePatient(ctx, fhirRequest, tx)
 

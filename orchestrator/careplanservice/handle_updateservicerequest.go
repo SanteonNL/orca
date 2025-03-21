@@ -47,6 +47,7 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 	// If no entries found, handle as a create operation
 	if len(searchBundle.Entry) == 0 {
 		log.Ctx(ctx).Info().Msgf("ServiceRequest not found, handling as create: %s", serviceRequestId)
+		request.Upsert = true
 		return s.handleCreateServiceRequest(ctx, request, tx)
 	}
 

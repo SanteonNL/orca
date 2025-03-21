@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
 	"net/url"
@@ -14,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
@@ -104,18 +105,19 @@ type Service struct {
 type FHIRHandler func(http.ResponseWriter, *http.Request, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
 type FHIRHandlerRequest struct {
-	ResourceId    string
-	ResourcePath  string
-	ResourceData  json.RawMessage
-	HttpMethod    string
-	HttpHeaders   http.Header
-	RequestUrl    *url.URL
-	FullUrl       string
-	Context       context.Context
+	ResourceId   string
+	ResourcePath string
+	ResourceData json.RawMessage
+	HttpMethod   string
+	HttpHeaders  http.Header
+	RequestUrl   *url.URL
+	FullUrl      string
+	Context      context.Context
 	// Principal contains the identity of the client invoking the FHIR operation.
-	Principal     *auth.Principal
+	Principal *auth.Principal
 	// LocalIdentity contains the identifier of the local care organization handling the FHIR operation invocation.
 	LocalIdentity *fhir.Identifier
+	Upsert        bool
 }
 
 func (r FHIRHandlerRequest) bundleEntryWithResource(res any) fhir.BundleEntry {

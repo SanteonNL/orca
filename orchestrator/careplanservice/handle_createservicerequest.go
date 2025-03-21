@@ -50,8 +50,9 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 		},
 	)
 
-	// If serviceRequest has an ID, treat as PUT operation
-	if serviceRequest.Id != nil && request.HttpMethod == "PUT" {
+	// If serviceRequest has an ID and the upsert flag is set, treat as PUT operation
+	// As per FHIR spec, this is how we can create a resource with a client supplied ID: https://hl7.org/fhir/http.html#upsert
+	if serviceRequest.Id != nil && request.Upsert {
 		tx.Append(serviceRequest, &fhir.BundleEntryRequest{
 			Method: fhir.HTTPVerbPUT,
 			Url:    "ServiceRequest/" + *serviceRequest.Id,
