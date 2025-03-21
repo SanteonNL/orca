@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
@@ -27,6 +28,29 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 	careTeam2Raw := mustReadFile("./testdata/careplan2-careteam1.json")
 	var careTeam2 fhir.CareTeam
 	_ = json.Unmarshal(careTeam2Raw, &careTeam2)
+
+	auditEvent := fhir.AuditEvent{
+		Id:     to.Ptr("1"),
+		Action: to.Ptr(fhir.AuditEventActionC),
+		Entity: []fhir.AuditEventEntity{
+			{
+				What: &fhir.Reference{
+					Reference: to.Ptr("QuestionnaireResponse/1"),
+				},
+			},
+		},
+		Agent: []fhir.AuditEventAgent{
+			{
+				Who: &fhir.Reference{
+					Identifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+						Value:  to.Ptr("3"),
+					},
+				},
+			},
+		},
+	}
+	auditEventRaw, _ := json.Marshal(auditEvent)
 
 	tests := map[string]struct {
 		context       context.Context
@@ -61,8 +85,8 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
 					Return(nil)
 				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: task1Raw},
 							},
@@ -71,6 +95,33 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 					})
 				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
 					Return(errors.New("fhir error: no response"))
+				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
+						return nil
+					})
+			},
+		},
+		"ok: QuestionnaireResponse exists, fetched task, incorrect principal, is creator": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
+					Return(nil)
+				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{Resource: task1Raw},
+							},
+						}
+						return nil
+					})
+				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
+					Return(errors.New("fhir error: no response"))
+				client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
+						return nil
+					})
 			},
 		},
 		"ok: QuestionnaireResponse exists, fetched task, task owner": {
@@ -79,8 +130,8 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
 					Return(nil)
 				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: task1Raw},
 							},

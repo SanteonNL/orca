@@ -7,12 +7,13 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func (s *Service) handleGetServiceRequest(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.ServiceRequest, error) {
 	// Verify requester is authenticated
-	_, err := auth.PrincipalFromContext(ctx)
+	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -29,8 +30,18 @@ func (s *Service) handleGetServiceRequest(ctx context.Context, id string, header
 	if err != nil {
 		return nil, err
 	}
-	// If bundle is empty, the user does not have access to the ServiceRequest
+	// If the user does not have access to the Task, check if they are the creator of the ServiceRequest
 	if len(bundle.Entry) == 0 {
+
+		// If the user created the service request, they have access to it
+		isCreator, err := s.isCreatorOfResource(ctx, principal, "ServiceRequest", id)
+		if isCreator {
+			return &serviceRequest, nil
+		}
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msg("Error checking if user is creator of ServiceRequest")
+		}
+
 		return nil, &coolfhir.ErrorWithCode{
 			Message:    "Participant does not have access to ServiceRequest",
 			StatusCode: http.StatusForbidden,

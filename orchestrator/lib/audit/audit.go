@@ -3,6 +3,9 @@ package audit
 import (
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -68,4 +71,14 @@ func Event(localIdentity fhir.Identifier, action fhir.AuditEventAction, resource
 	}
 
 	return &auditEvent
+}
+
+func IsCreator(auditEvent fhir.AuditEvent, principal *auth.Principal) bool {
+	// Compare the creator's identifier with the current user's identifier
+	for _, identifier := range principal.Organization.Identifier {
+		if coolfhir.IdentifierEquals(auditEvent.Agent[0].Who.Identifier, &identifier) {
+			return true
+		}
+	}
+	return false
 }

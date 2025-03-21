@@ -21,7 +21,12 @@ func (s *Service) handleGetPatient(ctx context.Context, id string, headers *fhir
 		return nil, err
 	}
 
-	authorisedPatients, err := s.filterAuthorizedPatients(ctx, []fhir.Patient{patient})
+	principal, err := auth.PrincipalFromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	authorisedPatients, err := s.filterAuthorizedPatients(ctx, principal, []fhir.Patient{patient})
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +44,7 @@ func (s *Service) handleGetPatient(ctx context.Context, id string, headers *fhir
 // if the requester is a participant of one of the returned CareTeams, return the whole bundle, else error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
-	_, err := auth.PrincipalFromContext(ctx)
+	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -53,7 +58,7 @@ func (s *Service) handleSearchPatient(ctx context.Context, queryParams url.Value
 		return &fhir.Bundle{Entry: []fhir.BundleEntry{}}, nil
 	}
 
-	authorisedPatients, err := s.filterAuthorizedPatients(ctx, patients)
+	authorisedPatients, err := s.filterAuthorizedPatients(ctx, principal, patients)
 	if err != nil {
 		return nil, err
 	}

@@ -43,8 +43,8 @@ func TestService_handleGetTask(t *testing.T) {
 			expectedError: errors.New("fhir error: careplan read failed"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Task/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Task) = task1
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Task, _ ...fhirclient.Option) error {
+						*target = task1
 						return nil
 					})
 				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
@@ -59,13 +59,13 @@ func TestService_handleGetTask(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Task/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Task) = task1
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Task, _ ...fhirclient.Option) error {
+						*target = task1
 						return nil
 					})
 				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.CarePlan) = carePlan1
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.CarePlan, _ ...fhirclient.Option) error {
+						*target = carePlan1
 						return nil
 					})
 			},
@@ -74,8 +74,8 @@ func TestService_handleGetTask(t *testing.T) {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Task/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Task) = task1
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Task, _ ...fhirclient.Option) error {
+						*target = task1
 						return nil
 					})
 			},
@@ -191,8 +191,8 @@ func TestService_handleSearchTask(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Task", url.Values{}, gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: task2},
 							},
@@ -201,8 +201,8 @@ func TestService_handleSearchTask(t *testing.T) {
 						return nil
 					})
 				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.CarePlan) = careplan
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.CarePlan, _ ...fhirclient.Option) error {
+						*target = careplan
 						return nil
 					})
 			},
@@ -214,8 +214,8 @@ func TestService_handleSearchTask(t *testing.T) {
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Task", url.Values{}, gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
 								{Resource: task2},
 							},
@@ -224,8 +224,8 @@ func TestService_handleSearchTask(t *testing.T) {
 						return nil
 					})
 				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.CarePlan) = careplan
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.CarePlan, _ ...fhirclient.Option) error {
+						*target = careplan
 						return nil
 					})
 			},

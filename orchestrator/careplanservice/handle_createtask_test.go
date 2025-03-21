@@ -178,7 +178,6 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		},
 	})
 	tests := []struct {
-		ctx                        context.Context
 		name                       string
 		taskToCreate               fhir.Task
 		createdTask                fhir.Task
@@ -187,6 +186,7 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		errorFromPatientBundleRead error
 		errorFromRead              error
 		expectError                error
+		principal                  *auth.Principal
 	}{
 		{
 			name: "happy flow",
@@ -199,13 +199,8 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			},
 		},
 		{
-			name:        "error: not authorised",
-			ctx:         context.Background(),
-			expectError: errors.New("not authenticated"),
-		},
-		{
 			name:        "error: requester is not a local organization",
-			ctx:         auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
+			principal:   auth.TestPrincipal2,
 			expectError: errors.New("requester must be local care organization in order to create new CarePlan and CareTeam"),
 		},
 		{
@@ -306,13 +301,9 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
-			if tt.ctx != nil {
-				ctx = tt.ctx
-			}
 
 			if tt.returnedPatientBundle != nil || tt.errorFromPatientBundleRead != nil {
-				mockFHIRClient.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, path string, params url.Values, result interface{}, option ...fhirclient.Option) error {
+				mockFHIRClient.EXPECT().SearchWithContext(gomock.Any(), "Patient", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, path string, params url.Values, result interface{}, option ...fhirclient.Option) error {
 					if tt.returnedPatientBundle != nil {
 						reflect.ValueOf(result).Elem().Set(reflect.ValueOf(*tt.returnedPatientBundle))
 					}
@@ -334,9 +325,19 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 				HttpHeaders: map[string][]string{
 					"If-None-Exist": {"ifnoneexist"},
 				},
+				Principal: auth.TestPrincipal1,
+				LocalIdentity: to.Ptr(fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				}),
 			}
 
 			tx := coolfhir.Transaction()
+
+			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+			if tt.principal != nil {
+				fhirRequest.Principal = tt.principal
+			}
 
 			result, err := service.handleCreateTask(ctx, fhirRequest, tx)
 
@@ -412,7 +413,6 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 	}
 
 	tests := []struct {
-		ctx                   context.Context
 		name                  string
 		taskToCreate          fhir.Task
 		createdTask           fhir.Task
@@ -422,34 +422,9 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 		returnedBundle        *fhir.Bundle
 		errorFromRead         error
 		expectError           bool
+		principal             *auth.Principal
 	}{
 		{
-			ctx:  context.Background(),
-			name: "not authorised",
-			taskToCreate: fhir.Task{
-				BasedOn: []fhir.Reference{
-					{
-						Type:      to.Ptr("CarePlan"),
-						Reference: to.Ptr("CarePlan/1"),
-					},
-				},
-				Intent:    "order",
-				Status:    fhir.TaskStatusRequested,
-				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
-				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
-				For: &fhir.Reference{
-					Identifier: &fhir.Identifier{
-						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-						Value:  to.Ptr("1333333337"),
-					},
-				},
-			},
-			returnedBundle: &fhir.Bundle{},
-			errorFromRead:  nil,
-			expectError:    true,
-		},
-		{
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name: "invalid field",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
@@ -474,7 +449,6 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 			expectError:    true,
 		},
 		{
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name: "Not SCP Task",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
@@ -499,7 +473,6 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 			expectError:    true,
 		},
 		{
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			name: "CarePlan not found",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
@@ -529,7 +502,6 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 			expectError:           true,
 		},
 		{
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			name: "No CareTeam in CarePlan",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
@@ -569,9 +541,9 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,
 			expectError:    true,
+			principal:      auth.TestPrincipal3,
 		},
 		{
-			ctx:  auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			name: "error: Task.for does not match CarePlan.subject",
 			taskToCreate: fhir.Task{
 				BasedOn: []fhir.Reference{
@@ -611,6 +583,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 			returnedBundle: &fhir.Bundle{},
 			errorFromRead:  nil,
 			expectError:    true,
+			principal:      auth.TestPrincipal3,
 		},
 		// TODO: Testing this has gotten incredibly complex with the reflection being used and the opts being passed to the Read method.
 		// refactor this to full http client tests
@@ -625,9 +598,20 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				ResourcePath: "Task",
 				ResourceData: taskBytes,
 				HttpMethod:   "POST",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: to.Ptr(fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				}),
 			}
 
 			tx := coolfhir.Transaction()
+
+			if tt.principal != nil {
+				fhirRequest.Principal = tt.principal
+			}
+
+			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
 
 			if tt.returnedCarePlan != nil || tt.returnedCarePlanError != nil {
 				mockFHIRClient.EXPECT().ReadWithContext(gomock.Any(), *tt.taskToCreate.BasedOn[0].Reference, gomock.Any(), gomock.Any()).
@@ -641,7 +625,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 					})
 			}
 
-			result, err := service.handleCreateTask(tt.ctx, fhirRequest, tx)
+			result, err := service.handleCreateTask(ctx, fhirRequest, tx)
 			if tt.expectError {
 				require.Error(t, err)
 				return
