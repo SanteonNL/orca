@@ -22,6 +22,7 @@ interface StoreState {
     setSubTasks: (subTasks: Task[]) => void
     onSubTaskSubmit: (callback: any) => void
     fetchAllResources: () => Promise<void>
+    refetchTasks: () => void
 }
 
 const taskProgressStore = create<StoreState>((set, get) => ({
@@ -93,6 +94,23 @@ const taskProgressStore = create<StoreState>((set, get) => ({
             set({ error: `Something went wrong while fetching all resources: ${error?.message || error}`, loading: false })
         }
     },
+    refetchTasks: async () => {
+        const selectedTaskId = get().selectedTaskId
+
+        if (!selectedTaskId) return
+
+        const [task, subTasks] = await Promise.all([
+            await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
+            await fetchSubTasks(selectedTaskId)
+        ])
+
+        if (task.status === 'accepted') {
+            set({ task, subTasks, primaryTaskCompleted: true })
+        } else if (get().subTasks?.length !== subTasks.length) {
+            await fetchQuestionnaires(subTasks, set)
+            set({ subTasks })
+        }
+    }
 }));
 
 const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
