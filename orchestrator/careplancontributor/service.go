@@ -245,8 +245,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 
-		// Check if the user defined a remote CPS - otherwise it will be handled as a local CPS proxy r
-		remoteCpsUrlFromHeader := request.Header.Get(carePlanServiceURLHeaderKey) //Check if the user defined a remote CPS
+		// Check if the user defined a remote CPS - otherwise it will be handled as a local CPS proxy request
+		remoteCpsUrlFromHeader := request.Header.Get(carePlanServiceURLHeaderKey)
 
 		isRemote := remoteCpsUrlFromHeader != ""
 		log.Ctx(request.Context()).Debug().Msg("Handling CPS FHIR API request. Remote: " + fmt.Sprint(isRemote))
