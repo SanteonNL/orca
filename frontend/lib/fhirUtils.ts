@@ -19,14 +19,6 @@ export const patientIdentifierSystem = () => {
     return process.env.ORCA_PATIENT_IDENTIFIER_SYSTEM ?? "http://fhir.nl/fhir/NamingSystem/bsn";
 }
 
-export const createEhrClient = () => {
-    const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`
-        : "http://localhost:9090/fhir";
-
-    return new Client({ baseUrl });
-};
-
 export const createCpsClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
