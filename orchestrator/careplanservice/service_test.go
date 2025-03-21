@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -70,7 +71,7 @@ func TestService_Proxy(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL)
+	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -144,7 +145,7 @@ func TestService_Proxy(t *testing.T) {
 			FHIR: coolfhir.ClientConfig{
 				BaseURL: fhirServer.URL + "/fhir",
 			},
-		}, profile.Test(), orcaPublicURL)
+		}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
 		require.NoError(t, err)
 		frontServerMux := http.NewServeMux()
 		service.RegisterHandlers(frontServerMux)
@@ -201,7 +202,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 			BaseURL: fhirServer.URL + "/fhir",
 		},
 		AllowUnmanagedFHIROperations: true,
-	}, profile.Test(), orcaPublicURL)
+	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -273,7 +274,7 @@ func TestService_ErrorHandling(t *testing.T) {
 			},
 		},
 		profile.Test(),
-		orcaPublicURL)
+		orcaPublicURL, messaging.NewMemoryBroker())
 	require.NoError(t, err)
 
 	service.RegisterHandlers(fhirServerMux)
@@ -476,7 +477,7 @@ func TestService_Handle(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL)
+	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
 
 	var capturedHeaders []http.Header
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -1064,7 +1065,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL)
+	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
 	require.NoError(t, err)
 
 	t.Run("invalid content type - fails", func(t *testing.T) {

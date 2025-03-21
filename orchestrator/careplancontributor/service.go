@@ -62,10 +62,7 @@ func New(
 	}
 	ctx := context.Background()
 	if config.HealthDataViewEndpointEnabled {
-		if ehrFhirProxy != nil {
-			//TODO: Currently the application gracefully starts up - decide if this needs to be enforced
-			log.Ctx(ctx).Error().Msg("ehrFhirProxy should be nil when HealthDataViewEndpointEnabled is true")
-		} else {
+		if ehrFhirProxy == nil {
 			ehrFhirProxy = coolfhir.NewProxy("App->EHR (DataView)", fhirURL, basePath+"/fhir", orcaPublicURL.JoinPath(basePath, "fhir"), localFhirStoreTransport, false, false)
 		}
 	}
