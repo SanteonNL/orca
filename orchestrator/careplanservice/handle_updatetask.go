@@ -9,7 +9,6 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -117,29 +116,43 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
-	taskUpdateAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU,
-		&fhir.Reference{
-			Reference: to.Ptr("Task/" + *task.Id),
-		},
-		&fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
-			Type:       to.Ptr("Organization"),
-		},
-	)
+	// taskUpdateAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU,
+	// 	&fhir.Reference{
+	// 		Reference: to.Ptr("Task/" + *task.Id),
+	// 	},
+	// 	&fhir.Reference{
+	// 		Identifier: &request.Principal.Organization.Identifier[0],
+	// 		Type:       to.Ptr("Organization"),
+	// 	},
+	// )
 
 	taskBundleEntry := request.bundleEntryWithResource(task)
-	tx = tx.AppendEntry(taskBundleEntry)
-	idx := len(tx.Entry) - 1
-	tx = tx.Create(taskUpdateAuditEvent)
+	tx = tx.AppendEntry(taskBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		ActingAgent: &fhir.Reference{
+			Identifier: request.LocalIdentity,
+			Type:       to.Ptr("Organization"),
+		},
+		Observer: *request.LocalIdentity,
+		Action:   fhir.AuditEventActionU,
+	}))
 	// Update care team
-	_, err = careteamservice.Update(ctx, s.fhirClient, carePlanId, task, tx)
+	_, err = careteamservice.Update(ctx, s.fhirClient, carePlanId, task, request.LocalIdentity, tx)
 	if err != nil {
 		return nil, fmt.Errorf("update CareTeam: %w", err)
 	}
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedTask fhir.Task
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[idx], &updatedTask)
+		taskEntryIdx := 0
+		// Find the Task in the transaction result
+		for idx, entry := range txResult.Entry {
+			if strings.HasPrefix(*entry.Response.Location, "Task/") {
+				taskEntryIdx = idx
+				break
+			}
+		}
+
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &updatedTask)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original Task that was sent.

@@ -520,7 +520,7 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 3)
+		require.Len(t, tx.Entry, 4)
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
 		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
@@ -537,7 +537,7 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 3)
+		require.Len(t, tx.Entry, 4)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
 		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
 			Identifier: &auth.TestPrincipal2.Organization.Identifier[0],

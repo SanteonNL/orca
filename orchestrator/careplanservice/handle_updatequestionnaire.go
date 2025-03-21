@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
@@ -55,31 +54,19 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 		return nil, fmt.Errorf("failed to unmarshal existing Questionnaire: %w", err)
 	}
 
-	// Get local identity for audit
-	localIdentity, err := s.getLocalIdentity()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get local identity: %w", err)
-	}
-
-	updateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
-		&fhir.Reference{
-			Reference: to.Ptr("Questionnaire/" + questionnaireId),
-			Type:      to.Ptr("Questionnaire"),
-		},
-		&fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
+	questionnaireBundleEntry := request.bundleEntryWithResource(questionnaire)
+	tx.AppendEntry(questionnaireBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		ActingAgent: &fhir.Reference{
+			Identifier: request.LocalIdentity,
 			Type:       to.Ptr("Organization"),
 		},
-	)
-
-	questionnaireBundleEntry := request.bundleEntryWithResource(questionnaire)
-	tx.AppendEntry(questionnaireBundleEntry)
-	idx := len(tx.Entry) - 1
-	tx.Create(updateAuditEvent)
+		Observer: *request.LocalIdentity,
+		Action:   fhir.AuditEventActionU,
+	}))
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedQuestionnaire fhir.Questionnaire
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &questionnaireBundleEntry, &txResult.Entry[idx], &updatedQuestionnaire)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &questionnaireBundleEntry, &txResult.Entry[0], &updatedQuestionnaire)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Questionnaire update result: %w", err)
 		}

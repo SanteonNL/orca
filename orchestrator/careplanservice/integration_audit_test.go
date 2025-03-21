@@ -109,6 +109,37 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	require.NoError(t, err)
 	addExpectedAudit("ServiceRequest/"+*serviceRequest.Id, fhir.AuditEventActionC)
 
+	// Create Condition
+	condition := fhir.Condition{
+		ClinicalStatus: &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://terminology.hl7.org/CodeSystem/condition-clinical"),
+					Code:    to.Ptr("active"),
+					Display: to.Ptr("Active"),
+				},
+			},
+		},
+		Subject: fhir.Reference{
+			Identifier: &fhir.Identifier{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("1333333337"),
+			},
+		},
+		Code: &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("386661006"),
+					Display: to.Ptr("Fever"),
+				},
+			},
+		},
+	}
+	err = carePlanContributor1.Create(condition, &condition)
+	require.NoError(t, err)
+	addExpectedAudit("Condition/"+*condition.Id, fhir.AuditEventActionC)
+
 	// Update Patient
 	patient.Name[0].Given = []string{"Updated"}
 	err = carePlanContributor1.Update("Patient/"+*patient.Id, patient, &patient)
@@ -150,6 +181,12 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		err = carePlanContributor2.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "Participant does not have access to ServiceRequest")
+	})
+
+	t.Run("Update Condition with different requester - fails", func(t *testing.T) {
+		err = carePlanContributor2.Update("Condition/"+*condition.Id, condition, &condition)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Participant does not have access to Condition")
 	})
 
 	// Update non-existing resources (creates new ones)
@@ -233,6 +270,39 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedAudit("ServiceRequest/"+*nonExistingServiceRequest.Id, fhir.AuditEventActionC)
 	})
 
+	t.Run("Update non-existing Condition - creates new resource", func(t *testing.T) {
+		nonExistingCondition := fhir.Condition{
+			Id: to.Ptr("non-existing-condition"),
+			ClinicalStatus: &fhir.CodeableConcept{
+				Coding: []fhir.Coding{
+					{
+						System:  to.Ptr("http://terminology.hl7.org/CodeSystem/condition-clinical"),
+						Code:    to.Ptr("active"),
+						Display: to.Ptr("Active"),
+					},
+				},
+			},
+			Subject: fhir.Reference{
+				Identifier: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  to.Ptr("1333333337"),
+				},
+			},
+			Code: &fhir.CodeableConcept{
+				Coding: []fhir.Coding{
+					{
+						System:  to.Ptr("http://snomed.info/sct"),
+						Code:    to.Ptr("386661006"),
+						Display: to.Ptr("New Fever"),
+					},
+				},
+			},
+		}
+		err = carePlanContributor1.Update("Condition/"+*nonExistingCondition.Id, nonExistingCondition, &nonExistingCondition)
+		require.NoError(t, err)
+		addExpectedAudit("Condition/"+*nonExistingCondition.Id, fhir.AuditEventActionC)
+	})
+
 	t.Run("Read Patient by id", func(t *testing.T) {
 		var readPatient fhir.Patient
 		err := carePlanContributor1.Read("Patient/"+*patient.Id, &readPatient)
@@ -295,6 +365,22 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		require.NotNil(t, readServiceRequest)
 
 		addExpectedAudit("ServiceRequest/"+*readServiceRequest.Id, fhir.AuditEventActionR)
+	})
+
+	t.Run("Read Condition by id", func(t *testing.T) {
+		var readCondition fhir.Condition
+		err := carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
+		require.NoError(t, err)
+		require.NotNil(t, readCondition)
+
+		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
+
+		// Read Condition by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
+		require.NoError(t, err)
+		require.NotNil(t, readCondition)
+
+		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
 	})
 
 	var searchResult fhir.Bundle
