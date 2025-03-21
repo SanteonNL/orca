@@ -120,6 +120,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			Subscriber: subscriber,
 			Focus:      focus,
 		})
+		log.Ctx(ctx).Info().Msgf("Notifying subscriber %s on topic %s", coolfhir.ToString(subscriber), SendNotificationTopic.FullName("(prefix)"))
 		if err := r.MessageBroker.SendMessage(ctx, SendNotificationTopic, &messaging.Message{
 			Body:        data,
 			ContentType: "application/json",
@@ -136,6 +137,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 }
 
 func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.Message) error {
+	log.Ctx(ctx).Info().Msgf("Received notification event: %s", string(message.Body))
 	var evt NotificationEvent
 	if err := json.Unmarshal(message.Body, &evt); err != nil {
 		return fmt.Errorf("failed to unmarshal message into %T: %w", evt, err)

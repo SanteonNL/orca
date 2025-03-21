@@ -115,7 +115,9 @@ func (c *AzureServiceBusBroker) Receive(queue Topic, handler func(context.Contex
 	go func() {
 		defer c.receivers.Done()
 		for c.ctx.Err() == nil {
+			log.Info().Msgf("AzureServiceBus: waiting for messages (queue: %s)", fullTopicName)
 			messages, err := receiver.ReceiveMessages(c.ctx, 1, &azservicebus.ReceiveMessagesOptions{})
+			log.Info().Msgf("AzureServiceBus: received messages (queue: %s, err: %v)", fullTopicName, err)
 			if err != nil {
 				const backoffTime = time.Minute
 				if !errors.Is(err, context.Canceled) {
