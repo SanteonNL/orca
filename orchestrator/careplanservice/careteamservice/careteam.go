@@ -21,7 +21,7 @@ var nowFunc = time.Now
 // updateTrigger is the Task that triggered the update, which is used to determine the CareTeam membership.
 // It's passed to the function, as the new Task is not yet stored in the FHIR server, since the update is to be done in a single transaction.
 // When the CareTeam is updated, it adds the update(s) to the given transaction and returns true. If no changes are made, it returns false.
-func Update(ctx context.Context, client fhirclient.Client, carePlanId string, updateTriggerTask fhir.Task, tx *coolfhir.BundleBuilder) (bool, error) {
+func Update(ctx context.Context, client fhirclient.Client, carePlanId string, updateTriggerTask fhir.Task, localIdentity *fhir.Identifier, tx *coolfhir.BundleBuilder) (bool, error) {
 	if len(updateTriggerTask.PartOf) > 0 {
 		// Only update the CareTeam if the Task is not a subtask
 		return false, nil
@@ -73,7 +73,11 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 		}
 
 		carePlan.Contained = contained
-		tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+		tx.Update(carePlan, "CarePlan/"+*carePlan.Id, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			ActingAgent: updateTriggerTask.Requester,
+			Observer:    *localIdentity,
+			Action:      fhir.AuditEventActionU,
+		}))
 
 		return true, nil
 	}

@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
@@ -63,27 +62,20 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 		return nil, coolfhir.NewErrorWithCode("Participant does not have access to Patient", http.StatusForbidden)
 	}
 
-	// Create audit event for the update
-	updateAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU,
-		&fhir.Reference{
-			Reference: to.Ptr("Patient/" + patientId),
-			Type:      to.Ptr("Patient"),
-		},
-		&fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
-			Type:       to.Ptr("Organization"),
-		},
-	)
-
 	// Add to transaction
 	patientBundleEntry := request.bundleEntryWithResource(patient)
-	tx.AppendEntry(patientBundleEntry)
-	idx := len(tx.Entry) - 1
-	tx.Create(updateAuditEvent)
+	tx.AppendEntry(patientBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		ActingAgent: &fhir.Reference{
+			Identifier: request.LocalIdentity,
+			Type:       to.Ptr("Organization"),
+		},
+		Observer: *request.LocalIdentity,
+		Action:   fhir.AuditEventActionU,
+	}))
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedPatient fhir.Patient
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &patientBundleEntry, &txResult.Entry[idx], &updatedPatient)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &patientBundleEntry, &txResult.Entry[0], &updatedPatient)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Patient update result: %w", err)
 		}
