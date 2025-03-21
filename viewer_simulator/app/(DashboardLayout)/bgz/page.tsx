@@ -24,7 +24,7 @@ export default function CarePlans() {
     }, []);
 
     useEffect(() => {
-        if (!name && endpoints) {
+        if (!name && endpoints?.length) {
             setName(endpoints[0].name);
         }
     }, [name, endpoints]);
