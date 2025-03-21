@@ -35,6 +35,7 @@ const basePath = "/cpc"
 
 // The care plan header key may be provided as X-SCP-Context but will be changed due to the Go http client canonicalization
 const carePlanURLHeaderKey = "X-Scp-Context"
+const carePlanServiceURLHeaderKey = "X-Cps-Url"
 
 const CarePlanServiceOAuth2Scope = "careplanservice"
 
@@ -243,18 +244,45 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	proxyBasePath := basePath + "/cps/fhir"
 
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
-		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+
+		// Check if the user defined a remote CPS - otherwise it will be handled as a local CPS proxy r
+		remoteCpsUrlFromHeader := request.Header.Get(carePlanServiceURLHeaderKey) //Check if the user defined a remote CPS
+
+		isRemote := remoteCpsUrlFromHeader != ""
+		log.Ctx(request.Context()).Debug().Msg("Handling CPS FHIR API request. Remote: " + fmt.Sprint(isRemote))
+
+		var cpsUrl *url.URL
+
+		if isRemote {
+			log.Ctx(request.Context()).Debug().Msg("Handling remote CPS FHIR API request - received remote CPS URL from header: " + remoteCpsUrlFromHeader)
+			var err error
+			if cpsUrl, err = url.Parse(remoteCpsUrlFromHeader); err != nil {
+				coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("Invalid remote CPS URL"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+				return
+			}
+			//make sure the URL is absolute
+			if !cpsUrl.IsAbs() {
+				coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("Remote CPS URL must be absolute"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+				return
+			}
+		} else {
+			log.Ctx(request.Context()).Debug().Msg("Handling local CPS FHIR API request - no remote CPS URL received from header")
+			cpsUrl = s.localCarePlanServiceUrl
+		}
+
+		if cpsUrl == nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No remote CPS requested and this ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
-		// TODO: Since we should only call our own CPS, this should be a local call.
-		//       If not, this should be optimized so that we don't do it every call
-		_, httpClient, err := s.createFHIRClientForURL(request.Context(), s.localCarePlanServiceUrl)
+
+		// TODO: This should be optimized so that we don't do it every call
+		_, httpClient, err := s.createFHIRClientForURL(request.Context(), cpsUrl)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
-		carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", s.localCarePlanServiceUrl,
+		proxyName := fmt.Sprintf("App->CPS (remote: %t) FHIR proxy", isRemote)
+		carePlanServiceProxy := coolfhir.NewProxy(proxyName, cpsUrl,
 			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false, true)
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))

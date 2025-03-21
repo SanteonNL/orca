@@ -1,4 +1,3 @@
-import Client from 'fhir-kit-client';
 import { Bundle, CarePlan } from 'fhir/r4';
 import { NextRequest, NextResponse } from 'next/server';
 
@@ -15,17 +14,31 @@ export async function GET(req: NextRequest) {
     }
 
     try {
-        const client = new Client({
-            baseUrl,
-            bearerToken: process.env[`${name}_BEARER_TOKEN`],
+
+        const resp = await fetch(`${process.env.ORCA_CPC_URL}/cps/fhir/CarePlan/_search`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${process.env[`${name}_BEARER_TOKEN`] ?? ''}`,
+                'Content-Type': 'application/fhir+json',
+                'X-Cps-Url': baseUrl,
+            },
         });
 
-        const response = (await client.search({
-            resourceType: 'CarePlan',
-        })) as Bundle;
+        if(!resp.ok) {
+            console.error(`Failed to fetch data: ${process.env.ORCA_CPC_URL}/cps/fhir/CarePlan/_search (X-Cps-Url: ${baseUrl})`, resp.status);
+            return NextResponse.json({
+                error: `Failed to fetch data from ${baseUrl}`},
+                {   
+                    status: resp.status, 
+                    statusText: resp.statusText
+                }
+            );
+        }
+
+        const bundle = await resp.json() as Bundle;
 
         const rows =
-            response.entry?.map((entry) => {
+        bundle.entry?.map((entry) => {
                 const carePlan = entry.resource as CarePlan;
 
                 // Find the careteam, first as a contained resource, otherwise as a referenced resource that has been notified
