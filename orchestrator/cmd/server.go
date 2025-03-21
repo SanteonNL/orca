@@ -114,7 +114,7 @@ func Start(ctx context.Context, config Config) error {
 		}()
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL(), messaging.NewMemoryBroker())
+		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL(), messageBroker)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

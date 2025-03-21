@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/url"
-	"sync"
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -134,27 +133,6 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 	} else {
 		return nil
 	}
-}
-
-func (r RetryableManager) notifyAll(ctx context.Context, instant time.Time, focus fhir.Reference, subscribers []fhir.Identifier) error {
-	errs := make(chan error, len(subscribers))
-	notifyFinished := &sync.WaitGroup{}
-	for _, subscriber := range subscribers {
-		notifyFinished.Add(1)
-		go func(subscriber fhir.Identifier) {
-			defer notifyFinished.Done()
-
-		}(subscriber)
-	}
-	notifyFinished.Wait()
-	var result []error
-	for i := 0; i < len(errs); i++ {
-		result = append(result, <-errs)
-	}
-	if len(result) > 0 {
-		return errors.Join(result...)
-	}
-	return nil
 }
 
 func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.Message) error {
