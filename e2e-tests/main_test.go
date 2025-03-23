@@ -2,13 +2,14 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/nuts-foundation/go-nuts-client/nuts"
-	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/nuts-foundation/go-nuts-client/nuts"
+	"github.com/nuts-foundation/go-nuts-client/oauth2"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/stretchr/testify/require"
@@ -345,6 +346,7 @@ func Test_Main(t *testing.T) {
 				Reference: to.Ptr("ServiceRequest/" + *unsupportedServiceRequest.Id),
 			},
 			For: &fhir.Reference{
+				Type: to.Ptr("Patient"),
 				Identifier: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 					Value:  to.Ptr("1333333337"),
