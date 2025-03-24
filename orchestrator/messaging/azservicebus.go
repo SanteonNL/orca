@@ -58,7 +58,7 @@ func newAzureServiceBusBroker(conf AzureServiceBusConfig, topics []Topic, topicP
 	}, nil
 }
 
-// AzureServiceBusBroker is an implementation of the MessageBroker interface for interacting with Azure Service Bus.
+// AzureServiceBusBroker is an implementation of the messageBroker interface for interacting with Azure Service Bus.
 // It wraps an azservicebus.Sender for sending messages to a specific Service Bus topic.
 // This struct provides methods to send messages and close the underlying Service Bus connection.
 type AzureServiceBusBroker struct {

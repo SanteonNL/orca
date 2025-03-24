@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/webhook"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"io"
 	"net/http"
 	"net/url"
@@ -37,7 +39,7 @@ const basePath = "/cps"
 // We might want to make this configurable at some point.
 var subscriberNotificationTimeout = 10 * time.Second
 
-func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messageBroker messaging.Broker) (*Service, error) {
+func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messageBroker messaging.Broker, eventManager events.Manager) (*Service, error) {
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -59,9 +61,19 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 		transport:                    transport,
 		fhirClient:                   fhirClient,
 		subscriptionManager:          subscriptionMgr,
+		eventManager:                 eventManager,
 		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
 		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
 	}
+
+	// Register event handlers
+	for _, handler := range config.Events.WebHooks {
+		err := eventManager.Subscribe(CarePlanCreatedEvent{}, webhook.NewEventHandler(handler.URL).Handle)
+		if err != nil {
+			return nil, fmt.Errorf("failed to subscribe to event %T: %w", CarePlanCreatedEvent{}, err)
+		}
+	}
+
 	s.pipeline = pipeline.New().
 		// Rewrite the upstream FHIR server URL in the response body to the public URL of the CPS instance.
 		// E.g.: http://fhir-server:8080/fhir -> https://example.com/cps)
@@ -91,6 +103,7 @@ type Service struct {
 	fhirClient                   fhirclient.Client
 	profile                      profile.Provider
 	subscriptionManager          subscriptions.Manager
+	eventManager                 events.Manager
 	maxReadBodySize              int
 	proxy                        coolfhir.HttpProxy
 	allowUnmanagedFHIROperations bool

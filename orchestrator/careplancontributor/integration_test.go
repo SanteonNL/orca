@@ -1,6 +1,7 @@
 package careplancontributor
 
 import (
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -16,7 +17,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
-	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
@@ -24,7 +24,6 @@ import (
 var notificationCounter = new(atomic.Int32)
 var fhirBaseURL *url.URL
 var httpService *httptest.Server
-var sessionManager *user.SessionManager
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	notificationEndpoint := setupNotificationEndpoint(t)
@@ -192,9 +191,9 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 		Principal: auth.TestPrincipal1,
 		CSD:       profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
 	}
-	service, err := careplanservice.New(config, activeProfile, orcaPublicURL, messaging.NewMemoryBroker())
-	require.NoError(t, err)
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
+	service, err := careplanservice.New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
@@ -211,7 +210,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy, carePlanServiceURL)
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), cpsProxy, carePlanServiceURL)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()

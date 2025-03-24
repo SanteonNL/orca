@@ -4,8 +4,8 @@ package ehr
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -14,9 +14,22 @@ import (
 	"net/url"
 )
 
-var TaskEngineTaskAcceptedQueueName = messaging.Topic{
-	Name:   "orca.taskengine.task-accepted",
-	Prefix: true,
+var _ events.Type = &TaskAcceptedEvent{}
+
+type TaskAcceptedEvent struct {
+	FHIRBaseURL string    `json:"fhirBaseURL"`
+	Task        fhir.Task `json:"task"`
+}
+
+func (t TaskAcceptedEvent) Topic() messaging.Topic {
+	return messaging.Topic{
+		Name:   "orca.taskengine.task-accepted",
+		Prefix: true,
+	}
+}
+
+func (t TaskAcceptedEvent) Instance() events.Type {
+	return &TaskAcceptedEvent{}
 }
 
 // Notifier is an interface for sending notifications regarding task acceptance within a FHIR-based system.
@@ -26,18 +39,15 @@ type Notifier interface {
 
 // notifier is a type that uses a ServiceBusClient to send messages to a message broker.
 type notifier struct {
+	eventManager      events.Manager
 	broker            messaging.Broker
 	fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
 }
 
-type acceptedTaskEvent struct {
-	FHIRBaseURL string    `json:"fhirBaseURL"`
-	Task        fhir.Task `json:"task"`
-}
-
 // NewNotifier creates and returns a Notifier implementation using the provided ServiceBusClient for message handling.
-func NewNotifier(messageBroker messaging.Broker, topic messaging.Topic, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
+func NewNotifier(eventManager events.Manager, messageBroker messaging.Broker, topic messaging.Topic, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
 	n := &notifier{
+		eventManager:      eventManager,
 		broker:            messageBroker,
 		fhirClientFactory: fhirClientFactory,
 	}
@@ -49,22 +59,15 @@ func NewNotifier(messageBroker messaging.Broker, topic messaging.Topic, fhirClie
 
 // NotifyTaskAccepted sends notification data comprehensively related to a specific FHIR Task to a message broker.
 func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, task *fhir.Task) error {
-	payload, _ := json.Marshal(acceptedTaskEvent{
+	return n.eventManager.Notify(ctx, TaskAcceptedEvent{
 		FHIRBaseURL: fhirBaseURL,
 		Task:        *task,
-	})
-	return n.broker.SendMessage(ctx, TaskEngineTaskAcceptedQueueName, &messaging.Message{
-		Body:        payload,
-		ContentType: "application/json",
 	})
 }
 
 func (n *notifier) start(sendToTopic messaging.Topic) error {
-	return n.broker.Receive(TaskEngineTaskAcceptedQueueName, func(ctx context.Context, message messaging.Message) error {
-		var event acceptedTaskEvent
-		if err := json.Unmarshal(message.Body, &event); err != nil {
-			return fmt.Errorf("failed to unmarshal message into %T: %w", event, err)
-		}
+	return n.eventManager.Subscribe(TaskAcceptedEvent{}, func(ctx context.Context, rawEvent events.Type) error {
+		event := rawEvent.(*TaskAcceptedEvent)
 		fhirBaseURL, err := url.Parse(event.FHIRBaseURL)
 		if err != nil {
 			return err

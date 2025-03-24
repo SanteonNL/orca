@@ -3,16 +3,41 @@ package webhook
 import (
 	"context"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
-	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/stretchr/testify/require"
 )
 
+var _ events.Type = StringEvent("")
+
+type StringEvent string
+
+func (s StringEvent) Topic() messaging.Topic {
+	return messaging.Topic{
+		Name: "string-event",
+	}
+}
+
+func (s StringEvent) Instance() events.Type {
+	return StringEvent("")
+}
+
+var _ events.Type = &unmarshallable{}
+
 type unmarshallable struct{}
+
+func (u unmarshallable) Topic() messaging.Topic {
+	return messaging.Topic{}
+}
+
+func (u unmarshallable) Instance() events.Type {
+	return unmarshallable{}
+}
 
 func (u unmarshallable) MarshalJSON() ([]byte, error) {
 	return nil, errors.New("fail")
@@ -23,13 +48,13 @@ func TestEventHandler_Handle(t *testing.T) {
 	cancel()
 
 	tests := map[string]struct {
-		event         events.Instance
+		event         events.Type
 		expectedError string
 		context       context.Context
 		handlerFunc   http.HandlerFunc
 	}{
 		"happy path": {
-			event:   events.Instance{FHIRResource: "noop"},
+			event:   StringEvent("noop"),
 			context: context.TODO(),
 			handlerFunc: func(w http.ResponseWriter, r *http.Request) {
 				defer r.Body.Close()
@@ -44,27 +69,27 @@ func TestEventHandler_Handle(t *testing.T) {
 			},
 		},
 		"context canceled": {
-			event:         events.Instance{FHIRResource: "noop"},
+			event:         StringEvent("noop"),
 			context:       cancelled,
 			expectedError: "context canceled",
 			handlerFunc: func(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 		"failed to marshal": {
-			event:         events.Instance{FHIRResource: unmarshallable{}},
+			event:         unmarshallable{},
 			context:       context.TODO(),
 			expectedError: "failed to serialize event",
 			handlerFunc:   func(w http.ResponseWriter, r *http.Request) {},
 		},
 		"failed to create request": {
-			event:         events.Instance{FHIRResource: "noop"},
+			event:         StringEvent("noop"),
 			context:       nil,
 			expectedError: "failed to create request",
 			handlerFunc: func(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 		"failed to send request": {
-			event:         events.Instance{FHIRResource: "noop"},
+			event:         StringEvent("noop"),
 			context:       context.TODO(),
 			expectedError: "failed to send request",
 			handlerFunc: func(w http.ResponseWriter, r *http.Request) {
@@ -72,7 +97,7 @@ func TestEventHandler_Handle(t *testing.T) {
 			},
 		},
 		"unexpected HTTP status": {
-			event:         events.Instance{FHIRResource: "noop"},
+			event:         StringEvent("noop"),
 			context:       context.TODO(),
 			expectedError: "unexpected status code: 500",
 			handlerFunc: func(w http.ResponseWriter, r *http.Request) {

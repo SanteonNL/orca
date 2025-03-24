@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
@@ -66,12 +67,13 @@ func TestService_Proxy(t *testing.T) {
 	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
+	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(Config{
 		AllowUnmanagedFHIROperations: true,
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -141,11 +143,12 @@ func TestService_Proxy(t *testing.T) {
 }`, string(responseData))
 	})
 	t.Run("disallowed unmanaged FHIR operation", func(t *testing.T) {
+		messageBroker := messaging.NewMemoryBroker()
 		service, err := New(Config{
 			FHIR: coolfhir.ClientConfig{
 				BaseURL: fhirServer.URL + "/fhir",
 			},
-		}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+		}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 		require.NoError(t, err)
 		frontServerMux := http.NewServeMux()
 		service.RegisterHandlers(frontServerMux)
@@ -197,12 +200,13 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	fhirServer := httptest.NewServer(fhirServerMux)
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	// Setup: create the service
+	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(Config{
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
 		AllowUnmanagedFHIROperations: true,
-	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -267,6 +271,7 @@ func TestService_ErrorHandling(t *testing.T) {
 	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: configure the service
+	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(
 		Config{
 			FHIR: coolfhir.ClientConfig{
@@ -274,7 +279,7 @@ func TestService_ErrorHandling(t *testing.T) {
 			},
 		},
 		profile.Test(),
-		orcaPublicURL, messaging.NewMemoryBroker())
+		orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	service.RegisterHandlers(fhirServerMux)
@@ -473,11 +478,12 @@ func TestService_Handle(t *testing.T) {
 	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
+	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(Config{
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 
 	var capturedHeaders []http.Header
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -1061,11 +1067,12 @@ func TestService_validateSearchRequest(t *testing.T) {
 	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
+	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(Config{
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	t.Run("invalid content type - fails", func(t *testing.T) {

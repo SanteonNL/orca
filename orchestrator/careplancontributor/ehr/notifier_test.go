@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/google/uuid"
@@ -103,7 +104,7 @@ func TestNotifier_NotifyTaskAccepted(t *testing.T) {
 		{
 			name:                        "error fetching task",
 			task:                        primaryTask,
-			expectedProcessMessageError: errors.New("failed to create task notification bundle: fetch error"),
+			expectedProcessMessageError: errors.New("event handler *ehr.TaskAcceptedEvent: failed to create task notification bundle: fetch error"),
 			setup: func(client *test.StubFHIRClient, messageBroker *messaging.MemoryBroker) {
 				client.Error = errors.New("fetch error")
 			},
@@ -116,7 +117,7 @@ func TestNotifier_NotifyTaskAccepted(t *testing.T) {
 					questionnaire, questionnaireResponse1, questionnaireResponse2, carePlan, secondaryTask, careTeam)
 				_ = messageBroker.Close(nil)
 			},
-			expectedSendMessageError: errors.New("no handlers for topic orca.taskengine.task-accepted"),
+			expectedSendMessageError: errors.New("event send ehr.TaskAcceptedEvent: no handlers for topic orca.taskengine.task-accepted"),
 		},
 	}
 
@@ -135,7 +136,7 @@ func TestNotifier_NotifyTaskAccepted(t *testing.T) {
 				return nil
 			}))
 
-			notifier, _ := NewNotifier(messageBroker, bundleTopic, func(_ context.Context, _ *url.URL) (fhirclient.Client, *http.Client, error) {
+			notifier, _ := NewNotifier(events.NewManager(messageBroker), messageBroker, bundleTopic, func(_ context.Context, _ *url.URL) (fhirclient.Client, *http.Client, error) {
 				return fhirClient, nil, nil
 			})
 

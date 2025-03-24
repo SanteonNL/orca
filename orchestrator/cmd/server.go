@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
@@ -54,13 +55,19 @@ func Start(ctx context.Context, config Config) error {
 	if config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic != "" {
 		messagingTopics = append(messagingTopics, messaging.Topic{
 			Name: config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic,
-		}, ehr.TaskEngineTaskAcceptedQueueName)
+		}, ehr.TaskAcceptedEvent{}.Topic())
 	}
-	messagingTopics = append(messagingTopics, subscriptions.SendNotificationTopic)
+	if len(config.CarePlanService.Events.WebHooks) > 0 {
+		messagingTopics = append(messagingTopics, careplanservice.CarePlanCreatedEvent{}.Topic())
+	}
+	if config.CarePlanService.Enabled {
+		messagingTopics = append(messagingTopics, subscriptions.SendNotificationTopic)
+	}
 	messageBroker, err := messaging.New(config.Messaging, messagingTopics)
 	if err != nil {
 		return fmt.Errorf("message broker initialization: %w", err)
 	}
+	eventManager := events.NewManager(messageBroker)
 
 	// Register services
 	var services []Service
@@ -98,6 +105,7 @@ func Start(ctx context.Context, config Config) error {
 			config.Public.ParseURL(),
 			sessionManager,
 			messageBroker,
+			eventManager,
 			ehrFhirProxy,
 			cpsURL)
 		if err != nil {
@@ -114,7 +122,7 @@ func Start(ctx context.Context, config Config) error {
 		}()
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL(), messageBroker)
+		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL(), messageBroker, eventManager)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}
