@@ -38,7 +38,7 @@ func (s *Service) handleCreateQuestionnaireResponse(ctx context.Context, request
 	}
 
 	// If questionnaireResponse has an ID, treat as PUT operation
-	if questionnaireResponse.Id != nil && request.HttpMethod == "PUT" {
+	if questionnaireResponse.Id != nil && request.Upsert {
 		tx.Append(questionnaireResponse, &fhir.BundleEntryRequest{
 			Method: fhir.HTTPVerbPUT,
 			Url:    "QuestionnaireResponse/" + *questionnaireResponse.Id,
