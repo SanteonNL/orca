@@ -33,8 +33,10 @@ import (
 
 const basePath = "/cpc"
 
-// The care plan header key may be provided as X-SCP-Context but will be changed due to the Go http client canonicalization
+// carePlanURLHeaderKey specifies the HTTP request header used to specify the SCP context, which is a reference to a FHIR CarePlan. Authorization is evaluated according to this CarePlan.
+// The header may also be provided as X-SCP-Context, which will be canonicalized to X-Scp-Context by the Golang HTTP client.
 const carePlanURLHeaderKey = "X-Scp-Context"
+// carePlanServiceURLHeaderKey specifies the HTTP request header to specify the FHIR base URL of the Care Plan Service the client wishes to invoke.
 const carePlanServiceURLHeaderKey = "X-Cps-Url"
 
 const CarePlanServiceOAuth2Scope = "careplanservice"
