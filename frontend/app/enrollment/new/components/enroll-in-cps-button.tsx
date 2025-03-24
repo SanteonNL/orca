@@ -1,6 +1,5 @@
 "use client"
 import useCpsClient from '@/hooks/use-cps-client'
-import useEhrClient from '@/hooks/use-ehr-fhir-client'
 import { findInBundle, getPatientIdentifier, constructTaskBundle } from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
 import { Bundle, Condition, PractitionerRole } from 'fhir/r4'
@@ -30,7 +29,6 @@ export default function EnrollInCpsButton({ className }: Props) {
 
     const router = useRouter()
     const cpsClient = useCpsClient()
-    const ehrClient = useEhrClient()
 
     useEffect(() => {
         setDisabled(submitted || !taskCondition || loading)
@@ -63,7 +61,7 @@ export default function EnrollInCpsButton({ className }: Props) {
     }
 
     const createTask = async (taskCondition: Condition, practitionerRole?: PractitionerRole) => {
-        if (!cpsClient || !ehrClient) {
+        if (!cpsClient) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }

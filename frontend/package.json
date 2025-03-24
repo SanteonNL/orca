@@ -34,7 +34,7 @@
     "fhir-kit-client": "^1.9.2",
     "framer-motion": "^12.5.0",
     "lucide-react": "^0.468.0",
-    "next": "15.1.6",
+    "next": "15.2.3",
     "next-themes": "^0.4.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -56,6 +56,6 @@
     "eslint-config-next": "15.1.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
-    "typescript": "^5.7.2"
+    "typescript": "^5.7.3"
   }
 }
