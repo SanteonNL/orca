@@ -109,6 +109,37 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	require.NoError(t, err)
 	addExpectedAudit("ServiceRequest/"+*serviceRequest.Id, fhir.AuditEventActionC)
 
+	// Create Condition
+	condition := fhir.Condition{
+		ClinicalStatus: &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://terminology.hl7.org/CodeSystem/condition-clinical"),
+					Code:    to.Ptr("active"),
+					Display: to.Ptr("Active"),
+				},
+			},
+		},
+		Subject: fhir.Reference{
+			Identifier: &fhir.Identifier{
+				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+				Value:  to.Ptr("1333333337"),
+			},
+		},
+		Code: &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					System:  to.Ptr("http://snomed.info/sct"),
+					Code:    to.Ptr("386661006"),
+					Display: to.Ptr("Fever"),
+				},
+			},
+		},
+	}
+	err = carePlanContributor1.Create(condition, &condition)
+	require.NoError(t, err)
+	addExpectedAudit("Condition/"+*condition.Id, fhir.AuditEventActionC)
+
 	// Update Patient
 	patient.Name[0].Given = []string{"Updated"}
 	err = carePlanContributor1.Update("Patient/"+*patient.Id, patient, &patient)
