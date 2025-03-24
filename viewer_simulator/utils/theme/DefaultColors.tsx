@@ -170,10 +170,45 @@ const darkTheme = createTheme({
         },
       },
     },
+    MuiAlert: {
+      styleOverrides: {
+        root: {
+          backgroundColor: "#2e2e2e",
+          '& .MuiAlert-message': {
+            color: "#ffffff",
+          },
+        },
+      },
+    },
     MuiSvgIcon: {
       styleOverrides: {
         root: {
           color: "#ffffff",
+        },
+      },
+    },
+    MuiInputBase: {
+      styleOverrides: {
+        root: {
+          '& .MuiInputBase-input': {
+            borderColor: '#ffffff',
+          },
+          '& .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#ffffff',
+          },
+          '&:hover .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#ffffff',
+          },
+          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+            borderColor: '#ffffff',
+          },
+        },
+      },
+    },
+    MuiSelect: {
+      styleOverrides: {
+        icon: {
+          color: '#ffffff',
         },
       },
     },

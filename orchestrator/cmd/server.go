@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
@@ -18,10 +17,14 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
 )
 
@@ -44,6 +47,21 @@ func Start(ctx context.Context, config Config) error {
 		return err
 	}
 
+	// Initialize Message Broker.
+	// Collect topics so the message broker implementation can do checks on start-up whether it can actually publish to them.
+	// Otherwise, things only break later at runtime.
+	var messagingTopics []messaging.Topic
+	if config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic != "" {
+		messagingTopics = append(messagingTopics, messaging.Topic{
+			Name: config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic,
+		}, ehr.TaskEngineTaskAcceptedQueueName)
+	}
+	messagingTopics = append(messagingTopics, subscriptions.SendNotificationTopic)
+	messageBroker, err := messaging.New(config.Messaging, messagingTopics)
+	if err != nil {
+		return fmt.Errorf("message broker initialization: %w", err)
+	}
+
 	// Register services
 	var services []Service
 
@@ -57,10 +75,11 @@ func Start(ctx context.Context, config Config) error {
 		// App Launches
 		frontendUrl, _ := url.Parse(config.CarePlanContributor.FrontendConfig.URL)
 		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, frontendUrl))
+
+		var ehrFhirProxy coolfhir.HttpProxy //TODO: Rewrite to an array so we can support multiple login mechanisms and multiple EHR proxies
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
 			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, frontendUrl))
 		}
-		var ehrFhirProxy coolfhir.HttpProxy
 		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
 			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, frontendUrl, activeProfile)
 			if err != nil {
@@ -69,13 +88,18 @@ func Start(ctx context.Context, config Config) error {
 			ehrFhirProxy = service.EhrFhirProxy()
 			services = append(services, service)
 		}
-		//
+		var cpsURL *url.URL
+		if config.CarePlanService.Enabled {
+			cpsURL = config.Public.ParseURL().JoinPath("cps")
+		}
 		carePlanContributor, err := careplancontributor.New(
 			config.CarePlanContributor,
 			activeProfile,
 			config.Public.ParseURL(),
 			sessionManager,
-			ehrFhirProxy)
+			messageBroker,
+			ehrFhirProxy,
+			cpsURL)
 		if err != nil {
 			return err
 		}
@@ -90,7 +114,7 @@ func Start(ctx context.Context, config Config) error {
 		}()
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL())
+		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL(), messageBroker)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

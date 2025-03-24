@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -27,6 +28,13 @@ func SearchSet() *BundleBuilder {
 	return &BundleBuilder{
 		Type: fhir.BundleTypeSearchset,
 	}
+}
+
+func (t *BundleBuilder) Get(resource interface{}, path string, opts ...BundleEntryOption) *BundleBuilder {
+	return t.Append(resource, &fhir.BundleEntryRequest{
+		Method: fhir.HTTPVerbGET,
+		Url:    path,
+	}, nil, opts...)
 }
 
 func (t *BundleBuilder) Create(resource interface{}, opts ...BundleEntryOption) *BundleBuilder {
@@ -54,13 +62,31 @@ func (t *BundleBuilder) Append(resource interface{}, request *fhir.BundleEntryRe
 		Response: response,
 	}
 	for _, opt := range opts {
-		opt(&entry)
+		if preOpt, ok := opt.(BundleEntryPreOption); ok {
+			preOpt(&entry)
+		}
 	}
-	return t.AppendEntry(entry)
+	t = t.AppendEntry(entry)
+	for _, opt := range opts {
+		if postOpt, ok := opt.(BundleEntryPostOption); ok {
+			postOpt(&entry)
+		}
+	}
+	return t
 }
 
-func (t *BundleBuilder) AppendEntry(entry fhir.BundleEntry) *BundleBuilder {
+func (t *BundleBuilder) AppendEntry(entry fhir.BundleEntry, opts ...BundleEntryOption) *BundleBuilder {
+	for _, opt := range opts {
+		if preOpt, ok := opt.(BundleEntryPreOption); ok {
+			preOpt(&entry)
+		}
+	}
 	t.Entry = append(t.Entry, entry)
+	for _, opt := range opts {
+		if postOpt, ok := opt.(BundleEntryPostOption); ok {
+			postOpt(&entry)
+		}
+	}
 	return t
 }
 
@@ -68,15 +94,169 @@ func (t *BundleBuilder) Bundle() fhir.Bundle {
 	return fhir.Bundle(*t)
 }
 
-type BundleEntryOption func(entry *fhir.BundleEntry)
+type BundleEntryOption interface {
+	Apply(entry *fhir.BundleEntry)
+}
 
-func WithFullUrl(fullUrl string) BundleEntryOption {
+type BundleEntryPreOption func(entry *fhir.BundleEntry)
+
+type BundleEntryPostOption func(entry *fhir.BundleEntry)
+
+func (f BundleEntryPreOption) Apply(entry *fhir.BundleEntry) {
+	f(entry)
+}
+
+func (f BundleEntryPostOption) Apply(entry *fhir.BundleEntry) {
+	f(entry)
+}
+
+func WithFullUrl(fullUrl string) BundleEntryPreOption {
 	return func(entry *fhir.BundleEntry) {
 		entry.FullUrl = to.NilString(fullUrl)
 	}
 }
 
-func WithRequestHeaders(header http.Header) BundleEntryOption {
+// AuditEventInfo contains information needed to create an AuditEvent
+type AuditEventInfo struct {
+	ActingAgent *fhir.Reference       // Who initiated the action, the acting agent
+	Observer    fhir.Identifier       // Who observed the action, the local identity
+	Action      fhir.AuditEventAction // What action was performed (e.g., "create", "update")
+	Metadata    map[string]string     // Additional metadata for the audit event
+	QueryParams url.Values            // Query parameters for the audit event
+}
+
+var nowFunc = time.Now
+
+// FailedBundleEntry contains information about a failure to create a bundle entry and information about the resource that failed
+type FailedBundleEntry struct {
+	ResourceType string
+	ID           string
+	Method       fhir.HTTPVerb
+	Error        string
+}
+
+// WithAuditEvent creates an option that adds audit event information to a bundle entry
+func WithAuditEvent(ctx context.Context, t *BundleBuilder, info AuditEventInfo) BundleEntryPostOption {
+	return func(entry *fhir.BundleEntry) {
+		// Extract resource type and ID for logging
+		var res Resource
+		if err := json.Unmarshal(entry.Resource, &res); err != nil {
+			log.Ctx(ctx).Error().Err(err).
+				Msg("Error unmarshalling resource to create audit event")
+			t.Append(FailedBundleEntry{
+				ResourceType: "",
+				ID:           "",
+				Method:       entry.Request.Method,
+				Error:        err.Error(),
+			}, nil, nil)
+			return
+		}
+
+		resourceRef := fhir.Reference{}
+		// Set the reference to the resource being audited
+		if entry.FullUrl != nil {
+			resourceRef.Reference = entry.FullUrl
+			resourceRef.Type = to.Ptr(res.Type)
+		} else if res.ID != "" {
+			// Construct reference from resource type and ID
+			resourceRef.Reference = to.Ptr(fmt.Sprintf("%s/%s", res.Type, res.ID))
+			resourceRef.Type = to.Ptr(res.Type)
+		} else {
+			log.Ctx(ctx).Error().Msgf("Unable to create proper reference for audit event, missing both FullUrl and resource ID")
+			// TODO: Find some way to fail the bundle creation
+			t.Append(FailedBundleEntry{
+				ResourceType: res.Type,
+				ID:           "",
+				Method:       entry.Request.Method,
+				Error:        "Unable to create proper reference for audit event, missing both FullUrl and resource ID",
+			}, nil, nil)
+			return
+		}
+
+		var interactionCode, interactionDisplay string
+		switch info.Action {
+		case fhir.AuditEventActionC:
+			interactionCode = "create"
+			interactionDisplay = "Create"
+		case fhir.AuditEventActionR:
+			interactionCode = "read"
+			interactionDisplay = "Read"
+		case fhir.AuditEventActionU:
+			interactionCode = "update"
+			interactionDisplay = "Update"
+		default:
+			// Considering we decide when to call this function, this will likely never happen, but it's good to have it here
+			t.Append(FailedBundleEntry{
+				ResourceType: res.Type,
+				ID:           res.ID,
+				Method:       entry.Request.Method,
+				Error:        "Unknown audit event action",
+			}, nil, nil)
+			return
+		}
+
+		auditEvent := fhir.AuditEvent{
+			Type: fhir.Coding{
+				System:  to.Ptr("http://terminology.hl7.org/CodeSystem/audit-event-type"),
+				Code:    to.Ptr("rest"),
+				Display: to.Ptr("RESTful Operation"),
+			},
+			Subtype: []fhir.Coding{
+				{
+					System:  to.Ptr("http://hl7.org/fhir/restful-interaction"),
+					Code:    to.Ptr(interactionCode),
+					Display: to.Ptr(interactionDisplay),
+				},
+			},
+			Action:   to.Ptr(info.Action),
+			Recorded: nowFunc().Format(time.RFC3339),
+			Outcome:  to.Ptr(fhir.AuditEventOutcome0),
+			Agent: []fhir.AuditEventAgent{
+				{
+					Who: info.ActingAgent,
+				},
+			},
+			Source: fhir.AuditEventSource{
+				Observer: fhir.Reference{
+					Identifier: &info.Observer,
+					Type:       to.Ptr("Device"),
+				},
+			},
+			Entity: []fhir.AuditEventEntity{
+				{
+					What: &resourceRef,
+				},
+			},
+		}
+
+		if info.QueryParams != nil {
+			queryEntity := fhir.AuditEventEntity{
+				Type: &fhir.Coding{
+					System:  to.Ptr("http://terminology.hl7.org/CodeSystem/audit-entity-type"),
+					Code:    to.Ptr("2"), // query parameters
+					Display: to.Ptr("Query Parameters"),
+				},
+				Detail: []fhir.AuditEventEntityDetail{},
+			}
+
+			for param, values := range info.QueryParams {
+				queryEntity.Detail = append(queryEntity.Detail, fhir.AuditEventEntityDetail{
+					Type:        param,
+					ValueString: to.Ptr(strings.Join(values, ",")),
+				})
+			}
+
+			auditEvent.Entity = append(auditEvent.Entity, queryEntity)
+		}
+
+		t.Append(auditEvent, &fhir.BundleEntryRequest{
+			Method: fhir.HTTPVerbPOST,
+			Url:    ResourceType(auditEvent),
+		}, nil)
+	}
+}
+
+func WithRequestHeaders(header http.Header) BundleEntryPreOption {
 	return func(entry *fhir.BundleEntry) {
 		if entry.Request == nil {
 			entry.Request = &fhir.BundleEntryRequest{}
@@ -187,7 +367,18 @@ func ResourceInBundle(bundle *fhir.Bundle, filter func(entry fhir.BundleEntry) b
 }
 
 // ExecuteTransaction performs a FHIR transaction and returns the result bundle.
+// If the bundle contains a FailedBundleEntry, it returns an error with the failure details.
 func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.Bundle, error) {
+	// Check for any FailedBundleEntry in the bundle
+	for _, entry := range bundle.Entry {
+		var failedEntry FailedBundleEntry
+		if err := json.Unmarshal(entry.Resource, &failedEntry); err == nil {
+			if failedEntry.Error != "" {
+				return fhir.Bundle{}, fmt.Errorf("bundle contains failed entry: %s", string(entry.Resource))
+			}
+		}
+	}
+
 	// Perform the FHIR transaction by creating the bundle
 	var resultBundle fhir.Bundle
 	if err := fhirClient.Create(bundle, &resultBundle, fhirclient.AtPath("/")); err != nil {

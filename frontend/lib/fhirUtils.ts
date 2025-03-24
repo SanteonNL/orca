@@ -1,10 +1,23 @@
 import Client from 'fhir-kit-client';
-import { Bundle, Condition, Patient, PractitionerRole, Questionnaire, Resource, ServiceRequest, Task } from 'fhir/r4';
+import {
+    Bundle,
+    Condition,
+    Identifier,
+    Patient,
+    PractitionerRole,
+    Questionnaire,
+    Reference,
+    Resource,
+    ServiceRequest,
+    Task
+} from 'fhir/r4';
 
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
 
-export const BSN_SYSTEM = "http://fhir.nl/fhir/NamingSystem/bsn"
+export const patientIdentifierSystem = () => {
+    return process.env.ORCA_PATIENT_IDENTIFIER_SYSTEM ?? "http://fhir.nl/fhir/NamingSystem/bsn";
+}
 
 export const createEhrClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
@@ -54,8 +67,8 @@ export const fetchAllBundlePages = async <T extends Resource>(
     return allResources;
 }
 
-export const getBsn = (patient?: Patient) => {
-    return patient?.identifier?.find((identifier) => identifier.system === BSN_SYSTEM)?.value;
+export const getPatientIdentifier = (patient?: Patient) => {
+    return patient?.identifier?.find((identifier) => identifier.system === patientIdentifierSystem());
 }
 
 export const findInBundle = (resourceType: string, bundle?: Bundle) => {
@@ -98,8 +111,9 @@ const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, p
     // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
     const cleanedServiceRequest = { ...serviceRequest, id: undefined };
 
-    if (serviceRequest.subject?.identifier?.system === BSN_SYSTEM && serviceRequest.subject?.identifier?.value !== getBsn(patient)) {
-        throw new Error("Subject BSN in service request differs from Patient BSN");
+    const patientIdentifier = getPatientIdentifier(patient);
+    if (!patientIdentifier || serviceRequest.subject?.identifier?.system !== patientIdentifier.system || serviceRequest.subject?.identifier?.value !== patientIdentifier.value) {
+        throw new Error("ServiceRequest.subject.identifier in service request differs from patient.identifier");
     }
 
     if (typeof cleanedServiceRequest.subject !== 'object') {
@@ -130,7 +144,7 @@ const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, p
     return cleanedServiceRequest;
 }
 
-export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: string, serviceRequestReference: string, taskIdentifier?: string, practitionerRole?: PractitionerRole): Task => {
+export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondition: Condition, patientReference: Reference, serviceRequestReference: string, taskIdentifier?: string, practitionerRole?: PractitionerRole): Task => {
     const conditionCode = primaryCondition.code?.coding?.[0]
     if (!conditionCode) throw new Error("Primary condition has no coding, cannot create Task");
 
@@ -141,10 +155,7 @@ export const constructBundleTask = (serviceRequest: ServiceRequest, primaryCondi
                 "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
             ]
         },
-        for: {
-            type: "Patient",
-            reference: patientReference,
-        },
+        for: patientReference,
         status: "requested",
         intent: "order",
         reasonCode: {
@@ -194,9 +205,14 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     type: "transaction"
 } => {
     const cleanedPatient = cleanPatient(patient);
+    const patientReference: Reference = {
+        type: "Patient",
+        reference: "urn:uuid:patient",
+        identifier: getPatientIdentifier(patient)!
+    }
     const serviceRequestEntry = {
         fullUrl: "urn:uuid:serviceRequest",
-        resource: cleanServiceRequest(serviceRequest, patient, "urn:uuid:patient", taskIdentifier),
+        resource: cleanServiceRequest(serviceRequest, patient, patientReference.reference!, taskIdentifier),
         request: {
             method: "POST",
             url: "ServiceRequest",
@@ -205,7 +221,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     }
     const taskEntry = {
         fullUrl: "urn:uuid:task",
-        resource: constructBundleTask(serviceRequest, primaryCondition, "urn:uuid:patient", "urn:uuid:serviceRequest", taskIdentifier, practitionerRole),
+        resource: constructBundleTask(serviceRequest, primaryCondition, patientReference, "urn:uuid:serviceRequest", taskIdentifier, practitionerRole),
         request: {
             method: "POST",
             url: "Task",
@@ -217,6 +233,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
     }
 
+    const patientIdentifier = getPatientIdentifier(patient)!;
     const bundle = {
         resourceType: "Bundle",
         type: "transaction",
@@ -227,7 +244,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                 request: {
                     method: "POST",
                     url: "Patient",
-                    ifNoneExist: `identifier=http://fhir.nl/fhir/NamingSystem/bsn|${getBsn(patient)}`
+                    ifNoneExist: `identifier=${patientIdentifier.system}|${patientIdentifier.value}`
                 }
             },
             serviceRequestEntry,
@@ -257,3 +274,16 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
     })
 }
 
+/**
+ * Returns a string representation of an Identifier ONLY if both the system and value are set. Otherwise, returns undefined.
+ * @param identifier 
+ * @returns 
+ */
+export function identifierToString(identifier?: Identifier) {
+
+    if (!identifier?.system || !identifier.value) {
+        return
+    }
+
+    return `${identifier.system}|${identifier.value}`
+}

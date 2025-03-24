@@ -2,13 +2,11 @@
 import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient } from '@aehrc/smart-forms-renderer';
 import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
 import { useEffect, useState } from 'react';
-import { ReloadIcon } from "@radix-ui/react-icons";
 import { toast } from 'sonner';
 import useCpsClient from '@/hooks/use-cps-client';
 import useTaskProgressStore from '@/lib/store/task-progress-store';
-import { BSN_SYSTEM, findQuestionnaireResponse } from '@/lib/fhirUtils';
+import {findQuestionnaireResponse, getPatientIdentifier} from '@/lib/fhirUtils';
 import { Spinner } from '@/components/spinner';
-import { useStepper } from '@/components/stepper';
 import { v4 } from 'uuid';
 import { populateQuestionnaire } from '../../utils/populate';
 import useEnrollmentStore from '@/lib/store/enrollment-store';
@@ -118,8 +116,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
     outputTask.status = "completed"
 
-    const patientIdentifier = patient?.identifier?.find(id => id.system === BSN_SYSTEM) || patient?.identifier?.[0]
-
     const bundle: FhirResource & { type: "transaction" } = {
       resourceType: 'Bundle',
       type: 'transaction',
@@ -136,7 +132,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         },
         {
           fullUrl: questionnaireResponseRef,
-          resource: { ...updatableResponse, subject: { identifier: patientIdentifier } },
+          resource: { ...updatableResponse, subject: { identifier: getPatientIdentifier(patient) } },
           request: {
             method: 'PUT',
             url: responseExists ? questionnaireResponseRef : `QuestionnaireResponse?identifier=${encodeURIComponent(`${scpSubTaskIdentifierSystem}|${newId}`)}`
@@ -197,7 +193,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       MuiCard: {
         styleOverrides: {
           root: {
-            border: '1px solid #e0e0e0',
+            backgroundColor: '#F5F5F5',
           },
         },
       }

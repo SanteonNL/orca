@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"net/url"
-	"os"
 	"reflect"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -451,12 +452,16 @@ func Test_isValidTransition(t *testing.T) {
 
 func Test_handleUpdateTask(t *testing.T) {
 	var task fhir.Task
-	taskData, _ := os.ReadFile("./testdata/task-update-accepted.json")
+	taskData := mustReadFile("./testdata/task-update-accepted.json")
 	require.NoError(t, json.Unmarshal(taskData, &task))
 
 	var carePlanBundle fhir.Bundle
-	carePlanBundleData, _ := os.ReadFile("./careteamservice/testdata/001-input.json")
+	carePlanBundleData := mustReadFile("./careteamservice/testdata/001-input.json")
 	require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
+
+	var carePlan fhir.CarePlan
+	err := json.Unmarshal(carePlanBundle.Entry[0].Resource, &carePlan)
+	require.NoError(t, err)
 
 	ctrl := gomock.NewController(t)
 	fhirClient := mock.NewMockClient(ctrl)
@@ -498,6 +503,11 @@ func Test_handleUpdateTask(t *testing.T) {
 			ResourceId:   *updatedTask.Id,
 			RequestUrl:   requestUrl,
 			HttpMethod:   "PUT",
+			Principal:    auth.TestPrincipal2,
+			LocalIdentity: &fhir.Identifier{
+				System: to.Ptr(coolfhir.URANamingSystem),
+				Value:  to.Ptr("2"),
+			},
 		}
 	}
 
@@ -510,9 +520,13 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 2)
+		require.Len(t, tx.Entry, 3)
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
+		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
+			Identifier: &auth.TestPrincipal2.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		})
 	})
 	t.Run("task status isn't updated", func(t *testing.T) {
 		request := updateRequest(func(task *fhir.Task) {
@@ -523,8 +537,12 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 2)
+		require.Len(t, tx.Entry, 3)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
+		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
+			Identifier: &auth.TestPrincipal2.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		})
 	})
 	t.Run("original FHIR request headers are passed to outgoing Bundle entry", func(t *testing.T) {
 		request := updateRequest()
@@ -666,7 +684,7 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 		profile:    profile.Test(),
 	}
 
-	updateTaskAcceptedData, _ := os.ReadFile("./testdata/task-update-accepted.json")
+	updateTaskAcceptedData := mustReadFile("./testdata/task-update-accepted.json")
 
 	tests := []struct {
 		name          string
@@ -683,6 +701,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task", "status":`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			wantErr: true,
 		},
@@ -693,6 +716,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task"}`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			wantErr: true,
 		},
@@ -703,6 +731,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task", "status": "received", "intent":"order"}`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Id:     to.Ptr("1"),
@@ -719,6 +752,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task", "status": "completed", "intent":"order"}`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Status: fhir.TaskStatusRequested,
@@ -733,6 +771,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: []byte(`{"resourceType": "Task", "status": "completed", "intent":"order"}`),
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Status: fhir.TaskStatusRequested,
@@ -747,6 +790,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: updateTaskAcceptedData,
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal3,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("3"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Owner:  &fhir.Reference{Identifier: &auth.TestPrincipal2.Organization.Identifier[0]},
@@ -762,6 +810,11 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 				ResourceId:   "1",
 				ResourceData: updateTaskAcceptedData,
 				ResourcePath: "Task/1",
+				Principal:    auth.TestPrincipal1,
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr(coolfhir.URANamingSystem),
+					Value:  to.Ptr("1"),
+				},
 			},
 			existingTask: &fhir.Task{
 				Owner:  &fhir.Reference{Identifier: &auth.TestPrincipal1.Organization.Identifier[0]},

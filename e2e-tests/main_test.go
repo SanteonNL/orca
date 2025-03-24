@@ -2,22 +2,26 @@ package main
 
 import (
 	"encoding/json"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/stretchr/testify/require"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel/to"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"github.com/nuts-foundation/go-nuts-client/nuts"
+	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/caramel/to"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 const URANamingSystem = "http://fhir.nl/fhir/NamingSystem/ura"
 
 func Test_Main(t *testing.T) {
 	dockerNetwork, err := setupDockerNetwork(t)
+	require.NoError(t, err)
 	// Setup HAPI FHIR server
 	hapiBaseURL := setupHAPI(t, dockerNetwork.Name)
 	hapiFhirClient := fhirclient.New(hapiBaseURL, http.DefaultClient, nil)
@@ -39,23 +43,35 @@ func Test_Main(t *testing.T) {
 	const hospitalBaseUrl = "http://hospital-orchestrator:8080"
 	const hospitalURA = 2
 
-	const carePlanServiceBaseURL = hospitalBaseUrl + "/cps"
-
 	// Setup Clinic
-	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir/notify", false)
+	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir", false)
 	require.NoError(t, err)
-	clinicOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, carePlanServiceBaseURL, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
-	clinicOrcaFHIRClient := fhirclient.New(clinicOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
+	_ = setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 
 	// Setup Hospital
 	// Questionnaires can't be created in HAPI FHIR server partitions, only in the default partition.
 	// Otherwise, the following error occurs: HAPI-1318: Resource type Questionnaire can not be partitioned
 	// This is why the hospital, running the CPS, stores its data in the default partition.
-	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir/notify", true)
+	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir", true)
 	require.NoError(t, err)
-	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, carePlanServiceBaseURL, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
+	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
 	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
+
+	// Set up FHIR client for clinic that can interact with hospital's CPS
+	hospitalAuthServerURL, _ := url.Parse("http://nutsnode:8080/oauth2/hospital")
+	clinicHTTPClient := &http.Client{
+		Transport: &oauth2.Transport{
+			UnderlyingTransport: http.DefaultTransport,
+			TokenSource: nuts.OAuth2TokenSource{
+				NutsSubject: "clinic",
+				NutsAPIURL:  nutsInternalURL,
+			},
+			Scope:          "careplanservice",
+			AuthzServerURL: hospitalAuthServerURL,
+		},
+	}
+	clinicOrcaCPSFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cps"), clinicHTTPClient, nil)
 
 	var patient fhir.Patient
 	var task fhir.Task
@@ -199,21 +215,21 @@ func Test_Main(t *testing.T) {
 				require.Equal(t, len(questionnaireResponse.Item), len(fetchedQuestionnaireResponse.Item))
 			}
 			t.Run("Check Task requester and owner are in the CareTeam", func(t *testing.T) {
-				var carePlansAndCareTeams fhir.Bundle
-				err := hospitalOrcaFHIRClient.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &carePlansAndCareTeams)
+				var carePlans fhir.Bundle
+				err := hospitalOrcaFHIRClient.Search("CarePlan", url.Values{"_id": {carePlanId}}, &carePlans)
 				require.NoError(t, err)
-				require.Len(t, carePlansAndCareTeams.Entry, 2, "Expected 2 entries in bundle")
-				// Assume CareTeam is 2nd resource
-				var careTeam fhir.CareTeam
-				require.NoError(t, json.Unmarshal(carePlansAndCareTeams.Entry[1].Resource, &careTeam))
-				require.Len(t, careTeam.Participant, 2)
-			})
+				require.Len(t, carePlans.Entry, 1, "Expected a single entry in bundle")
 
-			//t.Log("Filler adding Questionnaire sub-Task...")
-			//subTask := fhir.Task{}
-			//{
-			//
-			//}
+				var carePlan struct {
+					Contained []fhir.CareTeam `json:"contained"`
+				}
+
+				err = json.Unmarshal(carePlans.Entry[0].Resource, &carePlan)
+				require.NoError(t, err)
+
+				// Assume CareTeam is 1st contained resource
+				require.Len(t, carePlan.Contained[0].Participant, 2)
+			})
 		})
 	})
 	t.Run("Clinic attempts to create a CarePlan at Hospital's CarePlanService, which isn't allowed", func(t *testing.T) {
@@ -255,7 +271,7 @@ func Test_Main(t *testing.T) {
 			}
 			task.Intent = "order"
 			task.Status = fhir.TaskStatusRequested
-			err := clinicOrcaFHIRClient.Create(task, &task)
+			err := clinicOrcaCPSFHIRClient.Create(task, &task)
 			var operationOutcome fhirclient.OperationOutcomeError
 			require.ErrorAs(t, err, &operationOutcome)
 			require.Len(t, operationOutcome.Issue, 1)
@@ -271,7 +287,7 @@ func Test_Main(t *testing.T) {
 		require.Equal(t, *patient.Id, *fetchedPatient.Id)
 		require.Equal(t, *patient.Identifier[0].Value, *fetchedPatient.Identifier[0].Value)
 
-		err = clinicOrcaFHIRClient.Read("Patient/"+*patient.Id, &fetchedPatient)
+		err = clinicOrcaCPSFHIRClient.Read("Patient/"+*patient.Id, &fetchedPatient)
 		require.NoError(t, err)
 		require.Equal(t, *patient.Id, *fetchedPatient.Id)
 		require.Equal(t, *patient.Identifier[0].Value, *fetchedPatient.Identifier[0].Value)
@@ -283,7 +299,7 @@ func Test_Main(t *testing.T) {
 		require.Equal(t, *serviceRequest.Id, *fetchedServiceRequest.Id)
 		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)
 
-		err = clinicOrcaFHIRClient.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
+		err = clinicOrcaCPSFHIRClient.Read("ServiceRequest/"+*serviceRequest.Id, &fetchedServiceRequest)
 		require.NoError(t, err)
 		require.Equal(t, *serviceRequest.Id, *fetchedServiceRequest.Id)
 		require.Equal(t, *serviceRequest.Code.Coding[0].Code, *fetchedServiceRequest.Code.Coding[0].Code)

@@ -113,28 +113,12 @@ The process is as follows:
 When integrating with the ORCA system, the EHR (and its FHIR API) needs to support the following integrations:
 
 - Allow *Orchestrator* access to the FHIR API
-  - Supported means of authentication: none (TODO)
+  - Supported means of authentication: Azure Managed Identity, no authentication
 - To receive new/updated Task notifications: 
-  - Provide an FHIR R6 Out-of-band subscription endpoint at which *Orchestrator* can notify the EHR of accepted/updated Tasks.
+  - Provide message broker queue at which *Orchestrator* can notify the EHR of accepted/updated Tasks.
 - Invoking *Orchestrator*'s internal-facing FHIR API (to list Shared CarePlans and query remote FHIR resources)
 - *OPTIONAL*: If using the *Frontend*, invoking *Orchestrator*'s app launch
-  - Supported: SMART on FHIR (TODO), ChipSoft HIX (TODO)
-
-### Orca Care Plan Contributor task notification
-When the local Task filler accepts a new Task, ORCA will notify the EHR so it can process it. The following messaging protocols are supported:
-- Kafka
-- Azure Event Hub (through Kafka)
-
-Configure the `ORCA_CAREPLANCONTRIBUTOR_KAFKA` properties to enable delivery through Kafka.
-
-The message contains the Task and several FHIR bundles that contain the FHIR resources related to the Task.
-Note: the bundles with the related FHIR resources might be removed in future.
-
-#### The diagram of the initial implementation 
-![clinic-notification-2.svg](docs/images/clinic-notification-2.svg)
-
-#### The diagram of the future implementation
-![clinic-notification-1.svg](docs/images/clinic-notification-1.svg)
+  - Supported: ChipSoft HIX, SMART on FHIR (TODO)
 
 ## Deployment
 Note: this section needs to be expanded.

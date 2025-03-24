@@ -12,11 +12,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	"github.com/SanteonNL/orca/orchestrator/lib/test"
-	"github.com/jellydator/ttlcache/v3"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +20,12 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/jellydator/ttlcache/v3"
 
 	"github.com/stretchr/testify/assert"
 
@@ -271,6 +272,68 @@ func TestService(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, http.StatusBadRequest, launchHttpResponse.StatusCode)
 	})
+
+	t.Run("retry getSessionData 3 times - should work", func(t *testing.T) {
+		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
+
+		// Save the original sleep function and restore it after the test.
+		originalSleep := sleep
+
+		// Override sleep to collect the duration of the sleep requested duration instead of actually sleeping.
+		var sleeps []time.Duration
+		sleep = func(t time.Duration) { sleeps = append(sleeps, t) }
+
+		// Mock getSessionData to fail twice before succeeding
+		callCount := 0
+		service.getSessionData = func(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
+			callCount++
+			if callCount < 3 {
+				return nil, errors.New("temporary error")
+			}
+			return service.defaultGetSessionData(ctx, accessToken, launchContext)
+		}
+
+		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
+			"SAMLResponse": {createSAMLResponse(t, certificate.Leaf)},
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, http.StatusFound, launchHttpResponse.StatusCode)
+		require.Equal(t, 3, callCount, "expected getSessionData to be called 3 times")
+		require.Equal(t, []time.Duration{200 * time.Millisecond, 400 * time.Millisecond}, sleeps, "expected 2 incremental sleeps")
+
+		t.Cleanup(func() { sleep = originalSleep })
+		t.Cleanup(func() { service.getSessionData = service.defaultGetSessionData })
+	})
+
+	t.Run("Consistent error - should fail after 3 retries", func(t *testing.T) {
+		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
+
+		// Save the original sleep function and restore it after the test.
+		originalSleep := sleep
+
+		// Override sleep to collect the duration of the sleep requested duration instead of actually sleeping.
+		var sleeps []time.Duration
+		sleep = func(t time.Duration) { sleeps = append(sleeps, t) }
+
+		callCount := 0
+		service.getSessionData = func(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
+			callCount++
+			return nil, errors.New("temporary error") //always throw an error
+		}
+
+		launchHttpResponse, _ := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
+			"SAMLResponse": {createSAMLResponse(t, certificate.Leaf)},
+		})
+
+		require.Equal(t, http.StatusInternalServerError, launchHttpResponse.StatusCode)
+		require.Equal(t, 4, callCount, "expected getSessionData to be called 4 times")
+		require.Equal(t, []time.Duration{200 * time.Millisecond, 400 * time.Millisecond, 600 * time.Millisecond}, sleeps, "expected 3 incremental sleeps")
+
+		t.Cleanup(func() { sleep = originalSleep })
+		t.Cleanup(func() { service.getSessionData = service.defaultGetSessionData })
+	})
+
 }
 
 func createSAMLResponse(t *testing.T, encryptionKey *x509.Certificate) string {

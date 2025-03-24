@@ -46,6 +46,11 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("unable to parse XML: %w", err)
 	}
 
+	if doc.Root().Tag == "Error" {
+		log.Ctx(ctx).Error().Msgf("error tag as SAMLResponse: %s", decodedResponse)
+		return LaunchContext{}, errors.New("SAMLResponse from server contains an error, see log for details")
+	}
+
 	//TODO: Do we want to trim/cleanup values before validating?
 	assertion, err := s.decryptAssertion(doc)
 	if err != nil {
@@ -366,12 +371,6 @@ func (s *Service) extractWorkflowID(ctx context.Context, decryptedAssertion *etr
 	log.Ctx(ctx).Debug().Msgf("Extracted workflow-id: %s", workflowId)
 
 	return workflowId, nil
-}
-
-func (s *Service) processAdditionalAttributes(decryptedAssertion *etree.Document) error {
-	// TODO: Implement the logic to process additional attributes (claims) from the assertion
-	// This is a placeholder implementation
-	return nil
 }
 
 func getSubjectAttribute(decryptedAssertion *etree.Element, name string) (string, error) {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
@@ -307,6 +308,8 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
+			fhirBaseURL := must.ParseURL("https://example.com/fhir")
+			mockFHIRClient.EXPECT().Path().Return(fhirBaseURL).AnyTimes()
 			notifierMock := ehr.NewMockNotifier(ctrl)
 			t.Cleanup(func() {
 				fhirClientFactory = createFHIRClient
@@ -362,7 +365,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			if tt.expectSubmission {
 				expectedSubmissions = 1
 			}
-			notifierMock.EXPECT().NotifyTaskAccepted(ctx, mockFHIRClient, gomock.Any()).Times(expectedSubmissions)
+			notifierMock.EXPECT().NotifyTaskAccepted(ctx, fhirBaseURL.String(), gomock.Any()).Times(expectedSubmissions)
 			var capturedTx fhir.Bundle
 			if tt.numBundlesPosted > 0 {
 				mockFHIRClient.EXPECT().

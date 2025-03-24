@@ -8,6 +8,14 @@ This project visualizes steps like:
 
 This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next-app`](https://github.com/vercel/next.js/tree/canary/packages/create-next-app).
 
+## Configuration
+The following configuration options are supported:
+
+- `ORCA_PATIENT_IDENTIFIER_SYSTEM`: the FHIR coding system for patient identifiers, defaults to `http://fhir.nl/fhir/NamingSystem/bsn`.
+- `SUPPORT_CONTACT_LINK`: a link to support resource, e.g. a `mailto:` link or an `https://` link to a support page. It will be shown on error pages.
+- `DATA_VIEWER_ENABLED`: When an enrolment `Task` is either `in-progress` or `accepted`, the frontend can use the the CarePlanContributor's (CPC) aggregate functionality to query related resources (like `Observations`) for this specific enrolment. 
+- `FHIR_AGGREGATE_URL`: When using the data viewer, the application needs to call the aggregation endpoint of its own CPC. Defaults to `/orca/cpc/aggregate/fhir`
+
 ## Getting Started
 ### 1. Install dependencies
 

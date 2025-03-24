@@ -11,7 +11,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SanteonNL/orca/orchestrator/careplanservice"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
+
+	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/webhook"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -46,19 +50,25 @@ func New(
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager,
-	ehrFhirProxy coolfhir.HttpProxy) (*Service, error) {
+	messageBroker messaging.Broker,
+	ehrFhirProxy coolfhir.HttpProxy,
+	localCarePlanServiceURL *url.URL) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
-	cpsURL, _ := url.Parse(config.CarePlanService.URL)
 
 	localFhirStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
 	if err != nil {
 		return nil, err
 	}
+	ctx := context.Background()
+	if config.HealthDataViewEndpointEnabled {
+		if ehrFhirProxy == nil {
+			ehrFhirProxy = coolfhir.NewProxy("App->EHR (DataView)", fhirURL, basePath+"/fhir", orcaPublicURL.JoinPath(basePath, "fhir"), localFhirStoreTransport, false, false)
+		}
+	}
 
 	// Initialize workflow provider, which is used to select FHIR Questionnaires by the Task Filler engine
 	var workflowProvider taskengine.WorkflowProvider
-	ctx := context.Background()
 	if config.TaskFiller.QuestionnaireFHIR.BaseURL == "" {
 		// Use embedded workflow provider
 		memoryWorkflowProvider := &taskengine.MemoryWorkflowProvider{}
@@ -91,14 +101,19 @@ func New(
 		workflowProvider = taskengine.FhirApiWorkflowProvider{Client: questionnaireFhirClient}
 	}
 
-	serviceBusClient, err := ehr.NewClient(config.ServiceBusConfig)
-	if err != nil {
-		return nil, err
+	// Register event handlers
+	eventManager := events.NewInMemoryManager()
+	for _, handler := range config.Events.WebHooks {
+		err := eventManager.Subscribe(handler.ResourceType, handler.Name, webhook.NewEventHandler(handler.URL).Handle)
+		if err != nil {
+			return nil, fmt.Errorf("failed to subscribe to event %s: %w", handler.Name, err)
+		}
 	}
+
 	result := &Service{
 		config:                        config,
 		orcaPublicURL:                 orcaPublicURL,
-		localCarePlanServiceUrl:       cpsURL,
+		localCarePlanServiceUrl:       localCarePlanServiceURL,
 		SessionManager:                sessionManager,
 		profile:                       profile,
 		frontendUrl:                   config.FrontendConfig.URL,
@@ -106,8 +121,14 @@ func New(
 		ehrFhirProxy:                  ehrFhirProxy,
 		transport:                     localFhirStoreTransport,
 		workflows:                     workflowProvider,
-		notifier:                      ehr.NewNotifier(serviceBusClient),
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
+		eventManager:                  eventManager,
+	}
+	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
+		result.notifier, err = ehr.NewNotifier(messageBroker, messaging.Topic{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
+		if err != nil {
+			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
+		}
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
@@ -130,6 +151,7 @@ type Service struct {
 	workflows                     taskengine.WorkflowProvider
 	healthdataviewEndpointEnabled bool
 	notifier                      ehr.Notifier
+	eventManager                  events.Manager
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -138,25 +160,48 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// The section below defines endpoints specified by Shared Care Planning.
 	// These are secured through the profile (e.g. Nuts access tokens)
 	//
-	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		var notification coolfhir.SubscriptionNotification
-		if err := json.NewDecoder(request.Body).Decode(&notification); err != nil {
-			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to decode notification")
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
-			return
+	handleBundle := func(httpRequest *http.Request) error {
+		var notification fhir.Bundle
+		if err := json.NewDecoder(httpRequest.Body).Decode(&notification); err != nil {
+			return coolfhir.BadRequest("failed to decode bundle: %w", err)
 		}
-		if err := s.handleNotification(request.Context(), &notification); err != nil {
-			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to handle notification")
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequestError(err), "CarePlanContributor/Notify", writer)
+		if !coolfhir.IsSubscriptionNotification(&notification) {
+			return coolfhir.BadRequest("bundle type not supported: " + notification.Type.String())
+		}
+		if err := s.handleNotification(httpRequest.Context(), (*coolfhir.SubscriptionNotification)(&notification)); err != nil {
+			return err
+		}
+		return nil
+	}
+	// TODO: Remove /notify after all SCP nodes have been updated to use /fhir for delivering notifications
+	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		if err := handleBundle(request); err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 			return
 		}
 		writer.WriteHeader(http.StatusOK)
 	}))
+	mux.HandleFunc("POST "+basePath+"/fhir", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		if err := handleBundle(request); err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
+			return
+		}
+		writer.WriteHeader(http.StatusOK)
+	}))
+	mux.HandleFunc("POST "+basePath+"/fhir/", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		if err := handleBundle(request); err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
+			return
+		}
+		writer.WriteHeader(http.StatusOK)
+	}))
+
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if !s.healthdataviewEndpointEnabled {
+		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
+		if !s.healthdataviewEndpointEnabled || globals.StrictMode {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), &coolfhir.ErrorWithCode{
-				Message:    "health data view proxy endpoint is disabled",
+				Message:    "health data view proxy endpoint is disabled or strict mode is enabled",
 				StatusCode: http.StatusMethodNotAllowed,
 			}, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
@@ -183,6 +228,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
 	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+		log.Ctx(request.Context()).Debug().Msg("Handling aggregate _search FHIR API request")
 		err := s.proxyToAllCareTeamMembers(writer, request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
@@ -194,6 +240,10 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	proxyBasePath := basePath + "/cps/fhir"
 
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+		if s.localCarePlanServiceUrl == nil || s.localCarePlanServiceUrl.String() == "" {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("This ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
 		// TODO: Since we should only call our own CPS, this should be a local call.
 		//       If not, this should be optimized so that we don't do it every call
 		_, httpClient, err := s.createFHIRClientForURL(request.Context(), s.localCarePlanServiceUrl)
@@ -202,7 +252,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 		carePlanServiceProxy := coolfhir.NewProxy("App->CPS FHIR proxy", s.localCarePlanServiceUrl,
-			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false)
+			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false, true)
 		carePlanServiceProxy.ServeHTTP(writer, request)
 	}))
 
@@ -238,7 +288,7 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
 	proxyBasePath := basePath + "/ehr/fhir"
 	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", clientFactory.BaseURL, proxyBasePath,
-		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false)
+		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false, false)
 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
@@ -264,7 +314,6 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	if err != nil {
 		return err
 	}
-
 	s.ehrFhirProxy.ServeHTTP(writer, request)
 	return nil
 }
@@ -286,24 +335,30 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	if err != nil {
 		return err
 	}
-	_, careTeams, _, err := careplanservice.GetCarePlanAndCareTeams(request.Context(), cpsFHIRClient, carePlanRef)
+
+	var carePlan fhir.CarePlan
+
+	err = cpsFHIRClient.ReadWithContext(request.Context(), carePlanRef, &carePlan)
 	if err != nil {
-		return fmt.Errorf("failed to get CarePlan and CareTeams for X-SCP-Context: %w", err)
+		return fmt.Errorf("failed to get CarePlan %s for X-SCP-Context: %w", carePlanRef, err)
+	}
+
+	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
+	if err != nil {
+		return fmt.Errorf("failed to resolve CareTeam (carePlan=%s): %w", carePlanRef, err)
 	}
 
 	// Collect participants. Use a map to ensure we don't send the same request to the same participant multiple times.
 	participantIdentifiers := make(map[string]fhir.Identifier)
-	for _, careTeam := range careTeams {
-		for _, participant := range careTeam.Participant {
-			if !coolfhir.IsLogicalReference(participant.Member) {
-				continue
-			}
-			activeMember, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
-			if err != nil {
-				log.Ctx(request.Context()).Warn().Err(err).Msg("Failed to validate CareTeam participant period")
-			} else if activeMember {
-				participantIdentifiers[coolfhir.ToString(participant.Member.Identifier)] = *participant.Member.Identifier
-			}
+	for _, participant := range careTeam.Participant {
+		if !coolfhir.IsLogicalReference(participant.Member) {
+			continue
+		}
+		activeMember, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
+		if err != nil {
+			log.Ctx(request.Context()).Warn().Err(err).Msg("Failed to validate CareTeam participant period")
+		} else if activeMember {
+			participantIdentifiers[coolfhir.ToString(participant.Member.Identifier)] = *participant.Member.Identifier
 		}
 	}
 	if len(participantIdentifiers) == 0 {
@@ -353,7 +408,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	}
 	const proxyBasePath = basePath + "/aggregate/fhir/"
 	for _, target := range queryTargets {
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true)
+		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	}
 	return nil
@@ -373,16 +428,12 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header can't contain multiple values", carePlanURLHeaderKey))
 	}
 	carePlanURL := carePlanURLValue[0]
-	if !strings.HasPrefix(carePlanURL, s.localCarePlanServiceUrl.String()) {
-		return nil, coolfhir.BadRequest("invalid CarePlan URL in header. Got: " + carePlanURL + " expected: " + s.localCarePlanServiceUrl.String())
-	}
 
 	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
-	var carePlanId string
 	if err != nil {
 		return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
 	} else {
-		_, carePlanId, err = coolfhir.ParseLocalReference(carePlanRef)
+		_, _, err = coolfhir.ParseLocalReference(carePlanRef)
 		if err != nil {
 			return nil, coolfhir.BadRequest("specified SCP context header does not refer to a CarePlan")
 		}
@@ -393,29 +444,20 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, err
 	}
 
-	// Use extract CarePlan ID to be used for our query that will get the CarePlan and CareTeam in a bundle
-	var bundle fhir.Bundle
-	err = cpsFHIRClient.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(bundle.Entry) == 0 {
-		return nil, coolfhir.NewErrorWithCode("CarePlan not found", http.StatusNotFound)
-	}
-
-	var careTeams []fhir.CareTeam
-	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
-	if err != nil {
-		return nil, err
-	}
-	if len(careTeams) == 0 {
-		return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
-	}
-
 	var carePlan fhir.CarePlan
-	err = coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
 
+	err = cpsFHIRClient.ReadWithContext(request.Context(), carePlanRef, &carePlan)
+	if err != nil {
+		var outcomeError fhirclient.OperationOutcomeError
+
+		if errors.As(err, &outcomeError); err != nil {
+			return nil, coolfhir.NewErrorWithCode(outcomeError.Error(), outcomeError.HttpStatusCode)
+		}
+
+		return nil, err
+	}
+
+	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
 	if err != nil {
 		return nil, err
 	}
@@ -427,7 +469,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 
 	// get the CareTeamParticipant, then check that it is active
-	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, principal.Organization.Identifier)
 	if participant == nil {
 		return nil, coolfhir.NewErrorWithCode("requester does not have access to resource", http.StatusForbidden)
 	}
@@ -442,7 +484,7 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}
 	return &ScpValidationResult{
 		carePlan:  &carePlan,
-		careTeams: &careTeams,
+		careTeams: &[]fhir.CareTeam{*careTeam},
 	}, nil
 }
 
@@ -539,20 +581,21 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		return err
 	}
 
+	fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, fhirBaseURL, sender.Organization.Identifier[0])
+	if err != nil {
+		return err
+	}
+	var focusResource any
 	switch *focusReference.Type {
 	case "Task":
-		fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, fhirBaseURL, sender.Organization.Identifier[0])
-		if err != nil {
-			return err
-		}
-		// Get task
 		var task fhir.Task
 		err = fhirClient.Read(*focusReference.Reference, &task)
 		if err != nil {
 			return err
 		}
-
+		focusResource = task
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
+		// TODO: Move this to a event.Handler implementation
 		err = s.handleTaskNotification(ctx, fhirClient, &task)
 		rejection := new(TaskRejection)
 		if errors.As(err, &rejection) || errors.As(err, rejection) {
@@ -563,11 +606,21 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		} else if err != nil {
 			return err
 		}
+	case "CarePlan":
+		var carePlan fhir.CarePlan
+		err = fhirClient.Read(*focusReference.Reference, &carePlan)
+		if err != nil {
+			return err
+		}
+		focusResource = carePlan
 	default:
 		log.Ctx(ctx).Debug().Msgf("No handler for notification of type %s, ignoring", *focusReference.Type)
 	}
-
-	return nil
+	// TODO: Not sure if we should return an error here
+	return s.eventManager.Notify(ctx, *focusReference.Type, events.Instance{
+		FHIRResource:       focusResource,
+		FHIRResourceSource: *focusReference.Reference,
+	})
 }
 
 func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {

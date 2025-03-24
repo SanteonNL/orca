@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/url"
 	"strings"
 
@@ -30,6 +31,8 @@ type StubFHIRClient struct {
 	// CreatedResources is a list of resources that have been created using this client.
 	// It's not used by the client itself, but can be used by tests to verify that the client has been used correctly.
 	CreatedResources map[string][]any
+	// Error is an error that will be returned by all methods of this client.
+	Error error
 }
 
 func (s StubFHIRClient) Read(path string, target any, opts ...fhirclient.Option) error {
@@ -37,6 +40,9 @@ func (s StubFHIRClient) Read(path string, target any, opts ...fhirclient.Option)
 }
 
 func (s StubFHIRClient) ReadWithContext(ctx context.Context, path string, target any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
 	if path == "metadata" {
 		unmarshalInto(s.Metadata, &target)
 		return nil
@@ -63,7 +69,11 @@ func (s StubFHIRClient) Search(resourceType string, query url.Values, target any
 }
 
 func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType string, query url.Values, target any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
 	var candidates []BaseResource
+	var additionalResources []BaseResource
 	for _, res := range s.Resources {
 		var baseResource BaseResource
 		unmarshalInto(res, &baseResource)
@@ -99,6 +109,62 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 				}
 				return false
 			})
+		case "_id":
+			filterCandidates(func(candidate BaseResource) bool {
+				return candidate.Id == value
+			})
+		case "_include":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type == "CarePlan" {
+					if value == "CarePlan:care-team" {
+						for _, res := range s.Resources {
+							careTeam, ok := res.(fhir.CareTeam)
+							if !ok {
+								continue
+							}
+							var carePlan fhir.CarePlan
+							err := json.Unmarshal(candidate.Data, &carePlan)
+							if err != nil {
+								panic(err)
+							}
+							for _, reference := range carePlan.CareTeam {
+								if *reference.Reference == "CareTeam/"+*careTeam.Id {
+									var baseRes BaseResource
+									unmarshalInto(res, &baseRes)
+									additionalResources = append(additionalResources, baseRes)
+									return true
+								}
+							}
+						}
+					}
+				}
+				return false
+			})
+		case "_revinclude":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type == "Task" {
+					if value == "Task:part-of" {
+						for _, res := range s.Resources {
+							task, ok := res.(fhir.Task)
+							if !ok {
+								continue
+							}
+							if task.PartOf == nil {
+								continue
+							}
+							for _, partOf := range task.PartOf {
+								if *partOf.Reference == "Task/"+candidate.Id {
+									var baseRes BaseResource
+									unmarshalInto(res, &baseRes)
+									additionalResources = append(additionalResources, baseRes)
+									return true
+								}
+							}
+						}
+					}
+				}
+				return false
+			})
 		case "url":
 			filterCandidates(func(candidate BaseResource) bool {
 				return candidate.URL == value
@@ -117,11 +183,20 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 			Resource: candidate.Data,
 		})
 	}
+	for _, additionalResource := range additionalResources {
+		result.Entry = append(result.Entry, fhir.BundleEntry{
+			Resource: additionalResource.Data,
+		})
+	}
 	resultJSON, _ := json.Marshal(result)
 	return json.Unmarshal(resultJSON, target)
 }
 
 func (s *StubFHIRClient) CreateWithContext(_ context.Context, resource any, result any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
+
 	var baseResource BaseResource
 	unmarshalInto(resource, &baseResource)
 	resourceType := baseResource.Type
@@ -153,25 +228,35 @@ func (s *StubFHIRClient) CreateWithContext(_ context.Context, resource any, resu
 }
 
 func (s StubFHIRClient) Update(path string, resource any, result any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
 	panic("implement me")
 }
 
 func (s StubFHIRClient) UpdateWithContext(ctx context.Context, path string, resource any, result any, opts ...fhirclient.Option) error {
+	if s.Error != nil {
+		return s.Error
+	}
 	panic("implement me")
 }
 
 func (s StubFHIRClient) Delete(path string, opts ...fhirclient.Option) error {
-	//TODO implement me
+	if s.Error != nil {
+		return s.Error
+	}
 	panic("implement me")
 }
 
 func (s StubFHIRClient) DeleteWithContext(ctx context.Context, path string, opts ...fhirclient.Option) error {
-	//TODO implement me
+	if s.Error != nil {
+		return s.Error
+	}
 	panic("implement me")
 }
 
 func (s StubFHIRClient) Path(path ...string) *url.URL {
-	panic("implement me")
+	return must.ParseURL("stub:" + strings.Join(path, "/"))
 }
 
 func unmarshalInto(resource interface{}, target interface{}) {

@@ -103,7 +103,6 @@ EOF
 echo "Creating stack for Hospital..."
 echo "  Creating devtunnel"
 export HOSPITAL_URL=$(createTunnel ./hospital 9080)
-export CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${HOSPITAL_URL}/orca/cps"
 echo "  Creating Discovery Service definition"
 HOSPITAL_URL_ESCAPED=$(sed 's/[&/\]/\\&/g' <<<"${HOSPITAL_URL}")
 sed "s/DiscoveryServerURL/${HOSPITAL_URL_ESCAPED}/" shared_config/discovery_input/homemonitoring.json > shared_config/discovery/homemonitoring.json
@@ -111,7 +110,6 @@ echo "  Starting services"
 pushd hospital
 echo NUTS_URL="${HOSPITAL_URL}" > .env
 echo HOSPITAL_URL="${HOSPITAL_URL}" >> .env
-echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
 docker compose --env-file .env pull
 docker compose --env-file .env up --wait --build --remove-orphans
 echo "  Creating DID document"
@@ -120,7 +118,7 @@ echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "hospital" "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
 echo "  Registering on Nuts Discovery Service"
-curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirBaseURL\": \"${HOSPITAL_URL}/orca/cpc/fhir\", \"fhirNotificationURL\": \"${HOSPITAL_URL}/orca/cpc/fhir/notify\"}}" http://localhost:9081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirBaseURL\": \"${HOSPITAL_URL}/orca/cpc/fhir\", \"fhirNotificationURL\": \"${HOSPITAL_URL}/orca/cpc/fhir\"}}" http://localhost:9081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
 # TODO: Remove this init when the Questionnaire is provided by the sub-Task.input
 popd
 
@@ -132,7 +130,6 @@ echo "  Starting services"
 pushd clinic
 echo HOSPITAL_URL="${HOSPITAL_URL}" > .env # required for hacking into Hospital's FHIR API, for storing Questionnaires
 echo NUTS_URL="${CLINIC_URL}" >> .env
-echo CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL="${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}" >> .env
 docker compose --env-file .env pull
 docker compose --env-file .env up --wait --build --remove-orphans
 echo "  Creating DID document"
@@ -141,7 +138,7 @@ echo "    Clinic DID: $CLINIC_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
 echo "  Registering on Nuts Discovery Service"
-curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirBaseURL\": \"${CLINIC_URL}/orca/cpc/fhir\", \"fhirNotificationURL\": \"${CLINIC_URL}/orca/cpc/fhir/notify\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
+curl -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirBaseURL\": \"${CLINIC_URL}/orca/cpc/fhir\", \"fhirNotificationURL\": \"${CLINIC_URL}/orca/cpc/fhir\"}}" http://localhost:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
 echo "  Waiting for the FHIR server to be ready"
 popd
 

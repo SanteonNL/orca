@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	"github.com/rs/zerolog/log"
 
@@ -45,8 +47,8 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 		healthDataViewEndpointEnabled *bool
 		expectedStatus                int
 		xSCPContext                   string
-		searchBodyReturnFile          string
-		searchStatusReturn            int
+		readBodyReturnFile            string
+		readStatusReturn              int
 		// Allows us to test both GET and POST requests
 		patientRequestURL   *string
 		patientStatusReturn *int
@@ -75,146 +77,146 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: CarePlan in header not found - GET",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-not-found.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/not-exists",
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: CarePlan in header not found - GET",
+			expectedStatus:     http.StatusNotFound,
+			readStatusReturn:   http.StatusNotFound,
+			readBodyReturnFile: "./testdata/careplan-not-found.json",
+			xSCPContext:        "CarePlan/not-exists",
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: CarePlan in header not found - POST",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-not-found.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/not-exists",
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: CarePlan not found"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: CarePlan in header not found - POST",
+			expectedStatus:     http.StatusNotFound,
+			readStatusReturn:   http.StatusNotFound,
+			readBodyReturnFile: "./testdata/careplan-not-found.json",
+			xSCPContext:        "CarePlan/not-exists",
+			method:             to.Ptr("POST"),
+			url:                to.Ptr("/cpc/fhir/Patient/_search"),
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: CareTeam not present in bundle - GET",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-careteam-missing.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: CareTeam not present in bundle - GET",
+			expectedStatus:     http.StatusInternalServerError,
+			readBodyReturnFile: "./testdata/careplan-careteam-missing.json",
+			readStatusReturn:   http.StatusOK,
+			xSCPContext:        "CarePlan/cps-careplan-01",
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: CareTeam not present in bundle - POST",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-careteam-missing.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: CareTeam not found in bundle"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: CareTeam not present in bundle - POST",
+			expectedStatus:     http.StatusInternalServerError,
+			readBodyReturnFile: "./testdata/careplan-careteam-missing.json",
+			readStatusReturn:   http.StatusOK,
+			xSCPContext:        "CarePlan/cps-careplan-01",
+			method:             to.Ptr("POST"),
+			url:                to.Ptr("/cpc/fhir/Patient/_search"),
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: requester not part of CareTeam - GET",
-			principal:            auth.TestPrincipal3,
-			expectedStatus:       http.StatusForbidden,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: requester not part of CareTeam - GET",
+			principal:          auth.TestPrincipal3,
+			expectedStatus:     http.StatusForbidden,
+			readBodyReturnFile: "./testdata/careplan-valid.json",
+			readStatusReturn:   http.StatusOK,
+			xSCPContext:        "CarePlan/cps-careplan-01",
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: requester not part of CareTeam - POST",
-			principal:            auth.TestPrincipal3,
-			expectedStatus:       http.StatusForbidden,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:               "Fails: requester not part of CareTeam - POST",
+			principal:          auth.TestPrincipal3,
+			expectedStatus:     http.StatusForbidden,
+			readBodyReturnFile: "./testdata/careplan-valid.json",
+			readStatusReturn:   http.StatusOK,
+			xSCPContext:        "CarePlan/cps-careplan-01",
+			method:             to.Ptr("POST"),
+			url:                to.Ptr("/cpc/fhir/Patient/_search"),
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: proxied request returns error - GET",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientRequestURL:    to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn:  to.Ptr(http.StatusNotFound),
+			name:                "Fails: proxied request returns error - GET",
+			expectedStatus:      http.StatusNotFound,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
+			patientStatusReturn: to.Ptr(http.StatusNotFound),
 		},
 		{
-			name:                 "Fails: proxied request returns error - POST",
-			expectedStatus:       http.StatusNotFound,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientRequestURL:    to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn:  to.Ptr(http.StatusNotFound),
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
+			name:                "Fails: proxied request returns error - POST",
+			expectedStatus:      http.StatusNotFound,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
+			patientStatusReturn: to.Ptr(http.StatusNotFound),
+			method:              to.Ptr("POST"),
+			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
 		},
 		{
-			name:                 "Fails: requester is CareTeam member but Period is expired - GET",
-			principal:            auth.TestPrincipal2,
-			expectedStatus:       http.StatusForbidden,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientRequestURL:    to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:                "Fails: requester is CareTeam member but Period is expired - GET",
+			principal:           auth.TestPrincipal2,
+			expectedStatus:      http.StatusForbidden,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			expectedJSON:        `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Fails: requester is CareTeam member but Period is expired - POST",
-			principal:            auth.TestPrincipal2,
-			expectedStatus:       http.StatusForbidden,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientRequestURL:    to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:         `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:                "Fails: requester is CareTeam member but Period is expired - POST",
+			principal:           auth.TestPrincipal2,
+			expectedStatus:      http.StatusForbidden,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			method:              to.Ptr("POST"),
+			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
+			expectedJSON:        `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                 "Success: valid request - GET",
-			expectedStatus:       http.StatusOK,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/1"),
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientStatusReturn:  to.Ptr(http.StatusOK),
+			name:                "Success: valid request - GET",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/1"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
 		},
 		{
-			name:                 "Success: valid request - GET - Allow caching",
-			expectedStatus:       http.StatusOK,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/1"),
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			allowCaching:         true,
+			name:                "Success: valid request - GET - Allow caching",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/1"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			allowCaching:        true,
 		},
 		{
-			name:                 "Success: valid request - POST",
-			expectedStatus:       http.StatusOK,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/_search"),
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
+			name:                "Success: valid request - POST",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/_search"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			method:              to.Ptr("POST"),
+			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
 		},
 		{
-			name:                 "Success: valid request - POST - Allow caching",
-			expectedStatus:       http.StatusOK,
-			searchBodyReturnFile: "./testdata/careplan-bundle-valid.json",
-			patientRequestURL:    to.Ptr("/cpc/fhir/Patient/_search"),
-			searchStatusReturn:   http.StatusOK,
-			xSCPContext:          "CarePlan/cps-careplan-01",
-			patientStatusReturn:  to.Ptr(http.StatusOK),
-			method:               to.Ptr("POST"),
-			url:                  to.Ptr("/cpc/fhir/Patient/_search"),
-			allowCaching:         true,
+			name:                "Success: valid request - POST - Allow caching",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/_search"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
+			method:              to.Ptr("POST"),
+			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
+			allowCaching:        true,
 		},
 	}
 
@@ -224,6 +226,8 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			fhirServer := httptest.NewServer(fhirServerMux)
 			fhirServerURL, _ := url.Parse(fhirServer.URL)
 			sessionManager, _ := createTestSession()
+			messageBroker, err := messaging.New(messaging.Config{}, nil)
+			require.NoError(t, err)
 
 			carePlanServiceMux := http.NewServeMux()
 			carePlanService := httptest.NewServer(carePlanServiceMux)
@@ -241,32 +245,24 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 				"/cpc/cps/fhir",
 				orcaPublicURL.JoinPath("/cpc/cps/fhir"),
 				http.DefaultTransport,
-				tt.allowCaching,
+				tt.allowCaching, false,
 			)
 
 			service, _ := New(Config{
 				FHIR: coolfhir.ClientConfig{
 					BaseURL: fhirServer.URL + "/fhir",
 				},
-				CarePlanService: CarePlanServiceConfig{
-					URL: carePlanServiceURL.String(),
-				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.Test(), orcaPublicURL, sessionManager, proxy)
+			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, proxy, carePlanServiceURL)
 
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
 
-			var capturedBody []byte
-			if tt.searchBodyReturnFile != "" {
-				carePlanServiceMux.HandleFunc("POST /cps/CarePlan/_search", func(writer http.ResponseWriter, request *http.Request) {
-					capturedBody, _ = io.ReadAll(request.Body)
-					rawJson, _ := os.ReadFile(tt.searchBodyReturnFile)
-					var data fhir.Bundle
-					_ = json.Unmarshal(rawJson, &data)
-					responseData, _ := json.Marshal(data)
-					writer.WriteHeader(http.StatusOK)
-					_, _ = writer.Write(responseData)
+			if tt.readBodyReturnFile != "" {
+				carePlanServiceMux.HandleFunc(fmt.Sprintf("GET /cps/%s", tt.xSCPContext), func(writer http.ResponseWriter, request *http.Request) {
+					rawJson, _ := os.ReadFile(tt.readBodyReturnFile)
+					writer.WriteHeader(tt.readStatusReturn)
+					_, _ = writer.Write(rawJson)
 				})
 			}
 			if tt.patientRequestURL != nil && tt.patientStatusReturn != nil {
@@ -279,9 +275,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			service.RegisterHandlers(frontServerMux)
 			frontServer := httptest.NewServer(frontServerMux)
 
-			carePlanId := ""
 			if tt.xSCPContext != "" {
-				carePlanId = strings.TrimPrefix(tt.xSCPContext, "CarePlan/")
 				tt.xSCPContext = fmt.Sprintf("%s/%s", carePlanServiceURL, tt.xSCPContext)
 			}
 
@@ -307,21 +301,13 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			httpRequest, _ := http.NewRequest(method, frontServer.URL+reqURL, nil)
 			httpResponse, err := httpClient.Do(httpRequest)
 			require.Equal(t, err, tt.expectedError)
-			require.Equal(t, httpResponse.StatusCode, tt.expectedStatus)
+			require.Equal(t, tt.expectedStatus, httpResponse.StatusCode)
 
 			if tt.expectedJSON != "" {
 				body, _ := io.ReadAll(httpResponse.Body)
 				require.JSONEq(t, tt.expectedJSON, string(body))
 			}
-			if tt.searchBodyReturnFile != "" {
-				expectedValues := url.Values{
-					"_include": {"CarePlan:care-team"},
-					"_id":      {carePlanId},
-				}
-				actualValues, err := url.ParseQuery(string(capturedBody))
-				require.NoError(t, err)
-				require.Equal(t, expectedValues, actualValues)
-
+			if tt.readBodyReturnFile != "" {
 				if tt.expectedStatus == http.StatusOK {
 					if tt.allowCaching {
 						assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
@@ -344,6 +330,8 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
 
 	carePlanServiceMux := http.NewServeMux()
 	carePlanServiceMux.HandleFunc("GET /cps/Task/999", func(writer http.ResponseWriter, request *http.Request) {
@@ -387,10 +375,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -401,19 +386,31 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	t.Run("invalid notification - wrong data type", func(t *testing.T) {
 		notification := fhir.Task{Id: to.Ptr("1")}
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
 
 		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 	})
-	t.Run("valid notification - unsupported type", func(t *testing.T) {
+	t.Run("valid notification (no trailing slash)", func(t *testing.T) {
 		notification := coolfhir.CreateSubscriptionNotification(carePlanServiceURL,
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
+		httpResponse, err := httpClient.Do(httpRequest)
+
+		require.NoError(t, err)
+
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("valid notification (with trailing slash)", func(t *testing.T) {
+		notification := coolfhir.CreateSubscriptionNotification(carePlanServiceURL,
+			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
+			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
+		notificationJSON, _ := json.Marshal(notification)
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -425,19 +422,19 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/999"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
 
-		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+		require.Equal(t, http.StatusInternalServerError, httpResponse.StatusCode)
 	})
 	t.Run("valid notification - task - not SCP", func(t *testing.T) {
 		notification := coolfhir.CreateSubscriptionNotification(carePlanServiceURL,
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/1"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -449,7 +446,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/2"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -464,7 +461,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 
 	})
 	t.Run("invalid notification", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader("invalid"))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader("invalid"))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -493,16 +490,16 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	fhirServerURL.Path = "/fhir"
 	sessionManager, _ := createTestSession()
 
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
+
 	service, _ := New(Config{
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-		CarePlanService: CarePlanServiceConfig{
-			URL: fhirServerURL.String(),
-		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
-	}, orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	}, orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
@@ -554,7 +551,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 			return nil
 		})
 
-	httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/notify", strings.NewReader(string(notificationJSON)))
+	httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
 	httpResponse, err := httpClient.Do(httpRequest)
 
 	require.NoError(t, err)
@@ -583,9 +580,11 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 			BaseURL: fhirServerURL,
 		}
 	}
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -642,19 +641,24 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
 		capturedBody, _ = io.ReadAll(request.Body)
-		_ = json.NewEncoder(writer).Encode(fhir.Patient{})
+		_ = json.NewEncoder(writer).Encode(fhir.Bundle{})
+	})
+	carePlanServiceMux.HandleFunc("GET /fhir/Patient/1", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		_ = json.NewEncoder(writer).Encode(fhir.Patient{
+			Id: to.Ptr("1"),
+		})
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
 	carePlanServiceURL.Path = "/fhir"
 
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{
-		CarePlanService: CarePlanServiceConfig{
-			URL: carePlanServiceURL.String(),
-		},
-	}, profile.Test(), orcaPublicURL, sessionManager, &httputil.ReverseProxy{})
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, carePlanServiceURL)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()
@@ -679,6 +683,23 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 	actualValues, err := url.ParseQuery(string(capturedBody))
 	require.NoError(t, err)
 	require.Equal(t, expectedValues, actualValues)
+
+	t.Run("check meta.source is set for read operations", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/cps/fhir/Patient/1", nil)
+		httpRequest.AddCookie(&http.Cookie{
+			Name:  "sid",
+			Value: sessionID,
+		})
+		httpResponse, err := frontServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		responseData, err := io.ReadAll(httpResponse.Body)
+		require.NoError(t, err)
+		var patient fhir.Patient
+		err = json.Unmarshal(responseData, &patient)
+		require.NoError(t, err)
+		require.NotNil(t, patient.Meta)
+		require.NotNil(t, patient.Meta.Source)
+	})
 
 	t.Run("caching is not allowed", func(t *testing.T) {
 		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
@@ -721,7 +742,7 @@ func TestService_handleGetContext(t *testing.T) {
 	assert.JSONEq(t, `{
 		"practitioner": "the-doctor",
 		"practitionerRole": "the-doctor-role",
-		"serviceRequest": "ServiceRequest/1",	
+		"serviceRequest": "ServiceRequest/1",
 		"patient": "Patient/1",
 		"task": "Task/1",
 		"taskIdentifier": "task-identifier-123"
@@ -744,13 +765,15 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 			coolfhir.SendResponse(writer, http.StatusOK, results)
 		})
 		// CPS endpoints
-		carePlanBundleData, err := os.ReadFile("./testdata/careplan-bundle-valid.json")
+		carePlanData, err := os.ReadFile("./testdata/careplan-valid.json")
 		require.NoError(t, err)
-		var carePlanBundle fhir.Bundle
-		require.NoError(t, json.Unmarshal(carePlanBundleData, &carePlanBundle))
-		remoteContributorFHIRAPIMux.HandleFunc("POST /cps/fhir/CarePlan/_search", func(writer http.ResponseWriter, request *http.Request) {
-			coolfhir.SendResponse(writer, http.StatusOK, carePlanBundle)
+		var carePlan fhir.CarePlan
+		require.NoError(t, json.Unmarshal(carePlanData, &carePlan))
+
+		remoteContributorFHIRAPIMux.HandleFunc("GET /cps/fhir/CarePlan/1", func(writer http.ResponseWriter, request *http.Request) {
+			coolfhir.SendResponse(writer, http.StatusOK, carePlan)
 		})
+
 		remoteContributorFHIRAPI := httptest.NewServer(remoteContributorFHIRAPIMux)
 		cpcBaseURL := remoteContributorFHIRAPI.URL + "/cpc/fhir"
 		cpsBaseURL := remoteContributorFHIRAPI.URL + "/cps/fhir"
@@ -759,11 +782,6 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 		publicURL, _ := url.Parse("https://example.com")
 		service := &Service{
 			orcaPublicURL: publicURL,
-			config: Config{
-				CarePlanService: CarePlanServiceConfig{
-					URL: remoteContributorFHIRAPI.URL + "/cps",
-				},
-			},
 			profile: profile.TestProfile{
 				Principal: auth.TestPrincipal2,
 				CSD: profile.TestCsdDirectory{
@@ -778,9 +796,7 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 				},
 			},
 		}
-		expectedBody := url.Values{
-			"_include": {"CarePlan:care-team"},
-		}
+		expectedBody := url.Values{}
 
 		httpRequest := httptest.NewRequest("POST", publicURL.JoinPath("/cpc/aggregate/fhir/Patient/_search").String(), strings.NewReader(expectedBody.Encode()))
 		httpRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")

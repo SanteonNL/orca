@@ -1,15 +1,17 @@
 package careteamservice
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"slices"
+	"strings"
+	"time"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"slices"
-	"strings"
-	"time"
 )
 
 var nowFunc = time.Now
@@ -19,7 +21,7 @@ var nowFunc = time.Now
 // updateTrigger is the Task that triggered the update, which is used to determine the CareTeam membership.
 // It's passed to the function, as the new Task is not yet stored in the FHIR server, since the update is to be done in a single transaction.
 // When the CareTeam is updated, it adds the update(s) to the given transaction and returns true. If no changes are made, it returns false.
-func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.Task, tx *coolfhir.BundleBuilder) (bool, error) {
+func Update(ctx context.Context, client fhirclient.Client, carePlanId string, updateTriggerTask fhir.Task, tx *coolfhir.BundleBuilder) (bool, error) {
 	if len(updateTriggerTask.PartOf) > 0 {
 		// Only update the CareTeam if the Task is not a subtask
 		return false, nil
@@ -29,7 +31,6 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	if err := client.Read("CarePlan",
 		bundle,
 		fhirclient.QueryParam("_id", carePlanId),
-		fhirclient.QueryParam("_include", "CarePlan:care-team"),
 		fhirclient.QueryParam("_include", "CarePlan:activity-reference")); err != nil {
 		return false, fmt.Errorf("unable to resolve CarePlan and related resources: %w", err)
 	}
@@ -38,10 +39,12 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(carePlanId), carePlan); err != nil {
 		return false, fmt.Errorf("CarePlan not found (id=%s): %w", carePlanId, err)
 	}
-	careTeam, err := resolveCareTeam(bundle, carePlan)
+
+	careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 	if err != nil {
 		return false, err
 	}
+
 	activities, err := resolveActivities(bundle, carePlan)
 	if err != nil {
 		return false, err
@@ -60,11 +63,21 @@ func Update(client fhirclient.Client, carePlanId string, updateTriggerTask fhir.
 	if updateCareTeam(careTeam, otherActivities, updateTriggerTask) {
 		changed = true
 	}
+
 	if changed {
 		sortParticipants(careTeam.Participant)
-		tx.Update(*careTeam, "CareTeam/"+*careTeam.Id)
+
+		contained, err := coolfhir.UpdateContainedResource(carePlan.Contained, &carePlan.CareTeam[0], careTeam)
+		if err != nil {
+			return false, fmt.Errorf("unable to update CarePlan.Contained: %w", err)
+		}
+
+		carePlan.Contained = contained
+		tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+
 		return true, nil
 	}
+
 	return false, nil
 }
 
@@ -124,25 +137,6 @@ func deactivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference, otherA
 		}
 	}
 	return result
-}
-
-func resolveCareTeam(bundle *fhir.Bundle, carePlan *fhir.CarePlan) (*fhir.CareTeam, error) {
-	if len(carePlan.CareTeam) != 1 {
-		return nil, errors.New("CarePlan must have exactly one CareTeam")
-	}
-	var currentCareTeam fhir.CareTeam
-	if len(carePlan.CareTeam) == 1 {
-		// prevent nil deref
-		ref := carePlan.CareTeam[0].Reference
-		if ref == nil {
-			return nil, errors.New("CarePlan.CareTeam.Reference is required")
-		}
-		// Should be resolvable in Bundle
-		if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(*ref), &currentCareTeam); err != nil {
-			return nil, fmt.Errorf("unable to resolve CarePlan.CareTeam: %w", err)
-		}
-	}
-	return &currentCareTeam, nil
 }
 
 func resolveActivities(bundle *fhir.Bundle, carePlan *fhir.CarePlan) ([]fhir.Task, error) {

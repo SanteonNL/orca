@@ -1,12 +1,11 @@
 package careplanservice
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"io"
 	"net/http"
 	"net/url"
@@ -14,6 +13,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/messaging"
+
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 
@@ -31,7 +37,7 @@ const basePath = "/cps"
 // We might want to make this configurable at some point.
 var subscriberNotificationTimeout = 10 * time.Second
 
-func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Service, error) {
+func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messageBroker messaging.Broker) (*Service, error) {
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -40,16 +46,19 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL) (*Serv
 		return nil, err
 	}
 	baseUrl := orcaPublicURL.JoinPath(basePath)
+
+	subscriptionMgr, err := subscriptions.NewManager(baseUrl, subscriptions.CsdChannelFactory{Profile: profile}, messageBroker)
+	if err != nil {
+		return nil, fmt.Errorf("SubscriptionManager initialization: %w", err)
+	}
+
 	s := Service{
-		profile:       profile,
-		fhirURL:       upstreamFhirBaseUrl,
-		orcaPublicURL: orcaPublicURL,
-		transport:     transport,
-		fhirClient:    fhirClient,
-		subscriptionManager: subscriptions.DerivingManager{
-			FhirBaseURL: baseUrl,
-			Channels:    subscriptions.CsdChannelFactory{Profile: profile},
-		},
+		profile:                      profile,
+		fhirURL:                      upstreamFhirBaseUrl,
+		orcaPublicURL:                orcaPublicURL,
+		transport:                    transport,
+		fhirClient:                   fhirClient,
+		subscriptionManager:          subscriptionMgr,
 		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
 		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
 	}
@@ -104,6 +113,11 @@ type FHIRHandlerRequest struct {
 	RequestUrl   *url.URL
 	FullUrl      string
 	Context      context.Context
+	// Principal contains the identity of the client invoking the FHIR operation.
+	Principal *auth.Principal
+	// LocalIdentity contains the identifier of the local care organization handling the FHIR operation invocation.
+	LocalIdentity *fhir.Identifier
+	Upsert        bool
 }
 
 func (r FHIRHandlerRequest) bundleEntryWithResource(res any) fhir.BundleEntry {
@@ -139,7 +153,7 @@ type FHIRHandlerResult func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, er
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	s.proxy = coolfhir.NewProxy("CPS->FHIR proxy", s.fhirURL, basePath,
-		s.orcaPublicURL.JoinPath(basePath), s.transport, true)
+		s.orcaPublicURL.JoinPath(basePath), s.transport, true, false)
 	baseUrl := s.baseUrl()
 
 	// Binding to actual routing
@@ -216,7 +230,7 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBu
 		log.Ctx(request.Context()).Trace().Msgf("FHIR Transaction request: %s", txJson)
 	}
 	var txResult fhir.Bundle
-	if err := s.fhirClient.Create(tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
+	if err := s.fhirClient.CreateWithContext(request.Context(), tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 		txResultJson, _ := json.Marshal(tx.Bundle())
 		log.Ctx(request.Context()).Error().Err(err).
@@ -299,14 +313,28 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 			return
 		}
 	}
+
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+	localIdentity, err := s.getLocalIdentity()
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
 	fhirRequest := FHIRHandlerRequest{
-		RequestUrl:   httpRequest.URL,
-		HttpMethod:   httpRequest.Method,
-		HttpHeaders:  coolfhir.FilterRequestHeaders(httpRequest.Header),
-		ResourceId:   httpRequest.PathValue("id"),
-		ResourcePath: resourcePath,
-		ResourceData: bodyBytes,
-		Context:      httpRequest.Context(),
+		RequestUrl:    httpRequest.URL,
+		HttpMethod:    httpRequest.Method,
+		HttpHeaders:   coolfhir.FilterRequestHeaders(httpRequest.Header),
+		ResourceId:    httpRequest.PathValue("id"),
+		ResourcePath:  resourcePath,
+		ResourceData:  bodyBytes,
+		Context:       httpRequest.Context(),
+		Principal:     &principal,
+		LocalIdentity: localIdentity,
 	}
 	result, err := s.handleTransactionEntry(httpRequest.Context(), fhirRequest, tx)
 	if err != nil {
@@ -358,13 +386,16 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceId string, resourceType, operationName string) {
 	headers := new(fhirclient.Headers)
 
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
 	var resource interface{}
-	var err error
 	switch resourceType {
 	case "CarePlan":
 		resource, err = s.handleGetCarePlan(httpRequest.Context(), resourceId, headers)
-	case "CareTeam":
-		resource, err = s.handleGetCareTeam(httpRequest.Context(), resourceId, headers)
 	case "Task":
 		resource, err = s.handleGetTask(httpRequest.Context(), resourceId, headers)
 	case "Patient":
@@ -392,12 +423,118 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
 	}
+
+	localIdentity, err := s.getLocalIdentity()
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
+	auditEvent := audit.Event(*localIdentity, fhir.AuditEventActionR, &fhir.Reference{
+		Reference: to.Ptr(resourceType + "/" + resourceId),
+		Type:      to.Ptr(resourceType),
+	}, &fhir.Reference{
+		Identifier: &principal.Organization.Identifier[0],
+		Type:       to.Ptr("Organization"),
+	})
+
+	err = s.fhirClient.Create(auditEvent, &auditEvent)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
 	s.pipeline.PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers.Header)).
 		DoAndWrite(httpResponse, resource, http.StatusOK)
 }
 
+func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	resourceType := getResourceType(resourcePath)
+
+	switch resourceType {
+	case "Task":
+		return s.handleCreateTask
+	case "ServiceRequest":
+		return s.handleCreateServiceRequest
+	case "Patient":
+		return s.handleCreatePatient
+	case "Questionnaire":
+		return s.handleCreateQuestionnaire
+	case "QuestionnaireResponse":
+		return s.handleCreateQuestionnaireResponse
+	default:
+		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+			return s.handleUnmanagedOperation(request, tx)
+		}
+	}
+}
+
+func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	resourceType := getResourceType(resourcePath)
+
+	switch resourceType {
+	case "Task":
+		return s.handleUpdateTask
+	case "ServiceRequest":
+		return s.handleUpdateServiceRequest
+	case "Patient":
+		return s.handleUpdatePatient
+	case "Questionnaire":
+		return s.handleUpdateQuestionnaire
+	case "QuestionnaireResponse":
+		return s.handleUpdateQuestionnaireResponse
+	default:
+		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+			return s.handleUnmanagedOperation(request, tx)
+		}
+	}
+}
+
+func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
+	contentType := httpRequest.Header.Get("Content-Type")
+
+	if !strings.HasPrefix(contentType, "application/x-www-form-urlencoded") {
+		return coolfhir.BadRequest("Content-Type must be 'application/x-www-form-urlencoded'")
+	}
+
+	// Read the body
+	body, err := io.ReadAll(httpRequest.Body)
+	if err != nil {
+		return coolfhir.BadRequest("Failed to read request body: %w", err)
+	}
+
+	bodyString := string(body)
+
+	// Restore the body for later use
+	httpRequest.Body = io.NopCloser(bytes.NewBuffer(body))
+
+	if bodyString == "" {
+		return nil
+	}
+
+	// Custom validation to ensure the encoded body parameters are in the correct format
+	split := strings.Split(bodyString, "&")
+	for _, param := range split {
+		parts := strings.Split(param, "=")
+		if len(parts) != 2 {
+			return coolfhir.BadRequest("Invalid encoded body parameters")
+		}
+	}
+	return nil
+}
+
 func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
+	if err := s.validateSearchRequest(httpRequest); err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
 	headers := new(fhirclient.Headers)
+
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
 
 	// Ensure the Content-Type header is set correctly
 	contentType := httpRequest.Header.Get("Content-Type")
@@ -408,18 +545,15 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 
 	// Parse URL-encoded parameters from the request body
 	if err := httpRequest.ParseForm(); err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), fmt.Errorf("failed to parse form: %w", err), operationName, httpResponse)
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
 	}
 	queryParams := httpRequest.PostForm
 
 	var bundle *fhir.Bundle
-	var err error
 	switch resourceType {
 	case "CarePlan":
 		bundle, err = s.handleSearchCarePlan(httpRequest.Context(), queryParams, headers)
-	case "CareTeam":
-		bundle, err = s.handleSearchCareTeam(httpRequest.Context(), queryParams, headers)
 	case "Task":
 		bundle, err = s.handleSearchTask(httpRequest.Context(), queryParams, headers)
 	case "Patient":
@@ -440,6 +574,77 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
 	}
+
+	// Create audit events for each resource in the bundle
+	if bundle != nil && len(bundle.Entry) > 0 {
+		log.Ctx(httpRequest.Context()).Debug().
+			Int("resource_count", len(bundle.Entry)).
+			Str("resource_type", resourceType).
+			Msg("Creating audit events for resources in bundle")
+
+		for _, entry := range bundle.Entry {
+			if entry.Resource == nil {
+				continue
+			}
+
+			// Unmarshal the raw resource to access its properties
+			var resource struct {
+				ResourceType string `json:"resourceType"`
+				Id           string `json:"id"`
+			}
+
+			if err := json.Unmarshal(entry.Resource, &resource); err != nil {
+				log.Ctx(httpRequest.Context()).Error().
+					Err(err).
+					Msg("Failed to unmarshal resource for audit")
+				continue
+			}
+
+			resourceRef := &fhir.Reference{
+				Reference: to.Ptr(resource.ResourceType + "/" + resource.Id),
+				Type:      to.Ptr(resource.ResourceType),
+			}
+
+			// Create the query detail entity
+			queryEntity := fhir.AuditEventEntity{
+				Type: &fhir.Coding{
+					System:  to.Ptr("http://terminology.hl7.org/CodeSystem/audit-entity-type"),
+					Code:    to.Ptr("2"), // query parameters
+					Display: to.Ptr("Query Parameters"),
+				},
+				Detail: []fhir.AuditEventEntityDetail{},
+			}
+
+			// Add each query parameter as a detail
+			for param, values := range queryParams {
+				queryEntity.Detail = append(queryEntity.Detail, fhir.AuditEventEntityDetail{
+					Type:        param, // parameter name as string
+					ValueString: to.Ptr(strings.Join(values, ",")),
+				})
+			}
+
+			localIdentity, err := s.getLocalIdentity()
+			if err != nil {
+				coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+				return
+			}
+
+			auditEvent := audit.Event(*localIdentity, fhir.AuditEventActionR, resourceRef, &fhir.Reference{
+				Identifier: &principal.Organization.Identifier[0],
+				Type:       to.Ptr("Organization"),
+			})
+
+			// Add the query entity to the audit event
+			auditEvent.Entity = append(auditEvent.Entity, queryEntity)
+
+			err = s.fhirClient.Create(auditEvent, &auditEvent)
+			if err != nil {
+				coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+				return
+			}
+		}
+	}
+
 	s.pipeline.
 		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers.Header)).
 		DoAndWrite(httpResponse, bundle, http.StatusOK)
@@ -490,13 +695,25 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 			return
 		}
 
+		principal, err := auth.PrincipalFromContext(httpRequest.Context())
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
+			return
+		}
+		localIdentity, err := s.getLocalIdentity()
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
+			return
+		}
 		fhirRequest := FHIRHandlerRequest{
-			HttpMethod:   entry.Request.Method.Code(),
-			HttpHeaders:  coolfhir.HeadersFromBundleEntryRequest(entry.Request),
-			RequestUrl:   requestUrl,
-			ResourcePath: resourcePath,
-			ResourceData: entry.Resource,
-			Context:      httpRequest.Context(),
+			HttpMethod:    entry.Request.Method.Code(),
+			HttpHeaders:   coolfhir.HeadersFromBundleEntryRequest(entry.Request),
+			RequestUrl:    requestUrl,
+			ResourcePath:  resourcePath,
+			ResourceData:  entry.Resource,
+			Context:       httpRequest.Context(),
+			Principal:     &principal,
+			LocalIdentity: localIdentity,
 		}
 		if len(resourcePathParts) == 2 {
 			fhirRequest.ResourceId = resourcePathParts[1]
@@ -524,15 +741,9 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	switch method {
 	case http.MethodPost:
-		switch getResourceType(resourcePath) {
-		case "Task":
-			return s.handleCreateTask
-		}
+		return s.handleCreate(resourcePath)
 	case http.MethodPut:
-		switch getResourceType(resourcePath) {
-		case "Task":
-			return s.handleUpdateTask
-		}
+		return s.handleUpdate(resourcePath)
 	}
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		return s.handleUnmanagedOperation(request, tx)
@@ -789,6 +1000,41 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 	return nil
 }
 
+// TODO: This requires some further thought and discussion, implement in the future
+// func (s *Service) createErrorAuditEvent(ctx context.Context, err error, action fhir.AuditEventAction, resourceType string, resourceId string) {
+// 	principal, localErr := auth.PrincipalFromContext(ctx)
+// 	if localErr != nil {
+// 		log.Ctx(ctx).Error().Err(localErr).Msg("Failed to get principal for error audit")
+// 		return
+// 	}
+
+// 	resourceRef := &fhir.Reference{
+// 		Reference: to.Ptr(fmt.Sprintf("%s/%s", resourceType, resourceId)),
+// 		Type:      to.Ptr(resourceType),
+// 	}
+
+// 	auditEvent, localErr := audit.Event(ctx,
+// 		action,
+// 		resourceRef,
+// 		&fhir.Reference{
+// 			Identifier: &principal.Organization.Identifier[0],
+// 			Type:       to.Ptr("Organization"),
+// 		},
+// 	)
+// 	if localErr != nil {
+// 		log.Ctx(ctx).Error().Err(localErr).Msg("Failed to create error audit event")
+// 		return
+// 	}
+
+// 	// Add error details
+// 	auditEvent.Outcome = to.Ptr(fhir.AuditEventOutcome4) // 4 represents minor failure
+// 	auditEvent.OutcomeDesc = to.Ptr(err.Error())
+
+// 	if localErr := s.fhirClient.Create(auditEvent, &auditEvent); localErr != nil {
+// 		log.Ctx(ctx).Error().Err(localErr).Msg("Failed to store error audit event")
+// 	}
+// }
+
 func collectLiteralReferences(resource any, path []string, result map[string]string) {
 	switch r := resource.(type) {
 	case map[string]interface{}:
@@ -805,4 +1051,15 @@ func collectLiteralReferences(resource any, path []string, result map[string]str
 			result[strings.Join(path, ".")] = r
 		}
 	}
+}
+
+func (s *Service) getLocalIdentity() (*fhir.Identifier, error) {
+	localIdentity, err := s.profile.Identities(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	if len(localIdentity) == 0 || localIdentity[0].Identifier == nil || len(localIdentity[0].Identifier) == 0 {
+		return nil, errors.New("no local identity found")
+	}
+	return &localIdentity[0].Identifier[0], nil
 }

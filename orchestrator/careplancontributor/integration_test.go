@@ -15,11 +15,16 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
+	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 var notificationCounter = new(atomic.Int32)
+var fhirBaseURL *url.URL
+var httpService *httptest.Server
+var sessionManager *user.SessionManager
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	notificationEndpoint := setupNotificationEndpoint(t)
@@ -174,7 +179,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 }
 
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL, *httptest.Server, *url.URL) {
-	fhirBaseURL := test.SetupFHIRCandle(t)
+	fhirBaseURL = test.SetupFHIRCandle(t)
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
@@ -187,25 +192,26 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 		Principal: auth.TestPrincipal1,
 		CSD:       profile.TestCsdDirectory{Endpoint: notificationEndpoint.String()},
 	}
-	service, err := careplanservice.New(config, activeProfile, orcaPublicURL)
+	service, err := careplanservice.New(config, activeProfile, orcaPublicURL, messaging.NewMemoryBroker())
+	require.NoError(t, err)
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
-	httpService := httptest.NewServer(serverMux)
+	httpService = httptest.NewServer(serverMux)
 	service.RegisterHandlers(serverMux)
 
 	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
 	sessionManager, _ := createTestSession()
 
 	// TODO: Tests using the Zorgplatform service
-	cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true)
+	cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true, false)
 
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
-	cpcConfig.CarePlanService.URL = carePlanServiceURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, cpsProxy)
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, cpsProxy, carePlanServiceURL)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()

@@ -3,16 +3,17 @@ package careplanservice
 import (
 	"context"
 	"fmt"
+	"net/http"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
 )
 
 func (s *Service) handleGetCondition(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.Condition, error) {
 	var condition fhir.Condition
-	err := s.fhirClient.Read("Condition/"+id, &condition, fhirclient.ResponseHeaders(headers))
+	err := s.fhirClient.ReadWithContext(ctx, "Condition/"+id, &condition, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, err
 	}

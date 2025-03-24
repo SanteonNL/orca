@@ -38,3 +38,28 @@ func TestResponseBodyRewriter_Transform(t *testing.T) {
 		assert.Equal(t, expected, input)
 	})
 }
+
+func TestMetaSourceSetter_do(t *testing.T) {
+	t.Run("sets meta.source", func(t *testing.T) {
+		expected := `{"meta":{"source":"http://example.com"}}`
+		input := []byte(`{}`)
+		transformer := MetaSourceSetter{URI: "http://example.com"}
+		err := transformer.do(&input)
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(input))
+	})
+	t.Run("overwrites existing meta.source", func(t *testing.T) {
+		expected := `{"meta":{"source":"http://example.com"}}`
+		input := []byte(`{"meta":{"source":"http://localhost:8080"}}`)
+		transformer := MetaSourceSetter{URI: "http://example.com"}
+		err := transformer.do(&input)
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(input))
+	})
+	t.Run("invalid resource", func(t *testing.T) {
+		input := []byte(`invalid`)
+		transformer := MetaSourceSetter{URI: "http://example.com"}
+		err := transformer.do(&input)
+		assert.Error(t, err)
+	})
+}

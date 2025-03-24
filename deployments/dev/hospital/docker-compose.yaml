@@ -39,6 +39,8 @@ services:
     # build:
     #  context: ../../../frontend
     #  dockerfile: Dockerfile
+    environment:
+      - DATA_VIEWER_ENABLED=true
      # Make sure to copy the .env.secrets.example and fill in the terminology server credentials for the tx server to work
     env_file:
       - path: ../../../frontend/.env.secrets
@@ -70,8 +72,8 @@ services:
       - ORCA_CAREPLANSERVICE_ALLOWUNMANAGEDFHIROPERATIONS=true
       - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
       - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://fhirstore:8080/fhir
-      - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
       - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=${HOSPITAL_URL}/frontend/enrollment
       - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
@@ -99,7 +101,7 @@ services:
     environment:
       - hapi.fhir.fhir_version=R4
       - hapi.fhir.allow_external_references=true
-      - hapi.fhir.server_address=${HOSPITAL_URL}/fhir
+      - hapi.fhir.server_address=http://fhirstore:8080/fhir
   # The HAPI image has no binaries such as curl, so we use the curl image to perform the health check
   fhirstore-healthcheck:
     image: curlimages/curl:7.87.0

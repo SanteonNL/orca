@@ -7,6 +7,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 	"net/url"
 	"testing"
+	"time"
 )
 
 // File for test helpers that can be shared between CPS and CPC
@@ -21,7 +22,7 @@ func SetupHAPI(t *testing.T) *url.URL {
 			"hapi.fhir.fhir_version":              "R4",
 			"hapi.fhir.allow_external_references": "true",
 		},
-		WaitingFor: wait.ForHTTP("/fhir/Task"),
+		WaitingFor: wait.ForHTTP("/fhir/Task").WithStartupTimeout(2 * time.Minute),
 	}
 	container, err := tc.GenericContainer(ctx, tc.GenericContainerRequest{
 		ContainerRequest: req,

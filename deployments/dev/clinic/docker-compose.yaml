@@ -31,9 +31,9 @@ services:
       - "1305:1305"
   orchestrator:
     image: ghcr.io/santeonnl/orca_orchestrator:main
-#    build:
-#      context: ../../../orchestrator
-#      dockerfile: Dockerfile
+    #build:
+    #  context: ../../../orchestrator
+    #  dockerfile: Dockerfile
     ports:
       - "3030:8080"
     environment:
@@ -43,18 +43,14 @@ services:
       - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
       - ORCA_PUBLIC_URL=${NUTS_URL}/orca
       - ORCA_STRICTMODE=false
-      - ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL=${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
+      - ORCA_MESSAGING_HTTP_ENDPOINT=${NUTS_URL}/viewer/api/delivery
+      - ORCA_MESSAGING_HTTP_TOPICFILTER=orca-enroll-patient
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
-      # Note: clinic re-uses the FHIR store of the Hospital, so we don't need to start a second one making things even slower
-      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL=${HOSPITAL_URL}/fhir
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_ENABLED=true
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_TOPIC=orca-patient-enrollment-events
+      - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://viewer:3000/viewer/api/fhir
       # If this value is set, the clinic will send task notifications over http to the provided endpoint. Cannot be used in conjunction with the strict mode
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_DEMOENDPOINT=${NUTS_URL}/viewer/api/delivery
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_HOSTNAME=
-      - ORCA_CAREPLANCONTRIBUTOR_SERVICEBUS_CONNECTIONSTRING=Endpoint=sb://servicebus-emulator;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;
-      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC=orca-enroll-patient
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-healthcareservices.json,https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-questionnaires.json
     volumes:
       # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
       # used by the Task Filler Engine
@@ -66,29 +62,8 @@ services:
 #      context: ../../../viewer_simulator
 #      dockerfile: Dockerfile
     environment:
-      ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL: ${CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL}
-      FHIR_BASE_URL: http://orchestrator:8080/cpc/cps/fhir
+      FHIR_BASE_URL: ${HOSPITAL_URL}/orca/cpc/cps/fhir
       FHIR_AGGREGATE_URL: http://orchestrator:8080/cpc/aggregate/fhir
       FHIR_AUTHORIZATION_TOKEN: valid
       NEXT_ALLOWED_ORIGINS: localhost:7080
-  servicebus-emulator:
-    container_name: "servicebus-emulator"
-    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:latest
-    volumes:
-      - "./config/servicebus-emulator.json:/ServiceBus_Emulator/ConfigFiles/Config.json"
-    ports:
-      - "5672:5672"
-    environment:
-      SQL_SERVER: mssql
-      MSSQL_SA_PASSWORD: "Z4perS3!cr3!t"
-      ACCEPT_EULA: "Y"
-    depends_on:
-      - mssql
-  mssql:
-        container_name: "mssql"
-        image: "mcr.microsoft.com/mssql/server:2022-latest"
-        platform: linux/amd64
-        environment:
-          ACCEPT_EULA:  "Y"
-          MSSQL_SA_PASSWORD: "Z4perS3!cr3!t"
-          DOCKER_DEFAULT_PLATFORM: linux/amd64
+

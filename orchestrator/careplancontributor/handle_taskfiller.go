@@ -107,13 +107,19 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 	}
 	log.Ctx(ctx).Info().Msg("SubTask.status is completed - processing")
 
-	// TODO: Doesn't support nested subtasks for now
 	primaryTask := new(fhir.Task)
 	err := cpsClient.Read(primaryTaskRef, primaryTask)
 	if err != nil {
 		return &TaskRejection{
 			Reason:       "Processing failed",
 			ReasonDetail: fmt.Errorf("failed to fetch primary Task of subtask (subtask.id=%s, primarytask.ref=%s): %w", *task.Id, primaryTaskRef, err),
+		}
+	}
+
+	if coolfhir.IsScpSubTask(primaryTask) {
+		return &TaskRejection{
+			Reason:       "Invalid Task",
+			ReasonDetail: errors.New("sub-task references another sub-task. Nested subtasks are not supported"),
 		}
 	}
 
@@ -126,19 +132,22 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 		log.Ctx(ctx).Debug().Msg("primary Task.status != requested||received (workflow already started) - not processing in handleTaskNotification")
 		return nil
 	}
-	log.Ctx(ctx).Debug().Msg("Accepting primary Task")
+	ref := "Task/" + *primaryTask.Id
+	log.Ctx(ctx).Info().Msgf("TaskEngine: Accepting primary Task (task=%s)", ref)
 	primaryTask.Status = fhir.TaskStatusAccepted
 	// Update the task in the FHIR server
-	ref := "Task/" + *primaryTask.Id
 	err := cpsClient.Update(ref, primaryTask, primaryTask)
 	if err != nil {
 		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
 	}
 	log.Ctx(ctx).Debug().Msgf("Successfully accepted task (ref=%s)", ref)
-	err = s.notifier.NotifyTaskAccepted(ctx, cpsClient, primaryTask)
-	if err != nil {
-		log.Ctx(ctx).Warn().Msgf("Accepted Task with an error in the notification (ref=%s): %s", ref, err.Error())
-		return nil
+	if s.notifier != nil {
+		log.Ctx(ctx).Info().Msgf("TaskEngine: EHR will be notified of accepted Task with bundle of relevant FHIR resources (task=%s)", ref)
+		err = s.notifier.NotifyTaskAccepted(ctx, cpsClient.Path().String(), primaryTask)
+		if err != nil {
+			log.Ctx(ctx).Warn().Msgf("Accepted Task with an error in the notification (task=%s): %s", ref, err.Error())
+			return nil
+		}
 	}
 	log.Ctx(ctx).Debug().Msgf("Successfully accepted Task (ref=%s)", ref)
 	return nil
@@ -151,20 +160,6 @@ func (s *Service) fetchQuestionnaireByID(ctx context.Context, cpsClient fhirclie
 		return fmt.Errorf("failed to fetch Questionnaire: %s", err.Error())
 	}
 	return nil
-}
-
-func (s *Service) isScpTask(task *fhir.Task) bool {
-	if task.Meta == nil {
-		return false
-	}
-
-	for _, profile := range task.Meta.Profile {
-		if profile == coolfhir.SCPTaskProfile {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (s *Service) isValidTask(task *fhir.Task) error {

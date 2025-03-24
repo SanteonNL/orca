@@ -4,122 +4,86 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
 
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-// Writes an OperationOutcome based on the given error as HTTP response.
-func (s *Service) writeOperationOutcomeFromError(ctx context.Context, err error, desc string, httpResponse http.ResponseWriter) {
-	log.Ctx(ctx).Info().Msgf("%s failed: %v", desc, err)
-	diagnostics := fmt.Sprintf("%s failed: %s", desc, err.Error())
+func (s *Service) isCreatorOfResource(ctx context.Context, principal auth.Principal, resourceType string, resourceID string) (bool, error) {
 
-	issue := fhir.OperationOutcomeIssue{
-		Severity:    fhir.IssueSeverityError,
-		Code:        fhir.IssueTypeProcessing,
-		Diagnostics: to.Ptr(diagnostics),
-	}
-
-	outcome := fhir.OperationOutcome{
-		Issue: []fhir.OperationOutcomeIssue{issue},
-	}
-
-	coolfhir.SendResponse(httpResponse, http.StatusBadRequest, outcome)
-}
-
-func GetCarePlanAndCareTeams(ctx context.Context, client fhirclient.Client, carePlanReference string) (fhir.CarePlan, []fhir.CareTeam, *fhirclient.Headers, error) {
-	bundle := fhir.Bundle{}
-	var carePlan fhir.CarePlan
-	var careTeams []fhir.CareTeam
-	headers := new(fhirclient.Headers)
-
-	carePlanId := strings.TrimPrefix(carePlanReference, "CarePlan/")
-
-	err := client.Search("CarePlan", url.Values{"_id": {carePlanId}, "_include": {"CarePlan:care-team"}}, &bundle, fhirclient.ResponseHeaders(headers))
+	var auditBundle fhir.Bundle
+	err := s.fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{
+		"entity": []string{resourceType + "/" + resourceID},
+		"action": []string{fhir.AuditEventActionC.String()},
+	}, &auditBundle)
 	if err != nil {
-		return fhir.CarePlan{}, nil, nil, err
+		return false, fmt.Errorf("failed to find creation AuditEvent: %w", err)
 	}
 
-	err = coolfhir.ResourceInBundle(&bundle, coolfhir.EntryIsOfType("CarePlan"), &carePlan)
+	// Check if there's a creation audit event
+	if len(auditBundle.Entry) == 0 {
+		return false, coolfhir.NewErrorWithCode(fmt.Sprintf("No creation audit event found for %s", resourceType), http.StatusForbidden)
+	}
+
+	// Get the creator from the audit event
+	var creationAuditEvent fhir.AuditEvent
+	err = json.Unmarshal(auditBundle.Entry[0].Resource, &creationAuditEvent)
 	if err != nil {
-		return fhir.CarePlan{}, nil, nil, err
+		return false, fmt.Errorf("failed to unmarshal AuditEvent: %w", err)
 	}
 
-	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
-	if len(careTeams) == 0 {
-		return fhir.CarePlan{}, nil, nil, &coolfhir.ErrorWithCode{
-			Message:    "CareTeam not found in bundle",
-			StatusCode: http.StatusNotFound,
-		}
+	// Check if the current user is the creator
+	if !audit.IsCreator(creationAuditEvent, &principal) {
+		return false, coolfhir.NewErrorWithCode(fmt.Sprintf("Only the creator can update this %s", resourceType), http.StatusForbidden)
 	}
 
-	return carePlan, careTeams, headers, nil
-}
-
-// handleTaskBasedResourceAuth is a generic function to handle the authorization of a resource based on a Task
-// it will check if the resource is based on a Task, and if so, fetch the Task and in doing so - validate the requester has access to the Task
-// it returns an error if the Task is not found or the requester is not a participant of the CareTeam associated with the Task
-func (s *Service) handleTaskBasedResourceAuth(ctx context.Context, headers *fhirclient.Headers, basedOn []fhir.Reference, resourceType string) error {
-	if len(basedOn) != 1 {
-		return &coolfhir.ErrorWithCode{
-			Message:    fmt.Sprintf("%s has invalid number of BasedOn values", resourceType),
-			StatusCode: http.StatusInternalServerError,
-		}
-	}
-	if basedOn[0].Reference == nil {
-		return &coolfhir.ErrorWithCode{
-			Message:    fmt.Sprintf("%s has invalid BasedOn Reference", resourceType),
-			StatusCode: http.StatusInternalServerError,
-		}
-	}
-
-	// Fetch the task this questionnaireResponse is based on
-	// As long as we get a task back, we can assume the user has access to the service request
-	if !strings.HasPrefix(*basedOn[0].Reference, "Task/") {
-		return &coolfhir.ErrorWithCode{
-			Message:    fmt.Sprintf("%s BasedOn is not a Task", resourceType),
-			StatusCode: http.StatusInternalServerError,
-		}
-	}
-	taskId := strings.TrimPrefix(*basedOn[0].Reference, "Task/")
-	_, err := s.handleGetTask(ctx, taskId, headers)
-	if err != nil {
-		return err
-	}
-	return nil
+	return true, nil
 }
 
 // filterAuthorizedPatients will go through a list of patients and return the ones the requester has access to
-func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.Patient) ([]fhir.Patient, error) {
+func (s *Service) filterAuthorizedPatients(ctx context.Context, principal auth.Principal, patients []fhir.Patient) ([]fhir.Patient, error) {
 	params := url.Values{}
 	patientRefs := make([]string, len(patients))
 	for i, patient := range patients {
 		patientRefs[i] = fmt.Sprintf("Patient/%s", *patient.Id)
 	}
 	params.Add("subject", strings.Join(patientRefs, ","))
-	params.Add("_include", "CarePlan:care-team")
+	// If we're missing a CarePlan due to too low page count, we might incorrectly deny access
+	const carePlanSearchPageSize = 10000
+	params.Add("_count", strconv.Itoa(carePlanSearchPageSize))
 
 	// Fetch all CarePlans associated with the Patient, get the CareTeams associated with the CarePlans
 	// Get the CarePlan for which the Patient is the subject, get the CareTeams associated with the CarePlan
 	var verificationBundle fhir.Bundle
-	err := s.fhirClient.Search("CarePlan", params, &verificationBundle)
+	err := s.fhirClient.SearchWithContext(ctx, "CarePlan", params, &verificationBundle)
 	if err != nil {
 		return nil, err
 	}
 
-	var careTeams []fhir.CareTeam
-	err = coolfhir.ResourcesInBundle(&verificationBundle, coolfhir.EntryIsOfType("CareTeam"), &careTeams)
-	if err != nil {
-		return nil, err
+	// If there's more search results we didn't use, make sure we log this
+	carePlanSearchHasNext := false
+	for _, link := range verificationBundle.Link {
+		if link.Relation == "next" {
+			carePlanSearchHasNext = true
+			break
+		}
 	}
+	if carePlanSearchHasNext ||
+		len(verificationBundle.Entry) > carePlanSearchPageSize-1 ||
+		(verificationBundle.Total != nil && *verificationBundle.Total > carePlanSearchPageSize) {
+		log.Ctx(ctx).Warn().Msgf("Too many CarePlans found for patient(s), only the first %d will taken into account for granting access", carePlanSearchPageSize)
+	}
+
 	var carePlans []fhir.CarePlan
 	err = coolfhir.ResourcesInBundle(&verificationBundle, coolfhir.EntryIsOfType("CarePlan"), &carePlans)
 	if err != nil {
@@ -128,22 +92,17 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 
 	retPatients := make([]fhir.Patient, 0)
 
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	// Iterate through each CareTeam to see if the requester is a participant, if not, remove any patients from the bundle that are part of the CareTeam
 	for _, cp := range carePlans {
-		var ct fhir.CareTeam
-		for _, c := range careTeams {
-			if *cp.CareTeam[0].Reference == fmt.Sprintf("CareTeam/%s", *c.Id) {
-				ct = c
-				break
-			}
+		ct, err := coolfhir.CareTeamFromCarePlan(&cp)
+		// INT-630: We changed CareTeam to be contained within the CarePlan, but old test data in the CarePlan resource does not have CareTeam.
+		//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
+		if err != nil {
+			log.Ctx(ctx).Warn().Err(err).Msgf("Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource (carePlanID=%s)", *cp.Id)
+			continue
 		}
 
-		participant := coolfhir.FindMatchingParticipantInCareTeam([]fhir.CareTeam{ct}, principal.Organization.Identifier)
+		participant := coolfhir.FindMatchingParticipantInCareTeam(ct, principal.Organization.Identifier)
 		if participant != nil {
 			for _, patient := range patients {
 				if "Patient/"+*patient.Id == *cp.Subject.Reference {
@@ -151,6 +110,23 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 					break
 				}
 			}
+		}
+	}
+
+	// For patients not yet authorized, check if the requester is the creator
+	for _, patient := range patients {
+		// Skip if patient is already authorized through CareTeam
+		if slices.ContainsFunc(retPatients, func(p fhir.Patient) bool {
+			return *p.Id == *patient.Id
+		}) {
+			continue
+		}
+
+		// Check if requester is the creator
+		isCreator, err := s.isCreatorOfResource(ctx, principal, "Patient", *patient.Id)
+		if err == nil && isCreator {
+			log.Ctx(ctx).Debug().Msgf("User is creator of Patient/%s", *patient.Id)
+			retPatients = append(retPatients, patient)
 		}
 	}
 
@@ -162,13 +138,11 @@ func (s *Service) filterAuthorizedPatients(ctx context.Context, patients []fhir.
 func handleSearchResource[T any](ctx context.Context, s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
 	form := url.Values{}
 	for k, v := range queryParams {
-		for _, value := range v {
-			form.Add(k, value)
-		}
+		form.Add(k, strings.Join(v, ","))
 	}
 
 	var bundle fhir.Bundle
-	err := s.fhirClient.Search(resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
+	err := s.fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, &fhir.Bundle{}, err
 	}
@@ -182,25 +156,12 @@ func handleSearchResource[T any](ctx context.Context, s *Service, resourceType s
 	return resources, &bundle, nil
 }
 
-func validatePrincipalInCareTeams(principal auth.Principal, careTeams []fhir.CareTeam) error {
-	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+func validatePrincipalInCareTeam(principal auth.Principal, careTeam *fhir.CareTeam) error {
+	participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, principal.Organization.Identifier)
 	if participant == nil {
 		return &coolfhir.ErrorWithCode{
 			Message:    "Participant is not part of CareTeam",
 			StatusCode: http.StatusForbidden,
-		}
-	}
-	return nil
-}
-
-// matchResourceIDs matches whether the ID in the request URL matches the ID in the resource.
-// This is important for PUT requests, where the ID in the URL is the ID of the resource to update.
-// They do not need to be set both, but if they are, they should match.
-func matchResourceIDs(request *FHIRHandlerRequest, idFromResource *string) error {
-	if (idFromResource != nil && request.ResourceId != "") && request.ResourceId != *idFromResource {
-		return &coolfhir.ErrorWithCode{
-			Message:    "ID in request URL does not match ID in resource",
-			StatusCode: http.StatusBadRequest,
 		}
 	}
 	return nil

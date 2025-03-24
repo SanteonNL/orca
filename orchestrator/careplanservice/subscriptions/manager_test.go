@@ -2,17 +2,40 @@ package subscriptions
 
 import (
 	"context"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
+	"net/url"
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-	"net/url"
-	"testing"
 )
 
 func TestDerivingManager_Notify(t *testing.T) {
 	fhirBaseURL, _ := url.Parse("http://example.com/fhir")
+
+	t.Run("CarePlan with a single CareTeam", func(t *testing.T) {
+		carePlan := &fhir.CarePlan{
+			Id: to.Ptr("1"),
+			CareTeam: []fhir.Reference{{
+				Id:        to.Ptr("10"),
+				Reference: to.Ptr("CareTeam/20"),
+			}},
+		}
+
+		ctrl := gomock.NewController(t)
+		channelFactory := NewMockChannelFactory(ctrl)
+
+		manager, err := NewManager(fhirBaseURL, channelFactory, messaging.NewMemoryBroker())
+		require.NoError(t, err)
+
+		err = manager.Notify(context.Background(), carePlan)
+
+		require.NoError(t, err)
+	})
+
 	t.Run("CareTeam with multiple (3) subscribers", func(t *testing.T) {
 		careTeam := &fhir.CareTeam{
 			Id: to.Ptr("10"),
@@ -22,6 +45,7 @@ func TestDerivingManager_Notify(t *testing.T) {
 				{Member: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "3")},
 			},
 		}
+
 		ctrl := gomock.NewController(t)
 		channelFactory := NewMockChannelFactory(ctrl)
 
@@ -41,12 +65,10 @@ func TestDerivingManager_Notify(t *testing.T) {
 		member3Channel.EXPECT().Notify(gomock.Any(), gomock.Any()).Return(nil)
 		channelFactory.EXPECT().Create(gomock.Any(), *careTeam.Participant[2].Member.Identifier).Return(member3Channel, nil)
 
-		manager := DerivingManager{
-			FhirBaseURL: fhirBaseURL,
-			Channels:    channelFactory,
-		}
+		manager, err := NewManager(fhirBaseURL, channelFactory, messaging.NewMemoryBroker())
+		require.NoError(t, err)
 
-		err := manager.Notify(context.Background(), careTeam)
+		err = manager.Notify(context.Background(), careTeam)
 
 		require.NoError(t, err)
 		focus, _ := capturedMember1Notification.GetFocus()

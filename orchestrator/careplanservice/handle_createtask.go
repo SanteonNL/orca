@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/google/uuid"
@@ -44,14 +46,8 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
 	}
 
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-
 	carePlan := fhir.CarePlan{}
-	var carePlanRef *string
-	err = coolfhir.ValidateTaskRequiredFields(task)
+	err := coolfhir.ValidateTaskRequiredFields(task)
 	if err != nil {
 		return nil, err
 	}
@@ -70,8 +66,13 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	}
 
 	// Resolve the CarePlan
-	var taskEntryIdx = -1
-	var taskBundleEntry fhir.BundleEntry
+	var (
+		taskEntryIdx           = -1
+		taskBundleEntry        fhir.BundleEntry
+		carePlanBundleEntryIdx = -1
+		carePlanBundleEntry    *fhir.BundleEntry
+	)
+
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
 
@@ -80,17 +81,17 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		if err != nil {
 			return nil, err
 		}
-		if !isRequesterLocalCareOrganization(ids, principal) {
+		if !isRequesterLocalCareOrganization(ids, *request.Principal) {
 			return nil, errors.New("requester must be local care organization in order to create new CarePlan and CareTeam")
 		}
 
 		// Create a new CarePlan (which will also create a new CareTeam) based on the Task reference
 		carePlanURL := "urn:uuid:" + uuid.NewString()
-		careTeamURL := "urn:uuid:" + uuid.NewString()
+		careTeamID := "cps-careteam"
 		taskURL := "urn:uuid:" + uuid.NewString()
-		careTeam := fhir.CareTeam{}
+		careTeam := fhir.CareTeam{Id: to.Ptr(careTeamID)}
 		carePlan.CareTeam = append(carePlan.CareTeam, fhir.Reference{
-			Reference: to.Ptr(careTeamURL),
+			Reference: to.Ptr("#" + careTeamID),
 			Type:      to.Ptr(coolfhir.ResourceType(careTeam)),
 		})
 		carePlan.Intent = fhir.CarePlanIntentOrder
@@ -114,7 +115,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		// Validate Task.For: identifier (with system and value), and/or reference must be set
 		if task.For == nil || !coolfhir.ValidateReference(*task.For) {
-			return nil, coolfhir.NewErrorWithCode(fmt.Sprintf("Task.For must be set with a local reference, or a logical identifier, referencing a patient"), http.StatusBadRequest)
+			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
 		}
 		if task.For.Reference == nil {
 			headers := fhirclient.Headers{}
@@ -129,8 +130,40 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				task.For.Reference = to.Ptr("Patient/" + *patients[0].Id)
 			}
 		}
+
+		ok := careteamservice.ActivateMembership(&careTeam, &fhir.Reference{
+			Identifier: &request.Principal.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		})
+		if !ok {
+			return nil, errors.New("failed to activate membership for new CareTeam")
+		}
+
+		carePlanAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
+			Reference: to.Ptr(carePlanURL),
+			Type:      to.Ptr("CarePlan"),
+		}, &fhir.Reference{
+			Identifier: task.Requester.Identifier,
+			Type:       to.Ptr("Organization"),
+		})
+
+		taskAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
+			Reference: to.Ptr(taskURL),
+			Type:      to.Ptr("Task"),
+		}, &fhir.Reference{
+			Identifier: task.Requester.Identifier,
+			Type:       to.Ptr("Organization"),
+		})
+
+		data, err := json.Marshal([]any{careTeam})
+		if err != nil {
+			return nil, coolfhir.NewErrorWithCode("failed to marshal CareTeam", http.StatusInternalServerError)
+		}
+
 		carePlan.Subject = *task.For
 		carePlan.Status = fhir.RequestStatusActive
+		carePlan.Author = task.Requester
+		carePlan.Contained = data
 
 		task.BasedOn = []fhir.Reference{
 			{
@@ -139,30 +172,43 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			},
 		}
 
-		ok := careteamservice.ActivateMembership(&careTeam, &fhir.Reference{
-			Identifier: &principal.Organization.Identifier[0],
-			Type:       to.Ptr("Organization"),
-		})
-		if !ok {
-			return nil, errors.New("failed to activate membership for new CareTeam")
-		}
-
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL)).
-			Create(careTeam, coolfhir.WithFullUrl(careTeamURL)).
-			Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders))
-		taskEntryIdx = len(tx.Entry) - 1
+			Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders)).
+			Create(carePlanAuditEvent).
+			Create(taskAuditEvent)
+
+		taskEntryIdx = len(tx.Entry) - 3
 		taskBundleEntry = tx.Entry[taskEntryIdx]
+		carePlanBundleEntry = &tx.Entry[0]
+		carePlanBundleEntryIdx = 0
 	} else {
 		// Adding a task to an existing CarePlan
-		carePlanRef, err = basedOn(task)
+		carePlanRef, err := basedOn(task)
 		if err != nil {
 			return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 		}
 
-		var careTeams []fhir.CareTeam
-		err = s.fhirClient.Read(*carePlanRef, &carePlan, fhirclient.ResolveRef("careTeam", &careTeams))
-		if err != nil {
-			return nil, err
+		var carePlan fhir.CarePlan
+
+		if err := s.fhirClient.ReadWithContext(ctx, *carePlanRef, &carePlan); err != nil {
+			return nil, fmt.Errorf("failed to read CarePlan: %w", err)
+		}
+
+		if task.For == nil {
+			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
+		}
+
+		samePatient := false
+		// If either task.For or CarePlan.Subject contains an identifier, they must be equal
+		// If neither contain an identifier, the reference must be equal
+		if task.For.Identifier != nil || carePlan.Subject.Identifier != nil {
+			samePatient = coolfhir.LogicalReferenceEquals(*task.For, carePlan.Subject)
+		} else {
+			samePatient = coolfhir.ReferenceValueEquals(*task.For, carePlan.Subject)
+		}
+
+		if !samePatient {
+			return nil, coolfhir.NewErrorWithCode("Task.for must reference the same patient as CarePlan.subject", http.StatusBadRequest)
 		}
 
 		// Different validation logic for an SCP subtask
@@ -172,12 +218,12 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			}
 			// Get the parent task
 			var parentTask fhir.Task
-			err = s.fhirClient.Read(*task.PartOf[0].Reference, &parentTask)
+			err = s.fhirClient.ReadWithContext(ctx, *task.PartOf[0].Reference, &parentTask)
 			if err != nil {
 				return nil, err
 			}
 			// Verify the owner of the parent task is the same as the org creating the subtask
-			isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(&parentTask, principal.Organization.Identifier)
+			isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(&parentTask, request.Principal.Organization.Identifier)
 			if !isOwner {
 				return nil, coolfhir.NewErrorWithCode("requester is not the owner of the parent task", http.StatusUnauthorized)
 			}
@@ -189,16 +235,17 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, coolfhir.NewErrorWithCode("owner is not the same as the parent task requester", http.StatusBadRequest)
 			}
 		} else {
-			// we have a valid reference to a CarePlan, use this to retrieve the CarePlan and CareTeam to validate the requester is a participant
-			if len(careTeams) == 0 {
-				return nil, coolfhir.NewErrorWithCode("CareTeam not found in bundle", http.StatusNotFound)
+			careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse CareTeam in CarePlan.Contained: %w", err)
 			}
 
-			participant := coolfhir.FindMatchingParticipantInCareTeam(careTeams, principal.Organization.Identifier)
+			participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, request.Principal.Organization.Identifier)
 			if participant == nil {
 				return nil, coolfhir.NewErrorWithCode("requester is not part of CareTeam", http.StatusUnauthorized)
 			}
 		}
+
 		// TODO: Manage time-outs properly
 		// Add Task to CarePlan.activities
 		taskBundleEntry = request.bundleEntryWithResource(task)
@@ -206,9 +253,19 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 		}
 
+		taskAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
+			Reference: taskBundleEntry.FullUrl,
+			Type:      to.Ptr("Task"),
+		}, &fhir.Reference{
+			Identifier: task.Requester.Identifier,
+			Type:       to.Ptr("Organization"),
+		})
+
 		// TODO: Only if not updated
 		tx.AppendEntry(taskBundleEntry)
 		taskEntryIdx = len(tx.Entry) - 1
+		tx.Create(taskAuditEvent)
+
 		if len(task.PartOf) == 0 {
 			// Don't add subtasks to CarePlan.activity
 			carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
@@ -217,24 +274,53 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 					Type:      to.Ptr("Task"),
 				},
 			})
-			tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
-		}
-		if _, err := careteamservice.Update(s.fhirClient, *carePlan.Id, task, tx); err != nil {
-			return nil, fmt.Errorf("failed to update CarePlan: %w", err)
+
+			updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, tx)
+			if err != nil {
+				return nil, fmt.Errorf("failed to update CareTeam: %w", err)
+			}
+
+			if !updated {
+				tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+			}
+
+			carePlanBundleEntry = &tx.Entry[len(tx.Entry)-1]
+			carePlanBundleEntryIdx = len(tx.Entry) - 1
+
+			carePlanAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU, &fhir.Reference{
+				Reference: to.Ptr("CarePlan/" + *carePlan.Id),
+				Type:      to.Ptr("CarePlan"),
+			}, &fhir.Reference{
+				Identifier: task.Requester.Identifier,
+				Type:       to.Ptr("Organization"),
+			})
+			tx.Create(carePlanAuditEvent)
 		}
 	}
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
-		var createdTask fhir.Task
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
-		if err != nil {
-			return nil, nil, err
+		var result *fhir.BundleEntry
+		var notifications []any
+
+		// Task
+		{
+			var createdTask fhir.Task
+			var err error
+			result, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
+			if err != nil {
+				return nil, nil, err
+			}
+			notifications = append(notifications, &createdTask)
 		}
-		var notifications = []any{&createdTask}
-		// If CareTeam was updated, notify about CareTeam
-		var updatedCareTeam fhir.CareTeam
-		if err := coolfhir.ResourceInBundle(txResult, coolfhir.EntryIsOfType("CareTeam"), &updatedCareTeam); err == nil {
-			notifications = append(notifications, &updatedCareTeam)
+
+		// If CarePlan was updated/created, notify about CarePlan
+		if carePlanBundleEntry != nil {
+			var createdCarePlan fhir.CarePlan
+			_, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, carePlanBundleEntry, &txResult.Entry[carePlanBundleEntryIdx], &createdCarePlan)
+			if err != nil {
+				return nil, nil, err
+			}
+			notifications = append(notifications, &createdCarePlan)
 		}
 
 		return result, notifications, nil

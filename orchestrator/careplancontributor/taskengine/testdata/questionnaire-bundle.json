@@ -17,7 +17,7 @@
         },
         "language": "nl-NL",
         "title": "Vragenlijst voor aanmelding van patienten met hartfalen voor telemonitoring",
-        "url": "https://zorgbijjou.github.io/scp-homemonitoring/Questionnaire-zbj-telemonitoring-heartfailure-enrollment|0.3",
+        "url": "https://zorgbijjou.github.io/scp-homemonitoring/Questionnaire-zbj-telemonitoring-heartfailure-enrollment|0.4",
         "identifier": [
           {
             "system": "urn:ietf:rfc:3986",
@@ -171,6 +171,12 @@
             ],
             "item": [
               {
+                "linkId": "e0163609-a771-44c8-88e0-1c3bbeff2028",
+                "text": "Selecteer titratie en/of recompensatie",
+                "type": "display",
+                "required": true
+              },
+              {
                 "linkId": "1b81f13b-923e-4fc8-b758-08b3f172b2de",
                 "text": "Titratie",
                 "code": [
@@ -248,10 +254,30 @@
             "enableWhen": [
               {
                 "question": "245f3b7e-47d2-4b78-b751-fb04f38b17b9",
-                "operator": "exists",
-                "answerBoolean": true
+                "operator": "=",
+                "answerCoding": {
+                  "code": "58158008",
+                  "system": "http://snomed.info/sct"
+                }
+              },
+              {
+                "question": "1b81f13b-923e-4fc8-b758-08b3f172b2de",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct"
+                }
+              },
+              {
+                "question": "dcba2829-32d8-4390-b1d4-32a5fefda539",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct"
+                }
               }
             ],
+            "enableBehavior": "any",
             "item": [
               {
                 "linkId": "4e973bcb-bbbb-4a9f-877b-fbf45ab94361",
@@ -316,42 +342,6 @@
                 ]
               },
               {
-                "linkId": "345ca4a3-1bc8-4358-8d78-783c05953261",
-                "text": "Apparatuur beschikbaar",
-                "code": [
-                  {
-                    "code": "735333005",
-                    "system": "http://snomed.info/sct",
-                    "display": "apparatuur beschikbaar"
-                  }
-                ],
-                "type": "choice",
-                "required": true,
-                "repeats": true,
-                "answerOption": [
-                  {
-                    "valueCoding": {
-                      "code": "373066001",
-                      "system": "http://snomed.info/sct",
-                      "display": "ja, patiënt beschikt over een weegschaal en bloeddrukmeter (of is bereid deze aan te schaffen)"
-                    }
-                  }
-                ],
-                "extension": [
-                  {
-                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
-                    "valueCodeableConcept": {
-                      "coding": [
-                        {
-                          "code": "check-box",
-                          "system": "http://hl7.org/fhir/questionnaire-item-control"
-                        }
-                      ]
-                    }
-                  }
-                ]
-              },
-              {
                 "linkId": "be4b671d-f91f-4fc3-a6d8-fcafa8e67161",
                 "text": "Notitie",
                 "code": [
@@ -367,6 +357,26 @@
                   {
                     "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
                     "valueString": "Notitie (optioneel)"
+                  }
+                ],
+                "item": [
+                  {
+                    "linkId": "c230b150-c66f-4892-b9f6-5fff067962ee",
+                    "text": "Voorbeelden: patiënt is slechthorend, patiënt wordt geholpen door mantelzorger.",
+                    "type": "display",
+                    "extension": [
+                      {
+                        "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-displayCategory",
+                        "valueCodeableConcept": {
+                          "coding": [
+                            {
+                              "code": "instructions",
+                              "system": "http://hl7.org/fhir/questionnaire-display-category"
+                            }
+                          ]
+                        }
+                      }
+                    ]
                   }
                 ]
               }
@@ -387,10 +397,30 @@
             "enableWhen": [
               {
                 "question": "245f3b7e-47d2-4b78-b751-fb04f38b17b9",
-                "operator": "exists",
-                "answerBoolean": true
+                "operator": "=",
+                "answerCoding": {
+                  "code": "58158008",
+                  "system": "http://snomed.info/sct"
+                }
+              },
+              {
+                "question": "1b81f13b-923e-4fc8-b758-08b3f172b2de",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct"
+                }
+              },
+              {
+                "question": "dcba2829-32d8-4390-b1d4-32a5fefda539",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct"
+                }
               }
             ],
+            "enableBehavior": "any",
             "item": [
               {
                 "linkId": "295a22d7-d0ff-4546-b2a0-ce46beeba086",

@@ -111,7 +111,7 @@ func TestProxy(t *testing.T) {
 			}
 			return request
 		},
-	}, false)
+	}, false, false)
 	proxyServer := httptest.NewServer(proxyServerMux)
 	proxyServerMux.HandleFunc("/localfhir/{rest...}", proxy.ServeHTTP)
 
@@ -149,6 +149,26 @@ func TestProxy(t *testing.T) {
 			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
 			assert.Empty(t, httpResponse.Header.Get("Pragma"))
+		})
+	})
+	t.Run("meta.source", func(t *testing.T) {
+		t.Run("no setting of meta.source", func(t *testing.T) {
+			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/DoGet")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			data, _ := io.ReadAll(httpResponse.Body)
+			assert.JSONEq(t, `{"resourceType":"Patient"}`, string(data))
+		})
+		t.Run("setting meta.source", func(t *testing.T) {
+			proxy.setMetaSource = true
+			t.Cleanup(func() {
+				proxy.setMetaSource = false
+			})
+			httpResponse, err := proxyServer.Client().Get(proxyServer.URL + "/localfhir/DoGet")
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			data, _ := io.ReadAll(httpResponse.Body)
+			assert.JSONEq(t, `{"resourceType":"Patient","meta":{"source":"`+upstreamServerURL.String()+`/DoGet"}}`, string(data))
 		})
 	})
 	t.Run("GET request", func(t *testing.T) {

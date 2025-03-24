@@ -1,15 +1,19 @@
 package careteamservice
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
+	"os"
+	"testing"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-	"os"
-	"testing"
-	"time"
 )
 
 type testCase struct {
@@ -86,7 +90,7 @@ func TestUpdate(t *testing.T) {
 
 			// Perform
 			tx := coolfhir.Transaction()
-			updated, err := Update(fhirClient, "1", *tc.UpdatedTask(), tx)
+			updated, err := Update(auth.WithPrincipal(context.Background(), *auth.TestPrincipal1), fhirClient, "1", *tc.UpdatedTask(), tx)
 			require.NoError(t, err)
 
 			// Assert
@@ -97,10 +101,16 @@ func TestUpdate(t *testing.T) {
 			} else {
 				// Expected update to CareTeam
 				require.True(t, updated, "Expected update to CareTeam")
-				var actualCareTeam fhir.CareTeam
+				var actualCarePlan fhir.CarePlan
 				bundle := tx.Bundle()
-				err := coolfhir.ResourceInBundle(&bundle, coolfhir.EntryHasID("10"), &actualCareTeam)
+				x, _ := bundle.MarshalJSON()
+				fmt.Println(string(x))
+				err := coolfhir.ResourceInBundle(&bundle, coolfhir.EntryHasID("1"), &actualCarePlan)
 				require.NoError(t, err)
+
+				actualCareTeam, err := coolfhir.CareTeamFromCarePlan(&actualCarePlan)
+				require.NoError(t, err)
+
 				require.Equal(t, len(expectedCareTeam.Participant), len(actualCareTeam.Participant))
 				sortParticipants(expectedCareTeam.Participant)
 				require.Equal(t, expectedCareTeam.Participant, actualCareTeam.Participant)

@@ -2,12 +2,13 @@ package careplanservice
 
 import (
 	"context"
+	"net/http"
+	"net/url"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
 )
 
 // handleGetTask fetches the requested Task and validates if the requester has access to the resource (is a participant of one of the CareTeams associated with the task)
@@ -16,7 +17,7 @@ import (
 func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.Task, error) {
 	// fetch Task + CareTeam, validate requester is participant of CareTeam
 	var task fhir.Task
-	err := s.fhirClient.Read("Task/"+id, &task, fhirclient.ResponseHeaders(headers))
+	err := s.fhirClient.ReadWithContext(ctx, "Task/"+id, &task, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, err
 	}
@@ -41,12 +42,18 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 	// Check if the requester is either the task Owner or Requester, if not, they must be a member of the CareTeam
 	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 	if !(isOwner || isRequester) {
-		_, careTeams, _, err := GetCarePlanAndCareTeams(ctx, s.fhirClient, *task.BasedOn[0].Reference)
+		var carePlan fhir.CarePlan
+
+		if err := s.fhirClient.ReadWithContext(ctx, *task.BasedOn[0].Reference, &carePlan); err != nil {
+			return nil, err
+		}
+
+		careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
 		if err != nil {
 			return nil, err
 		}
 
-		err = validatePrincipalInCareTeams(principal, careTeams)
+		err = validatePrincipalInCareTeam(principal, careTeam)
 		if err != nil {
 			return nil, err
 		}
@@ -86,16 +93,22 @@ func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, 
 	}
 
 	taskRefs := make([]string, 0)
-	for ref, _ := range refs {
+	for ref := range refs {
 		for _, task := range tasks {
 			isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
 			if !(isOwner || isRequester) {
-				_, careTeams, _, err := GetCarePlanAndCareTeams(ctx, s.fhirClient, ref)
+				var carePlan fhir.CarePlan
+
+				if err := s.fhirClient.ReadWithContext(ctx, ref, &carePlan); err != nil {
+					continue
+				}
+
+				careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
 				if err != nil {
 					continue
 				}
 
-				err = validatePrincipalInCareTeams(principal, careTeams)
+				err = validatePrincipalInCareTeam(principal, careTeam)
 				if err != nil {
 					continue
 				}

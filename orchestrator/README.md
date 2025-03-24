@@ -19,9 +19,8 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 
 ### Care Plan Contributor configuration
-- `ORCA_CAREPLANCONTRIBUTOR_CAREPLANSERVICE_URL`: FHIR base URL of the CarePlan service.
 - `ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN`: Secures the EHR-facing endpoints with a static HTTP Bearer token. Only intended for development and testing purposes, since they're unpractical to change often.
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_URL`: Base URL of the FHIR API the CPC uses for storage.
+- `ORCA_CAREPLANCONTRIBUTOR_FHIR_URL`: Base URL of the FHIR API the CPC uses for storage. When `ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED` is enabled, data is retrieved from this FHIR API.
 - `ORCA_CAREPLANCONTRIBUTOR_FHIR_AUTH_TYPE`: Authentication type for the CPC FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
 - `ORCA_CAREPLANCONTRIBUTOR_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
@@ -31,13 +30,29 @@ Use the following environment variables to configure the orchestrator:
 
 ### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
-These FHIR resources can be read from a different FHIR API than configured in `ORCA_CAREPLANCONTRIBUTOR_QUESTIONNAIREFHIR` by setting 
-`ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL`, `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_AUTH_TYPE` and `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_AUTH_SCOPES`.
+You have the following options:
 
-If you want to automatically load FHIR HealthcareService and Questionnaire resources into the FHIR API on startup,
-you can configure the Task Filler to do so by setting `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS`.
-It takes a list (separated by commas) of URLs to fetch the FHIR Bundles from, that will be loaded into the FHIR API.
-The bundles may only contain Questionnaire and HealthcareService resources.
+1. Read them from your FHIR API
+2. Synchronize configured URLs with your FHIR API, then query your FHIR API
+3. Read them from configured URLs and only keep them in-memory.
+
+The most robust options (1 and 2) query the resources from your FHIR API. You can automate updating them by synchronizing them on startup.
+Configure these options to achieve this:
+- FHIR API for Questionnaire and HealthcareService resources:
+  - `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL`: Base URL of the FHIR API for querying Questionnaire and HealthcareService resources.
+  - `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_AUTH_TYPE`: Authentication type for the FHIR API, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
+  - `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
+- `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS`: Only if you want to synchronize on startup: a list of comma-separated URLs to fetch the FHIR Bundles from, that will be loaded into the FHIR API.
+  It will only load FHIR Questionnaire and HealthcareService resources.
+
+If you don't want to query the FHIR Questionnaire and HealthcareService resources from your FHIR API, only set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS`.
+The downside of this option is that the resources MUST be available on startup.
+
+#### EHR integration
+If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
+to the messaging topic on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
+
+See "Messaging configuration" for more information.  
 
 ### Care Plan Service configuration
 - `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
@@ -45,16 +60,16 @@ The bundles may only contain Questionnaire and HealthcareService resources.
 - `ORCA_CAREPLANSERVICE_FHIR_AUTH_TYPE`: Authentication type for the CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
 - `ORCA_CAREPLANSERVICE_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
 
-### Kafka / Eventhubs configuration
+### Messaging configuration
+Application event handling and FHIR Subscription notification sending uses a message broker.
+By default, an in-memory message broker is used, which doesn't retry messages.
+For production environments, it's recommended to use Azure ServiceBus.
 
-* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENABLED`: Determines whether Kafka integration is enabled for the CarePlan Contributor component of ORCA. If set to `false`, all other Kafka configuration options will be ignored.
-* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_DEBUG`: Determines whether Kafka debug option is enabled for the CarePlan Contributor component of ORCA. This will log all Kafka messages to the /tmp directory. Note that this setting should only be enabled for debugging purposes and once set, all other configuration options below will be ignored. The value of `ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENABLED` needs to be set to `true` to enable this feature.
-* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_TOPIC`: Specifies the Kafka topic to which patient enrollment events are published.
-* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_ENDPOINT`: Defines the Kafka broker URL to connect to for publishing and consuming messages.
-* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_MECHANISM`: Specifies the SASL mechanism used for Kafka authentication. The current implementation only supports `PLAIN`.
-* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SECURITY_PROTOCOL`: Specifies the security protocol used for Kafka communication. The current implementation only supports `SASL_PLAINTEXT`.
-* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_USERNAME`: The username or connection string used for authenticating with the Kafka broker. 
-* `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_PASSWORD`: The password or secret key used in conjunction with the `ORCA_CAREPLANCONTRIBUTOR_KAFKA_SASL_USERNAME` for Kafka authentication.
+* `ORCA_MESSAGING_AZURESERVICEBUS_HOSTNAME`: The hostname of the Azure ServiceBus instance, setting this (or the connection string) enables use of Azure ServiceBus as message broker.
+* `ORCA_MESSAGING_AZURESERVICEBUS_CONNECTIONSTRING`: The connection string of the Azure ServiceBus instance, setting this (or the hostname) enables use of Azure ServiceBus as message broker.
+* `ORCA_MESSAGING_TOPICPREFIX`: Optional prefix for topics, which allows multi-tenancy (using the same underlying message broker infrastructure for multiple ORCA instances) by prefixing the topic names with a tenant identifier.
+* `ORCA_MESSAGING_HTTP_ENDPOINT`: For demo purposes: a URL pointing HTTP endpoint, to which messages will also be delivered. It appends the topic name to this URL.
+* `ORCA_MESSAGING_HTTP_TOPICFILTER`: For demo purposes: topics to enable the HTTP endpoint for (separator: `,`). If not set, all topics are enabled.
 
 ## App Launch options
 

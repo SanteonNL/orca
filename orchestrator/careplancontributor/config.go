@@ -5,8 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
-
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 )
@@ -23,26 +21,22 @@ func DefaultConfig() Config {
 }
 
 type Config struct {
-	CarePlanService CarePlanServiceConfig `koanf:"careplanservice"`
-	FrontendConfig  FrontendConfig        `koanf:"frontend"`
-	AppLaunch       applaunch.Config      `koanf:"applaunch"`
+	FrontendConfig FrontendConfig   `koanf:"frontend"`
+	AppLaunch      applaunch.Config `koanf:"applaunch"`
 	// FHIR contains the configuration to connect to the FHIR API holding EHR data,
 	// to be made available through the CarePlanContributor.
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
 	TaskFiller                    TaskFillerConfig      `koanf:"taskfiller"`
-	ServiceBusConfig              ehr.ServiceBusConfig  `koanf:"servicebus"`
 	Enabled                       bool                  `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
 	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`
+	Events                        EventsConfig          `koanf:"events"`
 	StaticBearerToken             string
 }
 
 func (c Config) Validate() error {
 	if !c.Enabled {
 		return nil
-	}
-	if c.CarePlanService.URL == "" {
-		return errors.New("careplancontributor.careplanservice.url is not configured")
 	}
 	return nil
 }
@@ -53,6 +47,9 @@ type TaskFillerConfig struct {
 	// also because HAPI doesn't allow storing Questionnaires in partitions.
 	QuestionnaireFHIR     coolfhir.ClientConfig `koanf:"questionnairefhir"`
 	QuestionnaireSyncURLs []string              `koanf:"questionnairesyncurls"`
+	// TaskAcceptedBundleTopic is a Message Broker topic to which the TaskFiller will publish a message when a Task is accepted.
+	// The bundle will contain the Task, Patient, and other relevant resources.
+	TaskAcceptedBundleTopic string `koanf:"taskacceptedbundletopic"`
 }
 
 func (c TaskFillerConfig) Validate() error {
@@ -66,9 +63,18 @@ func (c TaskFillerConfig) Validate() error {
 	return nil
 }
 
-type CarePlanServiceConfig struct {
-	// URL is the base URL of the CarePlanService at which the CarePlanContributor creates/reads CarePlans.
-	URL string `koanf:"url"`
+type EventsConfig struct {
+	WebHooks []WebHookEventHandlerConfig `koanf:"webhooks"`
+}
+
+type WebHookEventHandlerConfig struct {
+	// ResourceType is the FHIR resource type for which the event handler is triggered.
+	// If blank, it's triggered for all resource types.
+	ResourceType string
+	// Name is the unique name of the event handler, used for persisting retry state.
+	Name string
+	// URL is the URL to which the event should be sent.
+	URL string
 }
 
 type FrontendConfig struct {
