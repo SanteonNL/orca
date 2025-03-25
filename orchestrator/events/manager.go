@@ -59,7 +59,7 @@ func (d DefaultManager) Notify(ctx context.Context, instance Type) error {
 	}
 	err = d.messageBroker.SendMessage(ctx, instance.Topic(), &messaging.Message{
 		Body:        messageData,
-		ContentType: "application/json",
+		ContentType: "application/fhir+json",
 	})
 	if err != nil {
 		return fmt.Errorf("event send %T: %w", instance, err)

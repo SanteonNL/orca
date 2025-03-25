@@ -63,7 +63,7 @@ func TestEventHandler_Handle(t *testing.T) {
 				require.NoError(t, err)
 
 				require.Equal(t, "\"noop\"", string(data))
-				require.Equal(t, "application/json", r.Header.Get("Content-Type"))
+				require.Equal(t, "application/fhir+json", r.Header.Get("Content-Type"))
 
 				w.WriteHeader(http.StatusOK)
 			},

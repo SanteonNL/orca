@@ -38,12 +38,12 @@ func (w EventHandler) Handle(ctx context.Context, event events.Type) error {
 		return fmt.Errorf("failed to serialize event: %w", err)
 	}
 
-	request, err := http.NewRequestWithContext(ctx, "POST", w.URL, bytes.NewReader(data))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	request.Header.Add("Content-Type", "application/json")
+	request.Header.Add("Content-Type", "application/fhir+json")
 
 	response, err := w.client.Do(request)
 	if err != nil {
