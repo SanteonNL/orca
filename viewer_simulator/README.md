@@ -32,3 +32,9 @@ To run it in production mode, use:
 npm run build
 npm run start
 ```
+## Configuring CarePlanServices
+This viewer is can receive resources from multiple CarePlanServices. Therefore, listing CarePlans can be done in a multi-tenant manner. To add a CarePlanService, add the following properties to the configuration:
+```
+<CPS_NAME>_CAREPLANSERVICE_URL
+<CPS_NAME>_BEARER_TOKEN
+```
