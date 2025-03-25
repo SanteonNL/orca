@@ -15,6 +15,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/sse"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/webhook"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -36,6 +37,7 @@ const basePath = "/cpc"
 // carePlanURLHeaderKey specifies the HTTP request header used to specify the SCP context, which is a reference to a FHIR CarePlan. Authorization is evaluated according to this CarePlan.
 // The header may also be provided as X-SCP-Context, which will be canonicalized to X-Scp-Context by the Golang HTTP client.
 const carePlanURLHeaderKey = "X-Scp-Context"
+
 // carePlanServiceURLHeaderKey specifies the HTTP request header to specify the FHIR base URL of the Care Plan Service the client wishes to invoke.
 const carePlanServiceURLHeaderKey = "X-Cps-Url"
 
@@ -126,6 +128,7 @@ func New(
 		workflows:                     workflowProvider,
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 		eventManager:                  eventManager,
+		sseService:                    sse.New(),
 	}
 	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
 		result.notifier, err = ehr.NewNotifier(messageBroker, messaging.Topic{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
@@ -155,6 +158,7 @@ type Service struct {
 	healthdataviewEndpointEnabled bool
 	notifier                      ehr.Notifier
 	eventManager                  events.Manager
+	sseService                    *sse.Service
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -241,7 +245,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
-
+	// Allow the front-end to subscribe to specific Task updates via Server-Sent Events (SSE)
+	mux.HandleFunc("GET "+basePath+"/subscribe/fhir/Task/{id}", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+		//TODO: We could also use the session to check for the "existing" Task (via the identifier) that is being launched. However, when starting a new enrolment, thsis Task does not yet exist
+		id := request.PathValue("id")
+		s.sseService.ServeHTTP(fmt.Sprintf("Task/%s", id), writer, request)
+	}))
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 
 		// Check if the user defined a remote CPS - otherwise it will be handled as a local CPS proxy request
@@ -635,6 +644,29 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			}
 		} else if err != nil {
 			return err
+		} else {
+			//Otherwise, the Task is valid and can be pushed to the frontend
+			data, err := json.Marshal(task)
+			if err != nil {
+				return err
+			}
+
+			// Check if the Task is a subTask
+			var parentTaskReference string
+			if len(task.PartOf) > 0 {
+				for _, reference := range task.PartOf {
+					if reference.Reference != nil && strings.HasPrefix(*reference.Reference, "Task/") {
+						parentTaskReference = *reference.Reference
+						break
+					}
+				}
+			}
+
+			if parentTaskReference != "" {
+				s.sseService.Publish(parentTaskReference, string(data))
+			} else {
+				s.sseService.Publish(fmt.Sprintf("Task/%s", *task.Id), string(data))
+			}
 		}
 	case "CarePlan":
 		var carePlan fhir.CarePlan

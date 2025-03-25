@@ -11,19 +11,10 @@ import { viewerFeatureIsEnabled } from '@/app/actions'
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
-    const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap, refetchTasks } = useTaskProgressStore()
+    const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
     const { patient } = useEnrollmentStore()
     const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
     const [showViewer, setShowViewer] = useState(false)
-
-    useEffect(() => {
-        console.warn("Enabling TMP polling")
-        const interval = setInterval(() => {
-            refetchTasks()
-        }, 2000)
-        return () => clearInterval(interval)
-    }, [refetchTasks])
-
 
     useEffect(() => {
         if (taskId) {

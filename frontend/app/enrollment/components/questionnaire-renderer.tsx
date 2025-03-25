@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import useCpsClient from '@/hooks/use-cps-client';
 import useTaskProgressStore from '@/lib/store/task-progress-store';
-import {findQuestionnaireResponse, getPatientIdentifier} from '@/lib/fhirUtils';
+import { findQuestionnaireResponse, getPatientIdentifier } from '@/lib/fhirUtils';
 import { Spinner } from '@/components/spinner';
 import { v4 } from 'uuid';
 import { populateQuestionnaire } from '../../utils/populate';
@@ -36,7 +36,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const [, setPrevQuestionnaireResponse] = useState<QuestionnaireResponse>()
 
   const cpsClient = useCpsClient()
-  const { onSubTaskSubmit, task } = useTaskProgressStore()
+  const { task } = useTaskProgressStore()
   const router = useRouter()
 
   useEffect(() => {
@@ -144,8 +144,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
     await cpsClient?.transaction({
       body: bundle
     });
-
-    onSubTaskSubmit(router.push(`/enrollment/task/${task!.id}`))
   }
 
   useEffect(() => {

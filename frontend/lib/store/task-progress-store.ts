@@ -4,7 +4,8 @@ import { create } from 'zustand';
 import { createCpsClient, fetchAllBundlePages } from '../fhirUtils';
 
 const cpsClient = createCpsClient()
-
+// A module-level variable, to ensure only one SSE subscription is active (`use` hook for this store is used in multiple places).
+let globalEventSource: EventSource | null = null;
 interface StoreState {
     initialized: boolean
     loading: boolean
@@ -20,9 +21,7 @@ interface StoreState {
     setTask: (task?: Task) => void
     nextStep: () => void
     setSubTasks: (subTasks: Task[]) => void
-    onSubTaskSubmit: (callback: any) => void
     fetchAllResources: () => Promise<void>
-    refetchTasks: () => void
 }
 
 const taskProgressStore = create<StoreState>((set, get) => ({
@@ -46,33 +45,6 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     setSubTasks: (subTasks: Task[]) => {
         set({ subTasks })
     },
-    onSubTaskSubmit: async (callback: any) => {
-        //TODO: Should work with EventSource to listen for changes in the Task status
-
-        const selectedTaskId = get().selectedTaskId
-
-        if (!selectedTaskId) return
-
-        const interval = setInterval(async () => {
-            const [task, subTasks] = await Promise.all([
-                await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
-                await fetchSubTasks(selectedTaskId)
-            ])
-
-            if (task.status === 'accepted') {
-                set({ task, subTasks, primaryTaskCompleted: true })
-                clearInterval(interval)
-
-                if (callback) callback()
-            } else if (get().subTasks?.length !== subTasks.length) {
-                await fetchQuestionnaires(subTasks, set)
-                set({ subTasks })
-                clearInterval(interval)
-                if (callback) callback()
-            }
-
-        }, 1000)
-    },
     fetchAllResources: async () => {
 
         try {
@@ -94,23 +66,6 @@ const taskProgressStore = create<StoreState>((set, get) => ({
             set({ error: `Something went wrong while fetching all resources: ${error?.message || error}`, loading: false })
         }
     },
-    refetchTasks: async () => {
-        const selectedTaskId = get().selectedTaskId
-
-        if (!selectedTaskId) return
-
-        const [task, subTasks] = await Promise.all([
-            await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
-            await fetchSubTasks(selectedTaskId)
-        ])
-
-        if (task.status === 'accepted') {
-            set({ task, subTasks, primaryTaskCompleted: true })
-        } else if (get().subTasks?.length !== subTasks.length) {
-            await fetchQuestionnaires(subTasks, set)
-            set({ subTasks })
-        }
-    }
 }));
 
 const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
@@ -159,6 +114,40 @@ const useTaskProgressStore = () => {
             fetchAllResources()
         }
     }, [selectedTaskId, loading, initialized, fetchAllResources]);
+
+    useEffect(() => {
+        // Only subscribe if we have a selectedTaskId and no active global subscription yet.
+        if (selectedTaskId && !globalEventSource) {
+            globalEventSource = new EventSource(`/orca/cpc/subscribe/fhir/Task/${selectedTaskId}`);
+            globalEventSource.onmessage = (event) => {
+                const task = JSON.parse(event.data) as Task;
+                // Detect if it's the primary Task or a subtask.
+                if (task.id === selectedTaskId) {
+                    taskProgressStore.setState({ task });
+                } else {
+                    taskProgressStore.setState((state) => {
+                        const currentSubTasks = state.subTasks || [];
+                        const index = currentSubTasks.findIndex(subTask => subTask.id === task.id);
+                        if (index === -1) {
+                            // If the subtask is new, add it to the array.
+                            return { subTasks: [...currentSubTasks, task] };
+                        } else {
+                            // If the subtask exists, update it.
+                            const updatedSubTasks = [...currentSubTasks];
+                            updatedSubTasks[index] = task;
+                            return { subTasks: updatedSubTasks };
+                        }
+                    });
+                }
+            };
+
+            // Clean up the global subscription when the component unmounts.
+            return () => {
+                globalEventSource?.close();
+                globalEventSource = null;
+            };
+        }
+    }, [selectedTaskId]);
 
     return store;
 };
