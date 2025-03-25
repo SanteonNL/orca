@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
+	"github.com/rs/zerolog/log"
 	"io"
 	"math/rand"
 	"net/http"
@@ -19,7 +20,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -869,7 +869,7 @@ func testBundleCreation(t *testing.T, carePlanContributor1 *fhirclient.BaseClien
 func Test_HandleSearchResource(t *testing.T) {
 
 	// Setup test environment
-	fhirBaseURL := test.SetupHAPI(t)
+	fhirBaseURL := test.SetupFHIRCandle(t)
 	activeProfile := profile.Test()
 	config := DefaultConfig()
 	config.Enabled = true
@@ -1075,7 +1075,7 @@ func Test_HandleSearchResource(t *testing.T) {
 }
 
 func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2NotificationEndpoint string) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
-	fhirBaseURL := test.SetupHAPI(t)
+	fhirBaseURL := test.SetupFHIRCandle(t)
 	activeProfile := profile.TestProfile{
 		Principal: auth.TestPrincipal1,
 		CSD: profile.TestCsdDirectory{
