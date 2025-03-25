@@ -124,7 +124,7 @@ const useTaskProgressStore = () => {
                 // Detect if it's the primary Task or a subtask.
                 if (task.id === selectedTaskId) {
                     taskProgressStore.setState({ task });
-                } else {
+                } else if (task.partOf?.some(ref => ref.reference === `Task/${selectedTaskId}`)) {
                     taskProgressStore.setState((state) => {
                         const currentSubTasks = state.subTasks || [];
                         const index = currentSubTasks.findIndex(subTask => subTask.id === task.id);
