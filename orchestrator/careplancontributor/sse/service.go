@@ -45,7 +45,7 @@ func (s *Service) ServeHTTP(topic string, writer http.ResponseWriter, request *h
 	fmt.Fprintf(writer, ": ping\n\n")
 	flusher.Flush()
 
-	// Send messages to the client
+	// Keep listening for messages to send to the client - keeps the connection open
 	ctx := request.Context()
 	for {
 		select {
