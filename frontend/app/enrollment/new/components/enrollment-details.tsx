@@ -12,7 +12,7 @@ export default function EnrollmentDetails() {
 
     return (
         (
-            <div className="grid grid-cols-[1fr,2fr] gap-y-4 w-[568px]">
+            <div className="grid grid-cols-[1fr_2fr] gap-y-4 w-[568px]">
                 <div>Patiënt:</div>
                 <div className="font-[500]">{patient ? patientName(patient) : "Onbekend"}</div>
 
