@@ -3,6 +3,7 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -68,17 +69,6 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 		return nil, coolfhir.NewErrorWithCode("Participant does not have access to QuestionnaireResponse", http.StatusForbidden)
 	}
 
-	// Create audit event for the update
-	// updateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
-	// 	&fhir.Reference{
-	// 		Reference: to.Ptr("QuestionnaireResponse/" + questionnaireResponseId),
-	// 		Type:      to.Ptr("QuestionnaireResponse"),
-	// 	},
-	// 	&fhir.Reference{
-	// 		Identifier: &request.Principal.Organization.Identifier[0],
-	// 		Type:       to.Ptr("Organization"),
-	// 	},
-	// )
 	// Add to transaction
 	questionnaireResponseBundleEntry := request.bundleEntryWithResource(questionnaireResponse)
 	tx.AppendEntry(questionnaireResponseBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
@@ -89,11 +79,18 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 		Observer: *request.LocalIdentity,
 		Action:   fhir.AuditEventActionU,
 	}))
+	// The last entry is the audit event, so we need to subtract 2 to get the index of the QuestionnaireResponse
+	idx := len(tx.Entry) - 2
+
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedQuestionnaireResponse fhir.QuestionnaireResponse
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &questionnaireResponseBundleEntry, &txResult.Entry[0], &updatedQuestionnaireResponse)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to process QuestionnaireResponse update result: %w", err)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &questionnaireResponseBundleEntry, &txResult.Entry[idx], &updatedQuestionnaireResponse)
+		if errors.Is(err, coolfhir.ErrEntryNotFound) {
+			// Bundle execution succeeded, but could not read result entry.
+			// Just respond with the original QuestionnaireResponse that was sent.
+			updatedQuestionnaireResponse = questionnaireResponse
+		} else if err != nil {
+			return nil, nil, err
 		}
 
 		return result, []any{&updatedQuestionnaireResponse}, nil

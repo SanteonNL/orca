@@ -77,13 +77,14 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 	}))
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedServiceRequest fhir.ServiceRequest
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &serviceRequestBundleEntry, &txResult.Entry[0], &updatedServiceRequest)
+		// The last entry is the audit event, so we need to subtract 2 to get the index of the ServiceRequest
+		idx := len(tx.Entry) - 2
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &serviceRequestBundleEntry, &txResult.Entry[idx], &updatedServiceRequest)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original ServiceRequest that was sent.
 			updatedServiceRequest = serviceRequest
 		} else if err != nil {
-			// Other error
 			return nil, nil, err
 		}
 

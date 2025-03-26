@@ -61,11 +61,12 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 		}))
 	}
 
-	serviceRequestEntryIdx := 0
+	// The last entry is the audit event, so we need to subtract 2 to get the index of the ServiceRequest
+	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdServiceRequest fhir.ServiceRequest
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[serviceRequestEntryIdx], &txResult.Entry[serviceRequestEntryIdx], &createdServiceRequest)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdServiceRequest)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process ServiceRequest creation result: %w", err)
 		}

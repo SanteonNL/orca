@@ -3,6 +3,7 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -73,11 +74,18 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 		Action:   fhir.AuditEventActionU,
 	}))
 
+	// The last entry is the audit event, so we need to subtract 2 to get the index of the Patient
+	idx := len(tx.Entry) - 2
+
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedPatient fhir.Patient
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &patientBundleEntry, &txResult.Entry[0], &updatedPatient)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to process Patient update result: %w", err)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &patientBundleEntry, &txResult.Entry[idx], &updatedPatient)
+		if errors.Is(err, coolfhir.ErrEntryNotFound) {
+			// Bundle execution succeeded, but could not read result entry.
+			// Just respond with the original Patient that was sent.
+			updatedPatient = patient
+		} else if err != nil {
+			return nil, nil, err
 		}
 
 		return result, []any{&updatedPatient}, nil

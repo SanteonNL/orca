@@ -61,11 +61,12 @@ func (s *Service) handleCreateCondition(ctx context.Context, request FHIRHandler
 		}))
 	}
 
-	conditionEntryIdx := 0
+	// The last entry is the audit event, so we need to subtract 2 to get the index of the Condition
+	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdCondition fhir.Condition
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[conditionEntryIdx], &txResult.Entry[conditionEntryIdx], &createdCondition)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdCondition)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Condition creation result: %w", err)
 		}

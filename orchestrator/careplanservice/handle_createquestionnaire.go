@@ -55,11 +55,12 @@ func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHan
 		}))
 	}
 
-	questionnaireEntryIdx := 0
+	// The last entry is the audit event, so we need to subtract 2 to get the index of the Questionnaire
+	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdQuestionnaire fhir.Questionnaire
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[questionnaireEntryIdx], &txResult.Entry[questionnaireEntryIdx], &createdQuestionnaire)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdQuestionnaire)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Questionnaire creation result: %w", err)
 		}

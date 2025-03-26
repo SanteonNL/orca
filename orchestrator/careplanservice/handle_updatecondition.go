@@ -75,16 +75,17 @@ func (s *Service) handleUpdateCondition(ctx context.Context, request FHIRHandler
 		Observer: *request.LocalIdentity,
 		Action:   fhir.AuditEventActionU,
 	}))
+	// The last entry is the audit event, so we need to subtract 2 to get the index of the Condition
+	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedCondition fhir.Condition
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &conditionBundleEntry, &txResult.Entry[0], &updatedCondition)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &conditionBundleEntry, &txResult.Entry[idx], &updatedCondition)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original Condition that was sent.
 			updatedCondition = condition
 		} else if err != nil {
-			// Other error
 			return nil, nil, err
 		}
 

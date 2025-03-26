@@ -116,16 +116,6 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
-	// taskUpdateAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU,
-	// 	&fhir.Reference{
-	// 		Reference: to.Ptr("Task/" + *task.Id),
-	// 	},
-	// 	&fhir.Reference{
-	// 		Identifier: &request.Principal.Organization.Identifier[0],
-	// 		Type:       to.Ptr("Organization"),
-	// 	},
-	// )
-
 	taskBundleEntry := request.bundleEntryWithResource(task)
 	tx = tx.AppendEntry(taskBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 		ActingAgent: &fhir.Reference{
@@ -135,6 +125,9 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		Observer: *request.LocalIdentity,
 		Action:   fhir.AuditEventActionU,
 	}))
+	// The last entry is the audit event, so we need to subtract 2 to get the index of the Task
+	idx := len(tx.Entry) - 2
+
 	// Update care team
 	_, err = careteamservice.Update(ctx, s.fhirClient, carePlanId, task, request.LocalIdentity, tx)
 	if err != nil {
@@ -143,22 +136,12 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedTask fhir.Task
-		taskEntryIdx := 0
-		// Find the Task in the transaction result
-		for idx, entry := range txResult.Entry {
-			if strings.HasPrefix(*entry.Response.Location, "Task/") {
-				taskEntryIdx = idx
-				break
-			}
-		}
-
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &updatedTask)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[idx], &updatedTask)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original Task that was sent.
 			updatedTask = task
 		} else if err != nil {
-			// Other error
 			return nil, nil, err
 		}
 		var notifications = []any{&updatedTask}
