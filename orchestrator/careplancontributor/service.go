@@ -615,7 +615,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	}
 	// TODO: for now, we assume the resource URL is always in the form of <FHIR base url>/<resource type>/<resource id>
 	//       Then, we can deduce the FHIR base URL from the resource URL
-	fhirBaseURL, _, err := coolfhir.ParseExternalLiteralReference(resourceUrl, *focusReference.Type)
+	fhirBaseURL, relativeReference, err := coolfhir.ParseExternalLiteralReference(resourceUrl, *focusReference.Type)
 	if err != nil {
 		return err
 	}
@@ -665,7 +665,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			if parentTaskReference != "" {
 				s.sseService.Publish(parentTaskReference, string(data))
 			} else {
-				s.sseService.Publish(fmt.Sprintf("Task/%s", *task.Id), string(data))
+				s.sseService.Publish(relativeReference, string(data))
 			}
 		}
 	case "CarePlan":
