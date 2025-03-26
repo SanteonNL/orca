@@ -8,6 +8,7 @@ import useEnrollmentStore from "@/lib/store/enrollment-store";
 import { patientName, organizationName } from "@/lib/fhirRender";
 import DataViewer from '@/components/data-viewer'
 import { viewerFeatureIsEnabled } from '@/app/actions'
+import TaskSseConnectionStatus from '../../components/sse-connection-status'
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
@@ -51,10 +52,13 @@ export default function EnrollmentTaskPage() {
         if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
             return <>Task is ontvangen, maar er ontbreekt informatie.</>
         }
-        return <QuestionnaireRenderer
-            questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
-            inputTask={subTasks[0]}
-        />
+        return <>
+            <QuestionnaireRenderer
+                questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
+                inputTask={subTasks[0]}
+            />
+            <TaskSseConnectionStatus />
+        </>
     } else {
         return <div className='w-full flex flex-col auto-cols-max'>
             {
@@ -75,6 +79,7 @@ export default function EnrollmentTaskPage() {
                 }
             </div>
             {showViewer && <DataViewer task={task} />}
+            <TaskSseConnectionStatus />
         </div>
     }
 }
