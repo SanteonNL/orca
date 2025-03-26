@@ -41,6 +41,10 @@ func (s *Service) ServeHTTP(topic string, writer http.ResponseWriter, request *h
 	s.registerClient(topic, msgCh)
 	defer s.unregisterClient(topic, msgCh)
 
+	// A comment/ping as per SSE spec - marks the start of the stream
+	fmt.Fprintf(writer, ": ping\n\n")
+	flusher.Flush()
+
 	// Send messages to the client
 	ctx := request.Context()
 	for {
