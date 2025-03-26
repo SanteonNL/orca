@@ -73,7 +73,14 @@ func TestServeHTTP_Publishes(t *testing.T) {
 	}()
 
 	// Give the ServeHTTP loop time to start and register the client.
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(10 * time.Millisecond)
+
+	// Check that the initial ping is sent
+	output := frw.readOutput()
+	expected := "ping\n\n"
+	if !strings.Contains(output, expected) {
+		t.Errorf("expected output to contain %q, got %q", expected, output)
+	}
 
 	// Publish a message.
 	msg := "hello world"
@@ -87,9 +94,12 @@ func TestServeHTTP_Publishes(t *testing.T) {
 		t.Fatal("timed out waiting for flush")
 	}
 
+	// Give the ServeHTTP loop time to send the async message.
+	time.Sleep(10 * time.Millisecond)
+
 	// Check that the output contains our published message.
-	output := frw.readOutput()
-	expected := "data: " + msg + "\n\n"
+	output = frw.readOutput()
+	expected = "data: " + msg + "\n\n"
 	if !strings.Contains(output, expected) {
 		t.Errorf("expected output to contain %q, got %q", expected, output)
 	}
