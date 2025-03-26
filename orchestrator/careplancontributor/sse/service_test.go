@@ -197,3 +197,56 @@ func TestRegisterAndUnregisterClient(t *testing.T) {
 		t.Errorf("expected channel to be closed upon unregistration")
 	}
 }
+
+// TestUnregisterClient_RemovesTopicWhenEmpty verifies that when the last client is unregistered,
+// the topic is removed from the clients map.
+func TestUnregisterClient_RemovesTopicWhenEmpty(t *testing.T) {
+	s := New()
+	topic := "removeTopic"
+	ch := make(chan string, 10)
+
+	s.registerClient(topic, ch)
+	s.unregisterClient(topic, ch)
+
+	s.mu.RLock()
+	_, exists := s.clients[topic]
+	s.mu.RUnlock()
+	if exists {
+		t.Errorf("expected topic %q to be removed after last client unregistration", topic)
+	}
+}
+
+// TestUnregisterClient_MultipleClients tests that unregistering one of multiple clients does not remove the topic,
+// and that the topic is removed only after the last client is unregistered.
+func TestUnregisterClient_MultipleClients(t *testing.T) {
+	s := New()
+	topic := "multiTopic"
+	ch1 := make(chan string, 10)
+	ch2 := make(chan string, 10)
+
+	s.registerClient(topic, ch1)
+	s.registerClient(topic, ch2)
+
+	// Unregister one client; the topic should still exist.
+	s.unregisterClient(topic, ch1)
+
+	s.mu.RLock()
+	clients, exists := s.clients[topic]
+	if !exists {
+		t.Fatalf("expected topic %q to exist", topic)
+	}
+	if len(clients) != 1 {
+		t.Errorf("expected 1 client remaining in topic %q, got %d", topic, len(clients))
+	}
+	s.mu.RUnlock()
+
+	// Unregister the remaining client; the topic should be removed.
+	s.unregisterClient(topic, ch2)
+
+	s.mu.RLock()
+	_, exists = s.clients[topic]
+	s.mu.RUnlock()
+	if exists {
+		t.Errorf("expected topic %q to be removed after unregistering all clients", topic)
+	}
+}

@@ -72,9 +72,12 @@ func (s *Service) unregisterClient(topic string, ch chan string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.clients[topic]; exists {
-		delete(s.clients[topic], ch)
+	if clients, exists := s.clients[topic]; exists {
+		delete(clients, ch)
 		close(ch)
+		if len(clients) == 0 {
+			delete(s.clients, topic)
+		}
 	}
 }
 
