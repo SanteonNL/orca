@@ -116,6 +116,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
+	idx := len(tx.Entry)
 	taskBundleEntry := request.bundleEntryWithResource(task)
 	tx = tx.AppendEntry(taskBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 		ActingAgent: &fhir.Reference{
@@ -125,8 +126,6 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		Observer: *request.LocalIdentity,
 		Action:   fhir.AuditEventActionU,
 	}))
-	// The last entry is the audit event, so we need to subtract 2 to get the index of the Task
-	idx := len(tx.Entry) - 2
 
 	// Update care team
 	_, err = careteamservice.Update(ctx, s.fhirClient, carePlanId, task, request.LocalIdentity, tx)

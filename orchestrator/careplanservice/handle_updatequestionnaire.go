@@ -55,6 +55,7 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 		return nil, fmt.Errorf("failed to unmarshal existing Questionnaire: %w", err)
 	}
 
+	idx := len(tx.Entry)
 	questionnaireBundleEntry := request.bundleEntryWithResource(questionnaire)
 	tx.AppendEntry(questionnaireBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 		ActingAgent: &fhir.Reference{
@@ -64,9 +65,6 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 		Observer: *request.LocalIdentity,
 		Action:   fhir.AuditEventActionU,
 	}))
-
-	// The last entry is the audit event, so we need to subtract 2 to get the index of the Questionnaire
-	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedQuestionnaire fhir.Questionnaire

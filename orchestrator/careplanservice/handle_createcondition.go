@@ -37,6 +37,8 @@ func (s *Service) handleCreateCondition(ctx context.Context, request FHIRHandler
 		conditionBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
+	idx := len(tx.Entry)
+
 	// If condition has an ID, treat as PUT operation
 	if condition.Id != nil && request.Upsert {
 		tx.Append(condition, &fhir.BundleEntryRequest{
@@ -60,9 +62,6 @@ func (s *Service) handleCreateCondition(ctx context.Context, request FHIRHandler
 			Action:   fhir.AuditEventActionC,
 		}))
 	}
-
-	// The last entry is the audit event, so we need to subtract 2 to get the index of the Condition
-	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdCondition fhir.Condition

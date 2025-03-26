@@ -37,6 +37,7 @@ func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRe
 		patientBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
+	idx := len(tx.Entry)
 	// If the patient has an ID and the upsert flag is set, treat as PUT operation
 	// As per FHIR spec, this is how we can create a resource with a client supplied ID: https://hl7.org/fhir/http.html#upsert
 	if patient.Id != nil && request.Upsert {
@@ -61,9 +62,6 @@ func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRe
 			Action:   fhir.AuditEventActionC,
 		}))
 	}
-
-	// The last entry is the audit event, so we need to subtract 2 to get the index of the Patient
-	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdPatient fhir.Patient

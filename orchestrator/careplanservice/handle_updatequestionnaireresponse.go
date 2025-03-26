@@ -69,7 +69,7 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 		return nil, coolfhir.NewErrorWithCode("Participant does not have access to QuestionnaireResponse", http.StatusForbidden)
 	}
 
-	// Add to transaction
+	idx := len(tx.Entry)
 	questionnaireResponseBundleEntry := request.bundleEntryWithResource(questionnaireResponse)
 	tx.AppendEntry(questionnaireResponseBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 		ActingAgent: &fhir.Reference{
@@ -79,8 +79,6 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 		Observer: *request.LocalIdentity,
 		Action:   fhir.AuditEventActionU,
 	}))
-	// The last entry is the audit event, so we need to subtract 2 to get the index of the QuestionnaireResponse
-	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedQuestionnaireResponse fhir.QuestionnaireResponse

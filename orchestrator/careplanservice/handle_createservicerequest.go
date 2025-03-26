@@ -37,6 +37,7 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 		serviceRequestBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
+	idx := len(tx.Entry)
 	// If serviceRequest has an ID, treat as PUT operation
 	if serviceRequest.Id != nil && request.HttpMethod == "PUT" {
 		tx.Append(serviceRequest, &fhir.BundleEntryRequest{
@@ -60,9 +61,6 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 			Action:   fhir.AuditEventActionC,
 		}))
 	}
-
-	// The last entry is the audit event, so we need to subtract 2 to get the index of the ServiceRequest
-	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdServiceRequest fhir.ServiceRequest

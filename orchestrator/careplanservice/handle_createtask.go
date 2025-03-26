@@ -154,6 +154,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			},
 		}
 
+		carePlanBundleEntryIdx = len(tx.Entry)
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
 				Identifier: request.LocalIdentity,
@@ -162,9 +163,9 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			Observer: *request.LocalIdentity,
 			Action:   fhir.AuditEventActionC,
 		}))
-		carePlanBundleEntryIdx = len(tx.Entry) - 2
 		carePlanBundleEntry = &tx.Entry[carePlanBundleEntryIdx]
 
+		taskEntryIdx = len(tx.Entry)
 		tx.Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
 				Identifier: task.Requester.Identifier,
@@ -173,8 +174,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			Observer: *request.LocalIdentity,
 			Action:   fhir.AuditEventActionC,
 		}))
-
-		taskEntryIdx = len(tx.Entry) - 2
 		taskBundleEntry = tx.Entry[taskEntryIdx]
 	} else {
 		// Adding a task to an existing CarePlan
@@ -248,6 +247,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 		}
 
+		taskEntryIdx = len(tx.Entry)
 		// TODO: Only if not updated
 		tx.AppendEntry(taskBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
@@ -257,7 +257,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			Observer: *request.LocalIdentity,
 			Action:   fhir.AuditEventActionC,
 		}))
-		taskEntryIdx = len(tx.Entry) - 2 // Account for audit event entry
 
 		if len(task.PartOf) == 0 {
 			// Don't add subtasks to CarePlan.activity
@@ -273,6 +272,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, fmt.Errorf("failed to update CareTeam: %w", err)
 			}
 
+			carePlanBundleEntryIdx = len(tx.Entry)
 			if !updated {
 				tx.Update(carePlan, "CarePlan/"+*carePlan.Id, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 					ActingAgent: &fhir.Reference{
@@ -283,8 +283,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 					Action:   fhir.AuditEventActionU,
 				}))
 			}
-
-			carePlanBundleEntryIdx = len(tx.Entry) - 2
 			carePlanBundleEntry = &tx.Entry[carePlanBundleEntryIdx]
 		}
 	}

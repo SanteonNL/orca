@@ -31,6 +31,7 @@ func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHan
 		questionnaireBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
+	idx := len(tx.Entry)
 	// If questionnaire has an ID, treat as PUT operation
 	if questionnaire.Id != nil && request.Upsert {
 		tx.Append(questionnaire, &fhir.BundleEntryRequest{
@@ -54,9 +55,6 @@ func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHan
 			Action:   fhir.AuditEventActionC,
 		}))
 	}
-
-	// The last entry is the audit event, so we need to subtract 2 to get the index of the Questionnaire
-	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdQuestionnaire fhir.Questionnaire

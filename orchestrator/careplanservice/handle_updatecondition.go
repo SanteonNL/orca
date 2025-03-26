@@ -65,6 +65,7 @@ func (s *Service) handleUpdateCondition(ctx context.Context, request FHIRHandler
 		return nil, coolfhir.NewErrorWithCode("Participant does not have access to Condition", http.StatusForbidden)
 	}
 
+	idx := len(tx.Entry)
 	// Add to transaction
 	conditionBundleEntry := request.bundleEntryWithResource(condition)
 	tx.AppendEntry(conditionBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
@@ -75,8 +76,6 @@ func (s *Service) handleUpdateCondition(ctx context.Context, request FHIRHandler
 		Observer: *request.LocalIdentity,
 		Action:   fhir.AuditEventActionU,
 	}))
-	// The last entry is the audit event, so we need to subtract 2 to get the index of the Condition
-	idx := len(tx.Entry) - 2
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedCondition fhir.Condition

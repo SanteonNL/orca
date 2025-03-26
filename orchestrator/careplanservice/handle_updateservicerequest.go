@@ -65,7 +65,7 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 		return nil, coolfhir.NewErrorWithCode("Participant does not have access to ServiceRequest", http.StatusForbidden)
 	}
 
-	// Add to transaction
+	idx := len(tx.Entry)
 	serviceRequestBundleEntry := request.bundleEntryWithResource(serviceRequest)
 	tx.AppendEntry(serviceRequestBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 		ActingAgent: &fhir.Reference{
@@ -75,10 +75,9 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 		Observer: *request.LocalIdentity,
 		Action:   fhir.AuditEventActionU,
 	}))
+
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedServiceRequest fhir.ServiceRequest
-		// The last entry is the audit event, so we need to subtract 2 to get the index of the ServiceRequest
-		idx := len(tx.Entry) - 2
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &serviceRequestBundleEntry, &txResult.Entry[idx], &updatedServiceRequest)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
