@@ -125,47 +125,48 @@ const useTaskProgressStore = () => {
     }, [selectedTaskId, loading, initialized, fetchAllResources]);
 
     useEffect(() => {
+
         // Only subscribe if we have a selectedTaskId and no active global subscription yet.
-        if (selectedTaskId && !globalEventSource) {
-            globalEventSource = new EventSource(`/orca/cpc/subscribe/fhir/Task/${selectedTaskId}`);
+        if (!selectedTaskId || globalEventSource) return
 
-            globalEventSource.onopen = () => {
-                setEventSourceConnected(true);
-            }
+        globalEventSource = new EventSource(`/orca/cpc/subscribe/fhir/Task/${selectedTaskId}`);
 
-            globalEventSource.onerror = (error) => {
-                setEventSourceConnected(false);
-            };
-
-            globalEventSource.onmessage = (event) => {
-                const task = JSON.parse(event.data) as Task;
-                // Detect if it's the primary Task or a subtask.
-                if (task.id === selectedTaskId) {
-                    taskProgressStore.setState({ task });
-                } else if (task.partOf?.some(ref => ref.reference === `Task/${selectedTaskId}`)) {
-                    taskProgressStore.setState((state) => {
-                        const currentSubTasks = state.subTasks || [];
-                        const index = currentSubTasks.findIndex(subTask => subTask.id === task.id);
-                        if (index === -1) {
-                            // If the subtask is new, add it to the array.
-                            return { subTasks: [...currentSubTasks, task] };
-                        } else {
-                            // If the subtask exists, update it.
-                            const updatedSubTasks = [...currentSubTasks];
-                            updatedSubTasks[index] = task;
-                            return { subTasks: updatedSubTasks };
-                        }
-                    });
-                }
-            };
-
-            // Clean up the global subscription when the component unmounts.
-            return () => {
-                globalEventSource?.close();
-                globalEventSource = null;
-                setEventSourceConnected(false);
-            };
+        globalEventSource.onopen = () => {
+            setEventSourceConnected(true);
         }
+
+        globalEventSource.onerror = (error) => {
+            setEventSourceConnected(false);
+        };
+
+        globalEventSource.onmessage = (event) => {
+            const task = JSON.parse(event.data) as Task;
+            // Detect if it's the primary Task or a subtask.
+            if (task.id === selectedTaskId) {
+                taskProgressStore.setState({ task });
+            } else if (task.partOf?.some(ref => ref.reference === `Task/${selectedTaskId}`)) {
+                taskProgressStore.setState((state) => {
+                    const currentSubTasks = state.subTasks || [];
+                    const index = currentSubTasks.findIndex(subTask => subTask.id === task.id);
+                    if (index === -1) {
+                        // If the subtask is new, add it to the array.
+                        return { subTasks: [...currentSubTasks, task] };
+                    } else {
+                        // If the subtask exists, update it.
+                        const updatedSubTasks = [...currentSubTasks];
+                        updatedSubTasks[index] = task;
+                        return { subTasks: updatedSubTasks };
+                    }
+                });
+            }
+        };
+
+        // Clean up the global subscription when the component unmounts.
+        return () => {
+            globalEventSource?.close();
+            globalEventSource = null;
+            setEventSourceConnected(false);
+        };
     }, [selectedTaskId, setEventSourceConnected]);
 
     return store;
