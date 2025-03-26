@@ -615,7 +615,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	}
 	// TODO: for now, we assume the resource URL is always in the form of <FHIR base url>/<resource type>/<resource id>
 	//       Then, we can deduce the FHIR base URL from the resource URL
-	fhirBaseURL, relativeReference, err := coolfhir.ParseExternalLiteralReference(resourceUrl, *focusReference.Type)
+	fhirBaseURL, _, err := coolfhir.ParseExternalLiteralReference(resourceUrl, *focusReference.Type)
 	if err != nil {
 		return err
 	}
@@ -635,6 +635,12 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		focusResource = task
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
 		// TODO: Move this to a event.Handler implementation
+		err = s.publishTaskToSse(&task)
+		if err != nil {
+			//gracefully log the error, but continue processing the notification
+			log.Ctx(ctx).Err(err).Msgf("Failed to publish task (id=%s) to SSE", *task.Id)
+		}
+
 		err = s.handleTaskNotification(ctx, fhirClient, &task)
 		rejection := new(TaskRejection)
 		if errors.As(err, &rejection) || errors.As(err, rejection) {
@@ -644,29 +650,6 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			}
 		} else if err != nil {
 			return err
-		} else {
-			//Otherwise, the Task is valid and can be pushed to the frontend
-			data, err := json.Marshal(task)
-			if err != nil {
-				return err
-			}
-
-			// Check if the Task is a subTask
-			var parentTaskReference string
-			if len(task.PartOf) > 0 {
-				for _, reference := range task.PartOf {
-					if reference.Reference != nil && strings.HasPrefix(*reference.Reference, "Task/") {
-						parentTaskReference = *reference.Reference
-						break
-					}
-				}
-			}
-
-			if parentTaskReference != "" {
-				s.sseService.Publish(parentTaskReference, string(data))
-			} else {
-				s.sseService.Publish(relativeReference, string(data))
-			}
 		}
 	case "CarePlan":
 		var carePlan fhir.CarePlan
@@ -683,6 +666,32 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		FHIRResource:       focusResource,
 		FHIRResourceSource: *focusReference.Reference,
 	})
+}
+
+func (s Service) publishTaskToSse(task *fhir.Task) error {
+	data, err := json.Marshal(task)
+	if err != nil {
+		return err
+	}
+
+	// Check if the Task is a subTask
+	var parentTaskReference string
+	if len(task.PartOf) > 0 {
+		for _, reference := range task.PartOf {
+			if reference.Reference != nil && strings.HasPrefix(*reference.Reference, "Task/") {
+				parentTaskReference = *reference.Reference
+				break
+			}
+		}
+	}
+
+	if parentTaskReference != "" {
+		s.sseService.Publish(parentTaskReference, string(data))
+	} else {
+		s.sseService.Publish(fmt.Sprintf("Task/%s", *task.Id), string(data))
+	}
+
+	return nil
 }
 
 func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {

@@ -126,7 +126,7 @@ func TestPublish_ChannelFull(t *testing.T) {
 	s.registerClient("full", ch)
 
 	// Fill the channel.
-	ch <- "first"
+	s.Publish("full", "first")
 	// At this point, the channel is full (buffer size is 1).
 	// Publish a message which should be dropped.
 	s.Publish("full", "dropped")
