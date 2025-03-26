@@ -18,7 +18,7 @@ var tokenIntrospectionClient = http.DefaultClient
 // Authenticator authenticates the caller according to the Nuts authentication.
 // The caller is required to provide an OAuth2 access token in the Authorization header, which is introspected at the Nuts node.
 // The result is then mapped to a FHIR Organization resource, using Dutch coding systems (URA).
-func (d DutchNutsProfile) Authenticator(resourceServerURL *url.URL, fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request) {
+func (d DutchNutsProfile) Authenticator(resourceServerURL *url.URL, next http.HandlerFunc) http.HandlerFunc {
 	authConfig := middleware.Config{
 		TokenIntrospectionEndpoint: d.Config.API.Parse().JoinPath("internal/auth/v2/accesstoken/introspect").String(),
 		TokenIntrospectionClient:   tokenIntrospectionClient,
@@ -42,7 +42,7 @@ func (d DutchNutsProfile) Authenticator(resourceServerURL *url.URL, fn func(writ
 			Organization: *organization,
 		}
 		log.Ctx(request.Context()).Debug().Msgf("Authenticated user: %v on route %s", principal, request.URL.Path)
-		fn(response, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
+		next(response, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 	})
 }
 

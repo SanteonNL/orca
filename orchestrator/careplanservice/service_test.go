@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +12,8 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
@@ -75,6 +76,7 @@ func TestService_Proxy(t *testing.T) {
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
+	service.policyMiddleware = NewMockPolicyMiddleware()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
@@ -148,6 +150,7 @@ func TestService_Proxy(t *testing.T) {
 		}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
 		require.NoError(t, err)
 		frontServerMux := http.NewServeMux()
+		service.policyMiddleware = NewMockPolicyMiddleware()
 		service.RegisterHandlers(frontServerMux)
 		frontServer := httptest.NewServer(frontServerMux)
 
@@ -203,9 +206,11 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 		},
 		AllowUnmanagedFHIROperations: true,
 	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
+	service.policyMiddleware = MockPolicyMiddleware{}
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
@@ -277,6 +282,7 @@ func TestService_ErrorHandling(t *testing.T) {
 		orcaPublicURL, messaging.NewMemoryBroker())
 	require.NoError(t, err)
 
+	service.policyMiddleware = NewMockPolicyMiddleware()
 	service.RegisterHandlers(fhirServerMux)
 	server := httptest.NewServer(fhirServerMux)
 
@@ -538,6 +544,7 @@ func TestService_Handle(t *testing.T) {
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
+	service.policyMiddleware = NewMockPolicyMiddleware()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
