@@ -383,6 +383,22 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
 	})
 
+	var searchResult fhir.Bundle
+	t.Run("Search Patient by id", func(t *testing.T) {
+		err := carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}}, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, readCondition)
+
+		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
+
+		// Read Condition by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
+		require.NoError(t, err)
+		require.NotNil(t, readCondition)
+
+		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
+	})
+
 	//var searchResult fhir.Bundle
 	//t.Run("Search Patient by id", func(t *testing.T) {
 	//	err := carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}}, &searchResult)
