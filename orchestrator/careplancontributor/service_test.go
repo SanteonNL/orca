@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	"github.com/rs/zerolog/log"
@@ -916,13 +917,12 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 	require.NoError(t, err)
 
 	tests := []struct {
-		name                 string
-		sessionValues        map[string]string
-		client               mock.MockClient
-		setLocalCPS          bool
-		expectCpsInteraction bool
-		expectedStatus       int
-		expectedContent      string
+		name            string
+		sessionValues   map[string]string
+		client          mock.MockClient
+		setLocalCPS     bool
+		expectedStatus  int
+		expectedContent string
 	}{
 		{
 			name:            "No taskIdentifier in session",
@@ -954,29 +954,40 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 			sessionValues: map[string]string{
 				"taskIdentifier": "https://some.other.domain/fhir/NamingSystem/task-workflow-identifier|12345",
 			},
-			setLocalCPS:          true,
-			expectCpsInteraction: true,
-			expectedStatus:       http.StatusBadRequest,
-			expectedContent:      "Task identifier does not match the taskIdentifier in the session",
+			setLocalCPS:     true,
+			expectedStatus:  http.StatusBadRequest,
+			expectedContent: "Task identifier does not match the taskIdentifier in the session",
 		},
 		{
 			name: "Success subscription",
 			sessionValues: map[string]string{
 				"taskIdentifier": validToken,
 			},
-			setLocalCPS:          true,
-			expectCpsInteraction: true,
-			expectedStatus:       http.StatusOK,
-			expectedContent:      "",
+			setLocalCPS:     true,
+			expectedStatus:  http.StatusOK,
+			expectedContent: "",
 		},
 	}
 
 	ctx := context.Background()
 	rawJson, _ := os.ReadFile("./testdata/task-3.json")
 
+	var taskData map[string]interface{}
+	err = json.Unmarshal(rawJson, &taskData)
+	require.NoError(t, err)
+	mockFhirClient := &test.StubFHIRClient{
+		Resources: []any{taskData},
+	}
+
 	sseService := sse.New()
 	sseService.ServeHTTP = func(topic string, writer http.ResponseWriter, request *http.Request) {
 		log.Ctx(ctx).Info().Msgf("Unit-Test: Transform request to SSE stream for topic: %s", topic)
+	}
+
+	svc := &Service{sseService: sseService}
+
+	svc.createFHIRClientForURL = func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
+		return mockFhirClient, nil, nil
 	}
 
 	for _, tt := range tests {
@@ -990,29 +1001,10 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 
 			resp := httptest.NewRecorder()
 
-			svc := &Service{sseService: sseService}
 			if tt.setLocalCPS {
 				svc.localCarePlanServiceUrl = localCPSUrl
 			} else {
 				svc.localCarePlanServiceUrl = nil
-			}
-
-			if tt.expectCpsInteraction {
-
-				ctrl := gomock.NewController(t)
-
-				mockFHIRClient := mock.NewMockClient(ctrl)
-				mockFHIRClient.EXPECT().ReadWithContext(ctx, "Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, target *fhir.Task, opts ...interface{}) error {
-					return json.Unmarshal(rawJson, target)
-				})
-
-				orig := svc.createFHIRClientForURL
-				t.Cleanup(func() {
-					svc.createFHIRClientForURL = orig
-				})
-				svc.createFHIRClientForURL = func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
-					return mockFHIRClient, nil, nil
-				}
 			}
 
 			// Call method under test.
