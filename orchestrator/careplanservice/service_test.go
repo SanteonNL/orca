@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,19 +13,20 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/SanteonNL/orca/orchestrator/messaging"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
-
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.uber.org/mock/gomock"
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
@@ -53,11 +53,11 @@ func TestService_Proxy(t *testing.T) {
 	fhirServerMux := http.NewServeMux()
 	var capturedQuery url.Values
 	var capturedRequestHeaders http.Header
-	fhirServerMux.HandleFunc("GET /fhir/Success/1", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/CarePlan/1", func(writer http.ResponseWriter, request *http.Request) {
 		capturedQuery = request.URL.Query()
 		capturedRequestHeaders = request.Header
-		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{
-			Intent: "order",
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.CarePlan{
+			Title: to.Ptr("Test Care Plan"),
 		})
 	})
 	fhirServerMux.HandleFunc("GET /fhir/Fail/1", func(writer http.ResponseWriter, request *http.Request) {
@@ -82,11 +82,11 @@ func TestService_Proxy(t *testing.T) {
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
 	t.Run("ok", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/CarePlan/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
-		require.JSONEq(t, `{"resourceType":"Task", "intent":"order", "status":"draft"}`, string(responseData))
+		require.JSONEq(t, `{"resourceType":"CarePlan", "title":"Test Care Plan"}`, string(responseData))
 		t.Run("caching is allowed", func(t *testing.T) {
 			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
 		})
@@ -103,14 +103,14 @@ func TestService_Proxy(t *testing.T) {
 		assert.Len(t, capabilityStatement.Rest[0].Security.Service, 1)
 	})
 	t.Run("it proxies query parameters", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1?_identifier=foo|bar")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/CarePlan/1?_identifier=foo|bar")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		assert.Equal(t, "foo|bar", capturedQuery.Get("_identifier"))
 	})
 	t.Run("it proxies FHIR HTTP request headers", func(t *testing.T) {
 		// https://build.fhir.org/http.html#Http-Headers
-		httpRequest, _ := http.NewRequest(http.MethodGet, frontServer.URL+"/cps/Success/1", nil)
+		httpRequest, _ := http.NewRequest(http.MethodGet, frontServer.URL+"/cps/CarePlan/1", nil)
 		httpRequest.Header.Set("If-None-Exist", "ine")
 		httpRequest.Header.Set("If-Match", "im")
 		httpRequest.Header.Set("If-Modified-Since", "ims")
@@ -362,12 +362,13 @@ func TestService_DefaultOperationHandler(t *testing.T) {
 
 		resultHandler, err := service.handleUnmanagedOperation(request, tx)
 		require.NoError(t, err)
-		resultBundleEntry, notifications, err := resultHandler(&txResultBundle)
+		resultBundleEntries, notifications, err := resultHandler(&txResultBundle)
 
 		require.NoError(t, err)
 		require.Empty(t, notifications)
-		assert.JSONEq(t, string(expectedServiceRequestJson), string(resultBundleEntry.Resource))
-		assert.Equal(t, "ServiceRequest/123", *resultBundleEntry.Response.Location)
+		require.Len(t, resultBundleEntries, 1)
+		assert.JSONEq(t, string(expectedServiceRequestJson), string(resultBundleEntries[0].Resource))
+		assert.Equal(t, "ServiceRequest/123", *resultBundleEntries[0].Response.Location)
 	})
 	t.Run("handles unmanaged FHIR operations - fail for unmanaged operations", func(t *testing.T) {
 		// Default behaviour is that we fail when a user tries to perform an unmanaged operation
@@ -488,26 +489,26 @@ func TestService_Handle(t *testing.T) {
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
-					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+					return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("CarePlan"))
 						carePlan := fhir.CarePlan{
 							Id: to.Ptr("123"),
 						}
 						result.Resource, _ = json.Marshal(carePlan)
-						return result, []any{&carePlan}, nil
+						return []*fhir.BundleEntry{result}, []any{&carePlan}, nil
 					}, nil
 				}
 			case "Task":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
-					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+					return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
 							Id: to.Ptr("123"),
 						}
 						result.Resource, _ = json.Marshal(task)
-						return result, []any{&task}, nil
+						return []*fhir.BundleEntry{result}, []any{&task}, nil
 					}, nil
 				}
 			}
@@ -517,13 +518,13 @@ func TestService_Handle(t *testing.T) {
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
-					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+					return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
 							Id: to.Ptr("123"),
 						}
 						result.Resource, _ = json.Marshal(task)
-						return result, []any{&task}, nil
+						return []*fhir.BundleEntry{result}, []any{&task}, nil
 					}, nil
 				}
 			case "Organization":

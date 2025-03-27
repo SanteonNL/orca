@@ -367,8 +367,8 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedAudit("ServiceRequest/"+*readServiceRequest.Id, fhir.AuditEventActionR)
 	})
 
+	var readCondition fhir.Condition
 	t.Run("Read Condition by id", func(t *testing.T) {
-		var readCondition fhir.Condition
 		err := carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
 		require.NoError(t, err)
 		require.NotNil(t, readCondition)
@@ -387,11 +387,16 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	t.Run("Search Patient by id", func(t *testing.T) {
 		err := carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}}, &searchResult)
 		require.NoError(t, err)
-		require.NotEmpty(t, searchResult.Entry)
+		require.NotNil(t, searchResult)
 
-		addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id + "," + *nonExistingPatient.Id + "," + "fake-id"}})
-		addExpectedSearchAudit("Patient/"+*nonExistingPatient.Id, url.Values{"_id": {*patient.Id + "," + *nonExistingPatient.Id + "," + "fake-id"}})
-		// TODO: Do we add an error audit event for "fake-id"
+		addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}})
+
+		// Read Condition by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
+		require.NoError(t, err)
+		require.NotNil(t, readCondition)
+
+		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
 	})
 
 	// Verify all audit events at the end

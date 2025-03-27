@@ -62,13 +62,13 @@ func (s *Service) handleCreateQuestionnaireResponse(ctx context.Context, request
 		}))
 	}
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var createdQuestionnaireResponse fhir.QuestionnaireResponse
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdQuestionnaireResponse)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process QuestionnaireResponse creation result: %w", err)
 		}
 
-		return result, []any{&createdQuestionnaireResponse}, nil
+		return []*fhir.BundleEntry{result}, []any{&createdQuestionnaireResponse}, nil
 	}, nil
 }
