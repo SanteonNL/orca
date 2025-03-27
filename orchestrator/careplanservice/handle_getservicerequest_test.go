@@ -26,6 +26,11 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 	var carePlan1 fhir.CarePlan
 	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
 
+	serviceRequest1 := fhir.ServiceRequest{
+		Id: to.Ptr("1"),
+	}
+	serviceRequest1Raw, _ := json.Marshal(serviceRequest1)
+
 	auditEvent := fhir.AuditEvent{
 		Id:     to.Ptr("1"),
 		Action: to.Ptr(fhir.AuditEventActionC),
@@ -51,11 +56,21 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 
 	tests := map[string]struct {
 		context       context.Context
+		request       FHIRHandlerRequest
 		expectedError error
 		setup         func(ctx context.Context, client *mock.MockClient)
 	}{
 		"error: ServiceRequest does not exist": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
 			expectedError: errors.New("fhir error: ServiceRequest not found"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "ServiceRequest/1", gomock.Any(), gomock.Any()).
@@ -63,7 +78,16 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 			},
 		},
 		"error: ServiceRequest exists, error searching for task": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
 			expectedError: errors.New("fhir error: Issue searching for task"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "ServiceRequest/1", gomock.Any(), gomock.Any()).
@@ -77,6 +101,15 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		},
 		"error: ServiceRequest exists, fetched task, incorrect principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal3,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("3"),
+				},
+			},
 			expectedError: &coolfhir.ErrorWithCode{
 				Message:    "Participant does not have access to ServiceRequest",
 				StatusCode: http.StatusForbidden,
@@ -107,10 +140,19 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		},
 		"ok: ServiceRequest exists, fetched task, incorrect principal, but is creator": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal3,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("3"),
+				},
+			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "ServiceRequest/1", gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, target *fhir.ServiceRequest, _ ...fhirclient.Option) error {
-						*target = fhir.ServiceRequest{Id: to.Ptr("1")}
+						*target = serviceRequest1
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
@@ -133,10 +175,19 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		},
 		"ok: ServiceRequest exists, fetched task, task owner": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "ServiceRequest/1", gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, target *fhir.ServiceRequest, _ ...fhirclient.Option) error {
-						*target = fhir.ServiceRequest{Id: to.Ptr("1")}
+						*target = serviceRequest1
 						return nil
 					})
 				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
@@ -161,14 +212,42 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 			tt.setup(tt.context, client)
 
 			service := &Service{fhirClient: client}
-			serviceRequest, err := service.handleGetServiceRequest(tt.context, "1", &fhirclient.Headers{})
+			tx := coolfhir.Transaction()
+			result, err := service.handleGetServiceRequest(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
-				require.Nil(t, serviceRequest)
-				require.Equal(t, tt.expectedError, err)
+				require.Error(t, err)
+				require.Nil(t, result)
 			} else {
 				require.NoError(t, err)
-				require.NotNil(t, serviceRequest)
+				require.NotNil(t, result)
+
+				mockResponse := &fhir.Bundle{
+					Entry: []fhir.BundleEntry{
+						{
+							Resource: serviceRequest1Raw,
+							Response: &fhir.BundleEntryResponse{
+								Status: "200 OK",
+							},
+						},
+						{
+							Resource: auditEventRaw,
+							Response: &fhir.BundleEntryResponse{
+								Status: "200 OK",
+							},
+						},
+					},
+				}
+
+				entry, notifications, err := result(mockResponse)
+				require.NoError(t, err)
+				require.NotNil(t, entry)
+				var serviceRequest fhir.ServiceRequest
+				err = json.Unmarshal(entry.Resource, &serviceRequest)
+				require.NoError(t, err)
+				require.Equal(t, serviceRequest.Id, to.Ptr("1"))
+
+				require.Len(t, notifications, 0)
 			}
 		})
 	}

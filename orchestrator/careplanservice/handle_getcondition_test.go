@@ -39,6 +39,7 @@ func TestService_handleGetCondition(t *testing.T) {
 			},
 		},
 	}
+	condition1Raw, _ := json.Marshal(condition1)
 
 	auditEvent := fhir.AuditEvent{
 		Id:     to.Ptr("1"),
@@ -65,11 +66,17 @@ func TestService_handleGetCondition(t *testing.T) {
 
 	tests := map[string]struct {
 		context       context.Context
+		request       FHIRHandlerRequest
 		expectedError error
 		setup         func(ctx context.Context, client *mock.MockClient)
 	}{
 		"error: Condition does not exist": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+			},
 			expectedError: errors.New("fhir error: Condition not found"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
@@ -78,6 +85,11 @@ func TestService_handleGetCondition(t *testing.T) {
 		},
 		"error: Condition exists, no subject": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+			},
 			expectedError: &coolfhir.ErrorWithCode{
 				Message:    "Participant does not have access to Condition",
 				StatusCode: http.StatusForbidden,
@@ -91,7 +103,12 @@ func TestService_handleGetCondition(t *testing.T) {
 			},
 		},
 		"error: Condition exists, subject is not a patient": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+			},
 			expectedError: errors.New("fhir error: Issues searching for patient"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
@@ -112,7 +129,12 @@ func TestService_handleGetCondition(t *testing.T) {
 			},
 		},
 		"error: Condition exists, subject is patient, error fetching patient": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+			},
 			expectedError: errors.New("fhir error: Issues searching for patient"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
@@ -126,6 +148,11 @@ func TestService_handleGetCondition(t *testing.T) {
 		},
 		"error: Condition exists, no patient returned": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+			},
 			expectedError: &coolfhir.ErrorWithCode{
 				Message:    "Participant does not have access to Condition",
 				StatusCode: http.StatusForbidden,
@@ -145,6 +172,11 @@ func TestService_handleGetCondition(t *testing.T) {
 		},
 		"error: Condition exists, subject is patient, patient returned, incorrect principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal3,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+			},
 			expectedError: &coolfhir.ErrorWithCode{
 				Message:    "Participant does not have access to Condition",
 				StatusCode: http.StatusForbidden,
@@ -173,6 +205,15 @@ func TestService_handleGetCondition(t *testing.T) {
 		},
 		"ok: Condition exists, subject is patient, patient returned, incorrect principal, but AuditEvent is found": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal3,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, target *fhir.Condition, _ ...fhirclient.Option) error {
@@ -198,6 +239,15 @@ func TestService_handleGetCondition(t *testing.T) {
 		},
 		"ok: Condition exists, subject is patient, patient returned, correct principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, target *fhir.Condition, _ ...fhirclient.Option) error {
@@ -230,14 +280,42 @@ func TestService_handleGetCondition(t *testing.T) {
 			}
 
 			service := &Service{fhirClient: client}
-			condition, err := service.handleGetCondition(tt.context, "1", &fhirclient.Headers{})
+			tx := coolfhir.Transaction()
+			result, err := service.handleGetCondition(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Error(t, err)
-				require.Nil(t, condition)
+				require.Nil(t, result)
 			} else {
 				require.NoError(t, err)
-				require.NotNil(t, condition)
+				require.NotNil(t, result)
+
+				mockResponse := &fhir.Bundle{
+					Entry: []fhir.BundleEntry{
+						{
+							Resource: condition1Raw,
+							Response: &fhir.BundleEntryResponse{
+								Status: "200 OK",
+							},
+						},
+						{
+							Resource: auditEventRaw,
+							Response: &fhir.BundleEntryResponse{
+								Status: "200 OK",
+							},
+						},
+					},
+				}
+
+				entry, notifications, err := result(mockResponse)
+				require.NoError(t, err)
+				require.NotNil(t, entry)
+				var condition fhir.Condition
+				err = json.Unmarshal(entry.Resource, &condition)
+				require.NoError(t, err)
+				require.Equal(t, condition.Id, to.Ptr("1"))
+
+				require.Len(t, notifications, 0)
 			}
 		})
 	}

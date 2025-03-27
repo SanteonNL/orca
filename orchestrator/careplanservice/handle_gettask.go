@@ -2,22 +2,25 @@ package careplanservice
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"net/url"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 // handleGetTask fetches the requested Task and validates if the requester has access to the resource (is a participant of one of the CareTeams associated with the task)
 // if the requester is valid, return the Task, else return an error
-// Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
-func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.Task, error) {
+func (s *Service) handleGetTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	log.Ctx(ctx).Info().Msgf("Getting Task with ID: %s", request.ResourceId)
 	// fetch Task + CareTeam, validate requester is participant of CareTeam
 	var task fhir.Task
-	err := s.fhirClient.ReadWithContext(ctx, "Task/"+id, &task, fhirclient.ResponseHeaders(headers))
+	err := s.fhirClient.ReadWithContext(ctx, "Task/"+request.ResourceId, &task, fhirclient.ResponseHeaders(request.FhirHeaders))
 	if err != nil {
 		return nil, err
 	}
@@ -35,12 +38,8 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 		}
 	}
 
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
 	// Check if the requester is either the task Owner or Requester, if not, they must be a member of the CareTeam
-	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
+	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, request.Principal.Organization.Identifier)
 	if !(isOwner || isRequester) {
 		var carePlan fhir.CarePlan
 
@@ -53,13 +52,32 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 			return nil, err
 		}
 
-		err = validatePrincipalInCareTeam(principal, careTeam)
+		err = validatePrincipalInCareTeam(*request.Principal, careTeam)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	return &task, nil
+	tx.Get(task, "Task/"+request.ResourceId, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		Action: fhir.AuditEventActionR,
+		ActingAgent: &fhir.Reference{
+			Identifier: &request.Principal.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		},
+		Observer: *request.LocalIdentity,
+	}))
+
+	taskEntryIdx := 0
+
+	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+		var retTask fhir.Task
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[taskEntryIdx], &txResult.Entry[taskEntryIdx], &retTask)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to process Task read result: %w", err)
+		}
+		// We do not want to notify subscribers for a get
+		return result, []any{}, nil
+	}, nil
 }
 
 // handleSearchTask does a search for Task based on the user requester parameters. If CareTeam is not requested, add this to the fetch to be used for validation

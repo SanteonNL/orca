@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
@@ -25,13 +26,28 @@ func TestService_handleGetTask(t *testing.T) {
 	var carePlan1 fhir.CarePlan
 	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
 
+	auditEvent := fhir.AuditEvent{
+		Id: to.Ptr("1"),
+	}
+	auditEventRaw, _ := json.Marshal(auditEvent)
+
 	tests := map[string]struct {
 		context       context.Context
+		request       FHIRHandlerRequest
 		expectedError error
 		setup         func(ctx context.Context, client *mock.MockClient)
 	}{
 		"error: Task does not exist": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal3,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("3"),
+				},
+			},
 			expectedError: errors.New("fhir error: task not found"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Task/1", gomock.Any(), gomock.Any()).
@@ -39,7 +55,16 @@ func TestService_handleGetTask(t *testing.T) {
 			},
 		},
 		"error: Task exists, auth, not owner or requester, error fetching CarePlan": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal3,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("3"),
+				},
+			},
 			expectedError: errors.New("fhir error: careplan read failed"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Task/1", gomock.Any(), gomock.Any()).
@@ -53,6 +78,15 @@ func TestService_handleGetTask(t *testing.T) {
 		},
 		"error: Task exists, auth, CarePlan and CareTeam returned, not a participant": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal3,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("3"),
+				},
+			},
 			expectedError: &coolfhir.ErrorWithCode{
 				Message:    "Participant is not part of CareTeam",
 				StatusCode: http.StatusForbidden,
@@ -72,6 +106,15 @@ func TestService_handleGetTask(t *testing.T) {
 		},
 		"ok: Task exists, auth, CarePlan and CareTeam returned, owner": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Task/1", gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, target *fhir.Task, _ ...fhirclient.Option) error {
@@ -91,14 +134,42 @@ func TestService_handleGetTask(t *testing.T) {
 			tt.setup(tt.context, client)
 
 			service := &Service{fhirClient: client}
-			task, err := service.handleGetTask(tt.context, "1", &fhirclient.Headers{})
+			tx := coolfhir.Transaction()
+			result, err := service.handleGetTask(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
-				require.Nil(t, task)
-				require.Equal(t, tt.expectedError, err)
+				require.Error(t, err)
+				require.Nil(t, result)
 			} else {
 				require.NoError(t, err)
-				require.NotNil(t, task)
+				require.NotNil(t, result)
+
+				mockResponse := &fhir.Bundle{
+					Entry: []fhir.BundleEntry{
+						{
+							Resource: task1Raw,
+							Response: &fhir.BundleEntryResponse{
+								Status: "200 OK",
+							},
+						},
+						{
+							Resource: auditEventRaw,
+							Response: &fhir.BundleEntryResponse{
+								Status: "200 OK",
+							},
+						},
+					},
+				}
+
+				entry, notifications, err := result(mockResponse)
+				require.NoError(t, err)
+				require.NotNil(t, entry)
+				var task fhir.Task
+				err = json.Unmarshal(entry.Resource, &task)
+				require.NoError(t, err)
+				require.Equal(t, task.Id, task1.Id)
+
+				require.Len(t, notifications, 0)
 			}
 		})
 	}

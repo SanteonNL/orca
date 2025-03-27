@@ -2,23 +2,25 @@ package careplanservice
 
 import (
 	"context"
+	"fmt"
 	"net/url"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 // handleGetCarePlan fetches the requested CarePlan and validates if the requester has access to the resource (is a participant of one of the CareTeams of the care plan)
 // if the requester is valid, return the CarePlan, else return an error
-// Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
-func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhirclient.Headers) (*fhir.CarePlan, error) {
+func (s *Service) handleGetCarePlan(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	log.Ctx(ctx).Info().Msgf("Getting CarePlan with ID: %s", request.ResourceId)
 	var carePlan fhir.CarePlan
 
 	// fetch CarePlan, validate requester is participant of CareTeam
-	// headers are passed in by reference and returned to the calling method
-	err := s.fhirClient.ReadWithContext(ctx, "CarePlan/"+id, &carePlan)
+	err := s.fhirClient.ReadWithContext(ctx, "CarePlan/"+request.ResourceId, &carePlan, fhirclient.ResponseHeaders(request.FhirHeaders))
 	if err != nil {
 		return nil, err
 	}
@@ -28,17 +30,31 @@ func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhi
 		return nil, err
 	}
 
-	principal, err := auth.PrincipalFromContext(ctx)
+	err = validatePrincipalInCareTeam(*request.Principal, careTeam)
 	if err != nil {
 		return nil, err
 	}
 
-	err = validatePrincipalInCareTeam(principal, careTeam)
-	if err != nil {
-		return nil, err
-	}
+	tx.Get(carePlan, "CarePlan/"+request.ResourceId, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		Action: fhir.AuditEventActionR,
+		ActingAgent: &fhir.Reference{
+			Identifier: &request.Principal.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		},
+		Observer: *request.LocalIdentity,
+	}))
 
-	return &carePlan, nil
+	carePlanEntryIdx := 0
+
+	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+		var retCarePlan fhir.CarePlan
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[carePlanEntryIdx], &txResult.Entry[carePlanEntryIdx], &retCarePlan)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to process CarePlan read result: %w", err)
+		}
+		// We do not want to notify subscribers for a get
+		return result, []any{}, nil
+	}, nil
 }
 
 // handleSearchCarePlan does a search for CarePlan based on the user requester parameters. If CareTeam is not requested, add this to the fetch to be used for validation
