@@ -16,8 +16,8 @@ func (c CarePlanCreatedEvent) Instance() events.Type {
 	return &CarePlanCreatedEvent{}
 }
 
-func (c CarePlanCreatedEvent) Topic() messaging.Topic {
-	return messaging.Topic{
+func (c CarePlanCreatedEvent) Entity() messaging.Entity {
+	return messaging.Entity{
 		Name:   "orca.hl7.fhir.careplan-created",
 		Prefix: true,
 	}

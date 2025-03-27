@@ -17,8 +17,8 @@ var _ events.Type = StringEvent("")
 
 type StringEvent string
 
-func (s StringEvent) Topic() messaging.Topic {
-	return messaging.Topic{
+func (s StringEvent) Entity() messaging.Entity {
+	return messaging.Entity{
 		Name: "string-event",
 	}
 }
@@ -31,8 +31,8 @@ var _ events.Type = &unmarshallable{}
 
 type unmarshallable struct{}
 
-func (u unmarshallable) Topic() messaging.Topic {
-	return messaging.Topic{}
+func (u unmarshallable) Entity() messaging.Entity {
+	return messaging.Entity{}
 }
 
 func (u unmarshallable) Instance() events.Type {

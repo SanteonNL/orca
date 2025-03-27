@@ -49,7 +49,7 @@ If you don't want to query the FHIR Questionnaire and HealthcareService resource
 The downside of this option is that the resources MUST be available on startup.
 
 #### EHR integration
-If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
+If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLEQUEUE`
 to the messaging topic on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
 
 See "Messaging configuration" for more information.  
@@ -68,13 +68,13 @@ For production environments, it's recommended to use Azure ServiceBus.
 
 * `ORCA_MESSAGING_AZURESERVICEBUS_HOSTNAME`: The hostname of the Azure ServiceBus instance, setting this (or the connection string) enables use of Azure ServiceBus as message broker.
 * `ORCA_MESSAGING_AZURESERVICEBUS_CONNECTIONSTRING`: The connection string of the Azure ServiceBus instance, setting this (or the hostname) enables use of Azure ServiceBus as message broker.
-* `ORCA_MESSAGING_TOPICPREFIX`: Optional prefix for topics, which allows multi-tenancy (using the same underlying message broker infrastructure for multiple ORCA instances) by prefixing the topic names with a tenant identifier.
+* `ORCA_MESSAGING_ENTITYPREFIX`: Optional prefix for topics and queues, which allows multi-tenancy (using the same underlying message broker infrastructure for multiple ORCA instances) by prefixing the entity names with a tenant identifier.
 * `ORCA_MESSAGING_HTTP_ENDPOINT`: For demo purposes: a URL pointing HTTP endpoint, to which messages will also be delivered. It appends the topic name to this URL.
 * `ORCA_MESSAGING_HTTP_TOPICFILTER`: For demo purposes: topics to enable the HTTP endpoint for (separator: `,`). If not set, all topics are enabled.
 
 If you're Azure Service Bus, depending on the features you've enabled, you'll need to create the following queues and topics: 
 
-- Queue `orca.taskengine.task-accepted` (if `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC` is set).
+- Queue `orca.taskengine.task-accepted` (if `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLEQUEUE` is set).
 - Topic `orca.hl7.fhir.careplan-created` (if `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL` is set).
 - Queue `orca.subscriptionmgr.notification` (if `ORCA_CAREPLANSERVICE_ENABLED` is `true`).
 

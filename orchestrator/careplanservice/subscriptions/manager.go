@@ -16,7 +16,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-var SendNotificationTopic = messaging.Topic{
+var SendNotificationQueue = messaging.Entity{
 	Name:   "orca.subscriptionmgr.notification",
 	Prefix: true,
 }
@@ -33,7 +33,7 @@ func NewManager(fhirBaseURL *url.URL, channels ChannelFactory, messageBroker mes
 		Channels:      channels,
 		MessageBroker: messageBroker,
 	}
-	if err := messageBroker.Receive(SendNotificationTopic, mgr.receiveMessage); err != nil {
+	if err := messageBroker.ReceiveFromQueue(SendNotificationQueue, mgr.receiveMessage); err != nil {
 		return nil, err
 	}
 	return mgr, nil
@@ -120,7 +120,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			Subscriber: subscriber,
 			Focus:      focus,
 		})
-		if err := r.MessageBroker.SendMessage(ctx, SendNotificationTopic, &messaging.Message{
+		if err := r.MessageBroker.SendMessage(ctx, SendNotificationQueue, &messaging.Message{
 			Body:        data,
 			ContentType: "application/json",
 		}); err != nil {

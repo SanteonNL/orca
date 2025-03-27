@@ -21,8 +21,8 @@ type TaskAcceptedEvent struct {
 	Task        fhir.Task `json:"task"`
 }
 
-func (t TaskAcceptedEvent) Topic() messaging.Topic {
-	return messaging.Topic{
+func (t TaskAcceptedEvent) Entity() messaging.Entity {
+	return messaging.Entity{
 		Name:   "orca.taskengine.task-accepted",
 		Prefix: true,
 	}
@@ -45,13 +45,13 @@ type notifier struct {
 }
 
 // NewNotifier creates and returns a Notifier implementation using the provided ServiceBusClient for message handling.
-func NewNotifier(eventManager events.Manager, messageBroker messaging.Broker, topic messaging.Topic, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
+func NewNotifier(eventManager events.Manager, messageBroker messaging.Broker, receiverTopicOrQueue messaging.Entity, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
 	n := &notifier{
 		eventManager:      eventManager,
 		broker:            messageBroker,
 		fhirClientFactory: fhirClientFactory,
 	}
-	if err := n.start(topic); err != nil {
+	if err := n.start(receiverTopicOrQueue); err != nil {
 		return nil, err
 	}
 	return n, nil
@@ -65,7 +65,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 	})
 }
 
-func (n *notifier) start(sendToTopic messaging.Topic) error {
+func (n *notifier) start(receiverTopicOrQueue messaging.Entity) error {
 	return n.eventManager.Subscribe(TaskAcceptedEvent{}, func(ctx context.Context, rawEvent events.Type) error {
 		event := rawEvent.(*TaskAcceptedEvent)
 		fhirBaseURL, err := url.Parse(event.FHIRBaseURL)
@@ -82,14 +82,14 @@ func (n *notifier) start(sendToTopic messaging.Topic) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to create task notification bundle")
 		}
-		return sendBundle(ctx, sendToTopic, *bundles, n.broker)
+		return sendBundle(ctx, receiverTopicOrQueue, *bundles, n.broker)
 	})
 }
 
 // sendBundle sends a serialized BundleSet to a Service Bus using the provided ServiceBusClient.
 // It logs the process and errors during submission while wrapping and returning them.
 // Returns an error if serialization or message submission fails.
-func sendBundle(ctx context.Context, topic messaging.Topic, set BundleSet, messageBroker messaging.Broker) error {
+func sendBundle(ctx context.Context, topic messaging.Entity, set BundleSet, messageBroker messaging.Broker) error {
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
 		return err

@@ -21,10 +21,11 @@ func TestAzureServiceBusBroker(t *testing.T) {
 	sqlServerContainer := setupSQLServer(t, dockerNetwork)
 	serviceBus := setupAzureServiceBus(t, dockerNetwork, sqlServerContainer)
 
-	queue := Topic{Name: "orca-patient-enrollment-events"}
+	queue := Entity{Name: "orca-patient-enrollment-queue"}
+	topic := Entity{Name: "orca-patient-enrollment-topic"}
 	broker, err := newAzureServiceBusBroker(AzureServiceBusConfig{
 		ConnectionString: "Endpoint=sb://" + serviceBus + ";SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=SAS_KEY_VALUE;UseDevelopmentEmulator=true;",
-	}, []Topic{queue, {Name: "not-existing-in-servicebus"}}, "")
+	}, []Entity{queue, topic, {Name: "not-existing-in-servicebus"}}, "")
 	require.NoError(t, err)
 	// When the container signals ready, the Service Bus emulator actually isn't ready yet.
 	// See https://github.com/Azure/azure-service-bus-emulator-installer/issues/35
@@ -36,11 +37,11 @@ func TestAzureServiceBusBroker(t *testing.T) {
 		_ = broker.Close(ctx)
 	})
 
-	t.Run("send and receive message", func(t *testing.T) {
+	t.Run("queue: send and receive message", func(t *testing.T) {
 		capturedMessages := make(chan Message, 10)
 		redeliveryCount := &atomic.Int32{}
 		const simulatedDeliveryFailures = 2
-		err := broker.Receive(queue, func(_ context.Context, message Message) error {
+		err := broker.ReceiveFromQueue(queue, func(_ context.Context, message Message) error {
 			if strings.Contains(string(message.Body), "redelivery") {
 				if redeliveryCount.Load() < simulatedDeliveryFailures {
 					redeliveryCount.Add(1)
@@ -81,15 +82,60 @@ func TestAzureServiceBusBroker(t *testing.T) {
 			require.Equal(t, `redelivery`, string(redeliveredMessage.Body))
 		})
 	})
+	t.Run("topic: send and receive message", func(t *testing.T) {
+		capturedMessages := make(chan Message, 10)
+		redeliveryCount := &atomic.Int32{}
+		const simulatedDeliveryFailures = 2
+		err := broker.ReceiveFromTopic(topic, func(_ context.Context, message Message) error {
+			if strings.Contains(string(message.Body), "redelivery") {
+				if redeliveryCount.Load() < simulatedDeliveryFailures {
+					redeliveryCount.Add(1)
+					return errors.New("redelivery")
+				}
+			}
+			capturedMessages <- message
+			return nil
+		}, "subscription.1")
+		require.NoError(t, err)
+		t.Run("ok", func(t *testing.T) {
+			// Send 2 messages
+			err = broker.SendMessage(ctx, topic, &Message{
+				Body:        []byte(`{"patient_id": "message 1"}`),
+				ContentType: "application/json",
+			})
+			require.NoError(t, err)
+			err = broker.SendMessage(ctx, topic, &Message{
+				Body:        []byte(`{"patient_id": "message 2"}`),
+				ContentType: "application/json",
+			})
+			require.NoError(t, err)
+
+			// Expect 2 messages
+			message1 := <-capturedMessages
+			require.Equal(t, `{"patient_id": "message 1"}`, string(message1.Body))
+			message2 := <-capturedMessages
+			require.Equal(t, `{"patient_id": "message 2"}`, string(message2.Body))
+		})
+		t.Run("handler returns not-OK, abandoned for redelivery", func(t *testing.T) {
+			err = broker.SendMessage(ctx, topic, &Message{
+				Body:        []byte(`redelivery`),
+				ContentType: "application/json",
+			})
+			require.NoError(t, err)
+
+			redeliveredMessage := <-capturedMessages
+			require.Equal(t, `redelivery`, string(redeliveredMessage.Body))
+		})
+	})
 	t.Run("unknown topic in ORCA", func(t *testing.T) {
-		err := broker.SendMessage(ctx, Topic{Name: "unknown-topic"}, &Message{
+		err := broker.SendMessage(ctx, Entity{Name: "unknown-topic"}, &Message{
 			Body:        []byte(`{"patient_id": "123"}`),
 			ContentType: "application/json",
 		})
-		require.EqualError(t, err, "AzureServiceBus: sender not found (topic=unknown-topic)")
+		require.EqualError(t, err, "AzureServiceBus: sender not found (entity=unknown-topic)")
 	})
 	t.Run("unknown topic in Azure ServiceBus", func(t *testing.T) {
-		err := broker.SendMessage(ctx, Topic{Name: "not-existing-in-servicebus"}, &Message{
+		err := broker.SendMessage(ctx, Entity{Name: "not-existing-in-servicebus"}, &Message{
 			Body:        []byte(`{"patient_id": "123"}`),
 			ContentType: "application/json",
 		})

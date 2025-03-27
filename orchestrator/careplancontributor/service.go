@@ -35,6 +35,7 @@ const basePath = "/cpc"
 // carePlanURLHeaderKey specifies the HTTP request header used to specify the SCP context, which is a reference to a FHIR CarePlan. Authorization is evaluated according to this CarePlan.
 // The header may also be provided as X-SCP-Context, which will be canonicalized to X-Scp-Context by the Golang HTTP client.
 const carePlanURLHeaderKey = "X-Scp-Context"
+
 // carePlanServiceURLHeaderKey specifies the HTTP request header to specify the FHIR base URL of the Care Plan Service the client wishes to invoke.
 const carePlanServiceURLHeaderKey = "X-Cps-Url"
 
@@ -117,8 +118,8 @@ func New(
 		workflows:                     workflowProvider,
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 	}
-	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
-		result.notifier, err = ehr.NewNotifier(eventManager, messageBroker, messaging.Topic{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
+	if config.TaskFiller.TaskAcceptedBundleQueue != "" {
+		result.notifier, err = ehr.NewNotifier(eventManager, messageBroker, messaging.Entity{Name: config.TaskFiller.TaskAcceptedBundleQueue}, result.createFHIRClientForURL)
 		if err != nil {
 			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
 		}

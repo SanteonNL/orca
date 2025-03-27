@@ -14,8 +14,8 @@ type StringEvent struct {
 	Value string
 }
 
-func (s StringEvent) Topic() messaging.Topic {
-	return messaging.Topic{
+func (s StringEvent) Entity() messaging.Entity {
+	return messaging.Entity{
 		Name: "string-event",
 	}
 }

@@ -51,19 +51,19 @@ func Start(ctx context.Context, config Config) error {
 	// Initialize Message Broker.
 	// Collect topics so the message broker implementation can do checks on start-up whether it can actually publish to them.
 	// Otherwise, things only break later at runtime.
-	var messagingTopics []messaging.Topic
-	if config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic != "" {
-		messagingTopics = append(messagingTopics, messaging.Topic{
-			Name: config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic,
-		}, ehr.TaskAcceptedEvent{}.Topic())
+	var messagingEntities []messaging.Entity
+	if config.CarePlanContributor.TaskFiller.TaskAcceptedBundleQueue != "" {
+		messagingEntities = append(messagingEntities, messaging.Entity{
+			Name: config.CarePlanContributor.TaskFiller.TaskAcceptedBundleQueue,
+		}, ehr.TaskAcceptedEvent{}.Entity())
 	}
 	if len(config.CarePlanService.Events.WebHooks) > 0 {
-		messagingTopics = append(messagingTopics, careplanservice.CarePlanCreatedEvent{}.Topic())
+		messagingEntities = append(messagingEntities, careplanservice.CarePlanCreatedEvent{}.Entity())
 	}
 	if config.CarePlanService.Enabled {
-		messagingTopics = append(messagingTopics, subscriptions.SendNotificationTopic)
+		messagingEntities = append(messagingEntities, subscriptions.SendNotificationQueue)
 	}
-	messageBroker, err := messaging.New(config.Messaging, messagingTopics)
+	messageBroker, err := messaging.New(config.Messaging, messagingEntities)
 	if err != nil {
 		return fmt.Errorf("message broker initialization: %w", err)
 	}

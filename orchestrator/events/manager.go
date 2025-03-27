@@ -8,7 +8,7 @@ import (
 )
 
 type Type interface {
-	Topic() messaging.Topic
+	Entity() messaging.Entity
 	Instance() Type
 }
 
@@ -33,13 +33,13 @@ type DefaultManager struct {
 }
 
 func (d DefaultManager) HasSubscribers(eventType Type) bool {
-	_, ok := d.subscribers[eventType.Topic().Name]
+	_, ok := d.subscribers[eventType.Entity().Name]
 	return ok
 }
 
 func (d DefaultManager) Subscribe(eventType Type, handler HandleFunc) error {
-	d.subscribers[eventType.Topic().Name] = true
-	return d.messageBroker.Receive(eventType.Topic(), func(ctx context.Context, message messaging.Message) error {
+	d.subscribers[eventType.Entity().Name] = true
+	return d.messageBroker.ReceiveFromQueue(eventType.Entity(), func(ctx context.Context, message messaging.Message) error {
 		event := eventType.Instance()
 		if err := json.Unmarshal(message.Body, event); err != nil {
 			return fmt.Errorf("event %T unmarshal: %w", eventType, err)
@@ -57,7 +57,7 @@ func (d DefaultManager) Notify(ctx context.Context, instance Type) error {
 	if err != nil {
 		return err
 	}
-	err = d.messageBroker.SendMessage(ctx, instance.Topic(), &messaging.Message{
+	err = d.messageBroker.SendMessage(ctx, instance.Entity(), &messaging.Message{
 		Body:        messageData,
 		ContentType: "application/fhir+json",
 	})

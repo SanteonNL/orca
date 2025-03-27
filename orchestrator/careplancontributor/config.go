@@ -46,9 +46,9 @@ type TaskFillerConfig struct {
 	// also because HAPI doesn't allow storing Questionnaires in partitions.
 	QuestionnaireFHIR     coolfhir.ClientConfig `koanf:"questionnairefhir"`
 	QuestionnaireSyncURLs []string              `koanf:"questionnairesyncurls"`
-	// TaskAcceptedBundleTopic is a Message Broker topic to which the TaskFiller will publish a message when a Task is accepted.
+	// TaskAcceptedBundleQueue is a Message Broker topic to which the TaskFiller will publish a message when a Task is accepted.
 	// The bundle will contain the Task, Patient, and other relevant resources.
-	TaskAcceptedBundleTopic string `koanf:"taskacceptedbundletopic"`
+	TaskAcceptedBundleQueue string `koanf:"taskacceptedbundlequeue"`
 }
 
 func (c TaskFillerConfig) Validate() error {
