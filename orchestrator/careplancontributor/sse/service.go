@@ -1,10 +1,12 @@
 package sse
 
 import (
+	"context"
 	"fmt"
-	"log"
 	"net/http"
 	"sync"
+
+	"github.com/rs/zerolog/log"
 )
 
 // This service maps a topic to a set of clients that are interested in receiving
@@ -51,6 +53,8 @@ func (s *Service) defaultServeHTTP(topic string, writer http.ResponseWriter, req
 
 	// Keep listening for messages to send to the client - keeps the connection open
 	ctx := request.Context()
+	log.Ctx(ctx).Debug().Msgf("Opened up SSE stream for topic: %s", topic)
+
 	for {
 		select {
 		case msg := <-msgCh:
@@ -85,7 +89,7 @@ func (s *Service) unregisterClient(topic string, ch chan string) {
 	}
 }
 
-func (s *Service) Publish(topic string, msg string) {
+func (s *Service) Publish(ctx context.Context, topic string, msg string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -93,7 +97,7 @@ func (s *Service) Publish(topic string, msg string) {
 		select {
 		case ch <- msg:
 		default:
-			log.Printf("client channel full, dropping message on topic %s", topic)
+			log.Ctx(ctx).Info().Msgf("client channel full, dropping message on topic %s", topic)
 		}
 	}
 }

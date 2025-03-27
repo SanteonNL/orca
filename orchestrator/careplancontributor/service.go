@@ -693,7 +693,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		focusResource = task
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
 		// TODO: Move this to a event.Handler implementation
-		err = s.publishTaskToSse(&task)
+		err = s.publishTaskToSse(ctx, &task)
 		if err != nil {
 			//gracefully log the error, but continue processing the notification
 			log.Ctx(ctx).Err(err).Msgf("Failed to publish task (id=%s) to SSE", *task.Id)
@@ -726,7 +726,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	})
 }
 
-func (s Service) publishTaskToSse(task *fhir.Task) error {
+func (s Service) publishTaskToSse(ctx context.Context, task *fhir.Task) error {
 	data, err := json.Marshal(task)
 	if err != nil {
 		return err
@@ -744,9 +744,9 @@ func (s Service) publishTaskToSse(task *fhir.Task) error {
 	}
 
 	if parentTaskReference != "" {
-		s.sseService.Publish(parentTaskReference, string(data))
+		s.sseService.Publish(ctx, parentTaskReference, string(data))
 	} else {
-		s.sseService.Publish(fmt.Sprintf("Task/%s", *task.Id), string(data))
+		s.sseService.Publish(ctx, fmt.Sprintf("Task/%s", *task.Id), string(data))
 	}
 
 	return nil

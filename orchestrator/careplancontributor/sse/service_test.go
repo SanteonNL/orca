@@ -84,7 +84,7 @@ func TestServeHTTP_Publishes(t *testing.T) {
 
 	// Publish a message.
 	msg := "hello world"
-	s.Publish("test", msg)
+	s.Publish(ctx, "test", msg)
 
 	// Wait for a flush to occur (i.e. message has been written).
 	select {
@@ -119,6 +119,8 @@ func TestServeHTTP_Publishes(t *testing.T) {
 // The message is dropped in this case.
 func TestPublish_ChannelFull(t *testing.T) {
 	s := New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	// Create a dummy client channel with a small buffer.
 	ch := make(chan string, 1)
@@ -126,10 +128,10 @@ func TestPublish_ChannelFull(t *testing.T) {
 	s.registerClient("full", ch)
 
 	// Fill the channel.
-	s.Publish("full", "first")
+	s.Publish(ctx, "full", "first")
 	// At this point, the channel is full (buffer size is 1).
 	// Publish a message which should be dropped.
-	s.Publish("full", "dropped")
+	s.Publish(ctx, "full", "dropped")
 
 	// Read from channel: should only receive the first message.
 	select {
