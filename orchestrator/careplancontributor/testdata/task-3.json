@@ -6,6 +6,12 @@
       "type": "CarePlan"
     }
   ],
+  "identifier": [
+    {
+      "system": "http://fhir.nl/fhir/NamingSystem/task-workflow-identifier",
+      "value": "12345"
+    }
+  ],
   "status": "requested",
   "intent": "order",
   "requester": {

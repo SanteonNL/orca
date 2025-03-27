@@ -12,17 +12,21 @@ import (
 // server-sent events (SSE) endpoint for that topic. The server can then publish
 // messages to all clients subscribed to a topic.
 type Service struct {
-	mu      sync.RWMutex
-	clients map[string]map[chan string]struct{} // topic -> clients
+	mu        sync.RWMutex
+	clients   map[string]map[chan string]struct{} // topic -> clients
+	ServeHTTP func(topic string, writer http.ResponseWriter, request *http.Request)
 }
 
 func New() *Service {
-	return &Service{
+	service := &Service{
 		clients: make(map[string]map[chan string]struct{}),
 	}
+
+	service.ServeHTTP = service.defaultServeHTTP
+	return service
 }
 
-func (s *Service) ServeHTTP(topic string, writer http.ResponseWriter, request *http.Request) {
+func (s *Service) defaultServeHTTP(topic string, writer http.ResponseWriter, request *http.Request) {
 	// Set headers for server-sent events (SSE)
 	writer.Header().Set("Content-Type", "text/event-stream")
 	writer.Header().Set("Cache-Control", "no-cache")

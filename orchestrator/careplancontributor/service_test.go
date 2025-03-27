@@ -10,6 +10,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/sse"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -888,6 +889,7 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 				},
 			},
 		}
+		service.createFHIRClientForURL = service.defaultCreateFHIRClientForURL
 		expectedBody := url.Values{}
 
 		httpRequest := httptest.NewRequest("POST", publicURL.JoinPath("/cpc/aggregate/fhir/Patient/_search").String(), strings.NewReader(expectedBody.Encode()))
@@ -903,6 +905,127 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 		require.NoError(t, json.Unmarshal(httpResponse.Body.Bytes(), &actualBundle))
 		require.Len(t, actualBundle.Entry, 1)
 	})
+}
+
+func TestService_HandleSubscribeToTask(t *testing.T) {
+
+	validToken := "http://fhir.nl/fhir/NamingSystem/task-workflow-identifier|12345"
+
+	// Create a dummy local CarePlanService URL.
+	localCPSUrl, err := url.Parse("http://dummy-cps")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name                 string
+		sessionValues        map[string]string
+		client               mock.MockClient
+		setLocalCPS          bool
+		expectCpsInteraction bool
+		expectedStatus       int
+		expectedContent      string
+	}{
+		{
+			name:            "No taskIdentifier in session",
+			sessionValues:   map[string]string{},
+			setLocalCPS:     true,
+			expectedStatus:  http.StatusBadRequest,
+			expectedContent: "No taskIdentifier found in session",
+		},
+		{
+			name: "Invalid taskIdentifier in session",
+			sessionValues: map[string]string{
+				"taskIdentifier": "invalid-token",
+			},
+			setLocalCPS:     true,
+			expectedStatus:  http.StatusBadRequest,
+			expectedContent: "Invalid taskIdentifier in session",
+		},
+		{
+			name: "No local CarePlanService configured",
+			sessionValues: map[string]string{
+				"taskIdentifier": validToken,
+			},
+			setLocalCPS:     false,
+			expectedStatus:  http.StatusBadRequest,
+			expectedContent: "No local CarePlanService configured",
+		},
+		{
+			name: "Task identifier does not match session",
+			sessionValues: map[string]string{
+				"taskIdentifier": "https://some.other.domain/fhir/NamingSystem/task-workflow-identifier|12345",
+			},
+			setLocalCPS:          true,
+			expectCpsInteraction: true,
+			expectedStatus:       http.StatusBadRequest,
+			expectedContent:      "Task identifier does not match the taskIdentifier in the session",
+		},
+		{
+			name: "Success subscription",
+			sessionValues: map[string]string{
+				"taskIdentifier": validToken,
+			},
+			setLocalCPS:          true,
+			expectCpsInteraction: true,
+			expectedStatus:       http.StatusOK,
+			expectedContent:      "",
+		},
+	}
+
+	ctx := context.Background()
+	rawJson, _ := os.ReadFile("./testdata/task-3.json")
+
+	sseService := sse.New()
+	sseService.ServeHTTP = func(topic string, writer http.ResponseWriter, request *http.Request) {
+		log.Ctx(ctx).Info().Msgf("Unit-Test: Transform request to SSE stream for topic: %s", topic)
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := &user.SessionData{
+				StringValues: tt.sessionValues,
+			}
+
+			req := httptest.NewRequest("GET", "/cpc/subscribe/fhir/Task/3", nil)
+			req.SetPathValue("id", "3")
+
+			resp := httptest.NewRecorder()
+
+			svc := &Service{sseService: sseService}
+			if tt.setLocalCPS {
+				svc.localCarePlanServiceUrl = localCPSUrl
+			} else {
+				svc.localCarePlanServiceUrl = nil
+			}
+
+			if tt.expectCpsInteraction {
+
+				ctrl := gomock.NewController(t)
+
+				mockFHIRClient := mock.NewMockClient(ctrl)
+				mockFHIRClient.EXPECT().ReadWithContext(ctx, "Task/3", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, path string, target *fhir.Task, opts ...interface{}) error {
+					return json.Unmarshal(rawJson, target)
+				})
+
+				orig := svc.createFHIRClientForURL
+				t.Cleanup(func() {
+					svc.createFHIRClientForURL = orig
+				})
+				svc.createFHIRClientForURL = func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
+					return mockFHIRClient, nil, nil
+				}
+			}
+
+			// Call method under test.
+			svc.handleSubscribeToTask(resp, req, session)
+
+			res := resp.Result()
+			defer res.Body.Close()
+			bodyBytes, _ := io.ReadAll(res.Body)
+			bodyStr := string(bodyBytes)
+			assert.Equal(t, tt.expectedStatus, res.StatusCode, "Unexpected status code")
+			assert.Contains(t, bodyStr, tt.expectedContent, "Unexpected error message or response text, got: "+bodyStr)
+		})
+	}
 }
 
 func createTestSession() (*user.SessionManager, string) {

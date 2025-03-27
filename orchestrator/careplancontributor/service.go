@@ -137,6 +137,7 @@ func New(
 		}
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
+	result.createFHIRClientForURL = result.defaultCreateFHIRClientForURL
 	return result, nil
 }
 
@@ -159,6 +160,7 @@ type Service struct {
 	notifier                      ehr.Notifier
 	eventManager                  events.Manager
 	sseService                    *sse.Service
+	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -246,11 +248,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
 	// Allow the front-end to subscribe to specific Task updates via Server-Sent Events (SSE)
-	mux.HandleFunc("GET "+basePath+"/subscribe/fhir/Task/{id}", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
-		//TODO: We could also use the session to check for the "existing" Task (via the identifier) that is being launched. However, when starting a new enrolment, thsis Task does not yet exist
-		id := request.PathValue("id")
-		s.sseService.ServeHTTP(fmt.Sprintf("Task/%s", id), writer, request)
-	}))
+	mux.HandleFunc("GET "+basePath+"/subscribe/fhir/Task/{id}", s.withSession(s.handleSubscribeToTask))
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 
 		// Check if the user defined a remote CPS - otherwise it will be handled as a local CPS proxy request
@@ -337,6 +335,66 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	} else {
 		proxy.ServeHTTP(writer, request)
 	}
+}
+
+func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+	launchedTaskIdentifier := session.StringValues["taskIdentifier"]
+
+	if launchedTaskIdentifier == "" {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No taskIdentifier found in session"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+
+	sessionTaskIdentifier, err := coolfhir.TokenToIdentifier(launchedTaskIdentifier)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest(fmt.Sprintf("Invalid taskIdentifier in session: %v", err)), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+
+	if s.localCarePlanServiceUrl == nil {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No local CarePlanService configured - cannot verify Task identifiers"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+
+	//Ensure the sessions taskIdentifier matches the requested task
+	cpsClient, _, err := s.createFHIRClientForURL(request.Context(), s.localCarePlanServiceUrl)
+	if err != nil {
+		log.Ctx(request.Context()).Err(err).Msgf("Failed to create local CarePlanService FHIR client: %v", err)
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "Failed to create local SCP client", writer)
+		return
+	}
+
+	id := request.PathValue("id")
+	var task fhir.Task
+	err = cpsClient.ReadWithContext(request.Context(), fmt.Sprintf("Task/%s", id), &task)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+
+	//CPS Task found, make sure the identifier from the session exists on the Task
+	found := false
+	if task.Identifier != nil {
+		for _, identifier := range task.Identifier {
+			if identifier.Value != nil && *identifier.Value == *sessionTaskIdentifier.Value && *identifier.System == *sessionTaskIdentifier.System {
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found {
+		coolfhir.WriteOperationOutcomeFromError(
+			request.Context(),
+			coolfhir.BadRequest("Task identifier does not match the taskIdentifier in the session"),
+			fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path),
+			writer,
+		)
+		return
+	}
+
+	// Subscribed task contains the taskIdentifier from the session, so we can subscribe to the task
+	s.sseService.ServeHTTP(fmt.Sprintf("Task/%s", id), writer, request)
 }
 
 // handleProxyExternalRequestToEHR handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
@@ -703,7 +761,7 @@ func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task 
 	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
 }
 
-func (s Service) createFHIRClientForURL(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
+func (s Service) defaultCreateFHIRClientForURL(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
 	// We only have the FHIR base URL, we need to read the CapabilityStatement to find out the Authorization Server URL
 	identifier := fhir.Identifier{
 		System: to.Ptr("https://build.fhir.org/http.html#root"),
