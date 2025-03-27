@@ -133,13 +133,13 @@ func TestService_handleGetCarePlan(t *testing.T) {
 					},
 				}
 
-				entry, notifications, err := result(mockResponse)
+				entries, notifications, err := result(mockResponse)
 				require.NoError(t, err)
-				require.NotNil(t, entry)
+				require.NotNil(t, entries)
 				var carePlan fhir.CarePlan
-				err = json.Unmarshal(entry.Resource, &carePlan)
+				err = json.Unmarshal(entries[0].Resource, &carePlan)
 				require.NoError(t, err)
-				require.Equal(t, carePlan.Id, carePlan1.Id)
+				require.Equal(t, carePlan.Id, to.Ptr("1"))
 
 				require.Len(t, notifications, 0)
 			}
@@ -148,83 +148,90 @@ func TestService_handleGetCarePlan(t *testing.T) {
 }
 
 func TestService_handleSearchCarePlan(t *testing.T) {
-	carePlan1 := mustReadFile("./testdata/careplan1-careteam2.json")
-	carePlan2 := mustReadFile("./testdata/careplan2-careteam1.json")
+	carePlan1Raw := mustReadFile("./testdata/careplan1-careteam2.json")
+	var carePlan1 fhir.CarePlan
+	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
+
+	carePlan2Raw := mustReadFile("./testdata/careplan2-careteam1.json")
+	var carePlan2 fhir.CarePlan
+	_ = json.Unmarshal(carePlan2Raw, &carePlan2)
+
+	auditEventRead := fhir.AuditEvent{
+		Id:     to.Ptr("1"),
+		Action: to.Ptr(fhir.AuditEventActionR),
+		Entity: []fhir.AuditEventEntity{
+			{
+				What: &fhir.Reference{
+					Reference: to.Ptr("CarePlan/1"),
+				},
+			},
+		},
+	}
+	auditEventReadRaw, _ := json.Marshal(auditEventRead)
 
 	tests := map[string]struct {
-		context        context.Context
-		expectedError  error
-		expectedBundle *fhir.Bundle
-		setup          func(ctx context.Context, client *mock.MockClient)
+		expectedError   error
+		context         context.Context
+		request         FHIRHandlerRequest
+		setup           func(ctx context.Context, client *mock.MockClient)
+		mockResponse    *fhir.Bundle
+		expectedEntries []string
 	}{
-		"No auth": {
-			context:       context.Background(),
-			expectedError: errors.New("not authenticated"),
-			setup:         func(ctx context.Context, client *mock.MockClient) {},
-		},
-		"Empty bundle": {
-			context:        auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			expectedBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{}},
+		"empty bundle": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				QueryParams: url.Values{},
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
 					Return(nil)
 			},
+			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
+			expectedEntries: []string{},
 		},
-		"fhirclient error": {
-			context:       auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			expectedError: errors.New("error"),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(errors.New("error"))
+		"careplan returned, correct principal": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				QueryParams: url.Values{},
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
 			},
-		},
-		"CarePlan returned, incorrect principal": {
-			context:        auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
-			expectedBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
-						*target.(*fhir.Bundle) = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{
-									Resource: carePlan1,
-								},
-							},
-						}
-						return nil
-					})
-			},
-		},
-		"CarePlan returned, correct principal": {
-			context:        auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			expectedBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1}}},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
-								{Resource: carePlan1},
+								{Resource: carePlan1Raw},
 							},
 						}
 						return nil
 					})
 			},
-		},
-		"Multiple CarePlans returned, correct principal, results filtered": {
-			context:        auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			expectedBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1}}},
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-						*target = fhir.Bundle{
-							Entry: []fhir.BundleEntry{
-								{Resource: carePlan1},
-								{Resource: carePlan2},
-							},
-						}
-						return nil
-					})
-			},
+			mockResponse: &fhir.Bundle{Entry: []fhir.BundleEntry{
+				{
+					Resource: carePlan1Raw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+				{
+					Resource: auditEventReadRaw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+			}},
+			expectedEntries: []string{string(carePlan1Raw)},
 		},
 	}
 
@@ -237,15 +244,35 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 			tt.setup(tt.context, client)
 
 			service := &Service{fhirClient: client}
-			result, err := service.handleSearchCarePlan(tt.context, url.Values{}, &fhirclient.Headers{})
+			tx := coolfhir.Transaction()
+			result, err := service.handleSearchCarePlan(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
-				require.Nil(t, result)
 				require.Equal(t, tt.expectedError, err)
+				require.Nil(t, result)
 			} else {
-				require.NotNil(t, result)
-				require.Equal(t, tt.expectedBundle, result)
 				require.NoError(t, err)
+				require.NotNil(t, result)
+
+				entries, notifications, err := result(tt.mockResponse)
+				require.NoError(t, err)
+				require.NotNil(t, entries)
+				require.Len(t, notifications, 0)
+
+				if len(tt.mockResponse.Entry) > 0 {
+					// We expect half the entries in the mock response, because we are returning the patient and the audit event, but entries only has careplans
+					require.Len(t, entries, len(tt.mockResponse.Entry)/2)
+
+					actualEntries := []string{}
+					for _, entry := range entries {
+						var carePlan fhir.CarePlan
+						err := json.Unmarshal(entry.Resource, &carePlan)
+						require.NoError(t, err)
+						actualEntries = append(actualEntries, string(entry.Resource))
+					}
+
+					require.ElementsMatch(t, tt.expectedEntries, actualEntries)
+				}
 			}
 		})
 	}

@@ -307,11 +307,11 @@ func TestService_handleGetCondition(t *testing.T) {
 					},
 				}
 
-				entry, notifications, err := result(mockResponse)
+				entries, notifications, err := result(mockResponse)
 				require.NoError(t, err)
-				require.NotNil(t, entry)
+				require.NotNil(t, entries)
 				var condition fhir.Condition
-				err = json.Unmarshal(entry.Resource, &condition)
+				err = json.Unmarshal(entries[0].Resource, &condition)
 				require.NoError(t, err)
 				require.Equal(t, condition.Id, to.Ptr("1"))
 

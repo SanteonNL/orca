@@ -241,11 +241,12 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 					},
 				}
 
-				entry, notifications, err := result(mockResponse)
+				entries, notifications, err := result(mockResponse)
 				require.NoError(t, err)
-				require.NotNil(t, entry)
+				require.NotNil(t, entries)
+				require.Len(t, entries, 1)
 				var questionnaireResponse fhir.QuestionnaireResponse
-				err = json.Unmarshal(entry.Resource, &questionnaireResponse)
+				err = json.Unmarshal(entries[0].Resource, &questionnaireResponse)
 				require.NoError(t, err)
 				require.Equal(t, questionnaireResponse.Id, to.Ptr("1"))
 

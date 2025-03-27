@@ -31,13 +31,13 @@ func (s *Service) handleGetQuestionnaire(ctx context.Context, request FHIRHandle
 
 	questionnaireEntryIdx := 0
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var retQuestionnaire fhir.Questionnaire
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[questionnaireEntryIdx], &txResult.Entry[questionnaireEntryIdx], &retQuestionnaire)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Questionnaire read result: %w", err)
 		}
 		// We do not want to notify subscribers for a get
-		return result, []any{}, nil
+		return []*fhir.BundleEntry{result}, []any{}, nil
 	}, nil
 }

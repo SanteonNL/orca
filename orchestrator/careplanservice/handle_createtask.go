@@ -287,7 +287,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 	}
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var result *fhir.BundleEntry
 		var notifications []any
 
@@ -312,7 +312,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			notifications = append(notifications, &createdCarePlan)
 		}
 
-		return result, notifications, nil
+		return []*fhir.BundleEntry{result}, notifications, nil
 	}, nil
 }
 

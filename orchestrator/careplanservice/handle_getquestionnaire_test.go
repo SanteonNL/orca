@@ -106,11 +106,11 @@ func TestService_handleGetQuestionnaire(t *testing.T) {
 					},
 				}
 
-				entry, notifications, err := result(mockResponse)
+				entries, notifications, err := result(mockResponse)
 				require.NoError(t, err)
-				require.NotNil(t, entry)
+				require.NotNil(t, entries)
 				var questionnaire fhir.Questionnaire
-				err = json.Unmarshal(entry.Resource, &questionnaire)
+				err = json.Unmarshal(entries[0].Resource, &questionnaire)
 				require.NoError(t, err)
 				require.Equal(t, questionnaire.Id, to.Ptr("1"))
 

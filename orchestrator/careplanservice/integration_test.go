@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"math/rand"
 	"net/http"
@@ -12,6 +11,8 @@ import (
 	"net/url"
 	"strconv"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"

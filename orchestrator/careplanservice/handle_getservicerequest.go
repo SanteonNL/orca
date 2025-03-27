@@ -22,7 +22,7 @@ func (s *Service) handleGetServiceRequest(ctx context.Context, request FHIRHandl
 
 	// TODO: This query is going to become more expensive as we create more tasks, we should look at setting ServiceRequest.BasedOn or another field to the Task ID
 	// If Task validation passes, the user has access to the ServiceRequest
-	bundle, err := s.handleSearchTask(ctx, map[string][]string{"focus": {"ServiceRequest/" + *serviceRequest.Id}}, request.FhirHeaders)
+	bundle, err := s.searchTask(ctx, map[string][]string{"focus": {"ServiceRequest/" + *serviceRequest.Id}}, request.FhirHeaders, *request.Principal)
 	if err != nil {
 		return nil, err
 	}
@@ -55,13 +55,13 @@ func (s *Service) handleGetServiceRequest(ctx context.Context, request FHIRHandl
 
 	srEntryIdx := 0
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var retSR fhir.ServiceRequest
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[srEntryIdx], &txResult.Entry[srEntryIdx], &retSR)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process ServiceRequest read result: %w", err)
 		}
 		// We do not want to notify subscribers for a get
-		return result, []any{}, nil
+		return []*fhir.BundleEntry{result}, []any{}, nil
 	}, nil
 }

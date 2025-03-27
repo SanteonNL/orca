@@ -24,7 +24,7 @@ func (s *Service) handleGetQuestionnaireResponse(ctx context.Context, request FH
 
 	// Fetch tasks where the QuestionnaireResponse is in the task Output
 	// If the user has access to the task, they have access to the questionnaire response
-	bundle, err := s.handleSearchTask(ctx, url.Values{"output-reference": []string{"QuestionnaireResponse/" + request.ResourceId}}, request.FhirHeaders)
+	bundle, err := s.searchTask(ctx, url.Values{"output-reference": []string{"QuestionnaireResponse/" + request.ResourceId}}, request.FhirHeaders, *request.Principal)
 	if err != nil {
 		return nil, err
 	}
@@ -58,13 +58,13 @@ func (s *Service) handleGetQuestionnaireResponse(ctx context.Context, request FH
 
 	qrEntryIdx := 0
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var retQR fhir.QuestionnaireResponse
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[qrEntryIdx], &txResult.Entry[qrEntryIdx], &retQR)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process QuestionnaireResponse read result: %w", err)
 		}
 		// We do not want to notify subscribers for a get
-		return result, []any{}, nil
+		return []*fhir.BundleEntry{result}, []any{}, nil
 	}, nil
 }

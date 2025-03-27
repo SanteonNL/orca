@@ -239,11 +239,12 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 					},
 				}
 
-				entry, notifications, err := result(mockResponse)
+				entries, notifications, err := result(mockResponse)
 				require.NoError(t, err)
-				require.NotNil(t, entry)
+				require.NotNil(t, entries)
+				require.Len(t, entries, 1)
 				var serviceRequest fhir.ServiceRequest
-				err = json.Unmarshal(entry.Resource, &serviceRequest)
+				err = json.Unmarshal(entries[0].Resource, &serviceRequest)
 				require.NoError(t, err)
 				require.Equal(t, serviceRequest.Id, to.Ptr("1"))
 

@@ -2,9 +2,12 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -69,25 +72,94 @@ func (s *Service) handleGetTask(ctx context.Context, request FHIRHandlerRequest,
 
 	taskEntryIdx := 0
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var retTask fhir.Task
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[taskEntryIdx], &txResult.Entry[taskEntryIdx], &retTask)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Task read result: %w", err)
 		}
 		// We do not want to notify subscribers for a get
-		return result, []any{}, nil
+		return []*fhir.BundleEntry{result}, []any{}, nil
 	}, nil
 }
 
 // handleSearchTask does a search for Task based on the user requester parameters. If CareTeam is not requested, add this to the fetch to be used for validation
 // if the requester is a participant of one of the returned CareTeams, return the whole bundle, else error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
-func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
-	// Verify requester is authenticated
-	principal, err := auth.PrincipalFromContext(ctx)
+func (s *Service) handleSearchTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	log.Ctx(ctx).Info().Msgf("Searching for Tasks")
+
+	bundle, err := s.searchTask(ctx, request.QueryParams, request.FhirHeaders, *request.Principal)
 	if err != nil {
 		return nil, err
+	}
+
+	taskEntryIndexes := []int{}
+
+	for _, entry := range bundle.Entry {
+		var currentTask fhir.Task
+		if err := json.Unmarshal(entry.Resource, &currentTask); err != nil {
+			log.Ctx(ctx).Error().
+				Err(err).
+				Msg("Failed to unmarshal resource for audit")
+			continue
+		}
+
+		// Create the query detail entity
+		queryEntity := fhir.AuditEventEntity{
+			Type: &fhir.Coding{
+				System:  to.Ptr("http://terminology.hl7.org/CodeSystem/audit-entity-type"),
+				Code:    to.Ptr("2"), // query parameters
+				Display: to.Ptr("Query Parameters"),
+			},
+			Detail: []fhir.AuditEventEntityDetail{},
+		}
+
+		// Add each query parameter as a detail
+		for param, values := range request.QueryParams {
+			queryEntity.Detail = append(queryEntity.Detail, fhir.AuditEventEntityDetail{
+				Type:        param, // parameter name as string
+				ValueString: to.Ptr(strings.Join(values, ",")),
+			})
+		}
+
+		taskEntryIndexes = append(taskEntryIndexes, len(tx.Entry))
+
+		tx.Get(entry.Resource, "Task/"+*currentTask.Id, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			Action: fhir.AuditEventActionR,
+			ActingAgent: &fhir.Reference{
+				Identifier: &request.Principal.Organization.Identifier[0],
+				Type:       to.Ptr("Organization"),
+			},
+			Observer:         *request.LocalIdentity,
+			AdditionalEntity: []fhir.AuditEventEntity{queryEntity},
+		}))
+	}
+
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
+		results := []*fhir.BundleEntry{}
+
+		for _, idx := range taskEntryIndexes {
+			var retTask fhir.Task
+
+			result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &retTask)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to process Task read result: %w", err)
+			}
+			results = append(results, result)
+		}
+
+		// We do not want to notify subscribers for a get
+		return results, []any{}, nil
+	}, nil
+}
+
+// searchTask performs the core functionality of searching for tasks and filtering by authorization
+// This can be used by other resources to search for tasks and filter by authorization
+func (s *Service) searchTask(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers, principal auth.Principal) (*fhir.Bundle, error) {
+	// Verify requester is authenticated
+	if principal.Organization.Identifier == nil || len(principal.Organization.Identifier) == 0 {
+		return nil, errors.New("not authenticated")
 	}
 
 	tasks, bundle, err := handleSearchResource[fhir.Task](ctx, s, "Task", queryParams, headers)

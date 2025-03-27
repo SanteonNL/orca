@@ -56,13 +56,13 @@ func (s *Service) handleGetCondition(ctx context.Context, request FHIRHandlerReq
 
 	conditionEntryIdx := 0
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var retCondition fhir.Condition
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[conditionEntryIdx], &txResult.Entry[conditionEntryIdx], &retCondition)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Condition read result: %w", err)
 		}
 		// We do not want to notify subscribers for a get
-		return result, []any{}, nil
+		return []*fhir.BundleEntry{result}, []any{}, nil
 	}, nil
 }

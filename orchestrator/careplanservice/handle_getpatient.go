@@ -49,14 +49,14 @@ func (s *Service) handleGetPatient(ctx context.Context, request FHIRHandlerReque
 
 	patientEntryIdx := 0
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var retPatient fhir.Patient
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[patientEntryIdx], &txResult.Entry[patientEntryIdx], &retPatient)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Patient read result: %w", err)
 		}
 		// We do not want to notify subscribers for a get
-		return result, []any{}, nil
+		return []*fhir.BundleEntry{result}, []any{}, nil
 	}, nil
 }
 
@@ -71,8 +71,9 @@ func (s *Service) handleSearchPatient(ctx context.Context, request FHIRHandlerRe
 		return nil, err
 	}
 
-	for _, entry := range bundle.Entry {
+	patientEntryIndexes := []int{}
 
+	for _, entry := range bundle.Entry {
 		var currentPatient fhir.Patient
 		if err := json.Unmarshal(entry.Resource, &currentPatient); err != nil {
 			log.Ctx(ctx).Error().
@@ -92,14 +93,16 @@ func (s *Service) handleSearchPatient(ctx context.Context, request FHIRHandlerRe
 		}
 
 		// Add each query parameter as a detail
-		for param, values := range request.RequestUrl.Query() {
+		for param, values := range request.QueryParams {
 			queryEntity.Detail = append(queryEntity.Detail, fhir.AuditEventEntityDetail{
 				Type:        param, // parameter name as string
 				ValueString: to.Ptr(strings.Join(values, ",")),
 			})
 		}
 
-		tx.Get(entry.Resource, "Patient/"+*currentPatient.Id, coolfhir.WithFullUrl(*entry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		patientEntryIndexes = append(patientEntryIndexes, len(tx.Entry))
+
+		tx.Get(entry.Resource, "Patient/"+*currentPatient.Id, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			Action: fhir.AuditEventActionR,
 			ActingAgent: &fhir.Reference{
 				Identifier: &request.Principal.Organization.Identifier[0],
@@ -110,9 +113,21 @@ func (s *Service) handleSearchPatient(ctx context.Context, request FHIRHandlerRe
 		}))
 	}
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
-		// TODO: FIX
-		return nil, nil, nil
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
+		results := []*fhir.BundleEntry{}
+
+		for _, idx := range patientEntryIndexes {
+			var retPatient fhir.Patient
+
+			result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &retPatient)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to process Patient read result: %w", err)
+			}
+			results = append(results, result)
+		}
+
+		// We do not want to notify subscribers for a get
+		return results, []any{}, nil
 	}, nil
 }
 
