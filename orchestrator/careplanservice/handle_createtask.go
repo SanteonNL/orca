@@ -267,7 +267,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				},
 			})
 
-			updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, &request.Principal.Organization.Identifier[0], tx)
+			updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, request.LocalIdentity, tx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to update CareTeam: %w", err)
 			}
