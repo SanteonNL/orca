@@ -37,6 +37,7 @@ func (s *Service) handleCreateQuestionnaireResponse(ctx context.Context, request
 		questionnaireResponseBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
+	idx := len(tx.Entry)
 	// If questionnaireResponse has an ID, treat as PUT operation
 	if questionnaireResponse.Id != nil && request.Upsert {
 		tx.Append(questionnaireResponse, &fhir.BundleEntryRequest{
@@ -61,11 +62,9 @@ func (s *Service) handleCreateQuestionnaireResponse(ctx context.Context, request
 		}))
 	}
 
-	questionnaireResponseEntryIdx := 0
-
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdQuestionnaireResponse fhir.QuestionnaireResponse
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[questionnaireResponseEntryIdx], &txResult.Entry[questionnaireResponseEntryIdx], &createdQuestionnaireResponse)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdQuestionnaireResponse)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process QuestionnaireResponse creation result: %w", err)
 		}

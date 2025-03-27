@@ -137,13 +137,13 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			},
 			{
 				Response: &fhir.BundleEntryResponse{
-					Location: to.Ptr("Task/3"),
+					Location: to.Ptr("AuditEvent/4"),
 					Status:   "201 Created",
 				},
 			},
 			{
 				Response: &fhir.BundleEntryResponse{
-					Location: to.Ptr("AuditEvent/4"),
+					Location: to.Ptr("Task/3"),
 					Status:   "201 Created",
 				},
 			},

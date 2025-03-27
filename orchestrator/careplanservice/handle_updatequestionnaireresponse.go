@@ -3,11 +3,11 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
@@ -69,34 +69,26 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 		return nil, coolfhir.NewErrorWithCode("Participant does not have access to QuestionnaireResponse", http.StatusForbidden)
 	}
 
-	// Get local identity for audit
-	localIdentity, err := s.getLocalIdentity()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get local identity: %w", err)
-	}
-
-	// Create audit event for the update
-	updateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
-		&fhir.Reference{
-			Reference: to.Ptr("QuestionnaireResponse/" + questionnaireResponseId),
-			Type:      to.Ptr("QuestionnaireResponse"),
-		},
-		&fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
+	idx := len(tx.Entry)
+	questionnaireResponseBundleEntry := request.bundleEntryWithResource(questionnaireResponse)
+	tx.AppendEntry(questionnaireResponseBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		ActingAgent: &fhir.Reference{
+			Identifier: request.LocalIdentity,
 			Type:       to.Ptr("Organization"),
 		},
-	)
-	// Add to transaction
-	questionnaireResponseBundleEntry := request.bundleEntryWithResource(questionnaireResponse)
-	tx.AppendEntry(questionnaireResponseBundleEntry)
-	idx := len(tx.Entry) - 1
-	tx.Create(updateAuditEvent)
+		Observer: *request.LocalIdentity,
+		Action:   fhir.AuditEventActionU,
+	}))
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedQuestionnaireResponse fhir.QuestionnaireResponse
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &questionnaireResponseBundleEntry, &txResult.Entry[idx], &updatedQuestionnaireResponse)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to process QuestionnaireResponse update result: %w", err)
+		if errors.Is(err, coolfhir.ErrEntryNotFound) {
+			// Bundle execution succeeded, but could not read result entry.
+			// Just respond with the original QuestionnaireResponse that was sent.
+			updatedQuestionnaireResponse = questionnaireResponse
+		} else if err != nil {
+			return nil, nil, err
 		}
 
 		return result, []any{&updatedQuestionnaireResponse}, nil

@@ -37,6 +37,7 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 		serviceRequestBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
+	idx := len(tx.Entry)
 	// If serviceRequest has an ID, treat as PUT operation
 	if serviceRequest.Id != nil && request.HttpMethod == "PUT" {
 		tx.Append(serviceRequest, &fhir.BundleEntryRequest{
@@ -61,11 +62,9 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 		}))
 	}
 
-	serviceRequestEntryIdx := 0
-
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdServiceRequest fhir.ServiceRequest
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[serviceRequestEntryIdx], &txResult.Entry[serviceRequestEntryIdx], &createdServiceRequest)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdServiceRequest)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process ServiceRequest creation result: %w", err)
 		}
