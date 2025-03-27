@@ -691,6 +691,18 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			return err
 		}
 		focusResource = task
+
+		//insert the meta.source - can be used to determine the X-Scp-Context
+		if task.Meta == nil {
+			task.Meta = &fhir.Meta{}
+		}
+
+		if task.Meta.Source != nil && task.Meta.Source != &resourceUrl {
+			log.Ctx(ctx).Warn().Msgf("Task (id=%s) already has a source (%s), overwriting it to (%s)", *task.Id, *task.Meta.Source, resourceUrl)
+		}
+
+		task.Meta.Source = &resourceUrl
+
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
 		// TODO: Move this to a event.Handler implementation
 		err = s.publishTaskToSse(ctx, &task)
