@@ -18,7 +18,7 @@ require (
 	github.com/knadh/koanf/providers/env v1.0.0
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/nuts-foundation/go-nuts-client v0.1.9
-	github.com/rs/zerolog v1.33.0
+	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.35.0
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250124114751-32aed7ae5408
@@ -118,7 +118,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/russellhaering/goxmldsig v1.4.0
+	github.com/russellhaering/goxmldsig v1.5.0
 	github.com/segmentio/asm v1.2.0
 	github.com/shengdoushi/base58 v1.0.0 // indirect
 	github.com/shirou/gopsutil/v3 v3.24.5 // indirect
