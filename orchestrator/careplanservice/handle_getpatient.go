@@ -3,12 +3,12 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -16,10 +16,10 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-// handleGetPatient fetches the requested Patient and validates if the requester has access to the resource (is a participant of one of the CareTeams associated with the patient)
+// handleReadPatient fetches the requested Patient and validates if the requester has access to the resource (is a participant of one of the CareTeams associated with the patient)
 // if the requester is valid, return the Patient, else return an error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
-func (s *Service) handleGetPatient(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+func (s *Service) handleReadPatient(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msgf("Getting Patient with ID: %s", request.ResourceId)
 	var patient fhir.Patient
 	err := s.fhirClient.ReadWithContext(ctx, "Patient/"+request.ResourceId, &patient, fhirclient.ResponseHeaders(request.FhirHeaders))
@@ -38,25 +38,31 @@ func (s *Service) handleGetPatient(ctx context.Context, request FHIRHandlerReque
 		}
 	}
 
-	tx.Get(patient, "Patient/"+request.ResourceId, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
-		Action: fhir.AuditEventActionR,
-		ActingAgent: &fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
-			Type:       to.Ptr("Organization"),
-		},
-		Observer: *request.LocalIdentity,
-	}))
+	patientRaw, err := json.Marshal(patient)
+	if err != nil {
+		return nil, err
+	}
 
-	patientEntryIdx := 0
+	bundleEntry := fhir.BundleEntry{
+		Resource: patientRaw,
+		Response: &fhir.BundleEntryResponse{
+			Status: "200 OK",
+		},
+	}
+
+	auditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionR, &fhir.Reference{
+		Id:        patient.Id,
+		Type:      to.Ptr("Patient"),
+		Reference: to.Ptr("Patient/" + *patient.Id),
+	}, &fhir.Reference{
+		Identifier: &request.Principal.Organization.Identifier[0],
+		Type:       to.Ptr("Organization"),
+	})
+	tx.Create(auditEvent)
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
-		var retPatient fhir.Patient
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[patientEntryIdx], &txResult.Entry[patientEntryIdx], &retPatient)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to process Patient read result: %w", err)
-		}
 		// We do not want to notify subscribers for a get
-		return []*fhir.BundleEntry{result}, []any{}, nil
+		return []*fhir.BundleEntry{&bundleEntry}, []any{}, nil
 	}, nil
 }
 
@@ -71,7 +77,7 @@ func (s *Service) handleSearchPatient(ctx context.Context, request FHIRHandlerRe
 		return nil, err
 	}
 
-	patientEntryIndexes := []int{}
+	results := []*fhir.BundleEntry{}
 
 	for _, entry := range bundle.Entry {
 		var currentPatient fhir.Patient
@@ -100,33 +106,28 @@ func (s *Service) handleSearchPatient(ctx context.Context, request FHIRHandlerRe
 			})
 		}
 
-		patientEntryIndexes = append(patientEntryIndexes, len(tx.Entry))
-
-		tx.Get(entry.Resource, "Patient/"+*currentPatient.Id, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
-			Action: fhir.AuditEventActionR,
-			ActingAgent: &fhir.Reference{
-				Identifier: &request.Principal.Organization.Identifier[0],
-				Type:       to.Ptr("Organization"),
+		bundleEntry := fhir.BundleEntry{
+			Resource: entry.Resource,
+			Response: &fhir.BundleEntryResponse{
+				Status: "200 OK",
 			},
-			Observer:         *request.LocalIdentity,
-			AdditionalEntity: []fhir.AuditEventEntity{queryEntity},
-		}))
+		}
+		results = append(results, &bundleEntry)
+
+		// Add audit event to the transaction
+		auditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionR, &fhir.Reference{
+			Id:        currentPatient.Id,
+			Type:      to.Ptr("Patient"),
+			Reference: to.Ptr("Patient/" + *currentPatient.Id),
+		}, &fhir.Reference{
+			Identifier: &request.Principal.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
+		})
+		tx.Create(auditEvent)
 	}
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
-		results := []*fhir.BundleEntry{}
-
-		for _, idx := range patientEntryIndexes {
-			var retPatient fhir.Patient
-
-			result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &retPatient)
-			if err != nil {
-				return nil, nil, fmt.Errorf("failed to process Patient read result: %w", err)
-			}
-			results = append(results, result)
-		}
-
-		// We do not want to notify subscribers for a get
+		// Simply return the already prepared results
 		return results, []any{}, nil
 	}, nil
 }

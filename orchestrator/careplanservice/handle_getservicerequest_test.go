@@ -213,7 +213,7 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 
 			service := &Service{fhirClient: client}
 			tx := coolfhir.Transaction()
-			result, err := service.handleGetServiceRequest(tt.context, tt.request, tx)
+			result, err := service.handleReadServiceRequest(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Error(t, err)

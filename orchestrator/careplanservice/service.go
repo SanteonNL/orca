@@ -183,7 +183,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// Searching for a resource via POST
 	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
-		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
+		s.handleSearchRequest(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
 	}))
 	// Handle bundle
 	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
@@ -210,17 +210,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
 	}))
-	if s.allowUnmanagedFHIROperations {
-		mux.HandleFunc("DELETE "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-			resourceType := request.PathValue("type")
-			s.handleModification(request, httpResponse, resourceType, "CarePlanService/Delete"+resourceType)
-		}))
-		mux.HandleFunc("DELETE "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-			resourceType := request.PathValue("type")
-			resourceID := request.PathValue("id")
-			s.handleModification(request, httpResponse, resourceType+"/"+resourceID, "CarePlanService/Delete"+resourceType)
-		}))
-	}
 }
 
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
@@ -257,10 +246,8 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBu
 		if err != nil {
 			return nil, fmt.Errorf("bundle execution succeeded, but couldn't resolve bundle.entry[%d] results: %w", entryIdx, err)
 		}
-		if len(currResult) > 0 {
-			for _, entry := range currResult {
-				resultBundle.Entry = append(resultBundle.Entry, *entry)
-			}
+		for _, entry := range currResult {
+			resultBundle.Entry = append(resultBundle.Entry, *entry)
 		}
 		notificationResources = append(notificationResources, currNotificationResources...)
 	}
@@ -275,12 +262,6 @@ func (s *Service) commitTransaction(request *http.Request, tx *coolfhir.BundleBu
 // handleTransactionEntry executes the FHIR operation in the HTTP request. It adds the FHIR operations to be executed to the given transaction Bundle,
 // and returns the function that must be executed after the transaction is committed.
 func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	if request.HttpMethod == http.MethodPost {
-		// We don't allow creation of resources with a specific ID
-		if request.ResourceId != "" {
-			return nil, coolfhir.BadRequest("specifying IDs when creating resources isn't allowed")
-		}
-	}
 	handler := s.handlerProvider(request.HttpMethod, getResourceType(request.ResourcePath))
 	if handler == nil {
 		return nil, fmt.Errorf("unsupported operation %s %s", request.HttpMethod, request.ResourcePath)
@@ -291,24 +272,86 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(request.Context).Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
 
-	err := s.checkAllowUnmanagedOperations()
-	if err != nil {
-		return nil, err
+	return nil, fmt.Errorf("unsupported operation %s %s", request.HttpMethod, request.ResourcePath)
+}
+
+// extractResponseHeadersAndStatus extracts headers and status code from a FHIR response.
+// It's a helper function used by both transaction and search response writers.
+func (s *Service) extractResponseHeadersAndStatus(entry *fhir.BundleEntry, ctx context.Context) (map[string][]string, int) {
+	var statusCode = http.StatusOK
+	headers := map[string][]string{}
+
+	if entry == nil || entry.Response == nil {
+		return headers, statusCode
 	}
 
-	idx := len(tx.Entry)
-	requestBundleEntry := request.bundleEntry()
-	// TODO: determine the appropriate audit event action based on the HTTP method
-	tx.AppendEntry(requestBundleEntry, coolfhir.WithAuditEvent(request.Context, tx, coolfhir.AuditEventInfo{
-		Action: fhir.AuditEventActionR,
-	}))
-	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(request.Context, s.fhirClient, s.fhirURL, &requestBundleEntry, &txResult.Entry[idx], nil)
-		if err != nil {
-			return nil, nil, err
+	fhirResponse := entry.Response
+
+	// Parse status code from the response
+	if fhirResponse.Status != "" {
+		statusParts := strings.Split(fhirResponse.Status, " ")
+		if parsedCode, err := strconv.Atoi(statusParts[0]); err != nil {
+			log.Ctx(ctx).Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
+		} else {
+			statusCode = parsedCode
 		}
-		return []*fhir.BundleEntry{result}, nil, nil
-	}, nil
+	}
+
+	// Add common headers if present
+	if fhirResponse.Location != nil {
+		headers["Location"] = []string{*fhirResponse.Location}
+	}
+	if fhirResponse.Etag != nil {
+		headers["ETag"] = []string{*fhirResponse.Etag}
+	}
+	if fhirResponse.LastModified != nil {
+		headers["Last-Modified"] = []string{*fhirResponse.LastModified}
+	}
+
+	return headers, statusCode
+}
+
+// writeTransactionResponse writes the response from a FHIR transaction to the HTTP response writer.
+// It extracts the status code, headers, and resource from the first entry in the transaction result.
+func (s *Service) writeTransactionResponse(httpResponse http.ResponseWriter, txResult *fhir.Bundle, ctx context.Context) {
+	if len(txResult.Entry) == 0 {
+		log.Ctx(ctx).Error().Msg("Expected at least one entry in transaction result, got 0")
+		httpResponse.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	headers, statusCode := s.extractResponseHeadersAndStatus(&txResult.Entry[0], ctx)
+
+	var resultResource any
+	if txResult.Entry[0].Resource != nil {
+		resultResource = txResult.Entry[0].Resource
+	}
+
+	s.pipeline.
+		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
+		DoAndWrite(httpResponse, resultResource, statusCode)
+}
+
+// writeSearchResponse writes the response from a FHIR search transaction to the HTTP response writer.
+// It returns the entire bundle with all search results.
+func (s *Service) writeSearchResponse(httpResponse http.ResponseWriter, txResult *fhir.Bundle, ctx context.Context) {
+	if len(txResult.Entry) == 0 {
+		log.Ctx(ctx).Warn().Msg("No entries in search result")
+		// Return an empty bundle instead of 204 No Content
+		s.pipeline.DoAndWrite(httpResponse, &fhir.Bundle{
+			Type:  fhir.BundleTypeSearchset,
+			Entry: []fhir.BundleEntry{},
+			Total: to.Ptr(0),
+		}, http.StatusOK)
+		return
+	}
+
+	// For search results, we get headers from the first entry but return the full bundle
+	headers, statusCode := s.extractResponseHeadersAndStatus(&txResult.Entry[0], ctx)
+
+	s.pipeline.
+		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
+		DoAndWrite(httpResponse, txResult, statusCode)
 }
 
 func (s *Service) handleModification(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
@@ -355,36 +398,8 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
 	}
-	if len(txResult.Entry) == 0 {
-		log.Ctx(httpRequest.Context()).Error().Msgf("Expected at least one entry in transaction result (operation=%s), got 0", operationName)
-		httpResponse.WriteHeader(http.StatusNoContent)
-		return
-	}
 
-	var statusCode int
-	fhirResponse := txResult.Entry[0].Response
-	statusParts := strings.Split(fhirResponse.Status, " ")
-	if statusCode, err = strconv.Atoi(statusParts[0]); err != nil {
-		log.Ctx(httpRequest.Context()).Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
-		statusCode = http.StatusOK
-	}
-	var headers = map[string][]string{}
-	if fhirResponse.Location != nil {
-		headers["Location"] = []string{*fhirResponse.Location}
-	}
-	if fhirResponse.Etag != nil {
-		headers["ETag"] = []string{*fhirResponse.Etag}
-	}
-	if fhirResponse.LastModified != nil {
-		headers["Last-Modified"] = []string{*fhirResponse.LastModified}
-	}
-	var resultResource any
-	if txResult.Entry[0].Resource != nil {
-		resultResource = txResult.Entry[0].Resource
-	}
-	s.pipeline.
-		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
-		DoAndWrite(httpResponse, resultResource, statusCode)
+	s.writeTransactionResponse(httpResponse, txResult, httpRequest.Context())
 }
 
 func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceId string, resourceType string, operationName string) {
@@ -426,36 +441,8 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
 	}
-	if len(txResult.Entry) == 0 {
-		log.Ctx(httpRequest.Context()).Error().Msgf("Expected at least one entry in transaction result (operation=%s), got 0", operationName)
-		httpResponse.WriteHeader(http.StatusNoContent)
-		return
-	}
 
-	var statusCode int
-	fhirResponse := txResult.Entry[0].Response
-	statusParts := strings.Split(fhirResponse.Status, " ")
-	if statusCode, err = strconv.Atoi(statusParts[0]); err != nil {
-		log.Ctx(httpRequest.Context()).Warn().Msgf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status)
-		statusCode = http.StatusOK
-	}
-	var headers = map[string][]string{}
-	if fhirResponse.Location != nil {
-		headers["Location"] = []string{*fhirResponse.Location}
-	}
-	if fhirResponse.Etag != nil {
-		headers["ETag"] = []string{*fhirResponse.Etag}
-	}
-	if fhirResponse.LastModified != nil {
-		headers["Last-Modified"] = []string{*fhirResponse.LastModified}
-	}
-	var resultResource any
-	if txResult.Entry[0].Resource != nil {
-		resultResource = txResult.Entry[0].Resource
-	}
-	s.pipeline.
-		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
-		DoAndWrite(httpResponse, resultResource, statusCode)
+	s.writeTransactionResponse(httpResponse, txResult, httpRequest.Context())
 }
 
 func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -509,19 +496,19 @@ func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHand
 
 	switch resourceType {
 	case "Patient":
-		return s.handleGetPatient
+		return s.handleReadPatient
 	case "Condition":
-		return s.handleGetCondition
+		return s.handleReadCondition
 	case "CarePlan":
-		return s.handleGetCarePlan
+		return s.handleReadCarePlan
 	case "Task":
-		return s.handleGetTask
+		return s.handleReadTask
 	case "Questionnaire":
-		return s.handleGetQuestionnaire
+		return s.handleReadQuestionnaire
 	case "QuestionnaireResponse":
-		return s.handleGetQuestionnaireResponse
+		return s.handleReadQuestionnaireResponse
 	case "ServiceRequest":
-		return s.handleGetServiceRequest
+		return s.handleReadServiceRequest
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 			return s.handleUnmanagedOperation(request, tx)
@@ -562,12 +549,30 @@ func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
 	return nil
 }
 
-func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
+func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	resourceType := getResourceType(resourcePath)
+
+	switch resourceType {
+	case "Patient":
+		return s.handleSearchPatient
+	case "CarePlan":
+		return s.handleSearchCarePlan
+	case "Task":
+		return s.handleSearchTask
+	default:
+		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+			return s.handleUnmanagedOperation(request, tx)
+		}
+	}
+}
+
+// handleSearchRequest handles the HTTP request for a FHIR search operation.
+// It validates the request, processes the search parameters, and executes the search.
+func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
 	if err := s.validateSearchRequest(httpRequest); err != nil {
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
 	}
-	headers := new(fhirclient.Headers)
 
 	principal, err := auth.PrincipalFromContext(httpRequest.Context())
 	if err != nil {
@@ -589,30 +594,6 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 	}
 	queryParams := httpRequest.PostForm
 
-	// Common setup for transaction-based search handlers
-	var handler func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
-
-	switch resourceType {
-	case "Patient":
-		handler = s.handleSearchPatient
-	case "CarePlan":
-		handler = s.handleSearchCarePlan
-	case "Task":
-		handler = s.handleSearchTask
-	default:
-		// Handle unmanaged resources
-		httpRequest.Body = io.NopCloser(strings.NewReader(queryParams.Encode()))
-		log.Ctx(httpRequest.Context()).Warn().
-			Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", httpRequest.Method, httpRequest.URL.String())
-		err = s.checkAllowUnmanagedOperations()
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
-			return
-		}
-		s.proxy.ServeHTTP(httpResponse, httpRequest)
-		return
-	}
-
 	// Set up the transaction and handler request
 	tx := coolfhir.Transaction()
 
@@ -629,11 +610,14 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		ResourcePath:  resourceType,
 		Principal:     &principal,
 		LocalIdentity: localIdentity,
-		FhirHeaders:   headers,
+		FhirHeaders:   new(fhirclient.Headers),
 		QueryParams:   queryParams,
 	}
 
-	// Call the appropriate handler
+	// Get the appropriate search handler
+	handler := s.handleSearch(resourceType)
+
+	// Call the handler
 	result, err := handler(httpRequest.Context(), fhirRequest, tx)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
@@ -647,49 +631,7 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		return
 	}
 
-	if len(txResult.Entry) == 0 {
-		log.Ctx(httpRequest.Context()).Warn().Msgf("No entries in transaction result (operation=%s)", operationName)
-		// Return an empty bundle instead of 204 No Content
-		statusCode := http.StatusOK
-		s.pipeline.DoAndWrite(httpResponse, &fhir.Bundle{
-			Type:  fhir.BundleTypeSearchset,
-			Entry: []fhir.BundleEntry{},
-			Total: to.Ptr(0),
-		}, statusCode)
-		return
-	}
-
-	// Return the entire bundle with all results
-	statusCode := http.StatusOK
-	headersMap := map[string][]string{}
-
-	// Extract headers from the first entry if available
-	if len(txResult.Entry) > 0 && txResult.Entry[0].Response != nil {
-		fhirResponse := txResult.Entry[0].Response
-
-		// Parse status code from the first entry
-		if fhirResponse.Status != "" {
-			statusParts := strings.Split(fhirResponse.Status, " ")
-			if parsedCode, parseErr := strconv.Atoi(statusParts[0]); parseErr == nil {
-				statusCode = parsedCode
-			}
-		}
-
-		// Add common headers if present
-		if fhirResponse.Location != nil {
-			headersMap["Location"] = []string{*fhirResponse.Location}
-		}
-		if fhirResponse.Etag != nil {
-			headersMap["ETag"] = []string{*fhirResponse.Etag}
-		}
-		if fhirResponse.LastModified != nil {
-			headersMap["Last-Modified"] = []string{*fhirResponse.LastModified}
-		}
-	}
-
-	s.pipeline.
-		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headersMap)).
-		DoAndWrite(httpResponse, txResult, statusCode)
+	s.writeSearchResponse(httpResponse, txResult, httpRequest.Context())
 }
 
 func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.ResponseWriter) {

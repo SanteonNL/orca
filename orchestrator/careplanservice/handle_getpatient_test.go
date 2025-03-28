@@ -216,7 +216,7 @@ func TestService_handleGetPatient(t *testing.T) {
 			}
 
 			tx := coolfhir.Transaction()
-			result, err := service.handleGetPatient(tt.context, tt.request, tx)
+			result, err := service.handleReadPatient(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Equal(t, tt.expectedError, err)

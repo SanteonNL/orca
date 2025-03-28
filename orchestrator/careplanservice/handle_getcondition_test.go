@@ -281,7 +281,7 @@ func TestService_handleGetCondition(t *testing.T) {
 
 			service := &Service{fhirClient: client}
 			tx := coolfhir.Transaction()
-			result, err := service.handleGetCondition(tt.context, tt.request, tx)
+			result, err := service.handleReadCondition(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Error(t, err)

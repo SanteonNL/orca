@@ -107,7 +107,7 @@ func TestService_handleGetCarePlan(t *testing.T) {
 
 			service := &Service{fhirClient: client}
 			tx := coolfhir.Transaction()
-			result, err := service.handleGetCarePlan(tt.context, tt.request, tx)
+			result, err := service.handleReadCarePlan(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Error(t, err)

@@ -2,17 +2,18 @@ package careplanservice
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"net/http"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func (s *Service) handleGetServiceRequest(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+func (s *Service) handleReadServiceRequest(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msgf("Getting ServiceRequest with ID: %s", request.ResourceId)
 	var serviceRequest fhir.ServiceRequest
 	err := s.fhirClient.ReadWithContext(ctx, "ServiceRequest/"+request.ResourceId, &serviceRequest, fhirclient.ResponseHeaders(request.FhirHeaders))
@@ -44,24 +45,30 @@ func (s *Service) handleGetServiceRequest(ctx context.Context, request FHIRHandl
 		}
 	}
 
-	tx.Get(serviceRequest, "ServiceRequest/"+request.ResourceId, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
-		Action: fhir.AuditEventActionR,
-		ActingAgent: &fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
-			Type:       to.Ptr("Organization"),
-		},
-		Observer: *request.LocalIdentity,
-	}))
+	serviceRequestRaw, err := json.Marshal(serviceRequest)
+	if err != nil {
+		return nil, err
+	}
 
-	srEntryIdx := 0
+	bundleEntry := fhir.BundleEntry{
+		Resource: serviceRequestRaw,
+		Response: &fhir.BundleEntryResponse{
+			Status: "200 OK",
+		},
+	}
+
+	auditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionR, &fhir.Reference{
+		Id:        serviceRequest.Id,
+		Type:      to.Ptr("ServiceRequest"),
+		Reference: to.Ptr("ServiceRequest/" + *serviceRequest.Id),
+	}, &fhir.Reference{
+		Identifier: &request.Principal.Organization.Identifier[0],
+		Type:       to.Ptr("Organization"),
+	})
+	tx.Create(auditEvent)
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
-		var retSR fhir.ServiceRequest
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[srEntryIdx], &txResult.Entry[srEntryIdx], &retSR)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to process ServiceRequest read result: %w", err)
-		}
 		// We do not want to notify subscribers for a get
-		return []*fhir.BundleEntry{result}, []any{}, nil
+		return []*fhir.BundleEntry{&bundleEntry}, []any{}, nil
 	}, nil
 }

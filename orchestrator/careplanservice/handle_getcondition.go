@@ -2,21 +2,23 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-// handleGetCondition fetches the requested Condition and validates if the requester has access to the resource
+// handleReadCondition fetches the requested Condition and validates if the requester has access to the resource
 // by checking if they have access to the Patient referenced in the Condition's subject
 // if the requester is valid, return the Condition, else return an error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
-func (s *Service) handleGetCondition(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+func (s *Service) handleReadCondition(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msgf("Getting Condition with ID: %s", request.ResourceId)
 	var condition fhir.Condition
 	err := s.fhirClient.ReadWithContext(ctx, "Condition/"+request.ResourceId, &condition, fhirclient.ResponseHeaders(request.FhirHeaders))
@@ -45,24 +47,30 @@ func (s *Service) handleGetCondition(ctx context.Context, request FHIRHandlerReq
 		}
 	}
 
-	tx.Get(condition, "Condition/"+request.ResourceId, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
-		Action: fhir.AuditEventActionR,
-		ActingAgent: &fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
-			Type:       to.Ptr("Organization"),
-		},
-		Observer: *request.LocalIdentity,
-	}))
+	conditionRaw, err := json.Marshal(condition)
+	if err != nil {
+		return nil, err
+	}
 
-	conditionEntryIdx := 0
+	bundleEntry := fhir.BundleEntry{
+		Resource: conditionRaw,
+		Response: &fhir.BundleEntryResponse{
+			Status: "200 OK",
+		},
+	}
+
+	auditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionR, &fhir.Reference{
+		Id:        condition.Id,
+		Type:      to.Ptr("Condition"),
+		Reference: to.Ptr("Condition/" + *condition.Id),
+	}, &fhir.Reference{
+		Identifier: &request.Principal.Organization.Identifier[0],
+		Type:       to.Ptr("Organization"),
+	})
+	tx.Create(auditEvent)
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
-		var retCondition fhir.Condition
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[conditionEntryIdx], &txResult.Entry[conditionEntryIdx], &retCondition)
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to process Condition read result: %w", err)
-		}
 		// We do not want to notify subscribers for a get
-		return []*fhir.BundleEntry{result}, []any{}, nil
+		return []*fhir.BundleEntry{&bundleEntry}, []any{}, nil
 	}, nil
 }

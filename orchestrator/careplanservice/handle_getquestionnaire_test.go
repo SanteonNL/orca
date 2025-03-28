@@ -80,7 +80,7 @@ func TestService_handleGetQuestionnaire(t *testing.T) {
 
 			service := &Service{fhirClient: client}
 			tx := coolfhir.Transaction()
-			result, err := service.handleGetQuestionnaire(tt.context, tt.request, tx)
+			result, err := service.handleReadQuestionnaire(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Error(t, err)
