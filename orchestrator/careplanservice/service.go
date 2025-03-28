@@ -964,7 +964,7 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 	for path, reference := range literalReferences {
 		lowerCaseRef := strings.ToLower(reference)
 		if strings.HasPrefix(lowerCaseRef, "http://") {
-			return coolfhir.BadRequest(fmt.Sprintf("literal reference is URL with scheme http://, only https:// is allowed (path=%s)", path))
+			return coolfhir.BadRequest("literal reference is URL with scheme http://, only https:// is allowed (path=%s)", path)
 		}
 		if strings.HasPrefix(lowerCaseRef, "https://") {
 			parsedRef, err := url.Parse(reference)
@@ -973,7 +973,7 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 				return err
 			}
 			if slices.Contains(strings.Split(parsedRef.Path, "/"), "..") {
-				return coolfhir.BadRequest(fmt.Sprintf("literal reference is URL with parent path segment '..' (path=%s)", path))
+				return coolfhir.BadRequest("literal reference is URL with parent path segment '..' (path=%s)", path)
 			}
 			if len(parsedRef.Query()) > 0 {
 				return coolfhir.BadRequest("literal reference is URL with query parameters")
@@ -987,7 +987,7 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 				}
 			}
 			if !isRegisteredBaseUrl {
-				return coolfhir.BadRequest(fmt.Sprintf("literal reference is not a child of a registered FHIR base URL (path=%s)", path))
+				return coolfhir.BadRequest("literal reference is not a child of a registered FHIR base URL (path=%s)", path)
 			}
 		}
 	}
