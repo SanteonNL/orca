@@ -126,6 +126,7 @@ func New(
 		if err != nil {
 			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
 		}
+		log.Ctx(ctx).Info().Msgf("TaskEngine: created EHR notifier for topic %s", config.TaskFiller.TaskAcceptedBundleTopic)
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
