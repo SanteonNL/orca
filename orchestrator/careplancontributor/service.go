@@ -165,7 +165,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return coolfhir.BadRequest("failed to decode bundle: %w", err)
 		}
 		if !coolfhir.IsSubscriptionNotification(&notification) {
-			return coolfhir.BadRequest("bundle type not supported: " + notification.Type.String())
+			return coolfhir.BadRequest("bundle type not supported: %s", notification.Type.String())
 		}
 		if err := s.handleNotification(httpRequest.Context(), (*coolfhir.SubscriptionNotification)(&notification)); err != nil {
 			return err
@@ -337,7 +337,7 @@ func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http
 
 	sessionTaskIdentifier, err := coolfhir.TokenToIdentifier(launchedTaskIdentifier)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest(fmt.Sprintf("Invalid taskIdentifier in session: %v", err)), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("Invalid taskIdentifier in session: %v", err), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 
@@ -409,7 +409,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request *http.Request) error {
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) != 1 {
-		return coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
+		return coolfhir.BadRequest("%s header must only contain one value", carePlanURLHeaderKey)
 	}
 	log.Debug().Msg("Handling BgZ FHIR API request carePlanURL: " + carePlanURLValue[0])
 
@@ -509,10 +509,10 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	// CarePlan should be provided in X-Scp-Context header
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) == 0 {
-		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header must be set", carePlanURLHeaderKey))
+		return nil, coolfhir.BadRequest("%s header must be set", carePlanURLHeaderKey)
 	}
 	if len(carePlanURLValue) > 1 {
-		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header can't contain multiple values", carePlanURLHeaderKey))
+		return nil, coolfhir.BadRequest("%s header can't contain multiple values", carePlanURLHeaderKey)
 	}
 	carePlanURL := carePlanURLValue[0]
 
