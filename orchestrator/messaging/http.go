@@ -33,13 +33,6 @@ type HTTPBroker struct {
 	topicFilter      []string
 }
 
-func (h HTTPBroker) ReceiveFromTopic(entity Entity, handler func(context.Context, Message) error, subscriberName string) error {
-	if h.underlyingBroker == nil {
-		return nil
-	}
-	return h.underlyingBroker.ReceiveFromTopic(entity, handler, subscriberName)
-}
-
 func (h HTTPBroker) ReceiveFromQueue(queue Entity, handler func(context.Context, Message) error) error {
 	if h.underlyingBroker == nil {
 		return nil

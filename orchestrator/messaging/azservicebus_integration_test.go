@@ -82,51 +82,6 @@ func TestAzureServiceBusBroker(t *testing.T) {
 			require.Equal(t, `redelivery`, string(redeliveredMessage.Body))
 		})
 	})
-	t.Run("topic: send and receive message", func(t *testing.T) {
-		capturedMessages := make(chan Message, 10)
-		redeliveryCount := &atomic.Int32{}
-		const simulatedDeliveryFailures = 2
-		err := broker.ReceiveFromTopic(topic, func(_ context.Context, message Message) error {
-			if strings.Contains(string(message.Body), "redelivery") {
-				if redeliveryCount.Load() < simulatedDeliveryFailures {
-					redeliveryCount.Add(1)
-					return errors.New("redelivery")
-				}
-			}
-			capturedMessages <- message
-			return nil
-		}, "subscription.1")
-		require.NoError(t, err)
-		t.Run("ok", func(t *testing.T) {
-			// Send 2 messages
-			err = broker.SendMessage(ctx, topic, &Message{
-				Body:        []byte(`{"patient_id": "message 1"}`),
-				ContentType: "application/json",
-			})
-			require.NoError(t, err)
-			err = broker.SendMessage(ctx, topic, &Message{
-				Body:        []byte(`{"patient_id": "message 2"}`),
-				ContentType: "application/json",
-			})
-			require.NoError(t, err)
-
-			// Expect 2 messages
-			message1 := <-capturedMessages
-			require.Equal(t, `{"patient_id": "message 1"}`, string(message1.Body))
-			message2 := <-capturedMessages
-			require.Equal(t, `{"patient_id": "message 2"}`, string(message2.Body))
-		})
-		t.Run("handler returns not-OK, abandoned for redelivery", func(t *testing.T) {
-			err = broker.SendMessage(ctx, topic, &Message{
-				Body:        []byte(`redelivery`),
-				ContentType: "application/json",
-			})
-			require.NoError(t, err)
-
-			redeliveredMessage := <-capturedMessages
-			require.Equal(t, `redelivery`, string(redeliveredMessage.Body))
-		})
-	})
 	t.Run("unknown topic in ORCA", func(t *testing.T) {
 		err := broker.SendMessage(ctx, Entity{Name: "unknown-topic"}, &Message{
 			Body:        []byte(`{"patient_id": "123"}`),

@@ -77,7 +77,4 @@ type Broker interface {
 	// ReceiveFromQueue subscribes to a queue and calls the handler function for each message received.
 	// The handler function should return an error if the message processing fails, which will cause the message to be retried or sent to the DLQ.
 	ReceiveFromQueue(queue Entity, handler func(context.Context, Message) error) error
-	// ReceiveFromTopic subscribes to a topic and calls the handler function for each message received.
-	// The handler function should return an error if the message processing fails, which will cause the message to be retried or sent to the DLQ.
-	ReceiveFromTopic(queue Entity, handler func(context.Context, Message) error, subscriberName string) error
 }

@@ -52,9 +52,9 @@ func Start(ctx context.Context, config Config) error {
 	// Collect topics so the message broker implementation can do checks on start-up whether it can actually publish to them.
 	// Otherwise, things only break later at runtime.
 	var messagingEntities []messaging.Entity
-	if config.CarePlanContributor.TaskFiller.TaskAcceptedBundleQueue != "" {
+	if config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic != "" {
 		messagingEntities = append(messagingEntities, messaging.Entity{
-			Name: config.CarePlanContributor.TaskFiller.TaskAcceptedBundleQueue,
+			Name: config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic,
 		}, ehr.TaskAcceptedEvent{}.Entity())
 	}
 	if len(config.CarePlanService.Events.WebHooks) > 0 {

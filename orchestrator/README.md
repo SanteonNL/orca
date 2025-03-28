@@ -49,8 +49,8 @@ If you don't want to query the FHIR Questionnaire and HealthcareService resource
 The downside of this option is that the resources MUST be available on startup.
 
 #### EHR integration
-If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLEQUEUE`
-to the messaging topic on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
+If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
+to the messaging topic or queue on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
 
 See "Messaging configuration" for more information.  
 
@@ -72,10 +72,10 @@ For production environments, it's recommended to use Azure ServiceBus.
 * `ORCA_MESSAGING_HTTP_ENDPOINT`: For demo purposes: a URL pointing HTTP endpoint, to which messages will also be delivered. It appends the topic name to this URL.
 * `ORCA_MESSAGING_HTTP_TOPICFILTER`: For demo purposes: topics to enable the HTTP endpoint for (separator: `,`). If not set, all topics are enabled.
 
-If you're Azure Service Bus, depending on the features you've enabled, you'll need to create the following queues and topics: 
+If you're Azure Service Bus, depending on the features you've enabled, you'll need to create the following queues: 
 
-- Queue `orca.taskengine.task-accepted` (if `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLEQUEUE` is set).
-- Topic `orca.hl7.fhir.careplan-created` (if `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL` is set).
+- Queue `orca.taskengine.task-accepted` (if `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC` is set).
+- Queue `orca.hl7.fhir.careplan-created` (if `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL` is set).
 - Queue `orca.subscriptionmgr.notification` (if `ORCA_CAREPLANSERVICE_ENABLED` is `true`).
 
 ## App Launch options

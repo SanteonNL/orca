@@ -89,7 +89,7 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity) error {
 // sendBundle sends a serialized BundleSet to a Service Bus using the provided ServiceBusClient.
 // It logs the process and errors during submission while wrapping and returning them.
 // Returns an error if serialization or message submission fails.
-func sendBundle(ctx context.Context, topic messaging.Entity, set BundleSet, messageBroker messaging.Broker) error {
+func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, set BundleSet, messageBroker messaging.Broker) error {
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
 		return err
@@ -100,7 +100,7 @@ func sendBundle(ctx context.Context, topic messaging.Entity, set BundleSet, mess
 		ContentType:   "application/json",
 		CorrelationID: &set.Id,
 	}
-	err = messageBroker.SendMessage(ctx, topic, msg)
+	err = messageBroker.SendMessage(ctx, receiverTopicOrQueue, msg)
 	if err != nil {
 		log.Ctx(ctx).Warn().Msgf("Sending set for task (ref=%s) to message broker failed, error: %s", set.task, err.Error())
 		return errors.Wrap(err, "failed to send task to message broker")

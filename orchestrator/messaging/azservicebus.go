@@ -117,16 +117,6 @@ func (c *AzureServiceBusBroker) ReceiveFromQueue(queue Entity, handler func(cont
 	return nil
 }
 
-func (c *AzureServiceBusBroker) ReceiveFromTopic(topic Entity, handler func(context.Context, Message) error, subscriberName string) error {
-	fullName := topic.FullName(c.entityPrefix)
-	receiver, err := c.client.NewReceiverForSubscription(fullName, subscriberName, &azservicebus.ReceiverOptions{})
-	if err != nil {
-		return fmt.Errorf("AzureServiceBus: create receiver (topic=%s)", fullName)
-	}
-	c.receive(receiver, fullName, handler)
-	return nil
-}
-
 func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullName string, handler func(context.Context, Message) error) {
 	c.receivers.Add(1)
 	go func() {

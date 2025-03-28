@@ -20,11 +20,6 @@ type MemoryBroker struct {
 	LastHandlerError atomic.Pointer[error]
 }
 
-func (m *MemoryBroker) ReceiveFromTopic(topic Entity, handler func(context.Context, Message) error, subscriberName string) error {
-	m.handlers[topic.Name] = append(m.handlers[topic.Name], handler)
-	return nil
-}
-
 func (m *MemoryBroker) ReceiveFromQueue(queue Entity, handler func(context.Context, Message) error) error {
 	m.handlers[queue.Name] = append(m.handlers[queue.Name], handler)
 	return nil
