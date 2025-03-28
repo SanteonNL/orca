@@ -3,6 +3,13 @@ package subscriptions
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+	"time"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -11,12 +18,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"testing"
-	"time"
 )
 
 func TestRestHookChannel_Notify(t *testing.T) {
@@ -60,7 +61,7 @@ func TestRestHookChannel_Notify(t *testing.T) {
 		err := channel.Notify(context.Background(), notification)
 
 		require.ErrorIs(t, err, ReceiverFailure)
-		require.EqualError(t, err, "FHIR subscription could not be delivered to receiver\nnon-OK HTTP response status: 404 Not Found")
+		require.EqualError(t, err, "FHIR subscription could not be delivered to receiver\nnon-OK HTTP response from "+subscriberServer.URL+" status: 404 Not Found")
 	})
 	t.Run("subscriber endpoint unreachable", func(t *testing.T) {
 		subscriberServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
