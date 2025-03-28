@@ -8,7 +8,7 @@ import (
 	"io"
 	"net/http"
 
-	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/rs/zerolog/log"
 )
 
@@ -19,7 +19,7 @@ var _ events.Handler = EventHandler{}
 
 func disposeResponseBody(r io.ReadCloser) {
 	if _, err := io.CopyN(io.Discard, r, maxPostHandlerReadBytes); err != nil {
-		log.Error().Err(err).Msg("failed to read request body")
+		log.Err(err).Msg("failed to read response body")
 	}
 }
 
@@ -32,18 +32,18 @@ func NewEventHandler(url string) EventHandler {
 	return EventHandler{URL: url, client: &http.Client{}}
 }
 
-func (w EventHandler) Handle(ctx context.Context, event events.Instance) error {
-	data, err := json.Marshal(event.FHIRResource)
+func (w EventHandler) Handle(ctx context.Context, event events.Type) error {
+	data, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to serialize event: %w", err)
 	}
 
-	request, err := http.NewRequestWithContext(ctx, "POST", w.URL, bytes.NewReader(data))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, w.URL, bytes.NewReader(data))
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 
-	request.Header.Add("Content-Type", "application/json")
+	request.Header.Add("Content-Type", "application/fhir+json")
 
 	response, err := w.client.Do(request)
 	if err != nil {

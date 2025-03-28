@@ -5,7 +5,7 @@
         "Name": "sbemulatorns",
         "Queues": [
           {
-            "Name": "orca-patient-enrollment-events",
+            "Name": "orca-patient-enrollment-queue",
             "Properties": {
               "DeadLetteringOnMessageExpiration": false,
               "DefaultMessageTimeToLive": "PT1H",
@@ -21,7 +21,7 @@
         ],
         "Topics": [
           {
-            "Name": "orca-patient-enrollment-events",
+            "Name": "orca-patient-enrollment-topic",
             "Properties": {
               "DefaultMessageTimeToLive": "PT1H",
               "DuplicateDetectionHistoryTimeWindow": "PT20S",
@@ -38,25 +38,7 @@
                   "ForwardDeadLetteredMessagesTo": "",
                   "ForwardTo": "",
                   "RequiresSession": false
-                },
-                "Rules": [
-                  {
-                    "Name": "app-prop-filter-1",
-                    "Properties": {
-                      "FilterType": "Correlation",
-                      "CorrelationFilter": {
-                        "ContentType": "application/text",
-                        "CorrelationId": "id1",
-                        "Label": "subject1",
-                        "MessageId": "msgid1",
-                        "ReplyTo": "someQueue",
-                        "ReplyToSessionId": "sessionId",
-                        "SessionId": "session1",
-                        "To": "xyz"
-                      }
-                    }
-                  }
-                ]
+                }
               }
             ]
           }

@@ -20,19 +20,19 @@ type MemoryBroker struct {
 	LastHandlerError atomic.Pointer[error]
 }
 
-func (m *MemoryBroker) Receive(queue Topic, handler func(context.Context, Message) error) error {
+func (m *MemoryBroker) ReceiveFromQueue(queue Entity, handler func(context.Context, Message) error) error {
 	m.handlers[queue.Name] = append(m.handlers[queue.Name], handler)
 	return nil
 }
 
-func (m *MemoryBroker) SendMessage(ctx context.Context, topic Topic, message *Message) error {
-	if len(m.handlers[topic.Name]) == 0 {
-		return fmt.Errorf("no handlers for topic %s", topic.Name)
+func (m *MemoryBroker) SendMessage(ctx context.Context, entity Entity, message *Message) error {
+	if len(m.handlers[entity.Name]) == 0 {
+		return fmt.Errorf("no handlers for entity %s", entity.Name)
 	}
-	for _, handler := range m.handlers[topic.Name] {
+	for _, handler := range m.handlers[entity.Name] {
 		if err := handler(ctx, *message); err != nil {
 			m.LastHandlerError.Store(&err)
-			log.Ctx(ctx).Warn().Msgf("Handler for topic %s failed: %s", topic.Name, err.Error())
+			log.Ctx(ctx).Warn().Msgf("Handler for entity %s failed: %s", entity.Name, err.Error())
 		}
 	}
 	return nil
