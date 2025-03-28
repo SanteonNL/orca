@@ -8,22 +8,14 @@ import useEnrollmentStore from "@/lib/store/enrollment-store";
 import { patientName, organizationName } from "@/lib/fhirRender";
 import DataViewer from '@/components/data-viewer'
 import { viewerFeatureIsEnabled } from '@/app/actions'
+import TaskSseConnectionStatus from '../../components/sse-connection-status'
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
-    const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap, refetchTasks } = useTaskProgressStore()
+    const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
     const { patient } = useEnrollmentStore()
     const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
     const [showViewer, setShowViewer] = useState(false)
-
-    useEffect(() => {
-        console.warn("Enabling TMP polling")
-        const interval = setInterval(() => {
-            refetchTasks()
-        }, 2000)
-        return () => clearInterval(interval)
-    }, [refetchTasks])
-
 
     useEffect(() => {
         if (taskId) {
@@ -60,17 +52,20 @@ export default function EnrollmentTaskPage() {
         if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
             return <>Task is ontvangen, maar er ontbreekt informatie.</>
         }
-        return <QuestionnaireRenderer
-            questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
-            inputTask={subTasks[0]}
-        />
+        return <>
+            <QuestionnaireRenderer
+                questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
+                inputTask={subTasks[0]}
+            />
+            <TaskSseConnectionStatus />
+        </>
     } else {
         return <div className='w-full flex flex-col auto-cols-max'>
             {
                 task && executionText(task.status) ?
                     <p className="w-[568px] text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
             }
-            <div className="w-[568px] grid grid-cols-[1fr,2fr] gap-y-4">
+            <div className="w-[568px] grid grid-cols-[1fr_2fr] gap-y-4">
                 <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} noUpperCase={true} />
                 <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
                 <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"} />
@@ -84,6 +79,7 @@ export default function EnrollmentTaskPage() {
                 }
             </div>
             {showViewer && <DataViewer task={task} />}
+            <TaskSseConnectionStatus />
         </div>
     }
 }

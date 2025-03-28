@@ -37,6 +37,7 @@ func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRe
 		patientBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
+	idx := len(tx.Entry)
 	// If the patient has an ID and the upsert flag is set, treat as PUT operation
 	// As per FHIR spec, this is how we can create a resource with a client supplied ID: https://hl7.org/fhir/http.html#upsert
 	if patient.Id != nil && request.Upsert {
@@ -62,11 +63,9 @@ func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRe
 		}))
 	}
 
-	patientEntryIdx := 0
-
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdPatient fhir.Patient
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[patientEntryIdx], &txResult.Entry[patientEntryIdx], &createdPatient)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdPatient)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Patient creation result: %w", err)
 		}

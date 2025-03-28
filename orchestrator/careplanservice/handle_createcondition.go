@@ -37,6 +37,8 @@ func (s *Service) handleCreateCondition(ctx context.Context, request FHIRHandler
 		conditionBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 
+	idx := len(tx.Entry)
+
 	// If condition has an ID, treat as PUT operation
 	if condition.Id != nil && request.Upsert {
 		tx.Append(condition, &fhir.BundleEntryRequest{
@@ -61,11 +63,9 @@ func (s *Service) handleCreateCondition(ctx context.Context, request FHIRHandler
 		}))
 	}
 
-	conditionEntryIdx := 0
-
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var createdCondition fhir.Condition
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[conditionEntryIdx], &txResult.Entry[conditionEntryIdx], &createdCondition)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdCondition)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Condition creation result: %w", err)
 		}

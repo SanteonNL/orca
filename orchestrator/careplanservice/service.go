@@ -492,6 +492,8 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 		return s.handleUpdateQuestionnaire
 	case "QuestionnaireResponse":
 		return s.handleUpdateQuestionnaireResponse
+	case "Condition":
+		return s.handleUpdateCondition
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 			return s.handleUnmanagedOperation(request, tx)

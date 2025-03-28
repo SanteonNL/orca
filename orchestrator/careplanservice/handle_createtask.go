@@ -8,8 +8,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/google/uuid"
@@ -139,22 +137,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			return nil, errors.New("failed to activate membership for new CareTeam")
 		}
 
-		carePlanAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
-			Reference: to.Ptr(carePlanURL),
-			Type:      to.Ptr("CarePlan"),
-		}, &fhir.Reference{
-			Identifier: task.Requester.Identifier,
-			Type:       to.Ptr("Organization"),
-		})
-
-		taskAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
-			Reference: to.Ptr(taskURL),
-			Type:      to.Ptr("Task"),
-		}, &fhir.Reference{
-			Identifier: task.Requester.Identifier,
-			Type:       to.Ptr("Organization"),
-		})
-
 		data, err := json.Marshal([]any{careTeam})
 		if err != nil {
 			return nil, coolfhir.NewErrorWithCode("failed to marshal CareTeam", http.StatusInternalServerError)
@@ -172,16 +154,27 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			},
 		}
 
-		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL)).
-			Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders)).
-			Create(carePlanAuditEvent).
-			Create(taskAuditEvent)
+		carePlanBundleEntryIdx = len(tx.Entry)
+		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			ActingAgent: &fhir.Reference{
+				Identifier: request.LocalIdentity,
+				Type:       to.Ptr("Organization"),
+			},
+			Observer: *request.LocalIdentity,
+			Action:   fhir.AuditEventActionC,
+		}))
+		carePlanBundleEntry = &tx.Entry[carePlanBundleEntryIdx]
 
-		taskEntryIdx = len(tx.Entry) - 3
+		taskEntryIdx = len(tx.Entry)
+		tx.Create(task, coolfhir.WithFullUrl(taskURL), coolfhir.WithRequestHeaders(request.HttpHeaders), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			ActingAgent: &fhir.Reference{
+				Identifier: task.Requester.Identifier,
+				Type:       to.Ptr("Organization"),
+			},
+			Observer: *request.LocalIdentity,
+			Action:   fhir.AuditEventActionC,
+		}))
 		taskBundleEntry = tx.Entry[taskEntryIdx]
-		carePlanBundleEntry = &tx.Entry[0]
-		carePlanBundleEntryIdx = 0
-
 		if s.eventManager.HasSubscribers(CarePlanCreatedEvent{}) {
 			if err := s.eventManager.Notify(ctx, CarePlanCreatedEvent{
 				CarePlan: carePlan,
@@ -261,18 +254,16 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			taskBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 		}
 
-		taskAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionC, &fhir.Reference{
-			Reference: taskBundleEntry.FullUrl,
-			Type:      to.Ptr("Task"),
-		}, &fhir.Reference{
-			Identifier: task.Requester.Identifier,
-			Type:       to.Ptr("Organization"),
-		})
-
+		taskEntryIdx = len(tx.Entry)
 		// TODO: Only if not updated
-		tx.AppendEntry(taskBundleEntry)
-		taskEntryIdx = len(tx.Entry) - 1
-		tx.Create(taskAuditEvent)
+		tx.AppendEntry(taskBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			ActingAgent: &fhir.Reference{
+				Identifier: task.Requester.Identifier,
+				Type:       to.Ptr("Organization"),
+			},
+			Observer: *request.LocalIdentity,
+			Action:   fhir.AuditEventActionC,
+		}))
 
 		if len(task.PartOf) == 0 {
 			// Don't add subtasks to CarePlan.activity
@@ -283,26 +274,23 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				},
 			})
 
-			updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, tx)
+			updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, request.LocalIdentity, tx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to update CareTeam: %w", err)
 			}
 
+			carePlanBundleEntryIdx = len(tx.Entry)
 			if !updated {
-				tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+				tx.Update(carePlan, "CarePlan/"+*carePlan.Id, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+					ActingAgent: &fhir.Reference{
+						Identifier: task.Requester.Identifier,
+						Type:       to.Ptr("Organization"),
+					},
+					Observer: *request.LocalIdentity,
+					Action:   fhir.AuditEventActionU,
+				}))
 			}
-
-			carePlanBundleEntry = &tx.Entry[len(tx.Entry)-1]
-			carePlanBundleEntryIdx = len(tx.Entry) - 1
-
-			carePlanAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU, &fhir.Reference{
-				Reference: to.Ptr("CarePlan/" + *carePlan.Id),
-				Type:      to.Ptr("CarePlan"),
-			}, &fhir.Reference{
-				Identifier: task.Requester.Identifier,
-				Type:       to.Ptr("Organization"),
-			})
-			tx.Create(carePlanAuditEvent)
+			carePlanBundleEntry = &tx.Entry[carePlanBundleEntryIdx]
 		}
 	}
 

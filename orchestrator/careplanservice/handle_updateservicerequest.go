@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
@@ -66,29 +65,16 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 		return nil, coolfhir.NewErrorWithCode("Participant does not have access to ServiceRequest", http.StatusForbidden)
 	}
 
-	// Get local identity for audit
-	localIdentity, err := s.getLocalIdentity()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get local identity: %w", err)
-	}
-
-	// Create audit event for the update
-	updateAuditEvent := audit.Event(*localIdentity, fhir.AuditEventActionU,
-		&fhir.Reference{
-			Reference: to.Ptr("ServiceRequest/" + serviceRequestId),
-			Type:      to.Ptr("ServiceRequest"),
-		},
-		&fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
+	idx := len(tx.Entry)
+	serviceRequestBundleEntry := request.bundleEntryWithResource(serviceRequest)
+	tx.AppendEntry(serviceRequestBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		ActingAgent: &fhir.Reference{
+			Identifier: request.LocalIdentity,
 			Type:       to.Ptr("Organization"),
 		},
-	)
-
-	// Add to transaction
-	serviceRequestBundleEntry := request.bundleEntryWithResource(serviceRequest)
-	tx.AppendEntry(serviceRequestBundleEntry)
-	idx := len(tx.Entry) - 1
-	tx.Create(updateAuditEvent)
+		Observer: *request.LocalIdentity,
+		Action:   fhir.AuditEventActionU,
+	}))
 
 	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 		var updatedServiceRequest fhir.ServiceRequest
@@ -98,7 +84,6 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 			// Just respond with the original ServiceRequest that was sent.
 			updatedServiceRequest = serviceRequest
 		} else if err != nil {
-			// Other error
 			return nil, nil, err
 		}
 

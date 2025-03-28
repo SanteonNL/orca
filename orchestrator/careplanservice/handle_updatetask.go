@@ -9,7 +9,6 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -117,22 +116,19 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 
-	taskUpdateAuditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionU,
-		&fhir.Reference{
-			Reference: to.Ptr("Task/" + *task.Id),
-		},
-		&fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
+	idx := len(tx.Entry)
+	taskBundleEntry := request.bundleEntryWithResource(task)
+	tx = tx.AppendEntry(taskBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+		ActingAgent: &fhir.Reference{
+			Identifier: request.LocalIdentity,
 			Type:       to.Ptr("Organization"),
 		},
-	)
+		Observer: *request.LocalIdentity,
+		Action:   fhir.AuditEventActionU,
+	}))
 
-	taskBundleEntry := request.bundleEntryWithResource(task)
-	tx = tx.AppendEntry(taskBundleEntry)
-	idx := len(tx.Entry) - 1
-	tx = tx.Create(taskUpdateAuditEvent)
 	// Update care team
-	_, err = careteamservice.Update(ctx, s.fhirClient, carePlanId, task, tx)
+	_, err = careteamservice.Update(ctx, s.fhirClient, carePlanId, task, request.LocalIdentity, tx)
 	if err != nil {
 		return nil, fmt.Errorf("update CareTeam: %w", err)
 	}
@@ -145,7 +141,6 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 			// Just respond with the original Task that was sent.
 			updatedTask = task
 		} else if err != nil {
-			// Other error
 			return nil, nil, err
 		}
 		var notifications = []any{&updatedTask}
