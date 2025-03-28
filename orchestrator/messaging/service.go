@@ -50,7 +50,7 @@ type Config struct {
 	AzureServiceBus AzureServiceBusConfig `koanf:"azureservicebus"`
 	HTTP            HTTPBrokerConfig      `koanf:"http"`
 	// EntityPrefix is the prefix to use for all topics and queues, which allows for multi-tenant use of the underlying message broker infrastructure.
-	EntityPrefix string `koanf:"entityPrefix"`
+	EntityPrefix string `koanf:"entityprefix"`
 }
 
 func (c Config) Validate(strictMode bool) error {
