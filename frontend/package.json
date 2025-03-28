@@ -35,7 +35,7 @@
     "fhir-kit-client": "^1.9.2",
     "framer-motion": "^12.5.0",
     "lucide-react": "^0.468.0",
-    "next": "15.2.3",
+    "next": "15.2.4",
     "next-themes": "^0.4.4",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
