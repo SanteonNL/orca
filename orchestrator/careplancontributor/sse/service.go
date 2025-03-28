@@ -97,7 +97,7 @@ func (s *Service) Publish(ctx context.Context, topic string, msg string) {
 		select {
 		case ch <- msg:
 		default:
-			log.Ctx(ctx).Info().Msgf("client channel full, dropping message on topic %s", topic)
+			log.Ctx(ctx).Warn().Msgf("client channel full, dropping message on topic %s", topic)
 		}
 	}
 }
