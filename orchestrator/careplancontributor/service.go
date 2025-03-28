@@ -120,6 +120,7 @@ func New(
 		eventManager:                  eventManager,
 		sseService:                    sse.New(),
 	}
+	result.createFHIRClientForURL = result.defaultCreateFHIRClientForURL
 	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
 		result.notifier, err = ehr.NewNotifier(eventManager, messageBroker, messaging.Entity{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
 		if err != nil {
@@ -127,7 +128,6 @@ func New(
 		}
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
-	result.createFHIRClientForURL = result.defaultCreateFHIRClientForURL
 	return result, nil
 }
 
