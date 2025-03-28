@@ -52,7 +52,7 @@ func (h HTTPBroker) Close(ctx context.Context) error {
 
 func (h HTTPBroker) SendMessage(ctx context.Context, topic Entity, message *Message) error {
 
-	log.Ctx(ctx).Debug().Msgf("Sending message to topic %s. ", topic.Name)
+	log.Ctx(ctx).Debug().Msgf("SendMessage invoked for topic %s. ", topic.Name)
 
 	var errs []error
 	if err := h.doSend(ctx, topic, message); err != nil {
