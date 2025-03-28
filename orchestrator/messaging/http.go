@@ -33,11 +33,11 @@ type HTTPBroker struct {
 	topicFilter      []string
 }
 
-func (h HTTPBroker) Receive(topic Topic, handler func(context.Context, Message) error) error {
+func (h HTTPBroker) ReceiveFromQueue(queue Entity, handler func(context.Context, Message) error) error {
 	if h.underlyingBroker == nil {
 		return nil
 	}
-	return h.underlyingBroker.Receive(topic, handler)
+	return h.underlyingBroker.ReceiveFromQueue(queue, handler)
 }
 
 func (h HTTPBroker) Close(ctx context.Context) error {
@@ -47,7 +47,7 @@ func (h HTTPBroker) Close(ctx context.Context) error {
 	return h.underlyingBroker.Close(ctx)
 }
 
-func (h HTTPBroker) SendMessage(ctx context.Context, topic Topic, message *Message) error {
+func (h HTTPBroker) SendMessage(ctx context.Context, topic Entity, message *Message) error {
 	if len(h.topicFilter) != 0 && !slices.Contains(h.topicFilter, topic.Name) {
 		return nil
 	}
@@ -63,7 +63,7 @@ func (h HTTPBroker) SendMessage(ctx context.Context, topic Topic, message *Messa
 	return errors.Join(errs...)
 }
 
-func (h HTTPBroker) doSend(ctx context.Context, topic Topic, message *Message) error {
+func (h HTTPBroker) doSend(ctx context.Context, topic Entity, message *Message) error {
 	// unmarshall and marshall the value to remove extra whitespace
 	var v interface{}
 	err := json.Unmarshal(message.Body, &v)

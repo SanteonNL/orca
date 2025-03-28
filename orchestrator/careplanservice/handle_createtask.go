@@ -175,6 +175,13 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			Action:   fhir.AuditEventActionC,
 		}))
 		taskBundleEntry = tx.Entry[taskEntryIdx]
+		if s.eventManager.HasSubscribers(CarePlanCreatedEvent{}) {
+			if err := s.eventManager.Notify(ctx, CarePlanCreatedEvent{
+				CarePlan: carePlan,
+			}); err != nil {
+				return nil, err
+			}
+		}
 	} else {
 		// Adding a task to an existing CarePlan
 		carePlanRef, err := basedOn(task)

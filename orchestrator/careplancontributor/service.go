@@ -14,15 +14,13 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
-	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/sse"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/webhook"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/sse"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
@@ -56,6 +54,7 @@ func New(
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager,
 	messageBroker messaging.Broker,
+	eventManager events.Manager,
 	ehrFhirProxy coolfhir.HttpProxy,
 	localCarePlanServiceURL *url.URL) (*Service, error) {
 
@@ -106,15 +105,6 @@ func New(
 		workflowProvider = taskengine.FhirApiWorkflowProvider{Client: questionnaireFhirClient}
 	}
 
-	// Register event handlers
-	eventManager := events.NewInMemoryManager()
-	for _, handler := range config.Events.WebHooks {
-		err := eventManager.Subscribe(handler.ResourceType, handler.Name, webhook.NewEventHandler(handler.URL).Handle)
-		if err != nil {
-			return nil, fmt.Errorf("failed to subscribe to event %s: %w", handler.Name, err)
-		}
-	}
-
 	result := &Service{
 		config:                        config,
 		orcaPublicURL:                 orcaPublicURL,
@@ -131,7 +121,7 @@ func New(
 		sseService:                    sse.New(),
 	}
 	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
-		result.notifier, err = ehr.NewNotifier(messageBroker, messaging.Topic{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
+		result.notifier, err = ehr.NewNotifier(eventManager, messageBroker, messaging.Entity{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
 		if err != nil {
 			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
 		}
@@ -682,7 +672,6 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	if err != nil {
 		return err
 	}
-	var focusResource any
 	switch *focusReference.Type {
 	case "Task":
 		var task fhir.Task
@@ -690,8 +679,6 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		if err != nil {
 			return err
 		}
-		focusResource = task
-
 		//insert the meta.source - can be used to determine the X-Scp-Context
 		if task.Meta == nil {
 			task.Meta = &fhir.Meta{}
@@ -721,21 +708,10 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		} else if err != nil {
 			return err
 		}
-	case "CarePlan":
-		var carePlan fhir.CarePlan
-		err = fhirClient.Read(*focusReference.Reference, &carePlan)
-		if err != nil {
-			return err
-		}
-		focusResource = carePlan
 	default:
 		log.Ctx(ctx).Debug().Msgf("No handler for notification of type %s, ignoring", *focusReference.Type)
 	}
-	// TODO: Not sure if we should return an error here
-	return s.eventManager.Notify(ctx, *focusReference.Type, events.Instance{
-		FHIRResource:       focusResource,
-		FHIRResourceSource: *focusReference.Reference,
-	})
+	return nil
 }
 
 func (s Service) publishTaskToSse(ctx context.Context, task *fhir.Task) error {

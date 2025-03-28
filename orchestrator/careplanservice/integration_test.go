@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"math/rand"
@@ -875,7 +876,8 @@ func Test_HandleSearchResource(t *testing.T) {
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 	config.AllowUnmanagedFHIROperations = true
-	service, err := New(config, activeProfile, orcaPublicURL, messaging.NewMemoryBroker())
+	messageBroker := messaging.NewMemoryBroker()
+	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -1093,7 +1095,8 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 	config.AllowUnmanagedFHIROperations = true
-	service, err := New(config, activeProfile, orcaPublicURL, messaging.NewMemoryBroker())
+	messageBroker := messaging.NewMemoryBroker()
+	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
