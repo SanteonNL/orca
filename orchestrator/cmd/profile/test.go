@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
-	"strings"
 )
 
 var _ Provider = TestProfile{}
@@ -55,7 +56,7 @@ func (t TestProfile) CsdDirectory() csd.Directory {
 	return t.CSD
 }
 
-func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request) {
+func (t TestProfile) Authenticator(_ *url.URL, next http.HandlerFunc) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		authHeader := request.Header.Get("Authorization")
 		if authHeader == "" {
@@ -84,7 +85,7 @@ func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWrite
 		request = request.WithContext(auth.WithPrincipal(request.Context(), auth.Principal{
 			Organization: user,
 		}))
-		fn(writer, request)
+		next(writer, request)
 	}
 }
 

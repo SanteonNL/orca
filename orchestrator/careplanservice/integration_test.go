@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	events "github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"math/rand"
 	"net/http"
@@ -15,18 +13,22 @@ import (
 	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/test"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 )
 
 var patientReference = fhir.Reference{
+	Type: to.Ptr("Patient"),
 	Identifier: &fhir.Identifier{
 		System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 		Value:  to.Ptr("1333333337"),
@@ -46,7 +48,7 @@ func Test_Integration(t *testing.T) {
 	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
 		cpc2Notifications = append(cpc2Notifications, n)
 	})
-	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint)
+	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, false)
 	// subTest logs the message and resets the notifications
 	subTest := func(t *testing.T, msg string) {
 		t.Log(msg)
@@ -1076,7 +1078,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	})
 }
 
-func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2NotificationEndpoint string) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
+func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint, cpc2NotificationEndpoint string, mockPolicyMiddleware bool) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
 		Principal: auth.TestPrincipal1,
@@ -1098,6 +1100,10 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
+
+	if mockPolicyMiddleware {
+		service.policyMiddleware = NewMockPolicyMiddleware()
+	}
 
 	serverMux := http.NewServeMux()
 	httpService := httptest.NewServer(serverMux)

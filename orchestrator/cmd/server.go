@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	events "github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"os"
@@ -13,6 +11,8 @@ import (
 	"sync"
 	"syscall"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
@@ -22,6 +22,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -135,6 +136,7 @@ func Start(ctx context.Context, config Config) error {
 
 	// Start HTTP server, shutdown when given context.Context is cancelled
 	httpServer := &http.Server{Addr: config.Public.Address, Handler: httpHandler}
+
 	wg := &sync.WaitGroup{}
 	wg.Add(1)
 	listenChan := make(chan error)

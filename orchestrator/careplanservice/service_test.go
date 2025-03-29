@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	events "github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +13,12 @@ import (
 	"strings"
 	"testing"
 
+	"go.uber.org/mock/gomock"
+	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+
+	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -23,11 +27,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
-
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
-	"github.com/stretchr/testify/require"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
@@ -77,6 +77,7 @@ func TestService_Proxy(t *testing.T) {
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
+	service.policyMiddleware = NewMockPolicyMiddleware()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
@@ -151,6 +152,7 @@ func TestService_Proxy(t *testing.T) {
 		}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 		require.NoError(t, err)
 		frontServerMux := http.NewServeMux()
+		service.policyMiddleware = NewMockPolicyMiddleware()
 		service.RegisterHandlers(frontServerMux)
 		frontServer := httptest.NewServer(frontServerMux)
 
@@ -207,9 +209,11 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 		},
 		AllowUnmanagedFHIROperations: true,
 	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
+	service.policyMiddleware = MockPolicyMiddleware{}
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
@@ -282,6 +286,7 @@ func TestService_ErrorHandling(t *testing.T) {
 		orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
+	service.policyMiddleware = NewMockPolicyMiddleware()
 	service.RegisterHandlers(fhirServerMux)
 	server := httptest.NewServer(fhirServerMux)
 
@@ -544,6 +549,7 @@ func TestService_Handle(t *testing.T) {
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
+	service.policyMiddleware = NewMockPolicyMiddleware()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
