@@ -7,14 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"io"
-	"net/http"
 )
 
 // ChannelFactory defines an interface for creating Subscription Notification Channels (e.g. rest-hook).
@@ -106,7 +107,7 @@ func (r RestHookChannel) Notify(ctx context.Context, notification coolfhir.Subsc
 	// Be a good client and read the response, even if we don't actually do anything with it.
 	_, _ = io.ReadAll(io.LimitReader(httpResponse.Body, 1024))
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
-		return errors.Join(ReceiverFailure, fmt.Errorf("non-OK HTTP response status: %v", httpResponse.Status))
+		return errors.Join(ReceiverFailure, fmt.Errorf("non-OK HTTP response from %s status: %v", r.Endpoint, httpResponse.Status))
 	}
 	return nil
 }

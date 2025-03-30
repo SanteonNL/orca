@@ -128,6 +128,7 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 }
 
 func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, primaryTask *fhir.Task) error {
+	log.Ctx(ctx).Debug().Msgf("Started function acceptPrimaryTask() for Task (task=%s)", *primaryTask.Id)
 	if primaryTask.Status != fhir.TaskStatusRequested && primaryTask.Status != fhir.TaskStatusReceived {
 		log.Ctx(ctx).Debug().Msg("primary Task.status != requested||received (workflow already started) - not processing in handleTaskNotification")
 		return nil

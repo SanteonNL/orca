@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/rs/zerolog/log"
 )
 
 var _ Broker = &HTTPBroker{}
@@ -24,6 +26,7 @@ func NewHTTPBroker(config HTTPBrokerConfig, underlyingBroker Broker) Broker {
 	return HTTPBroker{
 		underlyingBroker: underlyingBroker,
 		endpoint:         config.Endpoint,
+		topicFilter:      config.TopicFilter,
 	}
 }
 
@@ -48,9 +51,9 @@ func (h HTTPBroker) Close(ctx context.Context) error {
 }
 
 func (h HTTPBroker) SendMessage(ctx context.Context, topic Entity, message *Message) error {
-	if len(h.topicFilter) != 0 && !slices.Contains(h.topicFilter, topic.Name) {
-		return nil
-	}
+
+	log.Ctx(ctx).Debug().Msgf("SendMessage invoked for topic %s. ", topic.Name)
+
 	var errs []error
 	if err := h.doSend(ctx, topic, message); err != nil {
 		errs = append(errs, fmt.Errorf("failed to send message over HTTP: %w", err))
@@ -60,10 +63,19 @@ func (h HTTPBroker) SendMessage(ctx context.Context, topic Entity, message *Mess
 			errs = append(errs, err)
 		}
 	}
+	if len(errs) == 0 {
+		log.Ctx(ctx).Debug().Msgf("Sent message to topic %s", topic.Name)
+	}
 	return errors.Join(errs...)
 }
 
 func (h HTTPBroker) doSend(ctx context.Context, topic Entity, message *Message) error {
+
+	if len(h.topicFilter) != 0 && !slices.Contains(h.topicFilter, topic.Name) {
+		log.Ctx(ctx).Debug().Msgf("Skipping message for topic %s", topic.Name)
+		return nil
+	}
+
 	// unmarshall and marshall the value to remove extra whitespace
 	var v interface{}
 	err := json.Unmarshal(message.Body, &v)
@@ -86,6 +98,7 @@ func (h HTTPBroker) doSend(ctx context.Context, topic Entity, message *Message) 
 		return err
 	}
 	req.Header.Set("Content-Type", message.ContentType)
+	log.Ctx(ctx).Debug().Msgf("Sending message to %s", req.URL.String())
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
