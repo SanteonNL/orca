@@ -1,8 +1,10 @@
-package fhirpolicy_test
+package policy_test
 
-import data.fhirpolicy
+import data.policy
 
-mock_input(principal, participants) := {
+mock_input(principal, participants, resource, roles) := {
+	"resource": resource,
+	"roles": roles,
 	"method": "GET", "principal": {
 		"system": "http://fhir.nl/fhir/NamingSystem/ura",
 		"value": principal,
@@ -37,15 +39,35 @@ mock_input(principal, participants) := {
 }
 
 test_allowed if {
-	fhirpolicy.allow with input as mock_input("11111111", ["11111111", "22222222"])
+	fhirpolicy.allow with input as mock_input("11111111", ["11111111", "22222222"], {}, [])
+}
+
+test_allowed_with_tag if {
+	fhirpolicy.allow with input as mock_input(
+		"11111111", ["11111111", "22222222"], {"meta": {"tags": [{
+			"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+			"value": "MH",
+		}]}},
+		["30.076"],
+	)
+}
+
+test_tag_not_allowed if {
+	not fhirpolicy.allow with input as mock_input(
+		"11111111", ["11111111", "22222222"], {"meta": {"tags": [{
+			"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+			"value": "MH",
+		}]}},
+		["01.045"],
+	)
 }
 
 test_not_in_careteam if {
-	not fhirpolicy.allow with input as mock_input("11111111", ["22222222"])
+	not fhirpolicy.allow with input as mock_input("11111111", ["22222222"], {}, [])
 }
 
-test_no_careplans if {
-	not fhirpolicy.allow with input as mock_input("11111111", [])
+test_no_participants if {
+	not fhirpolicy.allow with input as mock_input("11111111", [], {}, [])
 }
 
 test_questionnaire if {

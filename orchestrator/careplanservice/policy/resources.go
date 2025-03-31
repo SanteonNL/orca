@@ -1,11 +1,9 @@
-package careplanservice
+package policy
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
-	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
@@ -48,21 +46,13 @@ var findSubjectFuncs = map[string]findSubjectFunc{
 	}),
 }
 
-func findSubject(ctx context.Context, fhirClient fhirclient.Client, resourceType, id string) (*fhir.Reference, error) {
-	path := fmt.Sprintf("%s/%s", resourceType, id)
-
-	findFunc, ok := findSubjectFuncs[resourceType]
+func findSubject(resource json.RawMessage, resourceType string) (*fhir.Reference, error) {
+	findSubject, ok := findSubjectFuncs[resourceType]
 	if !ok {
 		return nil, fmt.Errorf("unsupported resource type: %s", resourceType)
 	}
 
-	var message json.RawMessage
-
-	if err := fhirClient.ReadWithContext(ctx, path, &message); err != nil {
-		return nil, fmt.Errorf("failed to read resource: %w", err)
-	}
-
-	subject, err := findFunc(message)
+	subject, err := findSubject(resource)
 	if err != nil {
 		return nil, fmt.Errorf("failed to extract subject: %w", err)
 	}

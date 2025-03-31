@@ -13,21 +13,21 @@ import (
 	"strings"
 	"testing"
 
-	"go.uber.org/mock/gomock"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.uber.org/mock/gomock"
 
-	events "github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/stretchr/testify/assert"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 )
 
 var orcaPublicURL, _ = url.Parse("https://example.com/orca")
@@ -213,7 +213,7 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
-	service.policyMiddleware = MockPolicyMiddleware{}
+	service.policyMiddleware = NewMockPolicyMiddleware()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 

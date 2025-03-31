@@ -10,12 +10,12 @@ import (
 
 var ErrInvalidReference = errors.New("invalid reference, expecting local reference")
 
-type ContainedResource struct {
+type RawResource struct {
 	Resource
 	Raw json.RawMessage `json:"-"`
 }
 
-func (r *ContainedResource) UnmarshalJSON(data []byte) error {
+func (r *RawResource) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &r.Resource); err != nil {
 		return err
 	}
@@ -25,7 +25,7 @@ func (r *ContainedResource) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (r *ContainedResource) MarshalJSON() ([]byte, error) {
+func (r *RawResource) MarshalJSON() ([]byte, error) {
 	return r.Raw, nil
 }
 
@@ -39,19 +39,22 @@ func UpdateContainedResource(contained json.RawMessage, reference *fhir.Referenc
 		return nil, fmt.Errorf("failed to marshal data: %w", err)
 	}
 
-	var resources []ContainedResource
+	var resources []RawResource
 
 	if err := json.Unmarshal(contained, &resources); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal contained resources: %w", err)
 	}
 
 	for i, containedResource := range resources {
+		// Optionally check the type
+		if reference.Type != nil && containedResource.Type != *reference.Type {
+			continue
+		}
+
 		// We assume that reference refers to a local contained resource
-		if containedResource.ID == (*reference.Reference)[1:] &&
-			containedResource.Type == *reference.Type {
+		if containedResource.ID == (*reference.Reference)[1:] {
 			containedResource.Raw = data
 			resources[i] = containedResource
-
 			return json.Marshal(resources)
 		}
 	}
@@ -64,7 +67,7 @@ func CareTeamFromCarePlan(carePlan *fhir.CarePlan) (*fhir.CareTeam, error) {
 		return nil, errors.New("CarePlan must have exactly one CareTeam")
 	}
 
-	var resources []ContainedResource
+	var resources []RawResource
 
 	if len(carePlan.Contained) > 0 {
 		if err := json.Unmarshal(carePlan.Contained, &resources); err != nil {

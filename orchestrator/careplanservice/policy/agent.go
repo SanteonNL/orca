@@ -12,6 +12,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
+//go:embed policy.rego
+var source string
+
+var BuiltinModule = RegoModule{
+	Package: "policy",
+	Source:  source,
+}
+
 var ErrAccessDenied = errors.New("request denied by policy")
 
 type Agent struct {

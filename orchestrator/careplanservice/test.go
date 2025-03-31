@@ -3,19 +3,17 @@ package careplanservice
 import (
 	"net/http"
 	"os"
-
-	"github.com/SanteonNL/orca/orchestrator/lib/policy"
 )
 
 type MockPolicyMiddleware struct{}
 
-func (m MockPolicyMiddleware) WrapWithPolicyCheck(extractContext policy.ContextExtractor, next http.HandlerFunc) http.HandlerFunc {
+func (m MockPolicyMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		next(w, r)
 	})
 }
 
-func NewMockPolicyMiddleware() PolicyMiddleware {
+func NewMockPolicyMiddleware() MockPolicyMiddleware {
 	return MockPolicyMiddleware{}
 }
 
