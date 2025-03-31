@@ -4,18 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	"github.com/rs/zerolog/log"
 
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/sse"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -254,7 +256,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 					BaseURL: fhirServer.URL + "/fhir",
 				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, proxy, carePlanServiceURL)
+			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), proxy, carePlanServiceURL)
 
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
@@ -376,7 +378,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -500,7 +502,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
-	}, orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
+	}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
@@ -585,7 +587,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -659,7 +661,7 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, carePlanServiceURL)
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, carePlanServiceURL)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the upstream CarePlanService
 	frontServerMux := http.NewServeMux()
@@ -763,7 +765,7 @@ func TestService_ProxyToExternalCPS(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, &httputil.ReverseProxy{}, localCarePlanServiceURL)
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, localCarePlanServiceURL)
 	require.NoError(t, err)
 
 	// Setup: configure the service to proxy to the upstream CarePlanService
@@ -888,6 +890,7 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 				},
 			},
 		}
+		service.createFHIRClientForURL = service.defaultCreateFHIRClientForURL
 		expectedBody := url.Values{}
 
 		httpRequest := httptest.NewRequest("POST", publicURL.JoinPath("/cpc/aggregate/fhir/Patient/_search").String(), strings.NewReader(expectedBody.Encode()))
@@ -903,6 +906,118 @@ func TestService_proxyToAllCareTeamMembers(t *testing.T) {
 		require.NoError(t, json.Unmarshal(httpResponse.Body.Bytes(), &actualBundle))
 		require.Len(t, actualBundle.Entry, 1)
 	})
+}
+
+func TestService_HandleSubscribeToTask(t *testing.T) {
+
+	validToken := "http://fhir.nl/fhir/NamingSystem/task-workflow-identifier|12345"
+
+	// Create a dummy local CarePlanService URL.
+	localCPSUrl, err := url.Parse("http://dummy-cps")
+	require.NoError(t, err)
+
+	tests := []struct {
+		name            string
+		sessionValues   map[string]string
+		client          mock.MockClient
+		setLocalCPS     bool
+		expectedStatus  int
+		expectedContent string
+	}{
+		{
+			name:            "No taskIdentifier in session",
+			sessionValues:   map[string]string{},
+			setLocalCPS:     true,
+			expectedStatus:  http.StatusBadRequest,
+			expectedContent: "No taskIdentifier found in session",
+		},
+		{
+			name: "Invalid taskIdentifier in session",
+			sessionValues: map[string]string{
+				"taskIdentifier": "invalid-token",
+			},
+			setLocalCPS:     true,
+			expectedStatus:  http.StatusBadRequest,
+			expectedContent: "Invalid taskIdentifier in session",
+		},
+		{
+			name: "No local CarePlanService configured",
+			sessionValues: map[string]string{
+				"taskIdentifier": validToken,
+			},
+			setLocalCPS:     false,
+			expectedStatus:  http.StatusBadRequest,
+			expectedContent: "No local CarePlanService configured",
+		},
+		{
+			name: "Task identifier does not match session",
+			sessionValues: map[string]string{
+				"taskIdentifier": "https://some.other.domain/fhir/NamingSystem/task-workflow-identifier|12345",
+			},
+			setLocalCPS:     true,
+			expectedStatus:  http.StatusBadRequest,
+			expectedContent: "Task identifier does not match the taskIdentifier in the session",
+		},
+		{
+			name: "Success subscription",
+			sessionValues: map[string]string{
+				"taskIdentifier": validToken,
+			},
+			setLocalCPS:     true,
+			expectedStatus:  http.StatusOK,
+			expectedContent: "",
+		},
+	}
+
+	ctx := context.Background()
+	rawJson, _ := os.ReadFile("./testdata/task-3.json")
+
+	var taskData map[string]interface{}
+	err = json.Unmarshal(rawJson, &taskData)
+	require.NoError(t, err)
+	mockFhirClient := &test.StubFHIRClient{
+		Resources: []any{taskData},
+	}
+
+	sseService := sse.New()
+	sseService.ServeHTTP = func(topic string, writer http.ResponseWriter, request *http.Request) {
+		log.Ctx(ctx).Info().Msgf("Unit-Test: Transform request to SSE stream for topic: %s", topic)
+	}
+
+	svc := &Service{sseService: sseService}
+
+	svc.createFHIRClientForURL = func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
+		return mockFhirClient, nil, nil
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			session := &user.SessionData{
+				StringValues: tt.sessionValues,
+			}
+
+			req := httptest.NewRequest("GET", "/cpc/subscribe/fhir/Task/3", nil)
+			req.SetPathValue("id", "3")
+
+			resp := httptest.NewRecorder()
+
+			if tt.setLocalCPS {
+				svc.localCarePlanServiceUrl = localCPSUrl
+			} else {
+				svc.localCarePlanServiceUrl = nil
+			}
+
+			// Call method under test.
+			svc.handleSubscribeToTask(resp, req, session)
+
+			res := resp.Result()
+			defer res.Body.Close()
+			bodyBytes, _ := io.ReadAll(res.Body)
+			bodyStr := string(bodyBytes)
+			assert.Equal(t, tt.expectedStatus, res.StatusCode, "Unexpected status code")
+			assert.Contains(t, bodyStr, tt.expectedContent, "Unexpected error message or response text, got: "+bodyStr)
+		})
+	}
 }
 
 func createTestSession() (*user.SessionManager, string) {

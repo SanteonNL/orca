@@ -4,24 +4,28 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 
-	"github.com/SanteonNL/orca/orchestrator/messaging"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
+	"go.uber.org/mock/gomock"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
@@ -50,31 +54,26 @@ func TestService_Proxy(t *testing.T) {
 	fhirServerMux := http.NewServeMux()
 	var capturedQuery url.Values
 	var capturedRequestHeaders http.Header
-
-	carePlan1Raw := mustReadFile("./testdata/careplan1-careteam2.json")
-	var carePlan1 fhir.CarePlan
-	_ = json.Unmarshal(carePlan1Raw, &carePlan1)
-
-	fhirServerMux.HandleFunc("GET /fhir/CarePlan/1", func(writer http.ResponseWriter, request *http.Request) {
+	fhirServerMux.HandleFunc("GET /fhir/Success/1", func(writer http.ResponseWriter, request *http.Request) {
 		capturedQuery = request.URL.Query()
 		capturedRequestHeaders = request.Header
-		coolfhir.SendResponse(writer, http.StatusOK, carePlan1)
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{
+			Intent: "order",
+		})
 	})
 	fhirServerMux.HandleFunc("GET /fhir/Fail/1", func(writer http.ResponseWriter, request *http.Request) {
 		coolfhir.WriteOperationOutcomeFromError(context.Background(), coolfhir.BadRequest("Fail"), "oops", writer)
 	})
-	fhirServerMux.HandleFunc("POST /fhir/AuditEvent", func(writer http.ResponseWriter, request *http.Request) {
-		capturedRequestHeaders = request.Header
-		coolfhir.SendResponse(writer, http.StatusOK, fhir.AuditEvent{})
-	})
 	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
+	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(Config{
+		AllowUnmanagedFHIROperations: true,
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -85,11 +84,11 @@ func TestService_Proxy(t *testing.T) {
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
 	t.Run("ok", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/CarePlan/1")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		responseData, _ := io.ReadAll(httpResponse.Body)
-		require.JSONEq(t, `{"resourceType":"CarePlan", "title":"Test Care Plan"}`, string(responseData))
+		require.JSONEq(t, `{"resourceType":"Task", "intent":"order", "status":"draft"}`, string(responseData))
 		t.Run("caching is allowed", func(t *testing.T) {
 			assert.Equal(t, "must-understand, private", httpResponse.Header.Get("Cache-Control"))
 		})
@@ -106,14 +105,14 @@ func TestService_Proxy(t *testing.T) {
 		assert.Len(t, capabilityStatement.Rest[0].Security.Service, 1)
 	})
 	t.Run("it proxies query parameters", func(t *testing.T) {
-		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/CarePlan/1?_identifier=foo|bar")
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/Success/1?_identifier=foo|bar")
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		assert.Equal(t, "foo|bar", capturedQuery.Get("_identifier"))
 	})
 	t.Run("it proxies FHIR HTTP request headers", func(t *testing.T) {
 		// https://build.fhir.org/http.html#Http-Headers
-		httpRequest, _ := http.NewRequest(http.MethodGet, frontServer.URL+"/cps/CarePlan/1", nil)
+		httpRequest, _ := http.NewRequest(http.MethodGet, frontServer.URL+"/cps/Success/1", nil)
 		httpRequest.Header.Set("If-None-Exist", "ine")
 		httpRequest.Header.Set("If-Match", "im")
 		httpRequest.Header.Set("If-Modified-Since", "ims")
@@ -144,11 +143,12 @@ func TestService_Proxy(t *testing.T) {
 }`, string(responseData))
 	})
 	t.Run("disallowed unmanaged FHIR operation", func(t *testing.T) {
+		messageBroker := messaging.NewMemoryBroker()
 		service, err := New(Config{
 			FHIR: coolfhir.ClientConfig{
 				BaseURL: fhirServer.URL + "/fhir",
 			},
-		}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+		}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 		require.NoError(t, err)
 		frontServerMux := http.NewServeMux()
 		service.RegisterHandlers(frontServerMux)
@@ -165,6 +165,101 @@ func TestService_Proxy(t *testing.T) {
 	})
 }
 
+func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
+	// Test that the service registers the /cps URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	fhirServerMux := http.NewServeMux()
+	capturedHost := ""
+	fhirServerMux.HandleFunc("GET /fhir/SomeResource/1", func(writer http.ResponseWriter, request *http.Request) {
+		capturedHost = request.Host
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{})
+	})
+	var capturedBundle fhir.Bundle
+	fhirServerMux.HandleFunc("POST /fhir/", func(writer http.ResponseWriter, request *http.Request) {
+		if err := json.NewDecoder(request.Body).Decode(&capturedBundle); err != nil {
+			http.Error(writer, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{
+			Entry: []fhir.BundleEntry{
+				{
+					Response: &fhir.BundleEntryResponse{
+						Status: "204 No Content",
+					},
+				},
+			},
+		})
+	})
+	var capturedBody []byte
+	fhirServerMux.HandleFunc("POST /fhir/SomeResource/_search", func(writer http.ResponseWriter, request *http.Request) {
+		capturedHost = request.Host
+		capturedBody, _ = io.ReadAll(request.Body)
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Bundle{})
+	})
+	mockCustomSearchParams(fhirServerMux)
+	fhirServer := httptest.NewServer(fhirServerMux)
+	fhirServerURL, _ := url.Parse(fhirServer.URL)
+	// Setup: create the service
+	messageBroker := messaging.NewMemoryBroker()
+	service, err := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+		AllowUnmanagedFHIROperations: true,
+	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+	require.NoError(t, err)
+	// Setup: configure the service to proxy to the backing FHIR server
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+
+	t.Run("read", func(t *testing.T) {
+		httpResponse, err := httpClient.Get(frontServer.URL + "/cps/SomeResource/1")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		require.Equal(t, fhirServerURL.Host, capturedHost)
+	})
+
+	// Test POST edge cases
+	t.Run("search", func(t *testing.T) {
+		t.Run("ok", func(t *testing.T) {
+			httpResponse, err := httpClient.Post(frontServer.URL+"/cps/SomeResource/_search", "application/x-www-form-urlencoded", strings.NewReader(`identifier=foo`))
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			require.Equal(t, fhirServerURL.Host, capturedHost)
+			require.Equal(t, "identifier=foo", string(capturedBody))
+		})
+		t.Run("invalid path (_search must go directly after the resource)", func(t *testing.T) {
+			httpResponse, err := httpClient.Post(frontServer.URL+"/cps/SomeResource/1/_search", "application/fhir+json", nil)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+			responseBody, _ := io.ReadAll(httpResponse.Body)
+			assert.Contains(t, string(responseBody), "invalid path")
+		})
+	})
+	t.Run("delete", func(t *testing.T) {
+		t.Run("by search parameter", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest(http.MethodDelete, frontServer.URL+"/cps/SomeResource?identifier=foo", nil)
+			httpResponse, err := httpClient.Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusNoContent, httpResponse.StatusCode)
+			require.Equal(t, "SomeResource?identifier=foo", capturedBundle.Entry[0].Request.Url)
+			require.Equal(t, fhir.HTTPVerbDELETE, capturedBundle.Entry[0].Request.Method)
+		})
+		t.Run("by ID", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest(http.MethodDelete, frontServer.URL+"/cps/SomeResource/1", nil)
+			httpResponse, err := httpClient.Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusNoContent, httpResponse.StatusCode)
+			require.Equal(t, "SomeResource/1", capturedBundle.Entry[0].Request.Url)
+			require.Equal(t, fhir.HTTPVerbDELETE, capturedBundle.Entry[0].Request.Method)
+		})
+	})
+}
+
 type OperationOutcomeWithResourceType struct {
 	fhir.OperationOutcome
 	ResourceType *string `bson:"resourceType" json:"resourceType"`
@@ -176,6 +271,7 @@ func TestService_ErrorHandling(t *testing.T) {
 	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: configure the service
+	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(
 		Config{
 			FHIR: coolfhir.ClientConfig{
@@ -183,7 +279,7 @@ func TestService_ErrorHandling(t *testing.T) {
 			},
 		},
 		profile.Test(),
-		orcaPublicURL, messaging.NewMemoryBroker())
+		orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	service.RegisterHandlers(fhirServerMux)
@@ -213,6 +309,93 @@ func TestService_ErrorHandling(t *testing.T) {
 	require.NotNil(t, target)
 	require.NotEmpty(t, target.Issue)
 	require.Equal(t, "CarePlanService/CreateTask failed: invalid fhir.Task: unexpected end of JSON input", *target.Issue[0].Diagnostics)
+}
+
+func TestService_DefaultOperationHandler(t *testing.T) {
+	t.Run("handles unmanaged FHIR operations - allow unmanaged operations", func(t *testing.T) {
+		// For now, we have a flag that can be enabled in config that will allow unmanaged FHIR operations. This defaults to false and should not be enabled in test or prod environments
+		tx := coolfhir.Transaction()
+		// The unmanaged operation handler reads the resource to return from the result Bundle,
+		// from the same index as the resource it added to the transaction Bundle. To test this,
+		// we make sure there's 2 other resources in the Bundle.
+		tx.Create(fhir.Task{})
+		txResultBundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransaction,
+			Entry: []fhir.BundleEntry{
+				{
+					Response: &fhir.BundleEntryResponse{
+						Location: to.Ptr("Task/456"),
+						Status:   "201 Created",
+					},
+				},
+				{
+					Response: &fhir.BundleEntryResponse{
+						Location: to.Ptr("ServiceRequest/123"),
+						Status:   "201 Created",
+					},
+				},
+				{
+					Response: &fhir.BundleEntryResponse{
+						Location: to.Ptr("Task/789"),
+						Status:   "201 Created",
+					},
+				},
+			},
+		}
+		expectedServiceRequest := fhir.ServiceRequest{
+			Id: to.Ptr("123"),
+		}
+		expectedServiceRequestJson, _ := json.Marshal(expectedServiceRequest)
+		request := FHIRHandlerRequest{
+			ResourcePath: "ServiceRequest",
+			HttpMethod:   http.MethodPost,
+			Context:      context.Background(),
+		}
+		ctrl := gomock.NewController(t)
+		fhirClient := mock.NewMockClient(ctrl)
+		fhirClient.EXPECT().ReadWithContext(gomock.Any(), "ServiceRequest/123", gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, resultResource interface{}, opts ...fhirclient.Option) error {
+				reflect.ValueOf(resultResource).Elem().Set(reflect.ValueOf(expectedServiceRequestJson))
+				return nil
+			})
+		fhirBaseUrl, _ := url.Parse("http://example.com")
+		service := Service{
+			fhirClient:                   fhirClient,
+			allowUnmanagedFHIROperations: true,
+			fhirURL:                      fhirBaseUrl,
+		}
+
+		resultHandler, err := service.handleUnmanagedOperation(request, tx)
+		require.NoError(t, err)
+		resultBundleEntry, notifications, err := resultHandler(&txResultBundle)
+
+		require.NoError(t, err)
+		require.Empty(t, notifications)
+		assert.JSONEq(t, string(expectedServiceRequestJson), string(resultBundleEntry.Resource))
+		assert.Equal(t, "ServiceRequest/123", *resultBundleEntry.Response.Location)
+	})
+	t.Run("handles unmanaged FHIR operations - fail for unmanaged operations", func(t *testing.T) {
+		// Default behaviour is that we fail when a user tries to perform an unmanaged operation
+		tx := coolfhir.Transaction()
+		// The unmanaged operation handler reads the resource to return from the result Bundle,
+		// from the same index as the resource it added to the transaction Bundle. To test this,
+		// we make sure there's 2 other resources in the Bundle.
+		tx.Create(fhir.Task{})
+		ctrl := gomock.NewController(t)
+		fhirClient := mock.NewMockClient(ctrl)
+		service := Service{
+			fhirClient: fhirClient,
+		}
+		request := FHIRHandlerRequest{
+			ResourcePath: "ServiceRequest",
+			HttpMethod:   http.MethodPost,
+			Context:      context.Background(),
+		}
+
+		resultHandler, err := service.handleUnmanagedOperation(request, tx)
+		require.Error(t, err)
+		require.Nil(t, resultHandler)
+	})
 }
 
 func TestService_Handle(t *testing.T) {
@@ -288,16 +471,6 @@ func TestService_Handle(t *testing.T) {
 						"id":           "123",
 					},
 				},
-				map[string]interface{}{
-					"response": map[string]interface{}{
-						"location": "Questionnaire/123",
-						"status":   "201 Created",
-					},
-					"resource": map[string]interface{}{
-						"resourceType": "Questionnaire",
-						"id":           "123",
-					},
-				},
 			},
 		}
 		json.NewEncoder(writer).Encode(bundle)
@@ -305,11 +478,12 @@ func TestService_Handle(t *testing.T) {
 	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
+	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(Config{
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 
 	var capturedHeaders []http.Header
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -320,39 +494,26 @@ func TestService_Handle(t *testing.T) {
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
-					return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
+					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("CarePlan"))
 						carePlan := fhir.CarePlan{
 							Id: to.Ptr("123"),
 						}
 						result.Resource, _ = json.Marshal(carePlan)
-						return []*fhir.BundleEntry{result}, []any{&carePlan}, nil
+						return result, []any{&carePlan}, nil
 					}, nil
 				}
 			case "Task":
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
-					return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
+					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
 							Id: to.Ptr("123"),
 						}
 						result.Resource, _ = json.Marshal(task)
-						return []*fhir.BundleEntry{result}, []any{&task}, nil
-					}, nil
-				}
-			case "Questionnaire":
-				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
-					tx.AppendEntry(request.bundleEntry())
-					return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
-						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Questionnaire"))
-						questionnaire := fhir.Questionnaire{
-							Id: to.Ptr("123"),
-						}
-						result.Resource, _ = json.Marshal(questionnaire)
-						return []*fhir.BundleEntry{result}, []any{}, nil
+						return result, []any{&task}, nil
 					}, nil
 				}
 			}
@@ -362,13 +523,13 @@ func TestService_Handle(t *testing.T) {
 				return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 					capturedHeaders = append(capturedHeaders, request.HttpHeaders)
 					tx.AppendEntry(request.bundleEntry())
-					return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
+					return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
 						result := coolfhir.FirstBundleEntry(txResult, coolfhir.EntryIsOfType("Task"))
 						task := fhir.Task{
 							Id: to.Ptr("123"),
 						}
 						result.Resource, _ = json.Marshal(task)
-						return []*fhir.BundleEntry{result}, []any{&task}, nil
+						return result, []any{&task}, nil
 					}, nil
 				}
 			case "Organization":
@@ -582,14 +743,14 @@ func TestService_Handle(t *testing.T) {
 
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: only write operations are supported in Bundle")
 		})
-		t.Run("POST with specified ID results in a PUT", func(t *testing.T) {
+		t.Run("POST with specified ID is disallowed", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
 				Type: fhir.BundleTypeTransaction,
 				Entry: []fhir.BundleEntry{
 					{
 						Request: &fhir.BundleEntryRequest{
 							Method: fhir.HTTPVerbPOST,
-							Url:    "Questionnaire/123",
+							Url:    "CarePlan/123",
 						},
 					},
 				},
@@ -597,8 +758,8 @@ func TestService_Handle(t *testing.T) {
 			var resultBundle fhir.Bundle
 
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
-			require.NoError(t, err)
-			require.Equal(t, "Questionnaire/123", *resultBundle.Entry[0].Response.Location)
+
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0]: specifying IDs when creating resources isn't allowed")
 		})
 		t.Run("entry without request.url", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
@@ -906,11 +1067,12 @@ func TestService_validateSearchRequest(t *testing.T) {
 	mockCustomSearchParams(fhirServerMux)
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
+	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(Config{
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, messaging.NewMemoryBroker())
+	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	t.Run("invalid content type - fails", func(t *testing.T) {

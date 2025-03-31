@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/url"
 	"reflect"
 	"testing"
@@ -119,9 +121,10 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 	// Create the service with the mock FHIR client
 	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
-		profile:    profile.Test(),
-		fhirClient: mockFHIRClient,
-		fhirURL:    fhirBaseUrl,
+		profile:      profile.Test(),
+		fhirClient:   mockFHIRClient,
+		fhirURL:      fhirBaseUrl,
+		eventManager: events.NewManager(messaging.NewMemoryBroker()),
 	}
 
 	scpMeta := &fhir.Meta{

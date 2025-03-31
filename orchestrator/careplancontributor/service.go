@@ -14,14 +14,13 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
-	events "github.com/SanteonNL/orca/orchestrator/careplancontributor/event"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/webhook"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/sse"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
@@ -36,6 +35,7 @@ const basePath = "/cpc"
 // carePlanURLHeaderKey specifies the HTTP request header used to specify the SCP context, which is a reference to a FHIR CarePlan. Authorization is evaluated according to this CarePlan.
 // The header may also be provided as X-SCP-Context, which will be canonicalized to X-Scp-Context by the Golang HTTP client.
 const carePlanURLHeaderKey = "X-Scp-Context"
+
 // carePlanServiceURLHeaderKey specifies the HTTP request header to specify the FHIR base URL of the Care Plan Service the client wishes to invoke.
 const carePlanServiceURLHeaderKey = "X-Cps-Url"
 
@@ -54,6 +54,7 @@ func New(
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager,
 	messageBroker messaging.Broker,
+	eventManager events.Manager,
 	ehrFhirProxy coolfhir.HttpProxy,
 	localCarePlanServiceURL *url.URL) (*Service, error) {
 
@@ -104,15 +105,6 @@ func New(
 		workflowProvider = taskengine.FhirApiWorkflowProvider{Client: questionnaireFhirClient}
 	}
 
-	// Register event handlers
-	eventManager := events.NewInMemoryManager()
-	for _, handler := range config.Events.WebHooks {
-		err := eventManager.Subscribe(handler.ResourceType, handler.Name, webhook.NewEventHandler(handler.URL).Handle)
-		if err != nil {
-			return nil, fmt.Errorf("failed to subscribe to event %s: %w", handler.Name, err)
-		}
-	}
-
 	result := &Service{
 		config:                        config,
 		orcaPublicURL:                 orcaPublicURL,
@@ -126,12 +118,15 @@ func New(
 		workflows:                     workflowProvider,
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 		eventManager:                  eventManager,
+		sseService:                    sse.New(),
 	}
+	result.createFHIRClientForURL = result.defaultCreateFHIRClientForURL
 	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
-		result.notifier, err = ehr.NewNotifier(messageBroker, messaging.Topic{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
+		result.notifier, err = ehr.NewNotifier(eventManager, messageBroker, messaging.Entity{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
 		if err != nil {
 			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
 		}
+		log.Ctx(ctx).Info().Msgf("TaskEngine: created EHR notifier for topic %s", config.TaskFiller.TaskAcceptedBundleTopic)
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 	return result, nil
@@ -155,6 +150,8 @@ type Service struct {
 	healthdataviewEndpointEnabled bool
 	notifier                      ehr.Notifier
 	eventManager                  events.Manager
+	sseService                    *sse.Service
+	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -169,7 +166,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return coolfhir.BadRequest("failed to decode bundle: %w", err)
 		}
 		if !coolfhir.IsSubscriptionNotification(&notification) {
-			return coolfhir.BadRequest("bundle type not supported: " + notification.Type.String())
+			return coolfhir.BadRequest("bundle type not supported: %s", notification.Type.String())
 		}
 		if err := s.handleNotification(httpRequest.Context(), (*coolfhir.SubscriptionNotification)(&notification)); err != nil {
 			return err
@@ -241,7 +238,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	proxyBasePath := basePath + "/cps/fhir"
-
+	// Allow the front-end to subscribe to specific Task updates via Server-Sent Events (SSE)
+	mux.HandleFunc("GET "+basePath+"/subscribe/fhir/Task/{id}", s.withSession(s.handleSubscribeToTask))
 	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
 
 		// Check if the user defined a remote CPS - otherwise it will be handled as a local CPS proxy request
@@ -330,6 +328,66 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	}
 }
 
+func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+	launchedTaskIdentifier := session.StringValues["taskIdentifier"]
+
+	if launchedTaskIdentifier == "" {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No taskIdentifier found in session"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+
+	sessionTaskIdentifier, err := coolfhir.TokenToIdentifier(launchedTaskIdentifier)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("Invalid taskIdentifier in session: %v", err), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+
+	if s.localCarePlanServiceUrl == nil {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No local CarePlanService configured - cannot verify Task identifiers"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+
+	//Ensure the sessions taskIdentifier matches the requested task
+	cpsClient, _, err := s.createFHIRClientForURL(request.Context(), s.localCarePlanServiceUrl)
+	if err != nil {
+		log.Ctx(request.Context()).Err(err).Msgf("Failed to create local CarePlanService FHIR client: %v", err)
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "Failed to create local SCP client", writer)
+		return
+	}
+
+	id := request.PathValue("id")
+	var task fhir.Task
+	err = cpsClient.ReadWithContext(request.Context(), fmt.Sprintf("Task/%s", id), &task)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+
+	//CPS Task found, make sure the identifier from the session exists on the Task
+	found := false
+	if task.Identifier != nil {
+		for _, identifier := range task.Identifier {
+			if identifier.Value != nil && *identifier.Value == *sessionTaskIdentifier.Value && *identifier.System == *sessionTaskIdentifier.System {
+				found = true
+				break
+			}
+		}
+	}
+
+	if !found {
+		coolfhir.WriteOperationOutcomeFromError(
+			request.Context(),
+			coolfhir.BadRequest("Task identifier does not match the taskIdentifier in the session"),
+			fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path),
+			writer,
+		)
+		return
+	}
+
+	// Subscribed task contains the taskIdentifier from the session, so we can subscribe to the task
+	s.sseService.ServeHTTP(fmt.Sprintf("Task/%s", id), writer, request)
+}
+
 // handleProxyExternalRequestToEHR handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
 // This is typically used by remote parties to retrieve patient data from the local EHR.
 func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, request *http.Request) error {
@@ -352,7 +410,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request *http.Request) error {
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) != 1 {
-		return coolfhir.BadRequest(fmt.Sprintf("%s header must only contain one value", carePlanURLHeaderKey))
+		return coolfhir.BadRequest("%s header must only contain one value", carePlanURLHeaderKey)
 	}
 	log.Debug().Msg("Handling BgZ FHIR API request carePlanURL: " + carePlanURLValue[0])
 
@@ -452,10 +510,10 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	// CarePlan should be provided in X-Scp-Context header
 	carePlanURLValue := request.Header[carePlanURLHeaderKey]
 	if len(carePlanURLValue) == 0 {
-		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header must be set", carePlanURLHeaderKey))
+		return nil, coolfhir.BadRequest("%s header must be set", carePlanURLHeaderKey)
 	}
 	if len(carePlanURLValue) > 1 {
-		return nil, coolfhir.BadRequest(fmt.Sprintf("%s header can't contain multiple values", carePlanURLHeaderKey))
+		return nil, coolfhir.BadRequest("%s header can't contain multiple values", carePlanURLHeaderKey)
 	}
 	carePlanURL := carePlanURLValue[0]
 
@@ -615,7 +673,6 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	if err != nil {
 		return err
 	}
-	var focusResource any
 	switch *focusReference.Type {
 	case "Task":
 		var task fhir.Task
@@ -623,9 +680,25 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		if err != nil {
 			return err
 		}
-		focusResource = task
+		//insert the meta.source - can be used to determine the X-Scp-Context
+		if task.Meta == nil {
+			task.Meta = &fhir.Meta{}
+		}
+
+		if task.Meta.Source != nil && task.Meta.Source != &resourceUrl {
+			log.Ctx(ctx).Warn().Msgf("Task (id=%s) already has a source (%s), overwriting it to (%s)", *task.Id, *task.Meta.Source, resourceUrl)
+		}
+
+		task.Meta.Source = &resourceUrl
+
 		// TODO: How to differentiate between create and update? (Currently we only use Create in CPS. There is code for Update but nothing calls it)
 		// TODO: Move this to a event.Handler implementation
+		err = s.publishTaskToSse(ctx, &task)
+		if err != nil {
+			//gracefully log the error, but continue processing the notification
+			log.Ctx(ctx).Err(err).Msgf("Failed to publish task (id=%s) to SSE", *task.Id)
+		}
+
 		err = s.handleTaskNotification(ctx, fhirClient, &task)
 		rejection := new(TaskRejection)
 		if errors.As(err, &rejection) || errors.As(err, rejection) {
@@ -636,21 +709,36 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		} else if err != nil {
 			return err
 		}
-	case "CarePlan":
-		var carePlan fhir.CarePlan
-		err = fhirClient.Read(*focusReference.Reference, &carePlan)
-		if err != nil {
-			return err
-		}
-		focusResource = carePlan
 	default:
 		log.Ctx(ctx).Debug().Msgf("No handler for notification of type %s, ignoring", *focusReference.Type)
 	}
-	// TODO: Not sure if we should return an error here
-	return s.eventManager.Notify(ctx, *focusReference.Type, events.Instance{
-		FHIRResource:       focusResource,
-		FHIRResourceSource: *focusReference.Reference,
-	})
+	return nil
+}
+
+func (s Service) publishTaskToSse(ctx context.Context, task *fhir.Task) error {
+	data, err := json.Marshal(task)
+	if err != nil {
+		return err
+	}
+
+	// Check if the Task is a subTask
+	var parentTaskReference string
+	if len(task.PartOf) > 0 {
+		for _, reference := range task.PartOf {
+			if reference.Reference != nil && strings.HasPrefix(*reference.Reference, "Task/") {
+				parentTaskReference = *reference.Reference
+				break
+			}
+		}
+	}
+
+	if parentTaskReference != "" {
+		s.sseService.Publish(ctx, parentTaskReference, string(data))
+	} else {
+		s.sseService.Publish(ctx, fmt.Sprintf("Task/%s", *task.Id), string(data))
+	}
+
+	return nil
 }
 
 func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {
@@ -662,7 +750,7 @@ func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task 
 	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
 }
 
-func (s Service) createFHIRClientForURL(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
+func (s Service) defaultCreateFHIRClientForURL(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
 	// We only have the FHIR base URL, we need to read the CapabilityStatement to find out the Authorization Server URL
 	identifier := fhir.Identifier{
 		System: to.Ptr("https://build.fhir.org/http.html#root"),
