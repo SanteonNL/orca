@@ -5,6 +5,7 @@ import { getBsn } from '@/utils/fhirUtils';
 
 export async function GET(req: NextRequest) {
     const name = req.nextUrl.searchParams.get('name');
+    const roles = req.nextUrl.searchParams.get('roles');
     const baseUrl = process.env[`${name}_CAREPLANSERVICE_URL`];
 
     if (!baseUrl) {
@@ -14,14 +15,19 @@ export async function GET(req: NextRequest) {
     }
 
     try {
+        let headers: Record<string, string> = {
+            Authorization: `Bearer ${process.env[`${name}_BEARER_TOKEN`] ?? ''}`,
+            'Content-Type': 'application/fhir+json',
+            'X-Cps-Url': baseUrl,
+        };
+        
+        if (roles) {
+          headers['Orca-Auth-Roles'] = roles;
+        }
 
         const resp = await fetch(`${process.env.ORCA_CPC_URL}/cps/fhir/CarePlan/_search`, {
             method: 'POST',
-            headers: {
-                Authorization: `Bearer ${process.env[`${name}_BEARER_TOKEN`] ?? ''}`,
-                'Content-Type': 'application/fhir+json',
-                'X-Cps-Url': baseUrl,
-            },
+            headers,
         });
 
         if(!resp.ok) {
