@@ -6,7 +6,7 @@ set -e
 # It takes a port to forward to the tunnel, and returns the tunnel URL
 # It kills the tunnel when this bash script exits
 function createTunnel() {
-  rm $1/data/tunnel.*
+  rm -f $1/data/tunnel.* 2>/dev/null || true
   local tunnelFile=$1/data/tunnel.id
   local tunnelPidFile=$1/data/tunnel.pid
   local tunnelPort=$2
