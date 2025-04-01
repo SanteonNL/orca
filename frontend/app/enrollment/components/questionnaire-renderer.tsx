@@ -31,20 +31,12 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prePopulated, setPrePopulated] = useState(false);
   const [initialized, setInitialized] = useState(false)
-  const [shouldScroll, setShouldScroll] = useState(false)
 
   const [, setPrevQuestionnaireResponse] = useState<QuestionnaireResponse>()
 
   const cpsClient = useCpsClient()
   const { task } = useTaskProgressStore()
   const router = useRouter()
-
-  useEffect(() => {
-    if (shouldScroll) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      setShouldScroll(false);
-    }
-  }, [shouldScroll]);
 
   useEffect(() => {
 
@@ -81,8 +73,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
     }
 
     setIsSubmitting(true)
-
-    setShouldScroll(true)
 
     const outputTask = { ...inputTask }
     const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire)
