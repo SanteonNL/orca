@@ -12,8 +12,6 @@ import (
 	"net/url"
 	"testing"
 
-	"github.com/SanteonNL/orca/orchestrator/messaging"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"

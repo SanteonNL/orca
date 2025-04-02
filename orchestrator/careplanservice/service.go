@@ -6,8 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/webhook"
-	events "github.com/SanteonNL/orca/orchestrator/events"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,6 +13,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/webhook"
+	events "github.com/SanteonNL/orca/orchestrator/events"
 
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
@@ -282,10 +283,10 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 	return handler(ctx, request, tx)
 }
 
-func (s *Service) handleUnmanagedOperation(request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	log.Ctx(request.Context).Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl)
+func (s *Service) handleUnmanagedOperation(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	log.Ctx(ctx).Warn().Msgf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl.String())
 
-	return nil, fmt.Errorf("unsupported operation %s %s", request.HttpMethod, request.ResourcePath)
+	return nil, fmt.Errorf("unsupported operation %s %s", request.HttpMethod, request.RequestUrl.String())
 }
 
 // extractResponseHeadersAndStatus extracts headers and status code from a FHIR response.
@@ -476,7 +477,7 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 		return s.handleCreateCondition
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-			return s.handleUnmanagedOperation(request, tx)
+			return s.handleUnmanagedOperation(ctx, request, tx)
 		}
 	}
 }
@@ -499,7 +500,7 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 		return s.handleUpdateCondition
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-			return s.handleUnmanagedOperation(request, tx)
+			return s.handleUnmanagedOperation(ctx, request, tx)
 		}
 	}
 }
@@ -524,7 +525,7 @@ func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHand
 		return s.handleReadServiceRequest
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-			return s.handleUnmanagedOperation(request, tx)
+			return s.handleUnmanagedOperation(ctx, request, tx)
 		}
 	}
 }
@@ -574,7 +575,7 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 		return s.handleSearchTask
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-			return s.handleUnmanagedOperation(request, tx)
+			return s.handleUnmanagedOperation(ctx, request, tx)
 		}
 	}
 }
@@ -745,7 +746,7 @@ func (s *Service) defaultHandlerProvider(method string, resourcePath string) fun
 		return s.handleRead(resourcePath)
 	}
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-		return s.handleUnmanagedOperation(request, tx)
+		return s.handleUnmanagedOperation(ctx, request, tx)
 	}
 }
 
@@ -917,17 +918,6 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 		return fmt.Errorf("batch reindex SearchParameter %s: %w", strings.Join(reindexURLs, ","), err)
 	}
 
-	return nil
-}
-
-// checkAllowUnmanagedOperations checks if unmanaged operations are allowed. It errors if they are not.
-func (s *Service) checkAllowUnmanagedOperations() error {
-	if !s.allowUnmanagedFHIROperations {
-		return &coolfhir.ErrorWithCode{
-			Message:    "FHIR operation not allowed",
-			StatusCode: http.StatusMethodNotAllowed,
-		}
-	}
 	return nil
 }
 
