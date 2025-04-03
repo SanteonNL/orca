@@ -39,11 +39,11 @@ mock_input(principal, participants, resource, roles) := {
 }
 
 test_allowed if {
-	fhirpolicy.allow with input as mock_input("11111111", ["11111111", "22222222"], {}, [])
+	policy.allow with input as mock_input("11111111", ["11111111", "22222222"], {}, [])
 }
 
 test_allowed_with_tag if {
-	fhirpolicy.allow with input as mock_input(
+	policy.allow with input as mock_input(
 		"11111111", ["11111111", "22222222"], {"meta": {"tags": [{
 			"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
 			"value": "MH",
@@ -53,7 +53,7 @@ test_allowed_with_tag if {
 }
 
 test_tag_not_allowed if {
-	not fhirpolicy.allow with input as mock_input(
+	not policy.allow with input as mock_input(
 		"11111111", ["11111111", "22222222"], {"meta": {"tags": [{
 			"system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
 			"value": "MH",
@@ -63,17 +63,17 @@ test_tag_not_allowed if {
 }
 
 test_not_in_careteam if {
-	not fhirpolicy.allow with input as mock_input("11111111", ["22222222"], {}, [])
+	not policy.allow with input as mock_input("11111111", ["22222222"], {}, [])
 }
 
 test_no_participants if {
-	not fhirpolicy.allow with input as mock_input("11111111", [], {}, [])
+	not policy.allow with input as mock_input("11111111", [], {}, [])
 }
 
 test_questionnaire if {
-	fhirpolicy.allow with input as {"method": "GET", "resource_type": "Questionnaire"}
+	policy.allow with input as {"method": "GET", "resource_type": "Questionnaire"}
 }
 
 test_post_denied if {
-	not fhirpolicy.allow with input as {"method": "POST"}
+	not policy.allow with input as {"method": "POST"}
 }

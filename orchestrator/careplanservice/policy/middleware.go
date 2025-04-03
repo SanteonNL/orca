@@ -261,6 +261,7 @@ func (m Middleware) Use(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		next(w, r)
+
 		return
 	}
 }
