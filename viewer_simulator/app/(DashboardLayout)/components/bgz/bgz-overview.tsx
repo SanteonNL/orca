@@ -3,9 +3,36 @@ import React from 'react';
 import useFetch from '@/app/useFetch';
 import CarePlanTable, { Row } from './bgz-careplan-table';
 
-export default function BgzOverview({ name }: { name: string }) {
+const buildUrl = (
+    base: string,
+    path: string,
+    params: Record<string, string>,
+) => {
+    let url = `${base}${path}?`;
+
+    for (const key in params) {
+        url += `${key}=${encodeURIComponent(params[key])}&`;
+    }
+
+    return url;
+};
+
+export default function BgzOverview({
+    name,
+    roles: roles = '',
+}: {
+    name: string;
+    roles: string;
+}) {
     const { loading, data: rows } = useFetch<Row[]>(
-        `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/bgz/careplans?name=${encodeURIComponent(name)}`,
+        buildUrl(
+            process.env.NEXT_PUBLIC_BASE_PATH || '',
+            '/api/bgz/careplans',
+            {
+                name,
+                role: roles,
+            },
+        ),
     );
 
     return (

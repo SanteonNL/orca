@@ -2,10 +2,11 @@ package profile
 
 import (
 	"context"
-	"github.com/SanteonNL/orca/orchestrator/lib/csd"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/csd"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 // FHIRNotificationURLEndpointName is the name of the endpoint in the CSD that contains the FHIR Notification URL.
@@ -18,7 +19,7 @@ type Provider interface {
 	// Authenticator returns a middleware http.HandlerFunc that authenticates the caller according to the profile's authentication method.
 	// It sets the authenticate user as auth.Principal in the request context.
 	// The resourceServerURL is the external base URL of the resource being accessed.
-	Authenticator(resourceServerURL *url.URL, fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request)
+	Authenticator(resourceServerURL *url.URL, next http.HandlerFunc) http.HandlerFunc
 	// HttpClient returns an HTTP Client that can be used to perform Shared Care Planning transactions at a Care Plan Contributor or Care Plan Service.
 	// The HTTP client handles acquiring the required authentication credentials (e.g. OAuth2 access tokens).
 	HttpClient(ctx context.Context, serverIdentity fhir.Identifier) (*http.Client, error)

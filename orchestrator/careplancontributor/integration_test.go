@@ -64,6 +64,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 				Profile: []string{coolfhir.SCPTaskProfile},
 			},
 			For: &fhir.Reference{
+				Type: to.Ptr("Patient"),
 				Identifier: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 					Value:  to.Ptr("1333333337"),

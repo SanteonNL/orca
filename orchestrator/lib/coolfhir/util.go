@@ -207,6 +207,10 @@ func IsLogicalReference(reference *fhir.Reference) bool {
 	return reference != nil && reference.Type != nil && IsLogicalIdentifier(reference.Identifier)
 }
 
+func IsLiteralReference(reference *fhir.Reference) bool {
+	return reference != nil && reference.Reference != nil && strings.Contains(*reference.Reference, "/")
+}
+
 func IsLogicalIdentifier(identifier *fhir.Identifier) bool {
 	return identifier != nil && identifier.System != nil && identifier.Value != nil
 }

@@ -28,6 +28,10 @@ func (s *Service) handleGetCarePlan(ctx context.Context, id string, headers *fhi
 		return nil, err
 	}
 
+	if err := coolfhir.ResolveParticipants(ctx, s.fhirClient, careTeam); err != nil {
+		return nil, err
+	}
+
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
