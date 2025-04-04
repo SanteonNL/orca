@@ -8,13 +8,18 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-type findSubjectFunc func(message json.RawMessage) (*fhir.Reference, error)
+type findSubjectFunc func(message any) (*fhir.Reference, error)
 
 func wrapUnmarshal[T any](f func(resource T) *fhir.Reference) findSubjectFunc {
-	return func(message json.RawMessage) (*fhir.Reference, error) {
+	return func(anyResource any) (*fhir.Reference, error) {
 		var resource T
 
-		if err := json.Unmarshal(message, &resource); err != nil {
+		data, err := json.Marshal(anyResource)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal resource: %w", err)
+		}
+
+		if err := json.Unmarshal(data, &resource); err != nil {
 			return nil, fmt.Errorf("failed to decode resource: %w", err)
 		}
 
@@ -46,7 +51,7 @@ var findSubjectFuncs = map[string]findSubjectFunc{
 	}),
 }
 
-func findSubject(resource json.RawMessage, resourceType string) (*fhir.Reference, error) {
+func findSubject(resource any, resourceType string) (*fhir.Reference, error) {
 	findSubject, ok := findSubjectFuncs[resourceType]
 	if !ok {
 		return nil, fmt.Errorf("unsupported resource type: %s", resourceType)

@@ -53,7 +53,12 @@ default allow := false
 
 allow if {
 	input.method == "GET"
-	input.resource_type == "Questionnaire"
+	input.resource.resourceType == "Questionnaire"
+}
+
+allow if {
+	input.method == "GET"
+	input.resource.resourceType == "QuestionnaireResponse"
 }
 
 allow if {
