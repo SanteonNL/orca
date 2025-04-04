@@ -49,7 +49,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 		return nil, err
 	}
 
-	agent, err := policy.NewAgent(ctx, policy.BuiltinModule)
+	agent, err := policy.NewAgent(ctx, policy.BuiltinModule, fhirClient)
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +69,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 		fhirClient:                   fhirClient,
 		subscriptionManager:          subscriptionMgr,
 		eventManager:                 eventManager,
-		policyMiddleware:             policy.NewMiddleware(fhirClient, agent),
+		policyAgent:                  agent,
 		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
 		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
 	}
@@ -104,8 +104,10 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 	return &s, nil
 }
 
-type Middleware interface {
-	Use(handler http.HandlerFunc) http.HandlerFunc
+type PolicyAgent interface {
+	Allow(ctx context.Context, context *policy.Context) error
+	Preflight(resourceType, id string, r *http.Request) (*policy.Preflight, error)
+	PrepareContext(ctx context.Context, cache policy.SearchCache, preflight *policy.Preflight, resource any) (*policy.Context, error)
 }
 
 type Service struct {
@@ -118,7 +120,7 @@ type Service struct {
 	eventManager                 events.Manager
 	maxReadBodySize              int
 	proxy                        coolfhir.HttpProxy
-	policyMiddleware             Middleware
+	policyAgent                  PolicyAgent
 	allowUnmanagedFHIROperations bool
 	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	pipeline                     pipeline.Instance
@@ -184,9 +186,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	useAuth := func(next http.HandlerFunc) http.HandlerFunc {
 		return s.profile.Authenticator(baseUrl, next)
 	}
-	usePolicy := func(next http.HandlerFunc) http.HandlerFunc {
-		return useAuth(s.policyMiddleware.Use(next))
-	}
 
 	// Binding to actual routing
 	// Metadata
@@ -212,7 +211,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	}))
 	// Searching for a resource via POST
-	mux.HandleFunc("POST "+basePath+"/{type}/_search", usePolicy(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/{type}/_search", useAuth(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleSearch(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
 	}))
@@ -236,7 +235,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
 	}))
 	// Handle reading a specific resource instance
-	mux.HandleFunc("GET "+basePath+"/{type}/{id}", usePolicy(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/{type}/{id}", useAuth(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
@@ -450,6 +449,28 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		return
 	}
 
+	preflight, err := s.policyAgent.Preflight(resourceType, resourceId, httpRequest)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
+	context, err := s.policyAgent.PrepareContext(httpRequest.Context(), policy.NewSearchCache(), preflight, resource)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
+	if err = s.policyAgent.Allow(httpRequest.Context(), context); err != nil {
+		if errors.Is(err, policy.ErrAccessDenied) {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.NewErrorWithCode(err.Error(), http.StatusForbidden), operationName, httpResponse)
+			return
+		}
+
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
 	localIdentity, err := s.getLocalIdentity()
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
@@ -605,18 +626,49 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 		return
 	}
 
+	preflight, err := s.policyAgent.Preflight(resourceType, "", httpRequest)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		return
+	}
+
+	cache := policy.NewSearchCache()
+
+	var entries []fhir.BundleEntry
+
+	for _, entry := range bundle.Entry {
+		if entry.Resource == nil {
+			continue
+		}
+
+		context, err := s.policyAgent.PrepareContext(httpRequest.Context(), cache, preflight, entry.Resource)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+			return
+		}
+
+		err = s.policyAgent.Allow(httpRequest.Context(), context)
+		if err != nil {
+			if errors.Is(err, policy.ErrAccessDenied) {
+				continue
+			}
+
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+			return
+		}
+	}
+
+	bundle.Entry = entries
+	bundle.Total = to.Ptr(len(entries))
+
 	// Create audit events for each resource in the bundle
-	if bundle != nil && len(bundle.Entry) > 0 {
+	if len(bundle.Entry) > 0 {
 		log.Ctx(httpRequest.Context()).Debug().
 			Int("resource_count", len(bundle.Entry)).
 			Str("resource_type", resourceType).
 			Msg("Creating audit events for resources in bundle")
 
 		for _, entry := range bundle.Entry {
-			if entry.Resource == nil {
-				continue
-			}
-
 			// Unmarshal the raw resource to access its properties
 			var resource struct {
 				ResourceType string `json:"resourceType"`

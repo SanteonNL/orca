@@ -1102,7 +1102,7 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint, cpc2Notificati
 	require.NoError(t, err)
 
 	if mockPolicyMiddleware {
-		service.policyMiddleware = NewMockPolicyMiddleware()
+		service.policyAgent = NewMockPolicyMiddleware()
 	}
 
 	serverMux := http.NewServeMux()

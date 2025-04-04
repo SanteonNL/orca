@@ -6,7 +6,6 @@ import (
 	"net/url"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
@@ -35,30 +34,6 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 		}
 	}
 
-	principal, err := auth.PrincipalFromContext(ctx)
-	if err != nil {
-		return nil, err
-	}
-	// Check if the requester is either the task Owner or Requester, if not, they must be a member of the CareTeam
-	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
-	if !(isOwner || isRequester) {
-		var carePlan fhir.CarePlan
-
-		if err := s.fhirClient.ReadWithContext(ctx, *task.BasedOn[0].Reference, &carePlan); err != nil {
-			return nil, err
-		}
-
-		careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
-		if err != nil {
-			return nil, err
-		}
-
-		err = validatePrincipalInCareTeam(principal, careTeam)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return &task, nil
 }
 
@@ -66,57 +41,10 @@ func (s *Service) handleGetTask(ctx context.Context, id string, headers *fhircli
 // if the requester is a participant of one of the returned CareTeams, return the whole bundle, else error
 // Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleSearchTask(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers) (*fhir.Bundle, error) {
-	// Verify requester is authenticated
-	principal, err := auth.PrincipalFromContext(ctx)
+	_, bundle, err := handleSearchResource[fhir.Task](ctx, s, "Task", queryParams, headers)
 	if err != nil {
 		return nil, err
 	}
 
-	tasks, bundle, err := handleSearchResource[fhir.Task](ctx, s, "Task", queryParams, headers)
-	if err != nil {
-		return nil, err
-	}
-	if len(tasks) == 0 {
-		// If there are no tasks in the bundle there is no point in doing validation, return empty bundle to user
-		return &fhir.Bundle{Entry: []fhir.BundleEntry{}}, nil
-	}
-
-	// It is possible that we have tasks based on different CarePlans. Create distinct list of References to be used for checking participant
-	refs := make(map[string]bool)
-	for _, task := range tasks {
-		for _, bo := range task.BasedOn {
-			if bo.Reference == nil || refs[*bo.Reference] {
-				continue
-			}
-			refs[*bo.Reference] = true
-		}
-	}
-
-	taskRefs := make([]string, 0)
-	for ref := range refs {
-		for _, task := range tasks {
-			isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
-			if !(isOwner || isRequester) {
-				var carePlan fhir.CarePlan
-
-				if err := s.fhirClient.ReadWithContext(ctx, ref, &carePlan); err != nil {
-					continue
-				}
-
-				careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
-				if err != nil {
-					continue
-				}
-
-				err = validatePrincipalInCareTeam(principal, careTeam)
-				if err != nil {
-					continue
-				}
-			}
-			taskRefs = append(taskRefs, "Task/"+*task.Id)
-		}
-	}
-	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"Task"}, taskRefs)
-
-	return &retBundle, nil
+	return bundle, nil
 }
