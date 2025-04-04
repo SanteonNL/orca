@@ -212,10 +212,10 @@ func Test_handleCreatePatient(t *testing.T) {
 
 			// Process result
 			require.NotNil(t, result)
-			response, notifications, err := result(returnedBundle)
+			responses, notifications, err := result(returnedBundle)
 			require.NoError(t, err)
-			require.Equal(t, *returnedBundle.Entry[0].Response.Location, *response.Response.Location)
-			require.Equal(t, returnedBundle.Entry[0].Response.Status, response.Response.Status)
+			require.Equal(t, *returnedBundle.Entry[0].Response.Location, *responses[0].Response.Location)
+			require.Equal(t, returnedBundle.Entry[0].Response.Status, responses[0].Response.Status)
 			require.Len(t, notifications, 1)
 		})
 	}

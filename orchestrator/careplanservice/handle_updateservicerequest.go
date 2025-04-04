@@ -76,7 +76,7 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 		Action:   fhir.AuditEventActionU,
 	}))
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var updatedServiceRequest fhir.ServiceRequest
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &serviceRequestBundleEntry, &txResult.Entry[idx], &updatedServiceRequest)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
@@ -87,6 +87,6 @@ func (s *Service) handleUpdateServiceRequest(ctx context.Context, request FHIRHa
 			return nil, nil, err
 		}
 
-		return result, []any{&updatedServiceRequest}, nil
+		return []*fhir.BundleEntry{result}, []any{&updatedServiceRequest}, nil
 	}, nil
 }

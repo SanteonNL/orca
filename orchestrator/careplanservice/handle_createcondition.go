@@ -63,13 +63,13 @@ func (s *Service) handleCreateCondition(ctx context.Context, request FHIRHandler
 		}))
 	}
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var createdCondition fhir.Condition
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdCondition)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process Condition creation result: %w", err)
 		}
 
-		return result, []any{&createdCondition}, nil
+		return []*fhir.BundleEntry{result}, []any{&createdCondition}, nil
 	}, nil
 }

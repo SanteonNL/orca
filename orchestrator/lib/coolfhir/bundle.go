@@ -118,11 +118,12 @@ func WithFullUrl(fullUrl string) BundleEntryPreOption {
 
 // AuditEventInfo contains information needed to create an AuditEvent
 type AuditEventInfo struct {
-	ActingAgent *fhir.Reference       // Who initiated the action, the acting agent
-	Observer    fhir.Identifier       // Who observed the action, the local identity
-	Action      fhir.AuditEventAction // What action was performed (e.g., "create", "update")
-	Metadata    map[string]string     // Additional metadata for the audit event
-	QueryParams url.Values            // Query parameters for the audit event
+	ActingAgent      *fhir.Reference         // Who initiated the action, the acting agent
+	Observer         fhir.Identifier         // Who observed the action, the local identity
+	Action           fhir.AuditEventAction   // What action was performed (e.g., "create", "update")
+	Metadata         map[string]string       // Additional metadata for the audit event
+	QueryParams      url.Values              // Query parameters for the audit event
+	AdditionalEntity []fhir.AuditEventEntity // Additional entity for the audit event (i.e. query parameters)
 }
 
 var nowFunc = time.Now
@@ -228,6 +229,8 @@ func WithAuditEvent(ctx context.Context, t *BundleBuilder, info AuditEventInfo) 
 				},
 			},
 		}
+
+		auditEvent.Entity = append(auditEvent.Entity, info.AdditionalEntity...)
 
 		if info.QueryParams != nil {
 			queryEntity := fhir.AuditEventEntity{

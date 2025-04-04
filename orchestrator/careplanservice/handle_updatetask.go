@@ -133,7 +133,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, fmt.Errorf("update CareTeam: %w", err)
 	}
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var updatedTask fhir.Task
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[idx], &updatedTask)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
@@ -149,7 +149,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		if err := coolfhir.ResourceInBundle(txResult, coolfhir.EntryIsOfType("CareTeam"), &updatedCareTeam); err == nil {
 			notifications = append(notifications, &updatedCareTeam)
 		}
-		return result, notifications, nil
+		return []*fhir.BundleEntry{result}, notifications, nil
 	}, nil
 }
 
