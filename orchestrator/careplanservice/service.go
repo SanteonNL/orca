@@ -658,6 +658,8 @@ func (s *Service) handleSearch(httpRequest *http.Request, httpResponse http.Resp
 			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 			return
 		}
+
+		entries = append(entries, entry)
 	}
 
 	bundle.Entry = entries

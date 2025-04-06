@@ -49,6 +49,10 @@ is_careteam_participant if {
 	identifier_matches(participant.member.identifier, input.principal)
 }
 
+is_get_post if {
+	input.method in ["GET", "POST"]
+}
+
 default allow := false
 
 allow if {
@@ -62,13 +66,13 @@ allow if {
 }
 
 allow if {
-	input.method == "GET"
+	is_get_post
 	is_careteam_participant
 	not contains_tags
 }
 
 allow if {
-	input.method == "GET"
+	is_get_post
 	is_careteam_participant
 	contains_tags
 
@@ -80,9 +84,4 @@ allow if {
 	every tag in extract_tags(input.resource) {
 		tag in allowed_tags
 	}
-}
-
-allow if {
-	input.method == "POST"
-	is_careteam_participant
 }

@@ -71,7 +71,7 @@ test_no_participants if {
 }
 
 test_questionnaire if {
-	policy.allow with input as {"method": "GET", "resource_type": "Questionnaire"}
+	policy.allow with input as {"method": "GET", "resource": {"resourceType": "Questionnaire"}}
 }
 
 test_post_denied if {

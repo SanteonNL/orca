@@ -11,12 +11,18 @@ import (
 type findSubjectFunc func(message any) (*fhir.Reference, error)
 
 func wrapUnmarshal[T any](f func(resource T) *fhir.Reference) findSubjectFunc {
-	return func(anyResource any) (*fhir.Reference, error) {
-		var resource T
+	return func(input any) (*fhir.Reference, error) {
+		var (
+			resource T
+			err      error
+		)
 
-		data, err := json.Marshal(anyResource)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal resource: %w", err)
+		data, ok := input.(json.RawMessage)
+		if !ok {
+			data, err = json.Marshal(input)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal resource: %w", err)
+			}
 		}
 
 		if err := json.Unmarshal(data, &resource); err != nil {
