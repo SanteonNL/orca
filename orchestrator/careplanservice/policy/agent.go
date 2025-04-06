@@ -129,13 +129,20 @@ func (a Agent) Preflight(resourceType, id string, r *http.Request) (*Preflight, 
 		return nil, fmt.Errorf("failed to extract principal from context: %w", err)
 	}
 
+	var roles []string
+
+	rolesHeader := r.Header.Get("Orca-Auth-Roles")
+	if rolesHeader != "" {
+		roles = strings.Split(rolesHeader, ",")
+	}
+
 	return &Preflight{
 		ResourceId:   id,
 		ResourceType: resourceType,
 		Query:        r.URL.Query(),
 		Principal:    principal.Organization.Identifier[0],
 		Method:       r.Method,
-		Roles:        strings.Split(r.Header.Get("Orca-Auth-Roles"), ","),
+		Roles:        roles,
 	}, nil
 }
 

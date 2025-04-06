@@ -48,7 +48,7 @@ func Test_Integration(t *testing.T) {
 	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
 		cpc2Notifications = append(cpc2Notifications, n)
 	})
-	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, false)
+	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint)
 	// subTest logs the message and resets the notifications
 	subTest := func(t *testing.T, msg string) {
 		t.Log(msg)
@@ -1078,7 +1078,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	})
 }
 
-func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint, cpc2NotificationEndpoint string, mockPolicyMiddleware bool) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
+func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint, cpc2NotificationEndpoint string) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
 	fhirBaseURL := test.SetupHAPI(t)
 	activeProfile := profile.TestProfile{
 		Principal: auth.TestPrincipal1,
@@ -1100,10 +1100,6 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint, cpc2Notificati
 	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
-
-	if mockPolicyMiddleware {
-		service.policyAgent = NewMockPolicyMiddleware()
-	}
 
 	serverMux := http.NewServeMux()
 	httpService := httptest.NewServer(serverMux)

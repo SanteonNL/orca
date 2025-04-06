@@ -77,7 +77,6 @@ func TestService_Proxy(t *testing.T) {
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
-	service.policyAgent = NewMockPolicyMiddleware()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
@@ -152,7 +151,6 @@ func TestService_Proxy(t *testing.T) {
 		}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 		require.NoError(t, err)
 		frontServerMux := http.NewServeMux()
-		service.policyAgent = NewMockPolicyMiddleware()
 		service.RegisterHandlers(frontServerMux)
 		frontServer := httptest.NewServer(frontServerMux)
 
@@ -213,7 +211,6 @@ func TestService_Proxy_AllowUnmanagedOperations(t *testing.T) {
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
-	service.policyAgent = NewMockPolicyMiddleware()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
@@ -286,7 +283,6 @@ func TestService_ErrorHandling(t *testing.T) {
 		orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
-	service.policyAgent = NewMockPolicyMiddleware()
 	service.RegisterHandlers(fhirServerMux)
 	server := httptest.NewServer(fhirServerMux)
 
@@ -549,7 +545,7 @@ func TestService_Handle(t *testing.T) {
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
-	service.policyAgent = NewMockPolicyMiddleware()
+
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 

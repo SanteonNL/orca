@@ -20,7 +20,7 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	// Setup test clients and service
 	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
 	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
-	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, true)
+	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint)
 
 	// Track all expected audit events
 	var expectedAuditEvents []ExpectedAuditEvent

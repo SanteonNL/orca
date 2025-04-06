@@ -104,6 +104,8 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 	return &s, nil
 }
 
+//go:generate mockgen -destination=./policy_agent_mock.go -package=careplanservice -source=service.go PolicyAgent
+
 type PolicyAgent interface {
 	Allow(ctx context.Context, context *policy.Context) error
 	Preflight(resourceType, id string, r *http.Request) (*policy.Preflight, error)
