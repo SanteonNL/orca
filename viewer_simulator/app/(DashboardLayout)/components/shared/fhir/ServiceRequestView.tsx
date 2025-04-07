@@ -2,19 +2,20 @@ import React from 'react';
 import { Card, CardContent, Typography, List, ListItem, ListItemText } from '@mui/material';
 import useBgzStore from '@/store/bgz-store';
 
-export const ProcedureRequestView = () => {
-    const { procedureRequests } = useBgzStore();
+export const ServiceRequestView = () => {
+    const { serviceRequests } = useBgzStore();
     return (
         <Card>
             <CardContent>
                 <Typography variant="h2" component="h2" gutterBottom>
-                    Procedureverzoeken
+                    Serviceverzoeken
                 </Typography>
                 <List>
-                    {procedureRequests.map((request, index) => (
+                    {serviceRequests.map((request, index) => (
                         <ListItem key={request.id || index}>
                             <ListItemText
-                                primary={`Procedureverzoek ${index + 1}`}
+                                disableTypography={true}
+                                primary={`Serviceverzoek ${index + 1}`}
                                 secondary={
                                     <>
                                         <Typography component="p" variant="body1" color="text.primary">
@@ -33,13 +34,13 @@ export const ProcedureRequestView = () => {
                                             <strong>Patiënt:</strong> {request.subject?.display}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
-                                            <strong>Uitvoerder:</strong> {request.performer?.display}
+                                            <strong>Uitvoerder:</strong> {request.performer?.[0]?.display}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
                                             <strong>Lichaamsdeel:</strong> {request.bodySite?.[0]?.text}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
-                                            <strong>Aanvrager:</strong> {request.requester?.agent?.display}
+                                            <strong>Aanvrager:</strong> {request.requester?.display}
                                         </Typography>
                                     </>
                                 }

@@ -34,10 +34,7 @@ export const ConsentView = () => {
                       <strong>Behandeling toegestaan:</strong> {consent.modifierExtension?.find(ext => ext.url === 'http://nictiz.nl/fhir/StructureDefinition/zib-TreatmentDirective-TreatmentPermitted')?.valueCodeableConcept?.text || 'N/A'}
                     </Typography>
                     <Typography variant="body1" component="p" color="text.primary">
-                      <strong>Beperkingen:</strong> {consent.except?.[0]?.extension?.find(ext => ext.url === 'http://nictiz.nl/fhir/StructureDefinition/zib-TreatmentDirective-Restrictions')?.valueString || 'N/A'}
-                    </Typography>
-                    <Typography variant="body1" component="p" color="text.primary">
-                      <strong>Startdatum:</strong> {consent.period?.start ? new Date(consent.period?.start).toLocaleString('nl-NL') : 'N/A'}
+                      <strong>Startdatum:</strong> {consent.dateTime || 'N/A'}
                     </Typography>
                   </>
                 }

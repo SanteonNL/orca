@@ -30,7 +30,7 @@ export const EncounterView = () => {
                                             <strong>Periode:</strong> {encounter.period?.start ? new Date(encounter.period?.start).toLocaleDateString('nl-NL') : 'N/A'} - {encounter.period?.end ? new Date(encounter.period?.end).toLocaleDateString('nl-NL') : 'Lopend'}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
-                                            <strong>Reden:</strong> {encounter.reason?.[0]?.text || 'N/A'}
+                                            <strong>Reden:</strong> {encounter.reasonCode?.[0]?.text || 'N/A'}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
                                             <strong>Zorgverlener:</strong> {encounter.serviceProvider?.display || 'N/A'}

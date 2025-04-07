@@ -22,7 +22,7 @@ export const DeviceRequestView = () => {
                                             <strong>Status:</strong> {request.status} ({request._status?.extension?.[0]?.valueCodeableConcept?.text})
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
-                                            <strong>Intentie:</strong> {request.intent.text}
+                                            <strong>Intentie:</strong> {request.intent}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
                                             <strong>Prioriteit:</strong> {request.priority}

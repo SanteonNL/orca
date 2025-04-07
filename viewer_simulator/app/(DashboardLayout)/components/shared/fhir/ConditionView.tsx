@@ -9,6 +9,7 @@ interface ConditionViewProps {
 
 export const ConditionView = () => {
   const { conditions } = useBgzStore();
+  console.log(conditions)
   return (
     <Card>
       <CardHeader title="Condition" />
@@ -21,16 +22,17 @@ export const ConditionView = () => {
             <ListItem key={index}>
               <ListItemText
                 primary={condition.code?.text || `Condition ${index + 1}`}
+                disableTypography={true}
                 secondary={
                   <>
                     <Typography variant="body1" component="p" color="text.primary">
                       <strong>Onderwerp:</strong> {condition.subject?.display || 'Onbekend'}
                     </Typography>
                     <Typography variant="body1" component="p" color="text.primary">
-                      <strong>Klinische status:</strong> {condition.clinicalStatus || 'Onbekend'}
+                      <strong>Klinische status:</strong> {condition.clinicalStatus?.text || 'Onbekend'}
                     </Typography>
                     <Typography variant="body1" component="p" color="text.primary">
-                      <strong>Verificatiestatus:</strong> {condition.verificationStatus || 'Onbekend'}
+                      <strong>Verificatiestatus:</strong> {condition.verificationStatus?.text || 'Onbekend'}
                     </Typography>
                     <Typography variant="body1" component="p" color="text.primary">
                       <strong>Categorie:</strong> {condition.category?.[0]?.text || 'Onbekend'}

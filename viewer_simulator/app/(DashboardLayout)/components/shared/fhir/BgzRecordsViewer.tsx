@@ -12,11 +12,10 @@ import { ProcedureView } from './ProcedureView'
 import { ConditionView } from './ConditionView'
 import { ConsentView } from './ConsentView'
 import { EncounterView } from './EncounterView'
-import { ProcedureRequestView } from './ProcedureRequestView'
+import { ServiceRequestView } from './ServiceRequestView'
 import { DeviceUseStatementView } from './DeviceUseStatementView'
 import { MedicationRequestView } from './MedicationRequestView'
 import { CoverageView } from './CoverageView'
-import useBgzStore from '@/store/bgz-store'
 
 interface TabPanelProps {
     children?: React.ReactNode;
@@ -70,7 +69,7 @@ export default function BgzRecordsViewer() {
                     <Tab label="Conditions" {...a11yProps(9)} />
                     <Tab label="Consents" {...a11yProps(10)} />
                     <Tab label="Encounters" {...a11yProps(11)} />
-                    <Tab label="Procedure Requests" {...a11yProps(12)} />
+                    <Tab label="Service Requests" {...a11yProps(12)} />
                     <Tab label="Device Use Statements" {...a11yProps(13)} />
                     <Tab label="Medication Requests" {...a11yProps(14)} />
                     <Tab label="Coverages" {...a11yProps(15)} />
@@ -113,7 +112,7 @@ export default function BgzRecordsViewer() {
                 <EncounterView />
             </CustomTabPanel>
             <CustomTabPanel value={value} index={12}>
-                <ProcedureRequestView />
+                <ServiceRequestView />
             </CustomTabPanel>
             <CustomTabPanel value={value} index={13}>
                 <DeviceUseStatementView />

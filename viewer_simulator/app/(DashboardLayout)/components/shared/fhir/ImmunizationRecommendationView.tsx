@@ -20,10 +20,7 @@ export const ImmunizationRecommendationView = () => {
                         <CardHeader title={`Recommendation ${recIndex + 1}`} />
                         <CardContent>
                             <Typography component="p" variant="body1" color="text.primary">
-                                <strong>Date:</strong> {rec.date || 'N/A'}
-                            </Typography>
-                            <Typography component="p" variant="body1" color="text.primary">
-                                <strong>Vaccine:</strong> {rec.vaccineCode?.text}
+                                <strong>Vaccine:</strong> {rec.vaccineCode?.[0]?.text}
                             </Typography>
                             <Typography component="p" variant="body1" color="text.primary">
                                 <strong>Forecast Status:</strong> {rec.forecastStatus.text}

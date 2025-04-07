@@ -36,7 +36,7 @@ export const MedicationRequestView = () => {
                                             <strong>Stop type:</strong> {request.modifierExtension?.find(ext => ext.url === 'http://nictiz.nl/fhir/StructureDefinition/zib-Medication-StopType')?.valueCodeableConcept?.text}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
-                                            <strong>Requester:</strong> {request.requester?.agent?.display}
+                                            <strong>Requester:</strong> {request.requester?.display}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
                                             <strong>Reden:</strong> {request.reasonReference?.map(reason => reason.display).join(', ')}
@@ -45,7 +45,7 @@ export const MedicationRequestView = () => {
                                             <strong>Dosering:</strong> {request.dosageInstruction?.map(dosage => (
                                                 <div key={dosage.sequence} style={{ marginLeft: 25 }}>
                                                     <strong>Route:</strong> {dosage.route?.text} <br />
-                                                    <strong>Hoeveelheid:</strong> {dosage.doseQuantity?.value} {dosage.doseQuantity?.unit} <br />
+                                                    <strong>Hoeveelheid:</strong> {dosage.doseAndRate?.[0]?.doseQuantity?.value} {dosage.doseAndRate?.[0]?.doseQuantity?.unit} <br />
                                                     <strong>Frequentie:</strong> {dosage.timing?.repeat?.frequency} keer per {dosage.timing?.repeat?.period} {dosage.timing?.repeat?.periodUnit} <br />
                                                     <strong>Extra instructies:</strong> {dosage.additionalInstruction?.map(instr => instr.text).join(', ')}
                                                 </div>

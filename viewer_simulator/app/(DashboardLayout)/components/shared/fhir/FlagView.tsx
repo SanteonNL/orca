@@ -21,7 +21,7 @@ export const FlagView = () => {
                                             <strong>Status:</strong> {flag.status}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
-                                            <strong>Categorie:</strong> {flag.category?.text}
+                                            <strong>Categorie:</strong> {flag.category?.[0]?.text}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
                                             <strong>Code:</strong> {flag.code?.text}

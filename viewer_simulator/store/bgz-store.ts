@@ -1,5 +1,21 @@
-import { ProcedureRequest } from 'fhir/r3';
-import { DeviceUseStatement, Condition, Consent, Coverage, Encounter, Flag, Immunization, MedicationRequest, NutritionOrder, Observation, Patient, Procedure, ImmunizationRecommendation, Appointment, DeviceRequest } from 'fhir/r3';
+import {
+    ServiceRequest,
+    DeviceUseStatement,
+    Condition,
+    Consent,
+    Coverage,
+    Encounter,
+    Flag,
+    Immunization,
+    MedicationRequest,
+    NutritionOrder,
+    Observation,
+    Patient,
+    Procedure,
+    ImmunizationRecommendation,
+    Appointment,
+    DeviceRequest,
+} from 'fhir/r4';
 import { create } from 'zustand';
 
 interface BgzState {
@@ -18,7 +34,7 @@ interface BgzState {
     medicationRequests: MedicationRequest[];
     nutritionOrders: NutritionOrder[];
     procedures: Procedure[];
-    procedureRequests: ProcedureRequest[]; //TODO: Remove? STU3?
+    serviceRequests: ServiceRequest[]; //TODO: Remove? STU3?
     loaded: boolean;
     addBgzData: (data: Partial<BgzState>) => void;
     setBgzData: (data: BgzState) => void;
@@ -44,32 +60,33 @@ const useBgzStore = create<BgzState>((set) => ({
     medicationRequests: [],
     nutritionOrders: [],
     procedures: [],
-    procedureRequests: [],
+    serviceRequests: [],
     loaded: false,
     addBgzData: (data) => {
-        set((state) => ({ ...state, ...data }))
+        set((state) => ({ ...state, ...data }));
     },
     setBgzData: (data) => set(data),
     setLoaded: (loaded) => set({ loaded }),
-    clearBgzData: () => set({
-        patient: undefined,
-        appointments: [],
-        conditions: [],
-        coverages: [],
-        consents: [],
-        observations: [],
-        immunizations: [],
-        immunizationRecommendations: [],
-        deviceRequests: [],
-        deviceUseStatements: [],
-        encounters: [],
-        flags: [],
-        medicationRequests: [],
-        nutritionOrders: [],
-        procedures: [],
-        procedureRequests: [],
-        loaded: false,
-    }),
+    clearBgzData: () =>
+        set({
+            patient: undefined,
+            appointments: [],
+            conditions: [],
+            coverages: [],
+            consents: [],
+            observations: [],
+            immunizations: [],
+            immunizationRecommendations: [],
+            deviceRequests: [],
+            deviceUseStatements: [],
+            encounters: [],
+            flags: [],
+            medicationRequests: [],
+            nutritionOrders: [],
+            procedures: [],
+            serviceRequests: [],
+            loaded: false,
+        }),
 }));
 
 export default useBgzStore;

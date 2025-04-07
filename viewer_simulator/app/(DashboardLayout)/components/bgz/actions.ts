@@ -1,5 +1,6 @@
 'use server';
 import {
+    CarePlan,
     Appointment,
     Bundle,
     Condition,
@@ -16,9 +17,8 @@ import {
     Observation,
     Patient,
     Procedure,
-    ProcedureRequest,
-} from 'fhir/r3';
-import { CarePlan, CareTeam } from 'fhir/r4';
+    ServiceRequest,
+} from 'fhir/r4';
 
 export async function getBgzData(name: string, carePlan: CarePlan) {
     const [
@@ -37,7 +37,7 @@ export async function getBgzData(name: string, carePlan: CarePlan) {
         medicationRequests,
         nutritionOrders,
         procedures,
-        procedureRequests,
+        serviceRequests,
     ] = await Promise.all(
         [
             ['Appointment', 'status=booked,pending,proposed'],
@@ -61,7 +61,7 @@ export async function getBgzData(name: string, carePlan: CarePlan) {
             ],
             ['NutritionOrder', ''],
             ['Procedure', 'category=http://snomed.info/sct%7C387713003'],
-            ['ProcedureRequest', 'status=active'],
+            ['ServiceRequest', 'status=active'],
         ].map(([resourceType, query]) =>
             fetchBgzData(name, resourceType, query, carePlan),
         ),
@@ -85,7 +85,7 @@ export async function getBgzData(name: string, carePlan: CarePlan) {
         medicationRequests: medicationRequests as MedicationRequest[],
         nutritionOrders: nutritionOrders as NutritionOrder[],
         procedures: procedures as Procedure[],
-        procedureRequests: procedureRequests as ProcedureRequest[],
+        serviceRequests: serviceRequests as ServiceRequest[],
     };
 }
 

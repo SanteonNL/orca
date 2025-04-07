@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Patient, Practitioner, PractitionerRole } from 'fhir/r4';
+import { Address } from 'fhir/r4';
 import {
     Avatar,
     Box,
@@ -12,7 +12,7 @@ import {
     ListItemText,
     Paper,
     useTheme,
-    styled
+    styled,
 } from '@mui/material';
 import useBgzStore from '@/store/bgz-store';
 
@@ -61,16 +61,18 @@ const TabPanel = (props: TabPanelProps) => {
             aria-labelledby={`patient-tab-${index}`}
             {...other}
         >
-            {value === index && (
-                <Box sx={{ p: 3 }}>
-                    {children}
-                </Box>
-            )}
+            {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
         </div>
     );
 };
 
-const DataItem = ({ label, value }: { label: string; value: string | undefined }) => (
+const DataItem = ({
+    label,
+    value,
+}: {
+    label: string;
+    value: string | undefined;
+}) => (
     <ListItem>
         <ListItemText
             primary={label}
@@ -111,7 +113,7 @@ export const PatientView = () => {
         return `${name.given?.join(' ') || ''} ${name.family || ''}`.trim();
     };
 
-    const getFormattedAddress = (address: fhir3.Address) => {
+    const getFormattedAddress = (address: Address) => {
         const parts = [];
         if (address.line) parts.push(...address.line);
         if (address.city) parts.push(address.city);
@@ -165,7 +167,10 @@ export const PatientView = () => {
                     ))}
                     <DataItem
                         label="Marital Status"
-                        value={patient.maritalStatus?.text || patient.maritalStatus?.coding?.[0]?.display}
+                        value={
+                            patient.maritalStatus?.text ||
+                            patient.maritalStatus?.coding?.[0]?.display
+                        }
                     />
                 </List>
             </TabPanel>
@@ -176,11 +181,19 @@ export const PatientView = () => {
                         <React.Fragment key={index}>
                             <DataItem
                                 label="Contact Name"
-                                value={contact.name ? `${contact.name.given?.join(' ')} ${contact.name.family}` : undefined}
+                                value={
+                                    contact.name
+                                        ? `${contact.name.given?.join(' ')} ${contact.name.family}`
+                                        : undefined
+                                }
                             />
                             <DataItem
                                 label="Relationship"
-                                value={contact.relationship?.[0]?.text || contact.relationship?.[0]?.coding?.[0]?.display}
+                                value={
+                                    contact.relationship?.[0]?.text ||
+                                    contact.relationship?.[0]?.coding?.[0]
+                                        ?.display
+                                }
                             />
                             {contact.telecom?.map((telecom, telecomIndex) => (
                                 <DataItem
@@ -217,7 +230,9 @@ export const PatientView = () => {
                     ))}
                     <DataItem
                         label="Multiple Birth"
-                        value={patient.multipleBirthBoolean === true ? 'Yes' : 'No'}
+                        value={
+                            patient.multipleBirthBoolean === true ? 'Yes' : 'No'
+                        }
                     />
                     <DataItem
                         label="Deceased"

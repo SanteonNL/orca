@@ -29,7 +29,7 @@ export const AppointmentView = () => {
                             <strong>Identifier:</strong> {appointment.identifier?.[0]?.value}
                         </Typography>
                         <Typography variant="body1" component="p" color="text.primary">
-                            <strong>Reason:</strong> {appointment.reason?.[0]?.text}
+                            <strong>Reason:</strong> {appointment.reasonCode?.[0]?.text}
                         </Typography>
                         <Typography variant="body1" component="p" color="text.primary">
                             <strong>Participants:</strong>

@@ -18,13 +18,10 @@ export const ImmunizationView = () => {
               <strong>Status:</strong> {immunization.status === 'completed' ? 'Voltooid' : immunization.status}
             </Typography>
             <Typography component="p" variant="body1" color="text.primary">
-              <strong>Datum:</strong> {immunization?.date ? new Date(immunization?.date).toLocaleDateString('nl-NL') : 'N/A'}
+              <strong>Datum:</strong> {immunization?.occurrenceDateTime ? new Date(immunization?.occurrenceDateTime).toLocaleDateString('nl-NL') : 'N/A'}
             </Typography>
             <Typography variant="body1" component="p">
               <strong>Opmerking:</strong> {immunization.note?.[0]?.text || 'Geen opmerkingen'}
-            </Typography>
-            <Typography component="p" variant="body1" color="text.primary">
-              <strong>Niet gegeven:</strong> {immunization.notGiven ? 'Ja' : 'Nee'}
             </Typography>
             <Typography component="p" variant="body1" color="text.primary">
               <strong>Patiënt:</strong> {immunization.patient?.display}

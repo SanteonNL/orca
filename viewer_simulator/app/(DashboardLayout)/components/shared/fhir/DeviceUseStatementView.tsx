@@ -24,7 +24,7 @@ export const DeviceUseStatementView = () => {
                                             <strong>Apparaat:</strong> {statement.device.display}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
-                                            <strong>Tijdstip:</strong> {statement.whenUsed?.start ? new Date(statement.whenUsed.start).toLocaleDateString('nl-NL') : 'N.v.t.'}
+                                            <strong>Tijdstip:</strong> {statement.timingPeriod?.start ? new Date(statement.timingPeriod.start).toLocaleDateString('nl-NL') : 'N.v.t.'}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
                                             <strong>Locatie:</strong> {statement.bodySite?.text || 'N.v.t.'}
