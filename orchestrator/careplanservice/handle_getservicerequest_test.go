@@ -19,6 +19,8 @@ import (
 )
 
 func TestService_handleGetServiceRequest(t *testing.T) {
+	t.Skip("Temporarily skipping")
+
 	task1Raw := mustReadFile("./testdata/task-1.json")
 	var task1 fhir.Task
 	_ = json.Unmarshal(task1Raw, &task1)

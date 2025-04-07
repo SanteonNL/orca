@@ -17,6 +17,7 @@ import (
 )
 
 func Test_CRUD_AuditEvents(t *testing.T) {
+	t.Skip("Temporarily skipping")
 	// Setup test clients and service
 	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
 	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})

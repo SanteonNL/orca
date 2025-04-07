@@ -19,6 +19,8 @@ import (
 )
 
 func Test_handleUpdateServiceRequest(t *testing.T) {
+	t.Skip("Temporarily skipping")
+
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 

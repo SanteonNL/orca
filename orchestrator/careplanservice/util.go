@@ -11,7 +11,6 @@ import (
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -24,33 +23,33 @@ func (s *Service) isCreatorOfResource(ctx context.Context, principal auth.Princi
 	// TODO: Temporary while fixing audit event creation, remove ASAP
 	return true, nil
 
-	var auditBundle fhir.Bundle
-	err := s.fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{
-		"entity": []string{resourceType + "/" + resourceID},
-		"action": []string{fhir.AuditEventActionC.String()},
-	}, &auditBundle)
-	if err != nil {
-		return false, fmt.Errorf("failed to find creation AuditEvent: %w", err)
-	}
-
-	// Check if there's a creation audit event
-	if len(auditBundle.Entry) == 0 {
-		return false, coolfhir.NewErrorWithCode(fmt.Sprintf("No creation audit event found for %s", resourceType), http.StatusForbidden)
-	}
-
-	// Get the creator from the audit event
-	var creationAuditEvent fhir.AuditEvent
-	err = json.Unmarshal(auditBundle.Entry[0].Resource, &creationAuditEvent)
-	if err != nil {
-		return false, fmt.Errorf("failed to unmarshal AuditEvent: %w", err)
-	}
-
-	// Check if the current user is the creator
-	if !audit.IsCreator(creationAuditEvent, &principal) {
-		return false, coolfhir.NewErrorWithCode(fmt.Sprintf("Only the creator can update this %s", resourceType), http.StatusForbidden)
-	}
-
-	return true, nil
+	//var auditBundle fhir.Bundle
+	//err := s.fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{
+	//	"entity": []string{resourceType + "/" + resourceID},
+	//	"action": []string{fhir.AuditEventActionC.String()},
+	//}, &auditBundle)
+	//if err != nil {
+	//	return false, fmt.Errorf("failed to find creation AuditEvent: %w", err)
+	//}
+	//
+	//// Check if there's a creation audit event
+	//if len(auditBundle.Entry) == 0 {
+	//	return false, coolfhir.NewErrorWithCode(fmt.Sprintf("No creation audit event found for %s", resourceType), http.StatusForbidden)
+	//}
+	//
+	//// Get the creator from the audit event
+	//var creationAuditEvent fhir.AuditEvent
+	//err = json.Unmarshal(auditBundle.Entry[0].Resource, &creationAuditEvent)
+	//if err != nil {
+	//	return false, fmt.Errorf("failed to unmarshal AuditEvent: %w", err)
+	//}
+	//
+	//// Check if the current user is the creator
+	//if !audit.IsCreator(creationAuditEvent, &principal) {
+	//	return false, coolfhir.NewErrorWithCode(fmt.Sprintf("Only the creator can update this %s", resourceType), http.StatusForbidden)
+	//}
+	//
+	//return true, nil
 }
 
 // filterAuthorizedPatients will go through a list of patients and return the ones the requester has access to
