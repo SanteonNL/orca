@@ -138,6 +138,7 @@ type FailedBundleEntry struct {
 // WithAuditEvent creates an option that adds audit event information to a bundle entry
 func WithAuditEvent(ctx context.Context, t *BundleBuilder, info AuditEventInfo) BundleEntryPostOption {
 	return func(entry *fhir.BundleEntry) {
+		log.Ctx(ctx).Info().Msgf("Creating audit event")
 		// Extract resource type and ID for logging
 		var res Resource
 		if err := json.Unmarshal(entry.Resource, &res); err != nil {
@@ -228,6 +229,9 @@ func WithAuditEvent(ctx context.Context, t *BundleBuilder, info AuditEventInfo) 
 				},
 			},
 		}
+
+		auditEventJson, _ := json.Marshal(auditEvent)
+		log.Ctx(ctx).Info().Msgf("Audit event: %s", string(auditEventJson))
 
 		if info.QueryParams != nil {
 			queryEntity := fhir.AuditEventEntity{
