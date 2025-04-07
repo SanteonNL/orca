@@ -66,9 +66,12 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 		var createdServiceRequest fhir.ServiceRequest
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdServiceRequest)
 		if err != nil {
+			log.Ctx(ctx).Error().Msgf("Failed to process ServiceRequest creation result: %s", err)
 			return nil, nil, fmt.Errorf("failed to process ServiceRequest creation result: %w", err)
 		}
 
-		return result, []any{&createdServiceRequest}, nil
+		log.Ctx(ctx).Info().Msgf("ServiceRequest created: %s", *createdServiceRequest.Id)
+
+		return result, []any{}, nil
 	}, nil
 }
