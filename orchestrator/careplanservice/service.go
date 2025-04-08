@@ -18,7 +18,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/policy"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/webhook"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -28,6 +27,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
+	"github.com/SanteonNL/orca/orchestrator/lib/policy"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 )
@@ -104,14 +104,6 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 	return &s, nil
 }
 
-//go:generate mockgen -destination=./policy_agent_mock.go -package=careplanservice -source=service.go PolicyAgent
-
-type PolicyAgent interface {
-	Allow(ctx context.Context, context *policy.Context) error
-	Preflight(resourceType, id string, r *http.Request) (*policy.Preflight, error)
-	PrepareContext(ctx context.Context, cache policy.SearchCache, preflight *policy.Preflight, resource any) (*policy.Context, error)
-}
-
 type Service struct {
 	orcaPublicURL                *url.URL
 	fhirURL                      *url.URL
@@ -122,7 +114,7 @@ type Service struct {
 	eventManager                 events.Manager
 	maxReadBodySize              int
 	proxy                        coolfhir.HttpProxy
-	policyAgent                  PolicyAgent
+	policyAgent                  policy.PolicyAgent
 	allowUnmanagedFHIROperations bool
 	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	pipeline                     pipeline.Instance

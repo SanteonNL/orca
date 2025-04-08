@@ -19,6 +19,14 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
+//go:generate mockgen -destination=./policy_agent_mock.go -package=policy -source=agent.go Agent
+
+type PolicyAgent interface {
+	Allow(ctx context.Context, context *Context) error
+	Preflight(resourceType, id string, r *http.Request) (*Preflight, error)
+	PrepareContext(ctx context.Context, cache SearchCache, preflight *Preflight, resource any) (*Context, error)
+}
+
 func subjectToParams(subject *fhir.Reference) (url.Values, error) {
 	params := url.Values{}
 
