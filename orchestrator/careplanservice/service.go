@@ -461,8 +461,8 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 	switch resourceType {
 	case "Task":
 		return s.handleCreateTask
-	//case "ServiceRequest":
-	//	return s.handleCreateServiceRequest
+	case "ServiceRequest":
+		return s.handleCreateServiceRequest
 	case "Patient":
 		return s.handleCreatePatient
 	case "Questionnaire":
@@ -484,8 +484,8 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 	switch resourceType {
 	case "Task":
 		return s.handleUpdateTask
-	//case "ServiceRequest":
-	//	return s.handleUpdateServiceRequest
+	case "ServiceRequest":
+		return s.handleUpdateServiceRequest
 	case "Patient":
 		return s.handleUpdatePatient
 	case "Questionnaire":
