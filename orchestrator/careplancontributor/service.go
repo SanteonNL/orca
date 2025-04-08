@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/globals"
@@ -452,21 +453,12 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 		return coolfhir.NewErrorWithCode("no active participants found in CareTeam", http.StatusNotFound)
 	}
 
-	localIdentities, err := s.profile.Identities(request.Context())
-	if err != nil {
-		return err
-	}
-
 	type queryTarget struct {
 		fhirBaseURL *url.URL
 		httpClient  *http.Client
 	}
 	var queryTargets []queryTarget
 	for _, identifier := range participantIdentifiers {
-		// Don't fetch data from own endpoint, since we don't support querying from multiple endpoints yet
-		if coolfhir.HasIdentifier(identifier, coolfhir.OrganizationIdentifiers(localIdentities)...) {
-			continue
-		}
 		fhirEndpoints, err := s.profile.CsdDirectory().LookupEndpoint(request.Context(), &identifier, profile.FHIRBaseURLEndpointName)
 		if err != nil {
 			return fmt.Errorf("failed to lookup FHIR base URL for participant %s: %w", coolfhir.ToString(identifier), err)
@@ -489,16 +481,44 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	if len(queryTargets) == 0 {
 		return errors.New("didn't find any queryable FHIR endpoints for any active participant in related CareTeams")
 	}
-	if len(queryTargets) > 1 {
-		// TODO: In this case, we need to aggregate the results from multiple endpoints
-		return errors.New("found multiple queryable FHIR endpoints for active participants in related CareTeams, currently not supported")
-	}
+
 	const proxyBasePath = basePath + "/aggregate/fhir/"
+
+	var wc sync.WaitGroup
+	entries := make(chan fhir.BundleEntry)
+
 	for _, target := range queryTargets {
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true, true)
-		fhirProxy.ServeHTTP(writer, request)
+		wc.Add(1)
+		go func(target queryTarget) {
+			defer wc.Done()
+
+			w := aggregateWriter{Entries: entries}
+			fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true, true)
+			fhirProxy.ServeHTTP(w, request)
+		}(target)
 	}
-	return nil
+
+	go func() {
+		wc.Wait()
+		close(entries)
+	}()
+
+	var bundle fhir.Bundle
+
+	for entry := range entries {
+		bundle.Entry = append(bundle.Entry, entry)
+	}
+
+	bundle.Total = to.Ptr(len(bundle.Entry))
+
+	data, err := json.Marshal(bundle)
+	if err != nil {
+		return fmt.Errorf("failed to marshal bundle: %w", err)
+	}
+
+	writer.WriteHeader(http.StatusOK)
+	_, err = writer.Write(data)
+	return err
 }
 
 // TODO: Fix the logic in this method, it doesn't work as intended
