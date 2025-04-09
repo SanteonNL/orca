@@ -23,7 +23,7 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 
 	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
 	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
-	carePlanContributor1, _, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, fhirBaseURL)
+	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, fhirBaseURL)
 
 	// Track all expected audit events
 	var expectedAuditEvents []ExpectedAuditEvent
@@ -36,14 +36,13 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		})
 	}
 
-	// TODO: Re-implement, test case is still valid but auth mechanism needs to change
-	//addExpectedSearchAudit := func(resourceRef string, queryParams map[string][]string) {
-	//	expectedAuditEvents = append(expectedAuditEvents, ExpectedAuditEvent{
-	//		ResourceRef: resourceRef,
-	//		Action:      fhir.AuditEventActionR,
-	//		QueryParams: queryParams,
-	//	})
-	//}
+	addExpectedSearchAudit := func(resourceRef string, queryParams map[string][]string) {
+		expectedAuditEvents = append(expectedAuditEvents, ExpectedAuditEvent{
+			ResourceRef: resourceRef,
+			Action:      fhir.AuditEventActionR,
+			QueryParams: queryParams,
+		})
+	}
 
 	// Create Patient
 	patient := fhir.Patient{
@@ -170,29 +169,33 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 
 	// TODO: Re-implement, test case is still valid but auth mechanism needs to change
 	// Negative tests - different user trying to update resources
-	//t.Run("Update Patient with different requester - fails", func(t *testing.T) {
-	//	err = carePlanContributor2.Update("Patient/"+*patient.Id, patient, &patient)
-	//	require.Error(t, err)
-	//	require.Contains(t, err.Error(), "Participant does not have access to Patient")
-	//})
-	//
-	//t.Run("Update QuestionnaireResponse with different requester - fails", func(t *testing.T) {
-	//	err = carePlanContributor2.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponse, &questionnaireResponse)
-	//	require.Error(t, err)
-	//	require.Contains(t, err.Error(), "Participant does not have access to QuestionnaireResponse")
-	//})
-	//
-	//t.Run("Update ServiceRequest with different requester - fails", func(t *testing.T) {
-	//	err = carePlanContributor2.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
-	//	require.Error(t, err)
-	//	require.Contains(t, err.Error(), "Participant does not have access to ServiceRequest")
-	//})
-	//
-	//t.Run("Update Condition with different requester - fails", func(t *testing.T) {
-	//	err = carePlanContributor2.Update("Condition/"+*condition.Id, condition, &condition)
-	//	require.Error(t, err)
-	//	require.Contains(t, err.Error(), "Participant does not have access to Condition")
-	//})
+	t.Run("Update Patient with different requester - fails", func(t *testing.T) {
+		t.Skip()
+		err = carePlanContributor2.Update("Patient/"+*patient.Id, patient, &patient)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Participant does not have access to Patient")
+	})
+
+	t.Run("Update QuestionnaireResponse with different requester - fails", func(t *testing.T) {
+		t.Skip()
+		err = carePlanContributor2.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponse, &questionnaireResponse)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Participant does not have access to QuestionnaireResponse")
+	})
+
+	t.Run("Update ServiceRequest with different requester - fails", func(t *testing.T) {
+		t.Skip()
+		err = carePlanContributor2.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Participant does not have access to ServiceRequest")
+	})
+
+	t.Run("Update Condition with different requester - fails", func(t *testing.T) {
+		t.Skip()
+		err = carePlanContributor2.Update("Condition/"+*condition.Id, condition, &condition)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "Participant does not have access to Condition")
+	})
 
 	// Update non-existing resources (creates new ones)
 	var nonExistingPatient fhir.Patient
@@ -309,21 +312,22 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	})
 
 	// TODO: Re-implement, test case is still valid but auth mechanism needs to change
-	//t.Run("Read Patient by id", func(t *testing.T) {
-	//	var readPatient fhir.Patient
-	//	err := carePlanContributor1.Read("Patient/"+*patient.Id, &readPatient)
-	//	require.NoError(t, err)
-	//	require.NotNil(t, readPatient)
-	//
-	//	addExpectedAudit("Patient/"+*readPatient.Id, fhir.AuditEventActionR)
-	//
-	//	// Read Patient by ID again, generates new AuditEvent
-	//	err = carePlanContributor1.Read("Patient/"+*patient.Id, &readPatient)
-	//	require.NoError(t, err)
-	//	require.NotNil(t, readPatient)
-	//
-	//	addExpectedAudit("Patient/"+*readPatient.Id, fhir.AuditEventActionR)
-	//})
+	t.Run("Read Patient by id", func(t *testing.T) {
+		t.Skip()
+		var readPatient fhir.Patient
+		err := carePlanContributor1.Read("Patient/"+*patient.Id, &readPatient)
+		require.NoError(t, err)
+		require.NotNil(t, readPatient)
+
+		addExpectedAudit("Patient/"+*readPatient.Id, fhir.AuditEventActionR)
+
+		// Read Patient by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("Patient/"+*patient.Id, &readPatient)
+		require.NoError(t, err)
+		require.NotNil(t, readPatient)
+
+		addExpectedAudit("Patient/"+*readPatient.Id, fhir.AuditEventActionR)
+	})
 
 	t.Run("Read Questionnaire by id", func(t *testing.T) {
 		var readQuestionnaire fhir.Questionnaire
@@ -374,31 +378,33 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	})
 
 	// TODO: Re-implement, test case is still valid but auth mechanism needs to change
-	//var readCondition fhir.Condition
-	//t.Run("Read Condition by id", func(t *testing.T) {
-	//	err := carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
-	//	require.NoError(t, err)
-	//	require.NotNil(t, readCondition)
-	//
-	//	addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
-	//
-	//	// Read Condition by ID again, generates new AuditEvent
-	//	err = carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
-	//	require.NoError(t, err)
-	//	require.NotNil(t, readCondition)
-	//
-	//	addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
-	//})
+	var readCondition fhir.Condition
+	t.Run("Read Condition by id", func(t *testing.T) {
+		t.Skip()
+		err := carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
+		require.NoError(t, err)
+		require.NotNil(t, readCondition)
+
+		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
+
+		// Read Condition by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
+		require.NoError(t, err)
+		require.NotNil(t, readCondition)
+
+		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
+	})
 
 	// TODO: Re-implement, test case is still valid but auth mechanism needs to change
-	//var searchResult fhir.Bundle
-	//t.Run("Search Patient by id", func(t *testing.T) {
-	//	err := carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}}, &searchResult)
-	//	require.NoError(t, err)
-	//	require.NotNil(t, searchResult)
-	//
-	//	addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}})
-	//})
+	var searchResult fhir.Bundle
+	t.Run("Search Patient by id", func(t *testing.T) {
+		t.Skip()
+		err := carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}}, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}})
+	})
 
 	// Verify all audit events at the end
 	err = verifyAuditEvents(t, expectedAuditEvents, fhirBaseURL)

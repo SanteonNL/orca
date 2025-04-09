@@ -71,6 +71,8 @@ func Test_handleUpdateCondition(t *testing.T) {
 		wantErr                 bool
 		errorMessage            string
 		mockCreateBehavior      func(mockFHIRClient *mock.MockClient)
+		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
+		shouldSkip bool
 	}{
 		{
 			name:                    "valid update - creator - success",
@@ -91,35 +93,22 @@ func Test_handleUpdateCondition(t *testing.T) {
 			wantErr:         true,
 			errorMessage:    "failed to search for Condition",
 		},
-		// TODO: Re-implement, test case is still valid but auth mechanism needs to change
-		//{
-		//	name:                    "invalid update - error querying audit events - fails",
-		//	principal:               auth.TestPrincipal1,
-		//	existingConditionBundle: &existingConditionBundle,
-		//	errorFromAuditQuery:     errors.New("failed to find creation AuditEvent"),
-		//	wantErr:                 true,
-		//	errorMessage:            "Participant does not have access to Condition",
-		//},
-		//{
-		//	name:                    "invalid update - no creation audit event - fails",
-		//	principal:               auth.TestPrincipal1,
-		//	existingConditionBundle: &existingConditionBundle,
-		//	auditBundle:             &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-		//	wantErr:                 true,
-		//	errorMessage:            "Participant does not have access to Condition",
-		//},
-		//{
-		//	name:                    "invalid update - not creator - fails",
-		//	principal:               auth.TestPrincipal2,
-		//	existingConditionBundle: &existingConditionBundle,
-		//	auditBundle:             &creationAuditBundle,
-		//	wantErr:                 true,
-		//	errorMessage:            "Participant does not have access to Condition",
-		//},
+		{
+			shouldSkip:              true,
+			name:                    "invalid update - not creator - fails",
+			principal:               auth.TestPrincipal2,
+			existingConditionBundle: &existingConditionBundle,
+			wantErr:                 true,
+			errorMessage:            "Participant does not have access to Condition",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.shouldSkip {
+				t.Skip()
+			}
+
 			tx := coolfhir.Transaction()
 
 			mockFHIRClient := mock.NewMockClient(ctrl)
@@ -152,17 +141,6 @@ func Test_handleUpdateCondition(t *testing.T) {
 						return tt.errorFromSearch
 					}
 					*result = *tt.existingConditionBundle
-
-					//if len(tt.existingConditionBundle.Entry) > 0 {
-					//	mockFHIRClient.EXPECT().SearchWithContext(gomock.Any(), "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
-					//		if tt.errorFromAuditQuery != nil {
-					//			return tt.errorFromAuditQuery
-					//		}
-					//		*result = *tt.auditBundle
-					//		return nil
-					//	})
-					//}
-
 					return nil
 				})
 			}

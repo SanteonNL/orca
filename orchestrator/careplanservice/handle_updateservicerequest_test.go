@@ -64,6 +64,8 @@ func Test_handleUpdateServiceRequest(t *testing.T) {
 		wantErr                      bool
 		errorMessage                 string
 		mockCreateBehavior           func(mockFHIRClient *mock.MockClient)
+		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
+		shouldSkip bool
 	}{
 		{
 			name:                         "valid update - creator - success",
@@ -84,32 +86,22 @@ func Test_handleUpdateServiceRequest(t *testing.T) {
 			wantErr:         true,
 			errorMessage:    "failed to search for ServiceRequest",
 		},
-		// TODO: Re-implement, test case is still valid but auth mechanism needs to change
-		//{
-		//	name:                         "invalid update - error querying audit events - fails",
-		//	principal:                    auth.TestPrincipal1,
-		//	existingServiceRequestBundle: &existingServiceRequestBundle,
-		//	wantErr:                      true,
-		//	errorMessage:                 "Participant does not have access to ServiceRequest",
-		//},
-		//{
-		//	name:                         "invalid update - no creation audit event - fails",
-		//	principal:                    auth.TestPrincipal1,
-		//	existingServiceRequestBundle: &existingServiceRequestBundle,
-		//	wantErr:                      true,
-		//	errorMessage:                 "Participant does not have access to ServiceRequest",
-		//},
-		//{
-		//	name:                         "invalid update - not creator - fails",
-		//	principal:                    auth.TestPrincipal2,
-		//	existingServiceRequestBundle: &existingServiceRequestBundle,
-		//	wantErr:                      true,
-		//	errorMessage:                 "Participant does not have access to ServiceRequest",
-		//},
+		{
+			shouldSkip:                   true,
+			name:                         "invalid update - not creator - fails",
+			principal:                    auth.TestPrincipal2,
+			existingServiceRequestBundle: &existingServiceRequestBundle,
+			wantErr:                      true,
+			errorMessage:                 "Participant does not have access to ServiceRequest",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.shouldSkip {
+				t.Skip()
+			}
+
 			tx := coolfhir.Transaction()
 
 			mockFHIRClient := mock.NewMockClient(ctrl)

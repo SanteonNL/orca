@@ -59,6 +59,8 @@ func Test_handleUpdatePatient(t *testing.T) {
 		errorMessage          string
 		mockCreateBehavior    func(mockFHIRClient *mock.MockClient)
 		principal             *auth.Principal
+		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
+		shouldSkip bool
 	}{
 		{
 			name:                  "valid update - creator - success",
@@ -79,33 +81,22 @@ func Test_handleUpdatePatient(t *testing.T) {
 			wantErr:         true,
 			errorMessage:    "failed to search for Patient",
 		},
-		// TODO: Re-implement, test case is still valid but auth mechanism needs to change
-		//{
-		//	name:                  "invalid update - error querying audit events - fails",
-		//	principal:             auth.TestPrincipal1,
-		//	existingPatientBundle: &existingPatientBundle,
-		//	errorFromAuditQuery:   errors.New("failed to find creation AuditEvent"),
-		//	wantErr:               true,
-		//	errorMessage:          "Participant does not have access to Patient",
-		//},
-		//{
-		//	name:                  "invalid update - no creation audit event - fails",
-		//	principal:             auth.TestPrincipal1,
-		//	existingPatientBundle: &existingPatientBundle,
-		//	wantErr:               true,
-		//	errorMessage:          "Participant does not have access to Patient",
-		//},
-		//{
-		//	name:                  "invalid update - not creator - fails",
-		//	principal:             auth.TestPrincipal2,
-		//	existingPatientBundle: &existingPatientBundle,
-		//	wantErr:               true,
-		//	errorMessage:          "Participant does not have access to Patient",
-		//},
+		{
+			shouldSkip:            true,
+			name:                  "invalid update - not creator - fails",
+			principal:             auth.TestPrincipal2,
+			existingPatientBundle: &existingPatientBundle,
+			wantErr:               true,
+			errorMessage:          "Participant does not have access to Patient",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.shouldSkip {
+				t.Skip()
+			}
+
 			tx := coolfhir.Transaction()
 
 			mockFHIRClient := mock.NewMockClient(ctrl)

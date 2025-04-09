@@ -55,6 +55,8 @@ func Test_handleUpdateQuestionnaireResponse(t *testing.T) {
 		wantErr                        bool
 		errorMessage                   string
 		principal                      *auth.Principal
+		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
+		shouldSkip bool
 	}{
 		{
 			name:                           "valid update - creator - success",
@@ -69,32 +71,22 @@ func Test_handleUpdateQuestionnaireResponse(t *testing.T) {
 			wantErr:         true,
 			errorMessage:    "failed to read QuestionnaireResponse",
 		},
-		// TODO: Re-implement, test case is still valid but auth mechanism needs to change
-		//{
-		//	name:                           "invalid update - error querying audit events - fails",
-		//	principal:                      auth.TestPrincipal1,
-		//	existingQuestionnaireResBundle: &existingQuestionnaireResponseBundle,
-		//	wantErr:                        true,
-		//	errorMessage:                   "Participant does not have access to QuestionnaireResponse",
-		//},
-		//{
-		//	name:                           "invalid update - no creation audit event - fails",
-		//	principal:                      auth.TestPrincipal1,
-		//	existingQuestionnaireResBundle: &existingQuestionnaireResponseBundle,
-		//	wantErr:                        true,
-		//	errorMessage:                   "Participant does not have access to QuestionnaireResponse",
-		//},
-		//{
-		//	name:                           "invalid update - not creator - fails",
-		//	principal:                      auth.TestPrincipal2,
-		//	existingQuestionnaireResBundle: &existingQuestionnaireResponseBundle,
-		//	wantErr:                        true,
-		//	errorMessage:                   "Participant does not have access to QuestionnaireResponse",
-		//},
+		{
+			shouldSkip:                     true,
+			name:                           "invalid update - not creator - fails",
+			principal:                      auth.TestPrincipal2,
+			existingQuestionnaireResBundle: &existingQuestionnaireResponseBundle,
+			wantErr:                        true,
+			errorMessage:                   "Participant does not have access to QuestionnaireResponse",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.shouldSkip {
+				t.Skip()
+			}
+
 			tx := coolfhir.Transaction()
 
 			mockFHIRClient := mock.NewMockClient(ctrl)

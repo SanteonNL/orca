@@ -69,6 +69,8 @@ func TestService_handleGetCondition(t *testing.T) {
 		request       FHIRHandlerRequest
 		expectedError error
 		setup         func(ctx context.Context, client *mock.MockClient)
+		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
+		shouldSkip bool
 	}{
 		"error: Condition does not exist": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
@@ -170,74 +172,66 @@ func TestService_handleGetCondition(t *testing.T) {
 					})
 			},
 		},
-		// TODO: Re-implement, test case is still valid but auth mechanism needs to change
-		//"error: Condition exists, subject is patient, patient returned, incorrect principal": {
-		//	context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
-		//	request: FHIRHandlerRequest{
-		//		Principal:   auth.TestPrincipal3,
-		//		ResourceId:  "1",
-		//		FhirHeaders: &fhirclient.Headers{},
-		//	},
-		//	expectedError: &coolfhir.ErrorWithCode{
-		//		Message:    "Participant does not have access to Condition",
-		//		StatusCode: http.StatusForbidden,
-		//	},
-		//	setup: func(ctx context.Context, client *mock.MockClient) {
-		//		client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
-		//			DoAndReturn(func(_ context.Context, _ string, target *fhir.Condition, _ ...fhirclient.Option) error {
-		//				*target = condition1
-		//				return nil
-		//			})
-		//		client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-		//			DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-		//				return nil
-		//			})
-		//		client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
-		//			DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-		//				*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: patient1Raw}}}
-		//				return nil
-		//			})
-		//		client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-		//			DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-		//				*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
-		//				return nil
-		//			})
-		//	},
-		//},
-		//"ok: Condition exists, subject is patient, patient returned, incorrect principal, but creator of resource": {
-		//	context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
-		//	request: FHIRHandlerRequest{
-		//		Principal:   auth.TestPrincipal3,
-		//		ResourceId:  "1",
-		//		FhirHeaders: &fhirclient.Headers{},
-		//		LocalIdentity: &fhir.Identifier{
-		//			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-		//			Value:  to.Ptr("1"),
-		//		},
-		//	},
-		//	setup: func(ctx context.Context, client *mock.MockClient) {
-		//		client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
-		//			DoAndReturn(func(_ context.Context, _ string, target *fhir.Condition, _ ...fhirclient.Option) error {
-		//				*target = condition1
-		//				return nil
-		//			})
-		//		client.EXPECT().SearchWithContext(ctx, "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).
-		//			DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-		//				*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: auditEventRaw}}}
-		//				return nil
-		//			})
-		//		client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
-		//			DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-		//				*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: patient1Raw}}}
-		//				return nil
-		//			})
-		//		client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-		//			DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-		//				*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
-		//				return nil
-		//			})
-		//	},
-		//},
+		"error: Condition exists, subject is patient, patient returned, incorrect principal": {
+			shouldSkip: true,
+			context:    auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal3,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+			},
+			expectedError: &coolfhir.ErrorWithCode{
+				Message:    "Participant does not have access to Condition",
+				StatusCode: http.StatusForbidden,
+			},
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Condition, _ ...fhirclient.Option) error {
+						*target = condition1
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: patient1Raw}}}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
+						return nil
+					})
+			},
+		},
+		"ok: Condition exists, subject is patient, patient returned, incorrect principal, but creator of resource": {
+			shouldSkip: true,
+			context:    auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal3,
+				ResourceId:  "1",
+				FhirHeaders: &fhirclient.Headers{},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, target *fhir.Condition, _ ...fhirclient.Option) error {
+						*target = condition1
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: patient1Raw}}}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{{Resource: carePlan1Raw}}}
+						return nil
+					})
+			},
+		},
 		"ok: Condition exists, subject is patient, patient returned, correct principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
@@ -271,6 +265,10 @@ func TestService_handleGetCondition(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			if tt.shouldSkip {
+				t.Skip()
+			}
+
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
