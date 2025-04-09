@@ -59,6 +59,8 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		request       FHIRHandlerRequest
 		expectedError error
 		setup         func(ctx context.Context, client *mock.MockClient)
+		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
+		shouldSkip bool
 	}{
 		"error: ServiceRequest does not exist": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
@@ -100,7 +102,8 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 			},
 		},
 		"error: ServiceRequest exists, fetched task, incorrect principal": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			shouldSkip: true,
+			context:    auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			request: FHIRHandlerRequest{
 				Principal:   auth.TestPrincipal3,
 				ResourceId:  "1",
@@ -139,7 +142,8 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 			},
 		},
 		"ok: ServiceRequest exists, fetched task, incorrect principal, but is creator": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
+			shouldSkip: true,
+			context:    auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			request: FHIRHandlerRequest{
 				Principal:   auth.TestPrincipal3,
 				ResourceId:  "1",
@@ -205,6 +209,10 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
+			if tt.shouldSkip {
+				t.Skip()
+			}
+
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 

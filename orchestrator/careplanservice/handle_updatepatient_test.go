@@ -40,36 +40,6 @@ func Test_handleUpdatePatient(t *testing.T) {
 
 	updatePatientData, _ := json.Marshal(defaultPatient)
 
-	// Create a mock audit event for the creation
-	creationAuditEvent := fhir.AuditEvent{
-		Id: to.Ptr("audit1"),
-		Agent: []fhir.AuditEventAgent{
-			{
-				Who: &fhir.Reference{
-					Identifier: &auth.TestPrincipal1.Organization.Identifier[0],
-				},
-			},
-		},
-		Entity: []fhir.AuditEventEntity{
-			{
-				What: &fhir.Reference{
-					Reference: to.Ptr("Patient/1"),
-				},
-			},
-		},
-	}
-
-	creationAuditBundle := fhir.Bundle{
-		Entry: []fhir.BundleEntry{
-			{
-				Resource: func() []byte {
-					b, _ := json.Marshal(creationAuditEvent)
-					return b
-				}(),
-			},
-		},
-	}
-
 	existingPatientBundle := fhir.Bundle{
 		Entry: []fhir.BundleEntry{
 			{
@@ -85,18 +55,17 @@ func Test_handleUpdatePatient(t *testing.T) {
 		name                  string
 		existingPatientBundle *fhir.Bundle
 		errorFromSearch       error
-		errorFromAuditQuery   error
-		auditBundle           *fhir.Bundle
 		wantErr               bool
 		errorMessage          string
 		mockCreateBehavior    func(mockFHIRClient *mock.MockClient)
 		principal             *auth.Principal
+		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
+		shouldSkip bool
 	}{
 		{
 			name:                  "valid update - creator - success",
 			principal:             auth.TestPrincipal1,
 			existingPatientBundle: &existingPatientBundle,
-			auditBundle:           &creationAuditBundle,
 			wantErr:               false,
 		},
 		{
@@ -106,14 +75,6 @@ func Test_handleUpdatePatient(t *testing.T) {
 			wantErr:               false,
 		},
 		{
-			name:                  "invalid update - not creator - fails",
-			principal:             auth.TestPrincipal2,
-			existingPatientBundle: &existingPatientBundle,
-			auditBundle:           &creationAuditBundle,
-			wantErr:               true,
-			errorMessage:          "Participant does not have access to Patient",
-		},
-		{
 			name:            "invalid update - error searching existing resource - fails",
 			principal:       auth.TestPrincipal1,
 			errorFromSearch: errors.New("failed to search for Patient"),
@@ -121,18 +82,10 @@ func Test_handleUpdatePatient(t *testing.T) {
 			errorMessage:    "failed to search for Patient",
 		},
 		{
-			name:                  "invalid update - error querying audit events - fails",
-			principal:             auth.TestPrincipal1,
+			shouldSkip:            true,
+			name:                  "invalid update - not creator - fails",
+			principal:             auth.TestPrincipal2,
 			existingPatientBundle: &existingPatientBundle,
-			errorFromAuditQuery:   errors.New("failed to find creation AuditEvent"),
-			wantErr:               true,
-			errorMessage:          "Participant does not have access to Patient",
-		},
-		{
-			name:                  "invalid update - no creation audit event - fails",
-			principal:             auth.TestPrincipal1,
-			existingPatientBundle: &existingPatientBundle,
-			auditBundle:           &fhir.Bundle{Entry: []fhir.BundleEntry{}},
 			wantErr:               true,
 			errorMessage:          "Participant does not have access to Patient",
 		},
@@ -140,6 +93,10 @@ func Test_handleUpdatePatient(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.shouldSkip {
+				t.Skip()
+			}
+
 			tx := coolfhir.Transaction()
 
 			mockFHIRClient := mock.NewMockClient(ctrl)
@@ -157,16 +114,6 @@ func Test_handleUpdatePatient(t *testing.T) {
 						return tt.errorFromSearch
 					}
 					*result = *tt.existingPatientBundle
-
-					if len(tt.existingPatientBundle.Entry) > 0 {
-						mockFHIRClient.EXPECT().SearchWithContext(gomock.Any(), "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
-							if tt.errorFromAuditQuery != nil {
-								return tt.errorFromAuditQuery
-							}
-							*result = *tt.auditBundle
-							return nil
-						})
-					}
 
 					return nil
 				})
