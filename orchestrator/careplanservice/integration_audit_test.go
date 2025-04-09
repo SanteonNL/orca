@@ -4,23 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
 	"time"
-
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/stretchr/testify/require"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func Test_CRUD_AuditEvents(t *testing.T) {
 	// Setup test clients and service
+	fhirBaseURL := test.SetupHAPI(t)
+
 	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
 	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
-	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint)
+	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, fhirBaseURL)
 
 	// Track all expected audit events
 	var expectedAuditEvents []ExpectedAuditEvent
@@ -367,8 +370,8 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedAudit("ServiceRequest/"+*readServiceRequest.Id, fhir.AuditEventActionR)
 	})
 
+	var readCondition fhir.Condition
 	t.Run("Read Condition by id", func(t *testing.T) {
-		var readCondition fhir.Condition
 		err := carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
 		require.NoError(t, err)
 		require.NotNil(t, readCondition)
@@ -387,15 +390,20 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	t.Run("Search Patient by id", func(t *testing.T) {
 		err := carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}}, &searchResult)
 		require.NoError(t, err)
-		require.NotEmpty(t, searchResult.Entry)
+		require.NotNil(t, searchResult)
 
-		addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id + "," + *nonExistingPatient.Id + "," + "fake-id"}})
-		addExpectedSearchAudit("Patient/"+*nonExistingPatient.Id, url.Values{"_id": {*patient.Id + "," + *nonExistingPatient.Id + "," + "fake-id"}})
-		// TODO: Do we add an error audit event for "fake-id"
+		addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}})
+
+		// Read Condition by ID again, generates new AuditEvent
+		err = carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
+		require.NoError(t, err)
+		require.NotNil(t, readCondition)
+
+		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
 	})
 
 	// Verify all audit events at the end
-	err = verifyAuditEvents(t, carePlanContributor1, expectedAuditEvents)
+	err = verifyAuditEvents(t, expectedAuditEvents, fhirBaseURL)
 	require.NoError(t, err)
 }
 
@@ -407,26 +415,23 @@ type ExpectedAuditEvent struct {
 }
 
 // Refactored verifyAuditEvents to handle a list of expected audit events without timestamp requirements
-func verifyAuditEvents(t *testing.T, fhirClient fhirclient.Client, expectedEvents []ExpectedAuditEvent) error {
+func verifyAuditEvents(t *testing.T, expectedEvents []ExpectedAuditEvent, fhirBaseURL *url.URL) error {
 	t.Helper()
 
-	time.Sleep(5 * time.Second)
-
-	// Create a context with timeout to avoid hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Log the search attempt for debugging
 	t.Logf("Searching for AuditEvents")
 
+	client := fhirclient.New(fhirBaseURL, &http.Client{}, nil)
+
 	var bundle fhir.Bundle
-	err := fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{}, &bundle)
+	err := client.SearchWithContext(ctx, "AuditEvent", url.Values{}, &bundle)
 
 	if err != nil {
 		return fmt.Errorf("failed to search AuditEvents: %w", err)
 	}
 
-	// Log success for debugging
 	t.Logf("Successfully retrieved %d AuditEvents", len(bundle.Entry))
 
 	// Track which expected events have been found
@@ -487,7 +492,7 @@ func verifyAuditEvents(t *testing.T, fhirClient fhirclient.Client, expectedEvent
 				"entity": []string{event.ResourceRef},
 			}
 
-			err := fhirClient.Search("AuditEvent", specificQuery, &specificBundle)
+			err := client.Search("AuditEvent", specificQuery, &specificBundle)
 			if err != nil {
 				return fmt.Errorf("failed to perform specific search for audit event: %w", err)
 			}

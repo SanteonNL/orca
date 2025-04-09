@@ -388,11 +388,11 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 
 			// Process result
 			require.NotNil(t, result)
-			response, notifications, err := result(returnedBundle)
+			responses, notifications, err := result(returnedBundle)
 			require.NoError(t, err)
 			assert.Len(t, notifications, 2)
-			require.Equal(t, "Task/3", *response.Response.Location)
-			require.Equal(t, "201 Created", response.Response.Status)
+			require.Equal(t, "Task/3", *responses[0].Response.Location)
+			require.Equal(t, "201 Created", responses[0].Response.Status)
 			require.Len(t, notifications, 2)
 			require.IsType(t, &fhir.Task{}, notifications[0])
 			require.IsType(t, &fhir.CarePlan{}, notifications[1])
@@ -651,11 +651,11 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 
 			// Process result
 			require.NotNil(t, result)
-			response, notifications, err := result(tt.returnedBundle)
+			responses, notifications, err := result(tt.returnedBundle)
 			require.NoError(t, err)
 			assert.Len(t, notifications, 1)
-			require.Equal(t, "Task/3", *response.Response.Location)
-			require.Equal(t, "201 Created", response.Response.Status)
+			require.Equal(t, "Task/3", *responses[0].Response.Location)
+			require.Equal(t, "201 Created", responses[0].Response.Status)
 		})
 	}
 }
