@@ -55,15 +55,14 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 	}
 
 	s := Service{
-		profile:                      profile,
-		fhirURL:                      upstreamFhirBaseUrl,
-		orcaPublicURL:                orcaPublicURL,
-		transport:                    transport,
-		fhirClient:                   fhirClient,
-		subscriptionManager:          subscriptionMgr,
-		eventManager:                 eventManager,
-		maxReadBodySize:              fhirClientConfig.MaxResponseSize,
-		allowUnmanagedFHIROperations: config.AllowUnmanagedFHIROperations,
+		profile:             profile,
+		fhirURL:             upstreamFhirBaseUrl,
+		orcaPublicURL:       orcaPublicURL,
+		transport:           transport,
+		fhirClient:          fhirClient,
+		subscriptionManager: subscriptionMgr,
+		eventManager:        eventManager,
+		maxReadBodySize:     fhirClientConfig.MaxResponseSize,
 	}
 
 	// Register event handlers
@@ -573,6 +572,8 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 		return s.handleSearchCarePlan
 	case "Task":
 		return s.handleSearchTask
+	case "ServiceRequest":
+		return s.handleSearchServiceRequest
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 			return s.handleUnmanagedOperation(ctx, request, tx)
