@@ -769,7 +769,6 @@ func Test_HandleSearchResource(t *testing.T) {
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	config.AllowUnmanagedFHIROperations = true
 	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
@@ -987,7 +986,6 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	config.AllowUnmanagedFHIROperations = true
 	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
