@@ -14,8 +14,6 @@ type Config struct {
 	FHIR    coolfhir.ClientConfig `koanf:"fhir"`
 	Enabled bool                  `koanf:"enabled"`
 	Events  EventsConfig          `koanf:"events"`
-	// Defaults to false, should not be set true in Test or Prod
-	AllowUnmanagedFHIROperations bool `koanf:"allowunmanagedfhiroperations"`
 }
 
 func (c Config) Validate() error {

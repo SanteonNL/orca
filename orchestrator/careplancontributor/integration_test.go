@@ -182,7 +182,6 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	config.AllowUnmanagedFHIROperations = true
 
 	fhirClient := fhirclient.New(fhirBaseURL, http.DefaultClient, nil)
 	taskengine.LoadTestQuestionnairesAndHealthcareSevices(t, fhirClient)
