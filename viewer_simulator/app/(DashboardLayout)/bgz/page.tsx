@@ -16,7 +16,9 @@ import BgzOverview from '../components/bgz/bgz-overview';
 import useFetch from '@/app/useFetch';
 
 export default function CarePlans() {
+    const [profile, setProfile] = useState('default');
     const [roles, setRoles] = useState('default');
+    const [principal, setPrincipal] = useState('');
     const [name, setName] = useState<string | null>(null);
     const { data: endpoints } = useFetch<{ name: string; endpoint: string }[]>(
         `${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/bgz/endpoints`,
@@ -24,8 +26,28 @@ export default function CarePlans() {
     const updateEndpoint = useCallback((e: SelectChangeEvent<string>) => {
         setName(e.target.value);
     }, []);
-    const updateRoles = useCallback((e: SelectChangeEvent<string>) => {
-        setRoles(e.target.value);
+    const updateProfile = useCallback((e: SelectChangeEvent<string>) => {
+        switch (e.target.value) {
+            case 'harry':
+                setPrincipal(
+                    'PractitionerRole/org1-generalpractitioner-harryarts',
+                );
+                setRoles('01.015');
+                break;
+            case 'claudia':
+                setPrincipal(
+                    'PractitionerRole/org1-generalpractitioner-claudia',
+                );
+                setPrincipal('');
+                setRoles('01.015');
+                break;
+            case 'roos':
+                setPrincipal('PractitionerRole/org1-generalpractitioner-harryarts');
+                setRoles('30.000');
+                break;
+        }
+
+        setProfile(e.target.value);
     }, []);
 
     useEffect(() => {
@@ -49,23 +71,21 @@ export default function CarePlans() {
                         </Typography>
                         <div>
                             <Select
-                                label="Role"
+                                label="Profile"
                                 sx={{ mb: 2, mr: 1 }}
-                                value={roles}
-                                onChange={updateRoles}
+                                value={profile}
+                                onChange={updateProfile}
                             >
-                                <MenuItem value="default">
-                                    Organization (default)
+                                <MenuItem value="default">Organisatie</MenuItem>
+                                <MenuItem value="harry">Arts Harry</MenuItem>
+                                <MenuItem value="claudia">
+                                    Arts Claudia
                                 </MenuItem>
-                                <MenuItem value="org1-generalpractitioner-harryarts">
-                                    Arts Harry
-                                </MenuItem>
-                                <MenuItem value="123">Arts Claudia</MenuItem>
-                                <MenuItem value="456">
+                                <MenuItem value="roos">
                                     Verpleegkundige Roos
                                 </MenuItem>
                             </Select>
-                            {roles === 'default' &&
+                            {profile === 'default' &&
                                 (endpoints?.length || 0) > 1 && (
                                     <Select
                                         label="Endpoint"
@@ -84,7 +104,13 @@ export default function CarePlans() {
                                     </Select>
                                 )}
                         </div>
-                        {name && <BgzOverview name={name} roles={roles} />}
+                        {name && (
+                            <BgzOverview
+                                name={name}
+                                roles={roles}
+                                principal={principal}
+                            />
+                        )}
                     </>
                 </DashboardCard>
             </PageContainer>

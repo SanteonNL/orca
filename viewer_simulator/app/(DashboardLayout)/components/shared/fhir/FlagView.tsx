@@ -14,6 +14,7 @@ export const FlagView = () => {
                     {flags.map((flag, index) => (
                         <ListItem key={flag.id || index}>
                             <ListItemText
+                                disableTypography={true}
                                 primary={flag.code?.text}
                                 secondary={
                                     <>

@@ -4,6 +4,7 @@ import useBgzStore from '@/store/bgz-store';
 
 export const MedicationRequestView = () => {
     const { medicationRequests } = useBgzStore();
+    console.log(medicationRequests)
     return (
         <Card>
             <CardContent>
@@ -14,6 +15,7 @@ export const MedicationRequestView = () => {
                     {medicationRequests.map((request, index) => (
                         <ListItem key={request.id || index}>
                             <ListItemText
+                                disableTypography={true}
                                 primary={`Medicatieverzoek ${index + 1}`}
                                 secondary={
                                     <>
@@ -42,13 +44,13 @@ export const MedicationRequestView = () => {
                                             <strong>Reden:</strong> {request.reasonReference?.map(reason => reason.display).join(', ')}
                                         </Typography>
                                         <Typography component="p" variant="body1" color="text.primary">
-                                            <strong>Dosering:</strong> {request.dosageInstruction?.map(dosage => (
-                                                <div key={dosage.sequence} style={{ marginLeft: 25 }}>
+                                            <strong>Dosering:</strong> {request.dosageInstruction?.map((dosage, i) => (
+                                                <span key={i} style={{ marginLeft: 25, display: "block" }}>
                                                     <strong>Route:</strong> {dosage.route?.text} <br />
                                                     <strong>Hoeveelheid:</strong> {dosage.doseAndRate?.[0]?.doseQuantity?.value} {dosage.doseAndRate?.[0]?.doseQuantity?.unit} <br />
                                                     <strong>Frequentie:</strong> {dosage.timing?.repeat?.frequency} keer per {dosage.timing?.repeat?.period} {dosage.timing?.repeat?.periodUnit} <br />
                                                     <strong>Extra instructies:</strong> {dosage.additionalInstruction?.map(instr => instr.text).join(', ')}
-                                                </div>
+                                                </span>
                                             ))}
                                         </Typography>
                                     </>

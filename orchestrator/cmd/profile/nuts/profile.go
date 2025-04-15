@@ -5,6 +5,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"regexp"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
@@ -19,13 +27,6 @@ import (
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
-	"regexp"
-	"slices"
-	"strings"
-	"sync"
-	"time"
 )
 
 const identitiesCacheTTL = 5 * time.Minute

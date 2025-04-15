@@ -14,6 +14,7 @@ export const ProcedureView = () => {
           {procedures.map((procedure, index) => (
             <ListItem key={index}>
               <ListItemText
+                disableTypography={true}
                 primary={procedure.code?.text || `Procedure ${index + 1}`}
                 secondary={
                   <>

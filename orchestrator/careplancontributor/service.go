@@ -474,12 +474,6 @@ func (s Service) handleProxySearch(w http.ResponseWriter, r *http.Request, resou
 		return err
 	}
 
-	// for key, values := range writer.Headers {
-	// 	for _, value := range values {
-	// 		w.Header().Add(key, value)
-	// 	}
-	// }
-
 	w.WriteHeader(writer.StatusCode)
 
 	if _, err := w.Write(data); err != nil {
@@ -502,9 +496,12 @@ func (s Service) handleProxyRead(w http.ResponseWriter, r *http.Request, resourc
 		return err
 	}
 
+	writer := newFhirWriter()
+	s.ehrFhirProxy.ServeHTTP(writer, r)
+
 	cache := policy.NewSearchCache()
 
-	context, err := agent.PrepareContext(r.Context(), cache, preflight, nil)
+	context, err := agent.PrepareContext(r.Context(), cache, preflight, writer.Resource.Raw)
 	if err != nil {
 		return err
 	}
@@ -518,8 +515,22 @@ func (s Service) handleProxyRead(w http.ResponseWriter, r *http.Request, resourc
 		return err
 	}
 
-	s.ehrFhirProxy.ServeHTTP(w, r)
+	w.WriteHeader(http.StatusOK)
+	w.Write(writer.Resource.Raw)
+
 	return nil
+}
+
+func copyPolicyHeaders(orig *http.Request, proxy *http.Request) {
+	for key, values := range orig.Header {
+		if !strings.HasPrefix(key, "Orca-") {
+			continue
+		}
+
+		for _, value := range values {
+			proxy.Header.Add(key, value)
+		}
+	}
 }
 
 // proxyToAllCareTeamMembers is a convenience façade method that can be used proxy the request to all CPC nodes localized from the Shared CarePlan.participants.
@@ -542,7 +553,9 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 	var carePlan fhir.CarePlan
 
-	err = cpsFHIRClient.ReadWithContext(request.Context(), carePlanRef, &carePlan)
+	err = cpsFHIRClient.ReadWithContext(request.Context(), carePlanRef, &carePlan, fhirclient.PreRequestOption(func(_ fhirclient.Client, r *http.Request) {
+		copyPolicyHeaders(request, r)
+	}))
 	if err != nil {
 		return fmt.Errorf("failed to get CarePlan %s for X-SCP-Context: %w", carePlanRef, err)
 	}
@@ -555,14 +568,20 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	// Collect participants. Use a map to ensure we don't send the same request to the same participant multiple times.
 	participantIdentifiers := make(map[string]fhir.Identifier)
 	for _, participant := range careTeam.Participant {
-		if !coolfhir.IsLogicalReference(participant.Member) {
+		member, err := coolfhir.ResolveMember(request.Context(), cpsFHIRClient, *participant.Member)
+		if err != nil {
+			log.Ctx(request.Context()).Warn().Err(err).Msg("Failed to resolve member")
+		}
+
+		if !coolfhir.IsLogicalReference(&member) {
 			continue
 		}
+
 		activeMember, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
 		if err != nil {
 			log.Ctx(request.Context()).Warn().Err(err).Msg("Failed to validate CareTeam participant period")
 		} else if activeMember {
-			participantIdentifiers[coolfhir.ToString(participant.Member.Identifier)] = *participant.Member.Identifier
+			participantIdentifiers[coolfhir.ToString(member.Identifier)] = *member.Identifier
 		}
 	}
 	if len(participantIdentifiers) == 0 {
@@ -610,7 +629,7 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 
 			w := newFhirWriter()
 
-			fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true, true)
+			fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, false, true)
 			fhirProxy.ServeHTTP(w, request)
 
 			bundle, err := w.Bundle()

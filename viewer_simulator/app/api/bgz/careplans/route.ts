@@ -6,6 +6,7 @@ import { getBsn } from '@/utils/fhirUtils';
 export async function GET(req: NextRequest) {
     const name = req.nextUrl.searchParams.get('name');
     const roles = req.nextUrl.searchParams.get('roles');
+    const principal = req.nextUrl.searchParams.get('principal');
     const baseUrl = process.env[`${name}_CAREPLANSERVICE_URL`];
 
     if (!baseUrl) {
@@ -21,6 +22,10 @@ export async function GET(req: NextRequest) {
             'X-Cps-Url': baseUrl,
         };
         
+        if (principal) {
+          headers['Orca-Auth-Principal'] = principal;
+        }
+        
         if (roles) {
           headers['Orca-Auth-Roles'] = roles;
         }
@@ -31,6 +36,7 @@ export async function GET(req: NextRequest) {
         });
 
         if(!resp.ok) {
+          console.log(await resp.text())
             console.error(`Failed to fetch data: ${process.env.ORCA_CPC_URL}/cps/fhir/CarePlan/_search (X-Cps-Url: ${baseUrl})`, resp.status);
             return NextResponse.json({
                 error: `Failed to fetch data from ${baseUrl}`},

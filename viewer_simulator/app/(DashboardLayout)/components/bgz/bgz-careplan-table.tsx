@@ -19,11 +19,13 @@ export type Row = {
 
 interface Props {
     name: string,
+    principal: string,
+    roles: string,
     rows: Row[],
     loading?: boolean,
 }
 
-export default function BgzTable({ name, rows, loading }: Props) {
+export default function BgzTable({ name, principal, roles, rows, loading }: Props) {
 
     const columns: GridColDef[] = [
 
@@ -50,7 +52,7 @@ export default function BgzTable({ name, rows, loading }: Props) {
             headerName: 'Medical Records',
             flex: 1,
             renderCell: (params: { row: Row }) => {
-                return <BgzDataViewer name={name} carePlan={params.row.carePlan} />
+                return <BgzDataViewer name={name} principal={principal} roles={roles} carePlan={params.row.carePlan} />
             }
         },
         { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 2 },

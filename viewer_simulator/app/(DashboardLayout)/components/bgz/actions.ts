@@ -20,7 +20,7 @@ import {
     ServiceRequest,
 } from 'fhir/r4';
 
-export async function getBgzData(name: string, carePlan: CarePlan) {
+export async function getBgzData(name: string, principal: string, roles: string, carePlan: CarePlan) {
     const [
         appointments,
         patients,
@@ -63,7 +63,7 @@ export async function getBgzData(name: string, carePlan: CarePlan) {
             ['Procedure', 'category=http://snomed.info/sct%7C387713003'],
             ['ServiceRequest', 'status=active'],
         ].map(([resourceType, query]) =>
-            fetchBgzData(name, resourceType, query, carePlan),
+            fetchBgzData(name, principal, roles, resourceType, query, carePlan),
         ),
     );
 
@@ -91,6 +91,8 @@ export async function getBgzData(name: string, carePlan: CarePlan) {
 
 async function fetchBgzData(
     name: string,
+    principal: string,
+    roles: string,
     resourceType: string,
     query: string,
     carePlan: CarePlan,
@@ -107,6 +109,8 @@ async function fetchBgzData(
         headers: {
             Authorization: `Bearer ${process.env.FHIR_AUTHORIZATION_TOKEN}`,
             'X-Scp-Context': xSCPContext,
+            'Orca-Auth-Roles': roles,
+            'Orca-Auth-Principal': principal,
             'Content-Type': 'application/x-www-form-urlencoded',
         },
     });

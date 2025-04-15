@@ -15,6 +15,7 @@ export const DeviceRequestView = () => {
                     {deviceRequests.map((request, index) => (
                         <ListItem key={request.id || index}>
                             <ListItemText
+                                disableTypography={true}
                                 primary={`Verzoek voor apparaat ${index + 1}`}
                                 secondary={
                                     <>

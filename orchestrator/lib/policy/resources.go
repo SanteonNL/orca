@@ -55,6 +55,12 @@ var findSubjectFuncs = map[string]findSubjectFunc{
 	"Questionnaire": wrapUnmarshal(func(_ fhir.Questionnaire) *fhir.Reference {
 		return nil
 	}),
+	"Procedure": wrapUnmarshal(func(procedure fhir.Procedure) *fhir.Reference {
+		return &procedure.Subject
+	}),
+	"MedicationRequest": wrapUnmarshal(func(request fhir.MedicationRequest) *fhir.Reference {
+		return &request.Subject
+	}),
 }
 
 func findSubject(resource any, resourceType string) (*fhir.Reference, error) {

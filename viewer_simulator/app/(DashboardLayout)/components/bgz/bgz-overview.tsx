@@ -19,10 +19,12 @@ const buildUrl = (
 
 export default function BgzOverview({
     name,
-    roles: roles = '',
+    principal = '',
+    roles = '',
 }: {
     name: string;
     roles: string;
+    principal: string;
 }) {
     const { loading, data: rows } = useFetch<Row[]>(
         buildUrl(
@@ -30,14 +32,21 @@ export default function BgzOverview({
             '/api/bgz/careplans',
             {
                 name,
-                role: roles,
+                roles,
+                principal,
             },
         ),
     );
 
     return (
         <div>
-            <CarePlanTable name={name} rows={rows || []} loading={loading} />
+            <CarePlanTable
+                name={name}
+                principal={principal}
+                roles={roles}
+                rows={rows || []}
+                loading={loading}
+            />
         </div>
     );
 }

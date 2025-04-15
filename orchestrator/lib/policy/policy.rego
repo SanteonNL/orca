@@ -16,11 +16,23 @@ roles_to_tags := {
 		"BH", # behavioral health information sensitivity
 		"MH", # mental health information sensitivity
 	],
+	# Huisarts (01.015)
+	"01.015": ["MH"], # mental health information sensitivity
+	# Verpleegkundige (30.000)
+	"30.000": [],
 }
 
-identifier_matches(left, right) if {
-	left.system == right.system
-	left.value == right.value
+member_matches(left, right) if {
+	left.reference != null
+	right.reference != null
+	endswith(right.reference, left.reference)
+}
+
+member_matches(left, right) if {
+	left.identifier != null
+	right.identifier != null
+	left.identifier.system == right.identifier.system
+	left.identifier.value == right.identifier.value
 }
 
 extract_care_teams(care_plan) := [resource |
@@ -30,15 +42,15 @@ extract_care_teams(care_plan) := [resource |
 	resource.id == trim_left(care_team.reference, "#")
 ]
 
-extract_tags(resource) := [tag.value |
-	some tag in resource.meta.tags
+extract_tags(resource) := [tag.code |
+	some tag in resource.meta.tag
 	tag.system == "http://terminology.hl7.org/CodeSystem/v3-ActCode"
 ]
 
 contains_tags if {
 	input.resource != null
 	input.resource.meta != null
-	input.resource.meta.tags != null
+	input.resource.meta.tag != null
 }
 
 is_careteam_participant if {
@@ -46,7 +58,7 @@ is_careteam_participant if {
 	care_teams := extract_care_teams(care_plan)
 	some care_team in care_teams
 	some participant in care_team.participant
-	identifier_matches(participant.member.identifier, input.principal)
+	member_matches(participant.member, input.principal)
 }
 
 is_get_post if {

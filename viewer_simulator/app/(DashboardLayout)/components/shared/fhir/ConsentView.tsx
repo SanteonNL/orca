@@ -15,6 +15,7 @@ export const ConsentView = () => {
           {consents.map((consent, index) => (
             <ListItem key={index}>
               <ListItemText
+                disableTypography={true}
                 primary={consent.category?.[0]?.text || `Toestemming ${index + 1}`}
                 secondary={
                   <>

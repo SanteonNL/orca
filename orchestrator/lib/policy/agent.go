@@ -14,6 +14,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/rs/zerolog"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -71,7 +72,7 @@ type RegoModule struct {
 }
 
 type Context struct {
-	Principal fhir.Identifier `json:"principal"`
+	Principal fhir.Reference  `json:"principal"`
 	Method    string          `json:"method"`
 	Roles     []string        `json:"roles"`
 	Resource  any             `json:"resource"`
@@ -115,6 +116,13 @@ func (m Agent) Allow(ctx context.Context, context *Context) error {
 		return fmt.Errorf("invalid type for allow")
 	}
 
+	y, _ := json.Marshal(context.Principal)
+	x, _ := json.Marshal(context.Resource)
+	z := map[string]any{}
+	json.Unmarshal(x, &z)
+
+	fmt.Printf(">> policy check (allowed=%#v, principal=%s, roles=%s): %v/%v\n", allowed, string(y), strings.Join(context.Roles, ", "), z["resourceType"], z["id"])
+
 	if !allowed {
 		return ErrAccessDenied
 	}
@@ -126,15 +134,26 @@ type Preflight struct {
 	ResourceId   string
 	Query        url.Values
 	ResourceType string
-	Principal    fhir.Identifier
+	Principal    fhir.Reference
+	RawPrincipal string
 	Method       string
 	Roles        []string
 }
 
 func (a Agent) Preflight(resourceType, id string, r *http.Request) (*Preflight, error) {
-	principal, err := auth.PrincipalFromContext(r.Context())
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract principal from context: %w", err)
+	var principal fhir.Reference
+
+	principalHeader := r.Header.Get("Orca-Auth-Principal")
+
+	if principalHeader == "" {
+		authPrincipal, err := auth.PrincipalFromContext(r.Context())
+		if err != nil {
+			return nil, fmt.Errorf("failed to extract principal from context: %w", err)
+		}
+
+		principal = fhir.Reference{Identifier: &authPrincipal.Organization.Identifier[0]}
+	} else {
+		principal = fhir.Reference{Reference: to.Ptr(principalHeader)}
 	}
 
 	var roles []string
@@ -147,8 +166,9 @@ func (a Agent) Preflight(resourceType, id string, r *http.Request) (*Preflight, 
 	return &Preflight{
 		ResourceId:   id,
 		ResourceType: resourceType,
+		RawPrincipal: principalHeader,
 		Query:        r.URL.Query(),
-		Principal:    principal.Organization.Identifier[0],
+		Principal:    principal,
 		Method:       r.Method,
 		Roles:        roles,
 	}, nil
@@ -183,7 +203,10 @@ func (a Agent) PrepareContext(ctx context.Context, cache SearchCache, preflight 
 
 	var bundle fhir.Bundle
 
-	if err := a.client.SearchWithContext(ctx, "CarePlan", params, &bundle); err != nil {
+	if err := a.client.SearchWithContext(ctx, "CarePlan", params, &bundle, fhirclient.PreRequestOption(func(client fhirclient.Client, r *http.Request) {
+		r.Header.Set("Orca-Auth-Roles", strings.Join(preflight.Roles, ","))
+		r.Header.Set("Orca-Auth-Principal", preflight.RawPrincipal)
+	})); err != nil {
 		return nil, fmt.Errorf("failed to search for careplans: %w", err)
 	}
 

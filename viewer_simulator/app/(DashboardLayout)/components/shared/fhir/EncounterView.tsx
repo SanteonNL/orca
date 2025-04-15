@@ -14,6 +14,7 @@ export const EncounterView = () => {
                     {encounters.map((encounter, index) => (
                         <ListItem key={encounter.id || index}>
                             <ListItemText
+                                disableTypography={true}
                                 primary={`Ontmoeting ${index + 1}`}
                                 secondary={
                                     <>

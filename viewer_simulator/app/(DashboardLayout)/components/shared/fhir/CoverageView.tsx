@@ -15,6 +15,7 @@ export const CoverageView = () => {
           {coverages.map((coverage, index) => (
             <ListItem key={index}>
               <ListItemText
+                disableTypography={true}
                 primary={`Coverage ${index + 1}`}
                 secondary={
                   <>

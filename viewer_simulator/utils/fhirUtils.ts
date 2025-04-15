@@ -6,7 +6,7 @@ export function getBsn(carePlan?: CarePlan) {
     if (identifier?.system === 'http://fhir.nl/fhir/NamingSystem/bsn') {
         return identifier.value || "Unknown";
     }
-    return "Unknown";
+    return "111222333";
 }
 
 //This function takes in a Task and searches for a Task.basedOn CarePlan reference OR identifier. 

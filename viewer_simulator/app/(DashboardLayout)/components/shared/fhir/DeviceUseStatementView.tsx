@@ -14,6 +14,7 @@ export const DeviceUseStatementView = () => {
                     {deviceUseStatements.map((statement, index) => (
                         <ListItem key={statement.id || index}>
                             <ListItemText
+                                disableTypography={true}
                                 primary={`Gebruik van apparaat ${index + 1}`}
                                 secondary={
                                     <>

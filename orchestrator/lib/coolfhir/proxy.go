@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/rs/zerolog/log"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
@@ -210,7 +211,7 @@ func (f *FHIRClientProxy) sanitizeRequestHeaders(header http.Header) http.Header
 	// - httputil.ReverseProxy: remove hop-by-hop headers
 	for name, values := range header {
 		nameLC := strings.ToLower(name)
-		if strings.HasPrefix(nameLC, "x-") && nameLC != "x-scp-context" ||
+		if strings.HasPrefix(nameLC, "orca-") && strings.HasPrefix(nameLC, "x-") && nameLC != "x-scp-context" ||
 			nameLC == "referer" ||
 			nameLC == "cookie" ||
 			nameLC == "user-agent" ||
