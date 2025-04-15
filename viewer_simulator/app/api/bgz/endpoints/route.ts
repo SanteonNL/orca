@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
             .map((key) => ({
                 name: key.slice(0, 0 - '_CAREPLANSERVICE_URL'.length),
                 endpoint: process.env[key],
-            })),
+            }))
+            .toSorted((a, b) => a.name.localeCompare(b.name)),
     );
 }
