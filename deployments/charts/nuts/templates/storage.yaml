@@ -1,0 +1,12 @@
+{{- if .Values.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: nuts-data
+spec:
+  accessModes:
+    - ReadWriteOnce
+  volumeMode: Filesystem
+  resources:
+    {{ toYaml .Values.persistence.resources | nindent 4 }}
+{{- end }}

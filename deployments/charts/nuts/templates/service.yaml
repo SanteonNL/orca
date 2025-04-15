@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nuts.fullname" . }}
+  labels:
+    {{- include "nuts.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: 8081
+      targetPort: internal
+      protocol: TCP
+      name: internal
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "nuts.selectorLabels" . | nindent 4 }}

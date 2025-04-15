@@ -1,0 +1,26 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nuts.fullname" . }}-discovery
+data:
+  {{- toYaml .Values.discovery | nindent 2 }}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nuts.fullname" . }}-policy
+data:
+  {{- toYaml .Values.policy | nindent 2 }}
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "nuts.fullname" . }}-config
+data:
+  {{- toYaml .Values.config | nindent 2 }}
+  {{- if .Values.configExtra }}
+  {{- toYaml .Values.configExtra | nindent 2 }}
+  {{- end }}
+  
