@@ -21,7 +21,7 @@ func (c Client) GetID() string {
 }
 
 func (c Client) RedirectURIs() []string {
-	return append(c.redirectURIs)
+	return append([]string{}, c.redirectURIs...)
 }
 
 func (c Client) PostLogoutRedirectURIs() []string {
