@@ -31,7 +31,9 @@ func New(strictMode bool, issuer *url.URL, config Config) (*Service, error) {
 	if strictMode {
 		extraOptions = append(extraOptions, op.WithAllowInsecure())
 	}
-	key := [32]byte{} // TODO: what is this used for?
+	// TODO: Change to key in Azure Key Vault
+	key := [32]byte{}
+	_, _ = rand.Read(key[:])
 
 	// TODO: Change to key in Azure Key Vault
 	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -110,9 +112,6 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 	config := &op.Config{
 		CryptoKey: key,
 
-		// will be used if the end_session endpoint is called without a post_logout_redirect_uri
-		//DefaultLogoutRedirectURI: pathLoggedOut, // TODO
-
 		// enable code_challenge_method S256 for PKCE (and therefore PKCE in general)
 		CodeMethodS256: true,
 
@@ -121,8 +120,6 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 
 		// enables additional authentication by using private_key_jwt
 		//AuthMethodPrivateKeyJWT: true, // TODO: as alternative to client_secret?
-
-		GrantTypeRefreshToken: false,
 
 		// enables use of the `request` Object parameter
 		RequestObjectSupported: true,
@@ -156,7 +153,7 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 	opts := append([]op.Option{
 		// as an example on how to customize an endpoint this will change the authorization_endpoint from /authorize to /auth
 		op.WithCustomAuthEndpoint(op.NewEndpoint("auth")),
-		op.WithLogger(logger.WithGroup("openid-provider")),
+		//op.WithLogger(logger.WithGroup("openid-provider")),
 	}, extraOptions...)
 	handler, err := op.NewProvider(config, storage,
 		func(insecure bool) (op.IssuerFromRequest, error) {
