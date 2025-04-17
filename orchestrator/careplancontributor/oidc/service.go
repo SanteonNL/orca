@@ -9,6 +9,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 	"golang.org/x/text/language"
 	"log/slog"
@@ -121,15 +122,37 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 		// enables additional authentication by using private_key_jwt
 		//AuthMethodPrivateKeyJWT: true, // TODO: as alternative to client_secret?
 
-		// enables refresh_token grant use
-		// GrantTypeRefreshToken: true, // TODO: not needed?
+		GrantTypeRefreshToken: false,
 
 		// enables use of the `request` Object parameter
 		RequestObjectSupported: true,
 
 		// this example has only static texts (in English), so we'll set the here accordingly
 		SupportedUILocales: []language.Tag{language.English, language.Dutch},
+
+		SupportedScopes: []string{
+			oidc.ScopeOpenID,
+			oidc.ScopeProfile,
+			oidc.ScopeEmail,
+		},
+		SupportedClaims: []string{
+			"sub",
+			"aud",
+			"exp",
+			"iat",
+			"iss",
+			"auth_time",
+			"nonce",
+			"c_hash",
+			"at_hash",
+			"scopes",
+			"client_id",
+			"name",
+			"email",
+			"roles",
+		},
 	}
+
 	opts := append([]op.Option{
 		// as an example on how to customize an endpoint this will change the authorization_endpoint from /authorize to /auth
 		op.WithCustomAuthEndpoint(op.NewEndpoint("auth")),

@@ -13,6 +13,7 @@ import (
 )
 
 var _ op.Storage = (*Storage)(nil)
+var _ op.CanSetUserinfoFromRequest = (*Storage)(nil)
 
 type Storage struct {
 	mux          *sync.RWMutex
@@ -93,7 +94,7 @@ func (o Storage) DeleteAuthRequest(ctx context.Context, id string) error {
 }
 
 func (o Storage) CreateAccessToken(ctx context.Context, request op.TokenRequest) (accessTokenID string, expiration time.Time, err error) {
-	req, ok := request.(AuthRequest)
+	req, ok := request.(*AuthRequest)
 	if !ok {
 		return "", time.Time{}, fmt.Errorf("invalid token request: %T", request)
 	}
@@ -139,6 +140,25 @@ func (o Storage) AuthorizeClientIDSecret(ctx context.Context, clientID, clientSe
 	return nil
 }
 
+// SetUserinfoFromScopes sets the userinfo claims based on the requested scopes and user ID.
+// Since we don't want to store the userinfo in the database, we just return nil here.
+// User info should then be set through SetUserinfoFromRequest
+func (o Storage) SetUserinfoFromScopes(ctx context.Context, userinfo *oidc.UserInfo, userID, clientID string, scopes []string) error {
+	return nil
+}
+
+func (o Storage) SetUserinfoFromRequest(ctx context.Context, userinfo *oidc.UserInfo, request op.IDTokenRequest, scopes []string) error {
+	req, ok := request.(*AuthRequest)
+	if !ok {
+		return fmt.Errorf("only *AuthRequest is supported, but was: %T", request)
+	}
+	if req.User == nil || !req.AuthDone {
+		return errors.New("user not authenticated")
+	}
+	populateUserInfo(userinfo, scopes, *req.User)
+	return nil
+}
+
 func (o Storage) SetUserinfoFromToken(ctx context.Context, userInfo *oidc.UserInfo, tokenID, subject, origin string) error {
 	o.mux.RLock()
 	token, ok := o.tokens[tokenID]
@@ -146,18 +166,24 @@ func (o Storage) SetUserinfoFromToken(ctx context.Context, userInfo *oidc.UserIn
 	if !ok {
 		return errors.New("token not found")
 	}
-	for _, scope := range token.Scopes {
+	populateUserInfo(userInfo, token.Scopes, token.User)
+	return nil
+}
+
+func populateUserInfo(userInfo *oidc.UserInfo, scopes []string, user UserDetails) {
+	for _, scope := range scopes {
 		switch scope {
 		case oidc.ScopeOpenID:
-			userInfo.Subject = token.User.ID
+			userInfo.Subject = user.ID
 		case oidc.ScopeEmail:
-			userInfo.Email = token.User.Email
+			userInfo.Email = user.Email
 		case oidc.ScopeProfile:
-			userInfo.Name = token.User.Name
-			userInfo.Claims["roles"] = []string{token.User.Role}
+			userInfo.Name = user.Name
+			userInfo.Claims = map[string]any{
+				"roles": []string{user.Role},
+			}
 		}
 	}
-	return nil
 }
 
 func (o Storage) GetKeyByIDAndClientID(ctx context.Context, keyID, clientID string) (*jose.JSONWebKey, error) {
@@ -168,10 +194,6 @@ func (o Storage) GetKeyByIDAndClientID(ctx context.Context, keyID, clientID stri
 func (o Storage) ValidateJWTProfileScopes(ctx context.Context, userID string, scopes []string) ([]string, error) {
 	//TODO implement me
 	panic("ValidateJWTProfileScopes")
-}
-
-func (o Storage) SetUserinfoFromScopes(ctx context.Context, userinfo *oidc.UserInfo, userID, clientID string, scopes []string) error {
-	return nil
 }
 
 func (o Storage) GetPrivateClaimsFromScopes(ctx context.Context, userID, clientID string, scopes []string) (map[string]any, error) {
