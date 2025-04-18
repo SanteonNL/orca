@@ -348,12 +348,14 @@ function generatePatientBsn() {
 }
 
 function generatePatientPhone() {
-    let prefix = "+31 6 ";
-    // Ensure the tail is exactly 4 digits, pad with zeros if necessary.
-    const tail = Math.floor(Math.random() * 100000000).toString().padStart(8, '0');
-    // Concatenate to form an 8-digit candidate.
-    let bsn = prefix + tail;
-    return bsn
+    // Some downstream systems might be sending actual messages to these phone numbers, so use a fixed, non-existing one.
+    return '+31 6 12345678';
+    // let prefix = "+31 6 ";
+    // // Ensure the tail is exactly 4 digits, pad with zeros if necessary.
+    // const tail = Math.floor(Math.random() * 100000000).toString().padStart(8, '0');
+    // // Concatenate to form an 8-digit candidate.
+    // let bsn = prefix + tail;
+    // return bsn
 }
 /**
  * Nederlandse burgerservicenummers, de vroegere sofinummers, voldoen aan een variant van de elfproef.
