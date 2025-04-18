@@ -13,15 +13,23 @@ export async function GET(req: NextRequest) {
         );
     }
 
+    const orcaCpcUrl = process.env.ORCA_CPC_URL;
+    if (!orcaCpcUrl) {
+        throw new Error(
+            'Missing ORCA_CPC_URL environment variable',
+        );
+    }
+
     try {
 
-        const resp = await fetch(`${process.env.ORCA_CPC_URL}/cps/fhir/CarePlan/_search`, {
+        const resp = await fetch(`${orcaCpcUrl}/cps/fhir/CarePlan/_search`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${process.env[`${name}_BEARER_TOKEN`] ?? ''}`,
-                'Content-Type': 'application/fhir+json',
+                'Content-Type': 'x-www-form-urlencoded',
                 'X-Cps-Url': baseUrl,
             },
+            body: `_count=1000`
         });
 
         if(!resp.ok) {
