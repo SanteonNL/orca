@@ -80,7 +80,6 @@ func (s *Service) handleReadCondition(ctx context.Context, request FHIRHandlerRe
 
 // handleSearchCondition performs a search for Condition based on the user request parameters
 // and filters the results based on user authorization
-// Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
 func (s *Service) handleSearchCondition(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msgf("Searching for Conditions")
 
@@ -160,7 +159,7 @@ func (s *Service) searchCondition(ctx context.Context, queryParams url.Values, h
 	var allowedConditionRefs []string
 	for _, cond := range conditions {
 		// Verify if the Condition has a valid Patient subject and the user has access to this patient
-		if cond.Subject.Identifier != nil && cond.Subject.Identifier.System != nil && cond.Subject.Identifier.Value != nil {
+		if coolfhir.ValidateReference(cond.Subject) {
 			patientBundle, err := s.searchPatient(ctx, map[string][]string{"identifier": {fmt.Sprintf("%s|%s", *cond.Subject.Identifier.System, *cond.Subject.Identifier.Value)}}, headers, principal)
 			if err != nil {
 				log.Ctx(ctx).Error().Err(err).Msgf("Error checking patient access for Condition/%s", *cond.Id)
