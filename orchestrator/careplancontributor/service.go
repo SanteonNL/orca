@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
 	"net/http"
 	"net/url"
 	"strings"
@@ -120,6 +121,13 @@ func New(
 		eventManager:                  eventManager,
 		sseService:                    sse.New(),
 	}
+	if config.OIDCProvider.Enabled {
+		result.oidcProvider, err = oidc.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDCProvider)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
+		}
+	}
+
 	result.createFHIRClientForURL = result.defaultCreateFHIRClientForURL
 	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
 		result.notifier, err = ehr.NewNotifier(eventManager, messageBroker, messaging.Entity{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
@@ -152,9 +160,15 @@ type Service struct {
 	eventManager                  events.Manager
 	sseService                    *sse.Service
 	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
+	oidcProvider                  *oidc.Service
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
+	if s.oidcProvider != nil {
+		mux.HandleFunc(basePath+"/login", s.withSession(s.oidcProvider.HandleLogin))
+		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
+	}
+
 	baseURL := s.orcaPublicURL.JoinPath(basePath)
 	//
 	// The section below defines endpoints specified by Shared Care Planning.
