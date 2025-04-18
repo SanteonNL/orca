@@ -462,6 +462,68 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		require.True(t, foundServiceRequest, "Completed ServiceRequest not found in search results")
 	})
 
+	t.Run("Search Questionnaire by id", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{
+			"_id": {*questionnaire.Id},
+		}
+
+		err := carePlanContributor1.Search("Questionnaire", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// The search should return our questionnaire
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify it's the correct Questionnaire
+		var foundQuestionnaire bool
+		for _, entry := range searchResult.Entry {
+			var q fhir.Questionnaire
+			err := json.Unmarshal(entry.Resource, &q)
+			require.NoError(t, err)
+
+			if q.Id != nil && *q.Id == *questionnaire.Id {
+				foundQuestionnaire = true
+
+				// Add expected audit event for this Questionnaire
+				addExpectedSearchAudit("Questionnaire/"+*q.Id, queryParams)
+				break
+			}
+		}
+		require.True(t, foundQuestionnaire, "Questionnaire not found in search results")
+	})
+
+	t.Run("Search QuestionnaireResponse by id", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{
+			"_id": {*questionnaireResponse.Id},
+		}
+
+		err := carePlanContributor1.Search("QuestionnaireResponse", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// The search should return our questionnaireResponse
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify it's the correct QuestionnaireResponse
+		var foundQuestionnaireResponse bool
+		for _, entry := range searchResult.Entry {
+			var qr fhir.QuestionnaireResponse
+			err := json.Unmarshal(entry.Resource, &qr)
+			require.NoError(t, err)
+
+			if qr.Id != nil && *qr.Id == *questionnaireResponse.Id {
+				foundQuestionnaireResponse = true
+
+				// Add expected audit event for this QuestionnaireResponse
+				addExpectedSearchAudit("QuestionnaireResponse/"+*qr.Id, queryParams)
+				break
+			}
+		}
+		require.True(t, foundQuestionnaireResponse, "QuestionnaireResponse not found in search results")
+	})
+
 	// TODO: Re-implement, test case is still valid but auth mechanism needs to change
 	var readCondition fhir.Condition
 	t.Run("Read Condition by id", func(t *testing.T) {
@@ -478,6 +540,93 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		require.NotNil(t, readCondition)
 
 		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
+	})
+
+	t.Run("Search Condition by id", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{"_id": {*condition.Id}}
+
+		err := carePlanContributor1.Search("Condition", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify the search result contains the Condition we're looking for
+		var foundCondition bool
+		for _, entry := range searchResult.Entry {
+			var cond fhir.Condition
+			err := json.Unmarshal(entry.Resource, &cond)
+			require.NoError(t, err)
+
+			if cond.Id != nil && *cond.Id == *condition.Id {
+				foundCondition = true
+				break
+			}
+		}
+		require.True(t, foundCondition, "Condition not found in search results")
+
+		// Add expected audit event for this search operation
+		addExpectedSearchAudit("Condition/"+*condition.Id, queryParams)
+	})
+
+	t.Run("Search Condition by clinical status", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{"clinical-status": {"active"}}
+
+		err := carePlanContributor1.Search("Condition", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// Verify at least one active Condition is returned
+		var foundActiveCondition bool
+		for _, entry := range searchResult.Entry {
+			var cond fhir.Condition
+			err := json.Unmarshal(entry.Resource, &cond)
+			require.NoError(t, err)
+
+			if cond.ClinicalStatus != nil && len(cond.ClinicalStatus.Coding) > 0 {
+				for _, coding := range cond.ClinicalStatus.Coding {
+					if coding.Code != nil && *coding.Code == "active" {
+						foundActiveCondition = true
+						// Add expected audit event for this Condition
+						addExpectedSearchAudit("Condition/"+*cond.Id, queryParams)
+						break
+					}
+				}
+			}
+		}
+		require.True(t, foundActiveCondition, "No active Condition found in search results")
+	})
+
+	t.Run("Search Condition by multiple parameters", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{
+			"clinical-status": {"active"},
+			"_id":             {*condition.Id},
+		}
+
+		err := carePlanContributor1.Search("Condition", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// The search should return our active condition
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify it's the correct Condition
+		var foundCondition bool
+		for _, entry := range searchResult.Entry {
+			var cond fhir.Condition
+			err := json.Unmarshal(entry.Resource, &cond)
+			require.NoError(t, err)
+
+			if cond.Id != nil && *cond.Id == *condition.Id {
+				foundCondition = true
+				// Add expected audit event for this Condition
+				addExpectedSearchAudit("Condition/"+*cond.Id, queryParams)
+				break
+			}
+		}
+		require.True(t, foundCondition, "Active Condition not found in search results")
 	})
 
 	// TODO: Re-implement, test case is still valid but auth mechanism needs to change

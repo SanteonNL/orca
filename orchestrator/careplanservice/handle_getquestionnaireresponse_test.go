@@ -263,3 +263,326 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestService_handleSearchQuestionnaireResponse(t *testing.T) {
+	questionnaireResponse1 := fhir.QuestionnaireResponse{
+		Id:     to.Ptr("1"),
+		Status: fhir.QuestionnaireResponseStatusCompleted,
+	}
+	questionnaireResponse1Raw, _ := json.Marshal(questionnaireResponse1)
+
+	questionnaireResponse2 := fhir.QuestionnaireResponse{
+		Id:     to.Ptr("2"),
+		Status: fhir.QuestionnaireResponseStatusInProgress,
+	}
+	questionnaireResponse2Raw, _ := json.Marshal(questionnaireResponse2)
+
+	questionnaireResponse3 := fhir.QuestionnaireResponse{
+		Id:     to.Ptr("3"),
+		Status: fhir.QuestionnaireResponseStatusCompleted,
+	}
+	questionnaireResponse3Raw, _ := json.Marshal(questionnaireResponse3)
+
+	task1 := fhir.Task{
+		Id: to.Ptr("1"),
+		Output: []fhir.TaskOutput{
+			{
+				ValueReference: &fhir.Reference{
+					Reference: to.Ptr("QuestionnaireResponse/1"),
+				},
+			},
+		},
+	}
+	task1Raw, _ := json.Marshal(task1)
+
+	task3 := fhir.Task{
+		Id: to.Ptr("3"),
+		Output: []fhir.TaskOutput{
+			{
+				ValueReference: &fhir.Reference{
+					Reference: to.Ptr("QuestionnaireResponse/3"),
+				},
+			},
+		},
+	}
+	task3Raw, _ := json.Marshal(task3)
+
+	auditEventRead := fhir.AuditEvent{
+		Id:     to.Ptr("1"),
+		Action: to.Ptr(fhir.AuditEventActionR),
+		Entity: []fhir.AuditEventEntity{
+			{
+				What: &fhir.Reference{
+					Reference: to.Ptr("QuestionnaireResponse/1"),
+				},
+			},
+		},
+	}
+	auditEventReadRaw, _ := json.Marshal(auditEventRead)
+
+	tests := map[string]struct {
+		context         context.Context
+		request         FHIRHandlerRequest
+		expectedError   error
+		setup           func(ctx context.Context, client *mock.MockClient)
+		mockResponse    *fhir.Bundle
+		expectedEntries []string
+	}{
+		"empty bundle": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				FhirHeaders: &fhirclient.Headers{},
+				RequestUrl:  &url.URL{RawQuery: "_id=nonexistent"},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
+			expectedError: nil,
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+						return nil
+					})
+			},
+			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
+			expectedEntries: []string{},
+		},
+		"fhirclient error": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				FhirHeaders: &fhirclient.Headers{},
+				RequestUrl:  &url.URL{RawQuery: "_id=1"},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
+			expectedError: errors.New("error"),
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any(), gomock.Any()).
+					Return(errors.New("error"))
+			},
+			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
+			expectedEntries: []string{},
+		},
+		"found single QuestionnaireResponse with task access": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				FhirHeaders: &fhirclient.Headers{},
+				RequestUrl:  &url.URL{RawQuery: "_id=1"},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
+			expectedError: nil,
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{Resource: questionnaireResponse1Raw},
+							},
+						}
+						return nil
+					})
+
+				// Search for task referencing QuestionnaireResponse/1
+				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, params url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						require.Equal(t, "QuestionnaireResponse/1", params.Get("output-reference"))
+						*target = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{Resource: task1Raw},
+							},
+						}
+						return nil
+					})
+			},
+			mockResponse: &fhir.Bundle{Entry: []fhir.BundleEntry{
+				{
+					Resource: questionnaireResponse1Raw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+				{
+					Resource: auditEventReadRaw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+			}},
+			expectedEntries: []string{string(questionnaireResponse1Raw)},
+		},
+		"found QuestionnaireResponse as creator": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				FhirHeaders: &fhirclient.Headers{},
+				RequestUrl:  &url.URL{RawQuery: "_id=2"},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
+			expectedError: nil,
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{Resource: questionnaireResponse2Raw},
+							},
+						}
+						return nil
+					})
+
+				// Task search for QuestionnaireResponse/2 returns empty
+				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, params url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						require.Equal(t, "QuestionnaireResponse/2", params.Get("output-reference"))
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{}}
+						return nil
+					})
+
+				// isCreator check returns true
+				// Because our implementation of isCreatorOfResource currently just returns true, we don't need to mock AuditEvent search
+			},
+			mockResponse: &fhir.Bundle{Entry: []fhir.BundleEntry{
+				{
+					Resource: questionnaireResponse2Raw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+				{
+					Resource: auditEventReadRaw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+			}},
+			expectedEntries: []string{string(questionnaireResponse2Raw)},
+		},
+		"multiple responses filtered correctly": {
+			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
+			request: FHIRHandlerRequest{
+				Principal:   auth.TestPrincipal1,
+				FhirHeaders: &fhirclient.Headers{},
+				QueryParams: url.Values{"status": {"completed"}},
+				LocalIdentity: &fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+					Value:  to.Ptr("1"),
+				},
+			},
+			expectedError: nil,
+			setup: func(ctx context.Context, client *mock.MockClient) {
+				client.EXPECT().SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, params url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						require.Equal(t, "completed", params.Get("status"))
+						*target = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{Resource: questionnaireResponse1Raw},
+								{Resource: questionnaireResponse3Raw},
+							},
+						}
+						return nil
+					})
+
+				// Task search for each QuestionnaireResponse
+				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, params url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						if params.Get("output-reference") == "QuestionnaireResponse/1" {
+							*target = fhir.Bundle{
+								Entry: []fhir.BundleEntry{
+									{Resource: task1Raw},
+								},
+							}
+						} else if params.Get("output-reference") == "QuestionnaireResponse/3" {
+							*target = fhir.Bundle{
+								Entry: []fhir.BundleEntry{
+									{Resource: task3Raw},
+								},
+							}
+						}
+						return nil
+					}).Times(2)
+			},
+			mockResponse: &fhir.Bundle{Entry: []fhir.BundleEntry{
+				{
+					Resource: questionnaireResponse1Raw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+				{
+					Resource: auditEventReadRaw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+				{
+					Resource: questionnaireResponse3Raw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+				{
+					Resource: auditEventReadRaw,
+					Response: &fhir.BundleEntryResponse{
+						Status: "200 OK",
+					},
+				},
+			}},
+			expectedEntries: []string{string(questionnaireResponse1Raw), string(questionnaireResponse3Raw)},
+		},
+	}
+
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			client := mock.NewMockClient(ctrl)
+			tt.setup(tt.context, client)
+
+			service := &Service{fhirClient: client}
+			tx := coolfhir.Transaction()
+			result, err := service.handleSearchQuestionnaireResponse(tt.context, tt.request, tx)
+
+			if tt.expectedError != nil {
+				require.Equal(t, tt.expectedError, err)
+				require.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				require.NotNil(t, result)
+
+				entries, notifications, err := result(tt.mockResponse)
+				require.NoError(t, err)
+				require.NotNil(t, entries)
+				require.Len(t, notifications, 0)
+
+				if len(tt.expectedEntries) > 0 {
+					// Check that we have the expected number of entries
+					require.Len(t, entries, len(tt.expectedEntries))
+
+					actualEntries := []string{}
+					for _, entry := range entries {
+						actualEntries = append(actualEntries, string(entry.Resource))
+					}
+
+					// Verify that the actual entries match the expected entries
+					require.ElementsMatch(t, tt.expectedEntries, actualEntries)
+				} else {
+					require.Empty(t, entries)
+				}
+			}
+		})
+	}
+}

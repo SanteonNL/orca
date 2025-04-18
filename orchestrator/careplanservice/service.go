@@ -574,6 +574,12 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 		return s.handleSearchTask
 	case "ServiceRequest":
 		return s.handleSearchServiceRequest
+	case "Questionnaire":
+		return s.handleSearchQuestionnaire
+	case "QuestionnaireResponse":
+		return s.handleSearchQuestionnaireResponse
+	case "Condition":
+		return s.handleSearchCondition
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 			return s.handleUnmanagedOperation(ctx, request, tx)
