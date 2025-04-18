@@ -19,10 +19,9 @@ export async function GET(req: NextRequest) {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${process.env[`${name}_BEARER_TOKEN`] ?? ''}`,
-                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Type': 'application/fhir+json',
                 'X-Cps-Url': baseUrl,
             },
-            body: `_count=10000`
         });
 
         if(!resp.ok) {
