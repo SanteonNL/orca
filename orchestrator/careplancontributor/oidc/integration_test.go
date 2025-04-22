@@ -3,12 +3,15 @@ package oidc
 import (
 	"context"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 	zitadelHTTP "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"io"
 	"net/http"
 	"net/http/cookiejar"
 	"net/http/httptest"
@@ -17,7 +20,42 @@ import (
 
 func TestService_IntegrationTest(t *testing.T) {
 	sessionData := user.SessionData{
-		// TODO
+		StringValues: map[string]string{
+			"practitioner": "Practitioner/12345",
+		},
+		OtherValues: map[string]any{
+			"Practitioner/12345": fhir.Practitioner{
+				Identifier: []fhir.Identifier{
+					{
+						System: to.Ptr("example.com/identifier"),
+						Value:  to.Ptr("12345"),
+					},
+				},
+				Name: []fhir.HumanName{
+					{
+						Text: to.Ptr("John Doe"),
+					},
+				},
+				Qualification: []fhir.PractitionerQualification{
+					{
+						Code: fhir.CodeableConcept{
+							Coding: []fhir.Coding{
+								{
+									System: to.Ptr("example.com/CodeSystem"),
+									Code:   to.Ptr("nurse-level-4"),
+								},
+							},
+						},
+					},
+				},
+				Telecom: []fhir.ContactPoint{
+					{
+						System: to.Ptr(fhir.ContactPointSystemEmail),
+						Value:  to.Ptr("john@example.com"),
+					},
+				},
+			},
+		},
 	}
 	mux := http.NewServeMux()
 	httpServer := httptest.NewServer(mux)
@@ -69,12 +107,13 @@ func TestService_IntegrationTest(t *testing.T) {
 	httpClient := http.Client{
 		Jar: clientCookieJar,
 	}
-	_, err = httpClient.Get(clientLoginURL.String())
+	httpResponse, err := httpClient.Get(clientLoginURL.String())
 	require.NoError(t, err)
+	httpResponseData, _ := io.ReadAll(httpResponse.Body)
+	require.Equal(t, http.StatusOK, httpResponse.StatusCode, string(httpResponseData))
 
 	assert.Equal(t, "12345", capturedIDTokenClaims.Subject)
 	assert.Equal(t, "John Doe", capturedIDTokenClaims.GetUserInfo().Name)
 	assert.Equal(t, "john@example.com", capturedIDTokenClaims.GetUserInfo().Email)
-	assert.Equal(t, []any{"Verpleegkundige niveau 4"}, capturedIDTokenClaims.Claims["roles"])
-
+	assert.Equal(t, []any{"nurse-level-4@example.com/CodeSystem"}, capturedIDTokenClaims.Claims["roles"])
 }

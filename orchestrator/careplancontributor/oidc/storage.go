@@ -180,7 +180,7 @@ func populateUserInfo(userInfo *oidc.UserInfo, scopes []string, user UserDetails
 		case oidc.ScopeProfile:
 			userInfo.Name = user.Name
 			userInfo.Claims = map[string]any{
-				"roles": []string{user.Role},
+				"roles": user.Roles,
 			}
 		}
 	}
@@ -244,7 +244,7 @@ type UserDetails struct {
 	ID    string
 	Name  string
 	Email string
-	Role  string
+	Roles []string
 }
 
 type AuthRequest struct {
