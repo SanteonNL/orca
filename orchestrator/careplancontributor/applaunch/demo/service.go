@@ -31,14 +31,18 @@ func New(sessionManager *user.SessionManager, config Config, frontendLandingUrl 
 		sessionManager:     sessionManager,
 		config:             config,
 		frontendLandingUrl: frontendLandingUrl,
+		ehrFHIRClientFactory: func(baseURL *url.URL, httpClient *http.Client) fhirclient.Client {
+			return fhirclient.New(baseURL, httpClient, nil)
+		},
 	}
 }
 
 type Service struct {
-	sessionManager     *user.SessionManager
-	config             Config
-	baseURL            string
-	frontendLandingUrl *url.URL
+	sessionManager       *user.SessionManager
+	config               Config
+	baseURL              string
+	frontendLandingUrl   *url.URL
+	ehrFHIRClientFactory func(*url.URL, *http.Client) fhirclient.Client
 }
 
 func (s *Service) cpsFhirClient() fhirclient.Client {
@@ -68,7 +72,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	}
 
 	ehrFHIRClientProps := clients.Factories[fhirLauncherKey](values)
-	ehrFHIRClient := fhirclient.New(ehrFHIRClientProps.BaseURL, &http.Client{Transport: ehrFHIRClientProps.Client}, nil)
+	ehrFHIRClient := s.ehrFHIRClientFactory(ehrFHIRClientProps.BaseURL, &http.Client{Transport: ehrFHIRClientProps.Client})
 	var practitioner fhir.Practitioner
 	if err := ehrFHIRClient.Read(values["practitioner"], &practitioner); err != nil {
 		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to read practitioner resource")
