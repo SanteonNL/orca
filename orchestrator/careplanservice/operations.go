@@ -2,13 +2,13 @@ package careplanservice
 
 import (
 	"context"
-	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/url"
 	"strings"
 )
 
@@ -33,35 +33,45 @@ func (o *FHIRCreateOperation) Type() FHIROperationType {
 	return FHIROperationCreate
 }
 
-var _ FHIROperation = &FHIRSearchOperationHandler{}
+var _ FHIROperation = &FHIRSearchOperationHandler[any]{}
 
-type FHIRSearchOperationHandler struct {
-	fhirClient fhirclient.Client
+type FHIRSearchOperationHandler[T any] struct {
+	fhirClient  fhirclient.Client
+	authzPolicy Policy
 }
 
-func (h FHIRSearchOperationHandler) Type() FHIROperationType {
+func (h FHIRSearchOperationHandler[T]) Type() FHIROperationType {
 	return FHIROperationSearch
 }
 
-func (h FHIRSearchOperationHandler) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := request.ResourcePath
 	log.Ctx(ctx).Info().Msgf("Searching for %s", resourceType)
-	var bundle fhir.Bundle
-	err := h.fhirClient.SearchWithContext(ctx, resourceType, request.QueryParams, &bundle, fhirclient.ResponseHeaders(request.FhirHeaders))
+	resources, bundle, err := searchResources[T](ctx, h.fhirClient, resourceType, request.QueryParams, request.FhirHeaders)
 	if err != nil {
 		return nil, err
 	}
 
-	results := []*fhir.BundleEntry{}
-	for _, entry := range bundle.Entry {
-		var currentResource fhir.Resource
-		if err := json.Unmarshal(entry.Resource, &currentResource); err != nil {
-			log.Ctx(ctx).Error().
-				Err(err).
-				Msg("Failed to unmarshal resource for audit")
+	// Filter authorized resources
+	j := 0
+	for i, resource := range resources {
+		resourceID := *coolfhir.ResourceID(resource)
+		hasAccess, err := h.authzPolicy.HasAccess()
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msgf("Error checking authz policy for %s/%s", resourceType, resourceID)
 			continue
 		}
+		if hasAccess {
+			resources[j] = resource
+			bundle.Entry[j] = bundle.Entry[i]
+			j++
+		}
+	}
+	resources = resources[:j]
+	bundle.Entry = bundle.Entry[:j]
 
+	results := []*fhir.BundleEntry{}
+	for i, entry := range bundle.Entry {
 		// Create the query detail entity
 		queryEntity := fhir.AuditEventEntity{
 			Type: &fhir.Coding{
@@ -89,10 +99,11 @@ func (h FHIRSearchOperationHandler) Handle(ctx context.Context, request FHIRHand
 		results = append(results, &bundleEntry)
 
 		// Add audit event to the transaction
+		resourceID := coolfhir.ResourceID(resources[i])
 		auditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionR, &fhir.Reference{
-			Id:        currentResource.Id,
+			Id:        resourceID,
 			Type:      to.Ptr(resourceType),
-			Reference: to.Ptr(resourceType + "/" + *currentResource.Id),
+			Reference: to.Ptr(resourceType + "/" + *resourceID),
 		}, &fhir.Reference{
 			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
@@ -104,4 +115,25 @@ func (h FHIRSearchOperationHandler) Handle(ctx context.Context, request FHIRHand
 		// Simply return the already prepared results
 		return results, []any{}, nil
 	}, nil
+}
+
+func searchResources[T any](ctx context.Context, fhirClient fhirclient.Client, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
+	form := url.Values{}
+	for k, v := range queryParams {
+		form.Add(k, strings.Join(v, ","))
+	}
+
+	var bundle fhir.Bundle
+	err := fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
+	if err != nil {
+		return nil, &fhir.Bundle{}, err
+	}
+
+	var resources []T
+	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType(resourceType), &resources)
+	if err != nil {
+		return nil, &fhir.Bundle{}, err
+	}
+
+	return resources, &bundle, nil
 }

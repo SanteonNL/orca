@@ -556,9 +556,14 @@ func TestService_handleSearchServiceRequest(t *testing.T) {
 			client := mock.NewMockClient(ctrl)
 			tt.setup(tt.context, client)
 
-			service := &Service{fhirClient: client}
+			handler := FHIRSearchOperationHandler[fhir.ServiceRequest]{
+				fhirClient: client,
+				authzPolicy: AnyMatchPolicy([]Policy{
+					CreatorHasAccess{},
+				}),
+			}
 			tx := coolfhir.Transaction()
-			result, err := service.handleSearchServiceRequest(tt.context, tt.request, tx)
+			result, err := handler.handleSearchServiceRequest(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Equal(t, tt.expectedError, err)

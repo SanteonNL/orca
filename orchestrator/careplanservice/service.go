@@ -93,13 +93,13 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 		return nil, err
 	}
 
-	s.registerHandler("Patient", FHIRSearchOperationHandler{})
-	s.registerHandler("CarePlan", FHIRSearchOperationHandler{})
-	s.registerHandler("Task", FHIRSearchOperationHandler{})
-	s.registerHandler("ServiceRequest", FHIRSearchOperationHandler{})
-	s.registerHandler("Questionnaire", FHIRSearchOperationHandler{})
-	s.registerHandler("QuestionnaireResponse", FHIRSearchOperationHandler{})
-	s.registerHandler("Condition", FHIRSearchOperationHandler{})
+	s.registerHandler("Patient", FHIRSearchOperationHandler[any]{})
+	s.registerHandler("CarePlan", FHIRSearchOperationHandler[any]{})
+	s.registerHandler("Task", FHIRSearchOperationHandler[any]{})
+	s.registerHandler("ServiceRequest", FHIRSearchOperationHandler[any]{})
+	s.registerHandler("Questionnaire", FHIRSearchOperationHandler[any]{})
+	s.registerHandler("QuestionnaireResponse", FHIRSearchOperationHandler[any]{})
+	s.registerHandler("Condition", FHIRSearchOperationHandler[any]{})
 
 	return &s, nil
 }
@@ -1056,7 +1056,7 @@ func (s *Service) getLocalIdentity() (*fhir.Identifier, error) {
 	return &localIdentity[0].Identifier[0], nil
 }
 
-func (s *Service) registerHandler(resourceType string, operationHandler FHIRSearchOperationHandler) {
+func (s *Service) registerHandler(resourceType string, operationHandler FHIRSearchOperationHandler[any]) {
 	if s.operationHandlers == nil {
 		s.operationHandlers = map[string]map[FHIROperationType]FHIROperation{}
 	}

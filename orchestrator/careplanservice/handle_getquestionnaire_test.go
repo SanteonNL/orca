@@ -353,8 +353,9 @@ func TestService_handleSearchQuestionnaire(t *testing.T) {
 			client := mock.NewMockClient(ctrl)
 			tt.setup(tt.context, client)
 
-			handler := FHIRSearchOperationHandler{
-				fhirClient: client,
+			handler := FHIRSearchOperationHandler[fhir.Questionnaire]{
+				fhirClient:  client,
+				authzPolicy: EveryoneHasAccessPolicy{},
 			}
 			tx := coolfhir.Transaction()
 			result, err := handler.Handle(tt.context, tt.request, tx)
