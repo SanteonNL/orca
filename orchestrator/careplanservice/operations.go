@@ -4,6 +4,7 @@ import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
@@ -47,28 +48,10 @@ func (h FHIRSearchOperationHandler[T]) Type() FHIROperationType {
 func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := request.ResourcePath
 	log.Ctx(ctx).Info().Msgf("Searching for %s", resourceType)
-	resources, bundle, err := searchResources[T](ctx, h.fhirClient, resourceType, request.QueryParams, request.FhirHeaders)
+	resources, bundle, err := h.searchAndFilter(ctx, request.QueryParams, request.Principal, resourceType)
 	if err != nil {
 		return nil, err
 	}
-
-	// Filter authorized resources
-	j := 0
-	for i, resource := range resources {
-		resourceID := *coolfhir.ResourceID(resource)
-		hasAccess, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
-		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Msgf("Error checking authz policy for %s/%s", resourceType, resourceID)
-			continue
-		}
-		if hasAccess {
-			resources[j] = resource
-			bundle.Entry[j] = bundle.Entry[i]
-			j++
-		}
-	}
-	resources = resources[:j]
-	bundle.Entry = bundle.Entry[:j]
 
 	results := []*fhir.BundleEntry{}
 	for i, entry := range bundle.Entry {
@@ -115,6 +98,32 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		// Simply return the already prepared results
 		return results, []any{}, nil
 	}, nil
+}
+
+func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, queryParams url.Values, principal *auth.Principal, resourceType string) ([]T, *fhir.Bundle, error) {
+	resources, bundle, err := searchResources[T](ctx, h.fhirClient, resourceType, queryParams, new(fhirclient.Headers))
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Filter authorized resources
+	j := 0
+	for i, resource := range resources {
+		resourceID := *coolfhir.ResourceID(resource)
+		hasAccess, err := h.authzPolicy.HasAccess(ctx, resource, *principal)
+		if err != nil {
+			log.Ctx(ctx).Error().Err(err).Msgf("Error checking authz policy for %s/%s", resourceType, resourceID)
+			continue
+		}
+		if hasAccess {
+			resources[j] = resource
+			bundle.Entry[j] = bundle.Entry[i]
+			j++
+		}
+	}
+	resources = resources[:j]
+	bundle.Entry = bundle.Entry[:j]
+	return resources, bundle, nil
 }
 
 func searchResources[T any](ctx context.Context, fhirClient fhirclient.Client, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {

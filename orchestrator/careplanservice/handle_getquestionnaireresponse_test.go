@@ -331,9 +331,10 @@ func TestService_handleSearchQuestionnaireResponse(t *testing.T) {
 		"empty bundle": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				RequestUrl:  &url.URL{RawQuery: "_id=nonexistent"},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "QuestionnaireResponse",
+				RequestUrl:   &url.URL{RawQuery: "_id=nonexistent"},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -353,9 +354,10 @@ func TestService_handleSearchQuestionnaireResponse(t *testing.T) {
 		"fhirclient error": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				RequestUrl:  &url.URL{RawQuery: "_id=1"},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "QuestionnaireResponse",
+				RequestUrl:   &url.URL{RawQuery: "_id=1"},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -372,9 +374,10 @@ func TestService_handleSearchQuestionnaireResponse(t *testing.T) {
 		"found single QuestionnaireResponse with task access": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				RequestUrl:  &url.URL{RawQuery: "_id=1"},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "QuestionnaireResponse",
+				RequestUrl:   &url.URL{RawQuery: "_id=1"},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -423,9 +426,10 @@ func TestService_handleSearchQuestionnaireResponse(t *testing.T) {
 		"found QuestionnaireResponse as creator": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				RequestUrl:  &url.URL{RawQuery: "_id=2"},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "QuestionnaireResponse",
+				RequestUrl:   &url.URL{RawQuery: "_id=2"},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -473,9 +477,10 @@ func TestService_handleSearchQuestionnaireResponse(t *testing.T) {
 		"multiple responses filtered correctly": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				QueryParams: url.Values{"status": {"completed"}},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "QuestionnaireResponse",
+				QueryParams:  url.Values{"status": {"completed"}},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -552,9 +557,12 @@ func TestService_handleSearchQuestionnaireResponse(t *testing.T) {
 			client := mock.NewMockClient(ctrl)
 			tt.setup(tt.context, client)
 
-			service := &Service{fhirClient: client}
+			handler := FHIRSearchOperationHandler[fhir.QuestionnaireResponse]{
+				fhirClient:  client,
+				authzPolicy: ReadQuestionnaireResponseAuthzPolicy(client),
+			}
 			tx := coolfhir.Transaction()
-			result, err := service.handleSearchQuestionnaireResponse(tt.context, tt.request, tx)
+			result, err := handler.Handle(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Equal(t, tt.expectedError, err)

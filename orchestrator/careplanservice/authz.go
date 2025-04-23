@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/url"
 )
 
 type Policy[T any] interface {
@@ -32,6 +33,29 @@ func (e AnyMatchPolicy[T]) HasAccess(ctx context.Context, resource T, principal 
 		}
 	}
 	return false, nil
+}
+
+var _ Policy[any] = &RelatedResourcePolicy[any, any]{}
+
+// RelatedResourcePolicy is a policy that allows access if the user has access to the related resource(s).
+// For instance, if the user has access to a ServiceRequest, if the user has access to the related Task.
+type RelatedResourcePolicy[T any, R any] struct {
+	fhirClient          fhirclient.Client
+	searchHandlerPolicy Policy[R]
+	searchHandlerParams func(ctx context.Context, resource T) (resourceType string, searchParams url.Values)
+}
+
+func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+	resourceType, searchParams := r.searchHandlerParams(ctx, resource)
+	searchHandler := FHIRSearchOperationHandler[R]{
+		fhirClient:  r.fhirClient,
+		authzPolicy: r.searchHandlerPolicy,
+	}
+	results, _, err := searchHandler.searchAndFilter(ctx, searchParams, &principal, resourceType)
+	if err != nil {
+		return false, fmt.Errorf("related resource search (related resource type=%s): %w", resourceType, err)
+	}
+	return len(results) > 0, nil
 }
 
 var _ Policy[fhir.Task] = &TaskOwnerOrRequesterPolicy[fhir.Task]{}
@@ -86,7 +110,7 @@ func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, prin
 	return false, nil
 }
 
-var _ Policy[any] = &CreatorHasAccess[any]{}
+var _ Policy[any] = &CreatorPolicy[any]{}
 
 type EveryoneHasAccessPolicy[T any] struct {
 }
@@ -97,10 +121,10 @@ func (e EveryoneHasAccessPolicy[T]) HasAccess(ctx context.Context, resource T, p
 
 var _ Policy[any] = &EveryoneHasAccessPolicy[any]{}
 
-type CreatorHasAccess[T any] struct {
+type CreatorPolicy[T any] struct {
 }
 
-func (o CreatorHasAccess[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+func (o CreatorPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
 	// TODO: Find a more suitable way to handle this auth.
 	// The AuditEvent implementation has proven unsuitable and we are using the AuditEvent for unintended purposes.
 	// For now, we can return true, as this will follow the same logic as was present before implementing the AuditEvent.

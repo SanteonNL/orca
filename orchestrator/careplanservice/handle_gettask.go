@@ -12,6 +12,26 @@ import (
 	"net/http"
 )
 
+func ReadTaskAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Task] {
+	return AnyMatchPolicy[fhir.Task]{
+		Policies: []Policy[fhir.Task]{
+			TaskOwnerOrRequesterPolicy[fhir.Task]{},
+			CareTeamMemberPolicy[fhir.Task]{
+				fhirClient: fhirClient,
+				carePlanRefFunc: func(resource fhir.Task) ([]string, error) {
+					var refs []string
+					for _, reference := range resource.BasedOn {
+						if reference.Reference != nil {
+							refs = append(refs, *reference.Reference)
+						}
+					}
+					return refs, nil
+				},
+			},
+		},
+	}
+}
+
 // handleReadTask fetches the requested Task and validates if the requester has access to the resource (is a participant of one of the CareTeams associated with the task)
 // if the requester is valid, return the Task, else return an error
 func (s *Service) handleReadTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {

@@ -556,18 +556,16 @@ func TestService_handleSearchServiceRequest(t *testing.T) {
 	for name, tt := range tests {
 		t.Run(name, func(t *testing.T) {
 			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
+			t.Cleanup(func() {
+				ctrl.Finish()
+			})
 
 			client := mock.NewMockClient(ctrl)
 			tt.setup(tt.context, client)
 
 			handler := FHIRSearchOperationHandler[fhir.ServiceRequest]{
-				fhirClient: client,
-				authzPolicy: AnyMatchPolicy[fhir.ServiceRequest]{
-					Policies: []Policy[fhir.ServiceRequest]{
-						CreatorHasAccess[fhir.ServiceRequest]{},
-					},
-				},
+				fhirClient:  client,
+				authzPolicy: ReadServiceRequestAuthzPolicy(client),
 			}
 			tx := coolfhir.Transaction()
 			result, err := handler.Handle(tt.context, tt.request, tx)

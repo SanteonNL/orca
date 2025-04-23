@@ -324,24 +324,8 @@ func TestService_handleSearchTask(t *testing.T) {
 			tt.setup(tt.context, client)
 
 			handler := FHIRSearchOperationHandler[fhir.Task]{
-				fhirClient: client,
-				authzPolicy: AnyMatchPolicy[fhir.Task]{
-					Policies: []Policy[fhir.Task]{
-						TaskOwnerOrRequesterPolicy[fhir.Task]{},
-						CareTeamMemberPolicy[fhir.Task]{
-							fhirClient: client,
-							carePlanRefFunc: func(resource fhir.Task) ([]string, error) {
-								var refs []string
-								for _, reference := range resource.BasedOn {
-									if reference.Reference != nil {
-										refs = append(refs, *reference.Reference)
-									}
-								}
-								return refs, nil
-							},
-						},
-					},
-				},
+				fhirClient:  client,
+				authzPolicy: ReadTaskAuthzPolicy(client),
 			}
 			tx := coolfhir.Transaction()
 			result, err := handler.Handle(tt.context, tt.request, tx)
