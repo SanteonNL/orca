@@ -16,10 +16,10 @@ import (
 func ReadQuestionnaireResponseAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.QuestionnaireResponse] {
 	return AnyMatchPolicy[fhir.QuestionnaireResponse]{
 		Policies: []Policy[fhir.QuestionnaireResponse]{
-			RelatedResourcePolicy[fhir.QuestionnaireResponse, fhir.Task]{
-				fhirClient:          fhirClient,
-				searchHandlerPolicy: ReadTaskAuthzPolicy(fhirClient),
-				searchHandlerParams: func(ctx context.Context, resource fhir.QuestionnaireResponse) (resourceType string, searchParams url.Values) {
+			RelatedResourceSearchPolicy[fhir.QuestionnaireResponse, fhir.Task]{
+				fhirClient:            fhirClient,
+				relatedResourcePolicy: ReadTaskAuthzPolicy(fhirClient),
+				relatedResourceSearchParams: func(ctx context.Context, resource fhir.QuestionnaireResponse) (resourceType string, searchParams url.Values) {
 					return "Task", url.Values{"output-reference": []string{"QuestionnaireResponse/" + *resource.Id}}
 				},
 			},

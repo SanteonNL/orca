@@ -40,16 +40,51 @@ var _ Policy[any] = &RelatedResourcePolicy[any, any]{}
 // RelatedResourcePolicy is a policy that allows access if the user has access to the related resource(s).
 // For instance, if the user has access to a ServiceRequest, if the user has access to the related Task.
 type RelatedResourcePolicy[T any, R any] struct {
-	fhirClient          fhirclient.Client
-	searchHandlerPolicy Policy[R]
-	searchHandlerParams func(ctx context.Context, resource T) (resourceType string, searchParams url.Values)
+	fhirClient            fhirclient.Client
+	relatedResourcePolicy Policy[R]
+	relatedResourceRefs   func(ctx context.Context, resource T) ([]string, error)
 }
 
 func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
-	resourceType, searchParams := r.searchHandlerParams(ctx, resource)
+	refs, err := r.relatedResourceRefs(ctx, resource)
+	if err != nil {
+		return false, fmt.Errorf("related resource ref: %w", err)
+	}
+	for _, ref := range refs {
+		var relatedResource R
+		if err := r.fhirClient.ReadWithContext(ctx, ref, &relatedResource); err != nil {
+			log.Ctx(ctx).Warn().Msgf("RelatedResourcePolicy: unable to read related resource %s: %v", ref, err)
+			continue
+		}
+		hasAccess, err := r.relatedResourcePolicy.HasAccess(ctx, relatedResource, principal)
+		if err != nil {
+			log.Ctx(ctx).Warn().Msgf("RelatedResourcePolicy: unable to check access to related resource %s: %v", ref, err)
+			continue
+		}
+		if hasAccess {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+var _ Policy[any] = &RelatedResourceSearchPolicy[any, any]{}
+
+// RelatedResourceSearchPolicy is a policy that allows access if the user has access to the related resource(s).
+// For instance, if the user has access to a ServiceRequest, if the user has access to the related Task.
+// It differs from RelatedResourcePolicy in that it uses a search operation to find the related resources,
+// instead of using a reference to the related resource.
+type RelatedResourceSearchPolicy[T any, R any] struct {
+	fhirClient                  fhirclient.Client
+	relatedResourcePolicy       Policy[R]
+	relatedResourceSearchParams func(ctx context.Context, resource T) (resourceType string, searchParams url.Values)
+}
+
+func (r RelatedResourceSearchPolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+	resourceType, searchParams := r.relatedResourceSearchParams(ctx, resource)
 	searchHandler := FHIRSearchOperationHandler[R]{
 		fhirClient:  r.fhirClient,
-		authzPolicy: r.searchHandlerPolicy,
+		authzPolicy: r.relatedResourcePolicy,
 	}
 	results, _, err := searchHandler.searchAndFilter(ctx, searchParams, &principal, resourceType)
 	if err != nil {
@@ -73,41 +108,22 @@ func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource T
 	return isOwner || isRequester, nil
 }
 
-var _ Policy[any] = &CareTeamMemberPolicy[any]{}
+var _ Policy[fhir.CarePlan] = &CareTeamMemberPolicy[fhir.CarePlan]{}
 
 // CareTeamMemberPolicy is a policy that allows access if the user is a member of the care team.
-type CareTeamMemberPolicy[T any] struct {
-	fhirClient fhirclient.Client
-	// carePlanRefFunc is a function that returns the CarePlan reference for the resource.
-	carePlanRefFunc func(resource T) ([]string, error)
+type CareTeamMemberPolicy[T fhir.CarePlan] struct {
 }
 
 func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
-	carePlanRefs, err := c.carePlanRefFunc(resource)
+	carePlan, ok := any(resource).(fhir.CarePlan)
+	if !ok {
+		return false, fmt.Errorf("resource is not a CarePlan")
+	}
+	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
 	if err != nil {
-		return false, fmt.Errorf("CarePlan ref: %w", err)
+		return false, fmt.Errorf("unable to derive CareTeam from CarePlan: %w", err)
 	}
-	for _, carePlanRef := range carePlanRefs {
-		var carePlan fhir.CarePlan
-		if err := c.fhirClient.ReadWithContext(ctx, carePlanRef, &carePlan); err != nil {
-			log.Ctx(ctx).Warn().Msgf("CareTeamMemberPolicy: unable to read CarePlan %s: %v", carePlanRef, err)
-			continue
-		}
-
-		careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
-		if err != nil {
-			log.Ctx(ctx).Warn().Msgf("CareTeamMemberPolicy: unable to derive CareTeam from CarePlan %s: %v", carePlanRef, err)
-			continue
-		}
-
-		err = validatePrincipalInCareTeam(principal, careTeam)
-		if err != nil {
-			// only returns error if the principal is not in the care team
-			continue
-		}
-		return true, nil
-	}
-	return false, nil
+	return validatePrincipalInCareTeam(principal, careTeam) == nil, nil
 }
 
 var _ Policy[any] = &CreatorPolicy[any]{}

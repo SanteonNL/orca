@@ -180,9 +180,10 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 		"empty bundle": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				QueryParams: url.Values{},
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				QueryParams:  url.Values{},
+				ResourcePath: "CarePlan",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -198,9 +199,10 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 		"careplan returned, correct principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				QueryParams: url.Values{},
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				QueryParams:  url.Values{},
+				ResourcePath: "CarePlan",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -243,9 +245,12 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 			client := mock.NewMockClient(ctrl)
 			tt.setup(tt.context, client)
 
-			service := &Service{fhirClient: client}
+			handler := FHIRSearchOperationHandler[fhir.CarePlan]{
+				fhirClient:  client,
+				authzPolicy: ReadCarePlanAuthzPolicy(),
+			}
 			tx := coolfhir.Transaction()
-			result, err := service.handleSearchCarePlan(tt.context, tt.request, tx)
+			result, err := handler.Handle(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Equal(t, tt.expectedError, err)

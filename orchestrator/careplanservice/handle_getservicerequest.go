@@ -16,10 +16,10 @@ import (
 func ReadServiceRequestAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.ServiceRequest] {
 	return AnyMatchPolicy[fhir.ServiceRequest]{
 		Policies: []Policy[fhir.ServiceRequest]{
-			RelatedResourcePolicy[fhir.ServiceRequest, fhir.Task]{
-				fhirClient:          fhirClient,
-				searchHandlerPolicy: ReadTaskAuthzPolicy(fhirClient),
-				searchHandlerParams: func(ctx context.Context, resource fhir.ServiceRequest) (resourceType string, searchParams url.Values) {
+			RelatedResourceSearchPolicy[fhir.ServiceRequest, fhir.Task]{
+				fhirClient:            fhirClient,
+				relatedResourcePolicy: ReadTaskAuthzPolicy(fhirClient),
+				relatedResourceSearchParams: func(ctx context.Context, resource fhir.ServiceRequest) (resourceType string, searchParams url.Values) {
 					return "Task", url.Values{"focus": []string{"ServiceRequest/" + *resource.Id}}
 				},
 			},

@@ -11,6 +11,10 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
+func ReadQuestionnaireAuthzPolicy() Policy[fhir.Questionnaire] {
+	return EveryoneHasAccessPolicy[fhir.Questionnaire]{}
+}
+
 // handleReadQuestionnaire fetches the requested Questionnaire and validates if the requester is authenticated
 func (s *Service) handleReadQuestionnaire(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msgf("Getting Questionnaire with ID: %s", request.ResourceId)
