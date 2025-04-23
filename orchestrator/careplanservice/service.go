@@ -92,6 +92,15 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 	if err != nil {
 		return nil, err
 	}
+
+	s.registerHandler("Patient", FHIRSearchOperationHandler{})
+	s.registerHandler("CarePlan", FHIRSearchOperationHandler{})
+	s.registerHandler("Task", FHIRSearchOperationHandler{})
+	s.registerHandler("ServiceRequest", FHIRSearchOperationHandler{})
+	s.registerHandler("Questionnaire", FHIRSearchOperationHandler{})
+	s.registerHandler("QuestionnaireResponse", FHIRSearchOperationHandler{})
+	s.registerHandler("Condition", FHIRSearchOperationHandler{})
+
 	return &s, nil
 }
 
@@ -108,6 +117,8 @@ type Service struct {
 	allowUnmanagedFHIROperations bool
 	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	pipeline                     pipeline.Instance
+
+	operationHandlers map[string]map[FHIROperationType]FHIROperation
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
@@ -565,25 +576,14 @@ func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
 func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(resourcePath)
 
-	switch resourceType {
-	case "Patient":
-		return s.handleSearchPatient
-	case "CarePlan":
-		return s.handleSearchCarePlan
-	case "Task":
-		return s.handleSearchTask
-	case "ServiceRequest":
-		return s.handleSearchServiceRequest
-	case "Questionnaire":
-		return s.handleSearchQuestionnaire
-	case "QuestionnaireResponse":
-		return s.handleSearchQuestionnaireResponse
-	case "Condition":
-		return s.handleSearchCondition
-	default:
-		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-			return s.handleUnmanagedOperation(ctx, request, tx)
+	resourceHandlers, ok := s.operationHandlers[resourceType]
+	if ok {
+		if handler, ok := resourceHandlers[FHIROperationSearch]; ok {
+			return handler.Handle
 		}
+	}
+	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+		return s.handleUnmanagedOperation(ctx, request, tx)
 	}
 }
 
@@ -1054,4 +1054,14 @@ func (s *Service) getLocalIdentity() (*fhir.Identifier, error) {
 		return nil, errors.New("no local identity found")
 	}
 	return &localIdentity[0].Identifier[0], nil
+}
+
+func (s *Service) registerHandler(resourceType string, operationHandler FHIRSearchOperationHandler) {
+	if s.operationHandlers == nil {
+		s.operationHandlers = map[string]map[FHIROperationType]FHIROperation{}
+	}
+	if _, ok := s.operationHandlers[resourceType]; !ok {
+		s.operationHandlers[resourceType] = map[FHIROperationType]FHIROperation{}
+	}
+	s.operationHandlers[resourceType][operationHandler.Type()] = operationHandler
 }
