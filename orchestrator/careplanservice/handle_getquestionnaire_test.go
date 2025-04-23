@@ -355,7 +355,7 @@ func TestService_handleSearchQuestionnaire(t *testing.T) {
 
 			handler := FHIRSearchOperationHandler[fhir.Questionnaire]{
 				fhirClient:  client,
-				authzPolicy: EveryoneHasAccessPolicy{},
+				authzPolicy: EveryoneHasAccessPolicy[fhir.Questionnaire]{},
 			}
 			tx := coolfhir.Transaction()
 			result, err := handler.Handle(tt.context, tt.request, tx)

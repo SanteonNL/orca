@@ -3,18 +3,13 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
-	"errors"
-	"net/http"
-	"net/url"
-	"strings"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"net/http"
 )
 
 // handleReadTask fetches the requested Task and validates if the requester has access to the resource (is a participant of one of the CareTeams associated with the task)
@@ -87,127 +82,4 @@ func (s *Service) handleReadTask(ctx context.Context, request FHIRHandlerRequest
 		// We do not want to notify subscribers for a get
 		return []*fhir.BundleEntry{&bundleEntry}, []any{}, nil
 	}, nil
-}
-
-// handleSearchTask does a search for Task based on the user requester parameters. If CareTeam is not requested, add this to the fetch to be used for validation
-// if the requester is a participant of one of the returned CareTeams, return the whole bundle, else error
-// Pass in a pointer to a fhirclient.Headers object to get the headers from the fhir client request
-func (s *Service) handleSearchTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	log.Ctx(ctx).Info().Msgf("Searching for Tasks")
-
-	bundle, err := s.searchTask(ctx, request.QueryParams, request.FhirHeaders, *request.Principal)
-	if err != nil {
-		return nil, err
-	}
-
-	results := []*fhir.BundleEntry{}
-
-	for _, entry := range bundle.Entry {
-		var currentTask fhir.Task
-		if err := json.Unmarshal(entry.Resource, &currentTask); err != nil {
-			log.Ctx(ctx).Error().
-				Err(err).
-				Msg("Failed to unmarshal resource for audit")
-			continue
-		}
-
-		// Create the query detail entity
-		queryEntity := fhir.AuditEventEntity{
-			Type: &fhir.Coding{
-				System:  to.Ptr("http://terminology.hl7.org/CodeSystem/audit-entity-type"),
-				Code:    to.Ptr("2"), // query parameters
-				Display: to.Ptr("Query Parameters"),
-			},
-			Detail: []fhir.AuditEventEntityDetail{},
-		}
-
-		// Add each query parameter as a detail
-		for param, values := range request.QueryParams {
-			queryEntity.Detail = append(queryEntity.Detail, fhir.AuditEventEntityDetail{
-				Type:        param, // parameter name as string
-				ValueString: to.Ptr(strings.Join(values, ",")),
-			})
-		}
-
-		bundleEntry := fhir.BundleEntry{
-			Resource: entry.Resource,
-			Response: &fhir.BundleEntryResponse{
-				Status: "200 OK",
-			},
-		}
-		results = append(results, &bundleEntry)
-
-		// Add audit event to the transaction
-		auditEvent := audit.Event(*request.LocalIdentity, fhir.AuditEventActionR, &fhir.Reference{
-			Id:        currentTask.Id,
-			Type:      to.Ptr("Task"),
-			Reference: to.Ptr("Task/" + *currentTask.Id),
-		}, &fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
-			Type:       to.Ptr("Organization"),
-		})
-		tx.Create(auditEvent)
-	}
-
-	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
-		// Simply return the already prepared results
-		return results, []any{}, nil
-	}, nil
-}
-
-// searchTask performs the core functionality of searching for tasks and filtering by authorization
-// This can be used by other resources to search for tasks and filter by authorization
-func (s *Service) searchTask(ctx context.Context, queryParams url.Values, headers *fhirclient.Headers, principal auth.Principal) (*fhir.Bundle, error) {
-	// Verify requester is authenticated
-	if principal.Organization.Identifier == nil || len(principal.Organization.Identifier) == 0 {
-		return nil, errors.New("not authenticated")
-	}
-
-	tasks, bundle, err := handleSearchResource[fhir.Task](ctx, s, "Task", queryParams, headers)
-	if err != nil {
-		return nil, err
-	}
-	if len(tasks) == 0 {
-		// If there are no tasks in the bundle there is no point in doing validation, return empty bundle to user
-		return &fhir.Bundle{Entry: []fhir.BundleEntry{}}, nil
-	}
-
-	// It is possible that we have tasks based on different CarePlans. Create distinct list of References to be used for checking participant
-	refs := make(map[string]bool)
-	for _, task := range tasks {
-		for _, bo := range task.BasedOn {
-			if bo.Reference == nil || refs[*bo.Reference] {
-				continue
-			}
-			refs[*bo.Reference] = true
-		}
-	}
-
-	taskRefs := make([]string, 0)
-	for ref := range refs {
-		for _, task := range tasks {
-			isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, principal.Organization.Identifier)
-			if !(isOwner || isRequester) {
-				var carePlan fhir.CarePlan
-
-				if err := s.fhirClient.ReadWithContext(ctx, ref, &carePlan); err != nil {
-					continue
-				}
-
-				careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
-				if err != nil {
-					continue
-				}
-
-				err = validatePrincipalInCareTeam(principal, careTeam)
-				if err != nil {
-					continue
-				}
-			}
-			taskRefs = append(taskRefs, "Task/"+*task.Id)
-		}
-	}
-	retBundle := filterMatchingResourcesInBundle(ctx, bundle, []string{"Task"}, taskRefs)
-
-	return &retBundle, nil
 }

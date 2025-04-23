@@ -212,9 +212,10 @@ func TestService_handleSearchTask(t *testing.T) {
 		"empty bundle": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				QueryParams: url.Values{},
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				QueryParams:  url.Values{},
+				ResourcePath: "Task",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -230,9 +231,10 @@ func TestService_handleSearchTask(t *testing.T) {
 		"task returned, auth, task owner": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				QueryParams: url.Values{},
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				QueryParams:  url.Values{},
+				ResourcePath: "Task",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -269,9 +271,10 @@ func TestService_handleSearchTask(t *testing.T) {
 		"task returned, auth, not task owner, participant in CareTeam": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				QueryParams: url.Values{},
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				QueryParams:  url.Values{},
+				ResourcePath: "Task",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -320,9 +323,28 @@ func TestService_handleSearchTask(t *testing.T) {
 			client := mock.NewMockClient(ctrl)
 			tt.setup(tt.context, client)
 
-			service := &Service{fhirClient: client}
+			handler := FHIRSearchOperationHandler[fhir.Task]{
+				fhirClient: client,
+				authzPolicy: AnyMatchPolicy[fhir.Task]{
+					Policies: []Policy[fhir.Task]{
+						TaskOwnerOrRequesterPolicy[fhir.Task]{},
+						CareTeamMemberPolicy[fhir.Task]{
+							fhirClient: client,
+							carePlanRefFunc: func(resource fhir.Task) ([]string, error) {
+								var refs []string
+								for _, reference := range resource.BasedOn {
+									if reference.Reference != nil {
+										refs = append(refs, *reference.Reference)
+									}
+								}
+								return refs, nil
+							},
+						},
+					},
+				},
+			}
 			tx := coolfhir.Transaction()
-			result, err := service.handleSearchTask(tt.context, tt.request, tx)
+			result, err := handler.Handle(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Equal(t, tt.expectedError, err)

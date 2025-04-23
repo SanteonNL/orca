@@ -37,7 +37,7 @@ var _ FHIROperation = &FHIRSearchOperationHandler[any]{}
 
 type FHIRSearchOperationHandler[T any] struct {
 	fhirClient  fhirclient.Client
-	authzPolicy Policy
+	authzPolicy Policy[T]
 }
 
 func (h FHIRSearchOperationHandler[T]) Type() FHIROperationType {
@@ -56,7 +56,7 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	j := 0
 	for i, resource := range resources {
 		resourceID := *coolfhir.ResourceID(resource)
-		hasAccess, err := h.authzPolicy.HasAccess()
+		hasAccess, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking authz policy for %s/%s", resourceType, resourceID)
 			continue

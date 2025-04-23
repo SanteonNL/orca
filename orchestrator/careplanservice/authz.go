@@ -1,17 +1,29 @@
 package careplanservice
 
-type Policy interface {
-	HasAccess() (bool, error)
+import (
+	"context"
+	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/rs/zerolog/log"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+)
+
+type Policy[T any] interface {
+	HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error)
 }
 
-var _ Policy = &AnyMatchPolicy{}
+var _ Policy[any] = &AnyMatchPolicy[any]{}
 
 // AnyMatchPolicy is a policy that allows access if any of the policies in the list allow access.
-type AnyMatchPolicy []Policy
+type AnyMatchPolicy[T any] struct {
+	Policies []Policy[T]
+}
 
-func (e AnyMatchPolicy) HasAccess() (bool, error) {
-	for _, policy := range e {
-		hasAccess, err := policy.HasAccess()
+func (e AnyMatchPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+	for _, policy := range e.Policies {
+		hasAccess, err := policy.HasAccess(ctx, resource, principal)
 		if err != nil {
 			return false, err
 		}
@@ -22,21 +34,73 @@ func (e AnyMatchPolicy) HasAccess() (bool, error) {
 	return false, nil
 }
 
-var _ Policy = &CreatorHasAccess{}
+var _ Policy[fhir.Task] = &TaskOwnerOrRequesterPolicy[fhir.Task]{}
 
-type EveryoneHasAccessPolicy struct {
+// TaskOwnerOrRequesterPolicy is a policy that allows access if the user is the owner of the task or the requester of the task.
+type TaskOwnerOrRequesterPolicy[T fhir.Task] struct {
 }
 
-func (e EveryoneHasAccessPolicy) HasAccess() (bool, error) {
+func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+	resourceAsTask, ok := any(resource).(fhir.Task)
+	if !ok {
+		return false, fmt.Errorf("resource is not a Task")
+	}
+	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&resourceAsTask, principal.Organization.Identifier)
+	return isOwner || isRequester, nil
+}
+
+var _ Policy[any] = &CareTeamMemberPolicy[any]{}
+
+// CareTeamMemberPolicy is a policy that allows access if the user is a member of the care team.
+type CareTeamMemberPolicy[T any] struct {
+	fhirClient fhirclient.Client
+	// carePlanRefFunc is a function that returns the CarePlan reference for the resource.
+	carePlanRefFunc func(resource T) ([]string, error)
+}
+
+func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+	carePlanRefs, err := c.carePlanRefFunc(resource)
+	if err != nil {
+		return false, fmt.Errorf("CarePlan ref: %w", err)
+	}
+	for _, carePlanRef := range carePlanRefs {
+		var carePlan fhir.CarePlan
+		if err := c.fhirClient.ReadWithContext(ctx, carePlanRef, &carePlan); err != nil {
+			log.Ctx(ctx).Warn().Msgf("CareTeamMemberPolicy: unable to read CarePlan %s: %v", carePlanRef, err)
+			continue
+		}
+
+		careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
+		if err != nil {
+			log.Ctx(ctx).Warn().Msgf("CareTeamMemberPolicy: unable to derive CareTeam from CarePlan %s: %v", carePlanRef, err)
+			continue
+		}
+
+		err = validatePrincipalInCareTeam(principal, careTeam)
+		if err != nil {
+			// only returns error if the principal is not in the care team
+			continue
+		}
+		return true, nil
+	}
+	return false, nil
+}
+
+var _ Policy[any] = &CreatorHasAccess[any]{}
+
+type EveryoneHasAccessPolicy[T any] struct {
+}
+
+func (e EveryoneHasAccessPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
 	return true, nil
 }
 
-var _ Policy = &EveryoneHasAccessPolicy{}
+var _ Policy[any] = &EveryoneHasAccessPolicy[any]{}
 
-type CreatorHasAccess struct {
+type CreatorHasAccess[T any] struct {
 }
 
-func (o CreatorHasAccess) HasAccess() (bool, error) {
+func (o CreatorHasAccess[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
 	// TODO: Find a more suitable way to handle this auth.
 	// The AuditEvent implementation has proven unsuitable and we are using the AuditEvent for unintended purposes.
 	// For now, we can return true, as this will follow the same logic as was present before implementing the AuditEvent.
