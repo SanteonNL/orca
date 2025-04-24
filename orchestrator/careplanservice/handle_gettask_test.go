@@ -74,7 +74,7 @@ func TestService_handleGetTask(t *testing.T) {
 						*target = task1
 						return nil
 					})
-				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", url.Values{"_id": []string{"1"}, "_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
 					Return(errors.New("fhir error: careplan read failed"))
 			},
 		},
@@ -100,9 +100,15 @@ func TestService_handleGetTask(t *testing.T) {
 						*target = task1
 						return nil
 					})
-				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target *fhir.CarePlan, _ ...fhirclient.Option) error {
-						*target = carePlan1
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", url.Values{"_id": []string{"1"}, "_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{
+									Resource: carePlan1Raw,
+								},
+							},
+						}
 						return nil
 					})
 			},
@@ -298,9 +304,15 @@ func TestService_handleSearchTask(t *testing.T) {
 
 						return nil
 					})
-				client.EXPECT().ReadWithContext(ctx, "CarePlan/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target *fhir.CarePlan, _ ...fhirclient.Option) error {
-						*target = careplan
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", url.Values{"_id": []string{"1"}, "_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{
+							Entry: []fhir.BundleEntry{
+								{
+									Resource: careplanRaw,
+								},
+							},
+						}
 						return nil
 					})
 			},

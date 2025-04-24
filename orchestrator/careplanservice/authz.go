@@ -12,12 +12,6 @@ import (
 	"net/url"
 )
 
-type ResourcePolicies[T any] struct {
-	Create Policy[T]
-	Read   Policy[T]
-	Update Policy[T]
-}
-
 type Policy[T any] interface {
 	HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error)
 }
@@ -61,39 +55,6 @@ func (l LocalOrganizationPolicy[T]) HasAccess(ctx context.Context, _ T, principa
 					return true, nil
 				}
 			}
-		}
-	}
-	return false, nil
-}
-
-var _ Policy[any] = &RelatedResourcePolicy[any, any]{}
-
-// RelatedResourcePolicy is a policy that allows access if the user has access to the related resource(s).
-// For instance, if the user has access to a ServiceRequest, if the user has access to the related Task.
-type RelatedResourcePolicy[T any, R any] struct {
-	fhirClient            fhirclient.Client
-	relatedResourcePolicy Policy[R]
-	relatedResourceRefs   func(ctx context.Context, resource T) ([]string, error)
-}
-
-func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
-	refs, err := r.relatedResourceRefs(ctx, resource)
-	if err != nil {
-		return false, fmt.Errorf("related resource ref: %w", err)
-	}
-	for _, ref := range refs {
-		var relatedResource R
-		if err := r.fhirClient.ReadWithContext(ctx, ref, &relatedResource); err != nil {
-			log.Ctx(ctx).Warn().Msgf("RelatedResourcePolicy: unable to read related resource %s: %v", ref, err)
-			continue
-		}
-		hasAccess, err := r.relatedResourcePolicy.HasAccess(ctx, relatedResource, principal)
-		if err != nil {
-			log.Ctx(ctx).Warn().Msgf("RelatedResourcePolicy: unable to check access to related resource %s: %v", ref, err)
-			continue
-		}
-		if hasAccess {
-			return true, nil
 		}
 	}
 	return false, nil
@@ -185,14 +146,15 @@ func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, prin
 
 var _ Policy[any] = &CreatorPolicy[any]{}
 
-type EveryoneHasAccessPolicy[T any] struct {
+// AnyonePolicy is a policy that allows access to anyone.
+type AnyonePolicy[T any] struct {
 }
 
-func (e EveryoneHasAccessPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+func (e AnyonePolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
 	return true, nil
 }
 
-var _ Policy[any] = &EveryoneHasAccessPolicy[any]{}
+var _ Policy[any] = &AnyonePolicy[any]{}
 
 // CreatorPolicy is a policy that allows access if the principal is the creator of the resource.
 type CreatorPolicy[T any] struct {

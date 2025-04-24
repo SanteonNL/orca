@@ -905,6 +905,14 @@ func (s Service) baseUrl() *url.URL {
 	return s.orcaPublicURL.JoinPath(basePath)
 }
 
+func getResourceID(resourcePath string) string {
+	parts := strings.Split(resourcePath, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[1]
+}
+
 func getResourceType(resourcePath string) string {
 	return strings.Split(resourcePath, "/")[0]
 }
