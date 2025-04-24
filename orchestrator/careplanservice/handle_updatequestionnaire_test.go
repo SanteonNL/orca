@@ -87,10 +87,17 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 			mockFHIRClient := mock.NewMockClient(ctrl)
 
 			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
-			service := &Service{
-				profile:    profile.Test(),
-				fhirClient: mockFHIRClient,
-				fhirURL:    fhirBaseUrl,
+			handler := &FHIRUpdateOperationHandler[fhir.Questionnaire]{
+				profile:     profile.Test(),
+				fhirClient:  mockFHIRClient,
+				fhirURL:     fhirBaseUrl,
+				authzPolicy: UpdateQuestionnaireAuthzPolicy(),
+				createHandler: &FHIRCreateOperationHandler[fhir.Questionnaire]{
+					profile:     profile.Test(),
+					fhirClient:  mockFHIRClient,
+					fhirURL:     fhirBaseUrl,
+					authzPolicy: CreateQuestionnaireAuthzPolicy(),
+				},
 			}
 
 			fhirRequest := FHIRHandlerRequest{
@@ -124,7 +131,7 @@ func Test_handleUpdateQuestionnaire(t *testing.T) {
 				tt.mockCreateBehavior(mockFHIRClient)
 			}
 
-			result, err := service.handleUpdateQuestionnaire(ctx, fhirRequest, tx)
+			result, err := handler.Handle(ctx, fhirRequest, tx)
 
 			if tt.wantErr {
 				require.Error(t, err)
