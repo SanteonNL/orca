@@ -65,9 +65,10 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		"error: ServiceRequest does not exist": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				ResourceId:   "1",
+				ResourcePath: "ServiceRequest/1",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -82,9 +83,10 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		"error: ServiceRequest exists, error searching for task": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				ResourceId:   "1",
+				ResourcePath: "ServiceRequest/1",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -180,9 +182,10 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		"ok: ServiceRequest exists, fetched task, task owner": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				ResourceId:   "1",
+				ResourcePath: "ServiceRequest/1",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -219,9 +222,12 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 			client := mock.NewMockClient(ctrl)
 			tt.setup(tt.context, client)
 
-			service := &Service{fhirClient: client}
+			handler := &FHIRReadOperationHandler[fhir.ServiceRequest]{
+				fhirClient:  client,
+				authzPolicy: ReadServiceRequestAuthzPolicy(client),
+			}
 			tx := coolfhir.Transaction()
-			result, err := service.handleReadServiceRequest(tt.context, tt.request, tx)
+			result, err := handler.Handle(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Error(t, err)

@@ -62,6 +62,7 @@ func TestService_handleGetPatient(t *testing.T) {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
 				ResourceId:    "1",
+				ResourcePath:  "Patient/1",
 				Principal:     auth.TestPrincipal1,
 				LocalIdentity: &fhir.Identifier{},
 				FhirHeaders:   &fhirclient.Headers{},
@@ -79,6 +80,7 @@ func TestService_handleGetPatient(t *testing.T) {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
 				ResourceId:    "1",
+				ResourcePath:  "Patient/1",
 				Principal:     auth.TestPrincipal1,
 				LocalIdentity: &fhir.Identifier{},
 				FhirHeaders:   &fhirclient.Headers{},
@@ -103,6 +105,7 @@ func TestService_handleGetPatient(t *testing.T) {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
 				ResourceId:    "1",
+				ResourcePath:  "Patient/1",
 				Principal:     auth.TestPrincipal1,
 				LocalIdentity: &fhir.Identifier{},
 				FhirHeaders:   &fhirclient.Headers{},
@@ -176,6 +179,7 @@ func TestService_handleGetPatient(t *testing.T) {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
 				ResourceId:    "1",
+				ResourcePath:  "Patient/1",
 				Principal:     auth.TestPrincipal1,
 				LocalIdentity: &fhir.Identifier{},
 				FhirHeaders:   &fhirclient.Headers{},
@@ -207,12 +211,13 @@ func TestService_handleGetPatient(t *testing.T) {
 			client := mock.NewMockClient(ctrl)
 			tt.setup(tt.context, client)
 
-			service := &Service{
-				fhirClient: client,
+			handler := &FHIRReadOperationHandler[fhir.Patient]{
+				fhirClient:  client,
+				authzPolicy: ReadPatientAuthzPolicy(client),
 			}
 
 			tx := coolfhir.Transaction()
-			result, err := service.handleReadPatient(tt.context, tt.request, tx)
+			result, err := handler.Handle(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Equal(t, tt.expectedError, err)

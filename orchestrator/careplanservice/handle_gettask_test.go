@@ -40,9 +40,10 @@ func TestService_handleGetTask(t *testing.T) {
 		"error: Task does not exist": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal3,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal3,
+				ResourceId:   "1",
+				ResourcePath: "Task/1",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("3"),
@@ -57,9 +58,10 @@ func TestService_handleGetTask(t *testing.T) {
 		"error: Task exists, auth, not owner or requester, error fetching CarePlan": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal3,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal3,
+				ResourceId:   "1",
+				ResourcePath: "Task/1",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("3"),
@@ -79,9 +81,10 @@ func TestService_handleGetTask(t *testing.T) {
 		"error: Task exists, auth, CarePlan and CareTeam returned, not a participant": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal3,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal3,
+				ResourceId:   "1",
+				ResourcePath: "Task/1",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("3"),
@@ -107,9 +110,10 @@ func TestService_handleGetTask(t *testing.T) {
 		"ok: Task exists, auth, CarePlan and CareTeam returned, owner": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				ResourceId:   "1",
+				ResourcePath: "Task/1",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -133,9 +137,12 @@ func TestService_handleGetTask(t *testing.T) {
 			client := mock.NewMockClient(ctrl)
 			tt.setup(tt.context, client)
 
-			service := &Service{fhirClient: client}
+			handler := &FHIRReadOperationHandler[fhir.Task]{
+				fhirClient:  client,
+				authzPolicy: ReadTaskAuthzPolicy(client),
+			}
 			tx := coolfhir.Transaction()
-			result, err := service.handleReadTask(tt.context, tt.request, tx)
+			result, err := handler.Handle(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Error(t, err)
