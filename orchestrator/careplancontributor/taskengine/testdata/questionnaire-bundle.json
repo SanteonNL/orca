@@ -480,7 +480,7 @@
         },
         "language": "nl-NL",
         "title": "Vragenlijst voor aanmelding van patienten met astma voor telemonitoring",
-        "url": "https://zorgbijjou.github.io/scp-homemonitoring/Questionnaire-zbj-telemonitoring-asthma-enrollment|0.3",
+        "url": "https://zorgbijjou.github.io/scp-homemonitoring/Questionnaire-zbj-telemonitoring-asthma-enrollment|0.2",
         "identifier": [
           {
             "system": "urn:ietf:rfc:3986",
@@ -500,9 +500,9 @@
           }
         ],
         "experimental": false,
-        "date": "2025-03-29",
+        "date": "2024-12-23",
         "effectivePeriod": {
-          "start": "2025-03-29"
+          "start": "2024-12-23"
         },
         "useContext": [
           {
@@ -592,28 +592,144 @@
           },
           {
             "linkId": "da65ffd8-fb90-4918-becf-dfe0439577d8",
-            "text": "Protocol",
+            "text": "Instel / titratiefase",
+            "code": [
+              {
+                "code": "713838004",
+                "system": "http://snomed.info/sct",
+                "display": "optimaliseren van medicatie"
+              }
+            ],
             "type": "choice",
             "required": true,
             "answerOption": [
               {
-                "valueString": "Instel / titratiefase",
+                "valueCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct",
+                  "display": "ja, instel / titratiefase"
+                },
                 "initialSelected": true
               },
               {
-                "valueString": "Astma - wekelijks"
+                "valueCoding": {
+                  "code": "373067005",
+                  "system": "http://snomed.info/sct",
+                  "display": "nee, bestaande patient"
+                }
+              }
+            ],
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "radio-button",
+                      "system": "http://hl7.org/fhir/questionnaire-item-control"
+                    }
+                  ]
+                }
               },
               {
-                "valueString": "Astma - maandelijks"
+                "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                "valueCode": "horizontal"
+              }
+            ]
+          },
+          {
+            "linkId": "4b2e2ce0-37c5-4240-a733-872836382c5b",
+            "type": "group",
+            "enableWhen": [
+              {
+                "question": "da65ffd8-fb90-4918-becf-dfe0439577d8",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373067005",
+                  "system": "http://snomed.info/sct"
+                }
+              }
+            ],
+            "item": [
+              {
+                "linkId": "6635f5c1-8ed0-44ad-ad3d-8f763b9ca123",
+                "text": "Biologicals",
+                "code": [
+                  {
+                    "code": "76334006",
+                    "system": "http://snomed.info/sct",
+                    "display": "immunotherapie"
+                  }
+                ],
+                "type": "choice",
+                "repeats": true,
+                "answerOption": [
+                  {
+                    "valueCoding": {
+                      "code": "373066001",
+                      "system": "http://snomed.info/sct",
+                      "display": "ja, biologicals"
+                    }
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                    "valueCodeableConcept": {
+                      "coding": [
+                        {
+                          "code": "check-box",
+                          "system": "http://hl7.org/fhir/questionnaire-item-control"
+                        }
+                      ]
+                    }
+                  }
+                ]
               },
               {
-                "valueString": "Biologicals - wekelijks"
-              },
-              {
-                "valueString": "Biologicals - maandelijks"
-              },
-              {
-                "valueString": "Biologicals - remissie"
+                "linkId": "fd9da7fd-aab7-4dc4-8ca5-6b70c1c671df",
+                "text": "Frequentie",
+                "code": [
+                  {
+                    "code": "307459002",
+                    "system": "http://snomed.info/sct",
+                    "display": "frequentie interval"
+                  }
+                ],
+                "type": "choice",
+                "answerOption": [
+                  {
+                    "valueCoding": {
+                      "code": "14497002",
+                      "system": "http://snomed.info/sct",
+                      "display": "wekelijks"
+                    }
+                  },
+                  {
+                    "valueCoding": {
+                      "code": "89185003",
+                      "system": "http://snomed.info/sct",
+                      "display": "maandelijks"
+                    }
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                    "valueCodeableConcept": {
+                      "coding": [
+                        {
+                          "code": "radio-button",
+                          "system": "http://hl7.org/fhir/questionnaire-item-control"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                    "valueCode": "horizontal"
+                  }
+                ]
               }
             ]
           },
