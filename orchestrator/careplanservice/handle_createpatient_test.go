@@ -106,7 +106,7 @@ func Test_handleCreatePatient(t *testing.T) {
 			name:            "non-local requester - fails",
 			patientToCreate: defaultPatient,
 			principal:       auth.TestPrincipal2,
-			expectError:     errors.New("Only the local care organization can create a Patient"),
+			expectError:     errors.New("Participant is not allowed to create Patient"),
 		},
 		{
 			name:            "patient with existing ID - update",
@@ -151,10 +151,11 @@ func Test_handleCreatePatient(t *testing.T) {
 
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
-			service := &Service{
-				profile:    profile.Test(),
-				fhirClient: mockFHIRClient,
-				fhirURL:    fhirBaseUrl,
+			handler := &FHIRCreateOperationHandler[fhir.Patient]{
+				profile:     profile.Test(),
+				fhirClient:  mockFHIRClient,
+				fhirURL:     fhirBaseUrl,
+				authzPolicy: CreatePatientAuthzPolicy(profile.Test()),
 			}
 
 			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
@@ -165,7 +166,7 @@ func Test_handleCreatePatient(t *testing.T) {
 				fhirRequest.HttpMethod = "PUT"
 				fhirRequest.Upsert = true
 			}
-			result, err := service.handleCreatePatient(ctx, fhirRequest, tx)
+			result, err := handler.Handle(ctx, fhirRequest, tx)
 
 			if tt.expectError != nil {
 				require.EqualError(t, err, tt.expectError.Error())

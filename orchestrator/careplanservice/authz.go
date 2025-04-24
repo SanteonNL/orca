@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/rs/zerolog/log"
@@ -30,6 +31,30 @@ func (e AnyMatchPolicy[T]) HasAccess(ctx context.Context, resource T, principal 
 		}
 		if hasAccess {
 			return true, nil
+		}
+	}
+	return false, nil
+}
+
+var _ Policy[any] = &LocalOrganizationPolicy[any]{}
+
+// LocalOrganizationPolicy is a policy that allows access if the principal is a local organization.
+type LocalOrganizationPolicy[T any] struct {
+	profile profile.Provider
+}
+
+func (l LocalOrganizationPolicy[T]) HasAccess(ctx context.Context, _ T, principal auth.Principal) (bool, error) {
+	localIdentities, err := l.profile.Identities(ctx)
+	if err != nil {
+		return false, fmt.Errorf("failed to get local identities: %w", err)
+	}
+	for _, localIdentity := range localIdentities {
+		for _, requesterIdentifier := range principal.Organization.Identifier {
+			for _, localIdentifier := range localIdentity.Identifier {
+				if coolfhir.IdentifierEquals(&localIdentifier, &requesterIdentifier) {
+					return true, nil
+				}
+			}
 		}
 	}
 	return false, nil

@@ -22,7 +22,7 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 	}
 
 	// Check we're only allowing secure external literal references
-	if err := s.validateLiteralReferences(ctx, &patient); err != nil {
+	if err := validateLiteralReferences(ctx, s.profile, &patient); err != nil {
 		return nil, err
 	}
 

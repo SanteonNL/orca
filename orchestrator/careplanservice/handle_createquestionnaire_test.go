@@ -140,10 +140,11 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
-			service := &Service{
-				profile:    profile.Test(),
-				fhirClient: mockFHIRClient,
-				fhirURL:    fhirBaseUrl,
+			handler := &FHIRCreateOperationHandler[fhir.Questionnaire]{
+				profile:     profile.Test(),
+				fhirClient:  mockFHIRClient,
+				fhirURL:     fhirBaseUrl,
+				authzPolicy: CreateQuestionnaireAuthzPolicy(),
 			}
 
 			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
@@ -152,7 +153,7 @@ func Test_handleCreateQuestionnaire(t *testing.T) {
 				fhirRequest.HttpMethod = "PUT"
 				fhirRequest.Upsert = true
 			}
-			result, err := service.handleCreateQuestionnaire(ctx, fhirRequest, tx)
+			result, err := handler.Handle(ctx, fhirRequest, tx)
 
 			if tt.expectError != nil {
 				require.EqualError(t, err, tt.expectError.Error())

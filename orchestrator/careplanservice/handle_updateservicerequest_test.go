@@ -107,10 +107,17 @@ func Test_handleUpdateServiceRequest(t *testing.T) {
 			mockFHIRClient := mock.NewMockClient(ctrl)
 
 			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
-			service := &Service{
-				profile:    profile.Test(),
-				fhirClient: mockFHIRClient,
-				fhirURL:    fhirBaseUrl,
+			service := &FHIRUpdateOperationHandler[fhir.ServiceRequest]{
+				profile:     profile.Test(),
+				fhirClient:  mockFHIRClient,
+				fhirURL:     fhirBaseUrl,
+				authzPolicy: CreateServiceRequestAuthzPolicy(profile.Test()),
+				createHandler: &FHIRCreateOperationHandler[fhir.ServiceRequest]{
+					profile:     profile.Test(),
+					fhirClient:  mockFHIRClient,
+					fhirURL:     fhirBaseUrl,
+					authzPolicy: CreateServiceRequestAuthzPolicy(profile.Test()),
+				},
 			}
 
 			fhirRequest := FHIRHandlerRequest{
@@ -141,7 +148,7 @@ func Test_handleUpdateServiceRequest(t *testing.T) {
 
 			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
 
-			result, err := service.handleUpdateServiceRequest(ctx, fhirRequest, tx)
+			result, err := service.Handle(ctx, fhirRequest, tx)
 
 			if tt.wantErr {
 				require.Error(t, err)

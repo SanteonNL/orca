@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"net/http"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -13,6 +14,12 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
+func CreatePatientAuthzPolicy(profile profile.Provider) Policy[fhir.Patient] {
+	return LocalOrganizationPolicy[fhir.Patient]{
+		profile: profile,
+	}
+}
+
 func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msg("Creating Patient")
 	var patient fhir.Patient
@@ -21,7 +28,7 @@ func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRe
 	}
 
 	// Check we're only allowing secure external literal references
-	if err := s.validateLiteralReferences(ctx, &patient); err != nil {
+	if err := validateLiteralReferences(ctx, s.profile, &patient); err != nil {
 		return nil, err
 	}
 

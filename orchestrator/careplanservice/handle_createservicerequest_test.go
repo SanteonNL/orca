@@ -96,7 +96,7 @@ func Test_handleCreateServiceRequest(t *testing.T) {
 		{
 			name:        "error: requester is not a local organization",
 			principal:   auth.TestPrincipal2,
-			expectError: errors.New("Only the local care organization can create a ServiceRequest"),
+			expectError: errors.New("Participant is not allowed to create ServiceRequest"),
 		},
 		{
 			name:                   "serviceRequest with existing ID - update",
@@ -141,10 +141,11 @@ func Test_handleCreateServiceRequest(t *testing.T) {
 
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
-			service := &Service{
-				profile:    profile.Test(),
-				fhirClient: mockFHIRClient,
-				fhirURL:    fhirBaseUrl,
+			handler := &FHIRCreateOperationHandler[fhir.ServiceRequest]{
+				profile:     profile.Test(),
+				fhirClient:  mockFHIRClient,
+				fhirURL:     fhirBaseUrl,
+				authzPolicy: CreateServiceRequestAuthzPolicy(profile.Test()),
 			}
 
 			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
@@ -156,7 +157,7 @@ func Test_handleCreateServiceRequest(t *testing.T) {
 				fhirRequest.HttpMethod = "PUT"
 				fhirRequest.Upsert = true
 			}
-			result, err := service.handleCreateServiceRequest(ctx, fhirRequest, tx)
+			result, err := handler.Handle(ctx, fhirRequest, tx)
 
 			if tt.expectError != nil {
 				require.EqualError(t, err, tt.expectError.Error())

@@ -21,7 +21,7 @@ func (s *Service) handleCreateCondition(ctx context.Context, request FHIRHandler
 	}
 
 	// Check we're only allowing secure external literal references
-	if err := s.validateLiteralReferences(ctx, &condition); err != nil {
+	if err := validateLiteralReferences(ctx, s.profile, &condition); err != nil {
 		return nil, err
 	}
 

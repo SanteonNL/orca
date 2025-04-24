@@ -12,6 +12,10 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
+func CreateQuestionnaireAuthzPolicy() Policy[fhir.Questionnaire] {
+	return EveryoneHasAccessPolicy[fhir.Questionnaire]{}
+}
+
 func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	log.Ctx(ctx).Info().Msg("Creating Questionnaire")
 	var questionnaire fhir.Questionnaire
@@ -20,7 +24,7 @@ func (s *Service) handleCreateQuestionnaire(ctx context.Context, request FHIRHan
 	}
 
 	// Check we're only allowing secure external literal references
-	if err := s.validateLiteralReferences(ctx, &questionnaire); err != nil {
+	if err := validateLiteralReferences(ctx, s.profile, &questionnaire); err != nil {
 		return nil, err
 	}
 

@@ -33,6 +33,10 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
+type FHIROperation interface {
+	Handle(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
+}
+
 const basePath = "/cps"
 
 // subscriberNotificationTimeout is the timeout for notifying subscribers of changes in FHIR resources.
@@ -465,7 +469,12 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 	case "Task":
 		return s.handleCreateTask
 	case "ServiceRequest":
-		return s.handleCreateServiceRequest
+		return FHIRCreateOperationHandler[fhir.ServiceRequest]{
+			authzPolicy: CreateServiceRequestAuthzPolicy(s.profile),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			fhirURL:     s.fhirURL,
+		}.Handle
 	case "Patient":
 		return s.handleCreatePatient
 	case "Questionnaire":
@@ -488,7 +497,18 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 	case "Task":
 		return s.handleUpdateTask
 	case "ServiceRequest":
-		return s.handleUpdateServiceRequest
+		return FHIRUpdateOperationHandler[fhir.ServiceRequest]{
+			authzPolicy: UpdateServiceRequestAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			createHandler: &FHIRCreateOperationHandler[fhir.ServiceRequest]{
+				authzPolicy: CreateServiceRequestAuthzPolicy(s.profile),
+				fhirClient:  s.fhirClient,
+				profile:     s.profile,
+				fhirURL:     s.fhirURL,
+			},
+			fhirURL: s.fhirURL,
+		}.Handle
 	case "Patient":
 		return s.handleUpdatePatient
 	case "Questionnaire":
@@ -972,7 +992,7 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 // Literal references may be an external URL, but they MUST use HTTPS and be a child of a FHIR base URL
 // registered in the CSD. This prevents unsafe external references (e.g. accidentally exchanging resources over HTTP),
 // and gives more confidence that the resource can safely be fetched by SCP-nodes.
-func (s *Service) validateLiteralReferences(ctx context.Context, resource any) error {
+func validateLiteralReferences(ctx context.Context, prof profile.Provider, resource any) error {
 	// Literal references are "reference" fields that contain a string. This can be anywhere in the resource,
 	// so we need to recursively search for them.
 	resourceAsJson, err := json.Marshal(resource)
@@ -988,7 +1008,7 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 	}
 
 	// Make a list of allowed FHIR base URLs, normalize them to all make them end with a slash
-	fhirBaseURLs, err := s.profile.CsdDirectory().LookupEndpoint(ctx, nil, profile.FHIRBaseURLEndpointName)
+	fhirBaseURLs, err := prof.CsdDirectory().LookupEndpoint(ctx, nil, profile.FHIRBaseURLEndpointName)
 	if err != nil {
 		return fmt.Errorf("unable to list registered FHIR base URLs for validation: %w", err)
 	}

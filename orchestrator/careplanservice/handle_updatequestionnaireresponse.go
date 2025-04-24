@@ -27,7 +27,7 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 	log.Ctx(ctx).Debug().Msgf("questionnaireResponse: %s", string(responseJSON))
 
 	// Check we're only allowing secure external literal references
-	if err := s.validateLiteralReferences(ctx, &questionnaireResponse); err != nil {
+	if err := validateLiteralReferences(ctx, s.profile, &questionnaireResponse); err != nil {
 		return nil, err
 	}
 

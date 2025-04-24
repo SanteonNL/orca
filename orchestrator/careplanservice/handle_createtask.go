@@ -26,7 +26,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
 	}
 	// Check we're only allowing secure external literal references
-	if err := s.validateLiteralReferences(ctx, &task); err != nil {
+	if err := validateLiteralReferences(ctx, s.profile, &task); err != nil {
 		return nil, err
 	}
 

@@ -21,7 +21,7 @@ func (s *Service) handleCreateQuestionnaireResponse(ctx context.Context, request
 	}
 
 	// Check we're only allowing secure external literal references
-	if err := s.validateLiteralReferences(ctx, &questionnaireResponse); err != nil {
+	if err := validateLiteralReferences(ctx, s.profile, &questionnaireResponse); err != nil {
 		return nil, err
 	}
 
