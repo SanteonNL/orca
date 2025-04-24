@@ -497,7 +497,12 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 			fhirURL:     s.fhirURL,
 		}.Handle
 	case "Condition":
-		return s.handleCreateCondition
+		return FHIRCreateOperationHandler[fhir.Condition]{
+			authzPolicy: CreateConditionAuthzPolicy(s.profile),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			fhirURL:     s.fhirURL,
+		}.Handle
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 			return s.handleUnmanagedOperation(ctx, request, tx)
@@ -564,7 +569,17 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 			fhirURL: s.fhirURL,
 		}.Handle
 	case "Condition":
-		return s.handleUpdateCondition
+		return FHIRUpdateOperationHandler[fhir.Condition]{
+			authzPolicy: UpdateConditionAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			createHandler: &FHIRCreateOperationHandler[fhir.Condition]{
+				authzPolicy: CreateConditionAuthzPolicy(s.profile),
+				fhirClient:  s.fhirClient,
+				profile:     s.profile,
+				fhirURL:     s.fhirURL,
+			},
+		}.Handle
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 			return s.handleUnmanagedOperation(ctx, request, tx)

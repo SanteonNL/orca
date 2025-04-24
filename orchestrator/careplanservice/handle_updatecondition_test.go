@@ -114,10 +114,17 @@ func Test_handleUpdateCondition(t *testing.T) {
 			mockFHIRClient := mock.NewMockClient(ctrl)
 
 			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
-			service := &Service{
-				profile:    profile.Test(),
-				fhirClient: mockFHIRClient,
-				fhirURL:    fhirBaseUrl,
+			handler := &FHIRUpdateOperationHandler[fhir.Condition]{
+				profile:     profile.Test(),
+				fhirClient:  mockFHIRClient,
+				fhirURL:     fhirBaseUrl,
+				authzPolicy: UpdateConditionAuthzPolicy(),
+				createHandler: &FHIRCreateOperationHandler[fhir.Condition]{
+					fhirClient:  mockFHIRClient,
+					fhirURL:     fhirBaseUrl,
+					profile:     profile.Test(),
+					authzPolicy: CreateConditionAuthzPolicy(profile.Test()),
+				},
 			}
 
 			fhirRequest := FHIRHandlerRequest{
@@ -147,7 +154,7 @@ func Test_handleUpdateCondition(t *testing.T) {
 
 			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
 
-			result, err := service.handleUpdateCondition(ctx, fhirRequest, tx)
+			result, err := handler.Handle(ctx, fhirRequest, tx)
 
 			if tt.wantErr {
 				require.Error(t, err)

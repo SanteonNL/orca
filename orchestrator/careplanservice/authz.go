@@ -188,6 +188,7 @@ func (e EveryoneHasAccessPolicy[T]) HasAccess(ctx context.Context, resource T, p
 
 var _ Policy[any] = &EveryoneHasAccessPolicy[any]{}
 
+// CreatorPolicy is a policy that allows access if the principal is the creator of the resource.
 type CreatorPolicy[T any] struct {
 }
 
