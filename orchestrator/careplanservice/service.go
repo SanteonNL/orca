@@ -490,7 +490,12 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 			fhirURL:     s.fhirURL,
 		}.Handle
 	case "QuestionnaireResponse":
-		return s.handleCreateQuestionnaireResponse
+		return FHIRCreateOperationHandler[fhir.QuestionnaireResponse]{
+			authzPolicy: CreateQuestionnaireResponseAuthzPolicy(s.profile),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			fhirURL:     s.fhirURL,
+		}.Handle
 	case "Condition":
 		return s.handleCreateCondition
 	default:
@@ -546,7 +551,18 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 			fhirURL: s.fhirURL,
 		}.Handle
 	case "QuestionnaireResponse":
-		return s.handleUpdateQuestionnaireResponse
+		return FHIRUpdateOperationHandler[fhir.QuestionnaireResponse]{
+			authzPolicy: UpdateQuestionnaireResponseAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			createHandler: &FHIRCreateOperationHandler[fhir.QuestionnaireResponse]{
+				authzPolicy: CreateQuestionnaireResponseAuthzPolicy(s.profile),
+				fhirClient:  s.fhirClient,
+				profile:     s.profile,
+				fhirURL:     s.fhirURL,
+			},
+			fhirURL: s.fhirURL,
+		}.Handle
 	case "Condition":
 		return s.handleUpdateCondition
 	default:
