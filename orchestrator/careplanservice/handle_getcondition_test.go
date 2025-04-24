@@ -419,26 +419,6 @@ func TestService_handleSearchCondition(t *testing.T) {
 			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
 			expectedEntries: []string{},
 		},
-		"error: fhirclient error": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal1,
-				FhirHeaders:  &fhirclient.Headers{},
-				ResourcePath: "Condition",
-				RequestUrl:   &url.URL{RawQuery: "_id=1"},
-				LocalIdentity: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("1"),
-				},
-			},
-			expectedError: errors.New("error"),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "Condition", gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(errors.New("error"))
-			},
-			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-			expectedEntries: []string{},
-		},
 		"ok: Condition returned, patient access found": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -172,6 +173,8 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 			filterCandidates(func(candidate BaseResource) bool {
 				return candidate.URL == value
 			})
+		case "_count":
+			log.Logger.Warn().Msg("_count not supported in stub client, ignoring")
 		default:
 			return fmt.Errorf("unsupported query parameter: %s", name)
 		}

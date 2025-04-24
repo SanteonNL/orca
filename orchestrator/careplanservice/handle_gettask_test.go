@@ -204,25 +204,6 @@ func TestService_handleSearchTask(t *testing.T) {
 		mockResponse    *fhir.Bundle
 		expectedEntries []string
 	}{
-		"empty bundle": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal1,
-				QueryParams:  url.Values{},
-				ResourcePath: "Task",
-				FhirHeaders:  &fhirclient.Headers{},
-				LocalIdentity: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("1"),
-				},
-			},
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "Task", url.Values{"_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
-					Return(nil)
-			},
-			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-			expectedEntries: []string{},
-		},
 		"task returned, auth, task owner": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{

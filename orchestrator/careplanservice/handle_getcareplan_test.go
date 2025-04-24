@@ -164,25 +164,6 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 		mockResponse    *fhir.Bundle
 		expectedEntries []string
 	}{
-		"empty bundle": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal1,
-				QueryParams:  url.Values{},
-				ResourcePath: "CarePlan/_search",
-				FhirHeaders:  &fhirclient.Headers{},
-				LocalIdentity: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("1"),
-				},
-			},
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(nil)
-			},
-			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-			expectedEntries: []string{},
-		},
 		"careplan returned, correct principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{

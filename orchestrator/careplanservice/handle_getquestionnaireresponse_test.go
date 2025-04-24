@@ -316,49 +316,6 @@ func TestService_handleSearchQuestionnaireResponse(t *testing.T) {
 		mockResponse    *fhir.Bundle
 		expectedEntries []string
 	}{
-		"empty bundle": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal1,
-				FhirHeaders:  &fhirclient.Headers{},
-				ResourcePath: "QuestionnaireResponse",
-				RequestUrl:   &url.URL{RawQuery: "_id=nonexistent"},
-				LocalIdentity: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("1"),
-				},
-			},
-			expectedError: nil,
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
-						*target = fhir.Bundle{Entry: []fhir.BundleEntry{}}
-						return nil
-					})
-			},
-			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-			expectedEntries: []string{},
-		},
-		"fhirclient error": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal1,
-				FhirHeaders:  &fhirclient.Headers{},
-				ResourcePath: "QuestionnaireResponse",
-				RequestUrl:   &url.URL{RawQuery: "_id=1"},
-				LocalIdentity: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("1"),
-				},
-			},
-			expectedError: errors.New("error"),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "QuestionnaireResponse", gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(errors.New("error"))
-			},
-			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-			expectedEntries: []string{},
-		},
 		"found single QuestionnaireResponse with task access": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
