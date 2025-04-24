@@ -12,6 +12,12 @@ import (
 	"net/url"
 )
 
+type ResourcePolicies[T any] struct {
+	Create Policy[T]
+	Read   Policy[T]
+	Update Policy[T]
+}
+
 type Policy[T any] interface {
 	HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error)
 }

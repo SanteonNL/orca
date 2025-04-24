@@ -4,10 +4,21 @@ import (
 	"context"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
 )
+
+func CreateConditionAuthzPolicy(profile profile.Provider) Policy[fhir.Condition] {
+	return LocalOrganizationPolicy[fhir.Condition]{
+		profile: profile,
+	}
+}
+
+func UpdateConditionAuthzPolicy() Policy[fhir.Condition] {
+	return CreatorPolicy[fhir.Condition]{}
+}
 
 func ReadConditionAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Condition] {
 	// TODO: Find out new auth requirements for condition

@@ -465,9 +465,10 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(resourcePath)
 
-	switch resourceType {
-	case "Task":
+	if resourceType == "Task" {
 		return s.handleCreateTask
+	}
+	switch resourceType {
 	case "ServiceRequest":
 		return FHIRCreateOperationHandler[fhir.ServiceRequest]{
 			authzPolicy: CreateServiceRequestAuthzPolicy(s.profile),
@@ -512,7 +513,6 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 
 func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(resourcePath)
-
 	switch resourceType {
 	case "Task":
 		return s.handleUpdateTask

@@ -3,9 +3,20 @@ package careplanservice
 import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
 )
+
+func CreateQuestionnaireResponseAuthzPolicy(profile profile.Provider) Policy[fhir.QuestionnaireResponse] {
+	return LocalOrganizationPolicy[fhir.QuestionnaireResponse]{
+		profile: profile,
+	}
+}
+
+func UpdateQuestionnaireResponseAuthzPolicy() Policy[fhir.QuestionnaireResponse] {
+	return CreatorPolicy[fhir.QuestionnaireResponse]{}
+}
 
 func ReadQuestionnaireResponseAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.QuestionnaireResponse] {
 	return AnyMatchPolicy[fhir.QuestionnaireResponse]{
