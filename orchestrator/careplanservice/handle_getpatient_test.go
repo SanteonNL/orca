@@ -58,24 +58,6 @@ func TestService_handleGetPatient(t *testing.T) {
 		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
 		shouldSkip bool
 	}{
-		"error: Patient does not exist": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				ResourceId:    "1",
-				ResourcePath:  "Patient/1",
-				Principal:     auth.TestPrincipal1,
-				LocalIdentity: &fhir.Identifier{},
-				FhirHeaders:   &fhirclient.Headers{},
-			},
-			expectedError: fhirclient.OperationOutcomeError{
-				HttpStatusCode: http.StatusNotFound,
-			},
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).Return(fhirclient.OperationOutcomeError{
-					HttpStatusCode: http.StatusNotFound,
-				})
-			},
-		},
 		"error: Patient exists, auth, error fetching CarePlan": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{

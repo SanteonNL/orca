@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -57,7 +58,9 @@ func (s StubFHIRClient) ReadWithContext(ctx context.Context, path string, target
 			return nil
 		}
 	}
-	return errors.New("resource not found")
+	return fhirclient.OperationOutcomeError{
+		HttpStatusCode: http.StatusNotFound,
+	}
 }
 
 func (s StubFHIRClient) Create(resource any, result any, opts ...fhirclient.Option) error {

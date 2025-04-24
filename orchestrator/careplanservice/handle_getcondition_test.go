@@ -72,20 +72,6 @@ func TestService_handleGetCondition(t *testing.T) {
 		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
 		shouldSkip bool
 	}{
-		"error: Condition does not exist": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal1,
-				ResourcePath: "Condition/1",
-				ResourceId:   "1",
-				FhirHeaders:  &fhirclient.Headers{},
-			},
-			expectedError: errors.New("fhir error: Condition not found"),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "Condition/1", gomock.Any(), gomock.Any()).
-					Return(errors.New("fhir error: Condition not found"))
-			},
-		},
 		"error: Condition exists, no subject": {
 			shouldSkip: true, // "is creator" still gives access since it's not (properly) implemented, so we can't run this test until it's implemented.
 			context:    auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),

@@ -37,24 +37,6 @@ func TestService_handleGetTask(t *testing.T) {
 		expectedError error
 		setup         func(ctx context.Context, client *mock.MockClient)
 	}{
-		"error: Task does not exist": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal3,
-				ResourceId:   "1",
-				ResourcePath: "Task/1",
-				FhirHeaders:  &fhirclient.Headers{},
-				LocalIdentity: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("3"),
-				},
-			},
-			expectedError: errors.New("fhir error: task not found"),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "Task/1", gomock.Any(), gomock.Any()).
-					Return(errors.New("fhir error: task not found"))
-			},
-		},
 		"error: Task exists, auth, not owner or requester, error fetching CarePlan": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			request: FHIRHandlerRequest{

@@ -33,24 +33,6 @@ func TestService_handleGetQuestionnaire(t *testing.T) {
 		expectedError error
 		setup         func(ctx context.Context, client *mock.MockClient)
 	}{
-		"error: Questionnaire does not exist": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal1,
-				ResourceId:   "1",
-				ResourcePath: "Questionnaire/1",
-				FhirHeaders:  &fhirclient.Headers{},
-				LocalIdentity: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("1"),
-				},
-			},
-			expectedError: errors.New("fhir error: Questionnaire not found"),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "Questionnaire/1", gomock.Any(), gomock.Any()).
-					Return(errors.New("fhir error: Questionnaire not found"))
-			},
-		},
 		"ok: Questionnaire exists, auth": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{

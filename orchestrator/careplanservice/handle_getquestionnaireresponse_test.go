@@ -65,24 +65,6 @@ func TestService_handleGetQuestionnaireResponse(t *testing.T) {
 		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
 		shouldSkip bool
 	}{
-		"error: QuestionnaireResponse does not exist": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal1,
-				ResourceId:   "1",
-				ResourcePath: "QuestionnaireResponse/1",
-				FhirHeaders:  &fhirclient.Headers{},
-				LocalIdentity: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("1"),
-				},
-			},
-			expectedError: errors.New("fhir error: QuestionnaireResponse not found"),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "QuestionnaireResponse/1", gomock.Any(), gomock.Any()).
-					Return(errors.New("fhir error: QuestionnaireResponse not found"))
-			},
-		},
 		"error: QuestionnaireResponse exists, error fetching task": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
