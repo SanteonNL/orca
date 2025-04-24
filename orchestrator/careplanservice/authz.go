@@ -75,18 +75,24 @@ var _ Policy[any] = &RelatedResourceSearchPolicy[any, any]{}
 // It differs from RelatedResourcePolicy in that it uses a search operation to find the related resources,
 // instead of using a reference to the related resource.
 type RelatedResourceSearchPolicy[T any, R any] struct {
-	fhirClient                  fhirclient.Client
-	relatedResourcePolicy       Policy[R]
-	relatedResourceSearchParams func(ctx context.Context, resource T) (resourceType string, searchParams url.Values)
+	fhirClient            fhirclient.Client
+	relatedResourcePolicy Policy[R]
+	// relatedResourceSearchParams is a function that returns the search parameters for the related resource.
+	// If the resource lacks a reference to the related resource, this function should return nil for searchParams.
+	// In that case, the policy will deny access.
+	relatedResourceSearchParams func(ctx context.Context, resource T) (resourceType string, searchParams *url.Values)
 }
 
 func (r RelatedResourceSearchPolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
 	resourceType, searchParams := r.relatedResourceSearchParams(ctx, resource)
+	if searchParams == nil {
+		return false, nil
+	}
 	searchHandler := FHIRSearchOperationHandler[R]{
 		fhirClient:  r.fhirClient,
 		authzPolicy: r.relatedResourcePolicy,
 	}
-	results, _, err := searchHandler.searchAndFilter(ctx, searchParams, &principal, resourceType)
+	results, _, err := searchHandler.searchAndFilter(ctx, *searchParams, &principal, resourceType)
 	if err != nil {
 		return false, fmt.Errorf("related resource search (related resource type=%s): %w", resourceType, err)
 	}
@@ -120,10 +126,30 @@ func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, prin
 		return false, fmt.Errorf("resource is not a CarePlan")
 	}
 	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
+	// INT-630: We changed CareTeam to be contained within the CarePlan, but old test data in the CarePlan resource does not have CareTeam.
+	//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
 	if err != nil {
-		return false, fmt.Errorf("unable to derive CareTeam from CarePlan: %w", err)
+		log.Ctx(ctx).Warn().Err(err).Msgf("Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource (carePlanID=%s)", *carePlan.Id)
+		return false, nil
 	}
 	return validatePrincipalInCareTeam(principal, careTeam) == nil, nil
+	// TODO: Re-implement. We need this logic, but AuditEvent is not a suitable mechanism
+	// For patients not yet authorized, check if the requester is the creator
+	//for _, patient := range patients {
+	//	// Skip if patient is already authorized through CareTeam
+	//	if slices.ContainsFunc(retPatients, func(p fhir.Patient) bool {
+	//		return *p.Id == *patient.Id
+	//	}) {
+	//		continue
+	//	}
+	//
+	//	// Check if requester is the creator
+	//	isCreator, err := s.isCreatorOfResource(ctx, principal, "Patient", *patient.Id)
+	//	if err == nil && isCreator {
+	//		log.Ctx(ctx).Debug().Msgf("User is creator of Patient/%s", *patient.Id)
+	//		retPatients = append(retPatients, patient)
+	//	}
+	//}
 }
 
 var _ Policy[any] = &CreatorPolicy[any]{}

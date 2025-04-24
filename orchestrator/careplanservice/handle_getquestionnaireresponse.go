@@ -19,8 +19,8 @@ func ReadQuestionnaireResponseAuthzPolicy(fhirClient fhirclient.Client) Policy[f
 			RelatedResourceSearchPolicy[fhir.QuestionnaireResponse, fhir.Task]{
 				fhirClient:            fhirClient,
 				relatedResourcePolicy: ReadTaskAuthzPolicy(fhirClient),
-				relatedResourceSearchParams: func(ctx context.Context, resource fhir.QuestionnaireResponse) (resourceType string, searchParams url.Values) {
-					return "Task", url.Values{"output-reference": []string{"QuestionnaireResponse/" + *resource.Id}}
+				relatedResourceSearchParams: func(ctx context.Context, resource fhir.QuestionnaireResponse) (resourceType string, searchParams *url.Values) {
+					return "Task", &url.Values{"output-reference": []string{"QuestionnaireResponse/" + *resource.Id}}
 				},
 			},
 			CreatorPolicy[fhir.QuestionnaireResponse]{},

@@ -285,9 +285,10 @@ func TestService_handleSearchPatient(t *testing.T) {
 		"error: Empty bundle": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				RequestUrl:  &url.URL{RawQuery: "_id=1"},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "Patient",
+				RequestUrl:   &url.URL{RawQuery: "_id=1"},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -307,9 +308,10 @@ func TestService_handleSearchPatient(t *testing.T) {
 		"error: fhirclient error": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				RequestUrl:  &url.URL{RawQuery: "_id=1"},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "Patient",
+				RequestUrl:   &url.URL{RawQuery: "_id=1"},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -326,15 +328,15 @@ func TestService_handleSearchPatient(t *testing.T) {
 		"error: Patient returned, error from CarePlan read": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				RequestUrl:  &url.URL{RawQuery: "_id=1"},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "Patient",
+				RequestUrl:   &url.URL{RawQuery: "_id=1"},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
 				},
 			},
-			expectedError: errors.New("error"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().SearchWithContext(ctx, "Patient", gomock.Any(), gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
@@ -352,9 +354,10 @@ func TestService_handleSearchPatient(t *testing.T) {
 		"error: Patient returned, no careplan or careteam returned": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				RequestUrl:  &url.URL{RawQuery: "_id=1"},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "Patient",
+				RequestUrl:   &url.URL{RawQuery: "_id=1"},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -467,9 +470,10 @@ func TestService_handleSearchPatient(t *testing.T) {
 		"ok: Patient returned, careplan returned, correct principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				RequestUrl:  &url.URL{RawQuery: "_id=1"},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "Patient",
+				RequestUrl:   &url.URL{RawQuery: "_id=1"},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -520,9 +524,10 @@ func TestService_handleSearchPatient(t *testing.T) {
 		"ok: Multiple resources returned, correctly filtered": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				FhirHeaders: &fhirclient.Headers{},
-				QueryParams: url.Values{"_id": []string{"1,2,3"}},
+				Principal:    auth.TestPrincipal1,
+				FhirHeaders:  &fhirclient.Headers{},
+				ResourcePath: "Patient",
+				QueryParams:  url.Values{"_id": []string{"1,2,3"}},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -556,7 +561,7 @@ func TestService_handleSearchPatient(t *testing.T) {
 						}
 						return nil
 					})
-				client.EXPECT().SearchWithContext(ctx, "CarePlan", gomock.Any(), gomock.Any(), gomock.Any()).
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", url.Values{"subject": []string{"Patient/1"}, "_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{
@@ -565,12 +570,24 @@ func TestService_handleSearchPatient(t *testing.T) {
 									Status: "200 OK",
 								},
 							},
+						}}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", url.Values{"subject": []string{"Patient/2"}, "_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{
 								Resource: careplan2Careteam1,
 								Response: &fhir.BundleEntryResponse{
 									Status: "200 OK",
 								},
 							},
+						}}
+						return nil
+					})
+				client.EXPECT().SearchWithContext(ctx, "CarePlan", url.Values{"subject": []string{"Patient/3"}, "_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
+					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
+						*target = fhir.Bundle{Entry: []fhir.BundleEntry{
 							{
 								Resource: careplan3Careteam3,
 								Response: &fhir.BundleEntryResponse{
@@ -624,9 +641,12 @@ func TestService_handleSearchPatient(t *testing.T) {
 
 			tt.setup(tt.context, client)
 
-			service := &Service{fhirClient: client}
+			handler := &FHIRSearchOperationHandler[fhir.Patient]{
+				fhirClient:  client,
+				authzPolicy: ReadPatientAccessPolicy(client),
+			}
 			tx := coolfhir.Transaction()
-			result, err := service.handleSearchPatient(tt.context, tt.request, tx)
+			result, err := handler.Handle(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Equal(t, tt.expectedError, err)

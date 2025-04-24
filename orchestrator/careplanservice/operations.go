@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -10,6 +11,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -132,10 +134,37 @@ func searchResources[T any](ctx context.Context, fhirClient fhirclient.Client, r
 		form.Add(k, strings.Join(v, ","))
 	}
 
+	var searchLimit int
+	if form.Has("_count") {
+		count, err := strconv.Atoi(form.Get("_count"))
+		if err != nil {
+			return nil, &fhir.Bundle{}, fmt.Errorf("invalid _count value: %w", err)
+		}
+		searchLimit = count
+	} else {
+		// If we're missing a resource due to too low page count, we might incorrectly deny access
+		searchLimit = 10000
+		form.Add("_count", strconv.Itoa(searchLimit))
+	}
+
 	var bundle fhir.Bundle
 	err := fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, &fhir.Bundle{}, err
+	}
+
+	// If there's more search results we didn't use, make sure we log this
+	searchHasNext := false
+	for _, link := range bundle.Link {
+		if link.Relation == "next" {
+			searchHasNext = true
+			break
+		}
+	}
+	if searchHasNext ||
+		len(bundle.Entry) > searchLimit-1 ||
+		(bundle.Total != nil && *bundle.Total > searchLimit) {
+		log.Ctx(ctx).Warn().Msgf("Too many results found for %s search, only the first %d will taken into account. This could lead to not being granted access, or search results being omitted.", resourceType, searchLimit)
 	}
 
 	var resources []T

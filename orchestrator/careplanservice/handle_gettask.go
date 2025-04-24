@@ -57,23 +57,14 @@ func (s *Service) handleReadTask(ctx context.Context, request FHIRHandlerRequest
 		}
 	}
 
-	// Check if the requester is either the task Owner or Requester, if not, they must be a member of the CareTeam
-	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&task, request.Principal.Organization.Identifier)
-	if !(isOwner || isRequester) {
-		var carePlan fhir.CarePlan
-
-		if err := s.fhirClient.ReadWithContext(ctx, *task.BasedOn[0].Reference, &carePlan); err != nil {
-			return nil, err
-		}
-
-		careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
+	hasAccess, err := ReadTaskAuthzPolicy(s.fhirClient).HasAccess(ctx, task, *request.Principal)
+	if !hasAccess {
 		if err != nil {
-			return nil, err
+			log.Ctx(ctx).Error().Err(err).Msg("Error checking if principal has access to Task")
 		}
-
-		err = validatePrincipalInCareTeam(*request.Principal, careTeam)
-		if err != nil {
-			return nil, err
+		return nil, &coolfhir.ErrorWithCode{
+			Message:    "Participant does not have access to Task",
+			StatusCode: http.StatusForbidden,
 		}
 	}
 
