@@ -13,7 +13,7 @@ import (
 	"net/url"
 )
 
-func ReadPatientAccessPolicy(fhirClient fhirclient.Client) Policy[fhir.Patient] {
+func ReadPatientAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Patient] {
 	return RelatedResourceSearchPolicy[fhir.Patient, fhir.CarePlan]{
 		fhirClient:            fhirClient,
 		relatedResourcePolicy: CareTeamMemberPolicy[fhir.CarePlan]{},
@@ -34,7 +34,7 @@ func (s *Service) handleReadPatient(ctx context.Context, request FHIRHandlerRequ
 		return nil, err
 	}
 
-	hasAccess, err := ReadPatientAccessPolicy(s.fhirClient).HasAccess(ctx, patient, *request.Principal)
+	hasAccess, err := ReadPatientAuthzPolicy(s.fhirClient).HasAccess(ctx, patient, *request.Principal)
 	if !hasAccess {
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msg("Error checking if principal has access to Patient")

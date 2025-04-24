@@ -83,8 +83,9 @@ func TestService_handleGetPatient(t *testing.T) {
 				LocalIdentity: &fhir.Identifier{},
 				FhirHeaders:   &fhirclient.Headers{},
 			},
-			expectedError: fhirclient.OperationOutcomeError{
-				HttpStatusCode: http.StatusNotFound,
+			expectedError: &coolfhir.ErrorWithCode{
+				Message:    "Participant does not have access to Patient",
+				StatusCode: http.StatusForbidden,
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
 				client.EXPECT().ReadWithContext(ctx, "Patient/1", gomock.Any(), gomock.Any()).
@@ -643,7 +644,7 @@ func TestService_handleSearchPatient(t *testing.T) {
 
 			handler := &FHIRSearchOperationHandler[fhir.Patient]{
 				fhirClient:  client,
-				authzPolicy: ReadPatientAccessPolicy(client),
+				authzPolicy: ReadPatientAuthzPolicy(client),
 			}
 			tx := coolfhir.Transaction()
 			result, err := handler.Handle(tt.context, tt.request, tx)

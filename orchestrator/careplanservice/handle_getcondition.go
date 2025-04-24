@@ -14,13 +14,13 @@ import (
 	"net/url"
 )
 
-func ReadConditionAccessPolicy(fhirClient fhirclient.Client) Policy[fhir.Condition] {
+func ReadConditionAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Condition] {
 	// TODO: Find out new auth requirements for condition
 	return AnyMatchPolicy[fhir.Condition]{
 		Policies: []Policy[fhir.Condition]{
 			RelatedResourceSearchPolicy[fhir.Condition, fhir.Patient]{
 				fhirClient:            fhirClient,
-				relatedResourcePolicy: ReadPatientAccessPolicy(fhirClient),
+				relatedResourcePolicy: ReadPatientAuthzPolicy(fhirClient),
 				relatedResourceSearchParams: func(ctx context.Context, resource fhir.Condition) (string, *url.Values) {
 					if resource.Subject.Identifier == nil || resource.Subject.Identifier.System == nil || resource.Subject.Identifier.Value == nil {
 						log.Ctx(ctx).Warn().Msg("Condition does not have Patient as subject, can't verify access")
@@ -48,7 +48,7 @@ func (s *Service) handleReadCondition(ctx context.Context, request FHIRHandlerRe
 		return nil, err
 	}
 
-	hasAccess, err := ReadConditionAccessPolicy(s.fhirClient).HasAccess(ctx, condition, *request.Principal)
+	hasAccess, err := ReadConditionAuthzPolicy(s.fhirClient).HasAccess(ctx, condition, *request.Principal)
 	if !hasAccess {
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msg("Error checking if principal has access to Condition")

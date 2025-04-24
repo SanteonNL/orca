@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/webhook"
-	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/events"
 
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
@@ -92,15 +92,6 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 	if err != nil {
 		return nil, err
 	}
-
-	s.registerHandler("Patient", FHIRSearchOperationHandler[any]{})
-	s.registerHandler("CarePlan", FHIRSearchOperationHandler[any]{})
-	s.registerHandler("Task", FHIRSearchOperationHandler[any]{})
-	s.registerHandler("ServiceRequest", FHIRSearchOperationHandler[any]{})
-	s.registerHandler("Questionnaire", FHIRSearchOperationHandler[any]{})
-	s.registerHandler("QuestionnaireResponse", FHIRSearchOperationHandler[any]{})
-	s.registerHandler("Condition", FHIRSearchOperationHandler[any]{})
-
 	return &s, nil
 }
 
@@ -117,8 +108,6 @@ type Service struct {
 	allowUnmanagedFHIROperations bool
 	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	pipeline                     pipeline.Instance
-
-	operationHandlers map[string]map[FHIROperationType]FHIROperation
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
@@ -573,18 +562,53 @@ func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
 	return nil
 }
 
+type CPSResourceType interface {
+	fhir.Patient | fhir.Condition | fhir.CarePlan | fhir.Task | fhir.Questionnaire | fhir.QuestionnaireResponse | fhir.ServiceRequest
+}
+
 func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(resourcePath)
-
-	resourceHandlers, ok := s.operationHandlers[resourceType]
-	if ok {
-		if handler, ok := resourceHandlers[FHIROperationSearch]; ok {
-			return handler.Handle
-		}
+	var handleFunc func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
+	switch resourceType {
+	case "Patient":
+		handleFunc = FHIRSearchOperationHandler[fhir.Patient]{
+			authzPolicy: ReadPatientAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "Condition":
+		handleFunc = FHIRSearchOperationHandler[fhir.Condition]{
+			authzPolicy: ReadConditionAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "CarePlan":
+		handleFunc = FHIRSearchOperationHandler[fhir.CarePlan]{
+			authzPolicy: ReadCarePlanAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "Task":
+		handleFunc = FHIRSearchOperationHandler[fhir.Task]{
+			authzPolicy: ReadTaskAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "ServiceRequest":
+		handleFunc = FHIRSearchOperationHandler[fhir.ServiceRequest]{
+			authzPolicy: ReadServiceRequestAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "Questionnaire":
+		handleFunc = FHIRSearchOperationHandler[fhir.Questionnaire]{
+			authzPolicy: ReadQuestionnaireAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "QuestionnaireResponse":
+		handleFunc = FHIRSearchOperationHandler[fhir.QuestionnaireResponse]{
+			authzPolicy: ReadQuestionnaireResponseAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	default:
+		handleFunc = s.handleUnmanagedOperation
 	}
-	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-		return s.handleUnmanagedOperation(ctx, request, tx)
-	}
+	return handleFunc
 }
 
 // handleSearchRequest handles the HTTP request for a FHIR search operation.
@@ -1054,14 +1078,4 @@ func (s *Service) getLocalIdentity() (*fhir.Identifier, error) {
 		return nil, errors.New("no local identity found")
 	}
 	return &localIdentity[0].Identifier[0], nil
-}
-
-func (s *Service) registerHandler(resourceType string, operationHandler FHIRSearchOperationHandler[any]) {
-	if s.operationHandlers == nil {
-		s.operationHandlers = map[string]map[FHIROperationType]FHIROperation{}
-	}
-	if _, ok := s.operationHandlers[resourceType]; !ok {
-		s.operationHandlers[resourceType] = map[FHIROperationType]FHIROperation{}
-	}
-	s.operationHandlers[resourceType][operationHandler.Type()] = operationHandler
 }

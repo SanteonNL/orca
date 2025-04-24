@@ -222,7 +222,7 @@ func TestService_handleSearchTask(t *testing.T) {
 				},
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "Task", url.Values{}, gomock.Any(), gomock.Any()).
+				client.EXPECT().SearchWithContext(ctx, "Task", url.Values{"_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
 					Return(nil)
 			},
 			mockResponse:    &fhir.Bundle{Entry: []fhir.BundleEntry{}},
@@ -241,7 +241,7 @@ func TestService_handleSearchTask(t *testing.T) {
 				},
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "Task", url.Values{}, gomock.Any(), gomock.Any()).
+				client.EXPECT().SearchWithContext(ctx, "Task", url.Values{"_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target any, _ ...fhirclient.Option) error {
 						*target.(*fhir.Bundle) = fhir.Bundle{
 							Entry: []fhir.BundleEntry{
@@ -281,7 +281,7 @@ func TestService_handleSearchTask(t *testing.T) {
 				},
 			},
 			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().SearchWithContext(ctx, "Task", url.Values{}, gomock.Any(), gomock.Any()).
+				client.EXPECT().SearchWithContext(ctx, "Task", url.Values{"_count": []string{"10000"}}, gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ context.Context, _ string, _ url.Values, target *fhir.Bundle, _ ...fhirclient.Option) error {
 						*target = fhir.Bundle{
 							Entry: []fhir.BundleEntry{

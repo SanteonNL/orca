@@ -680,7 +680,7 @@ func TestService_handleSearchCondition(t *testing.T) {
 
 			handler := &FHIRSearchOperationHandler[fhir.Condition]{
 				fhirClient:  client,
-				authzPolicy: ReadConditionAccessPolicy(client),
+				authzPolicy: ReadConditionAuthzPolicy(client),
 			}
 			tx := coolfhir.Transaction()
 			result, err := handler.Handle(tt.context, tt.request, tx)
