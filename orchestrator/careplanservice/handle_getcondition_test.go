@@ -75,9 +75,10 @@ func TestService_handleGetCondition(t *testing.T) {
 		"error: Condition does not exist": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				ResourcePath: "Condition/1",
+				ResourceId:   "1",
+				FhirHeaders:  &fhirclient.Headers{},
 			},
 			expectedError: errors.New("fhir error: Condition not found"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
@@ -108,9 +109,10 @@ func TestService_handleGetCondition(t *testing.T) {
 		"error: Condition exists, subject is not a patient": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				ResourcePath: "Condition/1",
+				ResourceId:   "1",
+				FhirHeaders:  &fhirclient.Headers{},
 			},
 			expectedError: errors.New("fhir error: Issues searching for patient"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
@@ -134,9 +136,10 @@ func TestService_handleGetCondition(t *testing.T) {
 		"error: Condition exists, subject is patient, error fetching patient": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				ResourcePath: "Condition/1",
+				ResourceId:   "1",
+				FhirHeaders:  &fhirclient.Headers{},
 			},
 			expectedError: errors.New("fhir error: Issues searching for patient"),
 			setup: func(ctx context.Context, client *mock.MockClient) {
@@ -207,9 +210,10 @@ func TestService_handleGetCondition(t *testing.T) {
 		"ok: Condition exists, subject is patient, patient returned, incorrect principal, but creator of resource": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal3,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal3,
+				ResourceId:   "1",
+				ResourcePath: "Condition/1",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -236,9 +240,10 @@ func TestService_handleGetCondition(t *testing.T) {
 		"ok: Condition exists, subject is patient, patient returned, correct principal": {
 			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
 			request: FHIRHandlerRequest{
-				Principal:   auth.TestPrincipal1,
-				ResourceId:  "1",
-				FhirHeaders: &fhirclient.Headers{},
+				Principal:    auth.TestPrincipal1,
+				ResourceId:   "1",
+				ResourcePath: "Condition/1",
+				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
@@ -279,9 +284,12 @@ func TestService_handleGetCondition(t *testing.T) {
 				tt.setup(tt.context, client)
 			}
 
-			service := &Service{fhirClient: client}
+			service := &FHIRReadOperationHandler[fhir.Condition]{
+				fhirClient:  client,
+				authzPolicy: ReadConditionAuthzPolicy(client),
+			}
 			tx := coolfhir.Transaction()
-			result, err := service.handleReadCondition(tt.context, tt.request, tx)
+			result, err := service.Handle(tt.context, tt.request, tx)
 
 			if tt.expectedError != nil {
 				require.Error(t, err)

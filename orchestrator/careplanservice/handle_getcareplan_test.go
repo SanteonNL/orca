@@ -182,7 +182,7 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 			request: FHIRHandlerRequest{
 				Principal:    auth.TestPrincipal1,
 				QueryParams:  url.Values{},
-				ResourcePath: "CarePlan",
+				ResourcePath: "CarePlan/_search",
 				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
@@ -201,7 +201,7 @@ func TestService_handleSearchCarePlan(t *testing.T) {
 			request: FHIRHandlerRequest{
 				Principal:    auth.TestPrincipal1,
 				QueryParams:  url.Values{},
-				ResourcePath: "CarePlan",
+				ResourcePath: "CarePlan/_search",
 				FhirHeaders:  &fhirclient.Headers{},
 				LocalIdentity: &fhir.Identifier{
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),

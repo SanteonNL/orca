@@ -652,7 +652,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 		RequestUrl:    httpRequest.URL,
 		HttpMethod:    httpRequest.Method,
 		HttpHeaders:   coolfhir.FilterRequestHeaders(httpRequest.Header),
-		ResourcePath:  resourceType,
+		ResourcePath:  resourceType + "/_search",
 		Principal:     &principal,
 		LocalIdentity: localIdentity,
 		FhirHeaders:   new(fhirclient.Headers),
