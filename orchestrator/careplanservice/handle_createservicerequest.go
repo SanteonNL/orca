@@ -45,7 +45,7 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 			Url:    "ServiceRequest/" + *serviceRequest.Id,
 		}, nil, coolfhir.WithFullUrl(*serviceRequestBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,
@@ -54,7 +54,7 @@ func (s *Service) handleCreateServiceRequest(ctx context.Context, request FHIRHa
 	} else {
 		tx.Create(serviceRequest, coolfhir.WithFullUrl(*serviceRequestBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,

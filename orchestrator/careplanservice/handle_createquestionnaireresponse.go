@@ -45,7 +45,7 @@ func (s *Service) handleCreateQuestionnaireResponse(ctx context.Context, request
 			Url:    "QuestionnaireResponse/" + *questionnaireResponse.Id,
 		}, nil, coolfhir.WithFullUrl(*questionnaireResponseBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,
@@ -54,7 +54,7 @@ func (s *Service) handleCreateQuestionnaireResponse(ctx context.Context, request
 	} else {
 		tx.Create(questionnaireResponse, coolfhir.WithFullUrl(*questionnaireResponseBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,

@@ -120,7 +120,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	taskBundleEntry := request.bundleEntryWithResource(task)
 	tx = tx.AppendEntry(taskBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 		ActingAgent: &fhir.Reference{
-			Identifier: request.LocalIdentity,
+			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		},
 		Observer: *request.LocalIdentity,

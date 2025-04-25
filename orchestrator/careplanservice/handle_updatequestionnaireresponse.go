@@ -73,7 +73,7 @@ func (s *Service) handleUpdateQuestionnaireResponse(ctx context.Context, request
 	questionnaireResponseBundleEntry := request.bundleEntryWithResource(questionnaireResponse)
 	tx.AppendEntry(questionnaireResponseBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 		ActingAgent: &fhir.Reference{
-			Identifier: request.LocalIdentity,
+			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		},
 		Observer: *request.LocalIdentity,

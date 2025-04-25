@@ -46,7 +46,7 @@ func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRe
 			Url:    "Patient/" + *patient.Id,
 		}, nil, coolfhir.WithFullUrl(*patientBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,
@@ -55,7 +55,7 @@ func (s *Service) handleCreatePatient(ctx context.Context, request FHIRHandlerRe
 	} else {
 		tx.Create(patient, coolfhir.WithFullUrl(*patientBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,

@@ -46,7 +46,7 @@ func (s *Service) handleCreateCondition(ctx context.Context, request FHIRHandler
 			Url:    "Condition/" + *condition.Id,
 		}, nil, coolfhir.WithFullUrl(*conditionBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,
@@ -55,7 +55,7 @@ func (s *Service) handleCreateCondition(ctx context.Context, request FHIRHandler
 	} else {
 		tx.Create(condition, coolfhir.WithFullUrl(*conditionBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,

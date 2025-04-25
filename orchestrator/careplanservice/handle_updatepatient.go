@@ -68,7 +68,7 @@ func (s *Service) handleUpdatePatient(ctx context.Context, request FHIRHandlerRe
 	patientBundleEntry := request.bundleEntryWithResource(patient)
 	tx.AppendEntry(patientBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 		ActingAgent: &fhir.Reference{
-			Identifier: request.LocalIdentity,
+			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		},
 		Observer: *request.LocalIdentity,
