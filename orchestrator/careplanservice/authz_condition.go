@@ -24,7 +24,7 @@ func ReadConditionAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Conditio
 	// TODO: Find out new auth requirements for condition
 	return AnyMatchPolicy[fhir.Condition]{
 		Policies: []Policy[fhir.Condition]{
-			RelatedResourceSearchPolicy[fhir.Condition, fhir.Patient]{
+			RelatedResourcePolicy[fhir.Condition, fhir.Patient]{
 				fhirClient:            fhirClient,
 				relatedResourcePolicy: ReadPatientAuthzPolicy(fhirClient),
 				relatedResourceSearchParams: func(ctx context.Context, resource fhir.Condition) (string, *url.Values) {

@@ -21,7 +21,7 @@ func UpdateQuestionnaireResponseAuthzPolicy() Policy[fhir.QuestionnaireResponse]
 func ReadQuestionnaireResponseAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.QuestionnaireResponse] {
 	return AnyMatchPolicy[fhir.QuestionnaireResponse]{
 		Policies: []Policy[fhir.QuestionnaireResponse]{
-			RelatedResourceSearchPolicy[fhir.QuestionnaireResponse, fhir.Task]{
+			RelatedResourcePolicy[fhir.QuestionnaireResponse, fhir.Task]{
 				fhirClient:            fhirClient,
 				relatedResourcePolicy: ReadTaskAuthzPolicy(fhirClient),
 				relatedResourceSearchParams: func(ctx context.Context, resource fhir.QuestionnaireResponse) (resourceType string, searchParams *url.Values) {

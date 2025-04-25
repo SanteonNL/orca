@@ -21,7 +21,7 @@ func UpdateServiceRequestAuthzPolicy() Policy[fhir.ServiceRequest] {
 func ReadServiceRequestAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.ServiceRequest] {
 	return AnyMatchPolicy[fhir.ServiceRequest]{
 		Policies: []Policy[fhir.ServiceRequest]{
-			RelatedResourceSearchPolicy[fhir.ServiceRequest, fhir.Task]{
+			RelatedResourcePolicy[fhir.ServiceRequest, fhir.Task]{
 				fhirClient:            fhirClient,
 				relatedResourcePolicy: ReadTaskAuthzPolicy(fhirClient),
 				relatedResourceSearchParams: func(ctx context.Context, resource fhir.ServiceRequest) (string, *url.Values) {

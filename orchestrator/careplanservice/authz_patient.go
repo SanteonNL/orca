@@ -19,7 +19,7 @@ func UpdatePatientAuthzPolicy() Policy[fhir.Patient] {
 }
 
 func ReadPatientAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Patient] {
-	return RelatedResourceSearchPolicy[fhir.Patient, fhir.CarePlan]{
+	return RelatedResourcePolicy[fhir.Patient, fhir.CarePlan]{
 		fhirClient:            fhirClient,
 		relatedResourcePolicy: CareTeamMemberPolicy[fhir.CarePlan]{},
 		relatedResourceSearchParams: func(ctx context.Context, resource fhir.Patient) (resourceType string, searchParams *url.Values) {

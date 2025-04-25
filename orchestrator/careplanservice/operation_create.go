@@ -29,7 +29,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	log.Ctx(ctx).Info().Msgf("Creating %s", resourceType)
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
-		return nil, fmt.Errorf("invalid %T: %w", resource, coolfhir.BadRequestError(err))
+		return nil, fmt.Errorf("invalid %s: %w", resourceType, coolfhir.BadRequestError(err))
 	}
 	resourceID := coolfhir.ResourceID(resource)
 	// Check we're only allowing secure external literal references
@@ -39,10 +39,10 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	hasAccess, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
 	if !hasAccess {
 		if err != nil {
-			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal is allowed to create %s", resourceType)
+			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal is authorized to create %s", resourceType)
 		}
 		return nil, &coolfhir.ErrorWithCode{
-			Message:    fmt.Sprintf("Participant is not allowed to create %s", resourceType),
+			Message:    fmt.Sprintf("Participant is not authorized to create %s", resourceType),
 			StatusCode: http.StatusForbidden,
 		}
 	}

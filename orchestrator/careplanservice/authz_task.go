@@ -7,32 +7,11 @@ import (
 	"net/url"
 )
 
-//func ReadTaskAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Task] {
-//	return AnyMatchPolicy[fhir.Task]{
-//		Policies: []Policy[fhir.Task]{
-//			TaskOwnerOrRequesterPolicy[fhir.Task]{},
-//			RelatedResourcePolicy[fhir.Task, fhir.CarePlan]{
-//				fhirClient:            fhirClient,
-//				relatedResourcePolicy: CareTeamMemberPolicy[fhir.CarePlan]{},
-//				relatedResourceRefs: func(ctx context.Context, resource fhir.Task) ([]string, error) {
-//					var refs []string
-//					for _, reference := range resource.BasedOn {
-//						if reference.Reference != nil {
-//							refs = append(refs, *reference.Reference)
-//						}
-//					}
-//					return refs, nil
-//				},
-//			},
-//		},
-//	}
-//}
-
 func ReadTaskAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Task] {
 	return AnyMatchPolicy[fhir.Task]{
 		Policies: []Policy[fhir.Task]{
 			TaskOwnerOrRequesterPolicy[fhir.Task]{},
-			RelatedResourceSearchPolicy[fhir.Task, fhir.CarePlan]{
+			RelatedResourcePolicy[fhir.Task, fhir.CarePlan]{
 				fhirClient:            fhirClient,
 				relatedResourcePolicy: CareTeamMemberPolicy[fhir.CarePlan]{},
 				relatedResourceSearchParams: func(ctx context.Context, resource fhir.Task) (string, *url.Values) {

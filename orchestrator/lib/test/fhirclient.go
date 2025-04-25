@@ -169,6 +169,55 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 				}
 				return false
 			})
+		case "output-reference":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type != "Task" {
+					return false
+				}
+				var task fhir.Task
+				if err := json.Unmarshal(candidate.Data, &task); err != nil {
+					panic(err)
+				}
+				for _, output := range task.Output {
+					if output.ValueReference != nil &&
+						output.ValueReference.Reference != nil &&
+						*output.ValueReference.Reference == value {
+						return true
+					}
+				}
+				return false
+			})
+		case "focus":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type != "Task" {
+					return false
+				}
+				var task fhir.Task
+				if err := json.Unmarshal(candidate.Data, &task); err != nil {
+					panic(err)
+				}
+				return task.Focus != nil && *task.Focus.Reference == value
+			})
+		case "subject":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type != "CarePlan" {
+					return false
+				}
+				var carePlan fhir.CarePlan
+				if err := json.Unmarshal(candidate.Data, &carePlan); err != nil {
+					panic(err)
+				}
+				if carePlan.Subject.Reference != nil && *carePlan.Subject.Reference == value {
+					return true
+				}
+				if carePlan.Subject.Identifier != nil {
+					token := fmt.Sprintf("%s|%s", to.EmptyString(carePlan.Subject.Identifier.System), to.EmptyString(carePlan.Subject.Identifier.Value))
+					if value == token {
+						return true
+					}
+				}
+				return false
+			})
 		case "url":
 			filterCandidates(func(candidate BaseResource) bool {
 				return candidate.URL == value

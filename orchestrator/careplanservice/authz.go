@@ -60,13 +60,13 @@ func (l LocalOrganizationPolicy[T]) HasAccess(ctx context.Context, _ T, principa
 	return false, nil
 }
 
-var _ Policy[any] = &RelatedResourceSearchPolicy[any, any]{}
+var _ Policy[any] = &RelatedResourcePolicy[any, any]{}
 
-// RelatedResourceSearchPolicy is a policy that allows access if the user has access to the related resource(s).
+// RelatedResourcePolicy is a policy that allows access if the user has access to the related resource(s).
 // For instance, if the user has access to a ServiceRequest, if the user has access to the related Task.
 // It differs from RelatedResourcePolicy in that it uses a search operation to find the related resources,
 // instead of using a reference to the related resource.
-type RelatedResourceSearchPolicy[T any, R any] struct {
+type RelatedResourcePolicy[T any, R any] struct {
 	fhirClient            fhirclient.Client
 	relatedResourcePolicy Policy[R]
 	// relatedResourceSearchParams is a function that returns the search parameters for the related resource.
@@ -75,7 +75,7 @@ type RelatedResourceSearchPolicy[T any, R any] struct {
 	relatedResourceSearchParams func(ctx context.Context, resource T) (resourceType string, searchParams *url.Values)
 }
 
-func (r RelatedResourceSearchPolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
 	resourceType, searchParams := r.relatedResourceSearchParams(ctx, resource)
 	if searchParams == nil {
 		return false, nil
