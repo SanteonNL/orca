@@ -30,6 +30,13 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 	existingTask := fhir.Task{
 		Id: &task1ID,
 	}
+	toBundle := func(entries []*fhir.BundleEntry) fhir.Bundle {
+		result := fhir.Bundle{}
+		for _, entry := range entries {
+			result.Entry = append(result.Entry, *entry)
+		}
+		return result
+	}
 
 	type args struct {
 		resource          fhir.Task
@@ -37,11 +44,12 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 		existingResources []fhir.Task
 	}
 	type testCase struct {
-		name    string
-		args    args
-		want    func(t *testing.T, tx fhir.Bundle)
-		wantErr assert.ErrorAssertionFunc
-		policy  Policy[fhir.Task]
+		name      string
+		args      args
+		want      func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult)
+		wantErr   assert.ErrorAssertionFunc
+		policy    Policy[fhir.Task]
+		fhirError error
 	}
 	tests := []testCase{
 		{
@@ -50,13 +58,29 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				resource:          updatedTask,
 				existingResources: []fhir.Task{existingTask},
 			},
-			want: func(t *testing.T, tx fhir.Bundle) {
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
 				assertContainsAuditEvent(t, tx, task1Ref, auth.TestPrincipal1.Organization.Identifier[0], auth.TestPrincipal2.Organization.Identifier[0], fhir.AuditEventActionU)
 				assertBundleEntry(t, tx, coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
 					assert.Equal(t, fhir.HTTPVerbPUT, entry.Request.Method)
 					assert.Equal(t, *task1Ref.Reference, entry.Request.Url)
 					assert.JSONEq(t, string(must.MarshalJSON(updatedTask)), string(entry.Resource))
 				})
+				// Should respond with 1 bundle entry, and 1 notification
+				txResponse := coolfhir.Transaction().
+					Append(updatedTask, nil, &fhir.BundleEntryResponse{
+						Status:   "200 OK",
+						Location: task1Ref.Reference,
+					}).Bundle()
+				responseEntries, notifications, err := result(&txResponse)
+				require.NoError(t, err)
+				assert.Len(t, responseEntries, 1)
+				assertBundleEntry(t, toBundle(responseEntries), coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, "200 OK", entry.Response.Status)
+					assert.Equal(t, *task1Ref.Reference, *entry.Response.Location)
+					assert.JSONEq(t, string(must.MarshalJSON(updatedTask)), string(entry.Resource))
+				})
+				assert.Len(t, notifications, 1)
+				assert.IsType(t, &fhir.Task{}, notifications[0])
 			},
 		},
 		{
@@ -64,13 +88,29 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 			args: args{
 				resource: updatedTask,
 			},
-			want: func(t *testing.T, tx fhir.Bundle) {
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
 				assertContainsAuditEvent(t, tx, task1Ref, auth.TestPrincipal1.Organization.Identifier[0], auth.TestPrincipal2.Organization.Identifier[0], fhir.AuditEventActionC)
 				assertBundleEntry(t, tx, coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
 					assert.Equal(t, fhir.HTTPVerbPUT, entry.Request.Method)
 					assert.Equal(t, *task1Ref.Reference, entry.Request.Url)
 					assert.JSONEq(t, string(must.MarshalJSON(updatedTask)), string(entry.Resource))
 				})
+				// Should respond with 1 bundle entry, and 1 notification
+				txResponse := coolfhir.Transaction().
+					Append(updatedTask, nil, &fhir.BundleEntryResponse{
+						Status:   "201 Created",
+						Location: task1Ref.Reference,
+					}).Bundle()
+				responseEntries, notifications, err := result(&txResponse)
+				require.NoError(t, err)
+				assert.Len(t, responseEntries, 1)
+				assertBundleEntry(t, toBundle(responseEntries), coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, "201 Created", entry.Response.Status)
+					assert.Equal(t, *task1Ref.Reference, *entry.Response.Location)
+					assert.JSONEq(t, string(must.MarshalJSON(updatedTask)), string(entry.Resource))
+				})
+				assert.Len(t, notifications, 1)
+				assert.IsType(t, &fhir.Task{}, notifications[0])
 			},
 		},
 		{
@@ -80,7 +120,7 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				resource:          updatedTask,
 				existingResources: []fhir.Task{existingTask},
 			},
-			want: func(t *testing.T, tx fhir.Bundle) {
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
 				assert.Empty(t, tx.Entry)
 			},
 			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
@@ -96,7 +136,7 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				resource:          updatedTask,
 				existingResources: []fhir.Task{existingTask},
 			},
-			want: func(t *testing.T, tx fhir.Bundle) {
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
 				assert.Empty(t, tx.Entry)
 			},
 			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
@@ -104,11 +144,24 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 			},
 		},
 		{
+			name:      "existing resource search fails",
+			fhirError: assert.AnError,
+			args: args{
+				resource: updatedTask,
+			},
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
+				assert.Empty(t, tx.Entry)
+			},
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				return assert.EqualError(t, err, "failed to search for Task: assert.AnError general error for testing")
+			},
+		},
+		{
 			name: "invalid input resource",
 			args: args{
 				resourceData: []byte("not a valid resource"),
 			},
-			want: func(t *testing.T, tx fhir.Bundle) {
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
 				assert.Empty(t, tx.Entry)
 			},
 			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
@@ -129,7 +182,7 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 					},
 				},
 			},
-			want: func(t *testing.T, tx fhir.Bundle) {
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
 				assert.Empty(t, tx.Entry)
 			},
 			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
@@ -142,7 +195,9 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fhirClient := &test.StubFHIRClient{}
+			fhirClient := &test.StubFHIRClient{
+				Error: tt.fhirError,
+			}
 			for _, resource := range tt.args.existingResources {
 				fhirClient.Resources = append(fhirClient.Resources, resource)
 			}
@@ -182,7 +237,7 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				require.NoError(t, err)
 				assert.NotNil(t, handlerResult)
 			}
-			tt.want(t, tx.Bundle())
+			tt.want(t, tx.Bundle(), handlerResult)
 		})
 	}
 }

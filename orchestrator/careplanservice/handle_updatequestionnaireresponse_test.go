@@ -3,7 +3,6 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/url"
 	"testing"
 
@@ -63,13 +62,6 @@ func Test_handleUpdateQuestionnaireResponse(t *testing.T) {
 			existingQuestionnaireResBundle: &existingQuestionnaireResponseBundle,
 			wantErr:                        false,
 			principal:                      auth.TestPrincipal1,
-		},
-		{
-			name:            "invalid update - error searching existing resource - fails",
-			principal:       auth.TestPrincipal1,
-			errorFromSearch: errors.New("failed to read QuestionnaireResponse"),
-			wantErr:         true,
-			errorMessage:    "failed to read QuestionnaireResponse",
 		},
 		{
 			shouldSkip:                     true,

@@ -62,29 +62,6 @@ func TestService_handleGetServiceRequest(t *testing.T) {
 		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
 		shouldSkip bool
 	}{
-		"error: ServiceRequest exists, error searching for task": {
-			context: auth.WithPrincipal(context.Background(), *auth.TestPrincipal1),
-			request: FHIRHandlerRequest{
-				Principal:    auth.TestPrincipal1,
-				ResourceId:   "1",
-				ResourcePath: "ServiceRequest/1",
-				FhirHeaders:  &fhirclient.Headers{},
-				LocalIdentity: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
-					Value:  to.Ptr("1"),
-				},
-			},
-			expectedError: errors.New("fhir error: Issue searching for task"),
-			setup: func(ctx context.Context, client *mock.MockClient) {
-				client.EXPECT().ReadWithContext(ctx, "ServiceRequest/1", gomock.Any(), gomock.Any()).
-					DoAndReturn(func(_ context.Context, _ string, target *fhir.ServiceRequest, _ ...fhirclient.Option) error {
-						*target = fhir.ServiceRequest{Id: to.Ptr("1")}
-						return nil
-					})
-				client.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any(), gomock.Any()).
-					Return(errors.New("fhir error: Issue searching for task"))
-			},
-		},
 		"error: ServiceRequest exists, fetched task, incorrect principal": {
 			shouldSkip: true,
 			context:    auth.WithPrincipal(context.Background(), *auth.TestPrincipal3),

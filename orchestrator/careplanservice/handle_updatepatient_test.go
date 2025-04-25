@@ -3,7 +3,6 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"net/url"
 	"testing"
 
@@ -62,25 +61,6 @@ func Test_handleUpdatePatient(t *testing.T) {
 		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
 		shouldSkip bool
 	}{
-		{
-			name:                  "valid update - creator - success",
-			principal:             auth.TestPrincipal1,
-			existingPatientBundle: &existingPatientBundle,
-			wantErr:               false,
-		},
-		{
-			name:                  "resource not found - creates new resource - success",
-			principal:             auth.TestPrincipal1,
-			existingPatientBundle: &fhir.Bundle{Entry: []fhir.BundleEntry{}},
-			wantErr:               false,
-		},
-		{
-			name:            "invalid update - error searching existing resource - fails",
-			principal:       auth.TestPrincipal1,
-			errorFromSearch: errors.New("failed to search for Patient"),
-			wantErr:         true,
-			errorMessage:    "failed to search for Patient",
-		},
 		{
 			shouldSkip:            true,
 			name:                  "invalid update - not creator - fails",
