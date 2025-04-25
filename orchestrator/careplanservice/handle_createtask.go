@@ -157,7 +157,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		carePlanBundleEntryIdx = len(tx.Entry)
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: task.Requester.Identifier,
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,

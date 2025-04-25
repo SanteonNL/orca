@@ -50,7 +50,7 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 		tx := coolfhir.Transaction()
 		result, err := FHIRReadOperationHandler[fhir.Task]{
 			fhirClient:  fhirClient,
-			authzPolicy: NoAccessAuthzPolicy[fhir.Task]{},
+			authzPolicy: TestPolicy[fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.Error(t, err)
 		errorWithCode := new(coolfhir.ErrorWithCode)
@@ -87,9 +87,11 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 	})
 }
 
-type NoAccessAuthzPolicy[T any] struct {
+type TestPolicy[T any] struct {
+	Allow bool
+	Error error
 }
 
-func (n NoAccessAuthzPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
-	return false, nil
+func (n TestPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+	return n.Allow, n.Error
 }

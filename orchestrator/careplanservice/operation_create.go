@@ -60,7 +60,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			Url:    resourceType + "/" + *resourceID,
 		}, nil, coolfhir.WithFullUrl(*resourceBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,
@@ -69,7 +69,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	} else {
 		tx.Create(resource, coolfhir.WithFullUrl(*resourceBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: &request.Principal.Organization.Identifier[0],
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,

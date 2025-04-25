@@ -31,7 +31,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	log.Ctx(ctx).Info().Msgf("Updating %s: %s", resourceType, request.RequestUrl)
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
-		return nil, fmt.Errorf("invalid %T: %w", resource, coolfhir.BadRequestError(err))
+		return nil, coolfhir.BadRequest("invalid %s: %s", resourceType, err)
 	}
 	resourceID := coolfhir.ResourceID(resource)
 
@@ -72,7 +72,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	}
 
 	hasAccess, err := h.authzPolicy.HasAccess(ctx, existingResource, *request.Principal)
-	if !hasAccess {
+	if !hasAccess || err != nil {
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal has access to create %s", resourceType)
 		}
@@ -86,7 +86,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	resourceBundleEntry := request.bundleEntryWithResource(resource)
 	tx.AppendEntry(resourceBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 		ActingAgent: &fhir.Reference{
-			Identifier: request.LocalIdentity,
+			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
 		},
 		Observer: *request.LocalIdentity,
