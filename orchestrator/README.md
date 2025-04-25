@@ -28,7 +28,7 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
-### Care Plan Contributor Task Filler configuration
+#### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
 You have the following options:
 
@@ -48,11 +48,19 @@ Configure these options to achieve this:
 If you don't want to query the FHIR Questionnaire and HealthcareService resources from your FHIR API, only set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS`.
 The downside of this option is that the resources MUST be available on startup.
 
-#### EHR integration
+##### EHR integration
 If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
 to the messaging topic or queue on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
 
-See "Messaging configuration" for more information.  
+See "Messaging configuration" for more information.
+
+#### External application discovery
+If you have web applications that you want other care organizations to discovery through ORCA, you can set the following options:
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_NAME`: Name of the external application.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_URL`: URL of the external application.
+
+These configured applications are discovered by searching for FHIR Endpoints on the CPC's FHIR Endpoint.
+Note: this endpoint only supports searching using HTTP GET, without query parameters.
 
 ### Care Plan Service configuration
 - `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
