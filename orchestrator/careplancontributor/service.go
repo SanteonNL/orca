@@ -685,7 +685,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 			task.Meta = &fhir.Meta{}
 		}
 
-		if task.Meta.Source != nil && task.Meta.Source != &resourceUrl {
+		if task.Meta.Source != nil && *task.Meta.Source != resourceUrl {
 			log.Ctx(ctx).Warn().Msgf("Task (id=%s) already has a source (%s), overwriting it to (%s)", *task.Id, *task.Meta.Source, resourceUrl)
 		}
 

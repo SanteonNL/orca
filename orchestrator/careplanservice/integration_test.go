@@ -7,11 +7,9 @@ import (
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
-	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -46,7 +44,8 @@ func Test_Integration(t *testing.T) {
 	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
 		cpc2Notifications = append(cpc2Notifications, n)
 	})
-	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint)
+	fhirBaseURL := test.SetupHAPI(t)
+	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, fhirBaseURL)
 	// subTest logs the message and resets the notifications
 	subTest := func(t *testing.T, msg string) {
 		t.Log(msg)
@@ -101,111 +100,6 @@ func Test_Integration(t *testing.T) {
 	}
 	err := carePlanContributor1.Create(patient, &patient)
 	require.NoError(t, err)
-
-	t.Run("DELETE is supported when unmanaged operations are allowed", func(t *testing.T) {
-		serviceRequest := fhir.ServiceRequest{
-			Subject: fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr(strconv.Itoa(rand.Int())),
-				},
-			},
-		}
-		t.Run("as single request", func(t *testing.T) {
-			t.Run("with ID", func(t *testing.T) {
-				var actual fhir.ServiceRequest
-				err := carePlanContributor1.Create(serviceRequest, &actual)
-				require.NoError(t, err)
-
-				// Find and delete audit events first due to referential integrity
-				var auditEvents fhir.Bundle
-				err = carePlanContributor1.Search("AuditEvent", url.Values{
-					"entity": {"ServiceRequest/" + *actual.Id},
-				}, &auditEvents)
-				require.NoError(t, err)
-
-				// Delete each audit event referencing this resource
-				for _, entry := range auditEvents.Entry {
-					var auditEvent fhir.AuditEvent
-					err = json.Unmarshal(entry.Resource, &auditEvent)
-					require.NoError(t, err)
-					err = carePlanContributor1.Delete("AuditEvent/"+*auditEvent.Id, nil)
-					require.NoError(t, err)
-				}
-
-				// Now delete the resource
-				err = carePlanContributor1.Delete("ServiceRequest/"+*actual.Id, nil)
-				require.NoError(t, err)
-			})
-			t.Run("with ID as search parameter", func(t *testing.T) {
-				var actual fhir.ServiceRequest
-				err := carePlanContributor1.Create(serviceRequest, &actual)
-				require.NoError(t, err)
-
-				// Find and delete audit events first
-				var auditEvents fhir.Bundle
-				err = carePlanContributor1.Search("AuditEvent", url.Values{
-					"entity": {"ServiceRequest/" + *actual.Id},
-				}, &auditEvents)
-				require.NoError(t, err)
-
-				for _, entry := range auditEvents.Entry {
-					var auditEvent fhir.AuditEvent
-					err = json.Unmarshal(entry.Resource, &auditEvent)
-					require.NoError(t, err)
-					err = carePlanContributor1.Delete("AuditEvent/"+*auditEvent.Id, nil)
-					require.NoError(t, err)
-				}
-
-				// Then delete the resource
-				err = carePlanContributor1.Delete("ServiceRequest", fhirclient.QueryParam("_id", *actual.Id))
-				require.NoError(t, err)
-			})
-		})
-		t.Run("as transaction entry", func(t *testing.T) {
-			var actual fhir.ServiceRequest
-			err := carePlanContributor1.Create(serviceRequest, &actual)
-			require.NoError(t, err)
-
-			// Find audit events
-			var auditEvents fhir.Bundle
-			err = carePlanContributor1.Search("AuditEvent", url.Values{
-				"entity": {"ServiceRequest/" + *actual.Id},
-			}, &auditEvents)
-			require.NoError(t, err)
-
-			// Create transaction to delete audit events first, then the resource
-			transaction := fhir.Bundle{
-				Type:  fhir.BundleTypeTransaction,
-				Entry: []fhir.BundleEntry{},
-			}
-
-			// Add audit event deletions to transaction
-			for _, entry := range auditEvents.Entry {
-				var auditEvent fhir.AuditEvent
-				err = json.Unmarshal(entry.Resource, &auditEvent)
-				require.NoError(t, err)
-
-				transaction.Entry = append(transaction.Entry, fhir.BundleEntry{
-					Request: &fhir.BundleEntryRequest{
-						Method: fhir.HTTPVerbDELETE,
-						Url:    "AuditEvent/" + *auditEvent.Id,
-					},
-				})
-			}
-
-			// Add resource deletion to transaction
-			transaction.Entry = append(transaction.Entry, fhir.BundleEntry{
-				Request: &fhir.BundleEntryRequest{
-					Method: fhir.HTTPVerbDELETE,
-					Url:    "ServiceRequest/" + *actual.Id,
-				},
-			})
-
-			err = carePlanContributor1.Create(transaction, &transaction, fhirclient.AtPath("/"))
-			require.NoError(t, err)
-		})
-	})
 
 	// Patient not associated with any CarePlans or CareTeams for negative auth testing
 	var patient2 fhir.Patient
@@ -875,7 +769,6 @@ func Test_HandleSearchResource(t *testing.T) {
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	config.AllowUnmanagedFHIROperations = true
 	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
@@ -1076,8 +969,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	})
 }
 
-func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2NotificationEndpoint string) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
-	fhirBaseURL := test.SetupHAPI(t)
+func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2NotificationEndpoint string, fhirBaseURL *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
 	activeProfile := profile.TestProfile{
 		Principal: auth.TestPrincipal1,
 		CSD: profile.TestCsdDirectory{
@@ -1094,7 +986,6 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	config := DefaultConfig()
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
-	config.AllowUnmanagedFHIROperations = true
 	messageBroker := messaging.NewMemoryBroker()
 	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)

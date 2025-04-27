@@ -66,7 +66,7 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 		Action:   fhir.AuditEventActionU,
 	}))
 
-	return func(txResult *fhir.Bundle) (*fhir.BundleEntry, []any, error) {
+	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var updatedQuestionnaire fhir.Questionnaire
 		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &questionnaireBundleEntry, &txResult.Entry[idx], &updatedQuestionnaire)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
@@ -77,6 +77,6 @@ func (s *Service) handleUpdateQuestionnaire(ctx context.Context, request FHIRHan
 			return nil, nil, err
 		}
 
-		return result, []any{&updatedQuestionnaire}, nil
+		return []*fhir.BundleEntry{result}, []any{&updatedQuestionnaire}, nil
 	}, nil
 }

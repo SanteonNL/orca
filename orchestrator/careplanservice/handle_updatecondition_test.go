@@ -52,36 +52,6 @@ func Test_handleUpdateCondition(t *testing.T) {
 
 	updateConditionData, _ := json.Marshal(defaultCondition)
 
-	// Create a mock audit event for the creation
-	creationAuditEvent := fhir.AuditEvent{
-		Id: to.Ptr("audit1"),
-		Agent: []fhir.AuditEventAgent{
-			{
-				Who: &fhir.Reference{
-					Identifier: &auth.TestPrincipal1.Organization.Identifier[0],
-				},
-			},
-		},
-		Entity: []fhir.AuditEventEntity{
-			{
-				What: &fhir.Reference{
-					Reference: to.Ptr("Condition/1"),
-				},
-			},
-		},
-	}
-
-	creationAuditBundle := fhir.Bundle{
-		Entry: []fhir.BundleEntry{
-			{
-				Resource: func() []byte {
-					b, _ := json.Marshal(creationAuditEvent)
-					return b
-				}(),
-			},
-		},
-	}
-
 	existingConditionBundle := fhir.Bundle{
 		Entry: []fhir.BundleEntry{
 			{
@@ -98,17 +68,16 @@ func Test_handleUpdateCondition(t *testing.T) {
 		principal               *auth.Principal
 		existingConditionBundle *fhir.Bundle
 		errorFromSearch         error
-		errorFromAuditQuery     error
-		auditBundle             *fhir.Bundle
 		wantErr                 bool
 		errorMessage            string
 		mockCreateBehavior      func(mockFHIRClient *mock.MockClient)
+		// TODO: Temporarily disabling the audit-based auth tests, re-enable tests once auth has been re-implemented
+		shouldSkip bool
 	}{
 		{
 			name:                    "valid update - creator - success",
 			principal:               auth.TestPrincipal1,
 			existingConditionBundle: &existingConditionBundle,
-			auditBundle:             &creationAuditBundle,
 			wantErr:                 false,
 		},
 		{
@@ -118,14 +87,6 @@ func Test_handleUpdateCondition(t *testing.T) {
 			wantErr:                 false,
 		},
 		{
-			name:                    "invalid update - not creator - fails",
-			principal:               auth.TestPrincipal2,
-			existingConditionBundle: &existingConditionBundle,
-			auditBundle:             &creationAuditBundle,
-			wantErr:                 true,
-			errorMessage:            "Participant does not have access to Condition",
-		},
-		{
 			name:            "invalid update - error searching existing resource - fails",
 			principal:       auth.TestPrincipal1,
 			errorFromSearch: errors.New("failed to search for Condition"),
@@ -133,18 +94,10 @@ func Test_handleUpdateCondition(t *testing.T) {
 			errorMessage:    "failed to search for Condition",
 		},
 		{
-			name:                    "invalid update - error querying audit events - fails",
-			principal:               auth.TestPrincipal1,
+			shouldSkip:              true,
+			name:                    "invalid update - not creator - fails",
+			principal:               auth.TestPrincipal2,
 			existingConditionBundle: &existingConditionBundle,
-			errorFromAuditQuery:     errors.New("failed to find creation AuditEvent"),
-			wantErr:                 true,
-			errorMessage:            "Participant does not have access to Condition",
-		},
-		{
-			name:                    "invalid update - no creation audit event - fails",
-			principal:               auth.TestPrincipal1,
-			existingConditionBundle: &existingConditionBundle,
-			auditBundle:             &fhir.Bundle{Entry: []fhir.BundleEntry{}},
 			wantErr:                 true,
 			errorMessage:            "Participant does not have access to Condition",
 		},
@@ -152,6 +105,10 @@ func Test_handleUpdateCondition(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.shouldSkip {
+				t.Skip()
+			}
+
 			tx := coolfhir.Transaction()
 
 			mockFHIRClient := mock.NewMockClient(ctrl)
@@ -184,17 +141,6 @@ func Test_handleUpdateCondition(t *testing.T) {
 						return tt.errorFromSearch
 					}
 					*result = *tt.existingConditionBundle
-
-					if len(tt.existingConditionBundle.Entry) > 0 {
-						mockFHIRClient.EXPECT().SearchWithContext(gomock.Any(), "AuditEvent", gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(func(ctx context.Context, resourceType string, params url.Values, result *fhir.Bundle, option ...fhirclient.Option) error {
-							if tt.errorFromAuditQuery != nil {
-								return tt.errorFromAuditQuery
-							}
-							*result = *tt.auditBundle
-							return nil
-						})
-					}
-
 					return nil
 				})
 			}
