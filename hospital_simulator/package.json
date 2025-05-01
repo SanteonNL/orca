@@ -16,7 +16,7 @@
     "@mui/icons-material": "^6.2.0",
     "@mui/lab": "6.0.0-beta.19",
     "@mui/material": "^6.4.8",
-    "@mui/x-data-grid": "^7.28.2",
+    "@mui/x-data-grid": "^8.2.0",
     "@mui/x-date-pickers": "^7.27.1",
     "@tabler/icons-react": "3.24.0",
     "@types/fhir": "^0.0.41",
