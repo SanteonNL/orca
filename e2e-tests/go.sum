@@ -7,8 +7,8 @@ github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1/go.mod h1:xomTg6
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/RaveNoX/go-jsoncommentstrip v1.0.0/go.mod h1:78ihd09MekBnJnxpICcwzCMzGrKSKYe4AqU6PDYYpjk=
-github.com/SanteonNL/go-fhir-client v0.3.0 h1:7w82+W2BmOLFBLm1iPZnFuL9/XMMsqbbxARZf1nrrxk=
-github.com/SanteonNL/go-fhir-client v0.3.0/go.mod h1:CcU6J3vgxsdjTWry0s2BAJcV6SvdaRTsry9ixR7zqc4=
+github.com/SanteonNL/go-fhir-client v0.4.0 h1:vQJkvEAuiNj/3Iovz5jBDDLW6MJ0GT/W8wvWdo5lnpM=
+github.com/SanteonNL/go-fhir-client v0.4.0/go.mod h1:CcU6J3vgxsdjTWry0s2BAJcV6SvdaRTsry9ixR7zqc4=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
