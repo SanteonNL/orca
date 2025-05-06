@@ -1,3 +1,4 @@
+//go:generate mockgen -destination=./manager_mock.go -package=subscriptions -source=manager.go
 package subscriptions
 
 import (
@@ -109,8 +110,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			}
 		}
 	default:
-		log.Ctx(ctx).Debug().Msgf("notification dropped: subscription manager does not support notifying for resource type: %T", resource)
-		return nil
+		return fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
 	}
 
 	log.Ctx(ctx).Info().Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)

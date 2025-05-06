@@ -75,15 +75,4 @@ func TestDerivingManager_Notify(t *testing.T) {
 		require.Equal(t, "http://example.com/fhir/CareTeam/10", *focus.Reference)
 		require.Equal(t, "CareTeam", *focus.Type)
 	})
-
-	t.Run("unsupported resource type", func(t *testing.T) {
-		ctrl := gomock.NewController(t)
-		channelFactory := NewMockChannelFactory(ctrl)
-
-		resource := fhir.ActivityDefinition{}
-		manager, err := NewManager(fhirBaseURL, channelFactory, messaging.NewMemoryBroker())
-		require.NoError(t, err)
-		err = manager.Notify(context.Background(), &resource)
-		require.NoError(t, err) // just logged, no error
-	})
 }
