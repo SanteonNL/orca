@@ -118,7 +118,9 @@ func searchResources[T any](ctx context.Context, fhirClient fhirclient.Client, r
 		searchLimit = count
 	} else {
 		// If we're missing a resource due to too low page count, we might incorrectly deny access
-		searchLimit = 10000
+		// Note: limit on Azure FHIR is 1000, setting it higher will cause an error:
+		//       "The '_count' parameter exceeds limit configured for server"
+		searchLimit = 1000
 		form.Add("_count", strconv.Itoa(searchLimit))
 	}
 
