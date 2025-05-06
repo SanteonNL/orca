@@ -64,8 +64,6 @@ var _ Policy[any] = &RelatedResourcePolicy[any, any]{}
 
 // RelatedResourcePolicy is a policy that allows access if the user has access to the related resource(s).
 // For instance, if the user has access to a ServiceRequest, if the user has access to the related Task.
-// It differs from RelatedResourcePolicy in that it uses a search operation to find the related resources,
-// instead of using a reference to the related resource.
 type RelatedResourcePolicy[T any, R any] struct {
 	fhirClient            fhirclient.Client
 	relatedResourcePolicy Policy[R]
