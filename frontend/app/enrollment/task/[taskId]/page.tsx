@@ -42,6 +42,8 @@ export default function EnrollmentTaskPage() {
         return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
     }
 
+    const zbjViewerUrl = localStorage.getItem("zbjViewerUrl") || ''
+
     const StatusElement = ({ label, value, noUpperCase }: { label: string, value: string, noUpperCase?: boolean | undefined }) =>
         <>
             <div>{label}:</div>
@@ -78,7 +80,7 @@ export default function EnrollmentTaskPage() {
                     : <></>
                 }
             </div>
-            {showViewer && <DataViewer task={task} />}
+            {showViewer && <a href={zbjViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
             <TaskSseConnectionStatus />
         </div>
     }
