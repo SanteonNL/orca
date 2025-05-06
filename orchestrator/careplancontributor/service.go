@@ -210,6 +210,39 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		writer.WriteHeader(http.StatusOK)
 	}))
 
+	//
+	// This is a special endpoint, used by other SCP-nodes to discovery applications.
+	//
+	mux.HandleFunc("GET "+basePath+"/fhir/Endpoint", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		if len(request.URL.Query()) > 0 {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("search parameters are not supported on this endpoint"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		}
+		bundle := coolfhir.BundleBuilder{}
+		bundle.Type = fhir.BundleTypeSearchset
+		for _, appConfig := range s.config.AppLaunch.External {
+			endpoint := fhir.Endpoint{
+				Status: fhir.EndpointStatusActive,
+				ConnectionType: fhir.Coding{
+					System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"),
+					Code:   to.Ptr("app-launch"),
+				},
+				PayloadType: []fhir.CodeableConcept{
+					{
+						Coding: []fhir.Coding{
+							{
+								System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-payload-type"),
+								Code:   to.Ptr("web-application"),
+							},
+						},
+					},
+				},
+				Name:    to.Ptr(appConfig.Name),
+				Address: appConfig.URL,
+			}
+			bundle.Append(endpoint, nil, nil)
+		}
+		coolfhir.SendResponse(writer, http.StatusOK, bundle, nil)
+	}))
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled

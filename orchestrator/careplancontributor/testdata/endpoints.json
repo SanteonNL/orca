@@ -1,0 +1,49 @@
+{
+  "type": "searchset",
+  "entry": [
+    {
+      "resource": {
+        "status": "active",
+        "connectionType": {
+          "system": "http://santeonnl.github.io/shared-care-planning/endpoint-connection-type",
+          "code": "app-launch"
+        },
+        "name": "App 1",
+        "payloadType": [
+          {
+            "coding": [
+              {
+                "system": "http://santeonnl.github.io/shared-care-planning/endpoint-payload-type",
+                "code": "web-application"
+              }
+            ]
+          }
+        ],
+        "address": "https://example.com/app1",
+        "resourceType": "Endpoint"
+      }
+    },
+    {
+      "resource": {
+        "status": "active",
+        "connectionType": {
+          "system": "http://santeonnl.github.io/shared-care-planning/endpoint-connection-type",
+          "code": "app-launch"
+        },
+        "name": "App 2",
+        "payloadType": [
+          {
+            "coding": [
+              {
+                "system": "http://santeonnl.github.io/shared-care-planning/endpoint-payload-type",
+                "code": "web-application"
+              }
+            ]
+          }
+        ],
+        "address": "https://example.com/app2",
+        "resourceType": "Endpoint"
+      }
+    }
+  ]
+}
