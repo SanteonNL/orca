@@ -18,6 +18,8 @@ var _ op.Storage = (*Storage)(nil)
 var _ op.CanSetUserinfoFromRequest = (*Storage)(nil)
 
 const ScopePatient = "patient"
+const ClaimPatient = "patient"
+const ClaimRoles = "roles"
 
 type Storage struct {
 	mux          *sync.RWMutex
@@ -183,14 +185,14 @@ func populateUserInfo(userInfo *oidc.UserInfo, scopes []string, user UserDetails
 			for _, identifier := range user.PatientIdentifiers {
 				patientIdentifiers = append(patientIdentifiers, coolfhir.IdentifierToToken(identifier))
 			}
-			userInfo.Claims["patient"] = patientIdentifiers
+			userInfo.Claims[ClaimPatient] = patientIdentifiers
 		case oidc.ScopeOpenID:
 			userInfo.Subject = user.ID
 		case oidc.ScopeEmail:
 			userInfo.Email = user.Email
 		case oidc.ScopeProfile:
 			userInfo.Name = user.Name
-			userInfo.Claims["roles"] = user.Roles
+			userInfo.Claims[ClaimRoles] = user.Roles
 		}
 	}
 }

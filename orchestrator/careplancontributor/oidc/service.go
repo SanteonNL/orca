@@ -183,6 +183,7 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 			oidc.ScopeOpenID,
 			oidc.ScopeProfile,
 			oidc.ScopeEmail,
+			ScopePatient,
 		},
 		SupportedClaims: []string{
 			"sub",
@@ -198,7 +199,8 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 			"client_id",
 			"name",
 			"email",
-			"roles",
+			ClaimRoles,
+			ClaimPatient,
 		},
 	}
 
