@@ -32,6 +32,9 @@ func TestService_handle(t *testing.T) {
 			fhir.Practitioner{
 				Id: to.Ptr("c"),
 			},
+			fhir.Patient{
+				Id: to.Ptr("a"),
+			},
 		},
 	}
 	globals.CarePlanServiceFhirClient = &test.StubFHIRClient{
@@ -50,7 +53,7 @@ func TestService_handle(t *testing.T) {
 			},
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -68,7 +71,7 @@ func TestService_handle(t *testing.T) {
 			},
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -86,7 +89,7 @@ func TestService_handle(t *testing.T) {
 			},
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 		require.Equal(t, 1, sessionManager.SessionCount())
@@ -94,7 +97,7 @@ func TestService_handle(t *testing.T) {
 		// Now launch the second session - copy the cookies so the session is retained
 		cookies := response.Result().Cookies()
 		response = httptest.NewRecorder()
-		request = httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request = httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
 		for _, cookie := range cookies {
 			request.AddCookie(cookie)
 		}
@@ -112,7 +115,7 @@ func TestService_handle(t *testing.T) {
 			},
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 
