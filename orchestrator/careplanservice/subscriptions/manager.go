@@ -109,7 +109,8 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			}
 		}
 	default:
-		return fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
+		log.Ctx(ctx).Debug().Msgf("notification dropped: subscription manager does not support notifying for resource type: %T", resource)
+		return nil
 	}
 
 	log.Ctx(ctx).Info().Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)
