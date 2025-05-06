@@ -39,17 +39,6 @@ func New(strictMode bool, issuer *url.URL, config Config) (*Service, error) {
 	_, _ = rand.Read(key[:])
 
 	// TODO: Change to key in Azure Key Vault
-	//privateKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	//if err != nil {
-	//	return nil, fmt.Errorf("generate private key: %w", err)
-	//}
-	//keyID := uuid.NewString()
-	//signingKey := SigningKey{
-	//	id:           keyID,
-	//	sigAlgorithm: "ES256",
-	//	key:          privateKey,
-	//}
-	// Note: changed to RS256 for OpenResty OIDC
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, fmt.Errorf("generate private key: %w", err)
