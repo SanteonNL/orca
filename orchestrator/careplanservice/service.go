@@ -15,7 +15,7 @@ import (
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/webhook"
-	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/events"
 
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
@@ -32,6 +32,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
+
+type FHIROperation interface {
+	Handle(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
+}
 
 const basePath = "/cps"
 
@@ -461,19 +465,45 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(resourcePath)
 
-	switch resourceType {
-	case "Task":
+	if resourceType == "Task" {
 		return s.handleCreateTask
+	}
+	switch resourceType {
 	case "ServiceRequest":
-		return s.handleCreateServiceRequest
+		return FHIRCreateOperationHandler[fhir.ServiceRequest]{
+			authzPolicy: CreateServiceRequestAuthzPolicy(s.profile),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			fhirURL:     s.fhirURL,
+		}.Handle
 	case "Patient":
-		return s.handleCreatePatient
+		return FHIRCreateOperationHandler[fhir.Patient]{
+			authzPolicy: CreatePatientAuthzPolicy(s.profile),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			fhirURL:     s.fhirURL,
+		}.Handle
 	case "Questionnaire":
-		return s.handleCreateQuestionnaire
+		return FHIRCreateOperationHandler[fhir.Questionnaire]{
+			authzPolicy: CreateQuestionnaireAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			fhirURL:     s.fhirURL,
+		}.Handle
 	case "QuestionnaireResponse":
-		return s.handleCreateQuestionnaireResponse
+		return FHIRCreateOperationHandler[fhir.QuestionnaireResponse]{
+			authzPolicy: CreateQuestionnaireResponseAuthzPolicy(s.profile),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			fhirURL:     s.fhirURL,
+		}.Handle
 	case "Condition":
-		return s.handleCreateCondition
+		return FHIRCreateOperationHandler[fhir.Condition]{
+			authzPolicy: CreateConditionAuthzPolicy(s.profile),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			fhirURL:     s.fhirURL,
+		}.Handle
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 			return s.handleUnmanagedOperation(ctx, request, tx)
@@ -483,20 +513,73 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 
 func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(resourcePath)
-
 	switch resourceType {
 	case "Task":
 		return s.handleUpdateTask
 	case "ServiceRequest":
-		return s.handleUpdateServiceRequest
+		return FHIRUpdateOperationHandler[fhir.ServiceRequest]{
+			authzPolicy: UpdateServiceRequestAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			createHandler: &FHIRCreateOperationHandler[fhir.ServiceRequest]{
+				authzPolicy: CreateServiceRequestAuthzPolicy(s.profile),
+				fhirClient:  s.fhirClient,
+				profile:     s.profile,
+				fhirURL:     s.fhirURL,
+			},
+			fhirURL: s.fhirURL,
+		}.Handle
 	case "Patient":
-		return s.handleUpdatePatient
+		return FHIRUpdateOperationHandler[fhir.Patient]{
+			authzPolicy: UpdatePatientAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			createHandler: &FHIRCreateOperationHandler[fhir.Patient]{
+				authzPolicy: CreatePatientAuthzPolicy(s.profile),
+				fhirClient:  s.fhirClient,
+				profile:     s.profile,
+				fhirURL:     s.fhirURL,
+			},
+			fhirURL: s.fhirURL,
+		}.Handle
 	case "Questionnaire":
-		return s.handleUpdateQuestionnaire
+		return FHIRUpdateOperationHandler[fhir.Questionnaire]{
+			authzPolicy: UpdateQuestionnaireAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			createHandler: &FHIRCreateOperationHandler[fhir.Questionnaire]{
+				authzPolicy: CreateQuestionnaireAuthzPolicy(),
+				fhirClient:  s.fhirClient,
+				profile:     s.profile,
+				fhirURL:     s.fhirURL,
+			},
+			fhirURL: s.fhirURL,
+		}.Handle
 	case "QuestionnaireResponse":
-		return s.handleUpdateQuestionnaireResponse
+		return FHIRUpdateOperationHandler[fhir.QuestionnaireResponse]{
+			authzPolicy: UpdateQuestionnaireResponseAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			createHandler: &FHIRCreateOperationHandler[fhir.QuestionnaireResponse]{
+				authzPolicy: CreateQuestionnaireResponseAuthzPolicy(s.profile),
+				fhirClient:  s.fhirClient,
+				profile:     s.profile,
+				fhirURL:     s.fhirURL,
+			},
+			fhirURL: s.fhirURL,
+		}.Handle
 	case "Condition":
-		return s.handleUpdateCondition
+		return FHIRUpdateOperationHandler[fhir.Condition]{
+			authzPolicy: UpdateConditionAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+			profile:     s.profile,
+			createHandler: &FHIRCreateOperationHandler[fhir.Condition]{
+				authzPolicy: CreateConditionAuthzPolicy(s.profile),
+				fhirClient:  s.fhirClient,
+				profile:     s.profile,
+				fhirURL:     s.fhirURL,
+			},
+		}.Handle
 	default:
 		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 			return s.handleUnmanagedOperation(ctx, request, tx)
@@ -506,27 +589,47 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 
 func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(resourcePath)
-
+	var handleFunc func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	switch resourceType {
 	case "Patient":
-		return s.handleReadPatient
+		handleFunc = FHIRReadOperationHandler[fhir.Patient]{
+			authzPolicy: ReadPatientAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
 	case "Condition":
-		return s.handleReadCondition
+		handleFunc = FHIRReadOperationHandler[fhir.Condition]{
+			authzPolicy: ReadConditionAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
 	case "CarePlan":
-		return s.handleReadCarePlan
+		handleFunc = FHIRReadOperationHandler[fhir.CarePlan]{
+			authzPolicy: ReadCarePlanAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+		}.Handle
 	case "Task":
-		return s.handleReadTask
-	case "Questionnaire":
-		return s.handleReadQuestionnaire
-	case "QuestionnaireResponse":
-		return s.handleReadQuestionnaireResponse
+		handleFunc = FHIRReadOperationHandler[fhir.Task]{
+			authzPolicy: ReadTaskAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
 	case "ServiceRequest":
-		return s.handleReadServiceRequest
+		handleFunc = FHIRReadOperationHandler[fhir.ServiceRequest]{
+			authzPolicy: ReadServiceRequestAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "Questionnaire":
+		handleFunc = FHIRReadOperationHandler[fhir.Questionnaire]{
+			authzPolicy: ReadQuestionnaireAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "QuestionnaireResponse":
+		handleFunc = FHIRReadOperationHandler[fhir.QuestionnaireResponse]{
+			authzPolicy: ReadQuestionnaireResponseAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
 	default:
-		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-			return s.handleUnmanagedOperation(ctx, request, tx)
-		}
+		handleFunc = s.handleUnmanagedOperation
 	}
+	return handleFunc
 }
 
 func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
@@ -564,27 +667,47 @@ func (s *Service) validateSearchRequest(httpRequest *http.Request) error {
 
 func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(resourcePath)
-
+	var handleFunc func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	switch resourceType {
 	case "Patient":
-		return s.handleSearchPatient
-	case "CarePlan":
-		return s.handleSearchCarePlan
-	case "Task":
-		return s.handleSearchTask
-	case "ServiceRequest":
-		return s.handleSearchServiceRequest
-	case "Questionnaire":
-		return s.handleSearchQuestionnaire
-	case "QuestionnaireResponse":
-		return s.handleSearchQuestionnaireResponse
+		handleFunc = FHIRSearchOperationHandler[fhir.Patient]{
+			authzPolicy: ReadPatientAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
 	case "Condition":
-		return s.handleSearchCondition
+		handleFunc = FHIRSearchOperationHandler[fhir.Condition]{
+			authzPolicy: ReadConditionAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "CarePlan":
+		handleFunc = FHIRSearchOperationHandler[fhir.CarePlan]{
+			authzPolicy: ReadCarePlanAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "Task":
+		handleFunc = FHIRSearchOperationHandler[fhir.Task]{
+			authzPolicy: ReadTaskAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "ServiceRequest":
+		handleFunc = FHIRSearchOperationHandler[fhir.ServiceRequest]{
+			authzPolicy: ReadServiceRequestAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "Questionnaire":
+		handleFunc = FHIRSearchOperationHandler[fhir.Questionnaire]{
+			authzPolicy: ReadQuestionnaireAuthzPolicy(),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "QuestionnaireResponse":
+		handleFunc = FHIRSearchOperationHandler[fhir.QuestionnaireResponse]{
+			authzPolicy: ReadQuestionnaireResponseAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
 	default:
-		return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-			return s.handleUnmanagedOperation(ctx, request, tx)
-		}
+		handleFunc = s.handleUnmanagedOperation
 	}
+	return handleFunc
 }
 
 // handleSearchRequest handles the HTTP request for a FHIR search operation.
@@ -628,7 +751,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 		RequestUrl:    httpRequest.URL,
 		HttpMethod:    httpRequest.Method,
 		HttpHeaders:   coolfhir.FilterRequestHeaders(httpRequest.Header),
-		ResourcePath:  resourceType,
+		ResourcePath:  resourceType + "/_search",
 		Principal:     &principal,
 		LocalIdentity: localIdentity,
 		FhirHeaders:   new(fhirclient.Headers),
@@ -782,6 +905,14 @@ func (s Service) baseUrl() *url.URL {
 	return s.orcaPublicURL.JoinPath(basePath)
 }
 
+func getResourceID(resourcePath string) string {
+	parts := strings.Split(resourcePath, "/")
+	if len(parts) < 2 {
+		return ""
+	}
+	return parts[1]
+}
+
 func getResourceType(resourcePath string) string {
 	return strings.Split(resourcePath, "/")[0]
 }
@@ -932,7 +1063,7 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 // Literal references may be an external URL, but they MUST use HTTPS and be a child of a FHIR base URL
 // registered in the CSD. This prevents unsafe external references (e.g. accidentally exchanging resources over HTTP),
 // and gives more confidence that the resource can safely be fetched by SCP-nodes.
-func (s *Service) validateLiteralReferences(ctx context.Context, resource any) error {
+func validateLiteralReferences(ctx context.Context, prof profile.Provider, resource any) error {
 	// Literal references are "reference" fields that contain a string. This can be anywhere in the resource,
 	// so we need to recursively search for them.
 	resourceAsJson, err := json.Marshal(resource)
@@ -948,7 +1079,7 @@ func (s *Service) validateLiteralReferences(ctx context.Context, resource any) e
 	}
 
 	// Make a list of allowed FHIR base URLs, normalize them to all make them end with a slash
-	fhirBaseURLs, err := s.profile.CsdDirectory().LookupEndpoint(ctx, nil, profile.FHIRBaseURLEndpointName)
+	fhirBaseURLs, err := prof.CsdDirectory().LookupEndpoint(ctx, nil, profile.FHIRBaseURLEndpointName)
 	if err != nil {
 		return fmt.Errorf("unable to list registered FHIR base URLs for validation: %w", err)
 	}

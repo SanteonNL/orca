@@ -28,6 +28,23 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
+#### OpenID Connect Provider Configuration
+ORCA can act as OpenID Connect Provider for users that have an existing session (initiated through app launch).
+This allows the launch of OIDC-enabled applications that can't directly authenticate using the EHR.
+It supports the following scopes:
+- `openid` (required, adds `sub` claim)
+- `profile` (adds `name` and `roles` claims)
+- `email` (add `email` claim)
+
+The claims in the ID token are based on the user information from the EHR.
+
+To configure the OIDC Provider, set the following environment variables:
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_ENABLED`: Enables the OIDC provider (default: `false`).
+
+To register a client (application), set the following environment variables for that client:
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_CLIENTS_<clientname>_ID`: ID of the client, which will be used as `client_id` in the OIDC flow.
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_CLIENTS_<clientname>_REDIRECTURI`: URL to which the OIDC provider will redirect the user after authentication.
+
 #### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
 You have the following options:

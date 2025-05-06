@@ -14,7 +14,6 @@ import (
 	io "io"
 	reflect "reflect"
 
-	vc "github.com/nuts-foundation/go-did/vc"
 	vcr "github.com/nuts-foundation/go-nuts-client/nuts/vcr"
 	gomock "go.uber.org/mock/gomock"
 )
@@ -64,7 +63,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) CreateVPWithBodyWithResp
 }
 
 // CreateVPWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) CreateVPWithResponse(ctx context.Context, body vcr.CreateVPRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.CreateVPResponse, error) {
+func (m *MockClientWithResponsesInterface) CreateVPWithResponse(ctx context.Context, body vcr.CreateVPJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.CreateVPResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
@@ -124,7 +123,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) IssueVCWithBodyWithRespo
 }
 
 // IssueVCWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) IssueVCWithResponse(ctx context.Context, body vcr.IssueVCRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.IssueVCResponse, error) {
+func (m *MockClientWithResponsesInterface) IssueVCWithResponse(ctx context.Context, body vcr.IssueVCJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.IssueVCResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
@@ -204,7 +203,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) LoadVCWithBodyWithRespon
 }
 
 // LoadVCWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) LoadVCWithResponse(ctx context.Context, subjectID string, body vc.VerifiableCredential, reqEditors ...vcr.RequestEditorFn) (*vcr.LoadVCResponse, error) {
+func (m *MockClientWithResponsesInterface) LoadVCWithResponse(ctx context.Context, subjectID string, body vcr.VerifiableCredential, reqEditors ...vcr.RequestEditorFn) (*vcr.LoadVCResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subjectID, body}
 	for _, a := range reqEditors {
@@ -324,7 +323,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) SearchVCsWithBodyWithRes
 }
 
 // SearchVCsWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) SearchVCsWithResponse(ctx context.Context, body vcr.SearchVCRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.SearchVCsResponse, error) {
+func (m *MockClientWithResponsesInterface) SearchVCsWithResponse(ctx context.Context, body vcr.SearchVCsJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.SearchVCsResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
@@ -364,7 +363,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) TrustIssuerWithBodyWithR
 }
 
 // TrustIssuerWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) TrustIssuerWithResponse(ctx context.Context, body vcr.CredentialIssuer, reqEditors ...vcr.RequestEditorFn) (*vcr.TrustIssuerResponse, error) {
+func (m *MockClientWithResponsesInterface) TrustIssuerWithResponse(ctx context.Context, body vcr.TrustIssuerJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.TrustIssuerResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
@@ -404,7 +403,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) UntrustIssuerWithBodyWit
 }
 
 // UntrustIssuerWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) UntrustIssuerWithResponse(ctx context.Context, body vcr.CredentialIssuer, reqEditors ...vcr.RequestEditorFn) (*vcr.UntrustIssuerResponse, error) {
+func (m *MockClientWithResponsesInterface) UntrustIssuerWithResponse(ctx context.Context, body vcr.TrustIssuerJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.UntrustIssuerResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
@@ -444,7 +443,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVCWithBodyWithResp
 }
 
 // VerifyVCWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) VerifyVCWithResponse(ctx context.Context, body vcr.VCVerificationRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.VerifyVCResponse, error) {
+func (m *MockClientWithResponsesInterface) VerifyVCWithResponse(ctx context.Context, body vcr.VerifyVCJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.VerifyVCResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
@@ -484,7 +483,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) VerifyVPWithBodyWithResp
 }
 
 // VerifyVPWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) VerifyVPWithResponse(ctx context.Context, body vcr.VPVerificationRequest, reqEditors ...vcr.RequestEditorFn) (*vcr.VerifyVPResponse, error) {
+func (m *MockClientWithResponsesInterface) VerifyVPWithResponse(ctx context.Context, body vcr.VerifyVPJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.VerifyVPResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
