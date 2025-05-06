@@ -73,6 +73,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 
 	ehrFHIRClientProps := clients.Factories[fhirLauncherKey](values)
 	ehrFHIRClient := s.ehrFHIRClientFactory(ehrFHIRClientProps.BaseURL, &http.Client{Transport: ehrFHIRClientProps.Client})
+
 	var practitioner fhir.Practitioner
 	if err := ehrFHIRClient.Read(values["practitioner"], &practitioner); err != nil {
 		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to read practitioner resource")
@@ -81,11 +82,20 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	}
 	values["practitioner"] = "Practitioner/" + *practitioner.Id
 
+	var patient fhir.Patient
+	if err := ehrFHIRClient.Read(values["patient"], &patient); err != nil {
+		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to read patient resource")
+		http.Error(response, "Failed to read patient resource: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	values["patient"] = "Patient/" + *patient.Id
+
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: fhirLauncherKey,
 		StringValues: values,
 		OtherValues: map[string]any{
 			values["practitioner"]: practitioner,
+			values["patient"]:      patient,
 		},
 	})
 

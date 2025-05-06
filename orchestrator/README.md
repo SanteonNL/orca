@@ -32,9 +32,10 @@ Use the following environment variables to configure the orchestrator:
 ORCA can act as OpenID Connect Provider for users that have an existing session (initiated through app launch).
 This allows the launch of OIDC-enabled applications that can't directly authenticate using the EHR.
 It supports the following scopes:
-- `openid` (required, adds `sub` claim)
-- `profile` (adds `name` and `roles` claims)
-- `email` (add `email` claim)
+- `openid`: required, adds the `sub` claim.
+- `profile`: adds the `name` and `roles` claims.
+- `email`: adds the `email` claim.
+- `patient`: adds `patient` claim, which contains an array with identifiers of the patient associated with the ORCA user session. The format of the identifiers is `<system>|<value>`.
 
 The claims in the ID token are based on the user information from the EHR.
 

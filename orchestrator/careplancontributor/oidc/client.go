@@ -83,7 +83,7 @@ func (c Client) RestrictAdditionalAccessTokenScopes() func(scopes []string) []st
 
 func (c Client) IsScopeAllowed(scope string) bool {
 	switch scope {
-	case "openid", "profile", "email":
+	case oidc.ScopeOpenID, oidc.ScopeProfile, oidc.ScopeEmail, ScopePatient:
 		return true
 	default:
 		return false

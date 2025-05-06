@@ -61,6 +61,10 @@ services:
     depends_on:
       fhirstore-healthcheck:
         condition: service_completed_successfully
+    env_file:
+      # Allow extra environment variables to be passed in. This is useful for local development, since extra.env isn't committed to the repository.
+      - path: ./extra.env
+        required: false
     environment:
       - ORCA_NUTS_API_URL=http://nutsnode:8081
       - ORCA_NUTS_PUBLIC_URL=${NUTS_URL}

@@ -22,6 +22,7 @@ func TestService_IntegrationTest(t *testing.T) {
 	sessionData := user.SessionData{
 		StringValues: map[string]string{
 			"practitioner": "Practitioner/12345",
+			"patient":      "Patient/123",
 		},
 		OtherValues: map[string]any{
 			"Practitioner/12345": fhir.Practitioner{
@@ -55,6 +56,14 @@ func TestService_IntegrationTest(t *testing.T) {
 					},
 				},
 			},
+			"Patient/123": fhir.Patient{
+				Identifier: []fhir.Identifier{
+					{
+						System: to.Ptr("example.com/CodeSystem"),
+						Value:  to.Ptr("SOME-PATIENT-IDENTIFIER"),
+					},
+				},
+			},
 		},
 	}
 	mux := http.NewServeMux()
@@ -63,7 +72,7 @@ func TestService_IntegrationTest(t *testing.T) {
 	clientURL := must.ParseURL(httpServer.URL + "/client")
 	clientRedirectURL := clientURL.JoinPath("callback")
 	clientLoginURL := clientURL.JoinPath("login")
-	requestedScopes := []string{"openid", "profile", "email"}
+	requestedScopes := []string{"openid", "profile", "email", "patient"}
 	const clientID = "test-client-id"
 	const clientSecret = ""
 
@@ -116,4 +125,5 @@ func TestService_IntegrationTest(t *testing.T) {
 	assert.Equal(t, "John Doe", capturedIDTokenClaims.GetUserInfo().Name)
 	assert.Equal(t, "john@example.com", capturedIDTokenClaims.GetUserInfo().Email)
 	assert.Equal(t, []any{"nurse-level-4@example.com/CodeSystem"}, capturedIDTokenClaims.Claims["roles"])
+	assert.Equal(t, []any{"example.com/CodeSystem|SOME-PATIENT-IDENTIFIER"}, capturedIDTokenClaims.Claims["patient"])
 }
