@@ -1,9 +1,11 @@
 package demo
 
 import (
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"testing"
 	"time"
 
@@ -25,6 +27,13 @@ func TestService_handle(t *testing.T) {
 			},
 		},
 	}
+	ehrFHIRClient := &test.StubFHIRClient{
+		Resources: []interface{}{
+			fhir.Practitioner{
+				Id: to.Ptr("c"),
+			},
+		},
+	}
 	globals.CarePlanServiceFhirClient = &test.StubFHIRClient{
 		Resources: []interface{}{
 			existingTask,
@@ -33,9 +42,15 @@ func TestService_handle(t *testing.T) {
 
 	t.Run("root base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/", frontendLandingUrl: must.ParseURL("/cpc/")}
+		service := Service{
+			sessionManager: sessionManager, baseURL: "/",
+			frontendLandingUrl: must.ParseURL("/cpc/"),
+			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
+				return ehrFHIRClient
+			},
+		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -44,9 +59,16 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: must.ParseURL("/frontend/landing")}
+		service := Service{
+			sessionManager:     sessionManager,
+			baseURL:            "/orca",
+			frontendLandingUrl: must.ParseURL("/frontend/landing"),
+			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
+				return ehrFHIRClient
+			},
+		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -55,9 +77,16 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("should destroy previous session", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: must.ParseURL("/cpc/")}
+		service := Service{
+			sessionManager:     sessionManager,
+			baseURL:            "/orca",
+			frontendLandingUrl: must.ParseURL("/cpc/"),
+			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
+				return ehrFHIRClient
+			},
+		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 		require.Equal(t, 1, sessionManager.SessionCount())
@@ -65,7 +94,7 @@ func TestService_handle(t *testing.T) {
 		// Now launch the second session - copy the cookies so the session is retained
 		cookies := response.Result().Cookies()
 		response = httptest.NewRecorder()
-		request = httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request = httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
 		for _, cookie := range cookies {
 			request.AddCookie(cookie)
 		}
@@ -74,9 +103,16 @@ func TestService_handle(t *testing.T) {
 	})
 	t.Run("should restore task", func(t *testing.T) {
 		sessionManager := user.NewSessionManager(time.Minute)
-		service := Service{sessionManager: sessionManager, baseURL: "/orca", frontendLandingUrl: must.ParseURL("/frontend/enrollment")}
+		service := Service{
+			sessionManager:     sessionManager,
+			baseURL:            "/orca",
+			frontendLandingUrl: must.ParseURL("/frontend/enrollment"),
+			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
+				return ehrFHIRClient
+			},
+		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 

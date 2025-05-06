@@ -31,14 +31,18 @@ func New(sessionManager *user.SessionManager, config Config, frontendLandingUrl 
 		sessionManager:     sessionManager,
 		config:             config,
 		frontendLandingUrl: frontendLandingUrl,
+		ehrFHIRClientFactory: func(baseURL *url.URL, httpClient *http.Client) fhirclient.Client {
+			return fhirclient.New(baseURL, httpClient, nil)
+		},
 	}
 }
 
 type Service struct {
-	sessionManager     *user.SessionManager
-	config             Config
-	baseURL            string
-	frontendLandingUrl *url.URL
+	sessionManager       *user.SessionManager
+	config               Config
+	baseURL              string
+	frontendLandingUrl   *url.URL
+	ehrFHIRClientFactory func(*url.URL, *http.Client) fhirclient.Client
 }
 
 func (s *Service) cpsFhirClient() fhirclient.Client {
@@ -51,9 +55,13 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	log.Ctx(request.Context()).Debug().Msg("Handling demo app launch")
-	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss", "taskIdentifier")
+	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss")
 	if !ok {
 		return
+	}
+	// taskIdentifier is optional, only set if present
+	if taskIdentifiers := request.URL.Query()["taskIdentifier"]; len(taskIdentifiers) > 0 {
+		values["taskIdentifier"] = taskIdentifiers[0]
 	}
 
 	//Destroy the previous session if found
@@ -63,9 +71,22 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		s.sessionManager.Destroy(response, request)
 	}
 
+	ehrFHIRClientProps := clients.Factories[fhirLauncherKey](values)
+	ehrFHIRClient := s.ehrFHIRClientFactory(ehrFHIRClientProps.BaseURL, &http.Client{Transport: ehrFHIRClientProps.Client})
+	var practitioner fhir.Practitioner
+	if err := ehrFHIRClient.Read(values["practitioner"], &practitioner); err != nil {
+		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to read practitioner resource")
+		http.Error(response, "Failed to read practitioner resource: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	values["practitioner"] = "Practitioner/" + *practitioner.Id
+
 	s.sessionManager.Create(response, user.SessionData{
 		FHIRLauncher: fhirLauncherKey,
 		StringValues: values,
+		OtherValues: map[string]any{
+			values["practitioner"]: practitioner,
+		},
 	})
 
 	var existingTask *fhir.Task
