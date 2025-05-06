@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/rs/zerolog/log"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -57,7 +59,9 @@ func (s StubFHIRClient) ReadWithContext(ctx context.Context, path string, target
 			return nil
 		}
 	}
-	return errors.New("resource not found")
+	return fhirclient.OperationOutcomeError{
+		HttpStatusCode: http.StatusNotFound,
+	}
 }
 
 func (s StubFHIRClient) Create(resource any, result any, opts ...fhirclient.Option) error {
@@ -165,10 +169,61 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 				}
 				return false
 			})
+		case "output-reference":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type != "Task" {
+					return false
+				}
+				var task fhir.Task
+				if err := json.Unmarshal(candidate.Data, &task); err != nil {
+					panic(err)
+				}
+				for _, output := range task.Output {
+					if output.ValueReference != nil &&
+						output.ValueReference.Reference != nil &&
+						*output.ValueReference.Reference == value {
+						return true
+					}
+				}
+				return false
+			})
+		case "focus":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type != "Task" {
+					return false
+				}
+				var task fhir.Task
+				if err := json.Unmarshal(candidate.Data, &task); err != nil {
+					panic(err)
+				}
+				return task.Focus != nil && *task.Focus.Reference == value
+			})
+		case "subject":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type != "CarePlan" {
+					return false
+				}
+				var carePlan fhir.CarePlan
+				if err := json.Unmarshal(candidate.Data, &carePlan); err != nil {
+					panic(err)
+				}
+				if carePlan.Subject.Reference != nil && *carePlan.Subject.Reference == value {
+					return true
+				}
+				if carePlan.Subject.Identifier != nil {
+					token := fmt.Sprintf("%s|%s", to.EmptyString(carePlan.Subject.Identifier.System), to.EmptyString(carePlan.Subject.Identifier.Value))
+					if value == token {
+						return true
+					}
+				}
+				return false
+			})
 		case "url":
 			filterCandidates(func(candidate BaseResource) bool {
 				return candidate.URL == value
 			})
+		case "_count":
+			log.Logger.Warn().Msg("_count not supported in stub client, ignoring")
 		default:
 			return fmt.Errorf("unsupported query parameter: %s", name)
 		}

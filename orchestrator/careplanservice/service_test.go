@@ -831,24 +831,23 @@ func TestService_validateLiteralReferences(t *testing.T) {
 	prof := profile.TestProfile{
 		CSD: profile.TestCsdDirectory{Endpoint: "https://example.com/fhir"},
 	}
-	service := &Service{profile: prof}
 
 	t.Run("ok", func(t *testing.T) {
-		err = service.validateLiteralReferences(context.Background(), resource)
+		err = validateLiteralReferences(context.Background(), prof, resource)
 		require.NoError(t, err)
 	})
 	t.Run("http:// is not allowed", func(t *testing.T) {
 		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 			s.Focus.Reference = to.Ptr("http://example.com")
 		})
-		err := service.validateLiteralReferences(context.Background(), resource)
+		err := validateLiteralReferences(context.Background(), prof, resource)
 		require.EqualError(t, err, "literal reference is URL with scheme http://, only https:// is allowed (path=focus.reference)")
 	})
 	t.Run("parent directory traversal isn't allowed", func(t *testing.T) {
 		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 			s.Focus.Reference = to.Ptr("https://example.com/fhir/../secret-page")
 		})
-		err := service.validateLiteralReferences(context.Background(), resource)
+		err := validateLiteralReferences(context.Background(), prof, resource)
 		require.EqualError(t, err, "literal reference is URL with parent path segment '..' (path=focus.reference)")
 	})
 	t.Run("registered base URL", func(t *testing.T) {
@@ -856,14 +855,14 @@ func TestService_validateLiteralReferences(t *testing.T) {
 			resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 				s.Focus.Reference = to.Ptr("https://example.com/alternate/secret-page")
 			})
-			err = service.validateLiteralReferences(context.Background(), resource)
+			err = validateLiteralReferences(context.Background(), prof, resource)
 			require.EqualError(t, err, "literal reference is not a child of a registered FHIR base URL (path=focus.reference)")
 		})
 		t.Run("path differs, check trailing slash normalization", func(t *testing.T) {
 			resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 				s.Focus.Reference = to.Ptr("https://example.com/fhirPatient/not-allowed")
 			})
-			err = service.validateLiteralReferences(context.Background(), resource)
+			err = validateLiteralReferences(context.Background(), prof, resource)
 			require.EqualError(t, err, "literal reference is not a child of a registered FHIR base URL (path=focus.reference)")
 		})
 	})
