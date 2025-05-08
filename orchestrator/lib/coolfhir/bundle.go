@@ -124,6 +124,7 @@ type AuditEventInfo struct {
 	Metadata         map[string]string       // Additional metadata for the audit event
 	QueryParams      url.Values              // Query parameters for the audit event
 	AdditionalEntity []fhir.AuditEventEntity // Additional entity for the audit event (i.e. query parameters)
+	Policy           []string                // Policy references for the audit event
 }
 
 var nowFunc = time.Now
@@ -214,7 +215,8 @@ func WithAuditEvent(ctx context.Context, t *BundleBuilder, info AuditEventInfo) 
 			Outcome:  to.Ptr(fhir.AuditEventOutcome0),
 			Agent: []fhir.AuditEventAgent{
 				{
-					Who: info.ActingAgent,
+					Who:    info.ActingAgent,
+					Policy: info.Policy,
 				},
 			},
 			Source: fhir.AuditEventSource{

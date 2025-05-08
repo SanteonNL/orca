@@ -1,4 +1,4 @@
-//go:generate mockgen -destination=./channels_mock_test.go -package=subscriptions -source=channels.go
+//go:generate mockgen -destination=./channels_mock.go -package=subscriptions -source=channels.go
 package subscriptions
 
 import (

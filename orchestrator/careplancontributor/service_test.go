@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/external"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
@@ -726,6 +728,54 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 	httpResponse, err = frontServer.Client().Do(httpRequest)
 	require.NoError(t, err)
 	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
+}
+
+func TestService_HandleSearchEndpoints(t *testing.T) {
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	sessionManager, _ := createTestSession()
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
+
+	service, err := New(Config{
+		AppLaunch: applaunch.Config{
+			External: map[string]external.Config{
+				"app1": {
+					Name: "App 1",
+					URL:  "https://example.com/app1",
+				},
+				"app2": {
+					Name: "App 2",
+					URL:  "https://example.com/app2",
+				},
+			},
+		},
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, nil)
+	require.NoError(t, err)
+
+	// Setup: configure the service to proxy to the backing FHIR server
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+
+	t.Run("ok", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Endpoint", nil)
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		expectedData, err := os.ReadFile("./testdata/endpoints.json")
+		require.NoError(t, err)
+		require.JSONEq(t, string(expectedData), string(responseData))
+	})
+	t.Run("search parameters not allowed", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Endpoint?foo=bar", nil)
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	})
 }
 
 func TestService_ProxyToExternalCPS(t *testing.T) {
