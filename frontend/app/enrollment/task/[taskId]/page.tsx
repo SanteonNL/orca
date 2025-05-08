@@ -7,7 +7,7 @@ import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
 import { patientName, organizationName } from "@/lib/fhirRender";
 import DataViewer from '@/components/data-viewer'
-import { viewerFeatureIsEnabled } from '@/app/actions'
+import { viewerFeatureIsEnabled, getPatientViewerUrl } from '@/app/actions'
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
 
 export default function EnrollmentTaskPage() {
@@ -15,6 +15,7 @@ export default function EnrollmentTaskPage() {
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
     const { patient } = useEnrollmentStore()
     const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
+    const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
     const [showViewer, setShowViewer] = useState(false)
 
     useEffect(() => {
@@ -36,13 +37,18 @@ export default function EnrollmentTaskPage() {
             })
     }, [])
 
+    useEffect(()=>{
+        getPatientViewerUrl()
+            .then((url) => {
+                setPatientViewerUrl(url)
+            })
+    })
+
     if (loading || !initialized) return <Loading />
 
     if (!task) {
         return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
     }
-
-    const zbjViewerUrl = localStorage.getItem("zbjViewerUrl") || ''
 
     const StatusElement = ({ label, value, noUpperCase }: { label: string, value: string, noUpperCase?: boolean | undefined }) =>
         <>
@@ -80,7 +86,8 @@ export default function EnrollmentTaskPage() {
                     : <></>
                 }
             </div>
-            {showViewer && <a href={zbjViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
+            {patientViewerUrl && <a href={patientViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
+            {showViewer && <DataViewer task={task} />}
             <TaskSseConnectionStatus />
         </div>
     }
