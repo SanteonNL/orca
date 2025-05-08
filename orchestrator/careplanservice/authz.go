@@ -181,23 +181,6 @@ func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, prin
 		Allowed: false,
 		Reasons: []string{"CareTeamMemberPolicy: principal is not a member of CareTeam"},
 	}, nil
-	// TODO: Re-implement. We need this logic, but AuditEvent is not a suitable mechanism
-	// For patients not yet authorized, check if the requester is the creator
-	//for _, patient := range patients {
-	//	// Skip if patient is already authorized through CareTeam
-	//	if slices.ContainsFunc(retPatients, func(p fhir.Patient) bool {
-	//		return *p.Id == *patient.Id
-	//	}) {
-	//		continue
-	//	}
-	//
-	//	// Check if requester is the creator
-	//	isCreator, err := s.isCreatorOfResource(ctx, principal, "Patient", *patient.Id)
-	//	if err == nil && isCreator {
-	//		log.Ctx(ctx).Debug().Msgf("User is creator of Patient/%s", *patient.Id)
-	//		retPatients = append(retPatients, patient)
-	//	}
-	//}
 }
 
 var _ Policy[any] = &CreatorPolicy[any]{}
@@ -228,12 +211,18 @@ func (o CreatorPolicy[T]) HasAccess(ctx context.Context, resource T, principal a
 	extensionField := resourceValue.FieldByName("Extension")
 	if !extensionField.IsValid() {
 		// Resource doesn't have an Extension field
-		return false, nil
+		return &PolicyDecision{
+			Allowed: false,
+			Reasons: []string{"CreatorPolicy: resource does not have an Extension field"},
+		}, nil
 	}
 	extensions, ok := extensionField.Interface().([]fhir.Extension)
 	if !ok {
 		// Extension field is not of the expected type
-		return false, nil
+		return &PolicyDecision{
+			Allowed: false,
+			Reasons: []string{"CreatorPolicy: resource does not have a valid Extension field"},
+		}, nil
 	}
 
 	for _, extension := range extensions {
@@ -242,13 +231,16 @@ func (o CreatorPolicy[T]) HasAccess(ctx context.Context, resource T, principal a
 			for _, orgIdentifier := range principal.Organization.Identifier {
 				if coolfhir.IdentifierEquals(extension.ValueReference.Identifier, &orgIdentifier) {
 					return &PolicyDecision{
-		Allowed: true,
-		Reasons: []string{"CreatorPolicy: not implemented, anyone has access"},
-	}, nil
+						Allowed: true,
+						Reasons: []string{"CreatorPolicy: principal is the creator"},
+					}, nil
 				}
 			}
 		}
 	}
 
-	return false, nil
+	return &PolicyDecision{
+		Allowed: false,
+		Reasons: []string{"CreatorPolicy: principal is not the creator"},
+	}, nil
 }
