@@ -13,3 +13,7 @@ export async function viewerFeatureIsEnabled() {
 export async function getAggregationUrl() {
     return process.env.FHIR_AGGREGATE_URL
 }
+
+export async function getPatientViewerUrl() {
+    return process.env.PATIENT_VIEWER_URL
+}

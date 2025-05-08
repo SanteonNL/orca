@@ -106,6 +106,8 @@ func (s *Service) HandleLogin(httpResponse http.ResponseWriter, httpRequest *htt
 }
 
 func userFromSession(session *user.SessionData) (*UserDetails, error) {
+	var userDetails UserDetails
+	// Get practitioner from session
 	practitionerRef := session.StringValues["practitioner"] // reference to the FHIR practitioner resource
 	if practitionerRef == "" {
 		return nil, errors.New("no practitioner reference in session")
@@ -117,8 +119,6 @@ func userFromSession(session *user.SessionData) (*UserDetails, error) {
 	if !ok {
 		return nil, fmt.Errorf("practitioner object in session should be fhir.Practitioner, but was %T", session.OtherValues[practitionerRef])
 	}
-
-	var userDetails UserDetails
 	for _, name := range practitioner.Name {
 		userDetails.Name = coolfhir.FormatHumanName(name)
 		break
@@ -140,6 +140,18 @@ func userFromSession(session *user.SessionData) (*UserDetails, error) {
 			userDetails.Email = *contactPoint.Value
 			break
 		}
+	}
+	// Get patient from session
+	patientRef := session.StringValues["patient"]
+	if patientRef == "" {
+		return nil, errors.New("no patient reference in session")
+	}
+	patient, ok := session.OtherValues[patientRef].(fhir.Patient)
+	if !ok {
+		return nil, fmt.Errorf("patient object in session should be fhir.Patient, but was %T", session.OtherValues[patientRef])
+	}
+	for _, identifier := range patient.Identifier {
+		userDetails.PatientIdentifiers = append(userDetails.PatientIdentifiers, identifier)
 	}
 	return &userDetails, nil
 }
@@ -171,6 +183,7 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 			oidc.ScopeOpenID,
 			oidc.ScopeProfile,
 			oidc.ScopeEmail,
+			ScopePatient,
 		},
 		SupportedClaims: []string{
 			"sub",
@@ -186,7 +199,8 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 			"client_id",
 			"name",
 			"email",
-			"roles",
+			ClaimRoles,
+			ClaimPatient,
 		},
 	}
 
