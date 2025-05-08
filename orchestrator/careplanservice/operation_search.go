@@ -25,7 +25,7 @@ type FHIRSearchOperationHandler[T any] struct {
 func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(request.ResourcePath)
 	log.Ctx(ctx).Info().Msgf("Searching for %s", resourceType)
-	resources, bundle, err := h.searchAndFilter(ctx, request.QueryParams, request.Principal, resourceType)
+	resources, bundle, policyDecisions, err := h.searchAndFilter(ctx, request.QueryParams, request.Principal, resourceType)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		}, &fhir.Reference{
 			Identifier: &request.Principal.Organization.Identifier[0],
 			Type:       to.Ptr("Organization"),
-		})
+		}, policyDecisions[i].Reasons)
 		tx.Create(auditEvent)
 	}
 
@@ -77,30 +77,32 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	}, nil
 }
 
-func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, queryParams url.Values, principal *auth.Principal, resourceType string) ([]T, *fhir.Bundle, error) {
+func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, queryParams url.Values, principal *auth.Principal, resourceType string) ([]T, *fhir.Bundle, []PolicyDecision, error) {
 	resources, bundle, err := searchResources[T](ctx, h.fhirClient, resourceType, queryParams, new(fhirclient.Headers))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	// Filter authorized resources
 	j := 0
+	var allowedPolicyDecisions []PolicyDecision
 	for i, resource := range resources {
 		resourceID := *coolfhir.ResourceID(resource)
-		hasAccess, err := h.authzPolicy.HasAccess(ctx, resource, *principal)
+		authzDecision, err := h.authzPolicy.HasAccess(ctx, resource, *principal)
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking authz policy for %s/%s", resourceType, resourceID)
 			continue
 		}
-		if hasAccess {
+		if authzDecision.Allowed {
 			resources[j] = resource
 			bundle.Entry[j] = bundle.Entry[i]
+			allowedPolicyDecisions = append(allowedPolicyDecisions, *authzDecision)
 			j++
 		}
 	}
 	resources = resources[:j]
 	bundle.Entry = bundle.Entry[:j]
-	return resources, bundle, nil
+	return resources, bundle, allowedPolicyDecisions, nil
 }
 
 func searchResources[T any](ctx context.Context, fhirClient fhirclient.Client, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {

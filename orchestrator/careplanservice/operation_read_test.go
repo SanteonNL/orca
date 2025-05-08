@@ -92,6 +92,11 @@ type TestPolicy[T any] struct {
 	Error error
 }
 
-func (n TestPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
-	return n.Allow, n.Error
+func (n TestPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
+	if n.Error != nil {
+		return nil, n.Error
+	}
+	return &PolicyDecision{
+		Allowed: n.Allow,
+	}, nil
 }
