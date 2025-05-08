@@ -895,9 +895,11 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 	// Send notification for changed resources
 	notifyCtx, cancel := context.WithTimeout(ctx, subscriberNotificationTimeout)
 	defer cancel()
-	if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
-		log.Ctx(ctx).Error().Err(err).
-			Msgf("Failed to notify subscribers for %T", resource)
+	if shouldNotify(resource) {
+		if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
+			log.Ctx(ctx).Error().Err(err).
+				Msgf("Failed to notify subscribers for %T", resource)
+		}
 	}
 }
 
@@ -1185,4 +1187,17 @@ func (s *Service) getLocalIdentity() (*fhir.Identifier, error) {
 		return nil, errors.New("no local identity found")
 	}
 	return &localIdentity[0].Identifier[0], nil
+}
+
+func shouldNotify(resource any) bool {
+	switch coolfhir.ResourceType(resource) {
+	case "Task":
+		return true
+	case "CareTeam":
+		return true
+	case "CarePlan":
+		return true
+	default:
+		return false
+	}
 }

@@ -31,7 +31,7 @@ func testPolicy[T any](t *testing.T, tt AuthzPolicyTest[T]) {
 			t.Skip(tt.skipReason)
 		}
 		hasAccess, err := tt.policy.HasAccess(context.Background(), tt.resource, *tt.principal)
-		assert.Equal(t, tt.wantAllow, hasAccess)
+		assert.Equal(t, tt.wantAllow, hasAccess.Allowed)
 		if tt.wantErr != nil {
 			assert.EqualError(t, err, tt.wantErr.Error())
 		} else {

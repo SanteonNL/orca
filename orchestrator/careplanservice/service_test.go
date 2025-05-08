@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
+	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -1122,5 +1124,47 @@ func TestService_validateSearchRequest(t *testing.T) {
 		err := service.validateSearchRequest(req)
 
 		assert.NoError(t, err)
+	})
+}
+
+func TestService_notifySubscribers(t *testing.T) {
+	t.Run("CareTeam causes notification", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		subscriptionManager := subscriptions.NewMockManager(ctrl)
+		subscriptionManager.EXPECT().Notify(gomock.Any(), gomock.Any())
+		s := &Service{
+			subscriptionManager: subscriptionManager,
+		}
+		s.notifySubscribers(context.Background(), &fhir.CareTeam{})
+	})
+	t.Run("CarePlan causes notification", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		subscriptionManager := subscriptions.NewMockManager(ctrl)
+		subscriptionManager.EXPECT().Notify(gomock.Any(), gomock.Any())
+		s := &Service{
+			subscriptionManager: subscriptionManager,
+		}
+		s.notifySubscribers(context.Background(), &fhir.CarePlan{})
+	})
+	t.Run("Task causes notification", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		subscriptionManager := subscriptions.NewMockManager(ctrl)
+		subscriptionManager.EXPECT().Notify(gomock.Any(), gomock.Any())
+		s := &Service{
+			subscriptionManager: subscriptionManager,
+		}
+		s.notifySubscribers(context.Background(), &fhir.Task{})
+	})
+	t.Run("Other resource type does not cause notification", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		subscriptionManager := subscriptions.NewMockManager(ctrl)
+		s := &Service{
+			subscriptionManager: subscriptionManager,
+		}
+		s.notifySubscribers(context.Background(), &fhir.ActivityDefinition{})
 	})
 }
