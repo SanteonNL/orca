@@ -13,6 +13,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 var _ FHIROperation = &FHIRCreateOperationHandler[any]{}
@@ -26,7 +27,6 @@ type FHIRCreateOperationHandler[T any] struct {
 
 func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(request.ResourcePath)
-	log.Ctx(ctx).Info().Msgf("Creating %s", resourceType)
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
 		return nil, fmt.Errorf("invalid %s: %w", resourceType, coolfhir.BadRequestError(err))
@@ -36,8 +36,8 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if err := validateLiteralReferences(ctx, h.profile, &resource); err != nil {
 		return nil, err
 	}
-	hasAccess, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
-	if !hasAccess {
+	authzDecision, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
+	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal is authorized to create %s", resourceType)
 		}
@@ -46,6 +46,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			StatusCode: http.StatusForbidden,
 		}
 	}
+	log.Ctx(ctx).Info().Msgf("Creating %s (authz=%s)", resourceType, strings.Join(authzDecision.Reasons, ";"))
 	// TODO: Field validation
 	resourceBundleEntry := request.bundleEntryWithResource(resource)
 	if resourceBundleEntry.FullUrl == nil {
@@ -65,6 +66,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			},
 			Observer: *request.LocalIdentity,
 			Action:   fhir.AuditEventActionC,
+			Policy:   authzDecision.Reasons,
 		}))
 	} else {
 		tx.Create(resource, coolfhir.WithFullUrl(*resourceBundleEntry.FullUrl), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{

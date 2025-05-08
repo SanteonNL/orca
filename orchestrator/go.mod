@@ -14,7 +14,7 @@ require (
 	github.com/go-jose/go-jose/v4 v4.0.5
 	github.com/google/uuid v1.6.0
 	github.com/jellydator/ttlcache/v3 v3.3.0
-	github.com/knadh/koanf/providers/env v1.0.0
+	github.com/knadh/koanf/providers/env v1.1.0
 	github.com/knadh/koanf/v2 v2.2.0
 	github.com/nuts-foundation/go-nuts-client v0.1.9
 	github.com/rs/zerolog v1.34.0

@@ -12,8 +12,13 @@ import (
 	"net/url"
 )
 
+type PolicyDecision struct {
+	Allowed bool
+	Reasons []string
+}
+
 type Policy[T any] interface {
-	HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error)
+	HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error)
 }
 
 var _ Policy[any] = &AnyMatchPolicy[any]{}
@@ -23,17 +28,20 @@ type AnyMatchPolicy[T any] struct {
 	Policies []Policy[T]
 }
 
-func (e AnyMatchPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+func (e AnyMatchPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
 	for _, policy := range e.Policies {
-		hasAccess, err := policy.HasAccess(ctx, resource, principal)
+		decision, err := policy.HasAccess(ctx, resource, principal)
 		if err != nil {
-			return false, err
+			return nil, err
 		}
-		if hasAccess {
-			return true, nil
+		if decision.Allowed {
+			return &PolicyDecision{
+				Allowed: true,
+				Reasons: append([]string{"AnyMatchPolicy"}, decision.Reasons...),
+			}, nil
 		}
 	}
-	return false, nil
+	return &PolicyDecision{Allowed: false, Reasons: []string{"AnyMatchPolicy: none match"}}, nil
 }
 
 var _ Policy[any] = &LocalOrganizationPolicy[any]{}
@@ -43,21 +51,27 @@ type LocalOrganizationPolicy[T any] struct {
 	profile profile.Provider
 }
 
-func (l LocalOrganizationPolicy[T]) HasAccess(ctx context.Context, _ T, principal auth.Principal) (bool, error) {
+func (l LocalOrganizationPolicy[T]) HasAccess(ctx context.Context, _ T, principal auth.Principal) (*PolicyDecision, error) {
 	localIdentities, err := l.profile.Identities(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to get local identities: %w", err)
+		return nil, fmt.Errorf("failed to get local identities: %w", err)
 	}
 	for _, localIdentity := range localIdentities {
 		for _, requesterIdentifier := range principal.Organization.Identifier {
 			for _, localIdentifier := range localIdentity.Identifier {
 				if coolfhir.IdentifierEquals(&localIdentifier, &requesterIdentifier) {
-					return true, nil
+					return &PolicyDecision{
+						Allowed: true,
+						Reasons: []string{"LocalOrganizationPolicy: principal is local organization"},
+					}, nil
 				}
 			}
 		}
 	}
-	return false, nil
+	return &PolicyDecision{
+		Allowed: false,
+		Reasons: []string{"LocalOrganizationPolicy: principal is not a local organization"},
+	}, nil
 }
 
 var _ Policy[any] = &RelatedResourcePolicy[any, any]{}
@@ -73,20 +87,34 @@ type RelatedResourcePolicy[T any, R any] struct {
 	relatedResourceSearchParams func(ctx context.Context, resource T) (resourceType string, searchParams *url.Values)
 }
 
-func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
 	resourceType, searchParams := r.relatedResourceSearchParams(ctx, resource)
 	if searchParams == nil {
-		return false, nil
+		return &PolicyDecision{
+			Allowed: false,
+			Reasons: []string{"RelatedResourcePolicy: no related resource search parameters"},
+		}, nil
 	}
 	searchHandler := FHIRSearchOperationHandler[R]{
 		fhirClient:  r.fhirClient,
 		authzPolicy: r.relatedResourcePolicy,
 	}
-	results, _, err := searchHandler.searchAndFilter(ctx, *searchParams, &principal, resourceType)
+	results, _, policyDecisions, err := searchHandler.searchAndFilter(ctx, *searchParams, &principal, resourceType)
 	if err != nil {
-		return false, fmt.Errorf("related resource search (related resource type=%s): %w", resourceType, err)
+		return nil, fmt.Errorf("related resource search (related resource type=%s): %w", resourceType, err)
 	}
-	return len(results) > 0, nil
+	if len(results) > 0 {
+		return &PolicyDecision{
+			Allowed: true,
+			Reasons: append([]string{"RelatedResourcePolicy: access to related resource(s)"}, policyDecisions[0].Reasons...),
+		}, nil
+	} else {
+		return &PolicyDecision{
+			Allowed: false,
+			Reasons: []string{"RelatedResourcePolicy: no access to related resource(s)"},
+		}, nil
+	}
+
 }
 
 var _ Policy[fhir.Task] = &TaskOwnerOrRequesterPolicy[fhir.Task]{}
@@ -95,13 +123,28 @@ var _ Policy[fhir.Task] = &TaskOwnerOrRequesterPolicy[fhir.Task]{}
 type TaskOwnerOrRequesterPolicy[T fhir.Task] struct {
 }
 
-func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
 	resourceAsTask, ok := any(resource).(fhir.Task)
 	if !ok {
-		return false, fmt.Errorf("resource is not a Task")
+		return nil, fmt.Errorf("resource is not a Task")
 	}
 	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&resourceAsTask, principal.Organization.Identifier)
-	return isOwner || isRequester, nil
+	if isOwner {
+		return &PolicyDecision{
+			Allowed: true,
+			Reasons: []string{"TaskOwnerOrRequesterPolicy: principal is Task owner"},
+		}, nil
+	}
+	if isRequester {
+		return &PolicyDecision{
+			Allowed: true,
+			Reasons: []string{"TaskOwnerOrRequesterPolicy: principal is Task requester"},
+		}, nil
+	}
+	return &PolicyDecision{
+		Allowed: false,
+		Reasons: []string{"TaskOwnerOrRequesterPolicy: principal is neither Task owner or requester"},
+	}, nil
 }
 
 var _ Policy[fhir.CarePlan] = &CareTeamMemberPolicy[fhir.CarePlan]{}
@@ -110,19 +153,31 @@ var _ Policy[fhir.CarePlan] = &CareTeamMemberPolicy[fhir.CarePlan]{}
 type CareTeamMemberPolicy[T fhir.CarePlan] struct {
 }
 
-func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
 	carePlan, ok := any(resource).(fhir.CarePlan)
 	if !ok {
-		return false, fmt.Errorf("resource is not a CarePlan")
+		return nil, fmt.Errorf("resource is not a CarePlan")
 	}
 	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
 	// INT-630: We changed CareTeam to be contained within the CarePlan, but old test data in the CarePlan resource does not have CareTeam.
 	//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
 	if err != nil {
 		log.Ctx(ctx).Warn().Err(err).Msgf("Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource (carePlanID=%s)", *carePlan.Id)
-		return false, nil
+		return &PolicyDecision{
+			Allowed: false,
+			Reasons: []string{"CareTeamMemberPolicy: unable to derive CareTeam from CarePlan"},
+		}, nil
 	}
-	return validatePrincipalInCareTeam(principal, careTeam) == nil, nil
+	if validatePrincipalInCareTeam(principal, careTeam) == nil {
+		return &PolicyDecision{
+			Allowed: true,
+			Reasons: []string{"CareTeamMemberPolicy: principal is member of CareTeam"},
+		}, nil
+	}
+	return &PolicyDecision{
+		Allowed: false,
+		Reasons: []string{"CareTeamMemberPolicy: principal is not a member of CareTeam"},
+	}, nil
 	// TODO: Re-implement. We need this logic, but AuditEvent is not a suitable mechanism
 	// For patients not yet authorized, check if the requester is the creator
 	//for _, patient := range patients {
@@ -148,8 +203,11 @@ var _ Policy[any] = &CreatorPolicy[any]{}
 type AnyonePolicy[T any] struct {
 }
 
-func (e AnyonePolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
-	return true, nil
+func (e AnyonePolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
+	return &PolicyDecision{
+		Allowed: true,
+		Reasons: []string{"AnyonePolicy: anyone has access"},
+	}, nil
 }
 
 var _ Policy[any] = &AnyonePolicy[any]{}
@@ -158,12 +216,15 @@ var _ Policy[any] = &AnyonePolicy[any]{}
 type CreatorPolicy[T any] struct {
 }
 
-func (o CreatorPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
+func (o CreatorPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
 	// TODO: Find a more suitable way to handle this auth.
 	// The AuditEvent implementation has proven unsuitable and we are using the AuditEvent for unintended purposes.
 	// For now, we can return true, as this will follow the same logic as was present before implementing the AuditEvent.
 
-	return true, nil
+	return &PolicyDecision{
+		Allowed: true,
+		Reasons: []string{"CreatorPolicy: not implemented, anyone has access"},
+	}, nil
 
 	//var auditBundle fhir.Bundle
 	//err := s.fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{
