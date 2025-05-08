@@ -10,7 +10,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
+	"reflect"
 )
+
+const CreatorExtensionURL = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator"
 
 type Policy[T any] interface {
 	HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error)
@@ -159,37 +162,32 @@ type CreatorPolicy[T any] struct {
 }
 
 func (o CreatorPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (bool, error) {
-	// TODO: Find a more suitable way to handle this auth.
-	// The AuditEvent implementation has proven unsuitable and we are using the AuditEvent for unintended purposes.
-	// For now, we can return true, as this will follow the same logic as was present before implementing the AuditEvent.
+	// Check if the resource has a resource-creator extension matching the principal's organization identifier
+	resourceValue := reflect.ValueOf(resource)
+	if resourceValue.Kind() == reflect.Ptr {
+		resourceValue = resourceValue.Elem()
+	}
+	extensionField := resourceValue.FieldByName("Extension")
+	if !extensionField.IsValid() {
+		// Resource doesn't have an Extension field
+		return false, nil
+	}
+	extensions, ok := extensionField.Interface().([]fhir.Extension)
+	if !ok {
+		// Extension field is not of the expected type
+		return false, nil
+	}
 
-	return true, nil
+	for _, extension := range extensions {
+		if extension.Url == CreatorExtensionURL && extension.ValueReference != nil && extension.ValueReference.Identifier != nil {
+			// Compare with principal's organization identifiers
+			for _, orgIdentifier := range principal.Organization.Identifier {
+				if coolfhir.IdentifierEquals(extension.ValueReference.Identifier, &orgIdentifier) {
+					return true, nil
+				}
+			}
+		}
+	}
 
-	//var auditBundle fhir.Bundle
-	//err := s.fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{
-	//	"entity": []string{resourceType + "/" + resourceID},
-	//	"action": []string{fhir.AuditEventActionC.String()},
-	//}, &auditBundle)
-	//if err != nil {
-	//	return false, fmt.Errorf("failed to find creation AuditEvent: %w", err)
-	//}
-	//
-	//// Check if there's a creation audit event
-	//if len(auditBundle.Entry) == 0 {
-	//	return false, coolfhir.NewErrorWithCode(fmt.Sprintf("No creation audit event found for %s", resourceType), http.StatusForbidden)
-	//}
-	//
-	//// Get the creator from the audit event
-	//var creationAuditEvent fhir.AuditEvent
-	//err = json.Unmarshal(auditBundle.Entry[0].Resource, &creationAuditEvent)
-	//if err != nil {
-	//	return false, fmt.Errorf("failed to unmarshal AuditEvent: %w", err)
-	//}
-	//
-	//// Check if the current user is the creator
-	//if !audit.IsCreator(creationAuditEvent, &principal) {
-	//	return false, coolfhir.NewErrorWithCode(fmt.Sprintf("Only the creator can update this %s", resourceType), http.StatusForbidden)
-	//}
-	//
-	//return true, nil
+	return false, nil
 }

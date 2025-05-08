@@ -14,6 +14,8 @@ func TestPatientAuthzPolicy(t *testing.T) {
 	patient := fhir.Patient{
 		Id: to.Ptr("p1"),
 	}
+	patientWithCreator := patient
+	patientWithCreator.Extension = TestCreatorExtension
 	fhirClient := &test.StubFHIRClient{
 		Resources: []any{
 			fhir.CarePlan{
@@ -75,6 +77,13 @@ func TestPatientAuthzPolicy(t *testing.T) {
 				wantAllow: true,
 			},
 			{
+				name:      "allow (is creator)",
+				policy:    policy,
+				resource:  patientWithCreator,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+			{
 				name:      "disallow (not in CareTeam)",
 				policy:    policy,
 				resource:  patient,
@@ -89,17 +98,16 @@ func TestPatientAuthzPolicy(t *testing.T) {
 			{
 				name:      "allow (is creator)",
 				policy:    policy,
-				resource:  patient,
+				resource:  patientWithCreator,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
-				name:       "disallow (principal isn't the creator of the Patient)",
-				policy:     policy,
-				resource:   patient,
-				principal:  auth.TestPrincipal2,
-				wantAllow:  false,
-				skipReason: "'is creator' policy always returns true",
+				name:      "disallow (principal isn't the creator of the Patient)",
+				policy:    policy,
+				resource:  patientWithCreator,
+				principal: auth.TestPrincipal2,
+				wantAllow: false,
 			},
 		})
 	})

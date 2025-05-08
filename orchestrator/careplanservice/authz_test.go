@@ -3,9 +3,22 @@ package careplanservice
 import (
 	"context"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"testing"
 )
+
+var TestCreatorExtension = []fhir.Extension{{
+	Url: CreatorExtensionURL,
+	ValueReference: &fhir.Reference{
+		Type: to.Ptr("Organization"),
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+			Value:  to.Ptr("1"),
+		},
+	}},
+}
 
 type AuthzPolicyTest[T any] struct {
 	name       string

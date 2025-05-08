@@ -50,6 +50,8 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 				assertBundleEntry(t, tx, coolfhir.EntryIsOfType("Task"), func(t *testing.T, entry fhir.BundleEntry) {
 					assert.Equal(t, fhir.HTTPVerbPOST, entry.Request.Method)
 					assert.Equal(t, "Task", entry.Request.Url)
+					// Validate resource creation extension
+					task.Extension = TestCreatorExtension
 					assert.JSONEq(t, string(must.MarshalJSON(task)), string(entry.Resource))
 				})
 				// Should respond with 1 bundle entry, and 1 notification

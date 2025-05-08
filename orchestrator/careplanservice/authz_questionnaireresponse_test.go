@@ -19,6 +19,8 @@ func TestQuestionnaireResponseAuthzPolicy(t *testing.T) {
 			},
 		},
 	}
+	questionnaireResponseWithCreator := questionnaireResponse
+	questionnaireResponseWithCreator.Extension = TestCreatorExtension
 	fhirClient := &test.StubFHIRClient{
 		Resources: []any{
 			fhir.Task{
@@ -33,6 +35,7 @@ func TestQuestionnaireResponseAuthzPolicy(t *testing.T) {
 						},
 					},
 				},
+				Extension: TestCreatorExtension,
 			},
 		},
 	}
@@ -60,6 +63,13 @@ func TestQuestionnaireResponseAuthzPolicy(t *testing.T) {
 		policy := ReadQuestionnaireResponseAuthzPolicy(fhirClient)
 		testPolicies(t, []AuthzPolicyTest[fhir.QuestionnaireResponse]{
 			{
+				name:      "allow (is creator)",
+				policy:    policy,
+				resource:  questionnaireResponseWithCreator,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+			{
 				name:      "allow (principal has access to related Task)",
 				policy:    policy,
 				resource:  questionnaireResponse,
@@ -67,12 +77,11 @@ func TestQuestionnaireResponseAuthzPolicy(t *testing.T) {
 				wantAllow: true,
 			},
 			{
-				name:       "disallow (principal doesn't have access to related Task)",
-				policy:     policy,
-				resource:   questionnaireResponse,
-				principal:  auth.TestPrincipal2,
-				wantAllow:  false,
-				skipReason: "'is creator' policy always returns true",
+				name:      "disallow (principal doesn't have access to related Task and not creator)",
+				policy:    policy,
+				resource:  questionnaireResponseWithCreator,
+				principal: auth.TestPrincipal2,
+				wantAllow: false,
 			},
 		})
 	})
@@ -80,21 +89,19 @@ func TestQuestionnaireResponseAuthzPolicy(t *testing.T) {
 		policy := UpdateQuestionnaireResponseAuthzPolicy()
 		testPolicies(t, []AuthzPolicyTest[fhir.QuestionnaireResponse]{
 			{
-				name:      "allow (principal has access to related Task)",
+				name:      "allow (is creator)",
 				policy:    policy,
-				resource:  questionnaireResponse,
+				resource:  questionnaireResponseWithCreator,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
-				name:       "disallow (principal doesn't have access to related Task)",
-				policy:     policy,
-				resource:   questionnaireResponse,
-				principal:  auth.TestPrincipal2,
-				wantAllow:  false,
-				skipReason: "'is creator' policy always returns true",
+				name:      "disallow (principal doesn't have access to related Task and not creator)",
+				policy:    policy,
+				resource:  questionnaireResponseWithCreator,
+				principal: auth.TestPrincipal2,
+				wantAllow: false,
 			},
 		})
 	})
-
 }

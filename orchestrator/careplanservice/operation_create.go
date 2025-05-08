@@ -13,6 +13,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
+	"reflect"
 )
 
 var _ FHIROperation = &FHIRCreateOperationHandler[any]{}
@@ -52,6 +53,12 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		resourceBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 	idx := len(tx.Entry)
+
+	// Set the creator of the resource in the resource.Extension. This is used for creator-based auth
+	if err := appendCreatorExtension(&resource, request.Principal.Organization.Identifier[0]); err != nil {
+		return nil, fmt.Errorf("failed to set creator extension: %w", err)
+	}
+
 	// If the resource has an ID and the upsert flag is set, treat as PUT operation
 	// As per FHIR spec, this is how we can create a resource with a client supplied ID: https://hl7.org/fhir/http.html#upsert
 	if resourceID != nil && request.Upsert {
@@ -86,4 +93,33 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 		return []*fhir.BundleEntry{result}, []any{&createdResource}, nil
 	}, nil
+}
+
+// appendCreatorExtension adds the creator organization identifier to the resource's Extension array
+func appendCreatorExtension(resource interface{}, identifier fhir.Identifier) error {
+	val := reflect.ValueOf(resource)
+	if val.Kind() != reflect.Ptr || val.IsNil() {
+		return fmt.Errorf("resource must be a non-nil pointer")
+	}
+
+	elem := val.Elem()
+	if elem.Kind() != reflect.Struct {
+		return fmt.Errorf("resource must be a pointer to a struct")
+	}
+
+	extensionField := elem.FieldByName("Extension")
+	if !extensionField.IsValid() {
+		return fmt.Errorf("resource has no Extension field")
+	}
+
+	creatorExtension := fhir.Extension{
+		Url: CreatorExtensionURL,
+		ValueReference: &fhir.Reference{
+			Identifier: &identifier,
+			Type:       to.Ptr("Organization"),
+		},
+	}
+
+	extensionField.Set(reflect.Append(extensionField, reflect.ValueOf(creatorExtension)))
+	return nil
 }

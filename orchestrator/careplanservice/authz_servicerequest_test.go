@@ -21,36 +21,8 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 			},
 		},
 	}
-	//fhirClient := &test.StubFHIRClient{
-	//	Resources: []any{
-	//		fhir.CarePlan{
-	//			Id: to.Ptr("cp1"),
-	//			Subject: fhir.Reference{
-	//				Type:      to.Ptr("Patient"),
-	//				Reference: to.Ptr("Patient/p1"),
-	//			},
-	//			CareTeam: []fhir.Reference{
-	//				{
-	//					Type:      to.Ptr("CareTeam"),
-	//					Reference: to.Ptr("#ct"),
-	//				},
-	//			},
-	//			Contained: must.MarshalJSON([]fhir.CareTeam{
-	//				{
-	//					Id: to.Ptr("ct"),
-	//					Participant: []fhir.CareTeamParticipant{
-	//						{
-	//							Member: &fhir.Reference{
-	//								Type:       to.Ptr("Organization"),
-	//								Identifier: &auth.TestPrincipal1.Organization.Identifier[0],
-	//							},
-	//						},
-	//					},
-	//				},
-	//			}),
-	//		},
-	//	},
-	//}
+	serviceRequestWithCreator := serviceRequest
+	serviceRequestWithCreator.Extension = TestCreatorExtension
 	fhirClient := &test.StubFHIRClient{
 		Resources: []any{
 			fhir.Task{
@@ -88,6 +60,13 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 		policy := ReadServiceRequestAuthzPolicy(fhirClient)
 		testPolicies(t, []AuthzPolicyTest[fhir.ServiceRequest]{
 			{
+				name:      "allow (is creator)",
+				policy:    policy,
+				resource:  serviceRequestWithCreator,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+			{
 				name:      "allow (principal has access to related Task)",
 				policy:    policy,
 				resource:  serviceRequest,
@@ -95,12 +74,11 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 				wantAllow: true,
 			},
 			{
-				name:       "disallow (principal doesn't have access to related Task)",
-				policy:     policy,
-				resource:   serviceRequest,
-				principal:  auth.TestPrincipal2,
-				wantAllow:  false,
-				skipReason: "'is creator' policy always returns true",
+				name:      "disallow (principal doesn't have access to related Task)",
+				policy:    policy,
+				resource:  serviceRequest,
+				principal: auth.TestPrincipal2,
+				wantAllow: false,
 			},
 		})
 	})
@@ -108,6 +86,13 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 		policy := ReadServiceRequestAuthzPolicy(fhirClient)
 		testPolicies(t, []AuthzPolicyTest[fhir.ServiceRequest]{
 			{
+				name:      "allow (is creator)",
+				policy:    policy,
+				resource:  serviceRequestWithCreator,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+			{
 				name:      "allow (principal has access to related Task)",
 				policy:    policy,
 				resource:  serviceRequest,
@@ -115,12 +100,11 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 				wantAllow: true,
 			},
 			{
-				name:       "disallow (principal doesn't have access to related Task)",
-				policy:     policy,
-				resource:   serviceRequest,
-				principal:  auth.TestPrincipal2,
-				wantAllow:  false,
-				skipReason: "'is creator' policy always returns true",
+				name:      "disallow (principal doesn't have access to related Task)",
+				policy:    policy,
+				resource:  serviceRequest,
+				principal: auth.TestPrincipal2,
+				wantAllow: false,
 			},
 		})
 	})
