@@ -1,0 +1,13 @@
+{{- if .Values.gateway.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "fhir.fullname" . }}
+spec:
+  secretName: tls-cert-{{ include "fhir.fullname" . }}
+  issuerRef:
+    kind: ClusterIssuer
+    name: letsencrypt-dns
+  dnsNames:
+    {{ .Values.gateway.hosts | toYaml | nindent 4 }}
+{{- end }}
