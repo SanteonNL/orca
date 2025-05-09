@@ -21,6 +21,9 @@ func TestConditionAuthzPolicy(t *testing.T) {
 			},
 		},
 	}
+	conditionWithCreator := condition
+	conditionWithCreator.Extension = TestCreatorExtension
+
 	fhirClient := &test.StubFHIRClient{
 		Resources: []any{
 			fhir.Patient{
@@ -63,68 +66,65 @@ func TestConditionAuthzPolicy(t *testing.T) {
 
 	t.Run("create", func(t *testing.T) {
 		policy := CreateConditionAuthzPolicy(profile.Test())
-		testPolicies(t, []AuthzPolicyTest[fhir.Condition]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.Condition]{
 			{
 				name:      "allow (is local organization)",
 				policy:    policy,
-				resource:  condition,
+				resource:  &condition,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
-				name:       "disallow (not local organization)",
-				policy:     policy,
-				resource:   condition,
-				principal:  auth.TestPrincipal2,
-				wantAllow:  false,
-				skipReason: "'is creator' policy always returns true",
+				name:      "disallow (not local organization)",
+				policy:    policy,
+				resource:  &condition,
+				principal: auth.TestPrincipal2,
+				wantAllow: false,
 			},
 		})
 	})
 	t.Run("read", func(t *testing.T) {
 		policy := ReadConditionAuthzPolicy(fhirClient)
-		testPolicies(t, []AuthzPolicyTest[fhir.Condition]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.Condition]{
 			{
 				name:      "allow (is creator)",
 				policy:    policy,
-				resource:  condition,
+				resource:  &conditionWithCreator,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "allow (access to related Patient)",
 				policy:    policy,
-				resource:  condition,
+				resource:  &conditionWithCreator,
 				principal: auth.TestPrincipal2,
 				wantAllow: true,
 			},
 			{
-				name:       "disallow (no access to related Patient)",
-				policy:     policy,
-				resource:   condition,
-				principal:  auth.TestPrincipal3,
-				wantAllow:  false,
-				skipReason: "'is creator' policy always returns true",
+				name:      "disallow (no access to related Patient)",
+				policy:    policy,
+				resource:  &conditionWithCreator,
+				principal: auth.TestPrincipal3,
+				wantAllow: false,
 			},
 		})
 	})
 	t.Run("update", func(t *testing.T) {
 		policy := UpdateConditionAuthzPolicy()
-		testPolicies(t, []AuthzPolicyTest[fhir.Condition]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.Condition]{
 			{
 				name:      "allow (is creator)",
 				policy:    policy,
-				resource:  condition,
+				resource:  &conditionWithCreator,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
-				name:       "disallow (principal isn't the creator of the Condition)",
-				policy:     policy,
-				resource:   condition,
-				principal:  auth.TestPrincipal2,
-				wantAllow:  false,
-				skipReason: "'is creator' policy always returns true",
+				name:      "disallow (principal isn't the creator of the Condition)",
+				policy:    policy,
+				resource:  &conditionWithCreator,
+				principal: auth.TestPrincipal2,
+				wantAllow: false,
 			},
 		})
 	})

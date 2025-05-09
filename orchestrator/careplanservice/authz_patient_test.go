@@ -14,6 +14,8 @@ func TestPatientAuthzPolicy(t *testing.T) {
 	patient := fhir.Patient{
 		Id: to.Ptr("p1"),
 	}
+	patientWithCreator := patient
+	patientWithCreator.Extension = TestCreatorExtension
 	fhirClient := &test.StubFHIRClient{
 		Resources: []any{
 			fhir.CarePlan{
@@ -47,18 +49,18 @@ func TestPatientAuthzPolicy(t *testing.T) {
 
 	t.Run("create", func(t *testing.T) {
 		policy := CreatePatientAuthzPolicy(profile.Test())
-		testPolicies(t, []AuthzPolicyTest[fhir.Patient]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.Patient]{
 			{
 				name:      "allow (is local organization)",
 				policy:    policy,
-				resource:  patient,
+				resource:  &patient,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "disallow (not local organization)",
 				policy:    policy,
-				resource:  patient,
+				resource:  &patient,
 				principal: auth.TestPrincipal2,
 				wantAllow: false,
 			},
@@ -66,18 +68,25 @@ func TestPatientAuthzPolicy(t *testing.T) {
 	})
 	t.Run("read", func(t *testing.T) {
 		policy := ReadPatientAuthzPolicy(fhirClient)
-		testPolicies(t, []AuthzPolicyTest[fhir.Patient]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.Patient]{
 			{
 				name:      "allow (in CareTeam)",
 				policy:    policy,
-				resource:  patient,
+				resource:  &patient,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+			{
+				name:      "allow (is creator)",
+				policy:    policy,
+				resource:  &patientWithCreator,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "disallow (not in CareTeam)",
 				policy:    policy,
-				resource:  patient,
+				resource:  &patient,
 				principal: auth.TestPrincipal2,
 				wantAllow: false,
 			},
@@ -85,21 +94,20 @@ func TestPatientAuthzPolicy(t *testing.T) {
 	})
 	t.Run("update", func(t *testing.T) {
 		policy := UpdatePatientAuthzPolicy()
-		testPolicies(t, []AuthzPolicyTest[fhir.Patient]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.Patient]{
 			{
 				name:      "allow (is creator)",
 				policy:    policy,
-				resource:  patient,
+				resource:  &patientWithCreator,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
-				name:       "disallow (principal isn't the creator of the Patient)",
-				policy:     policy,
-				resource:   patient,
-				principal:  auth.TestPrincipal2,
-				wantAllow:  false,
-				skipReason: "'is creator' policy always returns true",
+				name:      "disallow (principal isn't the creator of the Patient)",
+				policy:    policy,
+				resource:  &patientWithCreator,
+				principal: auth.TestPrincipal2,
+				wantAllow: false,
 			},
 		})
 	})

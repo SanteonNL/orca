@@ -9,11 +9,11 @@ import (
 func TestCreateQuestionnaireAuthzPolicy(t *testing.T) {
 	questionnaire := fhir.Questionnaire{}
 	policy := CreateQuestionnaireAuthzPolicy()
-	testPolicies(t, []AuthzPolicyTest[fhir.Questionnaire]{
+	testPolicies(t, []AuthzPolicyTest[*fhir.Questionnaire]{
 		{
 			name:      "allow (anyone)",
 			policy:    policy,
-			resource:  questionnaire,
+			resource:  &questionnaire,
 			principal: auth.TestPrincipal2,
 			wantAllow: true,
 		},
@@ -23,11 +23,11 @@ func TestCreateQuestionnaireAuthzPolicy(t *testing.T) {
 func TestUpdateQuestionnaireAuthzPolicy(t *testing.T) {
 	questionnaire := fhir.Questionnaire{}
 	policy := UpdateQuestionnaireAuthzPolicy()
-	testPolicies(t, []AuthzPolicyTest[fhir.Questionnaire]{
+	testPolicies(t, []AuthzPolicyTest[*fhir.Questionnaire]{
 		{
 			name:      "allow (anyone)",
 			policy:    policy,
-			resource:  questionnaire,
+			resource:  &questionnaire,
 			principal: auth.TestPrincipal2,
 			wantAllow: true,
 		},
@@ -37,11 +37,11 @@ func TestUpdateQuestionnaireAuthzPolicy(t *testing.T) {
 func TestReadQuestionnaireAuthzPolicy(t *testing.T) {
 	questionnaire := fhir.Questionnaire{}
 	policy := ReadQuestionnaireAuthzPolicy()
-	testPolicies(t, []AuthzPolicyTest[fhir.Questionnaire]{
+	testPolicies(t, []AuthzPolicyTest[*fhir.Questionnaire]{
 		{
 			name:      "allow (anyone)",
 			policy:    policy,
-			resource:  questionnaire,
+			resource:  &questionnaire,
 			principal: auth.TestPrincipal2,
 			wantAllow: true,
 		},

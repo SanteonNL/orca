@@ -23,9 +23,9 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 			ResourceId:   "1",
 		}
 		tx := coolfhir.Transaction()
-		result, err := FHIRReadOperationHandler[fhir.Task]{
+		result, err := FHIRReadOperationHandler[*fhir.Task]{
 			fhirClient:  fhirClient,
-			authzPolicy: AnyonePolicy[fhir.Task]{},
+			authzPolicy: AnyonePolicy[*fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.Error(t, err)
 		var outcome fhirclient.OperationOutcomeError
@@ -48,9 +48,9 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 			Principal:    auth.TestPrincipal1,
 		}
 		tx := coolfhir.Transaction()
-		result, err := FHIRReadOperationHandler[fhir.Task]{
+		result, err := FHIRReadOperationHandler[*fhir.Task]{
 			fhirClient:  fhirClient,
-			authzPolicy: TestPolicy[fhir.Task]{},
+			authzPolicy: TestPolicy[*fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.Error(t, err)
 		errorWithCode := new(coolfhir.ErrorWithCode)
@@ -78,9 +78,9 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 			},
 		}
 		tx := coolfhir.Transaction()
-		result, err := FHIRReadOperationHandler[fhir.Task]{
+		result, err := FHIRReadOperationHandler[*fhir.Task]{
 			fhirClient:  fhirClient,
-			authzPolicy: AnyonePolicy[fhir.Task]{},
+			authzPolicy: AnyonePolicy[*fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)

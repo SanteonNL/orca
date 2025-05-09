@@ -36,7 +36,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 		args      args
 		want      func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult)
 		wantErr   assert.ErrorAssertionFunc
-		policy    Policy[fhir.Task]
+		policy    Policy[*fhir.Task]
 		fhirError error
 	}
 	tests := []testCase{
@@ -50,6 +50,8 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 				assertBundleEntry(t, tx, coolfhir.EntryIsOfType("Task"), func(t *testing.T, entry fhir.BundleEntry) {
 					assert.Equal(t, fhir.HTTPVerbPOST, entry.Request.Method)
 					assert.Equal(t, "Task", entry.Request.Url)
+					// Validate resource creation extension
+					task.Extension = TestCreatorExtension
 					assert.JSONEq(t, string(must.MarshalJSON(task)), string(entry.Resource))
 				})
 				// Should respond with 1 bundle entry, and 1 notification
@@ -72,7 +74,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 		},
 		{
 			name:   "access denied",
-			policy: TestPolicy[fhir.Task]{},
+			policy: TestPolicy[*fhir.Task]{},
 			args: args{
 				resource: task,
 			},
@@ -85,7 +87,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 		},
 		{
 			name: "access decision failed",
-			policy: TestPolicy[fhir.Task]{
+			policy: TestPolicy[*fhir.Task]{
 				Error: assert.AnError,
 			},
 			args: args{
@@ -140,9 +142,9 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 			fhirBaseURL := must.ParseURL("http://example.com/fhir")
 			policy := tt.policy
 			if policy == nil {
-				policy = AnyonePolicy[fhir.Task]{}
+				policy = AnyonePolicy[*fhir.Task]{}
 			}
-			handler := &FHIRCreateOperationHandler[fhir.Task]{
+			handler := &FHIRCreateOperationHandler[*fhir.Task]{
 				authzPolicy: policy,
 				fhirClient:  fhirClient,
 				profile:     profile.Test(),

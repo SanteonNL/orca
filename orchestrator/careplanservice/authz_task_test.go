@@ -66,32 +66,32 @@ func TestReadTaskAuthzPolicy(t *testing.T) {
 
 	t.Run("read", func(t *testing.T) {
 		policy := ReadTaskAuthzPolicy(fhirClient)
-		testPolicies(t, []AuthzPolicyTest[fhir.Task]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.Task]{
 			{
 				name:      "allow (principal is Task requester)",
 				policy:    policy,
-				resource:  taskWithRequesterAndOwner,
+				resource:  &taskWithRequesterAndOwner,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "allow (principal is Task requester)",
 				policy:    policy,
-				resource:  taskWithRequesterAndOwner,
+				resource:  &taskWithRequesterAndOwner,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "allow (principal is in CareTeam)",
 				policy:    policy,
-				resource:  taskWithRequesterAndOwner,
+				resource:  &taskWithRequesterAndOwner,
 				principal: auth.TestPrincipal3,
 				wantAllow: true,
 			},
 			{
 				name:      "disallow (principal is neither Task requester, nor owner, nor in CareTeam)",
 				policy:    policy,
-				resource:  taskWithRequester,
+				resource:  &taskWithRequester,
 				principal: auth.TestPrincipal2,
 				wantAllow: false,
 			},

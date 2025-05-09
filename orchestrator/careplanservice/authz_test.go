@@ -12,6 +12,17 @@ import (
 	"testing"
 )
 
+var TestCreatorExtension = []fhir.Extension{{
+	Url: CreatorExtensionURL,
+	ValueReference: &fhir.Reference{
+		Type: to.Ptr("Organization"),
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
+			Value:  to.Ptr("1"),
+		},
+	}},
+}
+
 type AuthzPolicyTest[T any] struct {
 	name       string
 	principal  *auth.Principal

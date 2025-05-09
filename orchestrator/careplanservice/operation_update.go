@@ -13,12 +13,13 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
+	"reflect"
 	"strings"
 )
 
-var _ FHIROperation = &FHIRUpdateOperationHandler[any]{}
+var _ FHIROperation = &FHIRUpdateOperationHandler[fhir.HasExtension]{}
 
-type FHIRUpdateOperationHandler[T any] struct {
+type FHIRUpdateOperationHandler[T fhir.HasExtension] struct {
 	authzPolicy Policy[T]
 	fhirClient  fhirclient.Client
 	profile     profile.Provider
@@ -81,6 +82,15 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			StatusCode: http.StatusForbidden,
 		}
 	}
+
+	// Validate that the resource Extension is not being modified
+	if !equalExtensions(resource.GetExtension(), existingResource.GetExtension()) {
+		return nil, &coolfhir.ErrorWithCode{
+			Message:    fmt.Sprintf("%s.Extension update not allowed", resourceType),
+			StatusCode: http.StatusForbidden,
+		}
+	}
+
 	log.Ctx(ctx).Info().Msgf("Updating %s (authz=%s)", request.RequestUrl, strings.Join(authzDecision.Reasons, ";"))
 
 	idx := len(tx.Entry)
@@ -106,6 +116,20 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			return nil, nil, err
 		}
 
-		return []*fhir.BundleEntry{result}, []any{&updatedResource}, nil
+		return []*fhir.BundleEntry{result}, []any{updatedResource}, nil
 	}, nil
+}
+
+// equalExtensions compares two slices of Extension to check if they are equivalent
+// For now we don't allow updates at all, in the future we may want to make this more granular
+func equalExtensions(a, b []fhir.Extension) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	if !reflect.DeepEqual(a, b) {
+		return false
+	}
+
+	return true
 }

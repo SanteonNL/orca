@@ -14,9 +14,9 @@ import (
 	"strings"
 )
 
-var _ FHIROperation = &FHIRReadOperationHandler[any]{}
+var _ FHIROperation = &FHIRReadOperationHandler[fhir.HasExtension]{}
 
-type FHIRReadOperationHandler[T any] struct {
+type FHIRReadOperationHandler[T fhir.HasExtension] struct {
 	fhirClient  fhirclient.Client
 	authzPolicy Policy[T]
 }

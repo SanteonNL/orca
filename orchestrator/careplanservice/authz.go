@@ -13,6 +13,8 @@ import (
 	"net/url"
 )
 
+const CreatorExtensionURL = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator"
+
 type PolicyDecision struct {
 	Allowed bool
 	Reasons []string
@@ -139,18 +141,18 @@ func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, 
 	}, nil
 }
 
-var _ Policy[fhir.Task] = &TaskOwnerOrRequesterPolicy[fhir.Task]{}
+var _ Policy[*fhir.Task] = &TaskOwnerOrRequesterPolicy[fhir.Task]{}
 
 // TaskOwnerOrRequesterPolicy is a policy that allows access if the user is the owner of the task or the requester of the task.
 type TaskOwnerOrRequesterPolicy[T fhir.Task] struct {
 }
 
-func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
-	resourceAsTask, ok := any(resource).(fhir.Task)
+func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource *T, principal auth.Principal) (*PolicyDecision, error) {
+	resourceAsTask, ok := any(resource).(*fhir.Task)
 	if !ok {
 		return nil, fmt.Errorf("resource is not a Task")
 	}
-	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&resourceAsTask, principal.Organization.Identifier)
+	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(resourceAsTask, principal.Organization.Identifier)
 	if isOwner {
 		return &PolicyDecision{
 			Allowed: true,
@@ -169,18 +171,18 @@ func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource T
 	}, nil
 }
 
-var _ Policy[fhir.CarePlan] = &CareTeamMemberPolicy[fhir.CarePlan]{}
+var _ Policy[*fhir.CarePlan] = &CareTeamMemberPolicy[fhir.CarePlan]{}
 
 // CareTeamMemberPolicy is a policy that allows access if the user is a member of the care team.
 type CareTeamMemberPolicy[T fhir.CarePlan] struct {
 }
 
-func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
-	carePlan, ok := any(resource).(fhir.CarePlan)
+func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource *T, principal auth.Principal) (*PolicyDecision, error) {
+	carePlan, ok := any(resource).(*fhir.CarePlan)
 	if !ok {
 		return nil, fmt.Errorf("resource is not a CarePlan")
 	}
-	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
+	careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 	// INT-630: We changed CareTeam to be contained within the CarePlan, but old test data in the CarePlan resource does not have CareTeam.
 	//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
 	if err != nil {
@@ -200,26 +202,7 @@ func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, prin
 		Allowed: false,
 		Reasons: []string{"CareTeamMemberPolicy: principal is not a member of CareTeam"},
 	}, nil
-	// TODO: Re-implement. We need this logic, but AuditEvent is not a suitable mechanism
-	// For patients not yet authorized, check if the requester is the creator
-	//for _, patient := range patients {
-	//	// Skip if patient is already authorized through CareTeam
-	//	if slices.ContainsFunc(retPatients, func(p fhir.Patient) bool {
-	//		return *p.Id == *patient.Id
-	//	}) {
-	//		continue
-	//	}
-	//
-	//	// Check if requester is the creator
-	//	isCreator, err := s.isCreatorOfResource(ctx, principal, "Patient", *patient.Id)
-	//	if err == nil && isCreator {
-	//		log.Ctx(ctx).Debug().Msgf("User is creator of Patient/%s", *patient.Id)
-	//		retPatients = append(retPatients, patient)
-	//	}
-	//}
 }
-
-var _ Policy[any] = &CreatorPolicy[any]{}
 
 // AnyonePolicy is a policy that allows access to anyone.
 type AnyonePolicy[T any] struct {
@@ -235,44 +218,28 @@ func (e AnyonePolicy[T]) HasAccess(ctx context.Context, resource T, principal au
 var _ Policy[any] = &AnyonePolicy[any]{}
 
 // CreatorPolicy is a policy that allows access if the principal is the creator of the resource.
-type CreatorPolicy[T any] struct {
+type CreatorPolicy[T fhir.HasExtension] struct {
 }
 
 func (o CreatorPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
-	// TODO: Find a more suitable way to handle this auth.
-	// The AuditEvent implementation has proven unsuitable and we are using the AuditEvent for unintended purposes.
-	// For now, we can return true, as this will follow the same logic as was present before implementing the AuditEvent.
+	for _, extension := range resource.GetExtension() {
+		if extension.Url == CreatorExtensionURL && extension.ValueReference != nil && extension.ValueReference.Identifier != nil {
+			// Compare with principal's organization identifiers
+			for _, orgIdentifier := range principal.Organization.Identifier {
+				if coolfhir.IdentifierEquals(extension.ValueReference.Identifier, &orgIdentifier) {
+					return &PolicyDecision{
+						Allowed: true,
+						Reasons: []string{"CreatorPolicy: principal is the creator"},
+					}, nil
+				}
+			}
+		}
+	}
 
 	return &PolicyDecision{
-		Allowed: true,
-		Reasons: []string{"CreatorPolicy: not implemented, anyone has access"},
+		Allowed: false,
+		Reasons: []string{"CreatorPolicy: principal is not the creator"},
 	}, nil
-
-	//var auditBundle fhir.Bundle
-	//err := s.fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{
-	//	"entity": []string{resourceType + "/" + resourceID},
-	//	"action": []string{fhir.AuditEventActionC.String()},
-	//}, &auditBundle)
-	//if err != nil {
-	//	return false, fmt.Errorf("failed to find creation AuditEvent: %w", err)
-	//}
-	//
-	//// Check if there's a creation audit event
-	//if len(auditBundle.Entry) == 0 {
-	//	return false, coolfhir.NewErrorWithCode(fmt.Sprintf("No creation audit event found for %s", resourceType), http.StatusForbidden)
-	//}
-	//
-	//// Get the creator from the audit event
-	//var creationAuditEvent fhir.AuditEvent
-	//err = json.Unmarshal(auditBundle.Entry[0].Resource, &creationAuditEvent)
-	//if err != nil {
-	//	return false, fmt.Errorf("failed to unmarshal AuditEvent: %w", err)
-	//}
-	//
-	//// Check if the current user is the creator
-	//if !audit.IsCreator(creationAuditEvent, &principal) {
-	//	return false, coolfhir.NewErrorWithCode(fmt.Sprintf("Only the creator can update this %s", resourceType), http.StatusForbidden)
-	//}
-	//
-	//return true, nil
 }
+
+var _ Policy[fhir.HasExtension] = &CreatorPolicy[fhir.HasExtension]{}
