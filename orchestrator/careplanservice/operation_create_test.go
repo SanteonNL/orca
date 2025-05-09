@@ -36,7 +36,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 		args      args
 		want      func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult)
 		wantErr   assert.ErrorAssertionFunc
-		policy    Policy[fhir.Task]
+		policy    Policy[*fhir.Task]
 		fhirError error
 	}
 	tests := []testCase{
@@ -74,7 +74,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 		},
 		{
 			name:   "access denied",
-			policy: TestPolicy[fhir.Task]{},
+			policy: TestPolicy[*fhir.Task]{},
 			args: args{
 				resource: task,
 			},
@@ -87,7 +87,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 		},
 		{
 			name: "access decision failed",
-			policy: TestPolicy[fhir.Task]{
+			policy: TestPolicy[*fhir.Task]{
 				Error: assert.AnError,
 			},
 			args: args{
@@ -142,9 +142,9 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 			fhirBaseURL := must.ParseURL("http://example.com/fhir")
 			policy := tt.policy
 			if policy == nil {
-				policy = AnyonePolicy[fhir.Task]{}
+				policy = AnyonePolicy[*fhir.Task]{}
 			}
-			handler := &FHIRCreateOperationHandler[fhir.Task]{
+			handler := &FHIRCreateOperationHandler[*fhir.Task]{
 				authzPolicy: policy,
 				fhirClient:  fhirClient,
 				profile:     profile.Test(),

@@ -7,14 +7,14 @@ import (
 	"net/url"
 )
 
-func ReadTaskAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Task] {
-	return AnyMatchPolicy[fhir.Task]{
-		Policies: []Policy[fhir.Task]{
+func ReadTaskAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Task] {
+	return AnyMatchPolicy[*fhir.Task]{
+		Policies: []Policy[*fhir.Task]{
 			TaskOwnerOrRequesterPolicy[fhir.Task]{},
-			RelatedResourcePolicy[fhir.Task, fhir.CarePlan]{
+			RelatedResourcePolicy[*fhir.Task, *fhir.CarePlan]{
 				fhirClient:            fhirClient,
 				relatedResourcePolicy: CareTeamMemberPolicy[fhir.CarePlan]{},
-				relatedResourceSearchParams: func(ctx context.Context, resource fhir.Task) (string, *url.Values) {
+				relatedResourceSearchParams: func(ctx context.Context, resource *fhir.Task) (string, *url.Values) {
 					var ids []string
 					for _, reference := range resource.BasedOn {
 						if reference.Reference != nil {

@@ -10,7 +10,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
-	"reflect"
 )
 
 const CreatorExtensionURL = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator"
@@ -120,18 +119,18 @@ func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, 
 
 }
 
-var _ Policy[fhir.Task] = &TaskOwnerOrRequesterPolicy[fhir.Task]{}
+var _ Policy[*fhir.Task] = &TaskOwnerOrRequesterPolicy[fhir.Task]{}
 
 // TaskOwnerOrRequesterPolicy is a policy that allows access if the user is the owner of the task or the requester of the task.
 type TaskOwnerOrRequesterPolicy[T fhir.Task] struct {
 }
 
-func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
-	resourceAsTask, ok := any(resource).(fhir.Task)
+func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource *T, principal auth.Principal) (*PolicyDecision, error) {
+	resourceAsTask, ok := any(resource).(*fhir.Task)
 	if !ok {
 		return nil, fmt.Errorf("resource is not a Task")
 	}
-	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&resourceAsTask, principal.Organization.Identifier)
+	isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(resourceAsTask, principal.Organization.Identifier)
 	if isOwner {
 		return &PolicyDecision{
 			Allowed: true,
@@ -150,18 +149,18 @@ func (t TaskOwnerOrRequesterPolicy[T]) HasAccess(ctx context.Context, resource T
 	}, nil
 }
 
-var _ Policy[fhir.CarePlan] = &CareTeamMemberPolicy[fhir.CarePlan]{}
+var _ Policy[*fhir.CarePlan] = &CareTeamMemberPolicy[fhir.CarePlan]{}
 
 // CareTeamMemberPolicy is a policy that allows access if the user is a member of the care team.
 type CareTeamMemberPolicy[T fhir.CarePlan] struct {
 }
 
-func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
-	carePlan, ok := any(resource).(fhir.CarePlan)
+func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource *T, principal auth.Principal) (*PolicyDecision, error) {
+	carePlan, ok := any(resource).(*fhir.CarePlan)
 	if !ok {
 		return nil, fmt.Errorf("resource is not a CarePlan")
 	}
-	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
+	careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 	// INT-630: We changed CareTeam to be contained within the CarePlan, but old test data in the CarePlan resource does not have CareTeam.
 	//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
 	if err != nil {
@@ -183,8 +182,6 @@ func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource T, prin
 	}, nil
 }
 
-var _ Policy[any] = &CreatorPolicy[any]{}
-
 // AnyonePolicy is a policy that allows access to anyone.
 type AnyonePolicy[T any] struct {
 }
@@ -199,33 +196,11 @@ func (e AnyonePolicy[T]) HasAccess(ctx context.Context, resource T, principal au
 var _ Policy[any] = &AnyonePolicy[any]{}
 
 // CreatorPolicy is a policy that allows access if the principal is the creator of the resource.
-type CreatorPolicy[T any] struct {
+type CreatorPolicy[T fhir.HasExtension] struct {
 }
 
 func (o CreatorPolicy[T]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
-	// Check if the resource has a resource-creator extension matching the principal's organization identifier
-	resourceValue := reflect.ValueOf(resource)
-	if resourceValue.Kind() == reflect.Ptr {
-		resourceValue = resourceValue.Elem()
-	}
-	extensionField := resourceValue.FieldByName("Extension")
-	if !extensionField.IsValid() {
-		// Resource doesn't have an Extension field
-		return &PolicyDecision{
-			Allowed: false,
-			Reasons: []string{"CreatorPolicy: resource does not have an Extension field"},
-		}, nil
-	}
-	extensions, ok := extensionField.Interface().([]fhir.Extension)
-	if !ok {
-		// Extension field is not of the expected type
-		return &PolicyDecision{
-			Allowed: false,
-			Reasons: []string{"CreatorPolicy: resource does not have a valid Extension field"},
-		}, nil
-	}
-
-	for _, extension := range extensions {
+	for _, extension := range resource.GetExtension() {
 		if extension.Url == CreatorExtensionURL && extension.ValueReference != nil && extension.ValueReference.Identifier != nil {
 			// Compare with principal's organization identifiers
 			for _, orgIdentifier := range principal.Organization.Identifier {
@@ -244,3 +219,5 @@ func (o CreatorPolicy[T]) HasAccess(ctx context.Context, resource T, principal a
 		Reasons: []string{"CreatorPolicy: principal is not the creator"},
 	}, nil
 }
+
+var _ Policy[fhir.HasExtension] = &CreatorPolicy[fhir.HasExtension]{}

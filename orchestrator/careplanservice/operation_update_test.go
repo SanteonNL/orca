@@ -30,6 +30,22 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 	existingTask := fhir.Task{
 		Id: &task1ID,
 	}
+	existingTaskWithCreatorExtension := existingTask
+	existingTaskWithCreatorExtension.SetExtension(TestCreatorExtension)
+
+	updatedTaskWithCreatorExtension := updatedTask
+	updatedTaskWithCreatorExtension.SetExtension(TestCreatorExtension)
+
+	updatedTaskWithArbitraryExtension := updatedTask
+	updatedTaskWithArbitraryExtension.SetExtension([]fhir.Extension{
+		{
+			Url: "http://example.com/extension",
+			ValueReference: &fhir.Reference{
+				Type: to.Ptr("Organization"),
+			},
+		},
+	})
+
 	toBundle := func(entries []*fhir.BundleEntry) fhir.Bundle {
 		result := fhir.Bundle{}
 		for _, entry := range entries {
@@ -48,26 +64,26 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 		args      args
 		want      func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult)
 		wantErr   assert.ErrorAssertionFunc
-		policy    Policy[fhir.Task]
+		policy    Policy[*fhir.Task]
 		fhirError error
 	}
 	tests := []testCase{
 		{
 			name: "ok, updated",
 			args: args{
-				resource:          updatedTask,
-				existingResources: []fhir.Task{existingTask},
+				resource:          updatedTaskWithCreatorExtension,
+				existingResources: []fhir.Task{existingTaskWithCreatorExtension},
 			},
 			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
 				assertContainsAuditEvent(t, tx, task1Ref, auth.TestPrincipal1.Organization.Identifier[0], auth.TestPrincipal2.Organization.Identifier[0], fhir.AuditEventActionU)
 				assertBundleEntry(t, tx, coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
 					assert.Equal(t, fhir.HTTPVerbPUT, entry.Request.Method)
 					assert.Equal(t, *task1Ref.Reference, entry.Request.Url)
-					assert.JSONEq(t, string(must.MarshalJSON(updatedTask)), string(entry.Resource))
+					assert.JSONEq(t, string(must.MarshalJSON(updatedTaskWithCreatorExtension)), string(entry.Resource))
 				})
 				// Should respond with 1 bundle entry, and 1 notification
 				txResponse := coolfhir.Transaction().
-					Append(updatedTask, nil, &fhir.BundleEntryResponse{
+					Append(updatedTaskWithCreatorExtension, nil, &fhir.BundleEntryResponse{
 						Status:   "200 OK",
 						Location: task1Ref.Reference,
 					}).Bundle()
@@ -77,7 +93,7 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				assertBundleEntry(t, toBundle(responseEntries), coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
 					assert.Equal(t, "200 OK", entry.Response.Status)
 					assert.Equal(t, *task1Ref.Reference, *entry.Response.Location)
-					assert.JSONEq(t, string(must.MarshalJSON(updatedTask)), string(entry.Resource))
+					assert.JSONEq(t, string(must.MarshalJSON(updatedTaskWithCreatorExtension)), string(entry.Resource))
 				})
 				assert.Len(t, notifications, 1)
 				assert.IsType(t, &fhir.Task{}, notifications[0])
@@ -94,8 +110,8 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 					assert.Equal(t, fhir.HTTPVerbPUT, entry.Request.Method)
 					assert.Equal(t, *task1Ref.Reference, entry.Request.Url)
 					// Validate resource creation extension
-					updatedTask.Extension = TestCreatorExtension
-					assert.JSONEq(t, string(must.MarshalJSON(updatedTask)), string(entry.Resource))
+					//updatedTask.Extension = TestCreatorExtension
+					assert.JSONEq(t, string(must.MarshalJSON(updatedTaskWithCreatorExtension)), string(entry.Resource))
 				})
 				// Should respond with 1 bundle entry, and 1 notification
 				txResponse := coolfhir.Transaction().
@@ -116,8 +132,21 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 			},
 		},
 		{
+			name: "denied, may not update Extension",
+			args: args{
+				resource:          updatedTaskWithArbitraryExtension,
+				existingResources: []fhir.Task{existingTaskWithCreatorExtension},
+			},
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
+				assert.Empty(t, tx.Entry)
+			},
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				return assert.EqualError(t, err, "Task.Extension update not allowed")
+			},
+		},
+		{
 			name:   "access denied",
-			policy: TestPolicy[fhir.Task]{},
+			policy: TestPolicy[*fhir.Task]{},
 			args: args{
 				resource:          updatedTask,
 				existingResources: []fhir.Task{existingTask},
@@ -131,7 +160,7 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 		},
 		{
 			name: "access decision failed",
-			policy: TestPolicy[fhir.Task]{
+			policy: TestPolicy[*fhir.Task]{
 				Error: assert.AnError,
 			},
 			args: args{
@@ -206,14 +235,14 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 			fhirBaseURL := must.ParseURL("http://example.com/fhir")
 			policy := tt.policy
 			if policy == nil {
-				policy = AnyonePolicy[fhir.Task]{}
+				policy = AnyonePolicy[*fhir.Task]{}
 			}
-			handler := &FHIRUpdateOperationHandler[fhir.Task]{
+			handler := &FHIRUpdateOperationHandler[*fhir.Task]{
 				authzPolicy: policy,
 				fhirClient:  fhirClient,
 				profile:     profile.Test(),
 				fhirURL:     fhirBaseURL,
-				createHandler: &FHIRCreateOperationHandler[fhir.Task]{
+				createHandler: &FHIRCreateOperationHandler[*fhir.Task]{
 					authzPolicy: policy,
 					fhirClient:  fhirClient,
 					profile:     profile.Test(),

@@ -39,18 +39,18 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 
 	t.Run("create", func(t *testing.T) {
 		policy := CreateServiceRequestAuthzPolicy(profile.Test())
-		testPolicies(t, []AuthzPolicyTest[fhir.ServiceRequest]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.ServiceRequest]{
 			{
 				name:      "allow (is local organization)",
 				policy:    policy,
-				resource:  serviceRequest,
+				resource:  &serviceRequest,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "disallow (not local organization)",
 				policy:    policy,
-				resource:  serviceRequest,
+				resource:  &serviceRequest,
 				principal: auth.TestPrincipal2,
 				wantAllow: false,
 			},
@@ -58,25 +58,25 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 	})
 	t.Run("read", func(t *testing.T) {
 		policy := ReadServiceRequestAuthzPolicy(fhirClient)
-		testPolicies(t, []AuthzPolicyTest[fhir.ServiceRequest]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.ServiceRequest]{
 			{
 				name:      "allow (is creator)",
 				policy:    policy,
-				resource:  serviceRequestWithCreator,
+				resource:  &serviceRequestWithCreator,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "allow (principal has access to related Task)",
 				policy:    policy,
-				resource:  serviceRequest,
+				resource:  &serviceRequest,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "disallow (principal doesn't have access to related Task)",
 				policy:    policy,
-				resource:  serviceRequest,
+				resource:  &serviceRequest,
 				principal: auth.TestPrincipal2,
 				wantAllow: false,
 			},
@@ -84,25 +84,25 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 	})
 	t.Run("update", func(t *testing.T) {
 		policy := ReadServiceRequestAuthzPolicy(fhirClient)
-		testPolicies(t, []AuthzPolicyTest[fhir.ServiceRequest]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.ServiceRequest]{
 			{
 				name:      "allow (is creator)",
 				policy:    policy,
-				resource:  serviceRequestWithCreator,
+				resource:  &serviceRequestWithCreator,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "allow (principal has access to related Task)",
 				policy:    policy,
-				resource:  serviceRequest,
+				resource:  &serviceRequest,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "disallow (principal doesn't have access to related Task)",
 				policy:    policy,
-				resource:  serviceRequest,
+				resource:  &serviceRequest,
 				principal: auth.TestPrincipal2,
 				wantAllow: false,
 			},
