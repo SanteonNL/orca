@@ -1,3 +1,4 @@
+//go:generate mockgen -destination=./authz_mock.go -package=careplanservice -source authz.go
 package careplanservice
 
 import (
@@ -86,7 +87,7 @@ type RelatedResourcePolicy[T any, R any] struct {
 	// relatedResourceSearchParams is a function that returns the search parameters for the related resource.
 	// If the resource lacks a reference to the related resource, this function should return nil for searchParams.
 	// In that case, the policy will deny access.
-	relatedResourceSearchParams func(ctx context.Context, resource T) (resourceType string, searchParams *url.Values)
+	relatedResourceSearchParams func(ctx context.Context, resource T) (resourceType string, searchParams url.Values)
 }
 
 func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, principal auth.Principal) (*PolicyDecision, error) {
@@ -101,22 +102,43 @@ func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, 
 		fhirClient:  r.fhirClient,
 		authzPolicy: r.relatedResourcePolicy,
 	}
-	results, _, policyDecisions, err := searchHandler.searchAndFilter(ctx, *searchParams, &principal, resourceType)
-	if err != nil {
-		return nil, fmt.Errorf("related resource search (related resource type=%s): %w", resourceType, err)
+	const maxIterations = 100
+	for i := 0; i < maxIterations; i++ {
+		results, searchSet, policyDecisions, err := searchHandler.searchAndFilter(ctx, searchParams, &principal, resourceType)
+		if err != nil {
+			return nil, fmt.Errorf("related resource search (related resource type=%s): %w", resourceType, err)
+		}
+		if len(results) > 0 {
+			// found a related resource the user has access to, grant access
+			return &PolicyDecision{
+				Allowed: true,
+				Reasons: append([]string{"RelatedResourcePolicy: access to related resource(s)"}, policyDecisions[0].Reasons...),
+			}, nil
+		}
+		// Try next page of search results if there is one
+		hasNext := false
+		for _, link := range searchSet.Link {
+			if link.Relation == "next" {
+				nextURL, err := url.Parse(link.Url)
+				if err != nil {
+					return nil, fmt.Errorf("invalid 'next' link for search set: %w", err)
+				}
+				searchParams = nextURL.Query()
+				hasNext = true
+			}
+		}
+		if !hasNext {
+			break
+		}
+		// Make sure we don't loop endlessly due to a bug in ORCA or the FHIR server
+		if i == maxIterations-1 {
+			return nil, fmt.Errorf("max. search iterations reached (%d), possible bug", maxIterations)
+		}
 	}
-	if len(results) > 0 {
-		return &PolicyDecision{
-			Allowed: true,
-			Reasons: append([]string{"RelatedResourcePolicy: access to related resource(s)"}, policyDecisions[0].Reasons...),
-		}, nil
-	} else {
-		return &PolicyDecision{
-			Allowed: false,
-			Reasons: []string{"RelatedResourcePolicy: no access to related resource(s)"},
-		}, nil
-	}
-
+	return &PolicyDecision{
+		Allowed: false,
+		Reasons: []string{"RelatedResourcePolicy: no access to related resource(s)"},
+	}, nil
 }
 
 var _ Policy[*fhir.Task] = &TaskOwnerOrRequesterPolicy[fhir.Task]{}

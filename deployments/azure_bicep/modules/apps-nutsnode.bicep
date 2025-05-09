@@ -5,7 +5,7 @@ param location string = resourceGroup().location
 param resourceName string = 'nutsnode'
 
 @description('Nuts Node Docker image to deploy')
-param nodeImage string = 'nutsfoundation/nuts-node:6.0.0-beta.9'
+param nodeImage string = 'nutsfoundation/nuts-node:6.1.2'
 
 // @description('Port to open on the container and the public IP address.')
 // param port int = 80

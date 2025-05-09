@@ -4,16 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/google/uuid"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"sync"
 	"time"
 )
 
 var _ op.Storage = (*Storage)(nil)
 var _ op.CanSetUserinfoFromRequest = (*Storage)(nil)
+
+const ScopePatient = "patient"
+const ClaimPatient = "patient"
+const ClaimRoles = "roles"
 
 type Storage struct {
 	mux          *sync.RWMutex
@@ -171,17 +177,22 @@ func (o Storage) SetUserinfoFromToken(ctx context.Context, userInfo *oidc.UserIn
 }
 
 func populateUserInfo(userInfo *oidc.UserInfo, scopes []string, user UserDetails) {
+	userInfo.Claims = map[string]any{}
 	for _, scope := range scopes {
 		switch scope {
+		case ScopePatient:
+			var patientIdentifiers []string
+			for _, identifier := range user.PatientIdentifiers {
+				patientIdentifiers = append(patientIdentifiers, coolfhir.IdentifierToToken(identifier))
+			}
+			userInfo.Claims[ClaimPatient] = patientIdentifiers
 		case oidc.ScopeOpenID:
 			userInfo.Subject = user.ID
 		case oidc.ScopeEmail:
 			userInfo.Email = user.Email
 		case oidc.ScopeProfile:
 			userInfo.Name = user.Name
-			userInfo.Claims = map[string]any{
-				"roles": user.Roles,
-			}
+			userInfo.Claims[ClaimRoles] = user.Roles
 		}
 	}
 }
@@ -245,6 +256,8 @@ type UserDetails struct {
 	Name  string
 	Email string
 	Roles []string
+
+	PatientIdentifiers []fhir.Identifier
 }
 
 type AuthRequest struct {

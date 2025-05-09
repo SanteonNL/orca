@@ -24,8 +24,8 @@ func ReadServiceRequestAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Se
 			RelatedResourcePolicy[*fhir.ServiceRequest, *fhir.Task]{
 				fhirClient:            fhirClient,
 				relatedResourcePolicy: ReadTaskAuthzPolicy(fhirClient),
-				relatedResourceSearchParams: func(ctx context.Context, resource *fhir.ServiceRequest) (string, *url.Values) {
-					return "Task", &url.Values{"focus": []string{"ServiceRequest/" + *resource.Id}}
+				relatedResourceSearchParams: func(ctx context.Context, resource *fhir.ServiceRequest) (string, url.Values) {
+					return "Task", url.Values{"focus": []string{"ServiceRequest/" + *resource.Id}}
 				},
 			},
 			CreatorPolicy[*fhir.ServiceRequest]{},

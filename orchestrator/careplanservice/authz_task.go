@@ -14,7 +14,7 @@ func ReadTaskAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Task] {
 			RelatedResourcePolicy[*fhir.Task, *fhir.CarePlan]{
 				fhirClient:            fhirClient,
 				relatedResourcePolicy: CareTeamMemberPolicy[fhir.CarePlan]{},
-				relatedResourceSearchParams: func(ctx context.Context, resource *fhir.Task) (string, *url.Values) {
+				relatedResourceSearchParams: func(ctx context.Context, resource *fhir.Task) (string, url.Values) {
 					var ids []string
 					for _, reference := range resource.BasedOn {
 						if reference.Reference != nil {
@@ -24,7 +24,7 @@ func ReadTaskAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Task] {
 					if len(ids) == 0 {
 						return "", nil
 					}
-					return "CarePlan", &url.Values{
+					return "CarePlan", url.Values{
 						"_id": ids,
 					}
 				},
