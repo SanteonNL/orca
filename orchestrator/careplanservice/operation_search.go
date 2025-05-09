@@ -119,10 +119,11 @@ func searchResources[T any](ctx context.Context, fhirClient fhirclient.Client, r
 		}
 		searchLimit = count
 	} else {
-		// If we're missing a resource due to too low page count, we might incorrectly deny access
+		// Set a default search count limit if not provided, so ORCA behavior across FHIR servers will be the same.
 		// Note: limit on Azure FHIR is 1000, setting it higher will cause an error:
 		//       "The '_count' parameter exceeds limit configured for server"
-		searchLimit = 1000
+		// Note: the default default limit for HAPI FHIR is 100
+		searchLimit = 100
 		form.Add("_count", strconv.Itoa(searchLimit))
 	}
 
@@ -130,20 +131,6 @@ func searchResources[T any](ctx context.Context, fhirClient fhirclient.Client, r
 	err := fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, &fhir.Bundle{}, err
-	}
-
-	// If there's more search results we didn't use, make sure we log this
-	searchHasNext := false
-	for _, link := range bundle.Link {
-		if link.Relation == "next" {
-			searchHasNext = true
-			break
-		}
-	}
-	if searchHasNext ||
-		len(bundle.Entry) > searchLimit-1 ||
-		(bundle.Total != nil && *bundle.Total > searchLimit) {
-		log.Ctx(ctx).Warn().Msgf("Too many results found for %s search, only the first %d will taken into account. This could lead to not being granted access, or search results being omitted.", resourceType, searchLimit)
 	}
 
 	var resources []T
