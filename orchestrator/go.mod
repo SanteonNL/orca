@@ -22,7 +22,7 @@ require (
 	github.com/testcontainers/testcontainers-go v0.37.0
 	github.com/zitadel/oidc/v3 v3.38.1
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250124114751-32aed7ae5408
-	go.uber.org/mock v0.5.1
+	go.uber.org/mock v0.5.2
 	golang.org/x/oauth2 v0.29.0
 )
 
