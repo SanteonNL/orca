@@ -57,12 +57,18 @@ func TestService_handle(t *testing.T) {
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=ServiceRequest/b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
 		require.Equal(t, http.StatusFound, response.Code)
 		require.Equal(t, "/cpc/new", response.Header().Get("Location"))
+		sessionData := user.SessionFromHttpResponse(sessionManager, response.Result())
+		require.NotNil(t, sessionData)
+		require.Equal(t, "Patient/a", sessionData.Get("Patient").Path)
+		require.Equal(t, "ServiceRequest/b", sessionData.Get("ServiceRequest").Path)
+		require.Equal(t, "Practitioner/c", sessionData.Get("Practitioner").Path)
+		require.Equal(t, "unit-test-system|10", *sessionData.TaskIdentifier)
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)

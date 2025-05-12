@@ -17,7 +17,6 @@ import (
 )
 
 const fhirLauncherKey = "demo"
-const demoTaskSystemSystem = "http://demo-launch/fhir/NamingSystem/task-identifier"
 
 func init() {
 	// Register FHIR client factory that can create FHIR clients when the Demo AppLaunch is used
@@ -71,6 +70,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 			"iss": values["iss"],
 		},
 	}
+	sessionData.Set(values["serviceRequest"], nil)
 	// taskIdentifier is optional, only set if present
 	if taskIdentifiers := request.URL.Query()["taskIdentifier"]; len(taskIdentifiers) > 0 {
 		sessionData.TaskIdentifier = &taskIdentifiers[0]
