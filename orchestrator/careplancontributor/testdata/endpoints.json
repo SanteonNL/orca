@@ -6,7 +6,7 @@
         "status": "active",
         "connectionType": {
           "system": "http://santeonnl.github.io/shared-care-planning/endpoint-connection-type",
-          "code": "app-launch"
+          "code": "web-oauth2"
         },
         "name": "App 1",
         "payloadType": [
@@ -28,7 +28,7 @@
         "status": "active",
         "connectionType": {
           "system": "http://santeonnl.github.io/shared-care-planning/endpoint-connection-type",
-          "code": "app-launch"
+          "code": "web-oauth2"
         },
         "name": "App 2",
         "payloadType": [

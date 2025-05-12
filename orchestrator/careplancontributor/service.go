@@ -224,7 +224,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				Status: fhir.EndpointStatusActive,
 				ConnectionType: fhir.Coding{
 					System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"),
-					Code:   to.Ptr("app-launch"),
+					Code:   to.Ptr("web-oauth2"),
 				},
 				PayloadType: []fhir.CodeableConcept{
 					{
