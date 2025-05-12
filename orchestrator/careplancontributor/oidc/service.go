@@ -142,6 +142,12 @@ func userFromSession(sessionData *session.Data) (*UserDetails, error) {
 	for _, identifier := range patient.Identifier {
 		userDetails.PatientIdentifiers = append(userDetails.PatientIdentifiers, identifier)
 	}
+	// Get organization from session
+	organization := session.Get[fhir.Organization](sessionData)
+	if organization == nil {
+		return nil, errors.New("no organization found in session")
+	}
+	userDetails.Organization = *organization
 	return &userDetails, nil
 }
 
