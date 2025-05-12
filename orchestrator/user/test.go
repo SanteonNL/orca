@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-func SessionFromHttpResponse(manager *SessionManager, httpResponse *http.Response) *SessionData {
+func SessionFromHttpResponse[T any](manager *SessionManager[T], httpResponse *http.Response) *T {
 	// extract session ID; sid=<something>;
 	cookieValue := httpResponse.Header.Get("Set-Cookie")
 	cookieValue = strings.Split(cookieValue, ";")[0]
