@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/rs/zerolog/log"
 	"net/http"
@@ -42,7 +43,7 @@ func Start(ctx context.Context, config Config) error {
 
 	// Set up dependencies
 	httpHandler := http.NewServeMux()
-	sessionManager := user.NewSessionManager(config.CarePlanContributor.SessionTimeout)
+	sessionManager := user.NewSessionManager[session.Data](config.CarePlanContributor.SessionTimeout)
 
 	if err := config.Validate(); err != nil {
 		return err
@@ -85,7 +86,7 @@ func Start(ctx context.Context, config Config) error {
 
 		var ehrFhirProxy coolfhir.HttpProxy //TODO: Rewrite to an array so we can support multiple login mechanisms and multiple EHR proxies
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
-			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, frontendUrl))
+			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, frontendUrl, activeProfile))
 		}
 		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
 			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, frontendUrl, activeProfile)

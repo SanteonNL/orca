@@ -26,7 +26,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
 	}
 	// Check we're only allowing secure external literal references
-	if err := s.validateLiteralReferences(ctx, &task); err != nil {
+	if err := validateLiteralReferences(ctx, s.profile, &task); err != nil {
 		return nil, err
 	}
 
@@ -146,6 +146,16 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		carePlan.Status = fhir.RequestStatusActive
 		carePlan.Author = task.Requester
 		carePlan.Contained = data
+		// This is technically not needed, but adding it for the sake of data consistency
+		carePlan.Extension = []fhir.Extension{
+			{
+				Url: CreatorExtensionURL,
+				ValueReference: &fhir.Reference{
+					Type:       to.Ptr("Organization"),
+					Identifier: task.Requester.Identifier,
+				},
+			},
+		}
 
 		task.BasedOn = []fhir.Reference{
 			{
@@ -153,11 +163,20 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				Reference: to.Ptr(carePlanURL),
 			},
 		}
+		task.Extension = []fhir.Extension{
+			{
+				Url: CreatorExtensionURL,
+				ValueReference: &fhir.Reference{
+					Type:       to.Ptr("Organization"),
+					Identifier: task.Requester.Identifier,
+				},
+			},
+		}
 
 		carePlanBundleEntryIdx = len(tx.Entry)
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
-				Identifier: request.LocalIdentity,
+				Identifier: task.Requester.Identifier,
 				Type:       to.Ptr("Organization"),
 			},
 			Observer: *request.LocalIdentity,
@@ -197,6 +216,16 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		if task.For == nil {
 			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
+		}
+
+		task.Extension = []fhir.Extension{
+			{
+				Url: CreatorExtensionURL,
+				ValueReference: &fhir.Reference{
+					Type:       to.Ptr("Organization"),
+					Identifier: task.Requester.Identifier,
+				},
+			},
 		}
 
 		samePatient := false

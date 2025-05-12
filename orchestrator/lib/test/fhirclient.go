@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -57,7 +59,9 @@ func (s StubFHIRClient) ReadWithContext(ctx context.Context, path string, target
 			return nil
 		}
 	}
-	return errors.New("resource not found")
+	return fhirclient.OperationOutcomeError{
+		HttpStatusCode: http.StatusNotFound,
+	}
 }
 
 func (s StubFHIRClient) Create(resource any, result any, opts ...fhirclient.Option) error {
@@ -92,6 +96,8 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 		candidates = filtered
 	}
 
+	count := 100
+	startAt := 0
 	for name, values := range query {
 		if len(values) != 1 {
 			return fmt.Errorf("multiple values for query parameter: %s", name)
@@ -165,19 +171,102 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 				}
 				return false
 			})
+		case "output-reference":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type != "Task" {
+					return false
+				}
+				var task fhir.Task
+				if err := json.Unmarshal(candidate.Data, &task); err != nil {
+					panic(err)
+				}
+				for _, output := range task.Output {
+					if output.ValueReference != nil &&
+						output.ValueReference.Reference != nil &&
+						*output.ValueReference.Reference == value {
+						return true
+					}
+				}
+				return false
+			})
+		case "focus":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type != "Task" {
+					return false
+				}
+				var task fhir.Task
+				if err := json.Unmarshal(candidate.Data, &task); err != nil {
+					panic(err)
+				}
+				return task.Focus != nil && *task.Focus.Reference == value
+			})
+		case "subject":
+			filterCandidates(func(candidate BaseResource) bool {
+				if candidate.Type != "CarePlan" {
+					return false
+				}
+				var carePlan fhir.CarePlan
+				if err := json.Unmarshal(candidate.Data, &carePlan); err != nil {
+					panic(err)
+				}
+				if carePlan.Subject.Reference != nil && *carePlan.Subject.Reference == value {
+					return true
+				}
+				if carePlan.Subject.Identifier != nil {
+					token := fmt.Sprintf("%s|%s", to.EmptyString(carePlan.Subject.Identifier.System), to.EmptyString(carePlan.Subject.Identifier.Value))
+					if value == token {
+						return true
+					}
+				}
+				return false
+			})
 		case "url":
 			filterCandidates(func(candidate BaseResource) bool {
 				return candidate.URL == value
 			})
+		case "_start_at":
+			// custom parameter for pagination using 'next' link
+			var err error
+			startAt, err = strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("invalid _start_at parameter value (must be an int): %s", value)
+			}
+			if startAt < 0 {
+				return fmt.Errorf("invalid _start_at parameter value (must be >= 0): %s", value)
+			}
+		case "_count":
+			var err error
+			count, err = strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("invalid _count parameter value: %s", value)
+			}
 		default:
 			return fmt.Errorf("unsupported query parameter: %s", name)
 		}
 	}
 
 	result := fhir.Bundle{
-		Type:  fhir.BundleTypeSearchset,
-		Total: to.Ptr(len(candidates)),
+		Type: fhir.BundleTypeSearchset,
 	}
+
+	idxStart := startAt
+	idxEnd := idxStart + count
+	if idxStart > len(candidates) {
+		candidates = []BaseResource{}
+	} else {
+		if idxEnd > len(candidates) {
+			idxEnd = len(candidates)
+		} else {
+			nextURLQuery, _ := url.ParseQuery(query.Encode())
+			nextURLQuery.Set("_start_at", strconv.Itoa(idxEnd))
+			result.Link = append(result.Link, fhir.BundleLink{
+				Relation: "next",
+				Url:      "https://example.com/fhir/" + resourceType + "/_search?" + nextURLQuery.Encode(),
+			})
+		}
+		candidates = candidates[idxStart:idxEnd]
+	}
+
 	for _, candidate := range candidates {
 		result.Entry = append(result.Entry, fhir.BundleEntry{
 			Resource: candidate.Data,

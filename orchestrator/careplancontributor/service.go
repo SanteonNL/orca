@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
 	"net/http"
 	"net/url"
 	"strings"
@@ -52,7 +54,7 @@ func New(
 	config Config,
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
-	sessionManager *user.SessionManager,
+	sessionManager *user.SessionManager[session.Data],
 	messageBroker messaging.Broker,
 	eventManager events.Manager,
 	ehrFhirProxy coolfhir.HttpProxy,
@@ -120,6 +122,13 @@ func New(
 		eventManager:                  eventManager,
 		sseService:                    sse.New(),
 	}
+	if config.OIDCProvider.Enabled {
+		result.oidcProvider, err = oidc.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDCProvider)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
+		}
+	}
+
 	result.createFHIRClientForURL = result.defaultCreateFHIRClientForURL
 	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
 		result.notifier, err = ehr.NewNotifier(eventManager, messageBroker, messaging.Entity{Name: config.TaskFiller.TaskAcceptedBundleTopic}, result.createFHIRClientForURL)
@@ -136,7 +145,7 @@ type Service struct {
 	config         Config
 	profile        profile.Provider
 	orcaPublicURL  *url.URL
-	SessionManager *user.SessionManager
+	SessionManager *user.SessionManager[session.Data]
 	frontendUrl    string
 	// localCarePlanServiceUrl is the URL of the local Care Plan Service, used to create new CarePlans.
 	localCarePlanServiceUrl *url.URL
@@ -152,9 +161,15 @@ type Service struct {
 	eventManager                  events.Manager
 	sseService                    *sse.Service
 	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
+	oidcProvider                  *oidc.Service
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
+	if s.oidcProvider != nil {
+		mux.HandleFunc(basePath+"/login", s.withSession(s.oidcProvider.HandleLogin))
+		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
+	}
+
 	baseURL := s.orcaPublicURL.JoinPath(basePath)
 	//
 	// The section below defines endpoints specified by Shared Care Planning.
@@ -196,6 +211,39 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		writer.WriteHeader(http.StatusOK)
 	}))
 
+	//
+	// This is a special endpoint, used by other SCP-nodes to discovery applications.
+	//
+	mux.HandleFunc("GET "+basePath+"/fhir/Endpoint", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+		if len(request.URL.Query()) > 0 {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("search parameters are not supported on this endpoint"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		}
+		bundle := coolfhir.BundleBuilder{}
+		bundle.Type = fhir.BundleTypeSearchset
+		for _, appConfig := range s.config.AppLaunch.External {
+			endpoint := fhir.Endpoint{
+				Status: fhir.EndpointStatusActive,
+				ConnectionType: fhir.Coding{
+					System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"),
+					Code:   to.Ptr("web-oauth2"),
+				},
+				PayloadType: []fhir.CodeableConcept{
+					{
+						Coding: []fhir.Coding{
+							{
+								System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-payload-type"),
+								Code:   to.Ptr("web-application"),
+							},
+						},
+					},
+				},
+				Name:    to.Ptr(appConfig.Name),
+				Address: appConfig.URL,
+			}
+			bundle.Append(endpoint, nil, nil)
+		}
+		coolfhir.SendResponse(writer, http.StatusOK, bundle, nil)
+	}))
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
@@ -285,7 +333,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	}))
 
 	// Logout endpoint
-	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
 		s.SessionManager.Destroy(writer, request)
 		// If there is a 'Referer' value in the header, redirect to that URL
 		if referer := request.Header.Get("Referer"); referer != "" {
@@ -300,20 +348,20 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 // withSession is a middleware that retrieves the session for the given request.
 // It then calls the given handler function and provides the session.
 // If there's no active session, it returns a 401 Unauthorized response.
-func (s Service) withSession(next func(response http.ResponseWriter, request *http.Request, session *user.SessionData)) http.HandlerFunc {
+func (s Service) withSession(next func(response http.ResponseWriter, request *http.Request, session *session.Data)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
-		session := s.SessionManager.Get(request)
-		if session == nil {
+		sessionData := s.SessionManager.Get(request)
+		if sessionData == nil {
 			http.Error(response, "no session found", http.StatusUnauthorized)
 			return
 		}
-		next(response, request, session)
+		next(response, request, sessionData)
 	}
 }
 
 // handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
-func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
+func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
+	clientFactory := clients.Factories[sessionData.FHIRLauncher](sessionData.LauncherProperties)
 	proxyBasePath := basePath + "/ehr/fhir"
 	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", clientFactory.BaseURL, proxyBasePath,
 		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false, false)
@@ -321,22 +369,20 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
 	// E.g., ChipSoft HiX doesn't provide ServiceRequest and Practitioner as FHIR resources, so whatever there is, is converted to FHIR and cached in the session.
-	if resource, exists := session.OtherValues[resourcePath]; exists {
-		coolfhir.SendResponse(writer, http.StatusOK, resource)
+	if resource := sessionData.Get(resourcePath); resource != nil && resource.Resource != nil {
+		coolfhir.SendResponse(writer, http.StatusOK, *resource.Resource)
 	} else {
 		proxy.ServeHTTP(writer, request)
 	}
 }
 
-func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	launchedTaskIdentifier := session.StringValues["taskIdentifier"]
-
-	if launchedTaskIdentifier == "" {
+func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
+	if sessionData.TaskIdentifier == nil {
 		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No taskIdentifier found in session"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 
-	sessionTaskIdentifier, err := coolfhir.TokenToIdentifier(launchedTaskIdentifier)
+	sessionTaskIdentifier, err := coolfhir.TokenToIdentifier(*sessionData.TaskIdentifier)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("Invalid taskIdentifier in session: %v", err), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
@@ -576,21 +622,21 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}, nil
 }
 
-func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
+func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, sessionData *session.Data) {
 	contextData := struct {
-		Patient          string `json:"patient"`
-		ServiceRequest   string `json:"serviceRequest"`
-		Practitioner     string `json:"practitioner"`
-		PractitionerRole string `json:"practitionerRole"`
-		Task             string `json:"task"`
-		TaskIdentifier   string `json:"taskIdentifier"`
+		Patient          string  `json:"patient"`
+		ServiceRequest   string  `json:"serviceRequest"`
+		Practitioner     string  `json:"practitioner"`
+		PractitionerRole string  `json:"practitionerRole"`
+		Task             string  `json:"task"`
+		TaskIdentifier   *string `json:"taskIdentifier"`
 	}{
-		Patient:          session.StringValues["patient"],
-		ServiceRequest:   session.StringValues["serviceRequest"],
-		Practitioner:     session.StringValues["practitioner"],
-		PractitionerRole: session.StringValues["practitionerRole"],
-		Task:             session.StringValues["task"],
-		TaskIdentifier:   session.StringValues["taskIdentifier"],
+		Patient:          sessionData.Get("Patient").Path,
+		ServiceRequest:   sessionData.Get("ServiceRequest").Path,
+		Practitioner:     sessionData.Get("Practitioner").Path,
+		PractitionerRole: sessionData.Get("PractitionerRole").Path,
+		Task:             sessionData.Get("Task").Path,
+		TaskIdentifier:   sessionData.TaskIdentifier,
 	}
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)

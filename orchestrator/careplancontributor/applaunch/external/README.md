@@ -1,0 +1,2 @@
+External app launch can be used to launch an external application, discovered through the CPC's FHIR Endpoint resources.
+For instance, if the care organization has a web application outside of ORCA, that can be used by other care organizations.

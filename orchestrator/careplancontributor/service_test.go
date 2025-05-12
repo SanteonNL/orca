@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/external"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
@@ -728,6 +731,54 @@ func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
 }
 
+func TestService_HandleSearchEndpoints(t *testing.T) {
+	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
+	// Setup: configure backing FHIR server to which the service proxies
+	sessionManager, _ := createTestSession()
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
+
+	service, err := New(Config{
+		AppLaunch: applaunch.Config{
+			External: map[string]external.Config{
+				"app1": {
+					Name: "App 1",
+					URL:  "https://example.com/app1",
+				},
+				"app2": {
+					Name: "App 2",
+					URL:  "https://example.com/app2",
+				},
+			},
+		},
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, nil)
+	require.NoError(t, err)
+
+	// Setup: configure the service to proxy to the backing FHIR server
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+
+	t.Run("ok", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Endpoint", nil)
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		expectedData, err := os.ReadFile("./testdata/endpoints.json")
+		require.NoError(t, err)
+		require.JSONEq(t, string(expectedData), string(responseData))
+	})
+	t.Run("search parameters not allowed", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Endpoint?foo=bar", nil)
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	})
+}
+
 func TestService_ProxyToExternalCPS(t *testing.T) {
 	// Test that providing an X-Cps-Url header will proxy to an external CPS via NUTS authz
 	// Setup: configure a "local" CarePlanService
@@ -821,21 +872,19 @@ func TestService_ProxyToExternalCPS(t *testing.T) {
 
 func TestService_handleGetContext(t *testing.T) {
 	httpResponse := httptest.NewRecorder()
-	Service{}.handleGetContext(httpResponse, nil, &user.SessionData{
-		StringValues: map[string]string{
-			"test":             "value",
-			"practitioner":     "the-doctor",
-			"practitionerRole": "the-doctor-role",
-			"serviceRequest":   "ServiceRequest/1",
-			"patient":          "Patient/1",
-			"task":             "Task/1",
-			"taskIdentifier":   "task-identifier-123",
-		},
-	})
+	sessionData := session.Data{
+		TaskIdentifier: to.Ptr("task-identifier-123"),
+	}
+	sessionData.Set("Practitioner/the-doctor", nil)
+	sessionData.Set("PractitionerRole/the-doctor-role", nil)
+	sessionData.Set("ServiceRequest/1", nil)
+	sessionData.Set("Patient/1", nil)
+	sessionData.Set("Task/1", nil)
+	Service{}.handleGetContext(httpResponse, nil, &sessionData)
 	assert.Equal(t, http.StatusOK, httpResponse.Code)
 	assert.JSONEq(t, `{
-		"practitioner": "the-doctor",
-		"practitionerRole": "the-doctor-role",
+		"practitioner": "Practitioner/the-doctor",
+		"practitionerRole": "PractitionerRole/the-doctor-role",
 		"serviceRequest": "ServiceRequest/1",
 		"patient": "Patient/1",
 		"task": "Task/1",
@@ -918,7 +967,7 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 
 	tests := []struct {
 		name            string
-		sessionValues   map[string]string
+		sessionData     session.Data
 		client          mock.MockClient
 		setLocalCPS     bool
 		expectedStatus  int
@@ -926,15 +975,15 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 	}{
 		{
 			name:            "No taskIdentifier in session",
-			sessionValues:   map[string]string{},
+			sessionData:     session.Data{},
 			setLocalCPS:     true,
 			expectedStatus:  http.StatusBadRequest,
 			expectedContent: "No taskIdentifier found in session",
 		},
 		{
 			name: "Invalid taskIdentifier in session",
-			sessionValues: map[string]string{
-				"taskIdentifier": "invalid-token",
+			sessionData: session.Data{
+				TaskIdentifier: to.Ptr("invalid-token"),
 			},
 			setLocalCPS:     true,
 			expectedStatus:  http.StatusBadRequest,
@@ -942,8 +991,8 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 		},
 		{
 			name: "No local CarePlanService configured",
-			sessionValues: map[string]string{
-				"taskIdentifier": validToken,
+			sessionData: session.Data{
+				TaskIdentifier: &validToken,
 			},
 			setLocalCPS:     false,
 			expectedStatus:  http.StatusBadRequest,
@@ -951,8 +1000,8 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 		},
 		{
 			name: "Task identifier does not match session",
-			sessionValues: map[string]string{
-				"taskIdentifier": "https://some.other.domain/fhir/NamingSystem/task-workflow-identifier|12345",
+			sessionData: session.Data{
+				TaskIdentifier: to.Ptr("https://some.other.domain/fhir/NamingSystem/task-workflow-identifier|12345"),
 			},
 			setLocalCPS:     true,
 			expectedStatus:  http.StatusBadRequest,
@@ -960,8 +1009,8 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 		},
 		{
 			name: "Success subscription",
-			sessionValues: map[string]string{
-				"taskIdentifier": validToken,
+			sessionData: session.Data{
+				TaskIdentifier: to.Ptr(validToken),
 			},
 			setLocalCPS:     true,
 			expectedStatus:  http.StatusOK,
@@ -984,7 +1033,7 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 		log.Ctx(ctx).Info().Msgf("Unit-Test: Transform request to SSE stream for topic: %s", topic)
 	}
 
-	svc := &Service{sseService: sseService}
+	svc := &Service{sseService: sseService, profile: profile.TestProfile{Principal: auth.TestPrincipal1}}
 
 	svc.createFHIRClientForURL = func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
 		return mockFhirClient, nil, nil
@@ -992,9 +1041,7 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			session := &user.SessionData{
-				StringValues: tt.sessionValues,
-			}
+			session := &tt.sessionData
 
 			req := httptest.NewRequest("GET", "/cpc/subscribe/fhir/Task/3", nil)
 			req.SetPathValue("id", "3")
@@ -1020,10 +1067,10 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 	}
 }
 
-func createTestSession() (*user.SessionManager, string) {
-	sessionManager := user.NewSessionManager(time.Minute)
+func createTestSession() (*user.SessionManager[session.Data], string) {
+	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 	sessionHttpResponse := httptest.NewRecorder()
-	sessionManager.Create(sessionHttpResponse, user.SessionData{
+	sessionManager.Create(sessionHttpResponse, session.Data{
 		FHIRLauncher: "test",
 	})
 	// extract session ID; s_id=<something>;

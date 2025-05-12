@@ -254,11 +254,15 @@ func HasIdentifier(needle fhir.Identifier, haystack ...fhir.Identifier) bool {
 func ToString(resource interface{}) string {
 	switch r := resource.(type) {
 	case *fhir.Identifier:
-		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
+		return IdentifierToToken(*r)
 	case fhir.Identifier:
-		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
+		return IdentifierToToken(r)
 	}
 	return fmt.Sprintf("%T(%v)", resource, resource)
+}
+
+func IdentifierToToken(r fhir.Identifier) string {
+	return fmt.Sprintf("%s|%s", to.EmptyString(r.System), to.EmptyString(r.Value))
 }
 
 func HttpMethodToVerb(method string) fhir.HTTPVerb {

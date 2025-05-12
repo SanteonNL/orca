@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
+	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -831,24 +833,23 @@ func TestService_validateLiteralReferences(t *testing.T) {
 	prof := profile.TestProfile{
 		CSD: profile.TestCsdDirectory{Endpoint: "https://example.com/fhir"},
 	}
-	service := &Service{profile: prof}
 
 	t.Run("ok", func(t *testing.T) {
-		err = service.validateLiteralReferences(context.Background(), resource)
+		err = validateLiteralReferences(context.Background(), prof, resource)
 		require.NoError(t, err)
 	})
 	t.Run("http:// is not allowed", func(t *testing.T) {
 		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 			s.Focus.Reference = to.Ptr("http://example.com")
 		})
-		err := service.validateLiteralReferences(context.Background(), resource)
+		err := validateLiteralReferences(context.Background(), prof, resource)
 		require.EqualError(t, err, "literal reference is URL with scheme http://, only https:// is allowed (path=focus.reference)")
 	})
 	t.Run("parent directory traversal isn't allowed", func(t *testing.T) {
 		resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 			s.Focus.Reference = to.Ptr("https://example.com/fhir/../secret-page")
 		})
-		err := service.validateLiteralReferences(context.Background(), resource)
+		err := validateLiteralReferences(context.Background(), prof, resource)
 		require.EqualError(t, err, "literal reference is URL with parent path segment '..' (path=focus.reference)")
 	})
 	t.Run("registered base URL", func(t *testing.T) {
@@ -856,14 +857,14 @@ func TestService_validateLiteralReferences(t *testing.T) {
 			resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 				s.Focus.Reference = to.Ptr("https://example.com/alternate/secret-page")
 			})
-			err = service.validateLiteralReferences(context.Background(), resource)
+			err = validateLiteralReferences(context.Background(), prof, resource)
 			require.EqualError(t, err, "literal reference is not a child of a registered FHIR base URL (path=focus.reference)")
 		})
 		t.Run("path differs, check trailing slash normalization", func(t *testing.T) {
 			resource := deep.AlterCopy(resource, func(s *fhir.Task) {
 				s.Focus.Reference = to.Ptr("https://example.com/fhirPatient/not-allowed")
 			})
-			err = service.validateLiteralReferences(context.Background(), resource)
+			err = validateLiteralReferences(context.Background(), prof, resource)
 			require.EqualError(t, err, "literal reference is not a child of a registered FHIR base URL (path=focus.reference)")
 		})
 	})
@@ -1123,5 +1124,47 @@ func TestService_validateSearchRequest(t *testing.T) {
 		err := service.validateSearchRequest(req)
 
 		assert.NoError(t, err)
+	})
+}
+
+func TestService_notifySubscribers(t *testing.T) {
+	t.Run("CareTeam causes notification", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		subscriptionManager := subscriptions.NewMockManager(ctrl)
+		subscriptionManager.EXPECT().Notify(gomock.Any(), gomock.Any())
+		s := &Service{
+			subscriptionManager: subscriptionManager,
+		}
+		s.notifySubscribers(context.Background(), &fhir.CareTeam{})
+	})
+	t.Run("CarePlan causes notification", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		subscriptionManager := subscriptions.NewMockManager(ctrl)
+		subscriptionManager.EXPECT().Notify(gomock.Any(), gomock.Any())
+		s := &Service{
+			subscriptionManager: subscriptionManager,
+		}
+		s.notifySubscribers(context.Background(), &fhir.CarePlan{})
+	})
+	t.Run("Task causes notification", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		subscriptionManager := subscriptions.NewMockManager(ctrl)
+		subscriptionManager.EXPECT().Notify(gomock.Any(), gomock.Any())
+		s := &Service{
+			subscriptionManager: subscriptionManager,
+		}
+		s.notifySubscribers(context.Background(), &fhir.Task{})
+	})
+	t.Run("Other resource type does not cause notification", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		subscriptionManager := subscriptions.NewMockManager(ctrl)
+		s := &Service{
+			subscriptionManager: subscriptionManager,
+		}
+		s.notifySubscribers(context.Background(), &fhir.ActivityDefinition{})
 	})
 }
