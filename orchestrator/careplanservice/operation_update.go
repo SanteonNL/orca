@@ -82,22 +82,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		}
 	}
 
-	// Remove all resourceCreator extensions from the resource, set based on the existing resource
-	extension := resource.GetExtension()
-	for i := range extension {
-		if extension[i].Url == CreatorExtensionURL {
-			extension = append(extension[:i], extension[i+1:]...)
-		}
-	}
-	// Set updated resource creator to that of the existing resource
-	existingResourceExtension := existingResource.GetExtension()
-	for i := range existingResourceExtension {
-		if existingResourceExtension[i].Url == CreatorExtensionURL {
-			extension = append(extension, existingResourceExtension[i])
-			break
-		}
-	}
-	resource.SetExtension(extension)
+	SetCreatorExtensionOnResource(resource, &request.Principal.Organization.Identifier[0])
 
 	log.Ctx(ctx).Info().Msgf("Updating %s (authz=%s)", request.RequestUrl, strings.Join(authzDecision.Reasons, ";"))
 

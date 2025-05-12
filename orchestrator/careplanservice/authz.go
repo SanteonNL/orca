@@ -8,12 +8,36 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
 )
 
 const CreatorExtensionURL = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator"
+
+func SetCreatorExtensionOnResource[T fhir.HasExtension](resource T, identifier *fhir.Identifier) {
+	extension := resource.GetExtension()
+	// If the resource already has a creator extension, remove all instances
+	for i := 0; i < len(extension); {
+		if extension[i].Url == CreatorExtensionURL {
+			extension = append(extension[:i], extension[i+1:]...)
+		} else {
+			i++
+		}
+	}
+
+	// Set the creator of the resource in the resource.Extension. This is used for creator-based auth
+	extension = append(extension, fhir.Extension{
+		Url: CreatorExtensionURL,
+		ValueReference: &fhir.Reference{
+			Identifier: identifier,
+			Type:       to.Ptr("Organization"),
+		},
+	})
+
+	resource.SetExtension(extension)
+}
 
 type PolicyDecision struct {
 	Allowed bool
