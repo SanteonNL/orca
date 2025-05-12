@@ -7,8 +7,9 @@ import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
 import { patientName, organizationName } from "@/lib/fhirRender";
 import DataViewer from '@/components/data-viewer'
-import { viewerFeatureIsEnabled, getPatientViewerUrl } from '@/app/actions'
+import { viewerFeatureIsEnabled } from '@/app/actions'
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
+import {getLaunchableApps} from "@/app/applaunch";
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
@@ -38,11 +39,16 @@ export default function EnrollmentTaskPage() {
     }, [])
 
     useEffect(()=>{
-        getPatientViewerUrl()
-            .then((url) => {
-                setPatientViewerUrl(url)
+        if (!task?.requester?.identifier) {
+            return
+        }
+        getLaunchableApps(task.requester.identifier)
+            .then((app) => {
+                if (app) {
+                    setPatientViewerUrl(app.URL)
+                }
             })
-    })
+    }, [task])
 
     if (loading || !initialized) return <Loading />
 

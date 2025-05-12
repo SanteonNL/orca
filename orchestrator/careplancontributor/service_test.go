@@ -1067,6 +1067,59 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 	}
 }
 
+func TestService_ExternalFHIRProxy(t *testing.T) {
+	t.Log("This tests the external FHIR proxy functionality (/cpc/external/fhir, used by the EHR and ORCA Frontend to query remote SCP-nodes' FHIR APIs.")
+
+	remoteFHIRAPIMux := http.NewServeMux()
+	remoteFHIRAPIMux.HandleFunc("POST /fhir/Task/_search", func(writer http.ResponseWriter, request *http.Request) {
+		results := coolfhir.SearchSet().Append(fhir.Task{
+			Id: to.Ptr("1"),
+		}, nil, nil)
+		coolfhir.SendResponse(writer, http.StatusOK, results)
+	})
+	remoteSCPNode := httptest.NewServer(remoteFHIRAPIMux)
+
+	mux := http.NewServeMux()
+	httpServer := httptest.NewServer(mux)
+	service := &Service{
+		profile: profile.TestProfile{
+			Principal: auth.TestPrincipal1,
+			CSD: profile.TestCsdDirectory{
+				Endpoints: map[string]map[string]string{
+					"http://fhir.nl/fhir/NamingSystem/ura|2": {
+						"fhirBaseURL": remoteSCPNode.URL + "/fhir",
+					},
+				},
+			},
+		},
+		orcaPublicURL: must.ParseURL(httpServer.URL),
+	}
+	service.RegisterHandlers(mux)
+	httpClient := &http.Client{
+		Transport: auth.AuthenticatedTestRoundTripper(httpServer.Client().Transport, auth.TestPrincipal1, ""),
+	}
+
+	t.Run("X-Scp-Entity-Identifier", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest(http.MethodPost, httpServer.URL+"/cpc/external/fhir/Task/_search", nil)
+		httpRequest.Header.Set("X-Scp-Entity-Identifier", "http://fhir.nl/fhir/NamingSystem/ura|2")
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		responseData, err := io.ReadAll(httpResponse.Body)
+		require.NoError(t, err)
+		assert.NotEmpty(t, responseData)
+	})
+	t.Run("can't determine remote node", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest(http.MethodPost, httpServer.URL+"/cpc/external/fhir/Task/_search", nil)
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+		responseData, err := io.ReadAll(httpResponse.Body)
+		require.NoError(t, err)
+		assert.Contains(t, string(responseData), "can't determine the external SCP-node to query from the HTTP request headers")
+	})
+}
+
 func createTestSession() (*user.SessionManager[session.Data], string) {
 	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 	sessionHttpResponse := httptest.NewRecorder()
