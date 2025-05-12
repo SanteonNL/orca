@@ -100,6 +100,38 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 			},
 		},
 		{
+			name: "ok, updated with extension",
+			args: args{
+				resource:          updatedTaskWithArbitraryExtension,
+				existingResources: []fhir.Task{existingTaskWithCreatorExtension},
+			},
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
+				assertContainsAuditEvent(t, tx, task1Ref, auth.TestPrincipal1.Organization.Identifier[0], auth.TestPrincipal2.Organization.Identifier[0], fhir.AuditEventActionU)
+				assertBundleEntry(t, tx, coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, fhir.HTTPVerbPUT, entry.Request.Method)
+					assert.Equal(t, *task1Ref.Reference, entry.Request.Url)
+					updatedTaskWithArbitraryExtension.Extension = append(updatedTaskWithArbitraryExtension.Extension, TestCreatorExtension...)
+					assert.JSONEq(t, string(must.MarshalJSON(updatedTaskWithArbitraryExtension)), string(entry.Resource))
+				})
+				// Should respond with 1 bundle entry, and 1 notification
+				txResponse := coolfhir.Transaction().
+					Append(updatedTaskWithCreatorExtension, nil, &fhir.BundleEntryResponse{
+						Status:   "200 OK",
+						Location: task1Ref.Reference,
+					}).Bundle()
+				responseEntries, notifications, err := result(&txResponse)
+				require.NoError(t, err)
+				assert.Len(t, responseEntries, 1)
+				assertBundleEntry(t, toBundle(responseEntries), coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, "200 OK", entry.Response.Status)
+					assert.Equal(t, *task1Ref.Reference, *entry.Response.Location)
+					assert.JSONEq(t, string(must.MarshalJSON(updatedTaskWithCreatorExtension)), string(entry.Resource))
+				})
+				assert.Len(t, notifications, 1)
+				assert.IsType(t, &fhir.Task{}, notifications[0])
+			},
+		},
+		{
 			name: "ok, upsert",
 			args: args{
 				resource: updatedTask,
@@ -129,19 +161,6 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				})
 				assert.Len(t, notifications, 1)
 				assert.IsType(t, &fhir.Task{}, notifications[0])
-			},
-		},
-		{
-			name: "denied, may not update Extension",
-			args: args{
-				resource:          updatedTaskWithArbitraryExtension,
-				existingResources: []fhir.Task{existingTaskWithCreatorExtension},
-			},
-			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
-				assert.Empty(t, tx.Entry)
-			},
-			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
-				return assert.EqualError(t, err, "Task.Extension update not allowed")
 			},
 		},
 		{

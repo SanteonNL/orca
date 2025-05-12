@@ -19,6 +19,23 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 	task := fhir.Task{
 		Status: fhir.TaskStatusCancelled,
 	}
+	taskWithExtension := task
+	taskWithExtension.Extension = []fhir.Extension{
+		{
+			Url:         "http://example.com/extension",
+			ValueString: to.Ptr("value"),
+		},
+	}
+	taskWithCreatorExtension := task
+	taskWithCreatorExtension.Extension = []fhir.Extension{
+		{
+			Url: CreatorExtensionURL,
+			ValueReference: &fhir.Reference{
+				Type:      to.Ptr("Organization"),
+				Reference: to.Ptr("2"),
+			},
+		},
+	}
 	toBundle := func(entries []*fhir.BundleEntry) fhir.Bundle {
 		result := fhir.Bundle{}
 		for _, entry := range entries {
@@ -53,6 +70,70 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 					// Validate resource creation extension
 					task.Extension = TestCreatorExtension
 					assert.JSONEq(t, string(must.MarshalJSON(task)), string(entry.Resource))
+				})
+				// Should respond with 1 bundle entry, and 1 notification
+				txResponse := coolfhir.Transaction().
+					Append(task, nil, &fhir.BundleEntryResponse{
+						Status:   "200 OK",
+						Location: to.Ptr("Task/1"),
+					}).Bundle()
+				responseEntries, notifications, err := result(&txResponse)
+				require.NoError(t, err)
+				assert.Len(t, responseEntries, 1)
+				assertBundleEntry(t, toBundle(responseEntries), coolfhir.EntryIsOfType("Task"), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, "200 OK", entry.Response.Status)
+					assert.Equal(t, "Task/1", *entry.Response.Location)
+					assert.JSONEq(t, string(must.MarshalJSON(task)), string(entry.Resource))
+				})
+				assert.Len(t, notifications, 1)
+				assert.IsType(t, &fhir.Task{}, notifications[0])
+			},
+		},
+		{
+			name: "ok, with extensions",
+			args: args{
+				resource: taskWithExtension,
+			},
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
+				assertContainsAuditEvent(t, tx, fhir.Reference{Type: to.Ptr("Task")}, auth.TestPrincipal1.Organization.Identifier[0], auth.TestPrincipal2.Organization.Identifier[0], fhir.AuditEventActionC)
+				assertBundleEntry(t, tx, coolfhir.EntryIsOfType("Task"), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, fhir.HTTPVerbPOST, entry.Request.Method)
+					assert.Equal(t, "Task", entry.Request.Url)
+					// Validate resource creation extension
+					taskWithExtension.Extension = append(taskWithExtension.Extension, TestCreatorExtension...)
+					assert.JSONEq(t, string(must.MarshalJSON(taskWithExtension)), string(entry.Resource))
+				})
+				// Should respond with 1 bundle entry, and 1 notification
+				txResponse := coolfhir.Transaction().
+					Append(task, nil, &fhir.BundleEntryResponse{
+						Status:   "200 OK",
+						Location: to.Ptr("Task/1"),
+					}).Bundle()
+				responseEntries, notifications, err := result(&txResponse)
+				require.NoError(t, err)
+				assert.Len(t, responseEntries, 1)
+				assertBundleEntry(t, toBundle(responseEntries), coolfhir.EntryIsOfType("Task"), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, "200 OK", entry.Response.Status)
+					assert.Equal(t, "Task/1", *entry.Response.Location)
+					assert.JSONEq(t, string(must.MarshalJSON(task)), string(entry.Resource))
+				})
+				assert.Len(t, notifications, 1)
+				assert.IsType(t, &fhir.Task{}, notifications[0])
+			},
+		},
+		{
+			name: "ok, with existing resource creator extension",
+			args: args{
+				resource: taskWithCreatorExtension,
+			},
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
+				assertContainsAuditEvent(t, tx, fhir.Reference{Type: to.Ptr("Task")}, auth.TestPrincipal1.Organization.Identifier[0], auth.TestPrincipal2.Organization.Identifier[0], fhir.AuditEventActionC)
+				assertBundleEntry(t, tx, coolfhir.EntryIsOfType("Task"), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, fhir.HTTPVerbPOST, entry.Request.Method)
+					assert.Equal(t, "Task", entry.Request.Url)
+					// Validate resource creation extension, the provided extension should be overwritten
+					taskWithCreatorExtension.SetExtension(TestCreatorExtension)
+					assert.JSONEq(t, string(must.MarshalJSON(taskWithCreatorExtension)), string(entry.Resource))
 				})
 				// Should respond with 1 bundle entry, and 1 notification
 				txResponse := coolfhir.Transaction().

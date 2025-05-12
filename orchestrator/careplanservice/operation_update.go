@@ -13,7 +13,6 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
-	"reflect"
 	"strings"
 )
 
@@ -83,13 +82,22 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		}
 	}
 
-	// Validate that the resource Extension is not being modified
-	if !equalExtensions(resource.GetExtension(), existingResource.GetExtension()) {
-		return nil, &coolfhir.ErrorWithCode{
-			Message:    fmt.Sprintf("%s.Extension update not allowed", resourceType),
-			StatusCode: http.StatusForbidden,
+	// Remove all resourceCreator extensions from the resource, set based on the existing resource
+	extension := resource.GetExtension()
+	for i := range extension {
+		if extension[i].Url == CreatorExtensionURL {
+			extension = append(extension[:i], extension[i+1:]...)
 		}
 	}
+	// Set updated resource creator to that of the existing resource
+	existingResourceExtension := existingResource.GetExtension()
+	for i := range existingResourceExtension {
+		if existingResourceExtension[i].Url == CreatorExtensionURL {
+			extension = append(extension, existingResourceExtension[i])
+			break
+		}
+	}
+	resource.SetExtension(extension)
 
 	log.Ctx(ctx).Info().Msgf("Updating %s (authz=%s)", request.RequestUrl, strings.Join(authzDecision.Reasons, ";"))
 
@@ -118,18 +126,4 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 		return []*fhir.BundleEntry{result}, []any{updatedResource}, nil
 	}, nil
-}
-
-// equalExtensions compares two slices of Extension to check if they are equivalent
-// For now we don't allow updates at all, in the future we may want to make this more granular
-func equalExtensions(a, b []fhir.Extension) bool {
-	if len(a) != len(b) {
-		return false
-	}
-
-	if !reflect.DeepEqual(a, b) {
-		return false
-	}
-
-	return true
 }

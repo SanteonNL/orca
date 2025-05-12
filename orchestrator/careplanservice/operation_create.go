@@ -54,16 +54,25 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	}
 	idx := len(tx.Entry)
 
+	extension := resource.GetExtension()
+	for i := range extension {
+		if extension[i].Url == CreatorExtensionURL {
+			// If the resource already has a creator extension, remove it
+			extension = append(extension[:i], extension[i+1:]...)
+			break
+		}
+	}
+
 	// Set the creator of the resource in the resource.Extension. This is used for creator-based auth
-	resource.SetExtension([]fhir.Extension{
-		{
-			Url: CreatorExtensionURL,
-			ValueReference: &fhir.Reference{
-				Identifier: &request.Principal.Organization.Identifier[0],
-				Type:       to.Ptr("Organization"),
-			},
+	extension = append(extension, fhir.Extension{
+		Url: CreatorExtensionURL,
+		ValueReference: &fhir.Reference{
+			Identifier: &request.Principal.Organization.Identifier[0],
+			Type:       to.Ptr("Organization"),
 		},
 	})
+
+	resource.SetExtension(extension)
 
 	// If the resource has an ID and the upsert flag is set, treat as PUT operation
 	// As per FHIR spec, this is how we can create a resource with a client supplied ID: https://hl7.org/fhir/http.html#upsert
