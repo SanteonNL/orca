@@ -10,24 +10,24 @@ import (
 	"net/url"
 )
 
-func CreateConditionAuthzPolicy(profile profile.Provider) Policy[fhir.Condition] {
-	return LocalOrganizationPolicy[fhir.Condition]{
+func CreateConditionAuthzPolicy(profile profile.Provider) Policy[*fhir.Condition] {
+	return LocalOrganizationPolicy[*fhir.Condition]{
 		profile: profile,
 	}
 }
 
-func UpdateConditionAuthzPolicy() Policy[fhir.Condition] {
-	return CreatorPolicy[fhir.Condition]{}
+func UpdateConditionAuthzPolicy() Policy[*fhir.Condition] {
+	return CreatorPolicy[*fhir.Condition]{}
 }
 
-func ReadConditionAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Condition] {
+func ReadConditionAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Condition] {
 	// TODO: Find out new auth requirements for condition
-	return AnyMatchPolicy[fhir.Condition]{
-		Policies: []Policy[fhir.Condition]{
-			RelatedResourcePolicy[fhir.Condition, fhir.Patient]{
+	return AnyMatchPolicy[*fhir.Condition]{
+		Policies: []Policy[*fhir.Condition]{
+			RelatedResourcePolicy[*fhir.Condition, *fhir.Patient]{
 				fhirClient:            fhirClient,
 				relatedResourcePolicy: ReadPatientAuthzPolicy(fhirClient),
-				relatedResourceSearchParams: func(ctx context.Context, resource fhir.Condition) (string, url.Values) {
+				relatedResourceSearchParams: func(ctx context.Context, resource *fhir.Condition) (string, url.Values) {
 					if resource.Subject.Identifier == nil || resource.Subject.Identifier.System == nil || resource.Subject.Identifier.Value == nil {
 						log.Ctx(ctx).Warn().Msg("Condition does not have Patient as subject, can't verify access")
 						return "Patient", nil
@@ -37,7 +37,7 @@ func ReadConditionAuthzPolicy(fhirClient fhirclient.Client) Policy[fhir.Conditio
 					}
 				},
 			},
-			CreatorPolicy[fhir.Condition]{},
+			CreatorPolicy[*fhir.Condition]{},
 		},
 	}
 }

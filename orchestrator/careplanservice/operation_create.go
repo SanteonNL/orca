@@ -16,9 +16,9 @@ import (
 	"strings"
 )
 
-var _ FHIROperation = &FHIRCreateOperationHandler[any]{}
+var _ FHIROperation = &FHIRCreateOperationHandler[fhir.HasExtension]{}
 
-type FHIRCreateOperationHandler[T any] struct {
+type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
 	fhirClient  fhirclient.Client
 	authzPolicy Policy[T]
 	profile     profile.Provider
@@ -53,6 +53,9 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		resourceBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
 	}
 	idx := len(tx.Entry)
+
+	SetCreatorExtensionOnResource(resource, &request.Principal.Organization.Identifier[0])
+
 	// If the resource has an ID and the upsert flag is set, treat as PUT operation
 	// As per FHIR spec, this is how we can create a resource with a client supplied ID: https://hl7.org/fhir/http.html#upsert
 	if resourceID != nil && request.Upsert {
@@ -86,6 +89,6 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			return nil, nil, fmt.Errorf("failed to process %s creation result: %w", resourceType, err)
 		}
 
-		return []*fhir.BundleEntry{result}, []any{&createdResource}, nil
+		return []*fhir.BundleEntry{result}, []any{createdResource}, nil
 	}, nil
 }

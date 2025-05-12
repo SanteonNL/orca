@@ -2,9 +2,9 @@ package oidc
 
 import (
 	"context"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
@@ -19,53 +19,54 @@ import (
 )
 
 func TestService_IntegrationTest(t *testing.T) {
-	sessionData := user.SessionData{
-		StringValues: map[string]string{
-			"practitioner": "Practitioner/12345",
-			"patient":      "Patient/123",
+	sessionData := session.Data{}
+	sessionData.Set("Practitioner/12345", fhir.Practitioner{
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("example.com/identifier"),
+				Value:  to.Ptr("12345"),
+			},
 		},
-		OtherValues: map[string]any{
-			"Practitioner/12345": fhir.Practitioner{
-				Identifier: []fhir.Identifier{
-					{
-						System: to.Ptr("example.com/identifier"),
-						Value:  to.Ptr("12345"),
-					},
-				},
-				Name: []fhir.HumanName{
-					{
-						Text: to.Ptr("John Doe"),
-					},
-				},
-				Qualification: []fhir.PractitionerQualification{
-					{
-						Code: fhir.CodeableConcept{
-							Coding: []fhir.Coding{
-								{
-									System: to.Ptr("example.com/CodeSystem"),
-									Code:   to.Ptr("nurse-level-4"),
-								},
-							},
+		Name: []fhir.HumanName{
+			{
+				Text: to.Ptr("John Doe"),
+			},
+		},
+		Qualification: []fhir.PractitionerQualification{
+			{
+				Code: fhir.CodeableConcept{
+					Coding: []fhir.Coding{
+						{
+							System: to.Ptr("example.com/CodeSystem"),
+							Code:   to.Ptr("nurse-level-4"),
 						},
 					},
 				},
-				Telecom: []fhir.ContactPoint{
-					{
-						System: to.Ptr(fhir.ContactPointSystemEmail),
-						Value:  to.Ptr("john@example.com"),
-					},
-				},
-			},
-			"Patient/123": fhir.Patient{
-				Identifier: []fhir.Identifier{
-					{
-						System: to.Ptr("example.com/CodeSystem"),
-						Value:  to.Ptr("SOME-PATIENT-IDENTIFIER"),
-					},
-				},
 			},
 		},
-	}
+		Telecom: []fhir.ContactPoint{
+			{
+				System: to.Ptr(fhir.ContactPointSystemEmail),
+				Value:  to.Ptr("john@example.com"),
+			},
+		},
+	})
+	sessionData.Set("Patient/123", fhir.Patient{
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("example.com/CodeSystem"),
+				Value:  to.Ptr("SOME-PATIENT-IDENTIFIER"),
+			},
+		},
+	})
+	sessionData.Set("Organization/1", fhir.Organization{
+		Identifier: []fhir.Identifier{
+			{
+				System: to.Ptr("example.com/CodeSystem"),
+				Value:  to.Ptr("SOME-ORG-IDENTIFIER"),
+			},
+		},
+	})
 	mux := http.NewServeMux()
 	httpServer := httptest.NewServer(mux)
 	issuerURL := must.ParseURL(httpServer.URL + "/provider")

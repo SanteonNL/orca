@@ -2,6 +2,9 @@ package demo
 
 import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/http/httptest"
@@ -44,13 +47,14 @@ func TestService_handle(t *testing.T) {
 	}
 
 	t.Run("root base URL", func(t *testing.T) {
-		sessionManager := user.NewSessionManager(time.Minute)
+		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager: sessionManager, baseURL: "/",
 			frontendLandingUrl: must.ParseURL("/cpc/"),
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
 			},
+			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
 		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
@@ -61,7 +65,7 @@ func TestService_handle(t *testing.T) {
 		require.Equal(t, "/cpc/new", response.Header().Get("Location"))
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
-		sessionManager := user.NewSessionManager(time.Minute)
+		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager:     sessionManager,
 			baseURL:            "/orca",
@@ -69,6 +73,7 @@ func TestService_handle(t *testing.T) {
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
 			},
+			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
 		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
@@ -79,7 +84,7 @@ func TestService_handle(t *testing.T) {
 		require.Equal(t, "/frontend/landing/new", response.Header().Get("Location"))
 	})
 	t.Run("should destroy previous session", func(t *testing.T) {
-		sessionManager := user.NewSessionManager(time.Minute)
+		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager:     sessionManager,
 			baseURL:            "/orca",
@@ -87,6 +92,7 @@ func TestService_handle(t *testing.T) {
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
 			},
+			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
 		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
@@ -105,7 +111,7 @@ func TestService_handle(t *testing.T) {
 		require.Equal(t, 1, sessionManager.SessionCount())
 	})
 	t.Run("should restore task", func(t *testing.T) {
-		sessionManager := user.NewSessionManager(time.Minute)
+		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager:     sessionManager,
 			baseURL:            "/orca",
@@ -113,6 +119,7 @@ func TestService_handle(t *testing.T) {
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
 			},
+			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
 		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)

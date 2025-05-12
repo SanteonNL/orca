@@ -16,9 +16,9 @@ import (
 	"strings"
 )
 
-var _ FHIROperation = &FHIRUpdateOperationHandler[any]{}
+var _ FHIROperation = &FHIRUpdateOperationHandler[fhir.HasExtension]{}
 
-type FHIRUpdateOperationHandler[T any] struct {
+type FHIRUpdateOperationHandler[T fhir.HasExtension] struct {
 	authzPolicy Policy[T]
 	fhirClient  fhirclient.Client
 	profile     profile.Provider
@@ -81,6 +81,9 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			StatusCode: http.StatusForbidden,
 		}
 	}
+
+	SetCreatorExtensionOnResource(resource, &request.Principal.Organization.Identifier[0])
+
 	log.Ctx(ctx).Info().Msgf("Updating %s (authz=%s)", request.RequestUrl, strings.Join(authzDecision.Reasons, ";"))
 
 	idx := len(tx.Entry)
@@ -106,6 +109,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			return nil, nil, err
 		}
 
-		return []*fhir.BundleEntry{result}, []any{&updatedResource}, nil
+		return []*fhir.BundleEntry{result}, []any{updatedResource}, nil
 	}, nil
 }
