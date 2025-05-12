@@ -11,40 +11,34 @@ import (
 
 // NewSessionManager creates a new session manager.
 // It uses in-memory storage.
-func NewSessionManager(sessionLifetime time.Duration) *SessionManager {
-	return &SessionManager{
+func NewSessionManager[TData any](sessionLifetime time.Duration) *SessionManager[TData] {
+	return &SessionManager[TData]{
 		sessionLifetime: sessionLifetime,
-		store: &sessionStore{
-			sessions: make(map[string]*Session),
+		store: &sessionStore[TData]{
+			sessions: make(map[string]*Session[TData]),
 			mux:      &sync.Mutex{},
 		},
 	}
 }
 
-type Session struct {
-	Data    SessionData
+type Session[TData any] struct {
+	Data    TData
 	Expires time.Time
 }
 
-type SessionData struct {
-	FHIRLauncher string
-	StringValues map[string]string
-	OtherValues  map[string]interface{}
-}
-
-type SessionManager struct {
-	store           *sessionStore
+type SessionManager[TData any] struct {
+	store           *sessionStore[TData]
 	sessionLifetime time.Duration
 }
 
-type sessionStore struct {
-	sessions map[string]*Session
+type sessionStore[TData any] struct {
+	sessions map[string]*Session[TData]
 	mux      *sync.Mutex
 }
 
 // Create creates a new session and sets a session cookie.
 // The given values are stored in the session, which can be retrieved later using Get.
-func (m *SessionManager) Create(response http.ResponseWriter, values SessionData) {
+func (m *SessionManager[TData]) Create(response http.ResponseWriter, values TData) {
 	id, _ := m.store.create(values, m.sessionLifetime)
 	setSessionCookie(id, response, m.sessionLifetime)
 }
@@ -52,7 +46,7 @@ func (m *SessionManager) Create(response http.ResponseWriter, values SessionData
 // Get retrieves the session for the given request.
 // The session is retrieved using the session cookie.
 // If no session is found, nil is returned.
-func (m *SessionManager) Get(request *http.Request) *SessionData {
+func (m *SessionManager[TData]) Get(request *http.Request) *TData {
 	sessionID := getSessionCookie(request)
 	if sessionID == "" {
 		return nil
@@ -64,7 +58,7 @@ func (m *SessionManager) Get(request *http.Request) *SessionData {
 	return &session.Data
 }
 
-func (m *SessionManager) Destroy(response http.ResponseWriter, request *http.Request) {
+func (m *SessionManager[TData]) Destroy(response http.ResponseWriter, request *http.Request) {
 	sessionID := getSessionCookie(request)
 	if sessionID != "" {
 		m.store.destroy(sessionID)
@@ -81,24 +75,17 @@ func (m *SessionManager) Destroy(response http.ResponseWriter, request *http.Req
 }
 
 // PruneSessions removes expired sessions.
-func (m *SessionManager) PruneSessions() {
+func (m *SessionManager[TData]) PruneSessions() {
 	m.store.mux.Lock()
 	defer m.store.mux.Unlock()
 	m.store.prune()
 }
 
-func (s *sessionStore) create(values SessionData, sessionLifetime time.Duration) (string, *Session) {
+func (s *sessionStore[TData]) create(values TData, sessionLifetime time.Duration) (string, *Session[TData]) {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	s.prune()
-	// prevent nil derefs later on
-	if values.OtherValues == nil {
-		values.OtherValues = make(map[string]interface{})
-	}
-	if values.StringValues == nil {
-		values.StringValues = make(map[string]string)
-	}
-	result := &Session{
+	result := &Session[TData]{
 		Data:    values,
 		Expires: time.Now().Add(sessionLifetime),
 	}
@@ -107,14 +94,14 @@ func (s *sessionStore) create(values SessionData, sessionLifetime time.Duration)
 	return id, result
 }
 
-func (s *sessionStore) get(id string) *Session {
+func (s *sessionStore[TData]) get(id string) *Session[TData] {
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	s.prune()
 	return s.sessions[id]
 }
 
-func (s *sessionStore) prune() {
+func (s *sessionStore[TData]) prune() {
 	for id, session := range s.sessions {
 		if session.Expires.Before(time.Now()) {
 			delete(s.sessions, id)
@@ -122,7 +109,7 @@ func (s *sessionStore) prune() {
 	}
 }
 
-func (s *sessionStore) destroy(id string) {
+func (s *sessionStore[TData]) destroy(id string) {
 	log.Info().Msgf("Destroying user session (id=%s)", id)
 	s.mux.Lock()
 	defer s.mux.Unlock()
@@ -148,6 +135,6 @@ func getSessionCookie(request *http.Request) string {
 	return cookie.Value
 }
 
-func (m *SessionManager) SessionCount() int {
+func (m *SessionManager[TData]) SessionCount() int {
 	return len(m.store.sessions)
 }

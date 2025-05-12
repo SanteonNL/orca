@@ -12,6 +12,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -179,7 +180,7 @@ func TestService(t *testing.T) {
 		},
 	}
 
-	sessionManager := user.NewSessionManager(time.Minute)
+	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 	service, err := newWithClients(context.Background(), sessionManager, cfg, httpServer.URL, must.ParseURL("/frontend"), keysClient, certsClient, profile.Test())
 	require.NoError(t, err)
 	service.secureTokenService = &stubSecureTokenService{}
@@ -207,16 +208,12 @@ func TestService(t *testing.T) {
 			require.NotNil(t, sessionData)
 
 			t.Run("check Practitioner is in session", func(t *testing.T) {
-				practitionerRef := sessionData.StringValues["practitioner"]
-				require.NotEmpty(t, practitionerRef)
-				require.IsType(t, fhir.Practitioner{}, sessionData.OtherValues[practitionerRef])
+				assert.NotNil(t, session.Get[fhir.Practitioner](sessionData))
 			})
 			t.Run("check ServiceRequest is in session", func(t *testing.T) {
-				serviceRequestRef := sessionData.StringValues["serviceRequest"]
-				require.NotEmpty(t, serviceRequestRef)
-				require.IsType(t, fhir.ServiceRequest{}, sessionData.OtherValues[serviceRequestRef])
+				serviceRequest := session.Get[fhir.ServiceRequest](sessionData)
+				require.NotNil(t, serviceRequest)
 				t.Run("check Workflow-ID identifier is properly set on the ServiceRequest", func(t *testing.T) {
-					serviceRequest := sessionData.OtherValues[serviceRequestRef].(fhir.ServiceRequest)
 					assert.Contains(t, serviceRequest.Identifier, fhir.Identifier{
 						System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
 						Value:  to.Ptr("b526e773-e1a6-4533-bd00-1360c97e745f"),
@@ -224,9 +221,7 @@ func TestService(t *testing.T) {
 				})
 			})
 			t.Run("check Patient is in session", func(t *testing.T) {
-				patientRef := sessionData.StringValues["patient"]
-				require.NotEmpty(t, patientRef)
-				require.IsType(t, fhir.Patient{}, sessionData.OtherValues[patientRef])
+				assert.NotNil(t, session.Get[fhir.Patient](sessionData))
 			})
 		})
 	})
@@ -255,7 +250,7 @@ func TestService(t *testing.T) {
 		sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
 		require.NotNil(t, sessionData)
 		require.Equal(t, "/frontend/task/12345678910", launchHttpResponse.Header.Get("Location"))
-		assert.Equal(t, "Task/"+*existingTask.Id, sessionData.StringValues["task"])
+		assert.Equal(t, "Task/"+*existingTask.Id, sessionData.Get("Task").Path)
 	})
 
 	t.Run("test invalid SAML response", func(t *testing.T) {
@@ -285,7 +280,7 @@ func TestService(t *testing.T) {
 
 		// Mock getSessionData to fail twice before succeeding
 		callCount := 0
-		service.getSessionData = func(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
+		service.getSessionData = func(ctx context.Context, accessToken string, launchContext LaunchContext) (*session.Data, error) {
 			callCount++
 			if callCount < 3 {
 				return nil, errors.New("temporary error")
@@ -317,7 +312,7 @@ func TestService(t *testing.T) {
 		sleep = func(t time.Duration) { sleeps = append(sleeps, t) }
 
 		callCount := 0
-		service.getSessionData = func(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
+		service.getSessionData = func(ctx context.Context, accessToken string, launchContext LaunchContext) (*session.Data, error) {
 			callCount++
 			return nil, errors.New("temporary error") //always throw an error
 		}

@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"net/http"
 	"net/url"
 	"os"
@@ -47,7 +48,12 @@ type workflowContext struct {
 	patientBsn string
 }
 
-func New(sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl *url.URL, profile profile.Provider) (*Service, error) {
+type OtherSessionData struct {
+	LaunchContext LaunchContext
+	AccessToken   string
+}
+
+func New(sessionManager *user.SessionManager[session.Data], config Config, baseURL string, frontendLandingUrl *url.URL, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
@@ -62,7 +68,7 @@ func New(sessionManager *user.SessionManager, config Config, baseURL string, fro
 	return newWithClients(ctx, sessionManager, config, baseURL, frontendLandingUrl, azKeysClient, azCertClient, profile)
 }
 
-func newWithClients(ctx context.Context, sessionManager *user.SessionManager, config Config, baseURL string, frontendLandingUrl *url.URL,
+func newWithClients(ctx context.Context, sessionManager *user.SessionManager[session.Data], config Config, baseURL string, frontendLandingUrl *url.URL,
 	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient, profile profile.Provider) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
@@ -181,7 +187,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager, co
 }
 
 type Service struct {
-	sessionManager         *user.SessionManager
+	sessionManager         *user.SessionManager[session.Data]
 	config                 Config
 	baseURL                string
 	frontendLandingUrl     *url.URL
@@ -193,7 +199,7 @@ type Service struct {
 	zorgplatformCert       *x509.Certificate
 	profile                profile.Provider
 	secureTokenService     SecureTokenService
-	getSessionData         func(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error)
+	getSessionData         func(ctx context.Context, accessToken string, launchContext LaunchContext) (*session.Data, error)
 	// accessTokenCache stores the Zorgplatform access tokens a given CarePlan (from X-SCP-Context)
 	// Requesting an access token involves an, chained lookup, so we cache the result for some time.
 	accessTokenCache *ttlcache.Cache[string, string]
@@ -333,7 +339,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	log.Ctx(request.Context()).Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
-	var sessionData *user.SessionData
+	var sessionData *session.Data
 	// INT-572: Adding a retry mechanism, as in some cases the Patient returns a 404 when a new workflow is created and directly launched in HiX
 	for i := 1; i <= 4; i++ {
 		sessionData, err = s.getSessionData(request.Context(), accessToken, launchContext)
@@ -355,14 +361,14 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// Redirect to landing page
 	log.Ctx(request.Context()).Info().Msg("Successfully launched through ChipSoft HiX app launch")
 
-	taskRef := sessionData.StringValues["task"]
+	taskResource := sessionData.Get("Task")
 	redirectURL := s.frontendLandingUrl
 	// If the task doesn't exist yet, send the user to the new page, where data is first confirmed
-	if taskRef == "" {
+	if taskResource == nil {
 		redirectURL = redirectURL.JoinPath("new")
 	} else {
 		// taskRef is in format Task/<id>, redirect URL is in task/<id> format
-		redirectURL = redirectURL.JoinPath("task", strings.Split(taskRef, "/")[1])
+		redirectURL = redirectURL.JoinPath("task", strings.Split(taskResource.Path, "/")[1])
 	}
 	http.Redirect(response, request, redirectURL.String(), http.StatusFound)
 }
@@ -449,7 +455,7 @@ func (s *Service) createZorgplatformApiClient(accessToken string) *http.Client {
 	}
 }
 
-func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string, launchContext LaunchContext) (*user.SessionData, error) {
+func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string, launchContext LaunchContext) (*session.Data, error) {
 	// New client that uses the access token
 	apiUrl, err := url.Parse(s.config.ApiUrl)
 	if err != nil {
@@ -494,7 +500,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 		return nil, fmt.Errorf("unable to find Patient resource in Bundle: %w", err)
 	}
 	var practitioner fhir.Practitioner
-	//TODO: The Practitioner has no indetifier set, so we cannot ensure this is the launched Practitioner. Verify with Zorgplatform
+	//TODO: The Practitioner has no identifier set, so we cannot ensure this is the launched Practitioner. Verify with Zorgplatform
 	// if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryHasIdentifier(launchContext.Practitioner.Identifier[0]), &practitioner); err != nil {
 	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Practitioner"), &practitioner); err != nil {
 		return nil, fmt.Errorf("unable to find Practitioner resource in Bundle: %w", err)
@@ -592,36 +598,22 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 		},
 	}
 
-	// patientRef := "Patient/magic-" + uuid.NewString() <-- Do not use a magic link so that we can request all Conditions for the Patient
-	serviceRequestRef := "ServiceRequest/magic-" + uuid.NewString()
-	practitionerRef := "Practitioner/magic-" + uuid.NewString()
-	practitionerRoleRef := "PractitionerRole/magic-" + uuid.NewString()
-	organizationRef := "Organization/magic-" + uuid.NewString()
-
-	sessionData := user.SessionData{
-		FHIRLauncher: launcherKey,
-		//TODO: See how/if to pass the conditions to the StringValues
-		StringValues: map[string]string{
-			"patient":          "Patient/" + *patient.Id,
-			"serviceRequest":   serviceRequestRef,
-			"practitioner":     practitionerRef,
-			"practitionerRole": practitionerRoleRef,
-			"organization":     organizationRef,
-			"accessToken":      accessToken,
-			"taskIdentifier":   zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId,
+	sessionData := session.Data{
+		FHIRLauncher:   launcherKey,
+		TaskIdentifier: to.Ptr(zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId),
+		LauncherProperties: map[string]string{
+			"accessToken": accessToken,
 		},
-		OtherValues: map[string]interface{}{
-			"Patient/" + *patient.Id:   patient, //Zorgplatform only allows for a GET on /Patient, we request by ID
-			practitionerRef:            practitioner,
-			practitionerRoleRef:        launchContext.PractitionerRole,
-			serviceRequestRef:          *serviceRequest,
-			organizationRef:            organization,
-			*reasonReference.Reference: reason,
-			"launchContext":            launchContext, // Can be used to fetch a new access token after expiration
-		},
+		//LaunchContext: launchContext, // Can be used to fetch a new access token after expiration
 	}
+	sessionData.Set("Patient/"+*patient.Id, patient)
+	sessionData.Set("ServiceRequest/magic-"+uuid.NewString(), *serviceRequest)
+	sessionData.Set("Practitioner/magic-"+uuid.NewString(), practitioner)
+	sessionData.Set("PractitionerRole/magic-"+uuid.NewString(), launchContext.PractitionerRole)
+	sessionData.Set("Organization/magic-"+uuid.NewString(), organization)
+	sessionData.Set(*reasonReference.Reference, reason)
 	if existingTaskRef != nil {
-		sessionData.StringValues["task"] = *existingTaskRef
+		sessionData.Set(*existingTaskRef, nil)
 	}
 	return &sessionData, nil
 }

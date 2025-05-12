@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
 	"net/http"
 	"net/url"
@@ -53,7 +54,7 @@ func New(
 	config Config,
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
-	sessionManager *user.SessionManager,
+	sessionManager *user.SessionManager[session.Data],
 	messageBroker messaging.Broker,
 	eventManager events.Manager,
 	ehrFhirProxy coolfhir.HttpProxy,
@@ -144,7 +145,7 @@ type Service struct {
 	config         Config
 	profile        profile.Provider
 	orcaPublicURL  *url.URL
-	SessionManager *user.SessionManager
+	SessionManager *user.SessionManager[session.Data]
 	frontendUrl    string
 	// localCarePlanServiceUrl is the URL of the local Care Plan Service, used to create new CarePlans.
 	localCarePlanServiceUrl *url.URL
@@ -332,7 +333,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	}))
 
 	// Logout endpoint
-	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
+	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
 		s.SessionManager.Destroy(writer, request)
 		// If there is a 'Referer' value in the header, redirect to that URL
 		if referer := request.Header.Get("Referer"); referer != "" {
@@ -347,20 +348,20 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 // withSession is a middleware that retrieves the session for the given request.
 // It then calls the given handler function and provides the session.
 // If there's no active session, it returns a 401 Unauthorized response.
-func (s Service) withSession(next func(response http.ResponseWriter, request *http.Request, session *user.SessionData)) http.HandlerFunc {
+func (s Service) withSession(next func(response http.ResponseWriter, request *http.Request, session *session.Data)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
-		session := s.SessionManager.Get(request)
-		if session == nil {
+		sessionData := s.SessionManager.Get(request)
+		if sessionData == nil {
 			http.Error(response, "no session found", http.StatusUnauthorized)
 			return
 		}
-		next(response, request, session)
+		next(response, request, sessionData)
 	}
 }
 
 // handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
-func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	clientFactory := clients.Factories[session.FHIRLauncher](session.StringValues)
+func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
+	clientFactory := clients.Factories[sessionData.FHIRLauncher](sessionData.LauncherProperties)
 	proxyBasePath := basePath + "/ehr/fhir"
 	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", clientFactory.BaseURL, proxyBasePath,
 		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false, false)
@@ -368,22 +369,20 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
 	// E.g., ChipSoft HiX doesn't provide ServiceRequest and Practitioner as FHIR resources, so whatever there is, is converted to FHIR and cached in the session.
-	if resource, exists := session.OtherValues[resourcePath]; exists {
-		coolfhir.SendResponse(writer, http.StatusOK, resource)
+	if resource := sessionData.Get(resourcePath); resource != nil && resource.Resource != nil {
+		coolfhir.SendResponse(writer, http.StatusOK, *resource.Resource)
 	} else {
 		proxy.ServeHTTP(writer, request)
 	}
 }
 
-func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http.Request, session *user.SessionData) {
-	launchedTaskIdentifier := session.StringValues["taskIdentifier"]
-
-	if launchedTaskIdentifier == "" {
+func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
+	if sessionData.TaskIdentifier == nil {
 		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No taskIdentifier found in session"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 
-	sessionTaskIdentifier, err := coolfhir.TokenToIdentifier(launchedTaskIdentifier)
+	sessionTaskIdentifier, err := coolfhir.TokenToIdentifier(*sessionData.TaskIdentifier)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("Invalid taskIdentifier in session: %v", err), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
@@ -623,21 +622,21 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 	}, nil
 }
 
-func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, session *user.SessionData) {
+func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request, sessionData *session.Data) {
 	contextData := struct {
-		Patient          string `json:"patient"`
-		ServiceRequest   string `json:"serviceRequest"`
-		Practitioner     string `json:"practitioner"`
-		PractitionerRole string `json:"practitionerRole"`
-		Task             string `json:"task"`
-		TaskIdentifier   string `json:"taskIdentifier"`
+		Patient          string  `json:"patient"`
+		ServiceRequest   string  `json:"serviceRequest"`
+		Practitioner     string  `json:"practitioner"`
+		PractitionerRole string  `json:"practitionerRole"`
+		Task             string  `json:"task"`
+		TaskIdentifier   *string `json:"taskIdentifier"`
 	}{
-		Patient:          session.StringValues["patient"],
-		ServiceRequest:   session.StringValues["serviceRequest"],
-		Practitioner:     session.StringValues["practitioner"],
-		PractitionerRole: session.StringValues["practitionerRole"],
-		Task:             session.StringValues["task"],
-		TaskIdentifier:   session.StringValues["taskIdentifier"],
+		Patient:          sessionData.Get("Patient").Path,
+		ServiceRequest:   sessionData.Get("ServiceRequest").Path,
+		Practitioner:     sessionData.Get("Practitioner").Path,
+		PractitionerRole: sessionData.Get("PractitionerRole").Path,
+		Task:             sessionData.Get("Task").Path,
+		TaskIdentifier:   sessionData.TaskIdentifier,
 	}
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)

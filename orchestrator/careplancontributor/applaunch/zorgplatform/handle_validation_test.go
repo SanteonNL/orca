@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"os"
 	"strings"
 	"testing"
@@ -23,7 +24,7 @@ import (
 
 // This test does not run the expiry checks as the Expires date in the assertion is in the past
 func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.T) {
-	sessionManager := user.NewSessionManager(time.Minute)
+	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 	s := &Service{
 		sessionManager: sessionManager,
 	}
@@ -166,7 +167,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 }
 
 func TestValidateTokenExpiry(t *testing.T) {
-	sessionManager := user.NewSessionManager(time.Minute)
+	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 	s := &Service{
 		sessionManager: sessionManager,
 	}
@@ -230,7 +231,7 @@ func TestValidateTokenExpiry(t *testing.T) {
 	}
 }
 func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
-	sessionManager := user.NewSessionManager(time.Minute)
+	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 
 	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
 	require.NoError(t, err)
