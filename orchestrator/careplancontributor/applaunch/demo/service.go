@@ -3,13 +3,17 @@ package demo
 import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
+	"strconv"
 )
 
 const fhirLauncherKey = "demo"
@@ -26,11 +30,12 @@ func init() {
 	}
 }
 
-func New(sessionManager *user.SessionManager, config Config, frontendLandingUrl *url.URL) *Service {
+func New(sessionManager *user.SessionManager[session.Data], config Config, frontendLandingUrl *url.URL, profile profile.Provider) *Service {
 	return &Service{
 		sessionManager:     sessionManager,
 		config:             config,
 		frontendLandingUrl: frontendLandingUrl,
+		profile:            profile,
 		ehrFHIRClientFactory: func(baseURL *url.URL, httpClient *http.Client) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, nil)
 		},
@@ -38,11 +43,12 @@ func New(sessionManager *user.SessionManager, config Config, frontendLandingUrl 
 }
 
 type Service struct {
-	sessionManager       *user.SessionManager
+	sessionManager       *user.SessionManager[session.Data]
 	config               Config
 	baseURL              string
 	frontendLandingUrl   *url.URL
 	ehrFHIRClientFactory func(*url.URL, *http.Client) fhirclient.Client
+	profile              profile.Provider
 }
 
 func (s *Service) cpsFhirClient() fhirclient.Client {
@@ -59,39 +65,60 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	if !ok {
 		return
 	}
+	sessionData := session.Data{
+		FHIRLauncher: fhirLauncherKey,
+		LauncherProperties: map[string]string{
+			"iss": values["iss"],
+		},
+	}
 	// taskIdentifier is optional, only set if present
 	if taskIdentifiers := request.URL.Query()["taskIdentifier"]; len(taskIdentifiers) > 0 {
-		values["taskIdentifier"] = taskIdentifiers[0]
+		sessionData.TaskIdentifier = &taskIdentifiers[0]
 	}
 
 	//Destroy the previous session if found
-	session := s.sessionManager.Get(request)
-	if session != nil {
+	existingSession := s.sessionManager.Get(request)
+	if existingSession != nil {
 		log.Ctx(request.Context()).Debug().Msg("Demo launch performed and previous session found - Destroying previous session")
 		s.sessionManager.Destroy(response, request)
 	}
 
 	ehrFHIRClientProps := clients.Factories[fhirLauncherKey](values)
 	ehrFHIRClient := s.ehrFHIRClientFactory(ehrFHIRClientProps.BaseURL, &http.Client{Transport: ehrFHIRClientProps.Client})
+
 	var practitioner fhir.Practitioner
 	if err := ehrFHIRClient.Read(values["practitioner"], &practitioner); err != nil {
 		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to read practitioner resource")
 		http.Error(response, "Failed to read practitioner resource: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	values["practitioner"] = "Practitioner/" + *practitioner.Id
+	sessionData.Set("Practitioner/"+*practitioner.Id, practitioner)
 
-	s.sessionManager.Create(response, user.SessionData{
-		FHIRLauncher: fhirLauncherKey,
-		StringValues: values,
-		OtherValues: map[string]any{
-			values["practitioner"]: practitioner,
-		},
-	})
+	var patient fhir.Patient
+	if err := ehrFHIRClient.Read(values["patient"], &patient); err != nil {
+		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to read patient resource")
+		http.Error(response, "Failed to read patient resource: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	sessionData.Set("Patient/"+*patient.Id, patient)
+
+	organizations, err := s.profile.Identities(request.Context())
+	if err != nil {
+		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to get active organization")
+		http.Error(response, "Failed to get active organization: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if len(organizations) != 1 {
+		log.Ctx(request.Context()).Error().Msgf("Expected 1 active organization, found %d", len(organizations))
+		http.Error(response, "Expected 1 active organization, found "+strconv.Itoa(len(organizations)), http.StatusInternalServerError)
+		return
+	}
+	sessionData.Set("Organization/magic-"+uuid.NewString(), organizations[0])
+	s.sessionManager.Create(response, sessionData)
 
 	var existingTask *fhir.Task
-	if values["taskIdentifier"] != "" {
-		taskIdentifier, err := coolfhir.TokenToIdentifier(values["taskIdentifier"])
+	if sessionData.TaskIdentifier != nil {
+		taskIdentifier, err := coolfhir.TokenToIdentifier(*sessionData.TaskIdentifier)
 		if err != nil {
 			http.Error(response, "Failed to parse task identifier: "+err.Error(), http.StatusBadRequest)
 			return

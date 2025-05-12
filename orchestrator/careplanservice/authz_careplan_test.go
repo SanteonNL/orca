@@ -33,18 +33,18 @@ func TestCarePlanAuthzPolicy(t *testing.T) {
 	}
 	t.Run("read", func(t *testing.T) {
 		policy := ReadCarePlanAuthzPolicy()
-		testPolicies(t, []AuthzPolicyTest[fhir.CarePlan]{
+		testPolicies(t, []AuthzPolicyTest[*fhir.CarePlan]{
 			{
 				name:      "allow (in CareTeam)",
 				policy:    policy,
-				resource:  carePlan,
+				resource:  &carePlan,
 				principal: auth.TestPrincipal1,
 				wantAllow: true,
 			},
 			{
 				name:      "disallow (not in CareTeam)",
 				policy:    policy,
-				resource:  carePlan,
+				resource:  &carePlan,
 				principal: auth.TestPrincipal2,
 				wantAllow: false,
 			},

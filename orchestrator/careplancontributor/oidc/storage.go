@@ -4,10 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/google/uuid"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"sync"
 	"time"
 )
@@ -15,12 +17,42 @@ import (
 var _ op.Storage = (*Storage)(nil)
 var _ op.CanSetUserinfoFromRequest = (*Storage)(nil)
 
+const ScopePatient = "patient"
+const ClaimPatient = "patient"
+const ClaimRoles = "roles"
+const TokenLifetime = 5 * time.Minute
+const AuthRequestLifetime = 5 * time.Minute
+
 type Storage struct {
 	mux          *sync.RWMutex
 	authRequests map[string]AuthRequest
 	tokens       map[string]Token
 	clients      map[string]op.Client
 	signingKey   SigningKey
+}
+
+func (o Storage) startPrune() {
+	go func() {
+		for {
+			time.Sleep(1 * time.Minute)
+			o.prune(time.Now())
+		}
+	}()
+}
+
+func (o Storage) prune(now time.Time) {
+	o.mux.Lock()
+	defer o.mux.Unlock()
+	for id, req := range o.authRequests {
+		if req.ExpirationTime.Before(now) {
+			delete(o.authRequests, id)
+		}
+	}
+	for id, token := range o.tokens {
+		if token.ExpirationTime.Before(now) {
+			delete(o.tokens, id)
+		}
+	}
 }
 
 func (o Storage) AuthenticateUser(ctx context.Context, authRequestID string, user UserDetails) error {
@@ -43,8 +75,9 @@ func (o Storage) CreateAuthRequest(ctx context.Context, request *oidc.AuthReques
 	defer o.mux.Unlock()
 	authRequestID := uuid.NewString()
 	req := AuthRequest{
-		ID:          authRequestID,
-		AuthRequest: *request,
+		ID:             authRequestID,
+		AuthRequest:    *request,
+		ExpirationTime: time.Now().Add(AuthRequestLifetime),
 	}
 	o.authRequests[authRequestID] = req
 	return &req, nil
@@ -102,13 +135,14 @@ func (o Storage) CreateAccessToken(ctx context.Context, request op.TokenRequest)
 	o.mux.Lock()
 	defer o.mux.Unlock()
 	token := &Token{
-		ID:       uuid.NewString(),
-		Audience: request.GetAudience(),
-		Scopes:   request.GetScopes(),
-		User:     *req.User,
+		ID:             uuid.NewString(),
+		Audience:       request.GetAudience(),
+		Scopes:         request.GetScopes(),
+		User:           *req.User,
+		ExpirationTime: time.Now().Add(TokenLifetime),
 	}
 	o.tokens[token.ID] = *token
-	return token.ID, time.Now().Add(5 * time.Minute), nil
+	return token.ID, token.ExpirationTime, nil
 }
 
 func (o Storage) SigningKey(ctx context.Context) (op.SigningKey, error) {
@@ -171,17 +205,22 @@ func (o Storage) SetUserinfoFromToken(ctx context.Context, userInfo *oidc.UserIn
 }
 
 func populateUserInfo(userInfo *oidc.UserInfo, scopes []string, user UserDetails) {
+	userInfo.Claims = map[string]any{}
 	for _, scope := range scopes {
 		switch scope {
+		case ScopePatient:
+			var patientIdentifiers []string
+			for _, identifier := range user.PatientIdentifiers {
+				patientIdentifiers = append(patientIdentifiers, coolfhir.IdentifierToToken(identifier))
+			}
+			userInfo.Claims[ClaimPatient] = patientIdentifiers
 		case oidc.ScopeOpenID:
 			userInfo.Subject = user.ID
 		case oidc.ScopeEmail:
 			userInfo.Email = user.Email
 		case oidc.ScopeProfile:
 			userInfo.Name = user.Name
-			userInfo.Claims = map[string]any{
-				"roles": user.Roles,
-			}
+			userInfo.Claims[ClaimRoles] = user.Roles
 		}
 	}
 }
@@ -238,6 +277,8 @@ type Token struct {
 	Audience []string
 	Scopes   []string
 	User     UserDetails
+
+	ExpirationTime time.Time
 }
 
 type UserDetails struct {
@@ -245,6 +286,8 @@ type UserDetails struct {
 	Name  string
 	Email string
 	Roles []string
+
+	PatientIdentifiers []fhir.Identifier
 }
 
 type AuthRequest struct {
@@ -256,6 +299,8 @@ type AuthRequest struct {
 	AuthDone      bool
 	Code          string
 	ApplicationID string
+
+	ExpirationTime time.Time
 }
 
 func (a *AuthRequest) Authenticate(details UserDetails) error {

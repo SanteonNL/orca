@@ -6,9 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -96,6 +96,8 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 		candidates = filtered
 	}
 
+	count := 100
+	startAt := 0
 	for name, values := range query {
 		if len(values) != 1 {
 			return fmt.Errorf("multiple values for query parameter: %s", name)
@@ -222,17 +224,49 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 			filterCandidates(func(candidate BaseResource) bool {
 				return candidate.URL == value
 			})
+		case "_start_at":
+			// custom parameter for pagination using 'next' link
+			var err error
+			startAt, err = strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("invalid _start_at parameter value (must be an int): %s", value)
+			}
+			if startAt < 0 {
+				return fmt.Errorf("invalid _start_at parameter value (must be >= 0): %s", value)
+			}
 		case "_count":
-			log.Logger.Warn().Msg("_count not supported in stub client, ignoring")
+			var err error
+			count, err = strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("invalid _count parameter value: %s", value)
+			}
 		default:
 			return fmt.Errorf("unsupported query parameter: %s", name)
 		}
 	}
 
 	result := fhir.Bundle{
-		Type:  fhir.BundleTypeSearchset,
-		Total: to.Ptr(len(candidates)),
+		Type: fhir.BundleTypeSearchset,
 	}
+
+	idxStart := startAt
+	idxEnd := idxStart + count
+	if idxStart > len(candidates) {
+		candidates = []BaseResource{}
+	} else {
+		if idxEnd > len(candidates) {
+			idxEnd = len(candidates)
+		} else {
+			nextURLQuery, _ := url.ParseQuery(query.Encode())
+			nextURLQuery.Set("_start_at", strconv.Itoa(idxEnd))
+			result.Link = append(result.Link, fhir.BundleLink{
+				Relation: "next",
+				Url:      "https://example.com/fhir/" + resourceType + "/_search?" + nextURLQuery.Encode(),
+			})
+		}
+		candidates = candidates[idxStart:idxEnd]
+	}
+
 	for _, candidate := range candidates {
 		result.Entry = append(result.Entry, fhir.BundleEntry{
 			Resource: candidate.Data,

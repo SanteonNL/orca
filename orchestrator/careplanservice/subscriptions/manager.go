@@ -1,3 +1,4 @@
+//go:generate mockgen -destination=./manager_mock.go -package=subscriptions -source=manager.go
 package subscriptions
 
 import (

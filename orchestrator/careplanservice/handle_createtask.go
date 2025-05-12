@@ -146,11 +146,30 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		carePlan.Status = fhir.RequestStatusActive
 		carePlan.Author = task.Requester
 		carePlan.Contained = data
+		// This is technically not needed, but adding it for the sake of data consistency
+		carePlan.Extension = []fhir.Extension{
+			{
+				Url: CreatorExtensionURL,
+				ValueReference: &fhir.Reference{
+					Type:       to.Ptr("Organization"),
+					Identifier: task.Requester.Identifier,
+				},
+			},
+		}
 
 		task.BasedOn = []fhir.Reference{
 			{
 				Type:      to.Ptr(coolfhir.ResourceType(carePlan)),
 				Reference: to.Ptr(carePlanURL),
+			},
+		}
+		task.Extension = []fhir.Extension{
+			{
+				Url: CreatorExtensionURL,
+				ValueReference: &fhir.Reference{
+					Type:       to.Ptr("Organization"),
+					Identifier: task.Requester.Identifier,
+				},
 			},
 		}
 
@@ -197,6 +216,16 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		if task.For == nil {
 			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
+		}
+
+		task.Extension = []fhir.Extension{
+			{
+				Url: CreatorExtensionURL,
+				ValueReference: &fhir.Reference{
+					Type:       to.Ptr("Organization"),
+					Identifier: task.Requester.Identifier,
+				},
+			},
 		}
 
 		samePatient := false

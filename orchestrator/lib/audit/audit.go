@@ -13,7 +13,7 @@ import (
 
 var nowFunc = time.Now
 
-func Event(localIdentity fhir.Identifier, action fhir.AuditEventAction, resourceReference *fhir.Reference, actingAgentRef *fhir.Reference) *fhir.AuditEvent {
+func Event(localIdentity fhir.Identifier, action fhir.AuditEventAction, resourceReference *fhir.Reference, actingAgentRef *fhir.Reference, policy []string) *fhir.AuditEvent {
 	// Map AuditEventAction to restful-interaction code
 	var interactionCode, interactionDisplay string
 	switch action {
@@ -52,6 +52,7 @@ func Event(localIdentity fhir.Identifier, action fhir.AuditEventAction, resource
 			{
 				Who:       actingAgentRef,
 				Requestor: true,
+				Policy:    policy,
 			},
 		},
 		Source: fhir.AuditEventSource{

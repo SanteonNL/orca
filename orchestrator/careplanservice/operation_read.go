@@ -11,26 +11,26 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
+	"strings"
 )
 
-var _ FHIROperation = &FHIRReadOperationHandler[any]{}
+var _ FHIROperation = &FHIRReadOperationHandler[fhir.HasExtension]{}
 
-type FHIRReadOperationHandler[T any] struct {
+type FHIRReadOperationHandler[T fhir.HasExtension] struct {
 	fhirClient  fhirclient.Client
 	authzPolicy Policy[T]
 }
 
 func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(request.ResourcePath)
-	log.Ctx(ctx).Info().Msgf("Getting %s with ID: %s", resourceType, request.ResourceId)
 	var resource T
 	err := h.fhirClient.ReadWithContext(ctx, resourceType+"/"+request.ResourceId, &resource, fhirclient.ResponseHeaders(request.FhirHeaders))
 	if err != nil {
 		return nil, err
 	}
 
-	hasAccess, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
-	if !hasAccess {
+	authzDecision, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
+	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal has access to %s", resourceType)
 		}
@@ -39,6 +39,7 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 			StatusCode: http.StatusForbidden,
 		}
 	}
+	log.Ctx(ctx).Info().Msgf("Getting %s/%s (authz=%s)", resourceType, request.ResourceId, strings.Join(authzDecision.Reasons, ";"))
 
 	resourceRaw, err := json.Marshal(resource)
 	if err != nil {
@@ -60,7 +61,7 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 	}, &fhir.Reference{
 		Identifier: &request.Principal.Organization.Identifier[0],
 		Type:       to.Ptr("Organization"),
-	})
+	}, authzDecision.Reasons)
 	tx.Create(auditEvent)
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
