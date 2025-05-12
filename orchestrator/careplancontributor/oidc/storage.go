@@ -20,6 +20,8 @@ var _ op.CanSetUserinfoFromRequest = (*Storage)(nil)
 const ScopePatient = "patient"
 const ClaimPatient = "patient"
 const ClaimRoles = "roles"
+const TokenLifetime = 5 * time.Minute
+const AuthRequestLifetime = 5 * time.Minute
 
 type Storage struct {
 	mux          *sync.RWMutex
@@ -27,6 +29,30 @@ type Storage struct {
 	tokens       map[string]Token
 	clients      map[string]op.Client
 	signingKey   SigningKey
+}
+
+func (o Storage) startPrune() {
+	go func() {
+		for {
+			time.Sleep(1 * time.Minute)
+			o.prune(time.Now())
+		}
+	}()
+}
+
+func (o Storage) prune(now time.Time) {
+	o.mux.Lock()
+	defer o.mux.Unlock()
+	for id, req := range o.authRequests {
+		if req.ExpirationTime.Before(now) {
+			delete(o.authRequests, id)
+		}
+	}
+	for id, token := range o.tokens {
+		if token.ExpirationTime.Before(now) {
+			delete(o.tokens, id)
+		}
+	}
 }
 
 func (o Storage) AuthenticateUser(ctx context.Context, authRequestID string, user UserDetails) error {
@@ -49,8 +75,9 @@ func (o Storage) CreateAuthRequest(ctx context.Context, request *oidc.AuthReques
 	defer o.mux.Unlock()
 	authRequestID := uuid.NewString()
 	req := AuthRequest{
-		ID:          authRequestID,
-		AuthRequest: *request,
+		ID:             authRequestID,
+		AuthRequest:    *request,
+		ExpirationTime: time.Now().Add(AuthRequestLifetime),
 	}
 	o.authRequests[authRequestID] = req
 	return &req, nil
@@ -108,13 +135,14 @@ func (o Storage) CreateAccessToken(ctx context.Context, request op.TokenRequest)
 	o.mux.Lock()
 	defer o.mux.Unlock()
 	token := &Token{
-		ID:       uuid.NewString(),
-		Audience: request.GetAudience(),
-		Scopes:   request.GetScopes(),
-		User:     *req.User,
+		ID:             uuid.NewString(),
+		Audience:       request.GetAudience(),
+		Scopes:         request.GetScopes(),
+		User:           *req.User,
+		ExpirationTime: time.Now().Add(TokenLifetime),
 	}
 	o.tokens[token.ID] = *token
-	return token.ID, time.Now().Add(5 * time.Minute), nil
+	return token.ID, token.ExpirationTime, nil
 }
 
 func (o Storage) SigningKey(ctx context.Context) (op.SigningKey, error) {
@@ -249,6 +277,8 @@ type Token struct {
 	Audience []string
 	Scopes   []string
 	User     UserDetails
+
+	ExpirationTime time.Time
 }
 
 type UserDetails struct {
@@ -269,6 +299,8 @@ type AuthRequest struct {
 	AuthDone      bool
 	Code          string
 	ApplicationID string
+
+	ExpirationTime time.Time
 }
 
 func (a *AuthRequest) Authenticate(details UserDetails) error {
