@@ -1093,16 +1093,15 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 			},
 		},
 		orcaPublicURL: must.ParseURL(httpServer.URL),
+		config:        Config{StaticBearerToken: "secret"},
 	}
 	service.RegisterHandlers(mux)
-	httpClient := &http.Client{
-		Transport: auth.AuthenticatedTestRoundTripper(httpServer.Client().Transport, auth.TestPrincipal1, ""),
-	}
 
 	t.Run("X-Scp-Entity-Identifier", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest(http.MethodPost, httpServer.URL+"/cpc/external/fhir/Task/_search", nil)
+		httpRequest.Header.Set("Authorization", "Bearer secret")
 		httpRequest.Header.Set("X-Scp-Entity-Identifier", "http://fhir.nl/fhir/NamingSystem/ura|2")
-		httpResponse, err := httpClient.Do(httpRequest)
+		httpResponse, err := httpServer.Client().Do(httpRequest)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 		responseData, err := io.ReadAll(httpResponse.Body)
@@ -1111,7 +1110,8 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 	})
 	t.Run("can't determine remote node", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest(http.MethodPost, httpServer.URL+"/cpc/external/fhir/Task/_search", nil)
-		httpResponse, err := httpClient.Do(httpRequest)
+		httpRequest.Header.Set("Authorization", "Bearer secret")
+		httpResponse, err := httpServer.Client().Do(httpRequest)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 		responseData, err := io.ReadAll(httpResponse.Body)
