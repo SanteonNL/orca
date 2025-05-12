@@ -871,18 +871,19 @@ func TestService_ProxyToExternalCPS(t *testing.T) {
 }
 
 func TestService_handleGetContext(t *testing.T) {
-	httpResponse := httptest.NewRecorder()
-	sessionData := session.Data{
-		TaskIdentifier: to.Ptr("task-identifier-123"),
-	}
-	sessionData.Set("Practitioner/the-doctor", nil)
-	sessionData.Set("PractitionerRole/the-doctor-role", nil)
-	sessionData.Set("ServiceRequest/1", nil)
-	sessionData.Set("Patient/1", nil)
-	sessionData.Set("Task/1", nil)
-	Service{}.handleGetContext(httpResponse, nil, &sessionData)
-	assert.Equal(t, http.StatusOK, httpResponse.Code)
-	assert.JSONEq(t, `{
+	t.Run("everything present", func(t *testing.T) {
+		httpResponse := httptest.NewRecorder()
+		sessionData := session.Data{
+			TaskIdentifier: to.Ptr("task-identifier-123"),
+		}
+		sessionData.Set("Practitioner/the-doctor", nil)
+		sessionData.Set("PractitionerRole/the-doctor-role", nil)
+		sessionData.Set("ServiceRequest/1", nil)
+		sessionData.Set("Patient/1", nil)
+		sessionData.Set("Task/1", nil)
+		Service{}.handleGetContext(httpResponse, nil, &sessionData)
+		assert.Equal(t, http.StatusOK, httpResponse.Code)
+		assert.JSONEq(t, `{
 		"practitioner": "Practitioner/the-doctor",
 		"practitionerRole": "PractitionerRole/the-doctor-role",
 		"serviceRequest": "ServiceRequest/1",
@@ -890,6 +891,27 @@ func TestService_handleGetContext(t *testing.T) {
 		"task": "Task/1",
 		"taskIdentifier": "task-identifier-123"
 	}`, httpResponse.Body.String())
+	})
+	t.Run("no PractitionerRole", func(t *testing.T) {
+		httpResponse := httptest.NewRecorder()
+		sessionData := session.Data{
+			TaskIdentifier: to.Ptr("task-identifier-123"),
+		}
+		sessionData.Set("Practitioner/the-doctor", nil)
+		sessionData.Set("ServiceRequest/1", nil)
+		sessionData.Set("Patient/1", nil)
+		sessionData.Set("Task/1", nil)
+		Service{}.handleGetContext(httpResponse, nil, &sessionData)
+		assert.Equal(t, http.StatusOK, httpResponse.Code)
+		assert.JSONEq(t, `{
+		"practitioner": "Practitioner/the-doctor",
+		"practitionerRole": "",
+		"serviceRequest": "ServiceRequest/1",
+		"patient": "Patient/1",
+		"task": "Task/1",
+		"taskIdentifier": "task-identifier-123"
+	}`, httpResponse.Body.String())
+	})
 }
 
 func TestService_proxyToAllCareTeamMembers(t *testing.T) {
