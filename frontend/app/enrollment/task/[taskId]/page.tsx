@@ -46,7 +46,7 @@ export default function EnrollmentTaskPage() {
         getLaunchableApps(primaryTaskPerformer)
             .then((apps) => {
                 if (apps.length == 0) {
-                    return undefined
+                    return
                 }
                 // might want to support a list in the future
                 setPatientViewerUrl(apps[0].URL)
