@@ -837,6 +837,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 			// The header value is in the form of <system>|<value>
 			identifier, err := coolfhir.TokenToIdentifier(headerValue)
 			if err != nil {
+				return nil, nil, fmt.Errorf("%s: invalid identifier (value=%s): %w", header, headerValue, err)
 			}
 			endpoints, err := s.profile.CsdDirectory().LookupEndpoint(ctx, identifier, profile.FHIRBaseURLEndpointName)
 			if err != nil {
