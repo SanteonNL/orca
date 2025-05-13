@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"net/http"
 	"net/url"
@@ -30,11 +31,11 @@ type Service struct {
 	config             Config
 	stateToTokenUrlMap map[string]string //TODO: move to redis
 	mu                 *sync.Mutex
-	sessionManager     *user.SessionManager
+	sessionManager     *user.SessionManager[session.Data]
 	landingUrlPath     *url.URL
 }
 
-func New(config Config, manager *user.SessionManager, landingUrlPath *url.URL) *Service {
+func New(config Config, manager *user.SessionManager[session.Data], landingUrlPath *url.URL) *Service {
 	return &Service{
 		config:             config,
 		stateToTokenUrlMap: make(map[string]string),
@@ -115,12 +116,13 @@ func (s *Service) handleSmartAppLaunchRedirect(response http.ResponseWriter, req
 	log.Ctx(request.Context()).Info().Msgf("SMART App Launch succeeded, got the following response\n%v", tokenResponse)
 
 	// 1) Extract the type of launch that is being performed, for example an enrollment, or a data view
-	// 2) switch type - call the apropriate service to handle the request
+	// 2) switch type - call the appropriate service to handle the request
 	// TODO: Need to provide "patient", "serviceRequest", "practitioner" in the "values" map
-	s.sessionManager.Create(response, user.SessionData{
+	s.sessionManager.Create(response, session.Data{
 		FHIRLauncher: fhirLauncherKey,
-		StringValues: map[string]string{
+		LauncherProperties: map[string]string{
 			"access_token": tokenResponse["access_token"].(string),
+			"iss":          request.URL.Query().Get("iss"),
 		},
 	})
 	http.Redirect(response, request, s.landingUrlPath.String(), http.StatusFound)

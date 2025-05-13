@@ -32,9 +32,14 @@ Use the following environment variables to configure the orchestrator:
 ORCA can act as OpenID Connect Provider for users that have an existing session (initiated through app launch).
 This allows the launch of OIDC-enabled applications that can't directly authenticate using the EHR.
 It supports the following scopes:
-- `openid` (required, adds `sub` claim)
-- `profile` (adds `name` and `roles` claims)
-- `email` (add `email` claim)
+- `openid`: required, adds the `sub`  and `orgid` claims.
+  - The `sub` claim contains the user identifier unique to the integrated EHR. Its format depends on the EHR (e.g., for ChipSoft HiX it's `<user id>@<HL7 NL OID>`).
+  - The `orgid` claim contains an array of organization identifiers (string) for which the user is authenticated in HL7 FHIR token format.
+    It follows the following format: `<system>|<value>`, where the `system` depends on the SCP profile.
+    Note: currently, the system of the identifier will always be URA (`http://fhir.nl/fhir/NamingSystem/ura`).
+- `profile`: adds the `name` and `roles` claims.
+- `email`: adds the `email` claim.
+- `patient`: adds `patient` claim, which contains an array with identifiers of the patient associated with the ORCA user session. The format of the identifiers is `<system>|<value>`.
 
 The claims in the ID token are based on the user information from the EHR.
 

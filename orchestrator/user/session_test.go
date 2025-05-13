@@ -11,15 +11,11 @@ import (
 
 // Test_SessionManager_SessionLifecycle tests the lifecycle of a session. It creates a session, retrieves it, deletes it and verifies that it is deleted.
 func Test_SessionManager_SessionLifecycle(t *testing.T) {
-	sessionManager := NewSessionManager(time.Minute)
+	sessionManager := NewSessionManager[string](time.Minute)
 	response := httptest.NewRecorder()
 
 	// Create a session
-	sessionManager.Create(response, SessionData{
-		StringValues: map[string]string{
-			"key": "value",
-		},
-	})
+	sessionManager.Create(response, "test")
 	require.Equal(t, 1, len(sessionManager.store.sessions))
 	require.Equal(t, http.StatusOK, response.Code)
 
@@ -35,15 +31,11 @@ func Test_SessionManager_SessionLifecycle(t *testing.T) {
 	sessionData = sessionManager.Get(request)
 	require.NotNil(t, sessionData)
 	// Check values in the request
-	require.Equal(t, "value", sessionData.StringValues["key"])
+	require.Equal(t, "test", *sessionData)
 
 	// Create new session to validate that delete only deletes the session in request
 	response = httptest.NewRecorder()
-	sessionManager.Create(response, SessionData{
-		StringValues: map[string]string{
-			"key2": "value2",
-		},
-	})
+	sessionManager.Create(response, "test2")
 	require.Equal(t, 2, len(sessionManager.store.sessions))
 	require.Equal(t, http.StatusOK, response.Code)
 
@@ -69,5 +61,5 @@ func Test_SessionManager_SessionLifecycle(t *testing.T) {
 	request.Header.Set("Cookie", cookie)
 	sessionData = sessionManager.Get(request)
 	require.NotNil(t, sessionData)
-	require.Equal(t, "value2", sessionData.StringValues["key2"])
+	require.Equal(t, "test2", *sessionData)
 }

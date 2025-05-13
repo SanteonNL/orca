@@ -6,9 +6,9 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -80,7 +80,7 @@ func New(strictMode bool, issuer *url.URL, config Config) (*Service, error) {
 	}, nil
 }
 
-func (s *Service) HandleLogin(httpResponse http.ResponseWriter, httpRequest *http.Request, session *user.SessionData) {
+func (s *Service) HandleLogin(httpResponse http.ResponseWriter, httpRequest *http.Request, sessionData *session.Data) {
 	ctx := op.ContextWithIssuer(httpRequest.Context(), s.issuerURL.String())
 	// TODO: Prevent CSRF
 	if err := httpRequest.ParseForm(); err != nil {
@@ -92,7 +92,7 @@ func (s *Service) HandleLogin(httpResponse http.ResponseWriter, httpRequest *htt
 		http.Error(httpResponse, "authRequestID is required", http.StatusBadRequest)
 		return
 	}
-	userDetails, err := userFromSession(session)
+	userDetails, err := userFromSession(sessionData)
 	if err != nil {
 		http.Error(httpResponse, fmt.Errorf("get user from session: %w", err).Error(), http.StatusBadRequest)
 		return
@@ -105,20 +105,13 @@ func (s *Service) HandleLogin(httpResponse http.ResponseWriter, httpRequest *htt
 	http.Redirect(httpResponse, httpRequest, redirectURL, http.StatusFound)
 }
 
-func userFromSession(session *user.SessionData) (*UserDetails, error) {
-	practitionerRef := session.StringValues["practitioner"] // reference to the FHIR practitioner resource
-	if practitionerRef == "" {
-		return nil, errors.New("no practitioner reference in session")
-	}
-	if session.OtherValues == nil || session.OtherValues[practitionerRef] == nil {
-		return nil, errors.New("practitioner object not found in session")
-	}
-	practitioner, ok := session.OtherValues[practitionerRef].(fhir.Practitioner)
-	if !ok {
-		return nil, fmt.Errorf("practitioner object in session should be fhir.Practitioner, but was %T", session.OtherValues[practitionerRef])
-	}
-
+func userFromSession(sessionData *session.Data) (*UserDetails, error) {
 	var userDetails UserDetails
+	// Get practitioner from session
+	practitioner := session.Get[fhir.Practitioner](sessionData)
+	if practitioner == nil {
+		return nil, errors.New("no practitioner found in session")
+	}
 	for _, name := range practitioner.Name {
 		userDetails.Name = coolfhir.FormatHumanName(name)
 		break
@@ -141,6 +134,20 @@ func userFromSession(session *user.SessionData) (*UserDetails, error) {
 			break
 		}
 	}
+	// Get patient from session
+	patient := session.Get[fhir.Patient](sessionData)
+	if patient == nil {
+		return nil, errors.New("no patient found in session")
+	}
+	for _, identifier := range patient.Identifier {
+		userDetails.PatientIdentifiers = append(userDetails.PatientIdentifiers, identifier)
+	}
+	// Get organization from session
+	organization := session.Get[fhir.Organization](sessionData)
+	if organization == nil {
+		return nil, errors.New("no organization found in session")
+	}
+	userDetails.Organization = *organization
 	return &userDetails, nil
 }
 
@@ -171,6 +178,7 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 			oidc.ScopeOpenID,
 			oidc.ScopeProfile,
 			oidc.ScopeEmail,
+			ScopePatient,
 		},
 		SupportedClaims: []string{
 			"sub",
@@ -186,7 +194,8 @@ func newOIDCProvider(storage op.Storage, issuer string, key [32]byte, logger *sl
 			"client_id",
 			"name",
 			"email",
-			"roles",
+			ClaimRoles,
+			ClaimPatient,
 		},
 	}
 

@@ -9,7 +9,7 @@ services:
     volumes:
       - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
-    image: nutsfoundation/nuts-node:master
+    image: nutsfoundation/nuts-node:6.1.2
     ports:
       - "8081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
@@ -36,6 +36,10 @@ services:
     #  dockerfile: Dockerfile
     ports:
       - "3030:8080"
+    env_file:
+      # Allow extra environment variables to be passed in. This is useful for local development, since extra.env isn't committed to the repository.
+      - path: ./extra.env
+        required: false
     environment:
       - ORCA_NUTS_API_URL=http://nutsnode:8081
       - ORCA_NUTS_PUBLIC_URL=${NUTS_URL}
@@ -48,6 +52,9 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://viewer:3000/viewer/api/fhir
+      # Register an example web application for discovery by other SCP participants.
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_NAME=Example Web Application
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_URL=https://example.com
       # If this value is set, the clinic will send task notifications over http to the provided endpoint. Cannot be used in conjunction with the strict mode
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC=orca-enroll-patient
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-healthcareservices.json,https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-questionnaires.json

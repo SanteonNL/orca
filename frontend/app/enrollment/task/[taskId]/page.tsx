@@ -9,12 +9,14 @@ import { patientName, organizationName } from "@/lib/fhirRender";
 import DataViewer from '@/components/data-viewer'
 import { viewerFeatureIsEnabled } from '@/app/actions'
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
+import {getLaunchableApps} from "@/app/applaunch";
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
-    const { patient } = useEnrollmentStore()
+    const { patient, serviceRequest } = useEnrollmentStore()
     const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
+    const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
     const [showViewer, setShowViewer] = useState(false)
 
     useEffect(() => {
@@ -35,6 +37,21 @@ export default function EnrollmentTaskPage() {
                 setViewerFeatureEnabled(enabled)
             })
     }, [])
+
+    useEffect(()=>{
+        const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
+        if (!primaryTaskPerformer) {
+            return
+        }
+        getLaunchableApps(primaryTaskPerformer)
+            .then((apps) => {
+                if (apps.length == 0) {
+                    return
+                }
+                // might want to support a list in the future
+                setPatientViewerUrl(apps[0].URL)
+            })
+    }, [serviceRequest])
 
     if (loading || !initialized) return <Loading />
 
@@ -78,6 +95,7 @@ export default function EnrollmentTaskPage() {
                     : <></>
                 }
             </div>
+            {patientViewerUrl && <a href={patientViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
             {showViewer && <DataViewer task={task} />}
             <TaskSseConnectionStatus />
         </div>

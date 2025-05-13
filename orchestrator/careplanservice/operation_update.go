@@ -13,11 +13,12 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
-var _ FHIROperation = &FHIRUpdateOperationHandler[any]{}
+var _ FHIROperation = &FHIRUpdateOperationHandler[fhir.HasExtension]{}
 
-type FHIRUpdateOperationHandler[T any] struct {
+type FHIRUpdateOperationHandler[T fhir.HasExtension] struct {
 	authzPolicy Policy[T]
 	fhirClient  fhirclient.Client
 	profile     profile.Provider
@@ -28,7 +29,6 @@ type FHIRUpdateOperationHandler[T any] struct {
 
 func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(request.ResourcePath)
-	log.Ctx(ctx).Info().Msgf("Updating %s: %s", resourceType, request.RequestUrl)
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
 		return nil, coolfhir.BadRequest("invalid %s: %s", resourceType, err)
@@ -71,8 +71,8 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		return nil, fmt.Errorf("failed to unmarshal existing %s: %w", resourceType, err)
 	}
 
-	hasAccess, err := h.authzPolicy.HasAccess(ctx, existingResource, *request.Principal)
-	if !hasAccess || err != nil {
+	authzDecision, err := h.authzPolicy.HasAccess(ctx, existingResource, *request.Principal)
+	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal has access to create %s", resourceType)
 		}
@@ -81,6 +81,10 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			StatusCode: http.StatusForbidden,
 		}
 	}
+
+	SetCreatorExtensionOnResource(resource, &request.Principal.Organization.Identifier[0])
+
+	log.Ctx(ctx).Info().Msgf("Updating %s (authz=%s)", request.RequestUrl, strings.Join(authzDecision.Reasons, ";"))
 
 	idx := len(tx.Entry)
 	resourceBundleEntry := request.bundleEntryWithResource(resource)
@@ -91,6 +95,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		},
 		Observer: *request.LocalIdentity,
 		Action:   fhir.AuditEventActionU,
+		Policy:   authzDecision.Reasons,
 	}))
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
@@ -104,6 +109,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			return nil, nil, err
 		}
 
-		return []*fhir.BundleEntry{result}, []any{&updatedResource}, nil
+		return []*fhir.BundleEntry{result}, []any{updatedResource}, nil
 	}, nil
 }
