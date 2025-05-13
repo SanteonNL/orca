@@ -27,13 +27,13 @@ export async function GET(req: NextRequest) {
             headers: {
                 Authorization: `Bearer ${process.env[`${name}_BEARER_TOKEN`] ?? ''}`,
                 'Content-Type': 'x-www-form-urlencoded',
-                'X-Cps-Url': baseUrl,
+                'X-Scp-Fhir-Url': baseUrl,
             },
             body: `_count=1000`
         });
 
         if(!resp.ok) {
-            console.error(`Failed to fetch data: ${process.env.ORCA_CPC_URL}/cps/fhir/CarePlan/_search (X-Cps-Url: ${baseUrl})`, resp.status);
+            console.error(`Failed to fetch data: ${process.env.ORCA_CPC_URL}/cps/fhir/CarePlan/_search (X-Scp-Fhir-Url: ${baseUrl})`, resp.status);
             return NextResponse.json({
                 error: `Failed to fetch data from ${baseUrl}`},
                 {   

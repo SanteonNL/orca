@@ -38,12 +38,13 @@ const basePath = "/cpc"
 // whose FHIR API should be queried. The identifier is in the form of <system>|<value>.
 const scpEntityIdentifierHeaderKey = "X-Scp-Entity-Identifier"
 
+// scpFHIRBaseURL specifies the HTTP request header used to specify the FHIR base URL, secured through SCP,
+// which should be queried.
+const scpFHIRBaseURL = "X-Scp-Fhir-Url"
+
 // carePlanURLHeaderKey specifies the HTTP request header used to specify the SCP context, which is a reference to a FHIR CarePlan. Authorization is evaluated according to this CarePlan.
 // The header may also be provided as X-SCP-Context, which will be canonicalized to X-Scp-Context by the Golang HTTP client.
 const carePlanURLHeaderKey = "X-Scp-Context"
-
-// carePlanServiceURLHeaderKey specifies the HTTP request header to specify the FHIR base URL of the Care Plan Service the client wishes to invoke.
-const carePlanServiceURLHeaderKey = "X-Cps-Url"
 
 const CarePlanServiceOAuth2Scope = "careplanservice"
 
@@ -294,52 +295,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	}))
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
-	proxyBasePath := basePath + "/cps/fhir"
 	// Allow the front-end to subscribe to specific Task updates via Server-Sent Events (SSE)
 	mux.HandleFunc("GET "+basePath+"/subscribe/fhir/Task/{id}", s.withSession(s.handleSubscribeToTask))
-	mux.HandleFunc(basePath+"/cps/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
-
-		// Check if the user defined a remote CPS - otherwise it will be handled as a local CPS proxy request
-		remoteCpsUrlFromHeader := request.Header.Get(carePlanServiceURLHeaderKey)
-
-		isRemote := remoteCpsUrlFromHeader != ""
-		log.Ctx(request.Context()).Debug().Msg("Handling CPS FHIR API request. Remote: " + fmt.Sprint(isRemote))
-
-		var cpsUrl *url.URL
-
-		if isRemote {
-			log.Ctx(request.Context()).Debug().Msg("Handling remote CPS FHIR API request - received remote CPS URL from header: " + remoteCpsUrlFromHeader)
-			var err error
-			if cpsUrl, err = url.Parse(remoteCpsUrlFromHeader); err != nil {
-				coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("Invalid remote CPS URL"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-				return
-			}
-			//make sure the URL is absolute
-			if !cpsUrl.IsAbs() {
-				coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("Remote CPS URL must be absolute"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-				return
-			}
-		} else {
-			log.Ctx(request.Context()).Debug().Msg("Handling local CPS FHIR API request - no remote CPS URL received from header")
-			cpsUrl = s.localCarePlanServiceUrl
-		}
-
-		if cpsUrl == nil {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No remote CPS requested and this ORCA instance has no local CarePlanService, API can't be used."), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-
-		// TODO: This should be optimized so that we don't do it every call
-		_, httpClient, err := s.createFHIRClientForURL(request.Context(), cpsUrl)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-		proxyName := fmt.Sprintf("App->CPS (remote: %t) FHIR proxy", isRemote)
-		carePlanServiceProxy := coolfhir.NewProxy(proxyName, cpsUrl,
-			proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, false, true)
-		carePlanServiceProxy.ServeHTTP(writer, request)
-	}))
 
 	// Logout endpoint
 	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
@@ -815,16 +772,38 @@ func (s Service) defaultCreateFHIRClientForURL(ctx context.Context, fhirBaseURL 
 }
 
 // createFHIRClientForExternalRequest creates a FHIR client for a request that should be proxied to an external SCP-node's FHIR API.
-// It derives the remote SCP-node from the HTTP request headers.
+// It derives the remote SCP-node from the HTTP request headers:
+// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL.
+// - X-Scp-Fhir-Url: Uses the FHIR base URL directly.
 func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request *http.Request) (*url.URL, *http.Client, error) {
 	var httpClient *http.Client
 	var fhirBaseURL *url.URL
-	for _, header := range []string{scpEntityIdentifierHeaderKey} {
+	for _, header := range []string{scpEntityIdentifierHeaderKey, scpFHIRBaseURL} {
 		headerValue := request.Header.Get(header)
 		if headerValue == "" {
 			continue
 		}
 		switch header {
+		case scpFHIRBaseURL:
+			var err error
+			if headerValue == "local-cps" {
+				// TODO: This should probably be optimized by the EHR/ORCA Frontend having a internal endpoint on the CPS, instead.
+				//       Accessing one's own CPS this way causes it to go through the Nuts authentication layer, which adds latency.
+				fhirBaseURL = s.localCarePlanServiceUrl
+				if fhirBaseURL == nil {
+					return nil, nil, fmt.Errorf("%s: no local CarePlanService", header)
+				}
+			} else {
+				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
+				if err != nil {
+					return nil, nil, fmt.Errorf("%s: %w", header, err)
+				}
+			}
+			_, httpClient, err = s.createFHIRClientForURL(ctx, fhirBaseURL)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%s: failed to create HTTP client: %w", header, err)
+			}
+			break
 		case scpEntityIdentifierHeaderKey:
 			// The header value is in the form of <system>|<value>
 			identifier, err := coolfhir.TokenToIdentifier(headerValue)
@@ -838,9 +817,9 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 			if len(endpoints) != 1 {
 				return nil, nil, fmt.Errorf("%s: expected one FHIR base URL, got %d (identifier=%s)", header, len(endpoints), headerValue)
 			}
-			fhirBaseURL, err = url.Parse(endpoints[0].Address)
-			if err != nil || !fhirBaseURL.IsAbs() || (fhirBaseURL.Scheme != "http" && fhirBaseURL.Scheme != "https") {
-				return nil, nil, fmt.Errorf("%s: invalid FHIR base URL (identifier=%s, url=%s): %w", header, headerValue, endpoints[0].Address, err)
+			fhirBaseURL, err = s.parseFHIRBaseURL(endpoints[0].Address)
+			if err != nil {
+				return nil, nil, fmt.Errorf("%s: registered FHIR base URL is invalid (identifier=%s): %w", header, headerValue, err)
 			}
 			_, httpClient, err = s.createFHIRClientForIdentifier(ctx, fhirBaseURL, *identifier)
 			if err != nil {
@@ -853,6 +832,27 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		return nil, nil, coolfhir.BadRequest("can't determine the external SCP-node to query from the HTTP request headers")
 	}
 	return fhirBaseURL, httpClient, nil
+}
+
+func (s Service) parseFHIRBaseURL(fhirBaseURL string) (*url.URL, error) {
+	parsedURL, err := url.Parse(fhirBaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid FHIR base URL: %s", fhirBaseURL)
+	}
+	if err := s.validateFHIRBaseURL(parsedURL); err != nil {
+		return nil, err
+	}
+	return parsedURL, nil
+}
+
+func (s Service) validateFHIRBaseURL(fhirBaseURL *url.URL) error {
+	if !fhirBaseURL.IsAbs() || (fhirBaseURL.Scheme != "http" && fhirBaseURL.Scheme != "https") {
+		return fmt.Errorf("invalid FHIR base URL: %s", fhirBaseURL)
+	}
+	if globals.StrictMode && fhirBaseURL.Scheme != "https" {
+		return fmt.Errorf("invalid FHIR base URL: %s (only HTTPS is allowed in strict mode)", fhirBaseURL)
+	}
+	return nil
 }
 
 func (s Service) createFHIRClientForIdentifier(ctx context.Context, fhirBaseURL *url.URL, identifier fhir.Identifier) (fhirclient.Client, *http.Client, error) {

@@ -43,7 +43,12 @@ export const createCpsClient = () => {
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
         : "http://localhost:9090/fhir";
 
-    return new Client({ baseUrl });
+    return new Client({
+        baseUrl: baseUrl,
+        customHeaders: {
+            'X-Scp-Fhir-Url': 'local-cps',
+        }
+    });
 };
 
 export const fetchAllBundlePages = async <T extends Resource>(
@@ -287,8 +292,8 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
 
 /**
  * Returns a string representation of an Identifier ONLY if both the system and value are set. Otherwise, returns undefined.
- * @param identifier 
- * @returns 
+ * @param identifier
+ * @returns
  */
 export function identifierToString(identifier?: Identifier) {
 
