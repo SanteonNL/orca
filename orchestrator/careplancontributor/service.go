@@ -192,14 +192,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		return nil
 	}
-	// TODO: Remove /notify after all SCP nodes have been updated to use /fhir for delivering notifications
-	mux.HandleFunc("POST "+basePath+"/fhir/notify", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		if err := handleBundle(request); err != nil {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
-			return
-		}
-		writer.WriteHeader(http.StatusOK)
-	}))
 	mux.HandleFunc("POST "+basePath+"/fhir", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		if err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
