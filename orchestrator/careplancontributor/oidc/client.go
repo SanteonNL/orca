@@ -12,6 +12,7 @@ var _ op.Client = (*Client)(nil)
 
 type Client struct {
 	id           string
+	secret       string
 	loginURL     *url.URL
 	redirectURIs []string
 }
