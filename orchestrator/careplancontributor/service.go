@@ -35,7 +35,7 @@ import (
 const basePath = "/cpc"
 
 // scpIdentifierHeaderKey specifies the HTTP request header used to specify the identifier of the external entity (care organization),
-// which's FHIR API should be queried. The identifier is in the form of <system>|<value>.
+// whose FHIR API should be queried. The identifier is in the form of <system>|<value>.
 const scpEntityIdentifierHeaderKey = "X-Scp-Entity-Identifier"
 
 // carePlanURLHeaderKey specifies the HTTP request header used to specify the SCP context, which is a reference to a FHIR CarePlan. Authorization is evaluated according to this CarePlan.
