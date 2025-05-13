@@ -44,10 +44,12 @@ export default function EnrollmentTaskPage() {
             return
         }
         getLaunchableApps(primaryTaskPerformer)
-            .then((app) => {
-                if (app) {
-                    setPatientViewerUrl(app.URL)
+            .then((apps) => {
+                if (apps.length == 0) {
+                    return undefined
                 }
+                // might want to support a list in the future
+                setPatientViewerUrl(apps[0].URL)
             })
     }, [serviceRequest])
 
