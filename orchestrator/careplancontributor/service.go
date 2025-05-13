@@ -631,11 +631,11 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 		Task             string  `json:"task"`
 		TaskIdentifier   *string `json:"taskIdentifier"`
 	}{
-		Patient:          sessionData.Get("Patient").Path,
-		ServiceRequest:   sessionData.Get("ServiceRequest").Path,
-		Practitioner:     sessionData.Get("Practitioner").Path,
-		PractitionerRole: sessionData.Get("PractitionerRole").Path,
-		Task:             sessionData.Get("Task").Path,
+		Patient:          to.Empty(sessionData.Get("Patient")).Path,
+		ServiceRequest:   to.Empty(sessionData.Get("ServiceRequest")).Path,
+		Practitioner:     to.Empty(sessionData.Get("Practitioner")).Path,
+		PractitionerRole: to.Empty(sessionData.Get("PractitionerRole")).Path,
+		Task:             to.Empty(sessionData.Get("Task")).Path,
 		TaskIdentifier:   sessionData.TaskIdentifier,
 	}
 	response.Header().Add("Content-Type", "application/json")

@@ -20,6 +20,7 @@ var _ op.CanSetUserinfoFromRequest = (*Storage)(nil)
 const ScopePatient = "patient"
 const ClaimPatient = "patient"
 const ClaimRoles = "roles"
+const ClaimOrganizationIdentifier = "orgid"
 const TokenLifetime = 5 * time.Minute
 const AuthRequestLifetime = 5 * time.Minute
 
@@ -214,6 +215,11 @@ func populateUserInfo(userInfo *oidc.UserInfo, scopes []string, user UserDetails
 				patientIdentifiers = append(patientIdentifiers, coolfhir.IdentifierToToken(identifier))
 			}
 			userInfo.Claims[ClaimPatient] = patientIdentifiers
+			var orgIdentifiers []string
+			for _, identifier := range user.Organization.Identifier {
+				orgIdentifiers = append(orgIdentifiers, coolfhir.IdentifierToToken(identifier))
+			}
+			userInfo.Claims[ClaimOrganizationIdentifier] = orgIdentifiers
 		case oidc.ScopeOpenID:
 			userInfo.Subject = user.ID
 		case oidc.ScopeEmail:
@@ -282,10 +288,11 @@ type Token struct {
 }
 
 type UserDetails struct {
-	ID    string
-	Name  string
-	Email string
-	Roles []string
+	ID           string
+	Name         string
+	Email        string
+	Roles        []string
+	Organization fhir.Organization
 
 	PatientIdentifiers []fhir.Identifier
 }
