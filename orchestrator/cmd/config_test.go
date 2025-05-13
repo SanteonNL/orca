@@ -64,7 +64,9 @@ func TestLoadConfig(t *testing.T) {
 		})
 		t.Run("single", func(t *testing.T) {
 			os.Setenv("ORCA_MAP_0_KEY", "foo")
+			defer os.Unsetenv("ORCA_MAP_0_KEY")
 			os.Setenv("ORCA_MAP_0_VALUE", "bar")
+			defer os.Unsetenv("ORCA_MAP_0_VALUE")
 			target := mapContainer{}
 			require.NoError(t, loadConfigInto(&target))
 			require.Equal(t, map[string]mapEntry{"0": {Key: "foo", Value: "bar"}}, target.Map)
