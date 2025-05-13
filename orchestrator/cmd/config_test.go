@@ -49,6 +49,27 @@ func TestLoadConfig(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, zerolog.TraceLevel, c.LogLevel)
 	})
+	t.Run("maps", func(t *testing.T) {
+		type mapEntry struct {
+			Key   string `koanf:"key"`
+			Value string `koanf:"value"`
+		}
+		type mapContainer struct {
+			Map map[string]mapEntry `koanf:"map"`
+		}
+		t.Run("empty", func(t *testing.T) {
+			target := mapContainer{}
+			require.NoError(t, loadConfigInto(&target))
+			require.Empty(t, target.Map)
+		})
+		t.Run("single", func(t *testing.T) {
+			os.Setenv("ORCA_MAP_0_KEY", "foo")
+			os.Setenv("ORCA_MAP_0_VALUE", "bar")
+			target := mapContainer{}
+			require.NoError(t, loadConfigInto(&target))
+			require.Equal(t, map[string]mapEntry{"0": {Key: "foo", Value: "bar"}}, target.Map)
+		})
+	})
 	t.Run("slices", func(t *testing.T) {
 		type sliceContainer struct {
 			Slice []string `koanf:"slice"`

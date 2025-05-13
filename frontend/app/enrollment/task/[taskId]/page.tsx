@@ -14,7 +14,7 @@ import {getLaunchableApps} from "@/app/applaunch";
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
-    const { patient } = useEnrollmentStore()
+    const { patient, serviceRequest } = useEnrollmentStore()
     const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
     const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
     const [showViewer, setShowViewer] = useState(false)
@@ -39,16 +39,17 @@ export default function EnrollmentTaskPage() {
     }, [])
 
     useEffect(()=>{
-        if (!task?.requester?.identifier) {
+        const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
+        if (!primaryTaskPerformer) {
             return
         }
-        getLaunchableApps(task.requester.identifier)
+        getLaunchableApps(primaryTaskPerformer)
             .then((app) => {
                 if (app) {
                     setPatientViewerUrl(app.URL)
                 }
             })
-    }, [task])
+    }, [serviceRequest])
 
     if (loading || !initialized) return <Loading />
 
