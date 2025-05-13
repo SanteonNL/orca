@@ -55,7 +55,7 @@ func New(strictMode bool, issuer *url.URL, config Config) (*Service, error) {
 		authRequests: make(map[string]AuthRequest),
 		tokens:       make(map[string]Token),
 		signingKey:   signingKey,
-		clients:      make(map[string]op.Client),
+		clients:      make(map[string]Client),
 	}
 	for _, client := range config.Clients {
 		if _, exists := storage.clients[client.ID]; exists {
@@ -63,6 +63,7 @@ func New(strictMode bool, issuer *url.URL, config Config) (*Service, error) {
 		}
 		storage.clients[client.ID] = Client{
 			id:           client.ID,
+			secret:       client.Secret,
 			redirectURIs: []string{client.RedirectURI},
 			loginURL:     issuer.JoinPath("login"),
 		}
