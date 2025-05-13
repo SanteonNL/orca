@@ -35,10 +35,10 @@ services:
     ports:
       - "1405:1305"
   frontend:
-    #image: ghcr.io/santeonnl/orca_frontend:main
-    build:
-      context: ../../../frontend
-      dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_frontend:main
+    # build:
+    #  context: ../../../frontend
+    #  dockerfile: Dockerfile
     environment:
       - DATA_VIEWER_ENABLED=true
      # Make sure to copy the .env.secrets.example and fill in the terminology server credentials for the tx server to work
@@ -48,10 +48,10 @@ services:
     ports:
       - "3003:3000"
   orchestrator:
-    #image: ghcr.io/santeonnl/orca_orchestrator:main
-    build:
-      context: ../../../orchestrator
-      dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_orchestrator:main
+    #build:
+    #  context: ../../../orchestrator
+    #  dockerfile: Dockerfile
     ports:
       - "8090:8080"
     volumes:

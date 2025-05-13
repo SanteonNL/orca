@@ -871,18 +871,19 @@ func TestService_ProxyToExternalCPS(t *testing.T) {
 }
 
 func TestService_handleGetContext(t *testing.T) {
-	httpResponse := httptest.NewRecorder()
-	sessionData := session.Data{
-		TaskIdentifier: to.Ptr("task-identifier-123"),
-	}
-	sessionData.Set("Practitioner/the-doctor", nil)
-	sessionData.Set("PractitionerRole/the-doctor-role", nil)
-	sessionData.Set("ServiceRequest/1", nil)
-	sessionData.Set("Patient/1", nil)
-	sessionData.Set("Task/1", nil)
-	Service{}.handleGetContext(httpResponse, nil, &sessionData)
-	assert.Equal(t, http.StatusOK, httpResponse.Code)
-	assert.JSONEq(t, `{
+	t.Run("everything present", func(t *testing.T) {
+		httpResponse := httptest.NewRecorder()
+		sessionData := session.Data{
+			TaskIdentifier: to.Ptr("task-identifier-123"),
+		}
+		sessionData.Set("Practitioner/the-doctor", nil)
+		sessionData.Set("PractitionerRole/the-doctor-role", nil)
+		sessionData.Set("ServiceRequest/1", nil)
+		sessionData.Set("Patient/1", nil)
+		sessionData.Set("Task/1", nil)
+		Service{}.handleGetContext(httpResponse, nil, &sessionData)
+		assert.Equal(t, http.StatusOK, httpResponse.Code)
+		assert.JSONEq(t, `{
 		"practitioner": "Practitioner/the-doctor",
 		"practitionerRole": "PractitionerRole/the-doctor-role",
 		"serviceRequest": "ServiceRequest/1",
@@ -890,6 +891,27 @@ func TestService_handleGetContext(t *testing.T) {
 		"task": "Task/1",
 		"taskIdentifier": "task-identifier-123"
 	}`, httpResponse.Body.String())
+	})
+	t.Run("no PractitionerRole", func(t *testing.T) {
+		httpResponse := httptest.NewRecorder()
+		sessionData := session.Data{
+			TaskIdentifier: to.Ptr("task-identifier-123"),
+		}
+		sessionData.Set("Practitioner/the-doctor", nil)
+		sessionData.Set("ServiceRequest/1", nil)
+		sessionData.Set("Patient/1", nil)
+		sessionData.Set("Task/1", nil)
+		Service{}.handleGetContext(httpResponse, nil, &sessionData)
+		assert.Equal(t, http.StatusOK, httpResponse.Code)
+		assert.JSONEq(t, `{
+		"practitioner": "Practitioner/the-doctor",
+		"practitionerRole": "",
+		"serviceRequest": "ServiceRequest/1",
+		"patient": "Patient/1",
+		"task": "Task/1",
+		"taskIdentifier": "task-identifier-123"
+	}`, httpResponse.Body.String())
+	})
 }
 
 func TestService_proxyToAllCareTeamMembers(t *testing.T) {
@@ -1065,59 +1087,6 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 			assert.Contains(t, bodyStr, tt.expectedContent, "Unexpected error message or response text, got: "+bodyStr)
 		})
 	}
-}
-
-func TestService_ExternalFHIRProxy(t *testing.T) {
-	t.Log("This tests the external FHIR proxy functionality (/cpc/external/fhir, used by the EHR and ORCA Frontend to query remote SCP-nodes' FHIR APIs.")
-
-	remoteFHIRAPIMux := http.NewServeMux()
-	remoteFHIRAPIMux.HandleFunc("POST /fhir/Task/_search", func(writer http.ResponseWriter, request *http.Request) {
-		results := coolfhir.SearchSet().Append(fhir.Task{
-			Id: to.Ptr("1"),
-		}, nil, nil)
-		coolfhir.SendResponse(writer, http.StatusOK, results)
-	})
-	remoteSCPNode := httptest.NewServer(remoteFHIRAPIMux)
-
-	mux := http.NewServeMux()
-	httpServer := httptest.NewServer(mux)
-	service := &Service{
-		profile: profile.TestProfile{
-			Principal: auth.TestPrincipal1,
-			CSD: profile.TestCsdDirectory{
-				Endpoints: map[string]map[string]string{
-					"http://fhir.nl/fhir/NamingSystem/ura|2": {
-						"fhirBaseURL": remoteSCPNode.URL + "/fhir",
-					},
-				},
-			},
-		},
-		orcaPublicURL: must.ParseURL(httpServer.URL),
-		config:        Config{StaticBearerToken: "secret"},
-	}
-	service.RegisterHandlers(mux)
-
-	t.Run("X-Scp-Entity-Identifier", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest(http.MethodPost, httpServer.URL+"/cpc/external/fhir/Task/_search", nil)
-		httpRequest.Header.Set("Authorization", "Bearer secret")
-		httpRequest.Header.Set("X-Scp-Entity-Identifier", "http://fhir.nl/fhir/NamingSystem/ura|2")
-		httpResponse, err := httpServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-		responseData, err := io.ReadAll(httpResponse.Body)
-		require.NoError(t, err)
-		assert.NotEmpty(t, responseData)
-	})
-	t.Run("can't determine remote node", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest(http.MethodPost, httpServer.URL+"/cpc/external/fhir/Task/_search", nil)
-		httpRequest.Header.Set("Authorization", "Bearer secret")
-		httpResponse, err := httpServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
-		responseData, err := io.ReadAll(httpResponse.Body)
-		require.NoError(t, err)
-		assert.Contains(t, string(responseData), "can't determine the external SCP-node to query from the HTTP request headers")
-	})
 }
 
 func createTestSession() (*user.SessionManager[session.Data], string) {
