@@ -50,8 +50,8 @@ To register a client (application), set the following environment variables for 
 - `ORCA_CAREPLANCONTRIBUTOR_OIDC_CLIENTS_<clientname>_ID`: ID of the client, which will be used as `client_id` in the OIDC flow.
 - `ORCA_CAREPLANCONTRIBUTOR_OIDC_CLIENTS_<clientname>_REDIRECTURI`: URL to which the OIDC provider will redirect the user after authentication.
 - `ORCA_CAREPLANCONTRIBUTOR_OIDC_CLIENTS_<clientname>_SECRET`: secret of the client to authenticate the client. 
-  The secret is salted with the client ID, concatenated with a pipe (`|`), hashed with SHA-256 and hex-encoded:
-  `hex(sha256(<client_id> + "|" + <secret>))`.
+  It is the hex-encoded SHA-256 hash of `<client_id>|<secret>`:
+  `hex(sha256(<client_id>|<secret>))`.
 
 #### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
