@@ -60,6 +60,7 @@ func Test_Main(t *testing.T) {
 		DefaultOptions: []fhirclient.Option{
 			fhirclient.RequestHeaders(map[string][]string{"X-Scp-Fhir-Url": {"local-cps"}}),
 		},
+		UsePostSearch: true,
 	})
 
 	// Set up FHIR client for clinic that can interact with hospital's CPS
