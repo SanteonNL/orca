@@ -56,7 +56,12 @@ func Test_Main(t *testing.T) {
 	require.NoError(t, err)
 	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
-	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
+	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/external/fhir"), orcaHttpClient, &fhirclient.Config{
+		DefaultOptions: []fhirclient.Option{
+			fhirclient.RequestHeaders(map[string][]string{"X-Scp-Fhir-Url": {"local-cps"}}),
+		},
+		UsePostSearch: true,
+	})
 
 	// Set up FHIR client for clinic that can interact with hospital's CPS
 	hospitalAuthServerURL, _ := url.Parse("http://nutsnode:8080/oauth2/hospital")
@@ -93,6 +98,7 @@ func Test_Main(t *testing.T) {
 					},
 				},
 			}
+
 			err := hospitalOrcaFHIRClient.Create(patient, &patient)
 			require.NoError(t, err)
 		}

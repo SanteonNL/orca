@@ -1,0 +1,11 @@
+{{- if .Values.postgres.enabled }}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ include "fhir.fullname" . }}-db
+spec:
+  instances: 1
+  primaryUpdateStrategy: unsupervised
+  storage:
+    size: 1G
+{{- end }}

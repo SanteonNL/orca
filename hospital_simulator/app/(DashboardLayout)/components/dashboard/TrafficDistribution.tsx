@@ -66,7 +66,7 @@ const TrafficDistribution = () => {
     <DashboardCard title="EHR Funding">
       <Grid container spacing={3}>
         {/* column */}
-        <Grid item xs={6} sm={7}>
+        <Grid size={{ xs:6, sm:7 }}>
           <Typography variant="h3" fontWeight="700">
             $36,358
           </Typography>
@@ -126,7 +126,7 @@ const TrafficDistribution = () => {
           </Stack>
         </Grid>
         {/* column */}
-        <Grid item xs={6} sm={5}>
+        <Grid size={{ xs:6, sm:5 }}>
           <Chart
             options={optionscolumnchart}
             series={seriescolumnchart}

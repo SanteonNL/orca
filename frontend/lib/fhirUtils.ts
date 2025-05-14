@@ -19,6 +19,16 @@ export const patientIdentifierSystem = () => {
     return process.env.ORCA_PATIENT_IDENTIFIER_SYSTEM ?? "http://fhir.nl/fhir/NamingSystem/bsn";
 }
 
+// This function creates a FHIR client to communicate with other (remote) SCP nodes' FHIR APIs.
+export const createScpClient = () => {
+    const baseUrl = process.env.NODE_ENV === "production"
+        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`
+        : "http://localhost:9090/fhir";
+
+    return new Client({ baseUrl });
+};
+
+// This function creates a FHIR client to communicate with the EHR's FHIR API.
 export const createEhrClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`
@@ -27,12 +37,18 @@ export const createEhrClient = () => {
     return new Client({ baseUrl });
 };
 
+// This function creates a FHIR client to communicate with the ORCA instance's own CarePlanService.
 export const createCpsClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
         : "http://localhost:9090/fhir";
 
-    return new Client({ baseUrl });
+    return new Client({
+        baseUrl: baseUrl,
+        customHeaders: {
+            'X-Scp-Fhir-Url': 'local-cps',
+        }
+    });
 };
 
 export const fetchAllBundlePages = async <T extends Resource>(
@@ -276,8 +292,8 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
 
 /**
  * Returns a string representation of an Identifier ONLY if both the system and value are set. Otherwise, returns undefined.
- * @param identifier 
- * @returns 
+ * @param identifier
+ * @returns
  */
 export function identifierToString(identifier?: Identifier) {
 

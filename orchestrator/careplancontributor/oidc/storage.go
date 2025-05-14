@@ -2,6 +2,8 @@ package oidc
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -28,7 +30,7 @@ type Storage struct {
 	mux          *sync.RWMutex
 	authRequests map[string]AuthRequest
 	tokens       map[string]Token
-	clients      map[string]op.Client
+	clients      map[string]Client
 	signingKey   SigningKey
 }
 
@@ -161,17 +163,29 @@ func (o Storage) KeySet(ctx context.Context) ([]op.Key, error) {
 }
 
 func (o Storage) GetClientByClientID(ctx context.Context, clientID string) (op.Client, error) {
+	return o.getClientByID(clientID)
+}
+
+func (o Storage) getClientByID(clientID string) (*Client, error) {
 	o.mux.RLock()
 	defer o.mux.RUnlock()
 	client, ok := o.clients[clientID]
 	if !ok {
 		return nil, errors.New("client not found")
 	}
-	return client, nil
+	return &client, nil
 }
 
 func (o Storage) AuthorizeClientIDSecret(ctx context.Context, clientID, clientSecret string) error {
-	// TODO: Implement this
+	client, err := o.getClientByID(clientID)
+	if err != nil {
+		return err
+	}
+	hashedClientSecret := sha256.Sum256([]byte(clientID + "|" + clientSecret))
+	hashedClientSecretStr := hex.EncodeToString(hashedClientSecret[:])
+	if client.secret != hashedClientSecretStr {
+		return errors.New("invalid client credentials")
+	}
 	return nil
 }
 

@@ -10,4 +10,6 @@ type ClientConfig struct {
 	ID string `koanf:"id"`
 	// RedirectURI holds the URI of the client to which the authorization server will redirect after authorization.
 	RedirectURI string `koanf:"redirecturi"`
+	// Secret is the hex-encoded, SHA-256 hash of the client secret, salted with the client_id and concatenated with a pipe (|).
+	Secret string `koanf:"secret"`
 }
