@@ -132,17 +132,17 @@ const CreateServiceRequestDialog: React.FC = () => {
                 <DialogContent>
                     <Grid container spacing={2}>
                         {error && (
-                            <Grid item xs={12}>
+                            <Grid size={{xs:12}}>
                                 <Alert severity="error">Something went wrong: {error}</Alert>
                             </Grid>
                         )}
-                        <Grid item xs={12}>
+                        <Grid size={{xs:12}}>
                             <DialogContentText>
                                 Create a new ServiceRequest for a new Patient. For demo purposes, we can only
                                 create <i>Telemonitoring</i> ServiceRequests.
                             </DialogContentText>
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{xs:12, md:6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -155,7 +155,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{xs:12, md:6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -168,7 +168,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{xs:12, md:6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -183,7 +183,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{xs:12, md:6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -197,7 +197,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{xs:12, md:6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -210,7 +210,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{xs:12, md:6}}>
                             <InputLabel id="select-gender">Gender</InputLabel>
                             <Select
                                 autoFocus
@@ -227,7 +227,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 <MenuItem value={"other"}>other</MenuItem>
                             </Select>
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{xs:12, md:6}}>
                             <DesktopDatePicker
                                 label="Birthdate"
                                 value={patientBirthdate}
@@ -238,7 +238,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 }}
                             />
                         </Grid>
-                        <Grid item xs={12} md={12}>
+                        <Grid size={{xs:12, md:12}}>
                             <TextField
                                 autoFocus
                                 required
@@ -251,7 +251,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid item xs={12} md={8}>
+                        <Grid size={{xs:12, md:8}}>
                             <TextField
                                 autoFocus
                                 required
@@ -264,7 +264,7 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid item xs={12} md={4}>
+                        <Grid size={{xs:12, md:4}}>
                             <TextField
                                 autoFocus
                                 required
@@ -277,12 +277,12 @@ const CreateServiceRequestDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid item xs={12} sx={{ mt: 2 }}>
+                        <Grid size={{xs:12}} sx={{ mt: 2 }}>
                             <Select fullWidth value="tele-monitoring">
                                 <MenuItem value="tele-monitoring">Telemonitoring</MenuItem>
                             </Select>
                         </Grid>
-                        <Grid item xs={12}>
+                        <Grid size={{xs:12}}>
                             <Select fullWidth value={patientConditionCode.code} onChange={(event) => {
                                 const conditionCode = supportedConditions.find((condition) => condition.code === event.target.value)
                                 if (conditionCode) {

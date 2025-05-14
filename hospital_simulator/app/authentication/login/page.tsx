@@ -31,11 +31,7 @@ const Login2 = () => {
           sx={{ height: "100vh" }}
         >
           <Grid
-            item
-            xs={12}
-            sm={12}
-            lg={4}
-            xl={3}
+            size={{xs:12, sm:12, lg:4, xl:3}}
             display="flex"
             justifyContent="center"
             alignItems="center"
