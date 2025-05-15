@@ -17,7 +17,7 @@ export async function GET(req: NextRequest) {
     for (const cpsURL of getCarePlanServiceBaseURLs(name)) {
         carePlans = carePlans.concat(await fetchCarePlans(name, cpsURL));
     }
-    return carePlans.map((carePlan) => {
+    const rows = carePlans.map((carePlan) => {
         // Find the careteam, first as a contained resource, otherwise as a referenced resource that has been notified
         const careTeam = carePlan.contained?.find(
             (resource) => resource.resourceType === 'CareTeam',
@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
                     .join(', ') ?? 'Unknown',
         };
     });
+    return NextResponse.json(rows);
 }
 
 async function fetchCarePlans(name: string, cpsBaseURL: string) {
