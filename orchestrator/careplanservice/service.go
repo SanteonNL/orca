@@ -210,6 +210,9 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		s.handleBundle(request, httpResponse)
 	}))
+	mux.HandleFunc("POST "+basePath, s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		s.handleBundle(request, httpResponse)
+	}))
 	// Updating a resource by ID
 	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
