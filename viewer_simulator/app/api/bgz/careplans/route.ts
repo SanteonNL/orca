@@ -2,6 +2,7 @@ import { Bundle, CarePlan } from 'fhir/r4';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getBsn } from '@/utils/fhirUtils';
+import {getORCABaseURL} from "@/utils/config";
 
 export async function GET(req: NextRequest) {
     const name = req.nextUrl.searchParams.get('name');
@@ -13,16 +14,9 @@ export async function GET(req: NextRequest) {
         );
     }
 
-    const orcaCpcUrl = process.env.ORCA_CPC_URL;
-    if (!orcaCpcUrl) {
-        throw new Error(
-            'Missing ORCA_CPC_URL environment variable',
-        );
-    }
-
     try {
 
-        const resp = await fetch(`${orcaCpcUrl}/cps/fhir/CarePlan/_search`, {
+        const resp = await fetch(`${getORCABaseURL(name)}/cps/fhir/CarePlan/_search`, {
             method: 'POST',
             headers: {
                 Authorization: `Bearer ${process.env[`${name}_BEARER_TOKEN`] ?? ''}`,
