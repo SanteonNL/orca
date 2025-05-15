@@ -18,7 +18,7 @@ import {
     Procedure,
     ProcedureRequest,
 } from 'fhir/r3';
-import {CarePlan, CareTeam} from 'fhir/r4';
+import {CarePlan} from 'fhir/r4';
 import {careTeamFromCarePlan, identifierToToken} from "@/utils/fhirUtils";
 import {getORCABaseURL, getORCABearerToken, getOwnIdentifier} from "@/utils/config";
 

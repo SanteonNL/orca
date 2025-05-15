@@ -30,3 +30,12 @@ export function getORCABearerToken(name: string): string {
     }
     return bearerToken;
 }
+
+export function getCarePlanServiceBaseURLs(name: string): string[] {
+    const val = `${process.env[`${name}_CPS_URL`]}`;
+    if (!val) {
+        throw new Error(`Remote CarePlanService URL(s) not configured ('${name}_CPS_URL')`);
+    }
+    // split on , and trim spaces
+    return val.split(',').map((url) => url.trim());
+}
