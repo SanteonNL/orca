@@ -48,6 +48,11 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 	}
 
 	outRequestUrl := f.upstreamBaseUrl.JoinPath(strings.TrimPrefix(request.URL.Path, f.proxyBasePath))
+	if strings.HasSuffix(request.URL.Path, "/") &&
+		!strings.HasSuffix(outRequestUrl.Path, "/") {
+		// Request was with trailing slash, but got removed by the path construction above, so re-add it.
+		outRequestUrl.Path += "/"
+	}
 	var responseStatusCode int
 	var headers fhirclient.Headers
 	params := []fhirclient.Option{
