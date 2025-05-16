@@ -64,6 +64,8 @@ export default function BgzTable({ name, rows, loading }: Props) {
                 columns={columns}
                 components={{ Toolbar: GridToolbar }}
                 autoHeight
+                pageSize={10}
+                rowsPerPageOptions={[10]}
                 componentsProps={{
                     toolbar: {
                         showQuickFilter: true,
