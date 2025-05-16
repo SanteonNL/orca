@@ -40,7 +40,7 @@ export const createEhrClient = () => {
 // This function creates a FHIR client to communicate with the ORCA instance's own CarePlanService.
 export const createCpsClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
+        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`
         : "http://localhost:9090/fhir";
 
     return new Client({
