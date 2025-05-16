@@ -20,7 +20,7 @@ import {
 } from 'fhir/r3';
 import {CarePlan} from 'fhir/r4';
 import {careTeamFromCarePlan, identifierToToken} from "@/utils/fhirUtils";
-import {getORCABaseURL, getORCABearerToken, getOwnIdentifier} from "@/utils/config";
+import {getORCABearerToken, getORCAExternalFHIRBaseURL, getOwnIdentifier} from "@/utils/config";
 
 export async function getBgzData(name: string, carePlan: CarePlan) {
     const [
@@ -116,7 +116,7 @@ async function fetchBgzData(
     }
     const remotePartyIdentifier = remotePartyIdentifiers[0].member?.identifier!!;
 
-    const requestUrl = `${getORCABaseURL(name)}/cpc/external/fhir/${resourceType}/_search`;
+    const requestUrl = `${getORCAExternalFHIRBaseURL(name)}/${resourceType}/_search`;
     if (!carePlan.meta?.source) {
         throw new Error(`CarePlan doesn't contain a meta.source`);
     }

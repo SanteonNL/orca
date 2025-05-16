@@ -1,4 +1,5 @@
 import {Identifier} from "fhir/r4"
+import {trimEnd} from "lodash";
 
 export function getOwnIdentifier(name: string): Identifier {
     const ownIdentifier = `${process.env[`${name}_IDENTIFIER`]}`
@@ -21,6 +22,12 @@ export function getORCABaseURL(name: string): string {
         throw new Error(`ORCA base URL not configured ('${name}_ORCA_URL')`);
     }
     return orcaBaseURL;
+}
+
+// getORCAExternalFHIRBaseURL returns the FHIR base URL for querying remote SCP-nodes' FHIR endpoints.
+export function getORCAExternalFHIRBaseURL(name: string): string {
+    const orcaBaseURL = getORCABaseURL(name);
+    return `${trimEnd(orcaBaseURL, '/')}/cpc/external/fhir`
 }
 
 export function getORCABearerToken(name: string): string {

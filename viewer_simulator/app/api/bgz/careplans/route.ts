@@ -2,8 +2,7 @@ import {Bundle, CarePlan} from 'fhir/r4';
 import {NextRequest, NextResponse} from 'next/server';
 
 import {getBsn} from '@/utils/fhirUtils';
-import {getCarePlanServiceBaseURLs, getORCABaseURL, getORCABearerToken} from "@/utils/config";
-import {trimEnd} from "lodash";
+import {getCarePlanServiceBaseURLs, getORCABearerToken, getORCAExternalFHIRBaseURL} from "@/utils/config";
 
 export async function GET(req: NextRequest) {
     const name = req.nextUrl.searchParams.get('name');
@@ -54,8 +53,7 @@ export async function GET(req: NextRequest) {
 }
 
 async function fetchCarePlans(name: string, cpsBaseURL: string) {
-    const orcaBaseURL = getORCABaseURL(name);
-    const httpRequestURL = `${trimEnd(orcaBaseURL, '/')}/CarePlan/_search`;
+    const httpRequestURL = `${getORCAExternalFHIRBaseURL(name)}/CarePlan/_search`;
     const orcaBearerToken = getORCABearerToken(name);
 
     let bundle = {} as Bundle;
@@ -84,5 +82,13 @@ async function fetchCarePlans(name: string, cpsBaseURL: string) {
             throw error;
         }
     }
-    return bundle.entry?.map((entry) => entry.resource as CarePlan) || [];
+    const carePlans = bundle.entry?.map((entry) => entry.resource as CarePlan) || [];
+    // Set the meta.source to the ORCA base URL, so it can be used as X-Scp-Context later (the ORCA FHIR proxy only sets meta.source for the top-level resource).
+    return carePlans.map(carePlan => {
+        carePlan.meta = {
+            ...carePlan.meta,
+            source: `${cpsBaseURL}/CarePlan/${carePlan.id}`,
+        };
+        return carePlan;
+    })
 }
