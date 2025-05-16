@@ -344,7 +344,7 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
 	// E.g., ChipSoft HiX doesn't provide ServiceRequest and Practitioner as FHIR resources, so whatever there is, is converted to FHIR and cached in the session.
-	if resource := sessionData.Get(resourcePath); resource != nil && resource.Resource != nil {
+	if resource := sessionData.GetByPath(resourcePath); resource != nil && resource.Resource != nil {
 		coolfhir.SendResponse(writer, http.StatusOK, *resource.Resource)
 	} else {
 		proxy.ServeHTTP(writer, request)
@@ -606,11 +606,11 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 		Task             string  `json:"task"`
 		TaskIdentifier   *string `json:"taskIdentifier"`
 	}{
-		Patient:          to.Empty(sessionData.Get("Patient")).Path,
-		ServiceRequest:   to.Empty(sessionData.Get("ServiceRequest")).Path,
-		Practitioner:     to.Empty(sessionData.Get("Practitioner")).Path,
-		PractitionerRole: to.Empty(sessionData.Get("PractitionerRole")).Path,
-		Task:             to.Empty(sessionData.Get("Task")).Path,
+		Patient:          to.Empty(sessionData.GetByType("Patient")).Path,
+		ServiceRequest:   to.Empty(sessionData.GetByType("ServiceRequest")).Path,
+		Practitioner:     to.Empty(sessionData.GetByType("Practitioner")).Path,
+		PractitionerRole: to.Empty(sessionData.GetByType("PractitionerRole")).Path,
+		Task:             to.Empty(sessionData.GetByType("Task")).Path,
 		TaskIdentifier:   sessionData.TaskIdentifier,
 	}
 	response.Header().Add("Content-Type", "application/json")
