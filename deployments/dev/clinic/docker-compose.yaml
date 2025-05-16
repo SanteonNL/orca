@@ -30,10 +30,10 @@ services:
     ports:
       - "1305:1305"
   orchestrator:
-    #image: ghcr.io/santeonnl/orca_orchestrator:main
-    build:
-      context: ../../../orchestrator
-      dockerfile: Dockerfile
+    image: ghcr.io/santeonnl/orca_orchestrator:main
+    #build:
+    #  context: ../../../orchestrator
+    #  dockerfile: Dockerfile
     ports:
       - "3030:8080"
     env_file:
@@ -69,7 +69,7 @@ services:
       context: ../../../viewer_simulator
       dockerfile: Dockerfile
     environment:
-      CLINIC_ORCA_URL: ${HOSPITAL_URL}/orca
+      CLINIC_ORCA_URL: ${CLINIC_URL}/orca
       CLINIC_ORCA_BEARERTOKEN: valid
       CLINIC_IDENTIFIER: http://fhir.nl/fhir/NamingSystem/ura|1234
       CLINIC_CPS_URL: ${HOSPITAL_URL}/orca/cps
