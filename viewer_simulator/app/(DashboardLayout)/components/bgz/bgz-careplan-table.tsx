@@ -70,6 +70,7 @@ export default function BgzTable({ name, rows, loading }: Props) {
                         showQuickFilter: true,
                     },
                 }}
+                paginationMode='server'
                 initialState={{
                     sorting: {
                         sortModel: [{ field: 'lastUpdated', sort: 'desc' }]
