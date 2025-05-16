@@ -64,16 +64,13 @@ services:
       - "../../../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json:/config/fhir/healthcareservices.json:ro"
       - "../../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
   viewer:
-    image: ghcr.io/santeonnl/orca_viewersimulator:main
-#    build:
-#      context: ../../../viewer_simulator
-#      dockerfile: Dockerfile
+#    image: ghcr.io/santeonnl/orca_viewersimulator:main
+    build:
+      context: ../../../viewer_simulator
+      dockerfile: Dockerfile
     environment:
-      FHIR_BASE_URL: ${HOSPITAL_URL}/orca/cpc/cps/fhir
-      FHIR_AGGREGATE_URL: http://orchestrator:8080/cpc/aggregate/fhir
-      FHIR_AUTHORIZATION_TOKEN: valid
+      CLINIC_ORCA_URL: ${CLINIC_URL}/orca
+      CLINIC_ORCA_BEARERTOKEN: valid
+      CLINIC_IDENTIFIER: http://fhir.nl/fhir/NamingSystem/ura|1234
+      CLINIC_CPS_URL: ${HOSPITAL_URL}/orca/cps
       NEXT_ALLOWED_ORIGINS: localhost:7080
-      ORCA_CPC_URL: http://orchestrator:8080/cpc
-      FAUXCARE_CAREPLANSERVICE_URL: ${HOSPITAL_URL}/orca/cps
-      FAUXCARE_BEARER_TOKEN: valid
-

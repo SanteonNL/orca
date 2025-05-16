@@ -11,7 +11,6 @@ export type Row = {
   bsn: string,
   category: string,
   carePlan: CarePlan,
-  careTeam?: CareTeam,
   status: string,
   lastUpdated: Date,
   careTeamMembers: string
@@ -24,7 +23,6 @@ interface Props {
 }
 
 export default function BgzTable({ name, rows, loading }: Props) {
-
     const columns: GridColDef[] = [
 
         { field: 'bsn', headerName: 'BSN', flex: 1 },

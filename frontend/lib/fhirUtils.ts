@@ -1,6 +1,6 @@
 import Client from 'fhir-kit-client';
 import {
-    Bundle,
+    Bundle, CarePlan, CareTeam,
     Condition,
     Identifier,
     Patient,
