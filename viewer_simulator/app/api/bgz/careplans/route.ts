@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
             return undefined
         }
         return {
-            id: careTeam?.id || 'Unknown',
+            id: carePlan.id!!,
             bsn: getBsn(carePlan),
             category:
                 carePlan.category?.[0]?.coding
