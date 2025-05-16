@@ -675,7 +675,9 @@ func TestService_HandleSearchEndpoints(t *testing.T) {
 		responseData, _ := io.ReadAll(httpResponse.Body)
 		expectedData, err := os.ReadFile("./testdata/endpoints.json")
 		require.NoError(t, err)
-		require.JSONEq(t, string(expectedData), string(responseData))
+		expected := must.UnmarshalJSON[map[string]any](expectedData)
+		actual := must.UnmarshalJSON[map[string]any](responseData)
+		require.Equal(t, expected, actual)
 	})
 	t.Run("search parameters not allowed", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Endpoint?foo=bar", nil)
