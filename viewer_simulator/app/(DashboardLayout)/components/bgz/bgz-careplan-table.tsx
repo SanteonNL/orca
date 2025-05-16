@@ -23,8 +23,6 @@ interface Props {
 }
 
 export default function BgzTable({ name, rows, loading }: Props) {
-    console.log('Entries: ' + rows.length)
-    console.log(rows)
     const columns: GridColDef[] = [
 
         { field: 'bsn', headerName: 'BSN', flex: 1 },
@@ -63,8 +61,7 @@ export default function BgzTable({ name, rows, loading }: Props) {
                 rows={rows}
                 columns={columns}
                 components={{ Toolbar: GridToolbar }}
-                pageSize={10}
-                rowsPerPageOptions={[10]}
+                autoHeight
                 componentsProps={{
                     toolbar: {
                         showQuickFilter: true,
