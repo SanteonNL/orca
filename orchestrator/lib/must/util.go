@@ -20,12 +20,3 @@ func MarshalJSON(v any) []byte {
 	}
 	return b
 }
-
-func UnmarshalJSON[T any](b []byte) T {
-	var result T
-	err := json.Unmarshal(b, &result)
-	if err != nil {
-		panic("failed to unmarshal JSON: " + err.Error())
-	}
-	return result
-}
