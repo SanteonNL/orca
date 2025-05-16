@@ -63,7 +63,6 @@ export default function BgzTable({ name, rows, loading }: Props) {
                 rows={rows}
                 columns={columns}
                 components={{ Toolbar: GridToolbar }}
-                autoHeight
                 pageSize={10}
                 rowsPerPageOptions={[10]}
                 componentsProps={{
@@ -74,6 +73,9 @@ export default function BgzTable({ name, rows, loading }: Props) {
                 initialState={{
                     sorting: {
                         sortModel: [{ field: 'lastUpdated', sort: 'desc' }]
+                    },
+                    pagination: {
+                        pageSize: 10,
                     },
                 }}
             />
