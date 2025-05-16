@@ -65,7 +65,7 @@ async function fetchCarePlans(name: string, cpsBaseURL: string) {
                 'Content-Type': 'x-www-form-urlencoded',
                 'X-Scp-Fhir-Url': cpsBaseURL,
             },
-            body: `_count=50`
+            body: `_count=200`
         });
         if (!resp.ok) {
             throw new Error(`Failed to fetch data: ${httpRequestURL} (X-Scp-Fhir-Url: ${cpsBaseURL}), status: ${resp.status}`);

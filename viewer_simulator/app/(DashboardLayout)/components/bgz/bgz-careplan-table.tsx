@@ -24,7 +24,8 @@ interface Props {
 }
 
 export default function BgzTable({ name, rows, loading }: Props) {
-
+    console.log('Entries: ' + rows.length)
+    console.log(rows)
     const columns: GridColDef[] = [
 
         { field: 'bsn', headerName: 'BSN', flex: 1 },
