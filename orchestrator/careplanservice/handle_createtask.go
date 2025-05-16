@@ -50,6 +50,10 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, err
 	}
 
+	if !isPrincipalTaskRequester(&task, request.Principal) {
+		return nil, coolfhir.BadRequest("requester must be equal to Task.requester")
+	}
+
 	// Enrich Task.Requester and Task.Owner with info from CSD (if available), typically to add the organization name
 	// TODO: CSD is queried again later, to get the notification endpoint. We should optimize/cache this. Maybe in the context.Context?
 	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Requester.Identifier); err != nil {
@@ -370,6 +374,18 @@ func isRequesterLocalCareOrganization(localIdentities []fhir.Organization, princ
 					return true
 				}
 			}
+		}
+	}
+	return false
+}
+
+func isPrincipalTaskRequester(task *fhir.Task, principal *auth.Principal) bool {
+	if task.Requester == nil || task.Requester.Identifier == nil {
+		return false
+	}
+	for _, identifier := range principal.Organization.Identifier {
+		if coolfhir.IdentifierEquals(task.Requester.Identifier, &identifier) {
+			return true
 		}
 	}
 	return false

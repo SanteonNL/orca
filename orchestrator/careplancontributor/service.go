@@ -10,6 +10,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -217,6 +218,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		bundle := coolfhir.BundleBuilder{}
 		bundle.Type = fhir.BundleTypeSearchset
+		endpoints := make(map[string]fhir.Endpoint)
+		endpointNames := make([]string, 0)
 		for _, appConfig := range s.config.AppLaunch.External {
 			endpoint := fhir.Endpoint{
 				Status: fhir.EndpointStatusActive,
@@ -237,7 +240,13 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				Name:    to.Ptr(appConfig.Name),
 				Address: appConfig.URL,
 			}
-			bundle.Append(endpoint, nil, nil)
+			endpoints[appConfig.Name] = endpoint
+			endpointNames = append(endpointNames, appConfig.Name)
+		}
+		// Stable order for sanity and easier testing
+		slices.Sort(endpointNames)
+		for _, name := range endpointNames {
+			bundle.Append(endpoints[name], nil, nil)
 		}
 		coolfhir.SendResponse(writer, http.StatusOK, bundle, nil)
 	}))

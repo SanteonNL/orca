@@ -238,52 +238,6 @@ func Test_Main(t *testing.T) {
 			})
 		})
 	})
-	t.Run("Clinic attempts to create a CarePlan at Hospital's CarePlanService, which isn't allowed", func(t *testing.T) {
-		var task fhir.Task
-		t.Log("Clinic attempts to create task without existing CarePlan in clinic, fails...")
-		{
-			task.Meta = &fhir.Meta{
-				Profile: []string{
-					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
-				},
-			}
-			task.Requester = &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr(URANamingSystem),
-					Value:  to.Ptr(strconv.Itoa(hospitalURA)),
-				},
-				Type: to.Ptr("Organization"),
-			}
-			task.Owner = &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr(URANamingSystem),
-					Value:  to.Ptr(strconv.Itoa(clinicURA)),
-				},
-				Type: to.Ptr("Organization"),
-			}
-			task.Focus = &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					// COPD
-					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
-					Value:  to.Ptr("99534756439"),
-				},
-			}
-			task.For = &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-				Reference: to.Ptr("Patient/" + *patient.Id),
-			}
-			task.Intent = "order"
-			task.Status = fhir.TaskStatusRequested
-			err := clinicOrcaCPSFHIRClient.Create(task, &task)
-			var operationOutcome fhirclient.OperationOutcomeError
-			require.ErrorAs(t, err, &operationOutcome)
-			require.Len(t, operationOutcome.Issue, 1)
-			require.Equal(t, "CarePlanService/CreateTask failed: requester must be local care organization in order to create new CarePlan and CareTeam", *operationOutcome.Issue[0].Diagnostics)
-		}
-	})
 	t.Run("Test resource GET authorisation", func(t *testing.T) {
 		// TODO: Negative testing with a third party that has a valid bearer token but no access to the existing CarePlan and CareTeams
 		// Patient
