@@ -11,7 +11,6 @@ export type Row = {
   bsn: string,
   category: string,
   carePlan: CarePlan,
-  careTeam?: CareTeam,
   status: string,
   lastUpdated: Date,
   careTeamMembers: string
@@ -70,13 +69,9 @@ export default function BgzTable({ name, rows, loading }: Props) {
                         showQuickFilter: true,
                     },
                 }}
-                paginationMode='server'
                 initialState={{
                     sorting: {
                         sortModel: [{ field: 'lastUpdated', sort: 'desc' }]
-                    },
-                    pagination: {
-                        pageSize: 10,
                     },
                 }}
             />

@@ -22,7 +22,8 @@ export async function GET(req: NextRequest) {
             (resource) => resource.resourceType === 'CareTeam',
         );
         if (!careTeam) {
-            console.warn(`No CareTeam found for CarePlan/${carePlan.id}`,);
+            console.warn(`No CareTeam found for CarePlan/${carePlan.id}`);
+            return undefined
         }
         return {
             id: careTeam?.id || 'Unknown',
@@ -32,7 +33,6 @@ export async function GET(req: NextRequest) {
                     ?.map((coding) => coding.display)
                     .join(', ') ?? 'Unknown',
             carePlan,
-            careTeam,
             status: carePlan.status,
             lastUpdated: carePlan.meta?.lastUpdated
                 ? new Date(carePlan.meta.lastUpdated)
@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
                     })
                     .join(', ') ?? 'Unknown',
         };
-    });
+    }).filter((row) => row !== undefined);
     return NextResponse.json(rows);
 }
 
