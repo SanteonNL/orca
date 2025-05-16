@@ -129,10 +129,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			}
 		}
 
-		ok := careteamservice.ActivateMembership(&careTeam, &fhir.Reference{
-			Identifier: &request.Principal.Organization.Identifier[0],
-			Type:       to.Ptr("Organization"),
-		})
+		ok := careteamservice.ActivateMembership(&careTeam, task.Requester)
 		if !ok {
 			return nil, errors.New("failed to activate membership for new CareTeam")
 		}
