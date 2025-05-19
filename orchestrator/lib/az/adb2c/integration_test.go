@@ -46,7 +46,7 @@ func TestIntegrationWithRealToken(t *testing.T) {
 
 	if err != nil {
 		// Expired tokens are expected in some test cases
-		if err.Error() == "token has expired" {
+		if errors.Is(err, ErrTokenExpired) {
 			t.Logf("Token validation failed as expected: %v", err)
 			t.Logf("This is normal if you're using an expired token for testing")
 			return
