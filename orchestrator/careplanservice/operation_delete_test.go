@@ -87,8 +87,8 @@ func TestFHIRDeleteOperationHandler_Handle(t *testing.T) {
 
 		// Verify the transaction contains the delete operation
 		assert.Len(t, tx.Entry, 1)
-		assert.Equal(t, fhir.HTTPVerbDELETE, tx.Entry[0].Request.Method)
-		assert.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
+		assert.Equal(t, fhir.HTTPVerbPOST, tx.Entry[0].Request.Method)
+		assert.Equal(t, "Task/$delete", tx.Entry[0].Request.Url)
 
 		// Verify the handler result
 		txResponse := coolfhir.Transaction().

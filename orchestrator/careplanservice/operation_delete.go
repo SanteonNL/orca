@@ -51,7 +51,7 @@ func (h FHIRDeleteOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		log.Ctx(ctx).Error().Err(err).Msgf("Error searching for AuditEvents for %s/%s", resourceType, resourceID)
 	}
 
-	// Delete each AuditEvent using conditional delete
+	// Delete AuditEvents individually first
 	for _, entry := range auditBundle.Entry {
 		var auditEvent fhir.AuditEvent
 		err := json.Unmarshal(entry.Resource, &auditEvent)
@@ -61,34 +61,54 @@ func (h FHIRDeleteOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		}
 
 		if auditEvent.Id != nil {
-			// Use conditional delete with _id parameter instead of direct deletion
-			tx.Append(auditEvent, &fhir.BundleEntryRequest{
-				Method: fhir.HTTPVerbDELETE,
-				Url:    "AuditEvent?_id=" + *auditEvent.Id,
+			// Use the special $delete operation for AuditEvents
+			deleteParams := fhir.Parameters{
+				Parameter: []fhir.ParametersParameter{
+					{
+						Name:        "id",
+						ValueString: auditEvent.Id,
+					},
+				},
+			}
+
+			// Add to transaction
+			tx.Append(deleteParams, &fhir.BundleEntryRequest{
+				Method: fhir.HTTPVerbPOST,
+				Url:    "AuditEvent/$delete",
 			}, nil)
 		}
 	}
 
-	// Add conditional delete operation for the main resource using _id parameter
+	// Use the special $delete operation for the main resource
 	idx := len(tx.Entry)
-	tx.Append(resource, &fhir.BundleEntryRequest{
-		Method: fhir.HTTPVerbDELETE,
-		Url:    resourceType + "?_id=" + resourceID,
+	deleteParams := fhir.Parameters{
+		Parameter: []fhir.ParametersParameter{
+			{
+				Name:        "id",
+				ValueString: &resourceID,
+			},
+		},
+	}
+
+	// Add to transaction
+	tx.Append(deleteParams, &fhir.BundleEntryRequest{
+		Method: fhir.HTTPVerbPOST,
+		Url:    resourceType + "/$delete",
 	}, nil)
 
+	// Return an empty bundle entry to indicate success
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		bundleEntry := &fhir.BundleEntry{
 			Response: &fhir.BundleEntryResponse{
-				Status: "200 OK",
+				Status: "204 No Content",
 			},
 		}
 
-		// Check if we have a response in the transaction result
+		// Check if we have a response in the transaction result for the main resource
 		if idx < len(txResult.Entry) {
 			bundleEntry.Response = txResult.Entry[idx].Response
 		}
 
-		// We do not want to notify subscribers for a delete operation
 		return []*fhir.BundleEntry{bundleEntry}, []any{}, nil
 	}, nil
 }
