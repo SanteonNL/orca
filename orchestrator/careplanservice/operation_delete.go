@@ -51,7 +51,7 @@ func (h FHIRDeleteOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		log.Ctx(ctx).Error().Err(err).Msgf("Error searching for AuditEvents for %s/%s", resourceType, resourceID)
 	}
 
-	// Delete each AuditEvent
+	// Delete each AuditEvent using conditional delete
 	for _, entry := range auditBundle.Entry {
 		var auditEvent fhir.AuditEvent
 		err := json.Unmarshal(entry.Resource, &auditEvent)
@@ -61,18 +61,19 @@ func (h FHIRDeleteOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		}
 
 		if auditEvent.Id != nil {
+			// Use conditional delete with _id parameter instead of direct deletion
 			tx.Append(auditEvent, &fhir.BundleEntryRequest{
 				Method: fhir.HTTPVerbDELETE,
-				Url:    "AuditEvent/" + *auditEvent.Id,
+				Url:    "AuditEvent?_id=" + *auditEvent.Id,
 			}, nil)
 		}
 	}
 
-	// Add delete operation to the transaction
+	// Add conditional delete operation for the main resource using _id parameter
 	idx := len(tx.Entry)
 	tx.Append(resource, &fhir.BundleEntryRequest{
 		Method: fhir.HTTPVerbDELETE,
-		Url:    resourceType + "/" + resourceID,
+		Url:    resourceType + "?_id=" + resourceID,
 	}, nil)
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
