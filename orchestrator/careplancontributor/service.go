@@ -10,6 +10,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -217,6 +218,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		bundle := coolfhir.BundleBuilder{}
 		bundle.Type = fhir.BundleTypeSearchset
+		endpoints := make(map[string]fhir.Endpoint)
+		endpointNames := make([]string, 0)
 		for _, appConfig := range s.config.AppLaunch.External {
 			endpoint := fhir.Endpoint{
 				Status: fhir.EndpointStatusActive,
@@ -237,7 +240,13 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				Name:    to.Ptr(appConfig.Name),
 				Address: appConfig.URL,
 			}
-			bundle.Append(endpoint, nil, nil)
+			endpoints[appConfig.Name] = endpoint
+			endpointNames = append(endpointNames, appConfig.Name)
+		}
+		// Stable order for sanity and easier testing
+		slices.Sort(endpointNames)
+		for _, name := range endpointNames {
+			bundle.Append(endpoints[name], nil, nil)
 		}
 		coolfhir.SendResponse(writer, http.StatusOK, bundle, nil)
 	}))
@@ -335,7 +344,7 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	resourcePath := request.PathValue("rest")
 	// If the requested resource is cached in the session, directly return it. This is used to support resources that are required (e.g. by Frontend), but not provided by the EHR.
 	// E.g., ChipSoft HiX doesn't provide ServiceRequest and Practitioner as FHIR resources, so whatever there is, is converted to FHIR and cached in the session.
-	if resource := sessionData.Get(resourcePath); resource != nil && resource.Resource != nil {
+	if resource := sessionData.GetByPath(resourcePath); resource != nil && resource.Resource != nil {
 		coolfhir.SendResponse(writer, http.StatusOK, *resource.Resource)
 	} else {
 		proxy.ServeHTTP(writer, request)
@@ -597,11 +606,11 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 		Task             string  `json:"task"`
 		TaskIdentifier   *string `json:"taskIdentifier"`
 	}{
-		Patient:          to.Empty(sessionData.Get("Patient")).Path,
-		ServiceRequest:   to.Empty(sessionData.Get("ServiceRequest")).Path,
-		Practitioner:     to.Empty(sessionData.Get("Practitioner")).Path,
-		PractitionerRole: to.Empty(sessionData.Get("PractitionerRole")).Path,
-		Task:             to.Empty(sessionData.Get("Task")).Path,
+		Patient:          to.Empty(sessionData.GetByType("Patient")).Path,
+		ServiceRequest:   to.Empty(sessionData.GetByType("ServiceRequest")).Path,
+		Practitioner:     to.Empty(sessionData.GetByType("Practitioner")).Path,
+		PractitionerRole: to.Empty(sessionData.GetByType("PractitionerRole")).Path,
+		Task:             to.Empty(sessionData.GetByType("Task")).Path,
 		TaskIdentifier:   sessionData.TaskIdentifier,
 	}
 	response.Header().Add("Content-Type", "application/json")

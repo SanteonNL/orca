@@ -65,9 +65,9 @@ func TestService_handle(t *testing.T) {
 		require.Equal(t, "/cpc/new", response.Header().Get("Location"))
 		sessionData := user.SessionFromHttpResponse(sessionManager, response.Result())
 		require.NotNil(t, sessionData)
-		require.Equal(t, "Patient/a", sessionData.Get("Patient").Path)
-		require.Equal(t, "ServiceRequest/b", sessionData.Get("ServiceRequest").Path)
-		require.Equal(t, "Practitioner/c", sessionData.Get("Practitioner").Path)
+		require.Equal(t, "Patient/a", sessionData.GetByType("Patient").Path)
+		require.Equal(t, "ServiceRequest/b", sessionData.GetByType("ServiceRequest").Path)
+		require.Equal(t, "Practitioner/c", sessionData.GetByType("Practitioner").Path)
 		require.Equal(t, "unit-test-system|10", *sessionData.TaskIdentifier)
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
