@@ -97,4 +97,17 @@ func TestReadTaskAuthzPolicy(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("delete", func(t *testing.T) {
+		policy := DeleteTaskAuthzPolicy()
+		testPolicies(t, []AuthzPolicyTest[*fhir.Task]{
+			{
+				name:      "allow (anyone can delete)",
+				policy:    policy,
+				resource:  &taskWithRequester,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+		})
+	})
 }

@@ -629,9 +629,38 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}})
 	})
 
-	// Verify all audit events at the end
+	// Verify all audit events at the end - check before deleting resources, as deleting them will remove the audit events
 	err = verifyAuditEvents(t, expectedAuditEvents, fhirBaseURL)
 	require.NoError(t, err)
+
+	// Delete resources
+	t.Run("Delete Patient", func(t *testing.T) {
+		err = carePlanContributor1.Delete("Patient/" + *patient.Id)
+		require.NoError(t, err)
+	})
+
+	t.Run("Delete QuestionnaireResponse", func(t *testing.T) {
+		err = carePlanContributor1.Delete("QuestionnaireResponse/" + *questionnaireResponse.Id)
+		require.NoError(t, err)
+
+		err = carePlanContributor1.Delete("QuestionnaireResponse/non-existing-questionnaire-response")
+		require.NoError(t, err)
+	})
+
+	t.Run("Delete Questionnaire", func(t *testing.T) {
+		err = carePlanContributor1.Delete("Questionnaire/" + *questionnaire.Id)
+		require.NoError(t, err)
+	})
+
+	t.Run("Delete ServiceRequest", func(t *testing.T) {
+		err = carePlanContributor1.Delete("ServiceRequest/" + *serviceRequest.Id)
+		require.NoError(t, err)
+	})
+
+	t.Run("Delete Condition", func(t *testing.T) {
+		err = carePlanContributor1.Delete("Condition/" + *condition.Id)
+		require.NoError(t, err)
+	})
 }
 
 // Define a new type to hold expected audit events without timestamp requirements

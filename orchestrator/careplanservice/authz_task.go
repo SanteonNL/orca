@@ -32,3 +32,7 @@ func ReadTaskAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Task] {
 		},
 	}
 }
+
+func DeleteTaskAuthzPolicy() Policy[*fhir.Task] {
+	return AnyonePolicy[*fhir.Task]{}
+}

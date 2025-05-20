@@ -128,4 +128,17 @@ func TestConditionAuthzPolicy(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("delete", func(t *testing.T) {
+		policy := DeleteConditionAuthzPolicy()
+		testPolicies(t, []AuthzPolicyTest[*fhir.Condition]{
+			{
+				name:      "allow (anyone can delete)",
+				policy:    policy,
+				resource:  &condition,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+		})
+	})
 }

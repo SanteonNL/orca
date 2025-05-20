@@ -32,3 +32,7 @@ func ReadServiceRequestAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Se
 		},
 	}
 }
+
+func DeleteServiceRequestAuthzPolicy() Policy[*fhir.ServiceRequest] {
+	return AnyonePolicy[*fhir.ServiceRequest]{}
+}

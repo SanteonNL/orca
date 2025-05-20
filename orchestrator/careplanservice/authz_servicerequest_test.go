@@ -109,4 +109,17 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 		})
 	})
 
+	t.Run("delete", func(t *testing.T) {
+		policy := DeleteServiceRequestAuthzPolicy()
+		testPolicies(t, []AuthzPolicyTest[*fhir.ServiceRequest]{
+			{
+				name:      "allow (anyone can delete)",
+				policy:    policy,
+				resource:  &serviceRequest,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+		})
+	})
+
 }

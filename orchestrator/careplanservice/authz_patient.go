@@ -32,3 +32,7 @@ func ReadPatientAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Patient] 
 		},
 	}
 }
+
+func DeletePatientAuthzPolicy() Policy[*fhir.Patient] {
+	return AnyonePolicy[*fhir.Patient]{}
+}

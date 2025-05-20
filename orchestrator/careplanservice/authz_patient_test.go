@@ -111,4 +111,17 @@ func TestPatientAuthzPolicy(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("delete", func(t *testing.T) {
+		policy := DeletePatientAuthzPolicy()
+		testPolicies(t, []AuthzPolicyTest[*fhir.Patient]{
+			{
+				name:      "allow (anyone can delete)",
+				policy:    policy,
+				resource:  &patient,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+		})
+	})
 }

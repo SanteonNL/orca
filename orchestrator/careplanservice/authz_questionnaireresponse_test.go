@@ -104,4 +104,17 @@ func TestQuestionnaireResponseAuthzPolicy(t *testing.T) {
 			},
 		})
 	})
+
+	t.Run("delete", func(t *testing.T) {
+		policy := DeleteQuestionnaireResponseAuthzPolicy()
+		testPolicies(t, []AuthzPolicyTest[*fhir.QuestionnaireResponse]{
+			{
+				name:      "allow (anyone can delete)",
+				policy:    policy,
+				resource:  &questionnaireResponse,
+				principal: auth.TestPrincipal1,
+				wantAllow: true,
+			},
+		})
+	})
 }
