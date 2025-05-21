@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"time"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -78,77 +76,6 @@ func sanitizeResource(resource map[string]interface{}, resourceType string) map[
 		"resourceType": resourceType,
 		"id":           id,
 	}
-
-	// Set status fields to "entered-in-error" or equivalent based on resource type
-	switch resourceType {
-	case "Task":
-		sanitized["status"] = "cancelled"
-		sanitized["intent"] = "unknown"
-		sanitized["modifierReason"] = map[string]interface{}{
-			"coding": []map[string]interface{}{
-				{
-					"system":  "http://terminology.hl7.org/CodeSystem/task-modifier-reason",
-					"code":    "deleted",
-					"display": "Deleted",
-				},
-			},
-		}
-	case "CarePlan":
-		sanitized["status"] = "entered-in-error"
-		sanitized["intent"] = "proposal"
-	case "Condition":
-		sanitized["clinicalStatus"] = map[string]interface{}{
-			"coding": []map[string]interface{}{
-				{
-					"system":  "http://terminology.hl7.org/CodeSystem/condition-clinical",
-					"code":    "inactive",
-					"display": "Inactive",
-				},
-			},
-		}
-		sanitized["verificationStatus"] = map[string]interface{}{
-			"coding": []map[string]interface{}{
-				{
-					"system":  "http://terminology.hl7.org/CodeSystem/condition-ver-status",
-					"code":    "entered-in-error",
-					"display": "Entered in Error",
-				},
-			},
-		}
-	case "ServiceRequest":
-		sanitized["status"] = "entered-in-error"
-		sanitized["intent"] = "proposal"
-	case "QuestionnaireResponse":
-		sanitized["status"] = "entered-in-error"
-	case "Patient":
-		sanitized["active"] = false
-	case "Organization":
-		sanitized["active"] = false
-	default:
-		// Generic approach for other resource types
-		if _, hasStatus := resource["status"]; hasStatus {
-			sanitized["status"] = "entered-in-error"
-		}
-	}
-
-	// Preserve meta with updated lastUpdated
-	meta := map[string]interface{}{
-		"lastUpdated": time.Now().Format(time.RFC3339),
-	}
-	if resource["meta"] != nil {
-		if metaMap, ok := resource["meta"].(map[string]interface{}); ok {
-			if profile, ok := metaMap["profile"]; ok {
-				meta["profile"] = profile
-			}
-			if security, ok := metaMap["security"]; ok {
-				meta["security"] = security
-			}
-			if versionId, ok := metaMap["versionId"]; ok {
-				meta["versionId"] = versionId
-			}
-		}
-	}
-	sanitized["meta"] = meta
 
 	// Maintain key relationships
 	maintainRelationships(resource, sanitized, resourceType)
