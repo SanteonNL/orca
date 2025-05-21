@@ -80,7 +80,11 @@ func sanitizeResource(resource map[string]interface{}, resourceType string, reso
 		}
 		sanitizedResource := fhir.Task{}
 		sanitizedResource.Id = existingTask.Id
-		sanitizedResource.Intent = existingTask.Intent
+		sanitizedResource.Intent = "order"
+		sanitizedResource.Status = fhir.TaskStatusRequested
+		sanitizedResource.For = existingTask.For
+		sanitizedResource.Owner = existingTask.Owner
+		sanitizedResource.Requester = existingTask.Requester
 		return &sanitizedResource
 	case "CarePlan":
 		sanitizedResource := fhir.CarePlan{}
