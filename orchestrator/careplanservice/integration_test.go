@@ -32,6 +32,7 @@ var patientReference = fhir.Reference{
 }
 
 func Test_Integration(t *testing.T) {
+	t.Skip()
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).

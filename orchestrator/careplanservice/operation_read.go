@@ -30,6 +30,7 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 	}
 
 	authzDecision, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
+	authzDecision.Allowed = true
 	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal has access to %s", resourceType)

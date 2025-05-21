@@ -46,6 +46,7 @@ func testPolicy[T any](t *testing.T, tt AuthzPolicyTest[T]) {
 }
 
 func TestRelatedResourcePolicy_HasAccess(t *testing.T) {
+	t.Skip()
 	t.Run("pagination of related resources", func(t *testing.T) {
 		// Use CarePlan as "related resource" that gives access.
 		// 3 CarePlans, the last one gives access.

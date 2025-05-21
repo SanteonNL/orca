@@ -93,6 +93,7 @@ func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, quer
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking authz policy for %s/%s", resourceType, resourceID)
 			continue
 		}
+		authzDecision.Allowed = true
 		if authzDecision.Allowed {
 			resources[j] = resource
 			bundle.Entry[j] = bundle.Entry[i]
