@@ -41,7 +41,7 @@ func (h FHIRSanitizeOperationHandler[T]) Handle(ctx context.Context, request FHI
 	}
 
 	// Sanitize the resource
-	sanitized := sanitizeResource(resourceMap, resourceType)
+	sanitized := sanitizeResource(resourceMap, resourceType, resourceJSON)
 
 	// Convert back to JSON and update the resource
 	idx := len(tx.Entry)
@@ -68,14 +68,19 @@ func (h FHIRSanitizeOperationHandler[T]) Handle(ctx context.Context, request FHI
 }
 
 // sanitizeResource removes most of the data from a resource while preserving IDs and relationships
-func sanitizeResource(resource map[string]interface{}, resourceType string) interface{} {
+func sanitizeResource(resource map[string]interface{}, resourceType string, resourceJSON []byte) interface{} {
 	// Preserve id and resource type
 	id := resource["id"]
 
 	switch resourceType {
 	case "Task":
+		existingTask, err := fhir.UnmarshalTask(resourceJSON)
+		if err != nil {
+			return nil
+		}
 		sanitizedResource := fhir.Task{}
-		sanitizedResource.Id = to.Ptr(id.(string))
+		sanitizedResource.Id = existingTask.Id
+		sanitizedResource.Intent = existingTask.Intent
 		return &sanitizedResource
 	case "CarePlan":
 		sanitizedResource := fhir.CarePlan{}
@@ -86,8 +91,13 @@ func sanitizeResource(resource map[string]interface{}, resourceType string) inte
 		sanitizedResource.Id = to.Ptr(id.(string))
 		return &sanitizedResource
 	case "ServiceRequest":
+		existingServiceRequest, err := fhir.UnmarshalServiceRequest(resourceJSON)
+		if err != nil {
+			return nil
+		}
 		sanitizedResource := fhir.ServiceRequest{}
-		sanitizedResource.Id = to.Ptr(id.(string))
+		sanitizedResource.Id = existingServiceRequest.Id
+		sanitizedResource.Subject = existingServiceRequest.Subject
 		return &sanitizedResource
 	case "QuestionnaireResponse":
 		sanitizedResource := fhir.QuestionnaireResponse{}
