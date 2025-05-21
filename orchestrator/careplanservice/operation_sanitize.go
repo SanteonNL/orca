@@ -6,6 +6,7 @@ import (
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -67,69 +68,91 @@ func (h FHIRSanitizeOperationHandler[T]) Handle(ctx context.Context, request FHI
 }
 
 // sanitizeResource removes most of the data from a resource while preserving IDs and relationships
-func sanitizeResource(resource map[string]interface{}, resourceType string) map[string]interface{} {
+func sanitizeResource(resource map[string]interface{}, resourceType string) interface{} {
 	// Preserve id and resource type
 	id := resource["id"]
 
-	// Start with completely clean resource
-	sanitized := map[string]interface{}{
-		"resourceType": resourceType,
-		"id":           id,
-	}
-
-	// Maintain key relationships
-	maintainRelationships(resource, sanitized, resourceType)
-
-	return sanitized
-}
-
-// maintainRelationships preserves important references in the resource
-func maintainRelationships(originalResource, sanitizedResource map[string]interface{}, resourceType string) {
-	// Preserve references based on resource type
 	switch resourceType {
 	case "Task":
-		if focus, ok := originalResource["focus"]; ok {
-			sanitizedResource["focus"] = focus
-		}
-		if for_, ok := originalResource["for"]; ok {
-			sanitizedResource["for"] = for_
-		}
-		if owner, ok := originalResource["owner"]; ok {
-			sanitizedResource["owner"] = owner
-		}
-		if requester, ok := originalResource["requester"]; ok {
-			sanitizedResource["requester"] = requester
-		}
-		if basedOn, ok := originalResource["basedOn"]; ok {
-			sanitizedResource["basedOn"] = basedOn
-		}
+		sanitizedResource := fhir.Task{}
+		sanitizedResource.Id = to.Ptr(id.(string))
+		return &sanitizedResource
 	case "CarePlan":
-		if subject, ok := originalResource["subject"]; ok {
-			sanitizedResource["subject"] = subject
-		}
-		if careTeam, ok := originalResource["careTeam"]; ok {
-			sanitizedResource["careTeam"] = careTeam
-		}
-		if addresses, ok := originalResource["addresses"]; ok {
-			sanitizedResource["addresses"] = addresses
-		}
+		sanitizedResource := fhir.CarePlan{}
+		sanitizedResource.Id = to.Ptr(id.(string))
+		return &sanitizedResource
 	case "Condition":
-		if subject, ok := originalResource["subject"]; ok {
-			sanitizedResource["subject"] = subject
-		}
+		sanitizedResource := fhir.Condition{}
+		sanitizedResource.Id = to.Ptr(id.(string))
+		return &sanitizedResource
 	case "ServiceRequest":
-		if subject, ok := originalResource["subject"]; ok {
-			sanitizedResource["subject"] = subject
-		}
-		if requester, ok := originalResource["requester"]; ok {
-			sanitizedResource["requester"] = requester
-		}
+		sanitizedResource := fhir.ServiceRequest{}
+		sanitizedResource.Id = to.Ptr(id.(string))
+		return &sanitizedResource
 	case "QuestionnaireResponse":
-		if subject, ok := originalResource["subject"]; ok {
-			sanitizedResource["subject"] = subject
-		}
-		if questionnaire, ok := originalResource["questionnaire"]; ok {
-			sanitizedResource["questionnaire"] = questionnaire
-		}
+		sanitizedResource := fhir.QuestionnaireResponse{}
+		sanitizedResource.Id = to.Ptr(id.(string))
+		return &sanitizedResource
+	case "Patient":
+		sanitizedResource := fhir.Patient{}
+		sanitizedResource.Id = to.Ptr(id.(string))
+		return &sanitizedResource
 	}
+	return nil
+
+	//// Maintain key relationships
+	//maintainRelationships(resource, sanitized, resourceType)
+	//
+	//return sanitized
 }
+
+//// maintainRelationships preserves important references in the resource
+//func maintainRelationships(originalResource, sanitizedResource map[string]interface{}, resourceType string) {
+//	// Preserve references based on resource type
+//	switch resourceType {
+//	case "Task":
+//		if focus, ok := originalResource["focus"]; ok {
+//			sanitizedResource["focus"] = focus
+//		}
+//		if for_, ok := originalResource["for"]; ok {
+//			sanitizedResource["for"] = for_
+//		}
+//		if owner, ok := originalResource["owner"]; ok {
+//			sanitizedResource["owner"] = owner
+//		}
+//		if requester, ok := originalResource["requester"]; ok {
+//			sanitizedResource["requester"] = requester
+//		}
+//		if basedOn, ok := originalResource["basedOn"]; ok {
+//			sanitizedResource["basedOn"] = basedOn
+//		}
+//	case "CarePlan":
+//		if subject, ok := originalResource["subject"]; ok {
+//			sanitizedResource["subject"] = subject
+//		}
+//		if careTeam, ok := originalResource["careTeam"]; ok {
+//			sanitizedResource["careTeam"] = careTeam
+//		}
+//		if addresses, ok := originalResource["addresses"]; ok {
+//			sanitizedResource["addresses"] = addresses
+//		}
+//	case "Condition":
+//		if subject, ok := originalResource["subject"]; ok {
+//			sanitizedResource["subject"] = subject
+//		}
+//	case "ServiceRequest":
+//		if subject, ok := originalResource["subject"]; ok {
+//			sanitizedResource["subject"] = subject
+//		}
+//		if requester, ok := originalResource["requester"]; ok {
+//			sanitizedResource["requester"] = requester
+//		}
+//	case "QuestionnaireResponse":
+//		if subject, ok := originalResource["subject"]; ok {
+//			sanitizedResource["subject"] = subject
+//		}
+//		if questionnaire, ok := originalResource["questionnaire"]; ok {
+//			sanitizedResource["questionnaire"] = questionnaire
+//		}
+//	}
+//}
