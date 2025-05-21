@@ -1,0 +1,350 @@
+{
+  "resourceType": "Bundle",
+  "id": "fb8f36e8-82fb-4a47-97ee-78e061100d7a",
+  "meta": {
+    "lastUpdated": "2025-05-21T13:27:50.3619255+00:00"
+  },
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://zbjintsazactcpswev2-zbjintsazactcpswev2.fhir.azurehealthcareapis.com/Patient"
+    }
+  ],
+  "entry": [
+    {
+      "fullUrl": "https://zbjintsazactcpswev2-zbjintsazactcpswev2.fhir.azurehealthcareapis.com/Patient/enBqLNcUqWjaW0rlVDw69H2IAtnZCsfOLTuruUPZPmeo3",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "enBqLNcUqWjaW0rlVDw69H2IAtnZCsfOLTuruUPZPmeo3",
+        "meta": {
+          "versionId": "6",
+          "lastUpdated": "2025-05-21T13:17:32.335+00:00"
+        },
+        "extension": [
+          {
+            "url": "http://open.epic.com/FHIR/StructureDefinition/extension/legal-sex",
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "system": "urn:oid:1.2.840.114350.1.13.487.3.7.10.698084.130.657370.310560001",
+                  "code": "male",
+                  "display": "male"
+                }
+              ]
+            }
+          },
+          {
+            "url": "http://open.epic.com/FHIR/StructureDefinition/extension/sex-for-clinical-use",
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "system": "urn:oid:1.2.840.114350.1.13.487.3.7.10.698084.130.657370.310560001",
+                  "code": "male",
+                  "display": "male"
+                }
+              ]
+            }
+          },
+          {
+            "extension": [
+              {
+                "url": "https://open.epic.com/FHIR/StructureDefinition/patient-unmerge-reference-old",
+                "valueReference": {
+                  "reference": "Patient/e0FkmH6u4FT4feMQn8jVBMV0sQHrTsqTcH.T7CAnm0eU3"
+                }
+              },
+              {
+                "url": "https://open.epic.com/FHIR/StructureDefinition/patient-merge-unmerge-instant",
+                "valueInstant": "2022-11-30T16:13:46+00:00"
+              },
+              {
+                "url": "https://open.epic.com/FHIR/StructureDefinition/patient-unmerge-old-target-reference",
+                "valueReference": {
+                  "reference": "Patient/eULkDCKNmYvaHGepgOCGRyznjwA7UIPdE-tHdSBNFgr03"
+                }
+              },
+              {
+                "url": "https://open.epic.com/FHIR/StructureDefinition/patient-unmerge-current-target-reference",
+                "valueReference": {
+                  "reference": "Patient/eULkDCKNmYvaHGepgOCGRyznjwA7UIPdE-tHdSBNFgr03"
+                }
+              },
+              {
+                "url": "https://open.epic.com/FHIR/StructureDefinition/patient-unmerge-original-source-reference",
+                "valueReference": {
+                  "reference": "Patient/enBqLNcUqWjaW0rlVDw69H2IAtnZCsfOLTuruUPZPmeo3"
+                }
+              }
+            ],
+            "url": "https://open.epic.com/FHIR/StructureDefinition/patient-unmerge-source"
+          },
+          {
+            "url": "http://hl7.org/fhir/us/core/StructureDefinition/us-core-sex",
+            "valueCode": "248153007"
+          },
+          {
+            "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+            "valueReference": {
+              "type": "Organization",
+              "identifier": {
+                "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                "value": "00021514"
+              }
+            }
+          }
+        ],
+        "identifier": [
+          {
+            "use": "usual",
+            "type": {
+              "text": "CEID"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.3.688884.100",
+            "value": "SNZJHMN4V8CHTJF"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "EPIC"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.5.737384.0",
+            "value": "E1936773"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "EXTERNAL"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.2.698084",
+            "value": "Z1937875"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "FHIR"
+            },
+            "system": "http://open.epic.com/FHIR/StructureDefinition/patient-dstu2-fhir-id",
+            "value": "TvYvemRNOzx8OD3TybkuxPMM4y2qdQ.QCFmIuypXdBqkB"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "FHIR STU3"
+            },
+            "system": "http://open.epic.com/FHIR/StructureDefinition/patient-fhir-id",
+            "value": "enBqLNcUqWjaW0rlVDw69H2IAtnZCsfOLTuruUPZPmeo3"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "INTERNAL"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.2.698084",
+            "value": "Z1937875"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "MYCHARTLOGIN"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.3.878082.110",
+            "value": "VITALYTESTMAN"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "LOCAL"
+            },
+            "system": "urn:oid:2.16.528.1.1007.3.3.21514.2.2.4.1",
+            "value": "3003780"
+          },
+          {
+            "use": "usual",
+            "type": {
+              "text": "WPRINTERNAL"
+            },
+            "system": "urn:oid:1.2.840.114350.1.13.487.3.7.2.878082",
+            "value": "124498"
+          },
+          {
+            "use": "usual",
+            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+            "value": "555550023"
+          }
+        ],
+        "active": true,
+        "name": [
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                "valueCode": "NL4"
+              }
+            ],
+            "use": "official",
+            "text": "D.D.M.N. Éëñçšž‰™",
+            "family": "Éëñçšž‰™",
+            "given": [
+              "Éëñçšž‰™",
+              "D.D.M.N."
+            ]
+          },
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                "valueCode": "NL4"
+              }
+            ],
+            "use": "usual",
+            "text": "Éëñçšž‰™ Éëñçšž‰™",
+            "family": "Éëñçšž‰™",
+            "given": [
+              "Éëñçšž‰™",
+              "D.D.M.N."
+            ]
+          },
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                "valueCode": "NL4"
+              }
+            ],
+            "use": "old",
+            "text": "VITALYTESTMAN,D.D.M.N.",
+            "family": "Vitalytestman",
+            "given": [
+              "D.D.M.N."
+            ]
+          },
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                "valueCode": "NL4"
+              }
+            ],
+            "use": "old",
+            "text": "VITALYTESTVROUWVITALYTESTMAN,D.D.M.N.",
+            "family": "Vitalytestvrouwvitalytestman",
+            "given": [
+              "D.D.M.N."
+            ]
+          },
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                "valueCode": "NL4"
+              }
+            ],
+            "use": "old",
+            "text": "VITALYTESTVROUW-VITALYTESTMAN,D.D.M.N.",
+            "family": "Vitalytestvrouw-Vitalytestman",
+            "given": [
+              "D.D.M.N."
+            ]
+          },
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                "valueCode": "NL4"
+              }
+            ],
+            "use": "old",
+            "text": "VITALYTESTMAN,M.C.",
+            "family": "Vitalytestman",
+            "given": [
+              "M.C."
+            ]
+          },
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                "valueCode": "NL4"
+              }
+            ],
+            "use": "old",
+            "text": "ÉËÑÇŠŽ‰™,ÉËÑÇŠŽ‰™",
+            "family": "Éëñçšž‰™",
+            "given": [
+              "ÉËÑÇŠŽ‰™."
+            ]
+          }
+        ],
+        "telecom": [
+          {
+            "system": "phone",
+            "value": "06-12259687",
+            "use": "mobile",
+            "rank": 1
+          },
+          {
+            "system": "phone",
+            "value": "06-12259687",
+            "use": "temp",
+            "period": {
+              "start": "2025-01-02",
+              "end": "2025-03-28"
+            }
+          },
+          {
+            "system": "email",
+            "value": "mj.van.leeuwen@antoniusziekenhuis.nl",
+            "rank": 1
+          }
+        ],
+        "gender": "male",
+        "birthDate": "1986-01-13",
+        "deceasedBoolean": false,
+        "address": [
+          {
+            "use": "home",
+            "city": "UTRECHT",
+            "postalCode": "3543 AZ",
+            "country": "NLD"
+          },
+          {
+            "use": "old",
+            "city": "UTRECHT",
+            "postalCode": "3543 AZ",
+            "country": "NLD"
+          }
+        ],
+        "communication": [
+          {
+            "language": {
+              "coding": [
+                {
+                  "system": "urn:ietf:bcp:47",
+                  "code": "nl",
+                  "display": "Nederlands"
+                }
+              ],
+              "text": "Nederlands"
+            },
+            "preferred": true
+          }
+        ],
+        "generalPractitioner": [
+          {
+            "reference": "Practitioner/exbZFnnmifWnzltuehJyKZXRzfwtJTZDdWQ-Y7MFhicw3",
+            "type": "Practitioner",
+            "display": "CLM. Heerde van"
+          }
+        ],
+        "managingOrganization": {
+          "reference": "Organization/eFJTqsfY2f-4SZhzlJ..Ezw3",
+          "display": "St Antonius"
+        }
+      },
+      "search": {
+        "mode": "match"
+      }
+    }
+  ]
+}
