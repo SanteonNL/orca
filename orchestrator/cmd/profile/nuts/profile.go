@@ -145,7 +145,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 	}
 
 	var underlyingTransport *http.Transport
-	if d.clientCerts != nil {
+	if len(d.clientCerts) > 0 {
 		tlsConfig := globals.DefaultTLSConfig.Clone()
 		tlsConfig.Certificates = d.clientCerts
 		underlyingTransport = &http.Transport{TLSClientConfig: tlsConfig}
