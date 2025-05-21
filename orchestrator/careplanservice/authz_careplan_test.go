@@ -50,17 +50,4 @@ func TestCarePlanAuthzPolicy(t *testing.T) {
 			},
 		})
 	})
-
-	t.Run("delete", func(t *testing.T) {
-		policy := DeleteCarePlanAuthzPolicy()
-		testPolicies(t, []AuthzPolicyTest[*fhir.CarePlan]{
-			{
-				name:      "allow (anyone can delete)",
-				policy:    policy,
-				resource:  &carePlan,
-				principal: auth.TestPrincipal1,
-				wantAllow: true,
-			},
-		})
-	})
 }

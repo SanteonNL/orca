@@ -47,17 +47,3 @@ func TestReadQuestionnaireAuthzPolicy(t *testing.T) {
 		},
 	})
 }
-
-func TestDeleteQuestionnaireAuthzPolicy(t *testing.T) {
-	questionnaire := fhir.Questionnaire{}
-	policy := DeleteQuestionnaireAuthzPolicy()
-	testPolicies(t, []AuthzPolicyTest[*fhir.Questionnaire]{
-		{
-			name:      "allow (anyone can delete)",
-			policy:    policy,
-			resource:  &questionnaire,
-			principal: auth.TestPrincipal1,
-			wantAllow: true,
-		},
-	})
-}

@@ -629,37 +629,62 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}})
 	})
 
-	// Verify all audit events at the end - check before deleting resources, as deleting them will remove the audit events
+	// Verify all audit events at the end - check before sanitizing resources, as sanitizing them will mark them as entered-in-error
 	err = verifyAuditEvents(t, expectedAuditEvents, fhirBaseURL)
 	require.NoError(t, err)
 
-	// Delete resources
-	t.Run("Delete Patient", func(t *testing.T) {
-		err = carePlanContributor1.Delete("Patient/" + *patient.Id)
+	// Sanitize resources instead of deleting them
+	t.Run("Sanitize Patient", func(t *testing.T) {
+		err = carePlanContributor1.Update("Patient/"+*patient.Id+"/$sanitize", fhir.Patient{}, nil)
 		require.NoError(t, err)
 	})
 
-	t.Run("Delete QuestionnaireResponse", func(t *testing.T) {
-		err = carePlanContributor1.Delete("QuestionnaireResponse/" + *questionnaireResponse.Id)
+	t.Run("Sanitize QuestionnaireResponse", func(t *testing.T) {
+		err = carePlanContributor1.Update("QuestionnaireResponse/"+*questionnaireResponse.Id+"/$sanitize", fhir.QuestionnaireResponse{}, nil)
 		require.NoError(t, err)
 
-		err = carePlanContributor1.Delete("QuestionnaireResponse/non-existing-questionnaire-response")
+		err = carePlanContributor1.Update("QuestionnaireResponse/non-existing-questionnaire-response/$sanitize", fhir.QuestionnaireResponse{}, nil)
 		require.NoError(t, err)
 	})
 
-	t.Run("Delete Questionnaire", func(t *testing.T) {
-		err = carePlanContributor1.Delete("Questionnaire/" + *questionnaire.Id)
+	t.Run("Sanitize ServiceRequest", func(t *testing.T) {
+		err = carePlanContributor1.Update("ServiceRequest/"+*serviceRequest.Id+"/$sanitize", fhir.ServiceRequest{}, nil)
 		require.NoError(t, err)
 	})
 
-	t.Run("Delete ServiceRequest", func(t *testing.T) {
-		err = carePlanContributor1.Delete("ServiceRequest/" + *serviceRequest.Id)
+	t.Run("Sanitize Condition", func(t *testing.T) {
+		err = carePlanContributor1.Update("Condition/"+*condition.Id+"/$sanitize", fhir.Condition{}, nil)
 		require.NoError(t, err)
 	})
 
-	t.Run("Delete Condition", func(t *testing.T) {
-		err = carePlanContributor1.Delete("Condition/" + *condition.Id)
+	// Search for existing resources to ensure they have been sanitized
+	t.Run("Search Patient", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		err = carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id}}, &searchResult)
 		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+		require.Equal(t, len(searchResult.Entry), 0)
+	})
+	t.Run("Search ServiceRequest", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		err = carePlanContributor1.Search("ServiceRequest", url.Values{"_id": {*serviceRequest.Id}}, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+		require.Equal(t, len(searchResult.Entry), 0)
+	})
+	t.Run("Search Condition", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		err = carePlanContributor1.Search("Condition", url.Values{"_id": {*condition.Id}}, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+		require.Equal(t, len(searchResult.Entry), 0)
+	})
+	t.Run("Search QuestionnaireResponse", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		err = carePlanContributor1.Search("QuestionnaireResponse", url.Values{"_id": {*questionnaireResponse.Id, "non-existing-questionnaire-response"}}, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+		require.Equal(t, len(searchResult.Entry), 0)
 	})
 }
 

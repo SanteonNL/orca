@@ -41,7 +41,3 @@ func ReadConditionAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Conditi
 		},
 	}
 }
-
-func DeleteConditionAuthzPolicy() Policy[*fhir.Condition] {
-	return AnyonePolicy[*fhir.Condition]{}
-}

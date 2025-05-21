@@ -32,7 +32,3 @@ func ReadQuestionnaireResponseAuthzPolicy(fhirClient fhirclient.Client) Policy[*
 		},
 	}
 }
-
-func DeleteQuestionnaireResponseAuthzPolicy() Policy[*fhir.QuestionnaireResponse] {
-	return AnyonePolicy[*fhir.QuestionnaireResponse]{}
-}

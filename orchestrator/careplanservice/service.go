@@ -230,14 +230,56 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
 	}))
-	mux.HandleFunc("DELETE  "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	// Sanitize a resource (mark as entered-in-error but preserve references)
+	mux.HandleFunc("PUT "+basePath+"/{type}/{id}/$sanitize", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		if globals.StrictMode {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("delete not allowed"), "CarePlanService/Delete", httpResponse)
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("sanitize not allowed in strict mode"), "CarePlanService/Sanitize", httpResponse)
 			return
 		}
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
-		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Delete"+resourceType)
+
+		// Create a transaction bundle
+		tx := coolfhir.Transaction()
+
+		principal, err := auth.PrincipalFromContext(request.Context())
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanService/Sanitize"+resourceType, httpResponse)
+			return
+		}
+		localIdentity, err := s.getLocalIdentity()
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanService/Sanitize"+resourceType, httpResponse)
+			return
+		}
+
+		fhirRequest := FHIRHandlerRequest{
+			RequestUrl:    request.URL,
+			HttpMethod:    "SANITIZE", // Use a custom method to distinguish from regular operations
+			HttpHeaders:   coolfhir.FilterRequestHeaders(request.Header),
+			ResourceId:    resourceId,
+			ResourcePath:  resourceType + "/" + resourceId,
+			Context:       request.Context(),
+			Principal:     &principal,
+			LocalIdentity: localIdentity,
+		}
+
+		// Use the sanitize handler
+		handler := s.handleSanitize(resourceType + "/" + resourceId)
+		result, err := handler(request.Context(), fhirRequest, tx)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanService/Sanitize"+resourceType, httpResponse)
+			return
+		}
+
+		// Execute the transaction
+		txResult, err := s.commitTransaction(request, tx, []FHIRHandlerResult{result})
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanService/Sanitize"+resourceType, httpResponse)
+			return
+		}
+
+		s.writeTransactionResponse(httpResponse, txResult, request.Context())
 	}))
 }
 
@@ -644,44 +686,37 @@ func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHand
 	return handleFunc
 }
 
-func (s *Service) handleDelete(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+func (s *Service) handleSanitize(resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(resourcePath)
 	var handleFunc func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 	switch resourceType {
 	case "Patient":
-		handleFunc = FHIRDeleteOperationHandler[*fhir.Patient]{
-			authzPolicy: DeletePatientAuthzPolicy(),
-			fhirClient:  s.fhirClient,
+		handleFunc = FHIRSanitizeOperationHandler[*fhir.Patient]{
+			fhirClient: s.fhirClient,
 		}.Handle
 	case "Condition":
-		handleFunc = FHIRDeleteOperationHandler[*fhir.Condition]{
-			authzPolicy: DeleteConditionAuthzPolicy(),
-			fhirClient:  s.fhirClient,
+		handleFunc = FHIRSanitizeOperationHandler[*fhir.Condition]{
+			fhirClient: s.fhirClient,
 		}.Handle
 	case "CarePlan":
-		handleFunc = FHIRDeleteOperationHandler[*fhir.CarePlan]{
-			authzPolicy: DeleteCarePlanAuthzPolicy(),
-			fhirClient:  s.fhirClient,
+		handleFunc = FHIRSanitizeOperationHandler[*fhir.CarePlan]{
+			fhirClient: s.fhirClient,
 		}.Handle
 	case "Task":
-		handleFunc = FHIRDeleteOperationHandler[*fhir.Task]{
-			authzPolicy: DeleteTaskAuthzPolicy(),
-			fhirClient:  s.fhirClient,
+		handleFunc = FHIRSanitizeOperationHandler[*fhir.Task]{
+			fhirClient: s.fhirClient,
 		}.Handle
 	case "ServiceRequest":
-		handleFunc = FHIRDeleteOperationHandler[*fhir.ServiceRequest]{
-			authzPolicy: DeleteServiceRequestAuthzPolicy(),
-			fhirClient:  s.fhirClient,
+		handleFunc = FHIRSanitizeOperationHandler[*fhir.ServiceRequest]{
+			fhirClient: s.fhirClient,
 		}.Handle
 	case "Questionnaire":
-		handleFunc = FHIRDeleteOperationHandler[*fhir.Questionnaire]{
-			authzPolicy: DeleteQuestionnaireAuthzPolicy(),
-			fhirClient:  s.fhirClient,
+		handleFunc = FHIRSanitizeOperationHandler[*fhir.Questionnaire]{
+			fhirClient: s.fhirClient,
 		}.Handle
 	case "QuestionnaireResponse":
-		handleFunc = FHIRDeleteOperationHandler[*fhir.QuestionnaireResponse]{
-			authzPolicy: DeleteQuestionnaireResponseAuthzPolicy(),
-			fhirClient:  s.fhirClient,
+		handleFunc = FHIRSanitizeOperationHandler[*fhir.QuestionnaireResponse]{
+			fhirClient: s.fhirClient,
 		}.Handle
 	default:
 		handleFunc = s.handleUnmanagedOperation
@@ -931,8 +966,8 @@ func (s *Service) defaultHandlerProvider(method string, resourcePath string) fun
 		return s.handleUpdate(resourcePath)
 	case http.MethodGet:
 		return s.handleRead(resourcePath)
-	case http.MethodDelete:
-		return s.handleDelete(resourcePath)
+	case "SANITIZE": // Custom method for sanitization
+		return s.handleSanitize(resourcePath)
 	}
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 		return s.handleUnmanagedOperation(ctx, request, tx)
