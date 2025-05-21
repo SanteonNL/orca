@@ -6,6 +6,7 @@ import (
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
@@ -61,39 +62,21 @@ func (h FHIRDeleteOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		}
 
 		if auditEvent.Id != nil {
-			// Use the special $delete operation for AuditEvents
-			deleteParams := fhir.Parameters{
-				Parameter: []fhir.ParametersParameter{
-					{
-						Name:        "id",
-						ValueString: auditEvent.Id,
-					},
-				},
-			}
-
-			// Add to transaction
-			tx.Append(deleteParams, &fhir.BundleEntryRequest{
-				Method: fhir.HTTPVerbPOST,
-				Url:    "AuditEvent/$delete",
+			tx.Append(auditEvent, &fhir.BundleEntryRequest{
+				Method:  fhir.HTTPVerbDELETE,
+				Url:     "AuditEvent/" + *auditEvent.Id + "?hardDelete=true",
+				IfMatch: to.Ptr("*"), // Wildcard If-Match to delete regardless of version
 			}, nil)
 		}
 	}
 
 	// Use the special $delete operation for the main resource
 	idx := len(tx.Entry)
-	deleteParams := fhir.Parameters{
-		Parameter: []fhir.ParametersParameter{
-			{
-				Name:        "id",
-				ValueString: &resourceID,
-			},
-		},
-	}
 
-	// Add to transaction
-	tx.Append(deleteParams, &fhir.BundleEntryRequest{
-		Method: fhir.HTTPVerbPOST,
-		Url:    resourceType + "/$delete",
+	tx.Append(resource, &fhir.BundleEntryRequest{
+		Method:  fhir.HTTPVerbDELETE,
+		Url:     resourceType + "/" + resourceID + "?hardDelete=true",
+		IfMatch: to.Ptr("*"), // Wildcard If-Match to delete regardless of version
 	}, nil)
 
 	// Return an empty bundle entry to indicate success
