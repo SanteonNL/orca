@@ -351,8 +351,8 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 
 		globals.DefaultTLSConfig = resourceServer.Client().Transport.(*http.Transport).TLSClientConfig
 		profile := DutchNutsProfile{
-			clientCert: &clientCert,
-			csd:        mockCSD,
+			clientCerts: []tls.Certificate{clientCert},
+			csd:         mockCSD,
 			Config: Config{
 				API: APIConfig{
 					URL: nutsNode.URL,
@@ -416,15 +416,16 @@ func TestNew(t *testing.T) {
 		cert, err := tls.LoadX509KeyPair("test_cert.pem", "test_cert_key.pem")
 		require.NoError(t, err)
 		kv.AddCertificate("test-client-cert", &cert)
+		kv.AddCertificate("test-client-cert-2", &cert)
 
 		profile, err := New(Config{
 			AzureKeyVault: AzureKeyVaultConfig{
 				URL:            kv.TestHttpServer.URL,
-				ClientCertName: "test-client-cert",
+				ClientCertName: []string{"test-client-cert", "test-client-cert-2"},
 			},
 		})
 		require.NoError(t, err)
-		require.NotNil(t, profile.clientCert)
+		require.Len(t, profile.clientCerts, 2)
 	})
 }
 

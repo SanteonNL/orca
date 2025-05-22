@@ -46,12 +46,12 @@ type DutchNutsProfile struct {
 	identitiesRefreshedAt time.Time
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
-	clientCert            *tls.Certificate
+	clientCerts           []tls.Certificate
 }
 
 func New(config Config) (*DutchNutsProfile, error) {
-	var clientCert *tls.Certificate
-	if config.AzureKeyVault.ClientCertName != "" {
+	var clientCerts []tls.Certificate
+	if len(config.AzureKeyVault.ClientCertName) > 0 {
 		if config.AzureKeyVault.CredentialType == "" {
 			config.AzureKeyVault.CredentialType = "managed_identity"
 		}
@@ -63,9 +63,12 @@ func New(config Config) (*DutchNutsProfile, error) {
 		if err != nil {
 			return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
 		}
-		clientCert, err = azkeyvault.GetTLSCertificate(context.Background(), azCertClient, azKeysClient, config.AzureKeyVault.ClientCertName)
-		if err != nil {
-			return nil, fmt.Errorf("unable to get client certificate from Azure Key Vault: %w", err)
+		for _, clientCertName := range config.AzureKeyVault.ClientCertName {
+			clientCert, err := azkeyvault.GetTLSCertificate(context.Background(), azCertClient, azKeysClient, clientCertName)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get client certificate from Azure Key Vault (cert=%s): %w", clientCertName, err)
+			}
+			clientCerts = append(clientCerts, *clientCert)
 		}
 	} else {
 		log.Warn().Msg("Nuts: no TLS client certificate configured for outbound HTTP requests")
@@ -85,7 +88,7 @@ func New(config Config) (*DutchNutsProfile, error) {
 			entryCache: make(map[string]cacheEntry),
 			cacheMux:   sync.RWMutex{},
 		},
-		clientCert: clientCert,
+		clientCerts: clientCerts,
 	}, nil
 }
 
@@ -142,9 +145,9 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 	}
 
 	var underlyingTransport *http.Transport
-	if d.clientCert != nil {
+	if len(d.clientCerts) > 0 {
 		tlsConfig := globals.DefaultTLSConfig.Clone()
-		tlsConfig.Certificates = []tls.Certificate{*d.clientCert}
+		tlsConfig.Certificates = d.clientCerts
 		underlyingTransport = &http.Transport{TLSClientConfig: tlsConfig}
 	} else {
 		underlyingTransport = http.DefaultTransport.(*http.Transport).Clone()
