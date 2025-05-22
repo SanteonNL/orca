@@ -83,7 +83,6 @@ func New(strictMode bool, issuer *url.URL, config Config) (*Service, error) {
 
 func (s *Service) HandleLogin(httpResponse http.ResponseWriter, httpRequest *http.Request, sessionData *session.Data) {
 	ctx := op.ContextWithIssuer(httpRequest.Context(), s.issuerURL.String())
-	// TODO: Prevent CSRF
 	if err := httpRequest.ParseForm(); err != nil {
 		http.Error(httpResponse, fmt.Errorf("parse form: %w", err).Error(), http.StatusBadRequest)
 		return
