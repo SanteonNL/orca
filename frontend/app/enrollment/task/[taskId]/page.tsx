@@ -59,7 +59,7 @@ export default function EnrollmentTaskPage() {
             const timeout = setTimeout(() => {
                 window.location.reload();
                 setShouldReload(false);
-            }, 10000);
+            }, 1000);
             return () => clearTimeout(timeout);
         }
     }, [shouldReload]);
