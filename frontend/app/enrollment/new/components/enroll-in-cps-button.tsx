@@ -65,6 +65,7 @@ export default function EnrollInCpsButton({ className }: Props) {
             toast.error("Error: CarePlanService not found", { richColors: true })
             throw new Error("No CPS client found")
         }
+        console.debug("CPS client base url: ", cpsClient.baseUrl)
         if (!patient || !getPatientIdentifier(patient) || !taskCondition || !serviceRequest) {
             toast.error("Error: Missing required items for Task creation", { richColors: true })
             throw new Error("Missing required items for Task creation")
@@ -74,6 +75,7 @@ export default function EnrollInCpsButton({ className }: Props) {
 
         try {
             taskBundle = constructTaskBundle(serviceRequest, taskCondition, patient, practitionerRole, launchContext?.taskIdentifier);
+            console.debug("TaskBundle", taskBundle);
         } catch (error) {
             console.debug("Error constructing taskBundle");
             console.error(error);
@@ -83,6 +85,7 @@ export default function EnrollInCpsButton({ className }: Props) {
         }
 
         try {
+            console.debug("Posting Bundle", taskBundle);
             return await cpsClient.transaction({ body: taskBundle });
         } catch (error) {
             console.debug("Error posting Bundle", taskBundle);
