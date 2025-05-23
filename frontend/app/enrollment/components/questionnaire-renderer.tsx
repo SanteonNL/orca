@@ -46,9 +46,11 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
       const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire) as QuestionnaireResponse
 
+      console.log(`Found inputTask: ${JSON.stringify(inputTask)}`)
       console.log(`Found QuestionnaireResponse: ${JSON.stringify(questionnaireResponse)}`)
 
       if (questionnaireResponse) {
+        console.log(`Setting up QuestionnaireResponse for Task/${inputTask?.id}`)
         setPrevQuestionnaireResponse(questionnaireResponse)
       }
     }
@@ -75,7 +77,9 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
     setIsSubmitting(true)
 
     const outputTask = { ...inputTask }
+    console.log(`OutputTask: ${JSON.stringify(outputTask)}`)
     const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire)
+    console.log(`Found QuestionnaireResponse: ${JSON.stringify(questionnaireResponse)}`)
 
     const newId = v4()
     const responseExists = !!questionnaireResponse?.id
@@ -130,6 +134,8 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         }
       ]
     };
+
+    console.log(`Submitting bundle: ${JSON.stringify(bundle)}`)
 
     await cpsClient?.transaction({
       body: bundle
