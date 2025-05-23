@@ -60,6 +60,10 @@ export async function populateQuestionnaire(
   const sourceQueries = getSourceQueries(questionnaire);
   const questionnaireLevelVariables = getQuestionnaireLevelXFhirQueryVariables(questionnaire);
 
+  console.debug('Launch contexts:', launchContexts);
+  console.debug('Source queries:', sourceQueries);
+  console.debug('Questionnaire-level variables:', questionnaireLevelVariables);
+
   if (
     launchContexts.length === 0 &&
     sourceQueries.length === 0 &&
@@ -90,6 +94,7 @@ export async function populateQuestionnaire(
       populateResult: null
     };
   }
+  console.debug('Input parameters:', inputParameters);
 
   if (!isInputParameters(inputParameters)) {
     console.log('Input parameters are not valid.');
@@ -109,6 +114,7 @@ export async function populateQuestionnaire(
       populateResult: null
     };
   }
+  console.debug('Output parameters:', outputParameters);
 
   const responseParameter = outputParameters.parameter.find(
     (param) => param.name === 'response'
