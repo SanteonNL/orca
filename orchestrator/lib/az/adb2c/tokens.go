@@ -2,18 +2,17 @@ package adb2c
 
 import (
 	"context"
-	"crypto/rsa"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/lestrrat-go/jwx/jwk"
 )
 
 // Client represents an Azure ADB2C client for token validation
@@ -21,12 +20,12 @@ type Client struct {
 	Issuer       string
 	ClientID     string
 	JwksURI      string
-	jwksFetcher  *jwk.AutoRefresh
-	openIDConfig *OpenIDConfig
+	jwksFetcher  *jwk.Cache
+	openIDConfig *oidc.DiscoveryConfiguration
 
 	// Map of trusted issuers to their discovery endpoints
 	trustedIssuers     map[string]string
-	issuerConfigs      map[string]*OpenIDConfig
+	issuerConfigs      map[string]*oidc.DiscoveryConfiguration
 	issuerConfigsMutex sync.RWMutex
 
 	// Last refresh time for OpenID configurations
@@ -35,31 +34,24 @@ type Client struct {
 	refreshInterval time.Duration
 }
 
-// OpenIDConfig represents the OpenID configuration for an ADB2C tenant
-type OpenIDConfig struct {
-	Issuer                 string   `json:"issuer"`
-	AuthorizationEndpoint  string   `json:"authorization_endpoint"`
-	TokenEndpoint          string   `json:"token_endpoint"`
-	EndSessionEndpoint     string   `json:"end_session_endpoint"`
-	JwksURI                string   `json:"jwks_uri"`
-	ResponseModesSupported []string `json:"response_modes_supported"`
-	ResponseTypesSupported []string `json:"response_types_supported"`
-	ScopesSupported        []string `json:"scopes_supported"`
-	SubjectTypesSupported  []string `json:"subject_types_supported"`
-}
-
 // TokenClaims represents the claims in a JWT token
 type TokenClaims struct {
-	jwt.RegisteredClaims
-	Roles  []string `json:"roles,omitempty"`
-	Name   string   `json:"name,omitempty"`
-	Emails []string `json:"emails,omitempty"`
+	Issuer    string   `json:"iss,omitempty"`
+	Subject   string   `json:"sub,omitempty"`
+	Audience  []string `json:"aud,omitempty"`
+	Expiry    int64    `json:"exp,omitempty"`
+	NotBefore int64    `json:"nbf,omitempty"`
+	IssuedAt  int64    `json:"iat,omitempty"`
+	ID        string   `json:"jti,omitempty"`
+	Roles     []string `json:"roles,omitempty"`
+	Name      string   `json:"name,omitempty"`
+	Emails    []string `json:"emails,omitempty"`
 }
 
 // ValidateAudience checks if the token's audience claim contains the expected clientID
 func (c *TokenClaims) ValidateAudience(clientID string) bool {
 	if clientID == "" {
-		return true
+		return false
 	}
 
 	for _, aud := range c.Audience {
@@ -73,7 +65,7 @@ func (c *TokenClaims) ValidateAudience(clientID string) bool {
 // ValidateIssuedAt checks if the token was issued at a reasonable time
 func (c *TokenClaims) ValidateIssuedAt() error {
 	now := time.Now()
-	if c.IssuedAt != nil && c.IssuedAt.After(now.Add(30*time.Second)) {
+	if c.IssuedAt > 0 && time.Unix(c.IssuedAt, 0).After(now.Add(30*time.Second)) {
 		return errors.New("token was issued in the future")
 	}
 	return nil
@@ -106,7 +98,7 @@ func NewClient(ctx context.Context, trustedIssuers map[string]string, clientID s
 	client := &Client{
 		ClientID:        clientID,
 		trustedIssuers:  trustedIssuers,
-		issuerConfigs:   make(map[string]*OpenIDConfig),
+		issuerConfigs:   make(map[string]*oidc.DiscoveryConfiguration),
 		refreshInterval: 24 * time.Hour,
 	}
 
@@ -122,12 +114,53 @@ func NewClient(ctx context.Context, trustedIssuers map[string]string, clientID s
 		}
 	}
 
-	// Initialize the jwks fetcher with auto-refresh capability
-	client.jwksFetcher = jwk.NewAutoRefresh(ctx)
+	// Initialize the jwk cache
+	cache := jwk.NewCache(ctx)
+	client.jwksFetcher = cache
 
-	// Prefetch all OpenID configurations
-	if err := client.refreshAllConfigurations(ctx); err != nil {
-		return nil, fmt.Errorf("failed to initialize OpenID configurations: %w", err)
+	// Detect if all endpoints are direct JWKS URIs
+	directJwksUris := true
+	for _, endpoint := range trustedIssuers {
+		if !strings.HasSuffix(endpoint, "/keys") &&
+			!strings.HasSuffix(endpoint, "/jwks") &&
+			!strings.HasSuffix(endpoint, "/jwks.json") &&
+			!strings.Contains(endpoint, "/keys?p=") {
+			directJwksUris = false
+			break
+		}
+	}
+
+	// If all endpoints are direct JWKS URIs, create minimal OpenID configurations
+	if directJwksUris {
+		for issuer, jwksURI := range trustedIssuers {
+			config := &oidc.DiscoveryConfiguration{
+				Issuer:  issuer,
+				JwksURI: jwksURI,
+			}
+			client.issuerConfigs[issuer] = config
+
+			// Register the JWKS URI with the cache for auto-refresh
+			if err := cache.Register(jwksURI); err != nil {
+				return nil, fmt.Errorf("failed to register JWKS URI %s: %w", jwksURI, err)
+			}
+
+			// Prefetch the JWKS
+			if _, err := cache.Refresh(ctx, jwksURI); err != nil {
+				return nil, fmt.Errorf("failed to refresh JWKS from %s: %w", jwksURI, err)
+			}
+		}
+	} else {
+		// Standard case - fetch OpenID configurations
+		if err := client.refreshAllConfigurations(ctx); err != nil {
+			return nil, fmt.Errorf("failed to initialize OpenID configurations: %w", err)
+		}
+	}
+
+	if defaultConfig, ok := client.issuerConfigs[client.Issuer]; ok {
+		client.openIDConfig = defaultConfig
+		client.JwksURI = defaultConfig.JwksURI
+	} else {
+		return nil, fmt.Errorf("default issuer %s not found in trusted issuers", client.Issuer)
 	}
 
 	return client, nil
@@ -139,20 +172,60 @@ func (c *Client) refreshAllConfigurations(ctx context.Context) error {
 	defer c.issuerConfigsMutex.Unlock()
 
 	for issuer, discoveryURL := range c.trustedIssuers {
+		// Check if the URL is a direct JWKS URI instead of a discovery endpoint
+		// If it ends with '/keys' or '/jwks', assume it's a direct JWKS URI
+		if strings.HasSuffix(discoveryURL, "/keys") || strings.HasSuffix(discoveryURL, "/jwks") {
+			// Create a minimal OpenID configuration with just the JWKS URI
+			config := &oidc.DiscoveryConfiguration{
+				Issuer:  issuer,
+				JwksURI: discoveryURL,
+			}
+
+			c.issuerConfigs[issuer] = config
+
+			// Register the JWKS URI with the cache for auto-refresh
+			if err := c.jwksFetcher.Register(discoveryURL); err != nil {
+				return fmt.Errorf("failed to register JWKS URI: %w", err)
+			}
+
+			// Force a refresh of the JWKS to ensure it's loaded
+			if _, err := c.jwksFetcher.Refresh(ctx, discoveryURL); err != nil {
+				return fmt.Errorf("failed to refresh JWKS from %s: %w", discoveryURL, err)
+			}
+
+			continue
+		}
+
+		// Normal case - fetch OpenID configuration from discovery endpoint
 		config, err := c.fetchOpenIDConfigurationFromURL(ctx, discoveryURL)
 		if err != nil {
 			return fmt.Errorf("failed to fetch OpenID configuration for issuer %s: %w", issuer, err)
 		}
 
 		// Verify the issuer in the config matches the expected issuer
-		if config.Issuer != issuer {
+		// Skip this check for direct JWKS URIs (already handled above)
+		if config.Issuer != issuer && config.Issuer != "" {
 			return fmt.Errorf("issuer mismatch: expected %s, got %s", issuer, config.Issuer)
+		}
+
+		// If empty, use the expected issuer
+		if config.Issuer == "" {
+			config.Issuer = issuer
 		}
 
 		c.issuerConfigs[issuer] = config
 
-		// Configure JWKS fetcher for this issuer
-		c.jwksFetcher.Configure(config.JwksURI)
+		if err := c.jwksFetcher.Register(config.JwksURI); err != nil {
+			return fmt.Errorf("failed to register JWKS URI: %w", err)
+		}
+
+		// Force a refresh of the JWKS to ensure it's loaded and processed
+		if keySet, err := c.jwksFetcher.Refresh(ctx, config.JwksURI); err != nil {
+			return fmt.Errorf("failed to refresh JWKS from %s: %w", config.JwksURI, err)
+		} else {
+			// Ensure keys have proper algorithm set
+			c.ensureKeyAlgorithms(ctx, keySet)
+		}
 	}
 
 	// Set the default OpenID config and JWKS URI
@@ -168,7 +241,7 @@ func (c *Client) refreshAllConfigurations(ctx context.Context) error {
 }
 
 // fetchOpenIDConfigurationFromURL fetches the OpenID configuration from a specific URL
-func (c *Client) fetchOpenIDConfigurationFromURL(ctx context.Context, discoveryURL string) (*OpenIDConfig, error) {
+func (c *Client) fetchOpenIDConfigurationFromURL(ctx context.Context, discoveryURL string) (*oidc.DiscoveryConfiguration, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, discoveryURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create request: %w", err)
@@ -184,7 +257,7 @@ func (c *Client) fetchOpenIDConfigurationFromURL(ctx context.Context, discoveryU
 		return nil, fmt.Errorf("failed to fetch OpenID configuration: status code %d", resp.StatusCode)
 	}
 
-	var config OpenIDConfig
+	var config oidc.DiscoveryConfiguration
 	if err := json.NewDecoder(resp.Body).Decode(&config); err != nil {
 		return nil, fmt.Errorf("failed to parse OpenID configuration: %w", err)
 	}
@@ -192,210 +265,199 @@ func (c *Client) fetchOpenIDConfigurationFromURL(ctx context.Context, discoveryU
 	return &config, nil
 }
 
-// refreshConfigurationsIfNeeded refreshes OpenID configurations if the refresh interval has passed
-func (c *Client) refreshConfigurationsIfNeeded(ctx context.Context) error {
-	if time.Since(c.lastRefresh) < c.refreshInterval {
-		return nil
+// fetchKeySet fetches the JWK set for a given issuer, refreshing if needed
+func (c *Client) fetchKeySet(ctx context.Context, issuer string) (jwk.Set, error) {
+	c.issuerConfigsMutex.RLock()
+	issuerConfig, ok := c.issuerConfigs[issuer]
+	c.issuerConfigsMutex.RUnlock()
+
+	if !ok {
+		return nil, fmt.Errorf("no configuration found for issuer: %s", issuer)
 	}
 
-	return c.refreshAllConfigurations(ctx)
+	// Check if refresh is needed
+	if time.Since(c.lastRefresh) >= c.refreshInterval {
+		// Since we do not store the last refresh time per issuer/token, we refresh all configurations
+		if err := c.refreshAllConfigurations(ctx); err != nil {
+			return nil, fmt.Errorf("failed to refresh configurations: %w", err)
+		}
+
+		// Get the possibly updated config
+		c.issuerConfigsMutex.RLock()
+		issuerConfig = c.issuerConfigs[issuer]
+		c.issuerConfigsMutex.RUnlock()
+	}
+
+	// Fetch JWK set
+	keySet, err := c.jwksFetcher.Get(ctx, issuerConfig.JwksURI)
+	if err != nil {
+		// Try refreshing once more before failing
+		keySet, err = c.jwksFetcher.Refresh(ctx, issuerConfig.JwksURI)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch JWKS from %s: %w", issuerConfig.JwksURI, err)
+		}
+	}
+
+	if keySet == nil || keySet.Len() == 0 {
+		return nil, fmt.Errorf("no keys found in JWKS from %s", issuerConfig.JwksURI)
+	}
+
+	c.ensureKeyAlgorithms(ctx, keySet)
+
+	return keySet, nil
 }
 
-// ParseToken parses a JWT token without validation and returns the claims
-func ParseToken(tokenString string) (map[string]interface{}, error) {
-	parts := strings.Split(tokenString, ".")
-	if len(parts) != 3 {
-		return nil, errors.New("invalid token format: token should have three parts")
+// ValidateTokenOption is a function that configures token validation
+type ValidateTokenOption func(*validateTokenOptions)
+
+type validateTokenOptions struct {
+	validateSignature bool
+}
+
+// WithValidateSignature sets whether to validate the token signature
+func WithValidateSignature(validate bool) ValidateTokenOption {
+	return func(options *validateTokenOptions) {
+		options.validateSignature = validate
+	}
+}
+
+// ValidateToken validates the provided JWT token
+func (c *Client) ValidateToken(ctx context.Context, tokenString string, options ...ValidateTokenOption) (*TokenClaims, error) {
+	// Set default options
+	opts := &validateTokenOptions{
+		validateSignature: true, // Default to validating signatures in production
 	}
 
-	// Decode the payload (second part)
-	payload, err := decodeSegment(parts[1])
+	// Apply options
+	for _, option := range options {
+		option(opts)
+	}
+
+	// First parse token without validation to get issuer, to know which key set to use
+	parseOpts := []jwt.ParseOption{jwt.WithValidate(false), jwt.WithVerify(false)}
+
+	parsedToken, err := jwt.Parse([]byte(tokenString), parseOpts...)
 	if err != nil {
-		return nil, fmt.Errorf("error decoding token payload: %w", err)
+		return nil, fmt.Errorf("invalid token format: %w", err)
 	}
 
-	var claims map[string]interface{}
-	if err := json.Unmarshal(payload, &claims); err != nil {
-		return nil, fmt.Errorf("error parsing token claims: %w", err)
+	issuer := parsedToken.Issuer()
+	if issuer == "" {
+		return nil, fmt.Errorf("token missing issuer claim")
+	}
+
+	if _, trusted := c.trustedIssuers[issuer]; !trusted {
+		return nil, fmt.Errorf("untrusted token issuer: %s", issuer)
+	}
+
+	// Now validate the token with appropriate options
+	validateOpts := []jwt.ParseOption{
+		jwt.WithIssuer(issuer),
+		jwt.WithValidate(true),
+	}
+
+	// Add audience validation if client ID is provided
+	if c.ClientID != "" {
+		validateOpts = append(validateOpts, jwt.WithAudience(c.ClientID))
+	}
+
+	// Handle signature validation based on options
+	if !opts.validateSignature {
+		validateOpts = append(validateOpts, jwt.WithVerify(false))
+	} else {
+		// Fetch JWK set for validation
+		keySet, err := c.fetchKeySet(ctx, issuer)
+		if err != nil {
+			return nil, err
+		}
+		validateOpts = append(validateOpts, jwt.WithKeySet(keySet))
+	}
+
+	// Validate the token with all options
+	parsedToken, err = jwt.Parse([]byte(tokenString), validateOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("token validation failed: %w", err)
+	}
+
+	// Extract claims
+	claims := &TokenClaims{}
+
+	claims.Issuer = parsedToken.Issuer()
+	claims.Subject = parsedToken.Subject()
+	claims.IssuedAt = parsedToken.IssuedAt().Unix()
+	claims.ID = parsedToken.JwtID()
+
+	// Handle expiry
+	if !parsedToken.Expiration().IsZero() {
+		claims.Expiry = parsedToken.Expiration().Unix()
+	}
+
+	// Extract audience
+	if aud := parsedToken.Audience(); len(aud) > 0 {
+		claims.Audience = aud
+	}
+
+	// Extract custom claims
+	privateClaims := parsedToken.PrivateClaims()
+
+	// Extract roles
+	if roles, ok := privateClaims["roles"]; ok {
+		if rolesSlice, ok := roles.([]interface{}); ok {
+			for _, role := range rolesSlice {
+				if roleStr, ok := role.(string); ok {
+					claims.Roles = append(claims.Roles, roleStr)
+				}
+			}
+		}
+	}
+
+	// Extract name
+	if name, ok := privateClaims["name"]; ok {
+		if nameStr, ok := name.(string); ok {
+			claims.Name = nameStr
+		}
+	}
+
+	// Extract emails
+	if emails, ok := privateClaims["emails"]; ok {
+		if emailsSlice, ok := emails.([]interface{}); ok {
+			for _, email := range emailsSlice {
+				if emailStr, ok := email.(string); ok {
+					claims.Emails = append(claims.Emails, emailStr)
+				}
+			}
+		}
+	}
+
+	// Validate audience
+	if !claims.ValidateAudience(c.ClientID) {
+		return nil, fmt.Errorf("token audience validation failed: expected %s, got %v", c.ClientID, claims.Audience)
+	}
+
+	// Validate issued at time
+	if err := claims.ValidateIssuedAt(); err != nil {
+		return nil, err
 	}
 
 	return claims, nil
 }
 
-// decodeSegment decodes a base64url encoded segment
-func decodeSegment(seg string) ([]byte, error) {
-	seg = strings.Map(func(r rune) rune {
-		switch r {
-		case '-':
-			return '+'
-		case '_':
-			return '/'
-		default:
-			return r
-		}
-	}, seg)
-
-	// Add padding if necessary
-	if mod := len(seg) % 4; mod != 0 {
-		seg += strings.Repeat("=", 4-mod)
+// ensureKeyAlgorithms ensures that all keys in the JWKS have an algorithm defined
+func (c *Client) ensureKeyAlgorithms(ctx context.Context, keySet jwk.Set) {
+	if keySet == nil {
+		return
 	}
 
-	return base64.StdEncoding.DecodeString(seg)
-}
+	for iter := keySet.Keys(ctx); iter.Next(ctx); {
+		pair := iter.Pair()
+		key := pair.Value.(jwk.Key)
 
-// ValidateToken validates the provided JWT token
-func (c *Client) ValidateToken(ctx context.Context, tokenString string) (*TokenClaims, error) {
-	// Refresh configurations if needed
-	if err := c.refreshConfigurationsIfNeeded(ctx); err != nil {
-		return nil, err
-	}
-
-	// Parse token without validating signature first to get claims and kid
-	token, _ := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		return nil, nil
-	})
-
-	if token == nil {
-		return nil, errors.New("invalid token format")
-	}
-
-	// Extract claims to check the issuer
-	claims, ok := token.Claims.(*TokenClaims)
-	if !ok {
-		return nil, errors.New("invalid token claims")
-	}
-
-	// Check if the issuer is trusted
-	if _, trusted := c.trustedIssuers[claims.Issuer]; !trusted {
-		return nil, fmt.Errorf("untrusted token issuer: %s", claims.Issuer)
-	}
-
-	// Get the issuer's OpenID configuration
-	c.issuerConfigsMutex.RLock()
-	config, ok := c.issuerConfigs[claims.Issuer]
-	c.issuerConfigsMutex.RUnlock()
-
-	if !ok {
-		return nil, fmt.Errorf("no configuration found for issuer: %s", claims.Issuer)
-	}
-
-	// Get the key ID from the token header
-	kid, ok := token.Header["kid"].(string)
-	if !ok {
-		return nil, errors.New("token header missing 'kid'")
-	}
-
-	// Get the RSA public key for the token
-	rsaKey, err := c.getPublicKeyFromJWKS(ctx, config.JwksURI, kid, claims.Issuer)
-	if err != nil {
-		return nil, err
-	}
-
-	// Parse and validate the token with the correct key
-	validatedToken, err := jwt.ParseWithClaims(tokenString, &TokenClaims{}, func(token *jwt.Token) (interface{}, error) {
-		// Ensure correct signing method
-		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
-			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
-		}
-		return rsaKey, nil
-	})
-
-	if err != nil {
-		if errors.Is(err, jwt.ErrTokenExpired) {
-			return nil, errors.New("token has expired")
-		}
-		return nil, fmt.Errorf("token validation failed: %w", err)
-	}
-
-	if !validatedToken.Valid {
-		return nil, errors.New("token is invalid")
-	}
-
-	validatedClaims, ok := validatedToken.Claims.(*TokenClaims)
-	if !ok {
-		return nil, errors.New("failed to extract token claims")
-	}
-
-	if !validatedClaims.ValidateAudience(c.ClientID) {
-		return nil, errors.New("invalid token audience")
-	}
-
-	if err := validatedClaims.ValidateIssuedAt(); err != nil {
-		return nil, err
-	}
-
-	return validatedClaims, nil
-}
-
-// getPublicKeyFromJWKS fetches the public key corresponding to the key ID from the JWKS endpoint
-func (c *Client) getPublicKeyFromJWKS(ctx context.Context, jwksURI, kid, issuer string) (*rsa.PublicKey, error) {
-	jwks, err := c.jwksFetcher.Fetch(ctx, jwksURI)
-	if err != nil {
-		// If fetching fails, try to refresh the configuration once, this can happen if the keys have been rotated
-		c.issuerConfigsMutex.Lock()
-		defer c.issuerConfigsMutex.Unlock()
-
-		refreshedConfig, refreshErr := c.fetchOpenIDConfigurationFromURL(ctx, c.trustedIssuers[issuer])
-		if refreshErr == nil {
-			c.issuerConfigs[issuer] = refreshedConfig
-			// Update the JWKS URI
-			c.jwksFetcher.Configure(refreshedConfig.JwksURI)
-			jwks, err = c.jwksFetcher.Fetch(ctx, refreshedConfig.JwksURI)
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch JWKS: %w", err)
+		if key.Algorithm() == jwa.InvalidKeyAlgorithm("") {
+			// The 'alg' field is optional for Azure ADB2C keys, but required by jwk, so we set a default
+			// For RSA and EC key types, RS256 is a reasonable default
+			if key.KeyType() == jwa.RSA || key.KeyType() == jwa.EC {
+				key.Set(jwk.AlgorithmKey, jwa.RS256)
+			}
 		}
 	}
-
-	// Find the key with the matching kid
-	matchingKey, found := jwks.LookupKeyID(kid)
-	if !found {
-		return nil, errors.New("matching key not found in JWKS")
-	}
-
-	var rawKey interface{}
-	if err := matchingKey.Raw(&rawKey); err != nil {
-		return nil, fmt.Errorf("failed to get raw JWK: %w", err)
-	}
-
-	rsaKey, ok := rawKey.(*rsa.PublicKey)
-	if !ok {
-		return nil, errors.New("key is not an RSA public key")
-	}
-
-	return rsaKey, nil
-}
-
-// ParseTrustedIssuers parses a string of trusted issuers in the format "issuer1=url1;issuer2=url2"
-// into a map of issuer URLs to their corresponding discovery endpoints
-func ParseTrustedIssuers(issuersStr string) (map[string]string, error) {
-	if issuersStr == "" {
-		return nil, fmt.Errorf("empty trusted issuers string")
-	}
-
-	trustedIssuers := make(map[string]string)
-	pairs := strings.Split(issuersStr, ";")
-
-	for _, pair := range pairs {
-		parts := strings.SplitN(pair, "=", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid issuer mapping format: %s", pair)
-		}
-
-		issuer := strings.TrimSpace(parts[0])
-		discoveryURL := strings.TrimSpace(parts[1])
-
-		if issuer == "" || discoveryURL == "" {
-			return nil, fmt.Errorf("empty issuer or discovery URL in mapping: %s", pair)
-		}
-
-		trustedIssuers[issuer] = discoveryURL
-	}
-
-	if len(trustedIssuers) == 0 {
-		return nil, fmt.Errorf("no valid issuer mappings found")
-	}
-
-	return trustedIssuers, nil
 }

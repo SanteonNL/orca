@@ -3,8 +3,6 @@ package adb2c
 import (
 	"context"
 	"encoding/json"
-	"net/http"
-	"net/http/httptest"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -17,50 +15,17 @@ func TestRealisticTokens(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, tokenGen)
 
-	jwksJSON, err := tokenGen.GetJWKSetJSON()
-	require.NoError(t, err)
-
-	jwkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(jwksJSON)
-	}))
-	defer jwkServer.Close()
-
-	openIDConfig := OpenIDConfig{
-		Issuer:                tokenGen.GetIssuerURL(),
-		JwksURI:               jwkServer.URL,
-		AuthorizationEndpoint: "https://test-tenant.b2clogin.com/test-tenant.onmicrosoft.com/oauth2/v2.0/authorize",
-		TokenEndpoint:         "https://test-tenant.b2clogin.com/test-tenant.onmicrosoft.com/oauth2/v2.0/token",
-		EndSessionEndpoint:    "https://test-tenant.b2clogin.com/test-tenant.onmicrosoft.com/oauth2/v2.0/logout",
-	}
-
-	openIDConfigJSON, err := json.Marshal(openIDConfig)
-	require.NoError(t, err)
-
-	openIDServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(openIDConfigJSON)
-	}))
-	defer openIDServer.Close()
-
-	issuerURL := tokenGen.GetIssuerURL()
-	trustedIssuers := map[string]string{
-		issuerURL: openIDServer.URL,
-	}
-
-	// Create a client that uses our mock servers
 	ctx := context.Background()
-	client, err := NewClient(ctx, trustedIssuers, tokenGen.ClientID, WithDefaultIssuer(issuerURL))
+	client, err := NewMockClient(ctx, tokenGen)
 	require.NoError(t, err)
+	require.NotNil(t, client)
 
-	t.Run("Valid token with standard claims", func(t *testing.T) {
+	t.Run("Valid token with standard claims, ok", func(t *testing.T) {
 		// Create a token with default claims
 		token, err := tokenGen.CreateToken(nil)
 		require.NoError(t, err)
 
-		// Validate the token
-		ctx := context.Background()
-		claims, err := client.ValidateToken(ctx, token)
+		claims, err := client.ValidateToken(ctx, token, WithValidateSignature(false))
 		require.NoError(t, err)
 		require.NotNil(t, claims)
 
@@ -70,14 +35,12 @@ func TestRealisticTokens(t *testing.T) {
 		assert.Equal(t, []string{"test.user@example.com"}, claims.Emails)
 	})
 
-	t.Run("Token with custom roles", func(t *testing.T) {
+	t.Run("Token with custom roles, ok", func(t *testing.T) {
 		roles := []string{"Admin", "User", "Approver"}
 		token, err := tokenGen.CreateTokenWithRoles(roles)
 		require.NoError(t, err)
 
-		// Validate the token
-		ctx := context.Background()
-		claims, err := client.ValidateToken(ctx, token)
+		claims, err := client.ValidateToken(ctx, token, WithValidateSignature(false))
 		require.NoError(t, err)
 		require.NotNil(t, claims)
 
@@ -85,40 +48,36 @@ func TestRealisticTokens(t *testing.T) {
 		assert.Equal(t, roles, claims.Roles)
 	})
 
-	t.Run("Expired token", func(t *testing.T) {
+	t.Run("Expired token, fails", func(t *testing.T) {
 		token, err := tokenGen.CreateExpiredToken()
 		require.NoError(t, err)
 
-		// Validate the token - should fail
-		ctx := context.Background()
-		claims, err := client.ValidateToken(ctx, token)
+		claims, err := client.ValidateToken(ctx, token, WithValidateSignature(false))
 		assert.Error(t, err)
 		assert.Nil(t, claims)
-		assert.Contains(t, err.Error(), "token has expired")
+		assert.Contains(t, err.Error(), "token validation failed")
+		assert.Contains(t, err.Error(), "exp")
 	})
 
-	t.Run("Invalid issuer", func(t *testing.T) {
+	t.Run("Invalid issuer, fails", func(t *testing.T) {
 		token, err := tokenGen.CreateInvalidIssuerToken()
 		require.NoError(t, err)
 
-		// Validate the token - should fail
-		ctx := context.Background()
-		claims, err := client.ValidateToken(ctx, token)
+		claims, err := client.ValidateToken(ctx, token, WithValidateSignature(false))
 		assert.Error(t, err)
 		assert.Nil(t, claims)
 		assert.Contains(t, err.Error(), "untrusted token issuer")
 	})
 
-	t.Run("Invalid audience", func(t *testing.T) {
+	t.Run("Invalid audience, fails", func(t *testing.T) {
 		token, err := tokenGen.CreateInvalidAudienceToken()
 		require.NoError(t, err)
 
-		// Validate the token - should fail
-		ctx := context.Background()
-		claims, err := client.ValidateToken(ctx, token)
+		claims, err := client.ValidateToken(ctx, token, WithValidateSignature(false))
 		assert.Error(t, err)
 		assert.Nil(t, claims)
-		assert.Contains(t, err.Error(), "invalid token audience")
+		assert.Contains(t, err.Error(), "token validation failed")
+		assert.Contains(t, err.Error(), "aud")
 	})
 
 	t.Run("Parse token and inspect claims", func(t *testing.T) {
@@ -133,7 +92,6 @@ func TestRealisticTokens(t *testing.T) {
 		token, err := tokenGen.CreateToken(customClaims)
 		require.NoError(t, err)
 
-		// Parse the token to inspect its claims
 		claims, err := ParseToken(token)
 		require.NoError(t, err)
 

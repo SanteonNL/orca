@@ -1,6 +1,7 @@
 package adb2c
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
@@ -8,10 +9,13 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"time"
 
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/lestrrat-go/jwx/jwk"
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v2/jwt"
 )
 
 // TestTokenGenerator provides utilities to create realistic Azure AD B2C test tokens
@@ -25,6 +29,67 @@ type TestTokenGenerator struct {
 	JWKSet     jwk.Set
 }
 
+// MockClient is a mock implementation of the Client to use in tests
+type MockClient struct {
+	*Client
+	mockJWKSet jwk.Set
+}
+
+// NewMockClient creates a mock client for testing without HTTP requests
+func NewMockClient(ctx context.Context, generator *TestTokenGenerator) (*MockClient, error) {
+	jwksJSON, err := generator.GetJWKSetJSON()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get JWKS JSON: %w", err)
+	}
+
+	// Setup mock HTTP server for JWKS
+	jwkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(jwksJSON)
+	}))
+
+	issuerURL := generator.GetIssuerURL()
+
+	// Setup mock discovery endpoint
+	discoveryServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		config := map[string]interface{}{
+			"issuer":                 issuerURL,
+			"authorization_endpoint": issuerURL + "oauth2/v2.0/authorize",
+			"token_endpoint":         issuerURL + "oauth2/v2.0/token",
+			"jwks_uri":               jwkServer.URL,
+			"response_types_supported": []string{
+				"code",
+				"id_token",
+				"token id_token",
+			},
+			"subject_types_supported": []string{
+				"pairwise",
+			},
+		}
+		json.NewEncoder(w).Encode(config)
+	}))
+
+	// Create trusted issuers map with mock servers
+	trustedIssuers := map[string]string{
+		issuerURL: discoveryServer.URL,
+	}
+
+	// Create the standard client with our mock data
+	client, err := NewClient(ctx, trustedIssuers, generator.ClientID, WithDefaultIssuer(issuerURL))
+	if err != nil {
+		jwkServer.Close()
+		discoveryServer.Close()
+		return nil, fmt.Errorf("failed to create client: %w", err)
+	}
+
+	// Return the mock client with the test server reference
+	return &MockClient{
+		Client:     client,
+		mockJWKSet: generator.JWKSet,
+	}, nil
+}
+
 // NewTestTokenGenerator creates a new test token generator with default settings
 func NewTestTokenGenerator() (*TestTokenGenerator, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -36,17 +101,25 @@ func NewTestTokenGenerator() (*TestTokenGenerator, error) {
 
 	// Create a JWK set with the public key
 	jwkSet := jwk.NewSet()
-	key, err := jwk.New(privateKey.Public())
+	pubKey, err := jwk.FromRaw(privateKey.Public())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create JWK: %w", err)
 	}
 
-	err = key.Set(jwk.KeyIDKey, keyID)
+	err = pubKey.Set(jwk.KeyIDKey, keyID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to set key ID: %w", err)
 	}
 
-	jwkSet.Add(key)
+	// Set algorithm to RS256 to match our ensureKeyAlgorithms function
+	err = pubKey.Set(jwk.AlgorithmKey, jwa.RS256)
+	if err != nil {
+		return nil, fmt.Errorf("failed to set algorithm: %w", err)
+	}
+
+	if err := jwkSet.AddKey(pubKey); err != nil {
+		return nil, fmt.Errorf("failed to add key to set: %w", err)
+	}
 
 	return &TestTokenGenerator{
 		PrivateKey: privateKey,
@@ -147,18 +220,32 @@ func (g *TestTokenGenerator) ExportPrivateKeyAsPEM() string {
 
 // CreateTestTokenWithClaims creates a JWT token for testing with the specified RSA key, claims map, and key ID
 func CreateTestTokenWithClaims(privateKey *rsa.PrivateKey, claims map[string]interface{}, keyID string) (string, error) {
-	// Create the token
-	token := jwt.New(jwt.SigningMethodRS256)
-	token.Header["kid"] = keyID
-	token.Header["typ"] = "JWT"
-	token.Header["alg"] = "RS256"
+	token := jwt.New()
 
-	// Set claims
-	mapClaims := token.Claims.(jwt.MapClaims)
 	for k, v := range claims {
-		mapClaims[k] = v
+		if err := token.Set(k, v); err != nil {
+			return "", fmt.Errorf("failed to set claim %s: %w", k, err)
+		}
 	}
 
-	// Sign the token
-	return token.SignedString(privateKey)
+	key, err := jwk.FromRaw(privateKey)
+	if err != nil {
+		return "", fmt.Errorf("failed to create JWK from private key: %w", err)
+	}
+
+	if err := key.Set(jwk.KeyIDKey, keyID); err != nil {
+		return "", fmt.Errorf("failed to set key ID: %w", err)
+	}
+
+	// Always set algorithm to RS256 for test tokens
+	if err := key.Set(jwk.AlgorithmKey, jwa.RS256); err != nil {
+		return "", fmt.Errorf("failed to set algorithm: %w", err)
+	}
+
+	signedToken, err := jwt.Sign(token, jwt.WithKey(jwa.RS256, key))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign token: %w", err)
+	}
+
+	return string(signedToken), nil
 }
