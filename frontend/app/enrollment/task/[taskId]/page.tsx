@@ -18,6 +18,7 @@ export default function EnrollmentTaskPage() {
     const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
     const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
     const [showViewer, setShowViewer] = useState(false)
+    const [shouldReload, setShouldReload] = useState(false);
 
     useEffect(() => {
         if (taskId) {
@@ -53,6 +54,16 @@ export default function EnrollmentTaskPage() {
             })
     }, [serviceRequest])
 
+    useEffect(() => {
+        if (shouldReload) {
+            const timeout = setTimeout(() => {
+                window.location.reload();
+                setShouldReload(false);
+            }, 1000);
+            return () => clearTimeout(timeout);
+        }
+    }, [shouldReload]);
+
     if (loading || !initialized) return <Loading />
 
     if (!task) {
@@ -67,6 +78,9 @@ export default function EnrollmentTaskPage() {
 
     if (task.status === "received") {
         if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
+            if (!shouldReload) {
+                setShouldReload(true);
+            }
             return <>Task is ontvangen, maar er ontbreekt informatie.</>
         }
         return <>

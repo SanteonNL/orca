@@ -9,6 +9,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -69,6 +70,7 @@ func (o Storage) AuthenticateUser(ctx context.Context, authRequestID string, use
 	if err != nil {
 		return err
 	}
+	log.Ctx(ctx).Info().Msgf("OIDC: Authenticated user (client=%s, user-id=%s)", authRequest.ClientID, user.ID)
 	o.authRequests[authRequestID] = authRequest
 	return nil
 }
@@ -76,6 +78,7 @@ func (o Storage) AuthenticateUser(ctx context.Context, authRequestID string, use
 func (o Storage) CreateAuthRequest(ctx context.Context, request *oidc.AuthRequest, _ string) (op.AuthRequest, error) {
 	o.mux.Lock()
 	defer o.mux.Unlock()
+	log.Ctx(ctx).Info().Msgf("OIDC: AuthRequest received (client=%s)", request.ClientID)
 	authRequestID := uuid.NewString()
 	req := AuthRequest{
 		ID:             authRequestID,
