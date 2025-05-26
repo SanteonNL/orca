@@ -119,11 +119,11 @@ func getTokenConfig(t *testing.T, config *ADB2CTestConfig) (string, string, map[
 
 	// Get issuer from token
 	issuer := ""
-	if parsedClaims["iss"] != nil {
-		issuer = parsedClaims["iss"].(string)
+	if value, ok := parsedClaims["iss"].(string); ok {
+		issuer = value
 		t.Logf("Using issuer from token: %s", issuer)
 	} else {
-		t.Fatal("No issuer claim found in token")
+		t.Fatal("Issuer claim is missing or not a string in token")
 	}
 
 	// Extract client ID from the audience claim or environment
