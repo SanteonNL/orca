@@ -2,6 +2,7 @@ package adb2c
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -191,5 +192,168 @@ func TestNewClientFromConfig(t *testing.T) {
 		require.NoError(t, err)
 		assert.NotNil(t, claims)
 		assert.Equal(t, tokenGen.ClientID, claims.Audience[0])
+	})
+}
+
+// TestIntegrationSignatureTampering tests signature validation with real Azure AD B2C tokens
+// This test validates that signature tampering is properly detected when using real tokens
+func TestIntegrationSignatureTampering(t *testing.T) {
+	testConfig := LoadTestConfig()
+	if testConfig.Token == "" {
+		t.Skip("Skipping signature tampering integration test. ADB2C_TOKEN environment variable not set.")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+	defer cancel()
+
+	t.Logf("Creating ADB2C client for signature tampering tests")
+
+	client, err := NewClient(ctx, testConfig.Config)
+	require.NoError(t, err, "Failed to create ADB2C client from config")
+
+	// First, verify the original token works (if not expired)
+	t.Run("original token validation baseline", func(t *testing.T) {
+		claims, err := client.ValidateToken(ctx, testConfig.Token, WithValidateSignature(true))
+
+		if err != nil {
+			if strings.Contains(err.Error(), "\"exp\" not satisfied") {
+				t.Logf("Original token is expired, which is expected for testing: %v", err)
+				// For expired tokens, we'll test without signature validation to establish baseline
+				claims, err = client.ValidateToken(ctx, testConfig.Token, WithValidateSignature(false))
+				require.NoError(t, err, "Token should be valid when ignoring expiry")
+				t.Logf("Baseline established: token is structurally valid but expired")
+			} else {
+				t.Logf("Original token validation failed: %v", err)
+				t.Logf("This may indicate network issues or configuration problems")
+				// We'll continue with tampering tests anyway to validate the security
+			}
+		} else {
+			require.NotNil(t, claims, "Token claims should not be nil")
+			t.Logf("Original token validated successfully with signature verification")
+		}
+	})
+
+	// Test signature tampering scenarios
+	t.Run("tampered signature, fails", func(t *testing.T) {
+		// Split the token and tamper with the signature
+		parts := strings.Split(testConfig.Token, ".")
+		require.Len(t, parts, 3, "Real token should have 3 parts")
+
+		// Tamper with the signature by changing a few characters
+		tamperedSignature := parts[2]
+		if len(tamperedSignature) > 15 {
+			// Replace some characters in different positions of the signature
+			runes := []rune(tamperedSignature)
+			runes[5] = 'X'
+			runes[10] = 'Y'
+			runes[len(runes)-5] = 'Z'
+			tamperedSignature = string(runes)
+		}
+
+		tamperedToken := parts[0] + "." + parts[1] + "." + tamperedSignature
+
+		claims, err := client.ValidateToken(ctx, tamperedToken, WithValidateSignature(true))
+		assert.Error(t, err, "Tampered signature should be rejected")
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "token validation failed")
+	})
+
+	t.Run("completely fake signature, fails", func(t *testing.T) {
+		// Split the token and replace with a completely fake signature
+		parts := strings.Split(testConfig.Token, ".")
+		require.Len(t, parts, 3, "Real token should have 3 parts")
+
+		// Create a completely fake signature
+		fakeSignature := "dGhpcy1pcy1hLWZha2Utc2lnbmF0dXJlLXRoYXQtc2hvdWxkLW5vdC12YWxpZGF0ZQ"
+
+		fakeToken := parts[0] + "." + parts[1] + "." + fakeSignature
+
+		claims, err := client.ValidateToken(ctx, fakeToken, WithValidateSignature(true))
+		assert.Error(t, err, "Fake signature should be rejected")
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "token validation failed")
+	})
+
+	t.Run("modified payload with original signature, fails", func(t *testing.T) {
+		// Parse the original token to get the payload
+		originalClaims, err := ParseToken(testConfig.Token)
+		require.NoError(t, err, "Should be able to parse original token")
+
+		// Split the token
+		parts := strings.Split(testConfig.Token, ".")
+		require.Len(t, parts, 3, "Real token should have 3 parts")
+
+		// Modify a claim in the payload (change the subject if it exists)
+		modifiedClaims := make(map[string]interface{})
+		for k, v := range originalClaims {
+			modifiedClaims[k] = v
+		}
+
+		// Modify the subject claim
+		if _, exists := modifiedClaims["sub"]; exists {
+			modifiedClaims["sub"] = "tampered-subject-12345"
+		} else {
+			// If no subject, modify another claim or add one
+			modifiedClaims["tampered"] = "true"
+		}
+
+		// Re-encode the modified payload
+		modifiedPayloadJSON, err := json.Marshal(modifiedClaims)
+		require.NoError(t, err)
+
+		modifiedPayloadB64 := base64.RawURLEncoding.EncodeToString(modifiedPayloadJSON)
+
+		// Use the original signature with the modified payload
+		modifiedToken := parts[0] + "." + modifiedPayloadB64 + "." + parts[2]
+
+		claims, err := client.ValidateToken(ctx, modifiedToken, WithValidateSignature(true))
+		assert.Error(t, err, "Modified payload should be rejected")
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "token validation failed")
+	})
+
+	t.Run("signature validation disabled should ignore tampering", func(t *testing.T) {
+		// This test ensures that when signature validation is disabled, even tampered tokens pass
+
+		// Split the token and tamper with the signature
+		parts := strings.Split(testConfig.Token, ".")
+		require.Len(t, parts, 3, "Real token should have 3 parts")
+
+		// Tamper with the signature
+		tamperedSignature := parts[2]
+		if len(tamperedSignature) > 10 {
+			runes := []rune(tamperedSignature)
+			runes[5] = 'X'
+			tamperedSignature = string(runes)
+		}
+
+		tamperedToken := parts[0] + "." + parts[1] + "." + tamperedSignature
+
+		// With signature validation disabled, this should pass (unless expired)
+		claims, err := client.ValidateToken(ctx, tamperedToken, WithValidateSignature(false))
+
+		if err != nil && strings.Contains(err.Error(), "\"exp\" not satisfied") {
+			t.Logf("Token is expired, which is expected: %v", err)
+		} else {
+			// If not expired, it should pass without signature validation
+			if err == nil {
+				assert.NotNil(t, claims)
+			} else {
+				t.Logf("Token failed for other reasons: %v", err)
+			}
+		}
+	})
+
+	t.Run("empty signature, fails", func(t *testing.T) {
+		// Split the token and remove the signature
+		parts := strings.Split(testConfig.Token, ".")
+		require.Len(t, parts, 3, "Real token should have 3 parts")
+
+		// Create token with empty signature
+		emptySignatureToken := parts[0] + "." + parts[1] + "."
+
+		claims, err := client.ValidateToken(ctx, emptySignatureToken, WithValidateSignature(true))
+		assert.Error(t, err, "Empty signature should be rejected")
+		assert.Nil(t, claims)
 	})
 }

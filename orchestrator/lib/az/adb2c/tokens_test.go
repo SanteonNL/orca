@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,8 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -710,6 +713,533 @@ func TestMultipleTrustedIssuers(t *testing.T) {
 	assert.Error(t, err)
 	assert.Nil(t, claims3)
 	assert.Contains(t, err.Error(), "untrusted token issuer")
+}
+
+func TestTokenReplayAttacks(t *testing.T) {
+	// Generate a test RSA key pair
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	publicKey := &privateKey.PublicKey
+
+	// Create a mock JWK server
+	jwkSet := jwk.NewSet()
+	jwkKey, err := jwk.FromRaw(publicKey)
+	require.NoError(t, err)
+	err = jwkKey.Set(jwk.KeyIDKey, "test-key-id")
+	require.NoError(t, err)
+	jwkSet.AddKey(jwkKey)
+
+	jwkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(jwkSet)
+	}))
+	defer jwkServer.Close()
+
+	// Create a mock OpenID configuration server
+	openIDConfig := oidc.DiscoveryConfiguration{
+		Issuer:                testIssuer,
+		JwksURI:               jwkServer.URL,
+		AuthorizationEndpoint: "https://test-tenant.b2clogin.com/test-tenant.onmicrosoft.com/oauth2/v2.0/authorize",
+		TokenEndpoint:         "https://test-tenant.b2clogin.com/test-tenant.onmicrosoft.com/oauth2/v2.0/token",
+	}
+
+	openIDServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(openIDConfig)
+	}))
+	defer openIDServer.Close()
+
+	// Create a test client
+	trustedIssuers := map[string]string{
+		testIssuer: openIDServer.URL,
+	}
+
+	ctx := context.Background()
+	client, err := newClientWithTrustedIssuers(ctx, trustedIssuers, testClientID)
+	require.NoError(t, err)
+
+	// Create a mock replay cache
+	replayCache := &mockReplayCache{
+		usedTokens: make(map[string]time.Time),
+	}
+
+	// Create a valid token with JTI
+	jti := "unique-token-id-123"
+	validToken := createTestToken(t, privateKey, map[string]interface{}{
+		"iss": testIssuer,
+		"aud": testClientID,
+		"sub": "test-subject",
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"iat": time.Now().Add(-time.Minute).Unix(),
+		"jti": jti,
+	}, "test-key-id")
+
+	t.Run("first use of token should succeed", func(t *testing.T) {
+		claims, err := client.ValidateToken(ctx, validToken,
+			WithValidateSignature(false),
+			WithReplayCache(replayCache))
+
+		assert.NoError(t, err)
+		assert.NotNil(t, claims)
+		assert.Equal(t, jti, claims.ID)
+	})
+
+	t.Run("replay of same token should fail", func(t *testing.T) {
+		claims, err := client.ValidateToken(ctx, validToken,
+			WithValidateSignature(false),
+			WithReplayCache(replayCache))
+
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "token has already been used")
+	})
+
+	t.Run("token without JTI should still work without replay protection", func(t *testing.T) {
+		tokenWithoutJTI := createTestToken(t, privateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+			// No JTI claim
+		}, "test-key-id")
+
+		claims, err := client.ValidateToken(ctx, tokenWithoutJTI,
+			WithValidateSignature(false),
+			WithReplayCache(replayCache))
+
+		assert.NoError(t, err)
+		assert.NotNil(t, claims)
+		assert.Equal(t, "", claims.ID) // No JTI
+	})
+}
+
+func TestCraftedJWTTokens(t *testing.T) {
+	// Generate a test RSA key pair
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	require.NoError(t, err)
+	publicKey := &privateKey.PublicKey
+
+	// Create a mock JWK server
+	jwkSet := jwk.NewSet()
+	jwkKey, err := jwk.FromRaw(publicKey)
+	require.NoError(t, err)
+	err = jwkKey.Set(jwk.KeyIDKey, "test-key-id")
+	require.NoError(t, err)
+	jwkSet.AddKey(jwkKey)
+
+	jwkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(jwkSet)
+	}))
+	defer jwkServer.Close()
+
+	// Create a mock OpenID configuration server
+	openIDConfig := oidc.DiscoveryConfiguration{
+		Issuer:                testIssuer,
+		JwksURI:               jwkServer.URL,
+		AuthorizationEndpoint: "https://test-tenant.b2clogin.com/test-tenant.onmicrosoft.com/oauth2/v2.0/authorize",
+		TokenEndpoint:         "https://test-tenant.b2clogin.com/test-tenant.onmicrosoft.com/oauth2/v2.0/token",
+	}
+
+	openIDServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(openIDConfig)
+	}))
+	defer openIDServer.Close()
+
+	// Create a test client
+	trustedIssuers := map[string]string{
+		testIssuer: openIDServer.URL,
+	}
+
+	ctx := context.Background()
+	client, err := newClientWithTrustedIssuers(ctx, trustedIssuers, testClientID)
+	require.NoError(t, err)
+
+	t.Run("malformed JWT should fail", func(t *testing.T) {
+		malformedTokens := []string{
+			"not.a.jwt",
+			"header.payload",                 // Missing signature
+			"",                               // Empty token
+			"header.payload.signature.extra", // Too many parts
+			"invalid-base64.invalid-base64.invalid-base64",
+		}
+
+		for _, token := range malformedTokens {
+			claims, err := client.ValidateToken(ctx, token, WithValidateSignature(false))
+			assert.Error(t, err, "Token should fail: %s", token)
+			assert.Nil(t, claims)
+			assert.Contains(t, err.Error(), "invalid token format")
+		}
+	})
+
+	t.Run("token with none algorithm should fail", func(t *testing.T) {
+		// Create a token with "none" algorithm (security vulnerability)
+		header := map[string]interface{}{
+			"alg": "none",
+			"typ": "JWT",
+		}
+		payload := map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+		}
+
+		headerJSON, _ := json.Marshal(header)
+		payloadJSON, _ := json.Marshal(payload)
+
+		headerB64 := base64.RawURLEncoding.EncodeToString(headerJSON)
+		payloadB64 := base64.RawURLEncoding.EncodeToString(payloadJSON)
+
+		noneToken := headerB64 + "." + payloadB64 + "."
+
+		claims, err := client.ValidateToken(ctx, noneToken, WithValidateSignature(true))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "unsupported or insecure algorithm")
+	})
+
+	t.Run("token with weak algorithm should fail", func(t *testing.T) {
+		// Test various weak algorithms
+		weakAlgorithms := []string{"HS256", "HS384", "HS512", "RS1", "none"}
+
+		for _, alg := range weakAlgorithms {
+			header := map[string]interface{}{
+				"alg": alg,
+				"typ": "JWT",
+			}
+			payload := map[string]interface{}{
+				"iss": testIssuer,
+				"aud": testClientID,
+				"sub": "test-subject",
+				"exp": time.Now().Add(time.Hour).Unix(),
+				"iat": time.Now().Add(-time.Minute).Unix(),
+			}
+
+			headerJSON, _ := json.Marshal(header)
+			payloadJSON, _ := json.Marshal(payload)
+
+			headerB64 := base64.RawURLEncoding.EncodeToString(headerJSON)
+			payloadB64 := base64.RawURLEncoding.EncodeToString(payloadJSON)
+
+			weakToken := headerB64 + "." + payloadB64 + ".fake-signature"
+
+			claims, err := client.ValidateToken(ctx, weakToken,
+				WithValidateSignature(true),
+				WithAllowedAlgorithms(jwa.RS256, jwa.PS256)) // Only allow secure algorithms
+
+			assert.Error(t, err, "Algorithm %s should be rejected", alg)
+			assert.Nil(t, claims)
+			assert.Contains(t, err.Error(), "unsupported or insecure algorithm")
+		}
+	})
+
+	t.Run("token with missing required claims should fail", func(t *testing.T) {
+		testCases := []struct {
+			name     string
+			claims   map[string]interface{}
+			errorMsg string
+		}{
+			{
+				name: "missing issuer",
+				claims: map[string]interface{}{
+					"aud": testClientID,
+					"sub": "test-subject",
+					"exp": time.Now().Add(time.Hour).Unix(),
+					"iat": time.Now().Add(-time.Minute).Unix(),
+				},
+				errorMsg: "token missing issuer claim",
+			},
+			{
+				name: "missing audience",
+				claims: map[string]interface{}{
+					"iss": testIssuer,
+					"sub": "test-subject",
+					"exp": time.Now().Add(time.Hour).Unix(),
+					"iat": time.Now().Add(-time.Minute).Unix(),
+				},
+				errorMsg: "\"aud\" not found",
+			},
+		}
+
+		for _, tc := range testCases {
+			t.Run(tc.name, func(t *testing.T) {
+				token := createTestToken(t, privateKey, tc.claims, "test-key-id")
+				claims, err := client.ValidateToken(ctx, token, WithValidateSignature(false))
+
+				assert.Error(t, err)
+				assert.Nil(t, claims)
+				assert.Contains(t, err.Error(), tc.errorMsg)
+			})
+		}
+	})
+
+	t.Run("token with future issued at time should fail", func(t *testing.T) {
+		futureToken := createTestToken(t, privateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(time.Hour).Unix(), // Issued in the future
+		}, "test-key-id")
+
+		claims, err := client.ValidateToken(ctx, futureToken, WithValidateSignature(false))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "\"iat\" not satisfied")
+	})
+
+	t.Run("token with not before in future should fail", func(t *testing.T) {
+		notYetValidToken := createTestToken(t, privateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+			"nbf": time.Now().Add(time.Hour).Unix(), // Not valid until future
+		}, "test-key-id")
+
+		claims, err := client.ValidateToken(ctx, notYetValidToken, WithValidateSignature(false))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "\"nbf\" not satisfied")
+	})
+
+	t.Run("token with wrong audience should fail", func(t *testing.T) {
+		wrongAudienceToken := createTestToken(t, privateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": "wrong-client-id",
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+		}, "test-key-id")
+
+		claims, err := client.ValidateToken(ctx, wrongAudienceToken, WithValidateSignature(false))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "\"aud\" not satisfied")
+	})
+
+	t.Run("token signed with wrong key should fail when signature validation enabled", func(t *testing.T) {
+		// Generate a different key pair
+		wrongPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+		require.NoError(t, err)
+
+		wrongKeyToken := createTestToken(t, wrongPrivateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+		}, "test-key-id")
+
+		claims, err := client.ValidateToken(ctx, wrongKeyToken, WithValidateSignature(true))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "token validation failed")
+	})
+
+	t.Run("expired token should fail", func(t *testing.T) {
+		expiredToken := createTestToken(t, privateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(-time.Hour).Unix(), // Expired 1 hour ago
+			"iat": time.Now().Add(-2 * time.Hour).Unix(),
+		}, "test-key-id")
+
+		claims, err := client.ValidateToken(ctx, expiredToken, WithValidateSignature(false))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "\"exp\" not satisfied")
+	})
+
+	t.Run("token with tampered signature should fail", func(t *testing.T) {
+		// Create a valid token first
+		validToken := createTestToken(t, privateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+		}, "test-key-id")
+
+		// Split the token and tamper with the signature
+		parts := strings.Split(validToken, ".")
+		require.Len(t, parts, 3, "Valid token should have 3 parts")
+
+		// Tamper with the signature by changing a few characters
+		tamperedSignature := parts[2]
+		if len(tamperedSignature) > 10 {
+			// Replace some characters in the middle of the signature
+			runes := []rune(tamperedSignature)
+			runes[5] = 'X'
+			runes[10] = 'Y'
+			runes[15] = 'Z'
+			tamperedSignature = string(runes)
+		}
+
+		tamperedToken := parts[0] + "." + parts[1] + "." + tamperedSignature
+
+		claims, err := client.ValidateToken(ctx, tamperedToken, WithValidateSignature(true))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "token validation failed")
+	})
+
+	t.Run("token with completely fake signature should fail", func(t *testing.T) {
+		// Create valid header and payload
+		header := map[string]interface{}{
+			"alg": "RS256",
+			"typ": "JWT",
+			"kid": "test-key-id",
+		}
+		payload := map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+		}
+
+		headerJSON, _ := json.Marshal(header)
+		payloadJSON, _ := json.Marshal(payload)
+
+		headerB64 := base64.RawURLEncoding.EncodeToString(headerJSON)
+		payloadB64 := base64.RawURLEncoding.EncodeToString(payloadJSON)
+
+		// Create a completely fake signature
+		fakeSignature := base64.RawURLEncoding.EncodeToString([]byte("this-is-a-fake-signature-that-should-not-validate"))
+
+		fakeToken := headerB64 + "." + payloadB64 + "." + fakeSignature
+
+		claims, err := client.ValidateToken(ctx, fakeToken, WithValidateSignature(true))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "token validation failed")
+	})
+
+	t.Run("token with modified payload but original signature should fail", func(t *testing.T) {
+		// Create a valid token first
+		validToken := createTestToken(t, privateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "original-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+		}, "test-key-id")
+
+		// Split the token
+		parts := strings.Split(validToken, ".")
+		require.Len(t, parts, 3, "Valid token should have 3 parts")
+
+		// Modify the payload (change the subject)
+		modifiedPayload := map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "modified-subject", // Changed this
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+		}
+
+		modifiedPayloadJSON, _ := json.Marshal(modifiedPayload)
+		modifiedPayloadB64 := base64.RawURLEncoding.EncodeToString(modifiedPayloadJSON)
+
+		// Use the original signature with the modified payload
+		modifiedToken := parts[0] + "." + modifiedPayloadB64 + "." + parts[2]
+
+		claims, err := client.ValidateToken(ctx, modifiedToken, WithValidateSignature(true))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		assert.Contains(t, err.Error(), "token validation failed")
+	})
+
+	t.Run("token with modified header but original signature should fail", func(t *testing.T) {
+		// Create a valid token first
+		validToken := createTestToken(t, privateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+		}, "test-key-id")
+
+		// Split the token
+		parts := strings.Split(validToken, ".")
+		require.Len(t, parts, 3, "Valid token should have 3 parts")
+
+		// Modify the header (change the algorithm)
+		modifiedHeader := map[string]interface{}{
+			"alg": "HS256", // Changed from RS256
+			"typ": "JWT",
+			"kid": "test-key-id",
+		}
+
+		modifiedHeaderJSON, _ := json.Marshal(modifiedHeader)
+		modifiedHeaderB64 := base64.RawURLEncoding.EncodeToString(modifiedHeaderJSON)
+
+		// Use the original signature with the modified header
+		modifiedToken := modifiedHeaderB64 + "." + parts[1] + "." + parts[2]
+
+		claims, err := client.ValidateToken(ctx, modifiedToken, WithValidateSignature(true))
+		assert.Error(t, err)
+		assert.Nil(t, claims)
+		// This should fail either due to algorithm validation or signature validation
+		assert.True(t, strings.Contains(err.Error(), "token validation failed") ||
+			strings.Contains(err.Error(), "unsupported or insecure algorithm"))
+	})
+
+	t.Run("valid token should pass signature validation", func(t *testing.T) {
+		// Create a properly signed token
+		validToken := createTestToken(t, privateKey, map[string]interface{}{
+			"iss": testIssuer,
+			"aud": testClientID,
+			"sub": "test-subject",
+			"exp": time.Now().Add(time.Hour).Unix(),
+			"iat": time.Now().Add(-time.Minute).Unix(),
+		}, "test-key-id")
+
+		claims, err := client.ValidateToken(ctx, validToken, WithValidateSignature(true))
+		assert.NoError(t, err)
+		assert.NotNil(t, claims)
+		assert.Equal(t, "test-subject", claims.Subject)
+	})
+}
+
+// mockReplayCache implements TokenReplayCache for testing
+type mockReplayCache struct {
+	usedTokens map[string]time.Time
+	mutex      sync.RWMutex
+}
+
+func (m *mockReplayCache) IsTokenUsed(ctx context.Context, jti string) (bool, error) {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	expiry, exists := m.usedTokens[jti]
+	if !exists {
+		return false, nil
+	}
+
+	// Check if token has expired
+	if time.Now().After(expiry) {
+		// Clean up expired token
+		delete(m.usedTokens, jti)
+		return false, nil
+	}
+
+	return true, nil
+}
+
+func (m *mockReplayCache) MarkTokenUsed(ctx context.Context, jti string, expiry time.Time) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	m.usedTokens[jti] = expiry
+	return nil
 }
 
 func createTestToken(t *testing.T, privateKey *rsa.PrivateKey, claims map[string]interface{}, keyID string) string {
