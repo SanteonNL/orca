@@ -3,7 +3,6 @@ package adb2c
 import (
 	"errors"
 	"fmt"
-	"net"
 	"net/url"
 	"strings"
 
@@ -28,8 +27,8 @@ type Config struct {
 	ADB2CTrustedIssuers map[string]TrustedIssuer `koanf:"trustedissuers"`
 }
 
-// ToTrustedIssuersMap converts the config format to the format expected by the ADB2C client
-func (c Config) ToTrustedIssuersMap() map[string]string {
+// TrustedIssuersMap converts the config format to the format expected by the ADB2C client
+func (c Config) TrustedIssuersMap() map[string]string {
 	result := make(map[string]string)
 	for _, issuer := range c.ADB2CTrustedIssuers {
 		result[issuer.IssuerURL] = issuer.DiscoveryURL
@@ -93,30 +92,9 @@ func (c *Config) Validate() error {
 		if discoveryURL.Host == "" {
 			return fmt.Errorf("discovery URL must have a valid host for issuer '%s'", name)
 		}
-
-		// Prevent localhost/private IPs in production (optional - can be configured)
-		if isPrivateOrLocalhost(issuerURL.Host) || isPrivateOrLocalhost(discoveryURL.Host) {
-			// This is a warning-level check - you might want to make this configurable
-			// return fmt.Errorf("private/localhost URLs not allowed in production for issuer '%s'", name)
-		}
 	}
 
 	return nil
-}
-
-// isPrivateOrLocalhost checks if a host is localhost or a private IP
-func isPrivateOrLocalhost(host string) bool {
-	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
-		return true
-	}
-
-	// Check for private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-	ip := net.ParseIP(host)
-	if ip != nil {
-		return ip.IsLoopback() || ip.IsPrivate()
-	}
-
-	return false
 }
 
 // LoadConfig loads the ADB2C configuration from environment variables using koanf.
@@ -124,15 +102,26 @@ func isPrivateOrLocalhost(host string) bool {
 // For example:
 //   - ADB2C_ENABLED=true
 //   - ADB2C_CLIENTID=my-client-id
-//   - ADB2C_TRUSTEDISSUERS_ISSUER1=https://example.com/issuer1
-//   - ADB2C_TRUSTEDISSUERS_ISSUER2=https://example.com/issuer2
+//   - ADB2C_TRUSTEDISSUERS_TENANT1_ISSUERURL=https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/
+//   - ADB2C_TRUSTEDISSUERS_TENANT1_DISCOVERYURL=https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration
 func LoadConfig() (*Config, error) {
-	result := DefaultConfig()
-	err := loadConfigInto(&result)
+	k := koanf.New(".")
+
+	// Load environment variables with ADB2C_ prefix
+	err := k.Load(env.Provider("ADB2C_", ".", func(s string) string {
+		return strings.Replace(strings.ToLower(strings.TrimPrefix(s, "ADB2C_")), "_", ".", -1)
+	}), nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to load environment variables: %w", err)
 	}
-	return &result, nil
+
+	config := DefaultConfig()
+	err = k.Unmarshal("", &config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+
+	return &config, nil
 }
 
 // DefaultConfig returns the default ADB2C configuration.
@@ -142,36 +131,4 @@ func DefaultConfig() Config {
 		ADB2CClientID:       "",
 		ADB2CTrustedIssuers: make(map[string]TrustedIssuer),
 	}
-}
-
-func loadConfigInto(target any) error {
-	k := koanf.New(".")
-	err := k.Load(env.ProviderWithValue("ADB2C_", ".", func(key string, value string) (string, interface{}) {
-		key = strings.Replace(strings.ToLower(strings.TrimPrefix(key, "ADB2C_")), "_", ".", -1)
-		if len(value) == 0 {
-			return key, nil
-		}
-		sliceValues := splitWithEscaping(value, ",", "\\")
-		for i, s := range sliceValues {
-			sliceValues[i] = strings.TrimSpace(s)
-		}
-		var parsedValue any = sliceValues
-		if len(sliceValues) == 1 {
-			parsedValue = sliceValues[0]
-		}
-		return key, parsedValue
-	}), nil)
-	if err != nil {
-		return err
-	}
-	return k.Unmarshal("", target)
-}
-
-func splitWithEscaping(s, separator, escape string) []string {
-	s = strings.ReplaceAll(s, escape+separator, "\x00")
-	tokens := strings.Split(s, separator)
-	for i, token := range tokens {
-		tokens[i] = strings.ReplaceAll(token, "\x00", separator)
-	}
-	return tokens
 }

@@ -159,7 +159,7 @@ func getTokenConfig(t *testing.T, testConfig *ADB2CTestConfig) (string, string, 
 
 	if len(testConfig.Config.ADB2CTrustedIssuers) > 0 {
 		// Use the trusted issuers from koanf configuration
-		trustedIssuers = testConfig.Config.ToTrustedIssuersMap()
+		trustedIssuers = testConfig.Config.TrustedIssuersMap()
 		t.Logf("Using trusted issuers from koanf configuration: %d issuers", len(trustedIssuers))
 		for issuerURL, discoveryURL := range trustedIssuers {
 			t.Logf("  %s -> %s", issuerURL, discoveryURL)
@@ -240,8 +240,8 @@ func TestLoadADB2CTestConfig(t *testing.T) {
 		assert.Equal(t, "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/", trustedIssuer.IssuerURL)
 		assert.Equal(t, "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration", trustedIssuer.DiscoveryURL)
 
-		// Verify ToTrustedIssuersMap works
-		trustedIssuersMap := testConfig.Config.ToTrustedIssuersMap()
+		// Verify TrustedIssuersMap works
+		trustedIssuersMap := testConfig.Config.TrustedIssuersMap()
 		assert.Len(t, trustedIssuersMap, 1)
 		assert.Equal(t, "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
 			trustedIssuersMap["https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/"])
@@ -390,7 +390,7 @@ func TestNewClientFromConfig(t *testing.T) {
 		assert.NoError(t, err)
 
 		// Verify the config conversion works
-		trustedIssuers := config.ToTrustedIssuersMap()
+		trustedIssuers := config.TrustedIssuersMap()
 		assert.Len(t, trustedIssuers, 1)
 		assert.Equal(t, "https://mock-discovery-url.example.com", trustedIssuers[tokenGen.GetIssuerURL()])
 

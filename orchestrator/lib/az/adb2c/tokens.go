@@ -80,7 +80,7 @@ func NewClient(ctx context.Context, config *Config, options ...ClientOption) (*C
 		return nil, fmt.Errorf("invalid configuration: %w", err)
 	}
 
-	trustedIssuers := config.ToTrustedIssuersMap()
+	trustedIssuers := config.TrustedIssuersMap()
 	return newClientWithTrustedIssuers(ctx, trustedIssuers, config.ADB2CClientID, options...)
 }
 

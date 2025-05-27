@@ -109,7 +109,7 @@ func TestConfig_ToTrustedIssuersMap(t *testing.T) {
 		},
 	}
 
-	result := config.ToTrustedIssuersMap()
+	result := config.TrustedIssuersMap()
 
 	expected := map[string]string{
 		"https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/": "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
