@@ -127,7 +127,7 @@ func TestNewClient(t *testing.T) {
 					},
 				},
 			},
-			expectedError: errors.New("failed to initialize OpenID configurations"),
+			expectedError: nil, // Client creation should succeed, errors are logged
 		},
 	}
 
@@ -161,7 +161,7 @@ func TestNewClientWithTrustedIssuers(t *testing.T) {
 			issuers:       map[string]string{testIssuer: "https://test.example.com/.well-known/openid_configuration"},
 			clientID:      testClientID,
 			options:       []ClientOption{},
-			expectedError: errors.New("failed to initialize OpenID configurations"),
+			expectedError: nil, // Client creation should succeed, errors are logged
 		},
 		{
 			name:          "Empty issuers, fails",
@@ -175,7 +175,7 @@ func TestNewClientWithTrustedIssuers(t *testing.T) {
 			issuers:       map[string]string{testIssuer: "https://invalid.example.com/.well-known/openid_configuration"},
 			clientID:      testClientID,
 			options:       []ClientOption{},
-			expectedError: errors.New("failed to initialize OpenID configurations"),
+			expectedError: nil, // Client creation should succeed, errors are logged
 		},
 	}
 
@@ -291,7 +291,13 @@ func TestKeyRefresh(t *testing.T) {
 	}, "original-key-id")
 
 	// Force the client to refresh by setting lastRefresh to the past
-	client.lastRefresh = time.Now().Add(-2 * client.refreshInterval)
+	client.statesMutex.RLock()
+	state := client.issuerStates[testIssuer]
+	client.statesMutex.RUnlock()
+
+	state.mutex.Lock()
+	state.lastRefresh = time.Now().Add(-2 * client.refreshInterval)
+	state.mutex.Unlock()
 
 	// Validate token - this should trigger a refresh
 	_, err = client.ValidateToken(ctx, validToken, WithValidateSignature(false))

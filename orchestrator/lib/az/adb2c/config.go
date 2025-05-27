@@ -4,10 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
-	"strings"
-
-	"github.com/knadh/koanf/providers/env"
-	"github.com/knadh/koanf/v2"
 )
 
 // TrustedIssuer represents a single trusted issuer configuration
@@ -95,33 +91,6 @@ func (c *Config) Validate() error {
 	}
 
 	return nil
-}
-
-// LoadConfig loads the ADB2C configuration from environment variables using koanf.
-// Environment variables should be prefixed with ADB2C_ and use underscores for nested keys.
-// For example:
-//   - ADB2C_ENABLED=true
-//   - ADB2C_CLIENTID=my-client-id
-//   - ADB2C_TRUSTEDISSUERS_TENANT1_ISSUERURL=https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/
-//   - ADB2C_TRUSTEDISSUERS_TENANT1_DISCOVERYURL=https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration
-func LoadConfig() (*Config, error) {
-	k := koanf.New(".")
-
-	// Load environment variables with ADB2C_ prefix
-	err := k.Load(env.Provider("ADB2C_", ".", func(s string) string {
-		return strings.Replace(strings.ToLower(strings.TrimPrefix(s, "ADB2C_")), "_", ".", -1)
-	}), nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load environment variables: %w", err)
-	}
-
-	config := DefaultConfig()
-	err = k.Unmarshal("", &config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
-	}
-
-	return &config, nil
 }
 
 // DefaultConfig returns the default ADB2C configuration.

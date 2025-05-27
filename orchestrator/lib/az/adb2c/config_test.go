@@ -1,90 +1,14 @@
 package adb2c
 
 import (
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/v2"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-func TestLoadConfig(t *testing.T) {
-	t.Run("default config", func(t *testing.T) {
-		// Clear any existing environment variables
-		os.Unsetenv("ADB2C_ENABLED")
-		os.Unsetenv("ADB2C_CLIENTID")
-		os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT1_ISSUERURL")
-		os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT1_DISCOVERYURL")
-
-		config, err := LoadConfig()
-		require.NoError(t, err)
-
-		expected := DefaultConfig()
-		assert.Equal(t, expected.Enabled, config.Enabled)
-		assert.Equal(t, expected.ADB2CClientID, config.ADB2CClientID)
-		assert.Equal(t, expected.ADB2CTrustedIssuers, config.ADB2CTrustedIssuers)
-	})
-
-	t.Run("config from environment variables", func(t *testing.T) {
-		// Set environment variables
-		os.Setenv("ADB2C_ENABLED", "true")
-		os.Setenv("ADB2C_CLIENTID", "test-client-id")
-		os.Setenv("ADB2C_TRUSTEDISSUERS_TENANT1_ISSUERURL", "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/")
-		os.Setenv("ADB2C_TRUSTEDISSUERS_TENANT1_DISCOVERYURL", "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration")
-		os.Setenv("ADB2C_TRUSTEDISSUERS_TENANT2_ISSUERURL", "https://tenant2.b2clogin.com/tenant2.onmicrosoft.com/v2.0/")
-		os.Setenv("ADB2C_TRUSTEDISSUERS_TENANT2_DISCOVERYURL", "https://tenant2.b2clogin.com/tenant2.onmicrosoft.com/v2.0/.well-known/openid_configuration")
-
-		defer func() {
-			os.Unsetenv("ADB2C_ENABLED")
-			os.Unsetenv("ADB2C_CLIENTID")
-			os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT1_ISSUERURL")
-			os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT1_DISCOVERYURL")
-			os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT2_ISSUERURL")
-			os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT2_DISCOVERYURL")
-		}()
-
-		config, err := LoadConfig()
-		require.NoError(t, err)
-
-		assert.True(t, config.Enabled)
-		assert.Equal(t, "test-client-id", config.ADB2CClientID)
-		assert.Equal(t, map[string]TrustedIssuer{
-			"tenant1": {
-				IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
-				DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
-			},
-			"tenant2": {
-				IssuerURL:    "https://tenant2.b2clogin.com/tenant2.onmicrosoft.com/v2.0/",
-				DiscoveryURL: "https://tenant2.b2clogin.com/tenant2.onmicrosoft.com/v2.0/.well-known/openid_configuration",
-			},
-		}, config.ADB2CTrustedIssuers)
-	})
-
-	t.Run("partial config from environment", func(t *testing.T) {
-		// Set only some environment variables
-		os.Setenv("ADB2C_ENABLED", "true")
-		os.Setenv("ADB2C_TRUSTEDISSUERS_MYISSUER_ISSUERURL", "https://myissuer.b2clogin.com/myissuer.onmicrosoft.com/v2.0/")
-		os.Setenv("ADB2C_TRUSTEDISSUERS_MYISSUER_DISCOVERYURL", "https://myissuer.b2clogin.com/myissuer.onmicrosoft.com/v2.0/.well-known/openid_configuration")
-
-		defer func() {
-			os.Unsetenv("ADB2C_ENABLED")
-			os.Unsetenv("ADB2C_TRUSTEDISSUERS_MYISSUER_ISSUERURL")
-			os.Unsetenv("ADB2C_TRUSTEDISSUERS_MYISSUER_DISCOVERYURL")
-		}()
-
-		config, err := LoadConfig()
-		require.NoError(t, err)
-
-		assert.True(t, config.Enabled)
-		assert.Equal(t, "", config.ADB2CClientID) // Should remain default
-		assert.Equal(t, map[string]TrustedIssuer{
-			"myissuer": {
-				IssuerURL:    "https://myissuer.b2clogin.com/myissuer.onmicrosoft.com/v2.0/",
-				DiscoveryURL: "https://myissuer.b2clogin.com/myissuer.onmicrosoft.com/v2.0/.well-known/openid_configuration",
-			},
-		}, config.ADB2CTrustedIssuers)
-	})
-}
 
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
@@ -93,6 +17,134 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "", config.ADB2CClientID)
 	assert.NotNil(t, config.ADB2CTrustedIssuers)
 	assert.Len(t, config.ADB2CTrustedIssuers, 0)
+}
+
+// TestConfig holds the configuration for the Azure AD B2C integration test
+type TestConfig struct {
+	Token    string
+	ClientID string
+	Config   *Config
+}
+
+func LoadTestConfig() *TestConfig {
+	testConfig := &TestConfig{
+		Token:    os.Getenv("ADB2C_TOKEN"),
+		ClientID: os.Getenv("ADB2C_CLIENT_ID"),
+	}
+
+	// Load the koanf-based configuration directly
+	k := koanf.New(".")
+
+	// Load environment variables with ADB2C_ prefix
+	err := k.Load(env.Provider("ADB2C_", ".", func(s string) string {
+		return strings.Replace(strings.ToLower(strings.TrimPrefix(s, "ADB2C_")), "_", ".", -1)
+	}), nil)
+
+	config := DefaultConfig()
+	if err == nil {
+		// If koanf loading succeeds, unmarshal into config
+		k.Unmarshal("", &config)
+	}
+
+	// Override client ID from environment if provided
+	if testConfig.ClientID != "" {
+		config.ADB2CClientID = testConfig.ClientID
+	}
+
+	testConfig.Config = &config
+	return testConfig
+}
+
+// TestLoadTestConfig tests the configuration loading for integration tests
+func TestLoadTestConfig(t *testing.T) {
+	t.Run("loads config with koanf environment variables", func(t *testing.T) {
+		// Set up environment variables in the new koanf format
+		os.Setenv("ADB2C_TOKEN", "test-token")
+		os.Setenv("ADB2C_CLIENT_ID", "test-client-from-env")
+		os.Setenv("ADB2C_ENABLED", "true")
+		os.Setenv("ADB2C_CLIENTID", "test-client-from-koanf")
+		os.Setenv("ADB2C_TRUSTEDISSUERS_TENANT1_ISSUERURL", "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/")
+		os.Setenv("ADB2C_TRUSTEDISSUERS_TENANT1_DISCOVERYURL", "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration")
+
+		defer func() {
+			os.Unsetenv("ADB2C_TOKEN")
+			os.Unsetenv("ADB2C_CLIENT_ID")
+			os.Unsetenv("ADB2C_ENABLED")
+			os.Unsetenv("ADB2C_CLIENTID")
+			os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT1_ISSUERURL")
+			os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT1_DISCOVERYURL")
+		}()
+
+		testConfig := LoadTestConfig()
+
+		// Verify token and client ID are loaded correctly
+		assert.Equal(t, "test-token", testConfig.Token)
+		assert.Equal(t, "test-client-from-env", testConfig.ClientID) // ADB2C_CLIENT_ID takes precedence
+
+		// Verify koanf config is loaded
+		assert.NotNil(t, testConfig.Config)
+		assert.True(t, testConfig.Config.Enabled)
+		assert.Equal(t, "test-client-from-env", testConfig.Config.ADB2CClientID) // Should be overridden by ADB2C_CLIENT_ID
+
+		// Verify trusted issuers are loaded
+		assert.Len(t, testConfig.Config.ADB2CTrustedIssuers, 1)
+		assert.Contains(t, testConfig.Config.ADB2CTrustedIssuers, "tenant1")
+
+		trustedIssuer := testConfig.Config.ADB2CTrustedIssuers["tenant1"]
+		assert.Equal(t, "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/", trustedIssuer.IssuerURL)
+		assert.Equal(t, "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration", trustedIssuer.DiscoveryURL)
+
+		// Verify TrustedIssuersMap works
+		trustedIssuersMap := testConfig.Config.TrustedIssuersMap()
+		assert.Len(t, trustedIssuersMap, 1)
+		assert.Equal(t, "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
+			trustedIssuersMap["https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/"])
+	})
+
+	t.Run("handles missing koanf config gracefully", func(t *testing.T) {
+		// Clear all ADB2C environment variables
+		os.Unsetenv("ADB2C_ENABLED")
+		os.Unsetenv("ADB2C_CLIENTID")
+		os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT1_ISSUERURL")
+		os.Unsetenv("ADB2C_TRUSTEDISSUERS_TENANT1_DISCOVERYURL")
+
+		// Set only the test-specific variables
+		os.Setenv("ADB2C_TOKEN", "test-token")
+		os.Setenv("ADB2C_CLIENT_ID", "test-client")
+
+		defer func() {
+			os.Unsetenv("ADB2C_TOKEN")
+			os.Unsetenv("ADB2C_CLIENT_ID")
+		}()
+
+		testConfig := LoadTestConfig()
+
+		// Verify basic config is loaded
+		assert.Equal(t, "test-token", testConfig.Token)
+		assert.Equal(t, "test-client", testConfig.ClientID)
+
+		// Verify fallback config is created
+		assert.NotNil(t, testConfig.Config)
+		assert.False(t, testConfig.Config.Enabled) // Should be false when no koanf config
+		assert.Equal(t, "test-client", testConfig.Config.ADB2CClientID)
+		assert.Len(t, testConfig.Config.ADB2CTrustedIssuers, 0)
+	})
+
+	t.Run("client ID precedence", func(t *testing.T) {
+		// Test that ADB2C_CLIENT_ID takes precedence over ADB2C_CLIENTID
+		os.Setenv("ADB2C_CLIENT_ID", "client-from-client-id")
+		os.Setenv("ADB2C_CLIENTID", "client-from-client")
+
+		defer func() {
+			os.Unsetenv("ADB2C_CLIENT_ID")
+			os.Unsetenv("ADB2C_CLIENTID")
+		}()
+
+		testConfig := LoadTestConfig()
+
+		assert.Equal(t, "client-from-client-id", testConfig.ClientID)
+		assert.Equal(t, "client-from-client-id", testConfig.Config.ADB2CClientID)
+	})
 }
 
 func TestConfig_ToTrustedIssuersMap(t *testing.T) {

@@ -9,6 +9,7 @@ import (
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/rs/zerolog/log"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"io"
 	"net/http"
@@ -17,18 +18,25 @@ import (
 	"time"
 )
 
+// issuerState tracks the state of an individual issuer
+type issuerState struct {
+	config      *oidc.DiscoveryConfiguration
+	lastRefresh time.Time
+	lastError   error
+	mutex       sync.RWMutex
+}
+
 // Client represents an Azure ADB2C client for token validation
 type Client struct {
 	ClientID    string
 	jwksFetcher *jwk.Cache
 
 	// Map of trusted issuers to their discovery endpoints
-	trustedIssuers     map[string]string
-	issuerConfigs      map[string]*oidc.DiscoveryConfiguration
-	issuerConfigsMutex sync.RWMutex
+	trustedIssuers map[string]string
+	// Per-issuer state tracking
+	issuerStates map[string]*issuerState
+	statesMutex  sync.RWMutex
 
-	// Last refresh time for OpenID configurations
-	lastRefresh time.Time
 	// How often to refresh the OpenID configurations (default: 24h)
 	refreshInterval time.Duration
 }
@@ -94,7 +102,7 @@ func newClientWithTrustedIssuers(ctx context.Context, trustedIssuers map[string]
 	client := &Client{
 		ClientID:        clientID,
 		trustedIssuers:  trustedIssuers,
-		issuerConfigs:   make(map[string]*oidc.DiscoveryConfiguration),
+		issuerStates:    make(map[string]*issuerState),
 		refreshInterval: 24 * time.Hour,
 	}
 
@@ -106,110 +114,81 @@ func newClientWithTrustedIssuers(ctx context.Context, trustedIssuers map[string]
 	cache := jwk.NewCache(ctx)
 	client.jwksFetcher = cache
 
-	// Detect if all endpoints are direct JWKS URIs
-	directJwksUris := true
-	for _, endpoint := range trustedIssuers {
-		if !strings.HasSuffix(endpoint, "/keys") &&
-			!strings.HasSuffix(endpoint, "/jwks") &&
-			!strings.HasSuffix(endpoint, "/jwks.json") &&
-			!strings.Contains(endpoint, "/keys?p=") {
-			directJwksUris = false
-			break
-		}
+	// Initialize issuer states - don't fail if some issuers are unavailable
+	client.statesMutex.Lock()
+	for issuer := range trustedIssuers {
+		client.issuerStates[issuer] = &issuerState{}
 	}
+	client.statesMutex.Unlock()
 
-	// If all endpoints are direct JWKS URIs, create minimal OpenID configurations
-	if directJwksUris {
-		for issuer, jwksURI := range trustedIssuers {
-			config := &oidc.DiscoveryConfiguration{
-				Issuer:  issuer,
-				JwksURI: jwksURI,
-			}
-			client.issuerConfigs[issuer] = config
-
-			// Register the JWKS URI with the cache for auto-refresh
-			if err := cache.Register(jwksURI); err != nil {
-				return nil, fmt.Errorf("failed to register JWKS URI %s: %w", jwksURI, err)
-			}
-
-			// Prefetch the JWKS
-			if _, err := cache.Refresh(ctx, jwksURI); err != nil {
-				return nil, fmt.Errorf("failed to refresh JWKS from %s: %w", jwksURI, err)
-			}
-		}
-	} else {
-		// Standard case - fetch OpenID configurations
-		if err := client.refreshAllConfigurations(ctx); err != nil {
-			return nil, fmt.Errorf("failed to initialize OpenID configurations: %w", err)
-		}
-	}
+	// Try to refresh configurations, but don't fail if some are unavailable
+	client.refreshAllConfigurations(ctx)
 
 	return client, nil
 }
 
-// refreshAllConfigurations fetches OpenID configurations for all trusted issuers
-func (c *Client) refreshAllConfigurations(ctx context.Context) error {
-	c.issuerConfigsMutex.Lock()
-	defer c.issuerConfigsMutex.Unlock()
-
+// refreshAllConfigurations tries to refresh all configurations but logs errors instead of failing
+func (c *Client) refreshAllConfigurations(ctx context.Context) {
 	for issuer, discoveryURL := range c.trustedIssuers {
-		// Check if the URL is a direct JWKS URI instead of a discovery endpoint
-		// If it ends with '/keys' or '/jwks', assume it's a direct JWKS URI
-		if strings.HasSuffix(discoveryURL, "/keys") || strings.HasSuffix(discoveryURL, "/jwks") {
-			// Create a minimal OpenID configuration with just the JWKS URI
-			config := &oidc.DiscoveryConfiguration{
-				Issuer:  issuer,
-				JwksURI: discoveryURL,
-			}
-
-			c.issuerConfigs[issuer] = config
-
-			// Register the JWKS URI with the cache for auto-refresh
-			if err := c.jwksFetcher.Register(discoveryURL); err != nil {
-				return fmt.Errorf("failed to register JWKS URI: %w", err)
-			}
-
-			// Force a refresh of the JWKS to ensure it's loaded
-			if _, err := c.jwksFetcher.Refresh(ctx, discoveryURL); err != nil {
-				return fmt.Errorf("failed to refresh JWKS from %s: %w", discoveryURL, err)
-			}
-
-			continue
+		if err := c.refreshIssuerConfiguration(ctx, issuer, discoveryURL); err != nil {
+			log.Ctx(ctx).Warn().Err(err).
+				Str("issuer", issuer).
+				Str("discovery_url", discoveryURL).
+				Msg("Failed to refresh OpenID configuration for issuer, will retry on demand")
 		}
+	}
+}
 
-		// Normal case - fetch OpenID configuration from discovery endpoint
-		config, err := c.fetchOpenIDConfigurationFromURL(ctx, discoveryURL)
-		if err != nil {
-			return fmt.Errorf("failed to fetch OpenID configuration for issuer %s: %w", issuer, err)
-		}
+// refreshIssuerConfiguration refreshes the configuration for a single issuer
+func (c *Client) refreshIssuerConfiguration(ctx context.Context, issuer, discoveryURL string) error {
+	c.statesMutex.RLock()
+	state, exists := c.issuerStates[issuer]
+	c.statesMutex.RUnlock()
 
-		// Verify the issuer in the config matches the expected issuer
-		// Skip this check for direct JWKS URIs (already handled above)
-		if config.Issuer != issuer && config.Issuer != "" {
-			return fmt.Errorf("issuer mismatch: expected %s, got %s", issuer, config.Issuer)
-		}
-
-		// If empty, use the expected issuer
-		if config.Issuer == "" {
-			config.Issuer = issuer
-		}
-
-		c.issuerConfigs[issuer] = config
-
-		if err := c.jwksFetcher.Register(config.JwksURI); err != nil {
-			return fmt.Errorf("failed to register JWKS URI: %w", err)
-		}
-
-		// Force a refresh of the JWKS to ensure it's loaded and processed
-		keySet, err := c.jwksFetcher.Refresh(ctx, config.JwksURI)
-		if err != nil {
-			return fmt.Errorf("failed to refresh JWKS from %s: %w", config.JwksURI, err)
-		}
-
-		c.ensureKeyAlgorithms(ctx, keySet)
+	if !exists {
+		return fmt.Errorf("no state found for issuer: %s", issuer)
 	}
 
-	c.lastRefresh = time.Now()
+	state.mutex.Lock()
+	defer state.mutex.Unlock()
+
+	config, err := c.fetchOpenIDConfigurationFromURL(ctx, discoveryURL)
+	if err != nil {
+		state.lastError = err
+		return fmt.Errorf("failed to fetch OpenID configuration for issuer %s: %w", issuer, err)
+	}
+
+	// Verify the issuer in the config matches the expected issuer
+	if config.Issuer != issuer && config.Issuer != "" {
+		err := fmt.Errorf("issuer mismatch: expected %s, got %s", issuer, config.Issuer)
+		state.lastError = err
+		return err
+	}
+
+	// If empty, use the expected issuer
+	if config.Issuer == "" {
+		config.Issuer = issuer
+	}
+
+	// Register and refresh JWKS
+	if err := c.jwksFetcher.Register(config.JwksURI); err != nil {
+		state.lastError = err
+		return fmt.Errorf("failed to register JWKS URI: %w", err)
+	}
+
+	keySet, err := c.jwksFetcher.Refresh(ctx, config.JwksURI)
+	if err != nil {
+		state.lastError = err
+		return fmt.Errorf("failed to refresh JWKS from %s: %w", config.JwksURI, err)
+	}
+
+	c.ensureKeyAlgorithms(ctx, keySet)
+
+	// Update state on success
+	state.config = config
+	state.lastRefresh = time.Now()
+	state.lastError = nil
+
 	return nil
 }
 
@@ -262,39 +241,67 @@ func (c *Client) fetchOpenIDConfigurationFromURL(ctx context.Context, discoveryU
 
 // fetchKeySet fetches the JWK set for a given issuer, refreshing if needed
 func (c *Client) fetchKeySet(ctx context.Context, issuer string) (jwk.Set, error) {
-	c.issuerConfigsMutex.RLock()
-	issuerConfig, ok := c.issuerConfigs[issuer]
-	c.issuerConfigsMutex.RUnlock()
+	c.statesMutex.RLock()
+	state, ok := c.issuerStates[issuer]
+	c.statesMutex.RUnlock()
 
 	if !ok {
-		return nil, fmt.Errorf("no configuration found for issuer: %s", issuer)
+		return nil, fmt.Errorf("no state found for issuer: %s", issuer)
 	}
 
-	// Check if refresh is needed
-	if time.Since(c.lastRefresh) >= c.refreshInterval {
-		// Since we do not store the last refresh time per issuer/token, we refresh all configurations
-		if err := c.refreshAllConfigurations(ctx); err != nil {
-			return nil, fmt.Errorf("failed to refresh configurations: %w", err)
+	state.mutex.RLock()
+	config := state.config
+	lastRefresh := state.lastRefresh
+	lastError := state.lastError
+	state.mutex.RUnlock()
+
+	// If we don't have a config yet, or it's time to refresh, try to get/refresh it
+	needsRefresh := config == nil || time.Since(lastRefresh) >= c.refreshInterval
+
+	if needsRefresh {
+		discoveryURL, exists := c.trustedIssuers[issuer]
+		if !exists {
+			return nil, fmt.Errorf("issuer %s not in trusted issuers", issuer)
 		}
 
-		// Get the possibly updated config
-		c.issuerConfigsMutex.RLock()
-		issuerConfig = c.issuerConfigs[issuer]
-		c.issuerConfigsMutex.RUnlock()
+		err := c.refreshIssuerConfiguration(ctx, issuer, discoveryURL)
+		if err != nil {
+			// If refresh failed and we have no previous config, fail
+			if config == nil {
+				return nil, fmt.Errorf("failed to load configuration for issuer %s and no cached config available: %w", issuer, err)
+			}
+			// If refresh failed but we have a cached config, log warning and continue with cached config
+			log.Ctx(ctx).Warn().Err(err).
+				Str("issuer", issuer).
+				Msg("Failed to refresh issuer configuration, using cached config")
+		} else {
+			// Refresh succeeded, get the updated config
+			state.mutex.RLock()
+			config = state.config
+			state.mutex.RUnlock()
+		}
+	}
+
+	// If we still don't have a config, check if we have a previous error to report
+	if config == nil {
+		if lastError != nil {
+			return nil, fmt.Errorf("no configuration available for issuer %s, last error: %w", issuer, lastError)
+		}
+		return nil, fmt.Errorf("no configuration available for issuer %s", issuer)
 	}
 
 	// Fetch JWK set
-	keySet, err := c.jwksFetcher.Get(ctx, issuerConfig.JwksURI)
+	keySet, err := c.jwksFetcher.Get(ctx, config.JwksURI)
 	if err != nil {
 		// Try refreshing once more before failing
-		keySet, err = c.jwksFetcher.Refresh(ctx, issuerConfig.JwksURI)
+		keySet, err = c.jwksFetcher.Refresh(ctx, config.JwksURI)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch JWKS from %s: %w", issuerConfig.JwksURI, err)
+			return nil, fmt.Errorf("failed to fetch JWKS from %s: %w", config.JwksURI, err)
 		}
 	}
 
 	if keySet == nil || keySet.Len() == 0 {
-		return nil, fmt.Errorf("no keys found in JWKS from %s", issuerConfig.JwksURI)
+		return nil, fmt.Errorf("no keys found in JWKS from %s", config.JwksURI)
 	}
 
 	c.ensureKeyAlgorithms(ctx, keySet)
@@ -336,8 +343,8 @@ func WithAllowedAlgorithms(algorithms ...jwa.SignatureAlgorithm) ValidateTokenOp
 func (c *Client) ValidateToken(ctx context.Context, tokenString string, options ...ValidateTokenOption) (*TokenClaims, error) {
 	// Set default options
 	opts := &validateTokenOptions{
-		validateSignature: true,                                                      // Default to validating signatures in production
-		allowedAlgorithms: []jwa.SignatureAlgorithm{jwa.RS256, jwa.RS384, jwa.RS512}, // Secure defaults
+		validateSignature: true,
+		allowedAlgorithms: []jwa.SignatureAlgorithm{jwa.RS256},
 	}
 
 	// Apply options
@@ -524,8 +531,8 @@ func (c *Client) ensureKeyAlgorithms(ctx context.Context, keySet jwk.Set) {
 
 		if key.Algorithm() == jwa.InvalidKeyAlgorithm("") {
 			// The 'alg' field is optional for Azure ADB2C keys, but required by jwk, so we set a default
-			// For RSA and EC key types, RS256 is a reasonable default
-			if key.KeyType() == jwa.RSA || key.KeyType() == jwa.EC {
+			// For RSA, RS256 is a reasonable default for our use-case
+			if key.KeyType() == jwa.RSA {
 				key.Set(jwk.AlgorithmKey, jwa.RS256)
 			}
 		}
