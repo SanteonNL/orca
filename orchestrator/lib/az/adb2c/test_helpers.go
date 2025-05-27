@@ -76,7 +76,7 @@ func NewMockClient(ctx context.Context, generator *TestTokenGenerator) (*MockCli
 	}
 
 	// Create the standard client with our mock data
-	client, err := NewClient(ctx, trustedIssuers, generator.ClientID, WithDefaultIssuer(issuerURL))
+	client, err := newClientWithTrustedIssuers(ctx, trustedIssuers, generator.ClientID)
 	if err != nil {
 		jwkServer.Close()
 		discoveryServer.Close()

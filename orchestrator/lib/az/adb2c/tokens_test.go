@@ -71,92 +71,123 @@ func ParseToken(tokenString string) (map[string]interface{}, error) {
 }
 
 func TestNewClient(t *testing.T) {
-	// Generate a test RSA key pair
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	require.NoError(t, err)
-	publicKey := &privateKey.PublicKey
-
-	// Create a JWK set with the public key
-	jwkSet := jwk.NewSet()
-	jwkKey, err := jwk.FromRaw(publicKey)
-	require.NoError(t, err)
-	err = jwkKey.Set(jwk.KeyIDKey, "test-key-id")
-	require.NoError(t, err)
-	err = jwkKey.Set(jwk.AlgorithmKey, jwa.RS256)
-	require.NoError(t, err)
-	jwkSet.AddKey(jwkKey)
-
-	jwkJSON, err := json.Marshal(jwkSet)
-	require.NoError(t, err)
-
-	// Create a mock JWKS server
-	jwkServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(jwkJSON)
-	}))
-	defer jwkServer.Close()
-
-	// Create a mock OpenID configuration server
-	openIDConfig := oidc.DiscoveryConfiguration{
-		Issuer:                testIssuer,
-		JwksURI:               jwkServer.URL,
-		AuthorizationEndpoint: "https://test-tenant.b2clogin.com/test-tenant.onmicrosoft.com/oauth2/v2.0/authorize",
-		TokenEndpoint:         "https://test-tenant.b2clogin.com/test-tenant.onmicrosoft.com/oauth2/v2.0/token",
-	}
-
-	openIDConfigJSON, err := json.Marshal(openIDConfig)
-	require.NoError(t, err)
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(openIDConfigJSON)
-	}))
-	defer server.Close()
+	ctx := context.Background()
 
 	tests := []struct {
 		name          string
-		issuers       map[string]string
-		clientID      string
-		options       []ClientOption
-		wantError     bool
+		config        *Config
 		expectedError error
 	}{
 		{
-			name: "Valid parameters, ok",
-			issuers: map[string]string{
-				testIssuer: server.URL,
-			},
-			clientID:      testClientID,
-			options:       []ClientOption{WithDefaultIssuer(testIssuer)},
-			expectedError: nil,
+			name:          "nil config",
+			config:        nil,
+			expectedError: errors.New("config cannot be nil"),
 		},
 		{
-			name:          "Empty issuers, fails",
-			issuers:       map[string]string{},
-			clientID:      testClientID,
-			expectedError: errors.New("at least one trusted issuer is required"),
+			name: "disabled config",
+			config: &Config{
+				Enabled:       false,
+				ADB2CClientID: testClientID,
+				ADB2CTrustedIssuers: map[string]TrustedIssuer{
+					"test": {
+						IssuerURL:    testIssuer,
+						DiscoveryURL: "https://test.example.com/.well-known/openid_configuration",
+					},
+				},
+			},
+			expectedError: errors.New("ADB2C is not enabled in configuration"),
 		},
 		{
-			name: "Invalid discovery URL, fails",
-			issuers: map[string]string{
-				testIssuer: "http://invalid-url",
+			name: "invalid config - missing client ID",
+			config: &Config{
+				Enabled:             true,
+				ADB2CClientID:       "",
+				ADB2CTrustedIssuers: map[string]TrustedIssuer{},
 			},
-			clientID:      testClientID,
-			expectedError: errors.New("failed to initialize OpenID configurations: failed to fetch OpenID configuration for issuer"),
+			expectedError: errors.New("invalid configuration"),
+		},
+		{
+			name: "invalid config - no trusted issuers",
+			config: &Config{
+				Enabled:             true,
+				ADB2CClientID:       testClientID,
+				ADB2CTrustedIssuers: map[string]TrustedIssuer{},
+			},
+			expectedError: errors.New("invalid configuration"),
+		},
+		{
+			name: "valid config but network error",
+			config: &Config{
+				Enabled:       true,
+				ADB2CClientID: testClientID,
+				ADB2CTrustedIssuers: map[string]TrustedIssuer{
+					"test": {
+						IssuerURL:    testIssuer,
+						DiscoveryURL: "https://invalid.example.com/.well-known/openid_configuration",
+					},
+				},
+			},
+			expectedError: errors.New("failed to initialize OpenID configurations"),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctx := context.Background()
-			client, err := NewClient(ctx, tt.issuers, tt.clientID, tt.options...)
+			client, err := NewClient(ctx, tt.config)
 			if tt.expectedError != nil {
 				assert.Contains(t, err.Error(), tt.expectedError.Error())
 				assert.Nil(t, client)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, client)
-				assert.Equal(t, testIssuer, client.Issuer)
+				assert.Equal(t, tt.config.ADB2CClientID, client.ClientID)
+			}
+		})
+	}
+}
+
+func TestNewClientWithTrustedIssuers(t *testing.T) {
+	ctx := context.Background()
+
+	tests := []struct {
+		name          string
+		issuers       map[string]string
+		clientID      string
+		options       []ClientOption
+		expectedError error
+	}{
+		{
+			name:          "Valid parameters but network error",
+			issuers:       map[string]string{testIssuer: "https://test.example.com/.well-known/openid_configuration"},
+			clientID:      testClientID,
+			options:       []ClientOption{},
+			expectedError: errors.New("failed to initialize OpenID configurations"),
+		},
+		{
+			name:          "Empty issuers, fails",
+			issuers:       map[string]string{},
+			clientID:      testClientID,
+			options:       []ClientOption{},
+			expectedError: errors.New("at least one trusted issuer is required"),
+		},
+		{
+			name:          "Invalid discovery URL, fails",
+			issuers:       map[string]string{testIssuer: "https://invalid.example.com/.well-known/openid_configuration"},
+			clientID:      testClientID,
+			options:       []ClientOption{},
+			expectedError: errors.New("failed to initialize OpenID configurations"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			client, err := newClientWithTrustedIssuers(ctx, tt.issuers, tt.clientID, tt.options...)
+			if tt.expectedError != nil {
+				assert.Contains(t, err.Error(), tt.expectedError.Error())
+				assert.Nil(t, client)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, client)
 				assert.Equal(t, tt.clientID, client.ClientID)
 			}
 		})
@@ -224,11 +255,10 @@ func TestKeyRefresh(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client, err := NewClient(
+	client, err := newClientWithTrustedIssuers(
 		ctx,
 		trustedIssuers,
 		testClientID,
-		WithDefaultIssuer(testIssuer),
 		WithRefreshInterval(time.Nanosecond), // Very short interval to ensure refresh
 	)
 	require.NoError(t, err)
@@ -330,7 +360,12 @@ func TestValidateToken(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client, err := NewClient(ctx, trustedIssuers, testClientID, WithDefaultIssuer(testIssuer))
+	client, err := newClientWithTrustedIssuers(
+		ctx,
+		trustedIssuers,
+		testClientID,
+		WithRefreshInterval(time.Nanosecond), // Very short interval to ensure refresh
+	)
 	require.NoError(t, err)
 
 	// Create a valid token
@@ -505,11 +540,11 @@ func TestKeyRotationHandling(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client, err := NewClient(
+	client, err := newClientWithTrustedIssuers(
 		ctx,
 		trustedIssuers,
 		testClientID,
-		WithDefaultIssuer(testIssuer),
+		WithRefreshInterval(time.Nanosecond),
 	)
 	require.NoError(t, err)
 
@@ -610,7 +645,12 @@ func TestMultipleTrustedIssuers(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	client, err := NewClient(ctx, trustedIssuers, testClientID, WithDefaultIssuer(issuer1))
+	client, err := newClientWithTrustedIssuers(
+		ctx,
+		trustedIssuers,
+		testClientID,
+		WithRefreshInterval(time.Nanosecond),
+	)
 	require.NoError(t, err)
 
 	// Create tokens from each issuer
