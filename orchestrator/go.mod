@@ -11,7 +11,7 @@ require (
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.1.0
 	github.com/beevik/etree v1.5.1
 	github.com/braineet/saml v0.4.15
-	github.com/go-jose/go-jose/v4 v4.0.5
+	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/google/uuid v1.6.0
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/knadh/koanf/providers/env v1.1.0
