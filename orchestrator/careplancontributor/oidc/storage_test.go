@@ -78,21 +78,42 @@ func TestStorage_CreateAccessToken(t *testing.T) {
 }
 
 func TestStorage_AuthorizeClientIDSecret(t *testing.T) {
-	storage := Storage{
-		mux: &sync.RWMutex{},
-		clients: map[string]Client{
-			"client": {
-				id:     "client",
-				secret: "ba80a943e1c6c6d9939c189df994fb4f2b5fa9c106c49580acbde7f53b087bda", // 'foo', salted with client_id in the form of `client|secret`
+	t.Run("sha256", func(t *testing.T) {
+		storage := Storage{
+			mux: &sync.RWMutex{},
+			clients: map[string]Client{
+				"client": {
+					id:     "client",
+					secret: "sha256|ba80a943e1c6c6d9939c189df994fb4f2b5fa9c106c49580acbde7f53b087bda", // 'foo', salted with client_id in the form of `client|secret`
+				},
 			},
-		},
-	}
-	t.Run("valid", func(t *testing.T) {
-		err := storage.AuthorizeClientIDSecret(context.Background(), "client", "foo")
-		require.NoError(t, err)
+		}
+		t.Run("valid", func(t *testing.T) {
+			err := storage.AuthorizeClientIDSecret(context.Background(), "client", "foo")
+			require.NoError(t, err)
+		})
+		t.Run("invalid", func(t *testing.T) {
+			err := storage.AuthorizeClientIDSecret(context.Background(), "client", "bar")
+			require.EqualError(t, err, "invalid client credentials")
+		})
 	})
-	t.Run("invalid", func(t *testing.T) {
-		err := storage.AuthorizeClientIDSecret(context.Background(), "client", "bar")
-		require.EqualError(t, err, "invalid client credentials")
+	t.Run("plaintext", func(t *testing.T) {
+		storage := Storage{
+			mux: &sync.RWMutex{},
+			clients: map[string]Client{
+				"client": {
+					id:     "client",
+					secret: "foo",
+				},
+			},
+		}
+		t.Run("valid", func(t *testing.T) {
+			err := storage.AuthorizeClientIDSecret(context.Background(), "client", "foo")
+			require.NoError(t, err)
+		})
+		t.Run("invalid", func(t *testing.T) {
+			err := storage.AuthorizeClientIDSecret(context.Background(), "client", "bar")
+			require.EqualError(t, err, "invalid client credentials")
+		})
 	})
 }
