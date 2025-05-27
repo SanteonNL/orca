@@ -13,6 +13,7 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"strings"
 	"sync"
 	"time"
 )
@@ -184,9 +185,15 @@ func (o Storage) AuthorizeClientIDSecret(ctx context.Context, clientID, clientSe
 	if err != nil {
 		return err
 	}
-	hashedClientSecret := sha256.Sum256([]byte(clientID + "|" + clientSecret))
-	hashedClientSecretStr := hex.EncodeToString(hashedClientSecret[:])
-	if client.secret != hashedClientSecretStr {
+	computedClientSecret := clientSecret
+	configuredClientSecret := client.secret
+	const sha256Prefix = "sha256|"
+	if strings.HasPrefix(client.secret, sha256Prefix) {
+		hashedClientSecret := sha256.Sum256([]byte(clientID + "|" + clientSecret))
+		computedClientSecret = hex.EncodeToString(hashedClientSecret[:])
+		configuredClientSecret = strings.TrimPrefix(configuredClientSecret, sha256Prefix)
+	}
+	if configuredClientSecret != computedClientSecret {
 		return errors.New("invalid client credentials")
 	}
 	return nil

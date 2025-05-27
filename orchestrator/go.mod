@@ -7,11 +7,11 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.9.0
 	github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.9.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.3.1
-	github.com/SanteonNL/go-fhir-client v0.4.0
+	github.com/SanteonNL/go-fhir-client v0.5.0
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.1.0
 	github.com/beevik/etree v1.5.1
 	github.com/braineet/saml v0.4.15
-	github.com/go-jose/go-jose/v4 v4.0.5
+	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/google/uuid v1.6.0
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/knadh/koanf/providers/env v1.1.0
@@ -23,7 +23,7 @@ require (
 	github.com/zitadel/oidc/v3 v3.38.1
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250508174153-3ca2640a22ea
 	go.uber.org/mock v0.5.2
-	golang.org/x/oauth2 v0.29.0
+	golang.org/x/oauth2 v0.30.0
 )
 
 require (
