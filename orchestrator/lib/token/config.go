@@ -1,4 +1,4 @@
-package adb2c
+package token
 
 import (
 	"errors"
