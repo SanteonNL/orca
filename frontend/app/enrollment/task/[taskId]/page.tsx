@@ -10,6 +10,7 @@ import DataViewer from '@/components/data-viewer'
 import { viewerFeatureIsEnabled } from '@/app/actions'
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
 import {getLaunchableApps} from "@/app/applaunch";
+import {Questionnaire} from "fhir/r4";
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
@@ -18,7 +19,7 @@ export default function EnrollmentTaskPage() {
     const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
     const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
     const [showViewer, setShowViewer] = useState(false)
-    const [shouldReload, setShouldReload] = useState(false);
+    const [currentQuestionnaire, setCurrentQuestionnaire] = useState({} as Questionnaire);
 
     useEffect(() => {
         if (taskId) {
@@ -54,16 +55,6 @@ export default function EnrollmentTaskPage() {
             })
     }, [serviceRequest])
 
-    useEffect(() => {
-        if (shouldReload) {
-            const timeout = setTimeout(() => {
-                window.location.reload();
-                setShouldReload(false);
-            }, 1000);
-            return () => clearTimeout(timeout);
-        }
-    }, [shouldReload]);
-
     if (loading || !initialized) return <Loading />
 
     if (!task) {
@@ -76,16 +67,23 @@ export default function EnrollmentTaskPage() {
             <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
 
+    useEffect(() => {
+        if (!taskToQuestionnaireMap) {
+            return undefined
+        }
+        if (!subTasks || subTasks.length === 0) {
+            return undefined
+        }
+        setCurrentQuestionnaire(taskToQuestionnaireMap[subTasks[0].id!!])
+    }, [taskToQuestionnaireMap, subTasks]);
+
     if (task.status === "received") {
-        if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
-            if (!shouldReload) {
-                setShouldReload(true);
-            }
+        if (!currentQuestionnaire || !subTasks?.[0]) {
             return <>Task is ontvangen, maar er ontbreekt informatie.</>
         }
         return <>
             <QuestionnaireRenderer
-                questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
+                questionnaire={currentQuestionnaire}
                 inputTask={subTasks[0]}
             />
             <TaskSseConnectionStatus />
