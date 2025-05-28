@@ -77,10 +77,7 @@ export default function EnrollmentTaskPage() {
             <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
 
-    if (task.status === "received") {
-        if (!currentQuestionnaire || !subTasks?.[0]) {
-            return <>Task is ontvangen, maar er ontbreekt informatie.</>
-        }
+    if (currentQuestionnaire && subTasks?.[0]) {
         return <>
             <QuestionnaireRenderer
                 questionnaire={currentQuestionnaire}
