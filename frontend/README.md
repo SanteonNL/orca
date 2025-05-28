@@ -11,6 +11,7 @@ This is a [Next.js](https://nextjs.org/) project bootstrapped with [`create-next
 ## Configuration
 The following configuration options are supported:
 
+- `TITLE`: the title of the application, defaults to `ORCA Frontend`.
 - `ORCA_PATIENT_IDENTIFIER_SYSTEM`: the FHIR coding system for patient identifiers, defaults to `http://fhir.nl/fhir/NamingSystem/bsn`.
 - `SUPPORT_CONTACT_LINK`: a link to support resource, e.g. a `mailto:` link or an `https://` link to a support page. It will be shown on error pages.
 - `DATA_VIEWER_ENABLED`: When an enrolment `Task` is either `in-progress` or `accepted`, the frontend can use the the CarePlanContributor's (CPC) aggregate functionality to query related resources (like `Observations`) for this specific enrolment. 

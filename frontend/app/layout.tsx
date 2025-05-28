@@ -10,7 +10,7 @@ const font = Roboto({
 });
 
 export const metadata: Metadata = {
-  title: "ORCA Frontend",
+  title: process.env.TITLE || "ORCA Frontend",
   description: "This app renders Questionnaires based on the SDC specification. It allows users to input required data before a Task is published to placer(s)",
 };
 
