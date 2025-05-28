@@ -10,7 +10,7 @@ import DataViewer from '@/components/data-viewer'
 import { viewerFeatureIsEnabled } from '@/app/actions'
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
 import {getLaunchableApps} from "@/app/applaunch";
-import {Questionnaire, Task} from "fhir/r4";
+import {Questionnaire} from "fhir/r4";
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
@@ -20,8 +20,6 @@ export default function EnrollmentTaskPage() {
     const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
     const [showViewer, setShowViewer] = useState(false)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState({} as Questionnaire);
-    const [currentSubTask, setCurrentSubTask] = useState({} as Task);
-    const [currentStep, setCurrentStep] = useState(0);
 
     useEffect(() => {
         if (taskId) {
@@ -57,21 +55,15 @@ export default function EnrollmentTaskPage() {
             })
     }, [serviceRequest])
 
-
     useEffect(() => {
-        if(!subTasks || subTasks.length === 0) {
-            setCurrentStep(1);
+        if (!taskToQuestionnaireMap) {
+            return undefined
         }
-        else if(taskToQuestionnaireMap && subTasks?.[0]?.id) {
-            setCurrentSubTask(subTasks[0])
-            setCurrentQuestionnaire(taskToQuestionnaireMap[currentSubTask.id!!])
-            setCurrentStep(2);
+        if (!subTasks || subTasks.length === 0) {
+            return undefined
         }
-        else
-        {
-            setCurrentStep(0)
-        }
-    }, [taskToQuestionnaireMap, currentQuestionnaire, subTasks]);
+        setCurrentQuestionnaire(taskToQuestionnaireMap[subTasks[0].id!!])
+    }, [taskToQuestionnaireMap, subTasks]);
 
     if (loading || !initialized) return <Loading />
 
@@ -85,40 +77,37 @@ export default function EnrollmentTaskPage() {
             <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
 
-    switch (currentStep) {
-        case 0:
-            return <div className='w-full flex flex-col auto-cols-max'>
-                {
-                    task && executionText(task.status) ?
-                        <p className="w-[568px] text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
+    if (currentQuestionnaire && subTasks?.[0]) {
+        return <>
+            <QuestionnaireRenderer
+                questionnaire={currentQuestionnaire}
+                inputTask={subTasks[0]}
+            />
+            <TaskSseConnectionStatus />
+        </>
+    } else {
+        return <div className='w-full flex flex-col auto-cols-max'>
+            {
+                task && executionText(task.status) ?
+                    <p className="w-[568px] text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
+            }
+            <div className="w-[568px] grid grid-cols-[1fr_2fr] gap-y-4">
+                <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} noUpperCase={true} />
+                <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
+                <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"} />
+                <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)} />
+                <StatusElement label="Status"
+                    value={statusLabel(task.status) + " op " + (task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend")} />
+                {task.statusReason
+                    ? <StatusElement label="Statusreden"
+                        value={task.statusReason.text ?? task.statusReason.coding?.at(0)?.code ?? "Onbekend"} />
+                    : <></>
                 }
-                <div className="w-[568px] grid grid-cols-[1fr_2fr] gap-y-4">
-                    <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} noUpperCase={true} />
-                    <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
-                    <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"} />
-                    <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)} />
-                    <StatusElement label="Status"
-                                   value={statusLabel(task.status) + " op " + (task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend")} />
-                    {task.statusReason
-                        ? <StatusElement label="Statusreden"
-                                         value={task.statusReason.text ?? task.statusReason.coding?.at(0)?.code ?? "Onbekend"} />
-                        : <></>
-                    }
-                </div>
-                {patientViewerUrl && <a href={patientViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
-                {showViewer && <DataViewer task={task} />}
-                <TaskSseConnectionStatus />
             </div>
-        case 1:
-            return <Loading />
-        case 2:
-            return <>
-                <QuestionnaireRenderer
-                    questionnaire={currentQuestionnaire}
-                    inputTask={currentSubTask}
-                />
-                <TaskSseConnectionStatus />
-            </>
+            {patientViewerUrl && <a href={patientViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
+            {showViewer && <DataViewer task={task} />}
+            <TaskSseConnectionStatus />
+        </div>
     }
 }
 
