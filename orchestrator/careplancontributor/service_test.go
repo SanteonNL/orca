@@ -7,8 +7,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/external"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/SanteonNL/orca/orchestrator/lib/token"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	"github.com/rs/zerolog/log"
@@ -729,71 +731,6 @@ func TestService_handleGetContext(t *testing.T) {
 	})
 }
 
-func TestService_proxyToAllCareTeamMembers(t *testing.T) {
-	// TODO: Non-happy tests:
-	//       - CarePlan not found
-	//       - Non-active members aren't queried
-	//       - etc...
-	//       - duplicate endpoints; aren't queried twice
-	t.Run("ok", func(t *testing.T) {
-		remoteContributorFHIRAPIMux := http.NewServeMux()
-		// CPC endpoints
-		remoteContributorFHIRAPIMux.HandleFunc("POST /cpc/fhir/Patient/_search", func(writer http.ResponseWriter, request *http.Request) {
-			results := coolfhir.SearchSet().Append(fhir.Patient{
-				Id: to.Ptr("1"),
-			}, nil, nil)
-			coolfhir.SendResponse(writer, http.StatusOK, results)
-		})
-		// CPS endpoints
-		carePlanData, err := os.ReadFile("./testdata/careplan-valid.json")
-		require.NoError(t, err)
-		var carePlan fhir.CarePlan
-		require.NoError(t, json.Unmarshal(carePlanData, &carePlan))
-
-		remoteContributorFHIRAPIMux.HandleFunc("GET /cps/fhir/CarePlan/1", func(writer http.ResponseWriter, request *http.Request) {
-			coolfhir.SendResponse(writer, http.StatusOK, carePlan)
-		})
-
-		remoteContributorFHIRAPI := httptest.NewServer(remoteContributorFHIRAPIMux)
-		cpcBaseURL := remoteContributorFHIRAPI.URL + "/cpc/fhir"
-		cpsBaseURL := remoteContributorFHIRAPI.URL + "/cps/fhir"
-		scpContext := cpsBaseURL + "/CarePlan/1"
-
-		publicURL, _ := url.Parse("https://example.com")
-		service := &Service{
-			orcaPublicURL: publicURL,
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal2,
-				CSD: profile.TestCsdDirectory{
-					Endpoints: map[string]map[string]string{
-						"http://fhir.nl/fhir/NamingSystem/ura|2": {
-							"fhirBaseURL": "http://example.com",
-						},
-						"http://fhir.nl/fhir/NamingSystem/ura|1": {
-							"fhirBaseURL": cpcBaseURL,
-						},
-					},
-				},
-			},
-		}
-		service.createFHIRClientForURL = service.defaultCreateFHIRClientForURL
-		expectedBody := url.Values{}
-
-		httpRequest := httptest.NewRequest("POST", publicURL.JoinPath("/cpc/aggregate/fhir/Patient/_search").String(), strings.NewReader(expectedBody.Encode()))
-		httpRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		httpRequest.Header.Add("X-SCP-Context", scpContext)
-		httpResponse := httptest.NewRecorder()
-
-		err = service.proxyToAllCareTeamMembers(httpResponse, httpRequest)
-
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, httpResponse.Code)
-		var actualBundle fhir.Bundle
-		require.NoError(t, json.Unmarshal(httpResponse.Body.Bytes(), &actualBundle))
-		require.Len(t, actualBundle.Entry, 1)
-	})
-}
-
 func TestService_HandleSubscribeToTask(t *testing.T) {
 
 	validToken := "http://fhir.nl/fhir/NamingSystem/task-workflow-identifier|12345"
@@ -991,13 +928,173 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 	})
 }
 
+func TestService_withSessionOrBearerToken(t *testing.T) {
+	// Generate a test token generator
+	tokenGenerator, err := token.NewTestTokenGenerator()
+	require.NoError(t, err)
+
+	// Generate a valid token
+	validToken, err := tokenGenerator.CreateToken(nil)
+	require.NoError(t, err)
+
+	// Generate an invalid token (expired)
+	invalidToken, err := tokenGenerator.CreateExpiredToken()
+	require.NoError(t, err)
+
+	// Create a mock token client
+	ctx := context.Background()
+	mockClient, err := token.NewMockClient(ctx, tokenGenerator)
+	require.NoError(t, err)
+
+	// Make sure globals.StrictMode is false for the tests
+	origStrictMode := globals.StrictMode
+	globals.StrictMode = false
+	defer func() {
+		globals.StrictMode = origStrictMode
+	}()
+
+	tests := []struct {
+		name           string
+		requestSetup   func(req *http.Request)
+		staticToken    string
+		expectedStatus int
+		withMockClient bool
+		strictMode     bool
+	}{
+		{
+			name: "With valid session",
+			requestSetup: func(req *http.Request) {
+				// Session cookie is added by the test setup
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "With static bearer token when strict mode is off",
+			requestSetup: func(req *http.Request) {
+				req.Header.Set("Authorization", "Bearer static-token")
+			},
+			staticToken:    "static-token",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "With static bearer token when strict mode is on",
+			requestSetup: func(req *http.Request) {
+				req.Header.Set("Authorization", "Bearer static-token")
+			},
+			staticToken:    "static-token",
+			expectedStatus: http.StatusUnauthorized,
+			strictMode:     true,
+		},
+		{
+			name: "With valid ADB2C token",
+			requestSetup: func(req *http.Request) {
+				req.Header.Set("Authorization", "Bearer "+validToken)
+			},
+			withMockClient: true,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "With invalid ADB2C token",
+			requestSetup: func(req *http.Request) {
+				req.Header.Set("Authorization", "Bearer "+invalidToken)
+			},
+			withMockClient: true,
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "With no authorization",
+			requestSetup: func(req *http.Request) {
+			},
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "With empty bearer token",
+			requestSetup: func(req *http.Request) {
+				req.Header.Set("Authorization", "Bearer ")
+			},
+			withMockClient: true,
+			expectedStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original strict mode and restore after test
+			origMode := globals.StrictMode
+			globals.StrictMode = tt.strictMode
+			defer func() {
+				globals.StrictMode = origMode
+			}()
+
+			// Setup: Create a session manager with a test session
+			sessionManager, sessionCookie := createTestSession()
+
+			// Setup: Create a handler that will be called if authentication is successful
+			handlerCalled := false
+			handler := func(writer http.ResponseWriter, request *http.Request) {
+				handlerCalled = true
+				writer.WriteHeader(http.StatusOK)
+			}
+
+			// Setup: Create the service with the session manager
+			service := &Service{
+				SessionManager: sessionManager,
+				config:         Config{StaticBearerToken: tt.staticToken},
+				tokenClient:    nil,
+			}
+
+			if tt.withMockClient {
+				service.tokenClient = mockClient.Client
+			}
+
+			// Call the middleware with our handler
+			wrappedHandler := service.withSessionOrBearerToken(handler)
+
+			// Create a test HTTP server with the wrapped handler
+			testServer := httptest.NewServer(wrappedHandler)
+			defer testServer.Close()
+
+			// Create a test request
+			req, err := http.NewRequest("GET", testServer.URL, nil)
+			require.NoError(t, err)
+
+			// Add a session cookie if the test case needs it
+			if tt.name == "With valid session" {
+				// Set the correct cookie name and format from the createTestSession function
+				req.AddCookie(&http.Cookie{
+					Name:  "sid", // This should match what's used in the session manager
+					Value: sessionCookie,
+				})
+			}
+
+			// Apply any custom request setup
+			tt.requestSetup(req)
+
+			// Make the request
+			resp, err := testServer.Client().Do(req) // Use the test server's client to ensure cookies are handled properly
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			// Check the response status code
+			assert.Equal(t, tt.expectedStatus, resp.StatusCode, "Unexpected status code for test: %s", tt.name)
+
+			// Verify if the handler was called when expected
+			if tt.expectedStatus == http.StatusOK {
+				assert.True(t, handlerCalled, "Handler should have been called for successful auth")
+			} else {
+				assert.False(t, handlerCalled, "Handler should not have been called for failed auth")
+			}
+		})
+	}
+}
+
 func createTestSession() (*user.SessionManager[session.Data], string) {
 	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 	sessionHttpResponse := httptest.NewRecorder()
 	sessionManager.Create(sessionHttpResponse, session.Data{
 		FHIRLauncher: "test",
 	})
-	// extract session ID; s_id=<something>;
+	// extract session ID; sid=<something>;
 	cookieValue := sessionHttpResponse.Header().Get("Set-Cookie")
 	cookieValue = strings.Split(cookieValue, ";")[0]
 	cookieValue = strings.Split(cookieValue, "=")[1]

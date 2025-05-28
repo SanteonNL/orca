@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
+	"github.com/SanteonNL/orca/orchestrator/lib/token"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ type Config struct {
 	FrontendConfig FrontendConfig   `koanf:"frontend"`
 	AppLaunch      applaunch.Config `koanf:"applaunch"`
 	OIDCProvider   oidc.Config      `koanf:"oidc"`
+	TokenClient    token.Config     `koanf:"tokenclient"`
 	// FHIR contains the configuration to connect to the FHIR API holding EHR data,
 	// to be made available through the CarePlanContributor.
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
