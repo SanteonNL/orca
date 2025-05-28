@@ -8,6 +8,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"context"
+	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
@@ -16,9 +18,12 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/lib/token"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"io"
+	"strings"
 )
 
 var notificationCounter = new(atomic.Int32)
@@ -175,6 +180,291 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.Error(t, err)
 		require.Len(t, fetchedBundle.Entry, 0)
 	}
+}
+
+func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
+	notificationEndpoint := setupNotificationEndpoint(t)
+	carePlanServiceURL, _, _ := setupIntegrationTest(t, notificationEndpoint)
+
+	// Setup mock external endpoint that will be called after JWT validation
+	var externalEndpointCalled bool
+	var receivedRequestBody string
+	mockExternalEndpoint := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		externalEndpointCalled = true
+
+		// Read the request body
+		body, _ := io.ReadAll(r.Body)
+		receivedRequestBody = string(body)
+
+		// Return a mock FHIR Bundle response
+		mockBundle := fhir.Bundle{
+			Type: fhir.BundleTypeSearchset,
+			Entry: []fhir.BundleEntry{
+				{
+					Resource: json.RawMessage(`{
+						"resourceType": "Patient",
+						"id": "test-patient-123",
+						"identifier": [
+							{
+								"system": "http://fhir.nl/fhir/NamingSystem/bsn",
+								"value": "1333333337"
+							}
+						]
+					}`),
+				},
+			},
+		}
+
+		w.Header().Set("Content-Type", "application/fhir+json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(mockBundle)
+	}))
+	defer mockExternalEndpoint.Close()
+
+	// Create a test token generator for JWT validation
+	tokenGen, err := token.NewTestTokenGenerator()
+	require.NoError(t, err)
+
+	// Create a mock token client
+	ctx := context.Background()
+	mockTokenClient, err := token.NewMockClient(ctx, tokenGen)
+	require.NoError(t, err)
+
+	// Setup CPC service with JWT validation enabled
+	cpcConfig := DefaultConfig()
+	cpcConfig.Enabled = true
+	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
+	cpcConfig.HealthDataViewEndpointEnabled = true
+	cpcConfig.TokenClient.Enabled = true
+	cpcConfig.TokenClient.ADB2CClientID = tokenGen.ClientID
+	cpcConfig.TokenClient.ADB2CTrustedIssuers = map[string]token.TrustedIssuer{
+		"test": {
+			IssuerURL:    tokenGen.GetIssuerURL(),
+			DiscoveryURL: "https://mock-discovery.example.com/.well-known/openid_configuration",
+		},
+	}
+
+	sessionManager, _ := createTestSession()
+	messageBroker, err := messaging.New(messaging.Config{}, nil)
+	require.NoError(t, err)
+
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), nil, carePlanServiceURL)
+	require.NoError(t, err)
+
+	cpc.tokenClient = mockTokenClient.Client
+
+	// Setup HTTP server for CPC
+	cpcServerMux := http.NewServeMux()
+	cpcHttpService := httptest.NewServer(cpcServerMux)
+	defer cpcHttpService.Close()
+	cpc.RegisterHandlers(cpcServerMux)
+
+	t.Run("Valid JWT token allows access to external endpoint", func(t *testing.T) {
+		externalEndpointCalled = false
+		receivedRequestBody = ""
+
+		// Create a valid JWT token
+		validToken, err := tokenGen.CreateToken(map[string]interface{}{
+			"sub":   "test-user-123",
+			"name":  "Test User",
+			"email": "test@example.com",
+			"roles": []string{"User", "Admin"},
+		})
+		require.NoError(t, err)
+
+		// Create HTTP client with JWT token
+		client := &http.Client{}
+
+		// Make request to CPC external endpoint with JWT token
+		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient/test-patient-123", nil)
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer "+validToken)
+		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// Verify the request was successful
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		// Verify the external endpoint was called
+		require.True(t, externalEndpointCalled, "External endpoint should have been called")
+
+		// Verify the response contains expected FHIR data
+		var responseBundle fhir.Bundle
+		err = json.NewDecoder(resp.Body).Decode(&responseBundle)
+		require.NoError(t, err)
+		require.Equal(t, fhir.BundleTypeSearchset, responseBundle.Type)
+		require.Len(t, responseBundle.Entry, 1)
+
+		// Verify the patient data in the response by parsing the JSON
+		var patient fhir.Patient
+		err = json.Unmarshal(responseBundle.Entry[0].Resource, &patient)
+		require.NoError(t, err)
+		require.Equal(t, "test-patient-123", *patient.Id)
+	})
+
+	t.Run("Invalid JWT token denies access", func(t *testing.T) {
+		externalEndpointCalled = false
+
+		// Create an invalid (expired) JWT token
+		expiredToken, err := tokenGen.CreateExpiredToken()
+		require.NoError(t, err)
+
+		// Create HTTP client with expired JWT token
+		client := &http.Client{}
+
+		// Make request to CPC external endpoint with expired JWT token
+		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient/test-patient-123", nil)
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer "+expiredToken)
+		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// Verify the request was denied
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+		// Verify the external endpoint was NOT called
+		require.False(t, externalEndpointCalled, "External endpoint should not have been called with invalid token")
+	})
+
+	t.Run("Malformed JWT token denies access", func(t *testing.T) {
+		externalEndpointCalled = false
+
+		// Create HTTP client with malformed JWT token
+		client := &http.Client{}
+
+		// Make request to CPC external endpoint with malformed JWT token
+		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient/test-patient-123", nil)
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer invalid.malformed.token")
+		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// Verify the request was denied
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+		// Verify the external endpoint was NOT called
+		require.False(t, externalEndpointCalled, "External endpoint should not have been called with malformed token")
+	})
+
+	t.Run("Missing JWT token denies access", func(t *testing.T) {
+		externalEndpointCalled = false
+
+		// Create HTTP client without JWT token
+		client := &http.Client{}
+
+		// Make request to CPC external endpoint without JWT token
+		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient/test-patient-123", nil)
+		require.NoError(t, err)
+		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// Verify the request was denied
+		require.Equal(t, http.StatusUnauthorized, resp.StatusCode)
+
+		// Verify the external endpoint was NOT called
+		require.False(t, externalEndpointCalled, "External endpoint should not have been called without token")
+	})
+
+	t.Run("Valid JWT token with custom claims", func(t *testing.T) {
+		externalEndpointCalled = false
+
+		// Create a valid JWT token with custom claims
+		customClaims := map[string]interface{}{
+			"sub":                       "healthcare-provider-456",
+			"name":                      "Dr. Jane Smith",
+			"email":                     "jane.smith@hospital.com",
+			"roles":                     []string{"Doctor", "Specialist"},
+			"organization":              "Hospital ABC",
+			"extension_CustomAttribute": "custom-value",
+			"groups": []string{
+				"cardiology-department",
+				"senior-staff",
+			},
+		}
+
+		validToken, err := tokenGen.CreateToken(customClaims)
+		require.NoError(t, err)
+
+		// Validate the token to ensure it contains the expected claims
+		claims, err := mockTokenClient.ValidateToken(ctx, validToken, token.WithValidateSignature(false))
+		require.NoError(t, err)
+		require.Equal(t, "healthcare-provider-456", claims.Subject)
+		require.Equal(t, "Dr. Jane Smith", claims.Name)
+		require.Equal(t, []string{"Doctor", "Specialist"}, claims.Roles)
+
+		// Create HTTP client with custom JWT token
+		client := &http.Client{}
+
+		// Make request to CPC external endpoint with custom JWT token
+		req, err := http.NewRequest("POST", cpcHttpService.URL+"/cpc/external/fhir/Patient/_search", strings.NewReader("identifier=1333333337"))
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer "+validToken)
+		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// Verify the request was successful
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		// Verify the external endpoint was called
+		require.True(t, externalEndpointCalled, "External endpoint should have been called")
+
+		// Verify the request body was forwarded correctly
+		require.Equal(t, "identifier=1333333337", receivedRequestBody)
+	})
+
+	t.Run("JWT token validation with signature verification", func(t *testing.T) {
+		// Reset the external endpoint call tracker
+		externalEndpointCalled = false
+
+		// Create a valid JWT token
+		validToken, err := tokenGen.CreateToken(map[string]interface{}{
+			"sub":   "test-user-789",
+			"name":  "Test User with Signature",
+			"email": "signature-test@example.com",
+		})
+		require.NoError(t, err)
+
+		// Validate the token with signature verification enabled
+		claims, err := mockTokenClient.ValidateToken(ctx, validToken, token.WithValidateSignature(true))
+		require.NoError(t, err)
+		require.Equal(t, "test-user-789", claims.Subject)
+		require.Equal(t, "Test User with Signature", claims.Name)
+
+		// Create HTTP client with valid JWT token
+		client := &http.Client{}
+
+		// Make request to CPC external endpoint
+		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient", nil)
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer "+validToken)
+		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
+
+		resp, err := client.Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+
+		// Verify the request was successful
+		require.Equal(t, http.StatusOK, resp.StatusCode)
+
+		// Verify the external endpoint was called
+		require.True(t, externalEndpointCalled, "External endpoint should have been called with valid signature")
+	})
 }
 
 func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL, *httptest.Server, *url.URL) {
