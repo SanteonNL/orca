@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"github.com/rs/zerolog"
 	"strings"
 	"time"
 
@@ -17,6 +18,10 @@ import (
 	"github.com/beevik/etree"
 	"github.com/rs/zerolog/log"
 )
+
+var now = func() time.Time {
+	return time.Now()
+}
 
 type LaunchContext struct {
 	Bsn              string
@@ -33,11 +38,14 @@ const HIX_ORG_OID_SYSTEM = "https://www.cwz.nl/hix-org-oid"
 // parseSamlResponse takes a SAML Response, validates it and extracts the SAML assertion, which is then returned as LaunchContext.
 // If the SAML Assertion is encrypted, it decrypts it.
 func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (LaunchContext, error) {
-	// TODO: Implement the SAML token validation logic
 	doc := etree.NewDocument()
 	decodedResponse, err := base64.StdEncoding.DecodeString(samlResponse)
 	if err != nil {
 		return LaunchContext{}, fmt.Errorf("unable to decode base64 SAML response: %w", err)
+	}
+
+	if log.Ctx(ctx).GetLevel() >= zerolog.DebugLevel {
+		log.Ctx(ctx).Debug().Msgf("Zorgplatform SAMLResponse: %s", samlResponse)
 	}
 
 	err = doc.ReadFromString(string(decodedResponse))
@@ -51,10 +59,20 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, errors.New("SAMLResponse from server contains an error, see log for details")
 	}
 
-	//TODO: Do we want to trim/cleanup values before validating?
+	if err := s.validateResponseExpiry(doc.Root()); err != nil {
+		return LaunchContext{}, fmt.Errorf("SAML response expiration: %w", err)
+	}
+
 	assertion, err := s.decryptAssertion(doc)
 	if err != nil {
 		return LaunchContext{}, fmt.Errorf("unable to decrypt assertion: %w", err)
+	}
+
+	if log.Ctx(ctx).GetLevel() >= zerolog.DebugLevel {
+		debugDoc := etree.NewDocument()
+		debugDoc.SetRoot(assertion)
+		xml, _ := debugDoc.WriteToString()
+		log.Ctx(ctx).Debug().Msgf("Zorgplatform SAMLResponse assertion: %s", xml)
 	}
 
 	// Validate the signature of the assertion using the public key of the Zorgplatform STS
@@ -62,23 +80,12 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("invalid assertion signature: %w", err)
 	}
 
-	// TODO: Do we need this?
-	//if err := s.validateAssertionExpiry(assertion); err != nil {
-	//	return LaunchContext{}, fmt.Errorf("token has expired: %w", err)
-	//}
-
 	if err := s.validateAudience(assertion); err != nil {
 		return LaunchContext{}, fmt.Errorf("invalid audience: %w", err)
 	}
 	if err := s.validateIssuer(assertion); err != nil {
 		return LaunchContext{}, fmt.Errorf("invalid issuer: %w", err)
 	}
-
-	// TODO: Remove this before going to acceptance/production
-	doc = etree.NewDocument()
-	doc.SetRoot(assertion)
-	xml, _ := doc.WriteToString()
-	println("Decrypted assertion:", xml)
 
 	// Extract Subject/NameID and log in the user
 	practitioner, err := s.extractPractitioner(ctx, assertion)
@@ -131,19 +138,21 @@ func (s *Service) decryptAssertion(doc *etree.Document) (*etree.Element, error) 
 	return result.FindElement("Assertion"), nil
 }
 
-func (s *Service) validateAssertionExpiry(ctx context.Context, doc *etree.Document) error {
-	createdElement := doc.Root().FindElement("//u:Timestamp/u:Created")
-	expiresElement := doc.Root().FindElement("//u:Timestamp/u:Expires")
+func (s *Service) validateResponseExpiry(rstResponseCollection *etree.Element) error {
+	securityTokenResponses := rstResponseCollection.FindElements(rstResponseCollection.Space + ":RequestSecurityTokenResponse")
+	if len(securityTokenResponses) != 1 {
+		return fmt.Errorf("expected 1 RequestSecurityTokenResponse, found %d", len(securityTokenResponses))
+	}
+	securityTokenResponse := securityTokenResponses[0]
+	createdElement := securityTokenResponse.FindElement(rstResponseCollection.Space + ":Lifetime/Created")
+	expiresElement := securityTokenResponse.FindElement(rstResponseCollection.Space + ":Lifetime/Expires")
 
 	if createdElement == nil || expiresElement == nil {
 		return fmt.Errorf("timestamp elements not found in the assertion")
 	}
 
-	created := createdElement.Text()
-	expires := expiresElement.Text()
-
-	log.Ctx(ctx).Trace().Msgf("Token created: %s", created)
-	log.Ctx(ctx).Trace().Msgf("Token expires: %s", expires)
+	created := strings.TrimSpace(createdElement.Text())
+	expires := strings.TrimSpace(expiresElement.Text())
 
 	createdTime, err := time.Parse(time.RFC3339Nano, created)
 	if err != nil {
@@ -155,9 +164,9 @@ func (s *Service) validateAssertionExpiry(ctx context.Context, doc *etree.Docume
 		return fmt.Errorf("invalid expires time format: %w", err)
 	}
 
-	now := time.Now().UTC()
-	if now.Before(createdTime) || now.After(expiresTime) {
-		return fmt.Errorf("token is not valid at the current time")
+	currentTime := now()
+	if currentTime.Before(createdTime) || currentTime.After(expiresTime) {
+		return fmt.Errorf("SecurityTokenResponse is not valid at the current time: %s, expected between [%s, %s]", currentTime, createdTime, expiresTime)
 	}
 
 	return nil
@@ -181,8 +190,28 @@ func (s *Service) validateZorgplatformSignature(decryptedAssertion *etree.Elemen
 	return nil //valid
 }
 
-func (s *Service) validateAudience(decryptedAssertion *etree.Element) error {
-	el := decryptedAssertion.FindElement("//AudienceRestriction/Audience")
+func (s *Service) validateAudience(assertion *etree.Element) error {
+	// Check Conditions.NotBefore and NotOnOrAfter
+	conditionsElements := assertion.FindElements("Conditions")
+	if len(conditionsElements) != 1 {
+		return fmt.Errorf("expected exactly one Conditions element, found %d", len(conditionsElements))
+	}
+	conditionsElement := conditionsElements[0]
+	notBefore, err := time.Parse(time.RFC3339Nano, conditionsElement.SelectAttrValue("NotBefore", ""))
+	if err != nil {
+		return fmt.Errorf("invalid Conditions.NotBefore: %w", err)
+	}
+	notOnOrAfter, err := time.Parse(time.RFC3339Nano, conditionsElement.SelectAttrValue("NotOnOrAfter", ""))
+	if err != nil {
+		return fmt.Errorf("invalid Conditions.NotOnOrAfter: %w", err)
+	}
+	currentTime := now()
+	if currentTime.Before(notBefore) || currentTime.After(notOnOrAfter) {
+		return fmt.Errorf("current time %s is not within the Conditions validity period [%s, %s]", currentTime, notBefore, notOnOrAfter)
+	}
+
+	// Check AudienceRestriction
+	el := assertion.FindElement("//AudienceRestriction/Audience")
 	aud := el.Text()
 
 	if aud == s.config.DecryptConfig.Audience {

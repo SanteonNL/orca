@@ -191,6 +191,12 @@ func TestService(t *testing.T) {
 			return http.ErrUseLastResponse
 		},
 	}
+	now = func() time.Time {
+		return time.Date(2024, 11, 06, 15, 57, 0, 0, time.UTC)
+	}
+	defer func() {
+		now = time.Now
+	}()
 
 	t.Run("ok, new Task", func(t *testing.T) {
 		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
