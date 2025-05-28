@@ -61,3 +61,9 @@ pnpm run build
 pnpm run start
 ```
 
+
+## Running locally
+http://localhost:9090/fhir/Patient
+http://localhost:9090/fhir/ServiceRequest
+
+http://localhost:3000/enrollment/new
