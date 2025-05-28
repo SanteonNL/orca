@@ -55,6 +55,16 @@ export default function EnrollmentTaskPage() {
             })
     }, [serviceRequest])
 
+    useEffect(() => {
+        if (!taskToQuestionnaireMap) {
+            return undefined
+        }
+        if (!subTasks || subTasks.length === 0) {
+            return undefined
+        }
+        setCurrentQuestionnaire(taskToQuestionnaireMap[subTasks[0].id!!])
+    }, [taskToQuestionnaireMap, subTasks]);
+
     if (loading || !initialized) return <Loading />
 
     if (!task) {
@@ -66,16 +76,6 @@ export default function EnrollmentTaskPage() {
             <div>{label}:</div>
             <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
-
-    useEffect(() => {
-        if (!taskToQuestionnaireMap) {
-            return undefined
-        }
-        if (!subTasks || subTasks.length === 0) {
-            return undefined
-        }
-        setCurrentQuestionnaire(taskToQuestionnaireMap[subTasks[0].id!!])
-    }, [taskToQuestionnaireMap, subTasks]);
 
     if (task.status === "received") {
         if (!currentQuestionnaire || !subTasks?.[0]) {
