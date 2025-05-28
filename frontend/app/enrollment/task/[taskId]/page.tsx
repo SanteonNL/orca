@@ -108,6 +108,11 @@ export default function EnrollmentTaskPage() {
                         value={task.statusReason.text ?? task.statusReason.coding?.at(0)?.code ?? "Onbekend"} />
                     : <></>
                 }
+                {task.note && task.note.length > 0
+                    ? <StatusElement label="Notitie"
+                                     value={task.note.map(note => note.text).join("\n")} />
+                    : <></>
+                }
             </div>
             {patientViewerUrl && <a href={patientViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
             {showViewer && <DataViewer task={task} />}

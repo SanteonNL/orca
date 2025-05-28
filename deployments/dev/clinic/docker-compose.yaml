@@ -30,10 +30,10 @@ services:
     ports:
       - "1305:1305"
   orchestrator:
-    image: ghcr.io/santeonnl/orca_orchestrator:main
-    #build:
-    #  context: ../../../orchestrator
-    #  dockerfile: Dockerfile
+    #image: ghcr.io/santeonnl/orca_orchestrator:main
+    build:
+      context: ../../../orchestrator
+      dockerfile: Dockerfile
     ports:
       - "3030:8080"
     env_file:
@@ -58,6 +58,7 @@ services:
       # If this value is set, the clinic will send task notifications over http to the provided endpoint. Cannot be used in conjunction with the strict mode
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC=orca-enroll-patient
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-healthcareservices.json,https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-questionnaires.json
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTE_ACCEPTED=Work on the Task will start tomorrow.
     volumes:
       # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
       # used by the Task Filler Engine

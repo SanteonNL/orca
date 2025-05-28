@@ -872,6 +872,21 @@ func (s Service) createFHIRClientForIdentifier(ctx context.Context, fhirBaseURL 
 	return fhirClientFactory(fhirBaseURL, httpClient), httpClient, nil
 }
 
+func (s *Service) getTaskStatusNote(status fhir.TaskStatus) *string {
+	// remove all non A-Z characters
+	mapKey := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' {
+			return r
+		}
+		return -1
+	}, status.Code())
+	log.Info().Msgf("Getting status note for task status: %s (mapKey=%s)", status.Code(), mapKey)
+	if note, ok := s.config.TaskFiller.StatusNote[mapKey]; ok {
+		return &note
+	}
+	return nil
+}
+
 func createFHIRClient(fhirBaseURL *url.URL, httpClient *http.Client) fhirclient.Client {
 	return fhirclient.New(fhirBaseURL, httpClient, coolfhir.Config())
 }

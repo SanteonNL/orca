@@ -29,6 +29,7 @@ import (
 )
 
 func TestService_handleTaskFillerCreate(t *testing.T) {
+	var capturedTask fhir.Task
 	tests := []struct {
 		name                    string
 		ctx                     context.Context
@@ -41,6 +42,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		mock                    func(*mock.MockClient)
 		expectSubmission        bool
 		expectPrimaryTaskStatus *fhir.TaskStatus
+		expectNote              string
 	}{
 		{
 			name:                    "primary task, owner = local organization, triggers subtask creation",
@@ -232,11 +234,13 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				client.EXPECT().
 					Update("Task/primary", gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ string, updatedPrimaryTask *fhir.Task, _ interface{}, options ...fhirclient.Option) error {
+						capturedTask = *updatedPrimaryTask
 						assert.Equal(t, fhir.TaskStatusAccepted, updatedPrimaryTask.Status)
 						return nil
 					})
 			},
 			expectSubmission: true,
+			expectNote:       "Task accepted by TaskFiller",
 		},
 		{
 			name:             "subtask status=completed, primary task status=accepted (nothing should be done)",
@@ -320,6 +324,13 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			service := &Service{
 				workflows: taskengine.DefaultTestWorkflowProvider(),
 				notifier:  notifierMock,
+				config: Config{
+					TaskFiller: TaskFillerConfig{
+						StatusNote: map[string]string{
+							"ACCEPTED": "Task accepted by TaskFiller",
+						},
+					},
+				},
 			}
 			if tt.mock != nil {
 				tt.mock(mockFHIRClient)
@@ -388,10 +399,9 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 						}
 
 						if tt.expectPrimaryTaskStatus != nil {
-							var existingTask fhir.Task
-							err := coolfhir.ResourceInBundle(&capturedTx, coolfhir.EntryHasID("primary"), &existingTask)
+							err := coolfhir.ResourceInBundle(&capturedTx, coolfhir.EntryHasID("primary"), &capturedTask)
 							require.NoError(t, err)
-							require.Equal(t, *tt.expectPrimaryTaskStatus, existingTask.Status)
+							require.Equal(t, *tt.expectPrimaryTaskStatus, capturedTask.Status)
 						}
 						bytes, _ := json.Marshal(mockResponse)
 						_ = json.Unmarshal(bytes, &result)
@@ -409,6 +419,10 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			}
 			for _, bundleEntry := range capturedTx.Entry {
 				require.NotEmpty(t, bundleEntry.Request.Url)
+			}
+			if tt.expectNote != "" {
+				require.Len(t, capturedTask.Note, 1)
+				require.Equal(t, tt.expectNote, capturedTask.Note[0].Text)
 			}
 		})
 	}
