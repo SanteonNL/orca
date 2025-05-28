@@ -78,6 +78,19 @@ export default function EnrollmentTaskPage() {
 
     if (task.status === "received") {
         if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
+            console.log("taskToQuestionnaireMap:")
+            console.log("subTasks?.[0]?.id")
+            console.log(subTasks?.[0]?.id)
+            console.log("taskToQuestionnaireMap[subTasks[0].id]")
+            if (!taskToQuestionnaireMap) {
+                console.log("taskToQuestionnaireMap is undefined")
+            } else {
+                if (!subTasks || subTasks.length === 0) {
+                    console.log("subTasks is undefined or empty")
+                } else {
+                    console.log(taskToQuestionnaireMap[subTasks[0].id!!])
+                }
+            }
             if (!shouldReload) {
                 setShouldReload(true);
             }
