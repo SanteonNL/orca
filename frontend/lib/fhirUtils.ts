@@ -23,7 +23,7 @@ export const patientIdentifierSystem = () => {
 export const createScpClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`
-        : "http://localhost:9090/fhir";
+        : (process.env.ORCA_BASEURL ? `${process.env.ORCA_BASEURL}/orca/cpc/external/fhir` : "http://localhost:9090/fhir");
 
     return new Client({ baseUrl });
 };
@@ -32,7 +32,7 @@ export const createScpClient = () => {
 export const createEhrClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`
-        : "http://localhost:9090/fhir";
+        : (process.env.ORCA_BASEURL ? `${process.env.ORCA_BASEURL}/orca/cpc/ehr/fhir` : "http://localhost:9090/fhir");
 
     return new Client({ baseUrl });
 };
@@ -41,7 +41,7 @@ export const createEhrClient = () => {
 export const createCpsClient = () => {
     const baseUrl = process.env.NODE_ENV === "production"
         ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`
-        : "http://localhost:9090/fhir";
+        : (process.env.ORCA_BASEURL ? `${process.env.ORCA_BASEURL}/orca/cpc/external/fhir` : "http://localhost:9090/fhir");
 
     return new Client({
         baseUrl: baseUrl,
