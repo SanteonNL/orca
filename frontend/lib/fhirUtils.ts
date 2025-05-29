@@ -21,28 +21,19 @@ export const patientIdentifierSystem = () => {
 
 // This function creates a FHIR client to communicate with other (remote) SCP nodes' FHIR APIs.
 export const createScpClient = () => {
-    const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`
-        : "http://localhost:9090/fhir";
-
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`;
     return new Client({ baseUrl });
 };
 
 // This function creates a FHIR client to communicate with the EHR's FHIR API.
 export const createEhrClient = () => {
-    const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`
-        : "http://localhost:9090/fhir";
-
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`;
     return new Client({ baseUrl });
 };
 
 // This function creates a FHIR client to communicate with the ORCA instance's own CarePlanService.
 export const createCpsClient = () => {
-    const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`
-        : "http://localhost:9090/fhir";
-
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`;
     return new Client({
         baseUrl: baseUrl,
         customHeaders: {

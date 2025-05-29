@@ -770,7 +770,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+	service, err := New(config, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	ctx := context.Background()
@@ -987,7 +987,7 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+	service, err := New(config, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()

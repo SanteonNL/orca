@@ -1,30 +1,17 @@
 services:
-  proxy:
-    image: nginx:latest
-    depends_on:
-      nutsnode:
-        condition: service_started
-      ehr:
-        condition: service_started
-      orchestrator:
-        condition: service_started
-    ports:
-      - "9080:8080"
-    volumes:
-      - "./config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   nutsnode:
     image: nutsfoundation/nuts-node:6.1.2
     ports:
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
-      - "../shared_config/policy/:/nuts/config/policy:ro"
-      - "../shared_config/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
+      - "./shared_config/policy/:/nuts/config/policy:ro"
+      - "./shared_config/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
     environment:
       - NUTS_VERBOSITY=debug
       - NUTS_STRICTMODE=false
       - NUTS_HTTP_INTERNAL_ADDRESS=:8081
       - NUTS_AUTH_CONTRACTVALIDATORS=dummy
-      - NUTS_URL=${NUTS_URL}
+      - NUTS_URL=http://nutsnode:8080
       - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
       - NUTS_DISCOVERY_SERVER_IDS=dev:HomeMonitoring2024
       - NUTS_VDR_DIDMETHODS=web
@@ -34,30 +21,46 @@ services:
       - NUTS_NODE_ADDRESS=http://nutsnode:8081
     ports:
       - "1405:1305"
-  frontend:
-    image: ghcr.io/santeonnl/orca_frontend:main
-    # build:
-    #  context: ../../../frontend
-    #  dockerfile: Dockerfile
+  hospital_proxy:
+    image: nginx:latest
+    depends_on:
+      nutsnode:
+        condition: service_started
+      hospital_ehr:
+        condition: service_started
+      hospital_orchestrator:
+        condition: service_started
+    ports:
+      - "8081:8080"
+    volumes:
+      - "./hospital/config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
+  hospital_frontend:
+    #image: ghcr.io/santeonnl/orca_frontend:main
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile-dev
+    volumes:
+      - ../../frontend:/app
+      - /app/node_modules
     environment:
-      - DATA_VIEWER_ENABLED=true
-     # Make sure to copy the .env.secrets.example and fill in the terminology server credentials for the tx server to work
-    env_file:
-      - path: ../../../frontend/.env.secrets
-        required: false
+      #TERMINOLOGY_SERVER_BASE_URL=https://terminologieserver.nl/fhir
+      NEXT_PUBLIC_BASE_PATH: /frontend
+      SUPPORT_CONTACT_LINK: mailto:support@example.com #This link will be shown at the bottom of the error.tsx page if configured
+      PATIENT_VIEWER_URL: https://msc-viewer-url/ehr/patient # When set, this will add a link to the task details page to open the patient in the viewer
+      NEXT_ALLOWED_ORIGINS: localhost:8081
     ports:
       - "3003:3000"
-  orchestrator:
-    image: ghcr.io/santeonnl/orca_orchestrator:main
-    #build:
-    #  context: ../../../orchestrator
-    #  dockerfile: Dockerfile
+  hospital_orchestrator:
+    #image: ghcr.io/santeonnl/orca_orchestrator:main
+    build:
+      context: ../../orchestrator
+      dockerfile: Dockerfile
     ports:
       - "8090:8080"
     volumes:
-      - "./config/test-decrypt-zorgplatform.private.pem:/keys/zorgplatform/test-decrypt-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
-      - "./config/test-sign-zorgplatform.private.pem:/keys/zorgplatform/test-sign-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
-      - "./config/test-tls-zorgplatform.private.pem:/keys/zorgplatform/test-tls-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
+      - "./hospital/config/test-decrypt-zorgplatform.private.pem:/keys/zorgplatform/test-decrypt-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
+      - "./hospital/config/test-sign-zorgplatform.private.pem:/keys/zorgplatform/test-sign-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
+      - "./hospital/config/test-tls-zorgplatform.private.pem:/keys/zorgplatform/test-tls-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
     depends_on:
       fhirstore-healthcheck:
         condition: service_completed_successfully
@@ -67,17 +70,20 @@ services:
         required: false
     environment:
       - ORCA_NUTS_API_URL=http://nutsnode:8081
-      - ORCA_NUTS_PUBLIC_URL=${NUTS_URL}
+      - ORCA_NUTS_PUBLIC_URL=http://nutsnode:8080
       - ORCA_NUTS_SUBJECT=hospital
       - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
-      - ORCA_PUBLIC_URL=${NUTS_URL}/orca
+      - ORCA_PUBLIC_URL=http://localhost:8081/orca
       - ORCA_STRICTMODE=false
       - ORCA_CAREPLANSERVICE_ENABLED=true
       - ORCA_CAREPLANSERVICE_FHIR_URL=http://fhirstore:8080/fhir
+      # Normally, the CPS URL is constructed from ORCA_PUBLIC_URL, but that doesn't work if the CPC is trying to call local CPS in another (or the same, if the ports differ) Docker container.
+      # So, we set the CPS URL here so something every Docker container in the network can call.
+      - ORCA_CAREPLANSERVICE_URL=http://hospital_orchestrator:8080/cps
       - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://fhirstore:8080/fhir
-      - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=${HOSPITAL_URL}/frontend/enrollment
+      - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=http://localhost:8081/frontend/enrollment
       - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       #   Uncomment and set the <...> values below to enable Zorgplatform integration - using zorgplatform production URLs as that is what their developer portal uses
@@ -110,35 +116,78 @@ services:
     image: curlimages/curl:7.87.0
     depends_on:
       - fhirstore
-    entrypoint: ["sh", "-c", "echo 'Starting fhirstore healthcheck...'; while ! curl -s -f http://fhirstore:8080/fhir/metadata; do echo 'Waiting for fhirstore to be ready...'; sleep 5; done; echo 'fhirstore is up and running.'"]
+    entrypoint: ["sh", "-c", "echo 'Starting fhirstore healthcheck...'; while ! curl -s -f http://fhirstore:8080/fhir/Task; do echo 'Waiting for fhirstore to be ready...'; sleep 5; done; echo 'fhirstore is up and running.'"]
     
     # Ensure the container exits successfully after the check
     restart: "no"
-  ehr:
-    image: ghcr.io/santeonnl/orca_hospitalsimulator:main
-    # build:
-    #  context: ../../../hospital_simulator
-    #  dockerfile: Dockerfile
+  hospital_ehr:
+    #image: ghcr.io/santeonnl/orca_hospitalsimulator:main
+    build:
+      context: ../../hospital_simulator
+      dockerfile: Dockerfile-dev
     ports:
       - "3001:3000"
     depends_on:
       - fhirstore
     environment:
+      ORCA_BASE_URL: http://localhost:8081/orca
       ORCA_LOCAL_ORGANIZATION_URA: 4567
       ORCA_LOCAL_ORGANIZATION_NAME: Demo Hospital
       ORCA_PERFORMER_ORGANIZATION_URA: 1234
       ORCA_PERFORMER_ORGANIZATION_NAME: Demo Clinic
-
-#  hospital_sof_adapter:
-#    build:
-#      context: ../../../smartonfhir_backend_adapter
-#      dockerfile: Dockerfile
-#    environment:
-#      - SOF_BACKEND_ADAPTER_FHIR_BASEURL=https://launch.smarthealthit.org/v/r4/sim/WzQsIiIsIiIsIiIsMCwwLDAsIiIsIiIsIiIsIiIsIiIsIiIsIiIsMCwxXQ/fhir
-#      - SOF_BACKEND_ADAPTER_LISTEN_ADDRESS=:8080
-#      - SOF_BACKEND_ADAPTER_OAUTH_CLIENT_ID=canbeanything_for_smart_sandbox
-#      - SOF_BACKEND_ADAPTER_SIGNINGKEY_FILE=/app/jwk.json
-#    ports:
-#      - "8080"
-#    volumes:
-#      - ./config/sof_adapter_signingkey.json:/app/jwk.json:ro
+      NEXT_ALLOWED_ORIGINS: localhost:8081
+      FHIR_BASE_URL: http://fhirstore:8080/fhir
+  clinic_proxy:
+    image: nginx:latest
+    depends_on:
+      - nutsnode
+      - clinic_orchestrator
+    ports:
+      - "8080:8080"
+    volumes:
+      - "./clinic/config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
+  clinic_orchestrator:
+    #image: ghcr.io/santeonnl/orca_orchestrator:main
+    build:
+      context: ../../orchestrator
+      dockerfile: Dockerfile
+    ports:
+      - "3030:8080"
+    env_file:
+      # Allow extra environment variables to be passed in. This is useful for local development, since extra.env isn't committed to the repository.
+      - path: ./extra.env
+        required: false
+    environment:
+      - ORCA_NUTS_API_URL=http://nutsnode:8081
+      - ORCA_NUTS_PUBLIC_URL=http://nutsnode:8080
+      - ORCA_NUTS_SUBJECT=clinic
+      - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
+      - ORCA_PUBLIC_URL=http://localhost:8080/orca
+      - ORCA_STRICTMODE=false
+      - ORCA_MESSAGING_HTTP_ENDPOINT=http://clinic_viewer:3000/viewer/api/delivery
+      - ORCA_MESSAGING_HTTP_TOPICFILTER=orca-enroll-patient
+      - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
+      - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://viewer:3000/viewer/api/fhir
+      # Register an example web application for discovery by other SCP participants.
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_NAME=Example Web Application
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_URL=https://example.com
+      # If this value is set, the clinic will send task notifications over http to the provided endpoint. Cannot be used in conjunction with the strict mode
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC=orca-enroll-patient
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-healthcareservices.json,https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-questionnaires.json
+    volumes:
+      # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
+      # used by the Task Filler Engine
+      - "../../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json:/config/fhir/healthcareservices.json:ro"
+      - "../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
+  clinic_viewer:
+    image: ghcr.io/santeonnl/orca_viewersimulator:main
+    #build:
+    #  context: ../../../viewer_simulator
+    #  dockerfile: Dockerfile
+    environment:
+      CLINIC_ORCA_URL: http://clinic_orchestrator:8080/
+      CLINIC_ORCA_BEARERTOKEN: valid
+      CLINIC_IDENTIFIER: http://fhir.nl/fhir/NamingSystem/ura|1234
+      CLINIC_CPS_URL: http://hospital_orchestrator:8080/cps
+      NEXT_ALLOWED_ORIGINS: localhost:8081
