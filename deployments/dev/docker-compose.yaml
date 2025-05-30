@@ -23,6 +23,7 @@ services:
       nutsnode:
         condition: service_healthy
     entrypoint: [ "sh", "-c", "echo 'Waiting for Nuts Node to be ready...'; while ! curl -s -f http://nutsnode:8080/status > /dev/null; do echo 'Waiting for nutsnode to be ready...'; sleep 1; done; echo 'Nutsnode is up and running.' && sh /nutsnode-init.sh" ]
+    restart: "no"
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
     environment:
@@ -125,7 +126,6 @@ services:
     depends_on:
       - fhirstore
     entrypoint: ["sh", "-c", "echo 'Starting fhirstore healthcheck...'; while ! curl -s -f http://fhirstore:8080/fhir/Task > /dev/null; do echo 'Waiting for fhirstore to be ready...'; sleep 5; done; echo 'fhirstore is up and running.'"]
-    
     # Ensure the container exits successfully after the check
     restart: "no"
   hospital_ehr:
@@ -189,13 +189,21 @@ services:
       - "../../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json:/config/fhir/healthcareservices.json:ro"
       - "../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
   clinic_viewer:
-    image: ghcr.io/santeonnl/orca_viewersimulator:main
-    #build:
-    #  context: ../../../viewer_simulator
-    #  dockerfile: Dockerfile
+    #image: ghcr.io/santeonnl/orca_viewersimulator:main
+    build:
+      context: ../../viewer_simulator
+      dockerfile: Dockerfile-dev
     environment:
       CLINIC_ORCA_URL: http://clinic_orchestrator:8080/
       CLINIC_ORCA_BEARERTOKEN: valid
       CLINIC_IDENTIFIER: http://fhir.nl/fhir/NamingSystem/ura|1234
       CLINIC_CPS_URL: http://hospital_orchestrator:8080/cps
       NEXT_ALLOWED_ORIGINS: localhost:8081
+  # Orchestrator's Task Engine posts to Viewer over HTTP, but the first call will time-out due to NextJS compilation.
+  # So, we use curl to force NextJS to make sure the application is compiled.
+  clinic_viewer-init:
+    image: curlimages/curl:7.87.0
+    depends_on:
+      clinic_viewer:
+        condition: service_healthy
+    entrypoint: [ "sh", "-c", "curl -s http://clinic_viewer:3000/viewer/api/delivery/orca-enroll-patient" ]
