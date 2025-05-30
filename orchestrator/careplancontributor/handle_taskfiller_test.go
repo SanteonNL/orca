@@ -327,7 +327,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				config: Config{
 					TaskFiller: TaskFillerConfig{
 						StatusNote: map[string]string{
-							"ACCEPTED": "Task accepted by TaskFiller",
+							"accepted": "Task accepted by TaskFiller",
 						},
 					},
 				},
