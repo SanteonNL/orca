@@ -200,10 +200,10 @@ services:
       CLINIC_CPS_URL: http://hospital_orchestrator:8080/cps
       NEXT_ALLOWED_ORIGINS: localhost:8081
   # Orchestrator's Task Engine posts to Viewer over HTTP, but the first call will time-out due to NextJS compilation.
-  # So, we use curl to force NextJS to make sure the application is compiled.
+  # So, we use curl to force NextJS to make sure the receiving endpoint is compiled.
   clinic_viewer-init:
     image: curlimages/curl:7.87.0
     depends_on:
       clinic_viewer:
         condition: service_healthy
-    entrypoint: [ "sh", "-c", "curl -s http://clinic_viewer:3000/viewer/api/delivery/orca-enroll-patient" ]
+    entrypoint: [ "sh", "-c", "curl -s -X POST -d '{}' http://clinic_viewer:3000/viewer/api/delivery/orca-enroll-patient" ]
