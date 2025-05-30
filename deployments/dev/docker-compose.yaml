@@ -4,8 +4,8 @@ services:
     ports:
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
-      - "./shared_config/policy/:/nuts/config/policy:ro"
-      - "./shared_config/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
+      - "./nuts/policy/:/nuts/config/policy:ro"
+      - "./nuts/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
     environment:
       - NUTS_VERBOSITY=debug
       - NUTS_STRICTMODE=false
@@ -14,7 +14,15 @@ services:
       - NUTS_URL=http://nutsnode:8080
       - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
       - NUTS_DISCOVERY_SERVER_IDS=dev:HomeMonitoring2024
-      - NUTS_VDR_DIDMETHODS=web
+      - NUTS_DIDMETHODS=web
+  nutsnode-init:
+    image: badouralix/curl-jq:alpine
+    volumes:
+      - "./nuts/nutsnode-init.sh:/nutsnode-init.sh:ro"
+    depends_on:
+      nutsnode:
+        condition: service_healthy
+    entrypoint: [ "sh", "-c", "echo 'Waiting for Nuts Node to be ready...'; while ! curl -s -f http://nutsnode:8080/status > /dev/null; do echo 'Waiting for nutsnode to be ready...'; sleep 1; done; echo 'Nutsnode is up and running.' && sh /nutsnode-init.sh" ]
   nutsadmin:
     image: "nutsfoundation/nuts-admin:main"
     environment:
@@ -116,7 +124,7 @@ services:
     image: curlimages/curl:7.87.0
     depends_on:
       - fhirstore
-    entrypoint: ["sh", "-c", "echo 'Starting fhirstore healthcheck...'; while ! curl -s -f http://fhirstore:8080/fhir/Task; do echo 'Waiting for fhirstore to be ready...'; sleep 5; done; echo 'fhirstore is up and running.'"]
+    entrypoint: ["sh", "-c", "echo 'Starting fhirstore healthcheck...'; while ! curl -s -f http://fhirstore:8080/fhir/Task > /dev/null; do echo 'Waiting for fhirstore to be ready...'; sleep 5; done; echo 'fhirstore is up and running.'"]
     
     # Ensure the container exits successfully after the check
     restart: "no"
