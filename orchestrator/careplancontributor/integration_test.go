@@ -192,7 +192,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	}
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
-	service, err := careplanservice.New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+	service, err := careplanservice.New(config, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()

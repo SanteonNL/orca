@@ -43,7 +43,7 @@ const basePath = "/cps"
 // We might want to make this configurable at some point.
 var subscriberNotificationTimeout = 10 * time.Second
 
-func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messageBroker messaging.Broker, eventManager events.Manager) (*Service, error) {
+func New(config Config, profile profile.Provider, cpsURL *url.URL, messageBroker messaging.Broker, eventManager events.Manager) (*Service, error) {
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -51,7 +51,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 	if err != nil {
 		return nil, err
 	}
-	baseUrl := orcaPublicURL.JoinPath(basePath)
+	baseUrl := cpsURL
 
 	subscriptionMgr, err := subscriptions.NewManager(baseUrl, subscriptions.CsdChannelFactory{Profile: profile}, messageBroker)
 	if err != nil {
@@ -61,7 +61,7 @@ func New(config Config, profile profile.Provider, orcaPublicURL *url.URL, messag
 	s := Service{
 		profile:             profile,
 		fhirURL:             upstreamFhirBaseUrl,
-		orcaPublicURL:       orcaPublicURL,
+		orcaPublicURL:       cpsURL,
 		transport:           transport,
 		fhirClient:          fhirClient,
 		subscriptionManager: subscriptionMgr,

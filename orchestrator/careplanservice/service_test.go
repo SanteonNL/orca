@@ -278,7 +278,7 @@ func TestService_ErrorHandling(t *testing.T) {
 			},
 		},
 		profile.Test(),
-		orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+		orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	service.RegisterHandlers(fhirServerMux)
@@ -481,7 +481,7 @@ func TestService_Handle(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+	}, profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 
 	var capturedHeaders []http.Header
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -1051,7 +1051,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+	}, profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	t.Run("invalid content type - fails", func(t *testing.T) {
