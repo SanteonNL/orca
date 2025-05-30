@@ -93,7 +93,9 @@ export default function EnrollmentTaskPage() {
     } else {
         return <div className='w-full flex flex-col auto-cols-max'>
             {
-                task && executionText(task.status) ?
+                // Either show Task.note, or a default message based on task status
+                task.note && task.note.length > 0 ? task.note.map(note => note.text).join("\n") :
+                executionText(task.status) ?
                     <p className="w-[568px] text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
             }
             <div className="w-[568px] grid grid-cols-[1fr_2fr] gap-y-4">
