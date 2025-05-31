@@ -64,7 +64,8 @@ func New(
 	messageBroker messaging.Broker,
 	eventManager events.Manager,
 	ehrFhirProxy coolfhir.HttpProxy,
-	localCarePlanServiceURL *url.URL) (*Service, error) {
+	localCarePlanServiceURL *url.URL,
+	httpHandler http.Handler) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 
@@ -127,6 +128,7 @@ func New(
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 		eventManager:                  eventManager,
 		sseService:                    sse.New(),
+		httpHandler:                   httpHandler,
 	}
 	if config.OIDCProvider.Enabled {
 		result.oidcProvider, err = oidc.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDCProvider)
@@ -168,6 +170,7 @@ type Service struct {
 	sseService                    *sse.Service
 	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
 	oidcProvider                  *oidc.Service
+	httpHandler                   http.Handler
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -795,22 +798,23 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		switch header {
 		case scpFHIRBaseURL:
 			var err error
-			if headerValue == "local-cps" {
-				// TODO: This should probably be optimized by the EHR/ORCA Frontend having a internal endpoint on the CPS, instead.
-				//       Accessing one's own CPS this way causes it to go through the Nuts authentication layer, which adds latency.
+			if headerValue == "local-cps" ||
+				(s.localCarePlanServiceUrl != nil && headerValue == s.localCarePlanServiceUrl.String()) {
+				// Targeted FHIR API is local CPS, either through 'local-cps' or because the target URL matches the local CPS URL
 				fhirBaseURL = s.localCarePlanServiceUrl
 				if fhirBaseURL == nil {
 					return nil, nil, fmt.Errorf("%s: no local CarePlanService", header)
 				}
+				httpClient = s.httpClientForLocalCPS(httpClient)
 			} else {
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
 				if err != nil {
 					return nil, nil, fmt.Errorf("%s: %w", header, err)
 				}
-			}
-			_, httpClient, err = s.createFHIRClientForURL(ctx, fhirBaseURL)
-			if err != nil {
-				return nil, nil, fmt.Errorf("%s: failed to create HTTP client: %w", header, err)
+				_, httpClient, err = s.createFHIRClientForURL(ctx, fhirBaseURL)
+				if err != nil {
+					return nil, nil, fmt.Errorf("%s: failed to create HTTP client: %w", header, err)
+				}
 			}
 			break
 		case scpEntityIdentifierHeaderKey:
@@ -841,6 +845,17 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		return nil, nil, coolfhir.BadRequest("can't determine the external SCP-node to query from the HTTP request headers")
 	}
 	return fhirBaseURL, httpClient, nil
+}
+
+func (s Service) httpClientForLocalCPS(httpClient *http.Client) *http.Client {
+	httpClient = &http.Client{Transport: internalDispatchHTTPRoundTripper{
+		profile: s.profile,
+		handler: s.httpHandler,
+		matcher: func(request *http.Request) bool {
+			return true
+		},
+	}}
+	return httpClient
 }
 
 func (s Service) parseFHIRBaseURL(fhirBaseURL string) (*url.URL, error) {
