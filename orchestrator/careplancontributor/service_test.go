@@ -259,7 +259,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 					BaseURL: fhirServer.URL + "/fhir",
 				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), proxy, carePlanServiceURL)
+			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), proxy, carePlanServiceURL, nil)
 
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
@@ -381,7 +381,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL), nil)
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -505,7 +505,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
-	}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
+	}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL), nil)
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
@@ -590,7 +590,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL), nil)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -657,7 +657,7 @@ func TestService_HandleSearchEndpoints(t *testing.T) {
 				},
 			},
 		},
-	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, nil)
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, nil, nil)
 	require.NoError(t, err)
 
 	// Setup: configure the service to proxy to the backing FHIR server
@@ -930,6 +930,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 				},
 			},
 		},
+		httpHandler:             mux,
 		localCarePlanServiceUrl: must.ParseURL(httpServer.URL + "/fhir"),
 		orcaPublicURL:           must.ParseURL(httpServer.URL),
 		config:                  Config{StaticBearerToken: "secret"},
@@ -956,7 +957,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 		})
 	})
 	t.Run("X-Scp-Fhir-Url", func(t *testing.T) {
-		t.Run("external", func(t *testing.T) {
+		t.Run("URL, external", func(t *testing.T) {
 			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/1", nil)
 			httpRequest.Header.Set("Authorization", "Bearer secret")
 			httpRequest.Header.Set("X-Scp-Fhir-Url", remoteSCPNode.URL+"/fhir")
@@ -967,7 +968,18 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 			require.NoError(t, err)
 			assert.NotEmpty(t, responseData)
 		})
-		t.Run("local", func(t *testing.T) {
+		t.Run("URL, local", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/2", nil)
+			httpRequest.Header.Set("Authorization", "Bearer secret")
+			httpRequest.Header.Set("X-Scp-Fhir-Url", service.localCarePlanServiceUrl.String())
+			httpResponse, err := httpServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			responseData, err := io.ReadAll(httpResponse.Body)
+			require.NoError(t, err)
+			assert.NotEmpty(t, responseData)
+		})
+		t.Run("local-cps", func(t *testing.T) {
 			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/2", nil)
 			httpRequest.Header.Set("Authorization", "Bearer secret")
 			httpRequest.Header.Set("X-Scp-Fhir-Url", "local-cps")
