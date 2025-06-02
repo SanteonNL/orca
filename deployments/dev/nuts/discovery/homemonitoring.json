@@ -1,6 +1,6 @@
 {
   "id": "dev:HomeMonitoring2024",
-  "endpoint": "DiscoveryServerURL/discovery/dev:HomeMonitoring2024",
+  "endpoint": "http://nutsnode:8080/discovery/dev:HomeMonitoring2024",
   "presentation_max_validity": 2764800,
   "presentation_definition": {
     "id": "dev:HomeMonitoring2024",
