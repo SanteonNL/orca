@@ -138,6 +138,10 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 				}
 				continue
 			}
+			if len(messages) == 0 {
+				time.Sleep(1 * time.Second) // Make sure we don't busy-wait on some external resource.
+				continue                    // No messages received, continue to the next iteration
+			}
 			azMessage := messages[0]
 			message := Message{
 				Body:          azMessage.Body,
