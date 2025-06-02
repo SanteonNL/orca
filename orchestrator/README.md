@@ -38,6 +38,16 @@ Example:
 - `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_EXAMPLE_ISSUERURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/v2.0/`
 - `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_EXAMPLE_DISCOVERYURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/B2C_1_local_login/v2.0/.well-known/openid_configuration`
 
+### Token Client configuration
+- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_ENABLED`: Enable the Token Client (default: `false`).
+- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_CLIENTID`: ClientID used for token validation, this will typically be the same as the `aud` claim in the JWT being validated.
+The following two fields can be repeated for multiple trusted issuers, but must both be set for each issuer:
+- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_TRUSTEDISSUERS_<ISSUER_NAME>_ISSUERURL`: Same as the `iss` claim in the JWT.
+- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_TRUSTEDISSUERS_<ISSUER_NAME>_DISCOVERYURL`: Same as the `iss` claim in the JWT, but with `tfp` before `/v2.0/` as well as the `.well-known/openid_configuration` suffix.
+Example:
+- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_TRUSTEDISSUERS_EXAMPLE_ISSUERURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/v2.0/`
+- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_TRUSTEDISSUERS_EXAMPLE_DISCOVERYURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/B2C_1_local_login/v2.0/.well-known/openid_configuration`
+
 #### OpenID Connect Provider Configuration
 ORCA can act as OpenID Connect Provider for users that have an existing session (initiated through app launch).
 This allows the launch of OIDC-enabled applications that can't directly authenticate using the EHR.

@@ -46,6 +46,7 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS": "file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json",
 			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":                          "true",
 			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":                "valid",
+			"ORCA_STRICTMODE": "false",
 		},
 		Files: []testcontainers.ContainerFile{
 			// Questionnaire and HealthcareService bundles required by Task Filler Engine
