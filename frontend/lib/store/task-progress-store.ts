@@ -54,7 +54,6 @@ const taskProgressStore = create<StoreState>((set, get) => ({
 
         try {
             const { loading, selectedTaskId } = get()
-
             if (!loading && selectedTaskId) {
                 set({ loading: true, error: undefined })
 
@@ -81,6 +80,7 @@ const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState |
     await Promise.all(subTasks.map(async (task: Task) => {
         if (task.input && task.input.length > 0) {
             const input = task.input.find(input => input.valueReference?.reference?.startsWith("Questionnaire"));
+            console.log(`Found the input for Task ${task.id}: ${JSON.stringify(input)}`);
             if (input && task.id && input.valueReference?.reference) {
                 const questionnaireId = input.valueReference.reference;
                 try {
@@ -88,6 +88,7 @@ const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState |
                         resourceType: "Questionnaire",
                         id: questionnaireId.split("/")[1]
                     }) as Questionnaire;
+                    console.log(`Found the questionnaire  ${task.id}: ${JSON.stringify(questionnaire)}`);
                     tmpMap[task.id] = questionnaire;
                 } catch (error) {
                     set({ error: `Failed to fetch questionnaire: ${error}` });
