@@ -44,7 +44,7 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("unable to decode base64 SAML response: %w", err)
 	}
 
-	if log.Ctx(ctx).Enabled(zerolog.DebugLevel) {
+	if log.Ctx(ctx).GetLevel() <= zerolog.DebugLevel {
 		log.Ctx(ctx).Debug().Msgf("Zorgplatform SAMLResponse: %s", samlResponse)
 	}
 
@@ -129,7 +129,7 @@ func (s *Service) decryptAssertion(doc *etree.Document) (*etree.Element, error) 
 	}
 	decrypt, err := xmlenc.Decrypt(s.decryptCertificate, el)
 	if err != nil {
-		return nil, fmt.Errorf("unable to decrypt assertion: %w", err)
+		return nil, err
 	}
 	result := etree.NewDocument()
 	if err := result.ReadFromBytes(decrypt); err != nil {

@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 	"os"
 	"strings"
 	"testing"
@@ -314,13 +315,42 @@ func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
 }
 
 func TestService_parseSamlResponse(t *testing.T) {
-	//t.Run("ok", func(t *testing.T) {
-	//	assertionXML, err := os.ReadFile("saml_assertion_input.xml")
-	//	require.NoError(t, err)
-	//	s := &Service{}
-	//	ctx := context.Background()
-	//	assertionEncoded := base64.StdEncoding.EncodeToString(assertionXML)
-	//})
+	t.Run("ok", func(t *testing.T) {
+		certificate, err := tls.LoadX509KeyPair("test-certificate.pem", "test-key.pem")
+		require.NoError(t, err)
+		samlResponse := createSAMLResponse(t, certificate.Leaf)
+		now = func() time.Time {
+			return time.Date(2024, 11, 06, 15, 57, 0, 0, time.UTC)
+		}
+		defer func() {
+			now = time.Now
+		}()
+		s := &Service{
+			decryptCertificate: crypto.RsaSuite{
+				PrivateKey: certificate.PrivateKey.(*rsa.PrivateKey),
+				Cert:       certificate.Leaf,
+			},
+			zorgplatformCert: certificate.Leaf,
+			config: Config{
+				DecryptConfig: DecryptConfig{
+					Audience: "https://partner-application.nl",
+					Issuer:   "unit-test",
+				},
+			},
+		}
+		ctx := context.Background()
+
+		actual, err := s.parseSamlResponse(ctx, samlResponse)
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, actual)
+		assert.Equal(t, "999999151", actual.Bsn)
+		assert.Len(t, actual.Practitioner.Identifier, 1)
+		assert.Equal(t, "urn:oid:2.16.840.1.113883.4.1", *actual.Practitioner.Identifier[0].System)
+		assert.Equal(t, "999999999", *actual.Practitioner.Identifier[0].Value)
+		assert.Equal(t, "b526e773-e1a6-4533-bd00-1360c97e745f", actual.WorkflowId)
+
+	})
 	t.Run("<Error> response", func(t *testing.T) {
 		s := &Service{}
 		doc := etree.NewDocument()
