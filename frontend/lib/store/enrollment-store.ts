@@ -75,6 +75,8 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
 
     launchContext = await launchContextRes.json();
 
+    console.log(`LaunchContext fetched: ${JSON.stringify(launchContext)}`);
+
 
     set({ launchContext });
 

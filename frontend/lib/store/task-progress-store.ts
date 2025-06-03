@@ -39,6 +39,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     error: undefined,
     eventSourceConnected: false,
     setSelectedTaskId: (taskId: string) => {
+        console.log(`Setting selected task ID: ${taskId}`);
         set({ selectedTaskId: taskId })
     },
     setTask: (task?: Task) => {
@@ -51,7 +52,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
         set({ subTasks })
     },
     fetchAllResources: async () => {
-
+        console.log("Fetching all resources for the selected task...");
         try {
             const { loading, selectedTaskId } = get()
             if (!loading && selectedTaskId) {

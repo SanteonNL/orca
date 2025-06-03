@@ -23,6 +23,7 @@ export default function EnrollmentTaskPage() {
 
     useEffect(() => {
         if (taskId) {
+            console.log(`Task ID from URL: ${taskId}`);
             //TODO: Currently we only have one Questionnaire per enrollment flow. But we support multiple. The UX for multiple still needs to be made. When it's there, this is the place to add it
             const selectedTaskId = Array.isArray(taskId) ? taskId[0] : taskId;
             setSelectedTaskId(selectedTaskId);
