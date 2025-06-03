@@ -284,8 +284,10 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	})
 	getProxyHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		log.Ctx(request.Context()).Debug().Msgf("Handling FHIR request: %s %s", request.Method, request.URL.Path)
+		log.Ctx(request.Context()).Debug().Msgf("getProxyHandler called - healthdataviewEndpointEnabled: %v, StrictMode: %v", s.healthdataviewEndpointEnabled, globals.StrictMode)
 		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
 		if !s.healthdataviewEndpointEnabled || globals.StrictMode {
+			log.Ctx(request.Context()).Warn().Msgf("Request blocked - healthdataviewEndpointEnabled: %v, StrictMode: %v", s.healthdataviewEndpointEnabled, globals.StrictMode)
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), &coolfhir.ErrorWithCode{
 				Message:    "health data view proxy endpoint is disabled or strict mode is enabled",
 				StatusCode: http.StatusMethodNotAllowed,
@@ -307,8 +309,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 	})
 	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
+	log.Debug().Msgf("Registered route: GET %s/fhir/{resourceType}/{id}", basePath)
 	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}", s.profile.Authenticator(baseURL, getProxyHandler))
+	log.Debug().Msgf("Registered route: GET %s/fhir/{resourceType}", basePath)
 	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
+	log.Debug().Msgf("Registered route: POST %s/fhir/{resourceType}/_search", basePath)
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
