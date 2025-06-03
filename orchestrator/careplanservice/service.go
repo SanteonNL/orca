@@ -192,6 +192,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		s.profile.CapabilityStatement(&md)
 		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
 	})
+	// GET search for BGZ data
+	mux.HandleFunc("GET "+basePath+"/fhir/Coverage", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+		resourceType := request.PathValue("type")
+		// extract the query params and add them to the request
+		queryParams := request.URL.Query()
+		request.URL.RawQuery = queryParams.Encode()
+		s.handleSearchRequest(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
+	}))
 	// Creating a resource
 	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
@@ -705,6 +713,11 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 	case "QuestionnaireResponse":
 		handleFunc = FHIRSearchOperationHandler[*fhir.QuestionnaireResponse]{
 			authzPolicy: ReadQuestionnaireResponseAuthzPolicy(s.fhirClient),
+			fhirClient:  s.fhirClient,
+		}.Handle
+	case "Coverage":
+		handleFunc = FHIRSearchOperationHandler[*fhir.Coverage]{
+			authzPolicy: AnyonePolicy[*fhir.Coverage]{},
 			fhirClient:  s.fhirClient,
 		}.Handle
 	default:
