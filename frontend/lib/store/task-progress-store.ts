@@ -2,8 +2,6 @@ import { Bundle, Questionnaire, Task } from 'fhir/r4';
 import { useEffect } from 'react';
 import { create } from 'zustand';
 import { createCpsClient, fetchAllBundlePages } from '../fhirUtils';
-import { set } from 'date-fns/set';
-import { gl } from 'date-fns/locale';
 
 const cpsClient = createCpsClient()
 // A module-level variable, to ensure only one SSE subscription is active (`use` hook for this store is used in multiple places).
@@ -24,7 +22,7 @@ interface StoreState {
     setTask: (task?: Task) => void
     nextStep: () => void
     setSubTasks: (subTasks: Task[]) => void
-    fetchAllResources: () => Promise<void>
+    fetchAllResources: (selectedTaskId: string) => Promise<void>
     setEventSourceConnected: (connected: boolean) => void
 }
 
@@ -51,22 +49,20 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     setSubTasks: (subTasks: Task[]) => {
         set({ subTasks })
     },
-    fetchAllResources: async () => {
+    fetchAllResources: async (selectedTaskId: string) => {
         console.log("Fetching all resources for the selected task...");
         try {
-            const { loading, selectedTaskId } = get()
-            if (!loading && selectedTaskId) {
-                set({ loading: true, error: undefined })
+            set({ loading: true, error: undefined })
 
-                const [task, subTasks] = await Promise.all([
-                    await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
-                    await fetchSubTasks(selectedTaskId)
-                ])
+            const [task, subTasks] = await Promise.all([
+                await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
+                await fetchSubTasks(selectedTaskId)
+            ])
 
-                set({ task, subTasks })
-                await fetchQuestionnaires(subTasks, set)
-                set({ initialized: true, loading: false, })
-            }
+            set({ task, subTasks })
+            await fetchQuestionnaires(subTasks, set)
+            set({ initialized: true, loading: false, })
+
         } catch (error: any) {
             set({ error: `Something went wrong while fetching all resources: ${error?.message || error}`, loading: false })
         }
@@ -122,7 +118,7 @@ const useTaskProgressStore = () => {
 
     useEffect(() => {
         if (!loading && !initialized && selectedTaskId) {
-            fetchAllResources()
+            fetchAllResources(selectedTaskId)
         }
     }, [selectedTaskId, loading, initialized, fetchAllResources]);
 
@@ -138,6 +134,7 @@ const useTaskProgressStore = () => {
 
         globalEventSource.onerror = (error) => {
             setEventSourceConnected(false);
+            console.error(`Error in global EventSource: ${error}`);
         };
 
         globalEventSource.onmessage = (event) => {
