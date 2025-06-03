@@ -70,20 +70,11 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
 
     let launchContext: LaunchContext;
 
-    if (process.env.NODE_ENV === "production") {
-        const launchContextRes = await fetch(`/orca/cpc/context`);
-        if (!launchContextRes.ok) throw new Error(`Failed to fetch patient: ${launchContextRes.statusText}`);
+    const launchContextRes = await fetch(`/orca/cpc/context`);
+    if (!launchContextRes.ok) throw new Error(`Failed to fetch patient: ${launchContextRes.statusText}`);
 
-        launchContext = await launchContextRes.json();
-    } else {
-        //TODO: We can remove this when going live, this is useful during development
-        launchContext = {
-            "patient": "Patient/4",
-            "serviceRequest": "ServiceRequest/6",
-            "practitioner": "Practitioner/8",
-            "practitionerRole": "PractitionerRole/9"
-        }
-    }
+    launchContext = await launchContextRes.json();
+
 
     set({ launchContext });
 
