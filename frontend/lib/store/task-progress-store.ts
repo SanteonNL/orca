@@ -125,7 +125,6 @@ const useTaskProgressStore = () => {
     }, [selectedTaskId, loading, initialized, fetchAllResources]);
 
     useEffect(() => {
-
         // Only subscribe if we have a selectedTaskId and no active global subscription yet.
         if (!selectedTaskId || globalEventSource) return
 

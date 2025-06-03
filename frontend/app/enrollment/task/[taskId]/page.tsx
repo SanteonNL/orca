@@ -19,7 +19,7 @@ export default function EnrollmentTaskPage() {
     const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
     const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
     const [showViewer, setShowViewer] = useState(false)
-    const [currentQuestionnaire, setCurrentQuestionnaire] = useState({} as Questionnaire);
+    const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
 
     useEffect(() => {
         if (taskId) {
@@ -77,7 +77,7 @@ export default function EnrollmentTaskPage() {
             <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
 
-    if (currentQuestionnaire && subTasks?.[0]) {
+    if (task.status === "received" && currentQuestionnaire && subTasks?.[0]) {
         return <>
             <QuestionnaireRenderer
                 questionnaire={currentQuestionnaire}
