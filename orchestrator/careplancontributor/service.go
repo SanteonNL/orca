@@ -282,8 +282,32 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
+	getProxyHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		log.Ctx(request.Context()).Debug().Msgf("Handling FHIR request: %s %s", request.Method, request.URL.Path)
+		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
+		if !s.healthdataviewEndpointEnabled || globals.StrictMode {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), &coolfhir.ErrorWithCode{
+				Message:    "health data view proxy endpoint is disabled or strict mode is enabled",
+				StatusCode: http.StatusMethodNotAllowed,
+			}, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+
+		err := s.handleProxyExternalRequestToEHR(writer, request)
+		if err != nil {
+			log.Ctx(request.Context()).Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
+			// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
+			var operationOutcomeErr fhirclient.OperationOutcomeError
+			if errors.As(err, &operationOutcomeErr) {
+				operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
+				err = operationOutcomeErr
+			}
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+	})
 	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
-	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
+	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}", s.profile.Authenticator(baseURL, getProxyHandler))
 	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
