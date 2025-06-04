@@ -57,6 +57,7 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 	type args struct {
 		resource          fhir.Task
 		resourceData      []byte
+		requestFn         func(request *FHIRHandlerRequest)
 		existingResources []fhir.Task
 	}
 	type testCase struct {
@@ -126,6 +127,41 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 					assert.Equal(t, "200 OK", entry.Response.Status)
 					assert.Equal(t, *task1Ref.Reference, *entry.Response.Location)
 					assert.JSONEq(t, string(must.MarshalJSON(updatedTaskWithCreatorExtension)), string(entry.Resource))
+				})
+				assert.Len(t, notifications, 1)
+				assert.IsType(t, &fhir.Task{}, notifications[0])
+			},
+		},
+		{
+			name: "ok, update (with search query)",
+			args: args{
+				existingResources: []fhir.Task{existingTaskWithCreatorExtension},
+				resource:          updatedTask,
+				requestFn: func(request *FHIRHandlerRequest) {
+					request.RequestUrl = must.ParseURL("Task?_id=1")
+					request.ResourceId = ""
+					request.ResourcePath = "Task"
+				},
+			},
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
+				assertContainsAuditEvent(t, tx, task1Ref, auth.TestPrincipal1.Organization.Identifier[0], auth.TestPrincipal2.Organization.Identifier[0], fhir.AuditEventActionU)
+				assertBundleEntry(t, tx, coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, fhir.HTTPVerbPUT, entry.Request.Method)
+					assert.Equal(t, "Task?_id=1", entry.Request.Url)
+				})
+				// Should respond with 1 bundle entry, and 1 notification
+				txResponse := coolfhir.Transaction().
+					Append(updatedTask, nil, &fhir.BundleEntryResponse{
+						Status:   "200 OK",
+						Location: task1Ref.Reference,
+					}).Bundle()
+				responseEntries, notifications, err := result(&txResponse)
+				require.NoError(t, err)
+				assert.Len(t, responseEntries, 1)
+				assertBundleEntry(t, toBundle(responseEntries), coolfhir.EntryIsOfType(*task1Ref.Type), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, "200 OK", entry.Response.Status)
+					assert.Equal(t, *task1Ref.Reference, *entry.Response.Location)
+					assert.JSONEq(t, string(must.MarshalJSON(updatedTask)), string(entry.Resource))
 				})
 				assert.Len(t, notifications, 1)
 				assert.IsType(t, &fhir.Task{}, notifications[0])
@@ -273,14 +309,18 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				requestData = must.MarshalJSON(tt.args.resource)
 			}
 			tx := coolfhir.Transaction()
-			handlerResult, err := handler.Handle(context.Background(), FHIRHandlerRequest{
+			request := FHIRHandlerRequest{
 				HttpMethod:    http.MethodPut,
 				ResourceId:    "1",
 				ResourceData:  requestData,
 				ResourcePath:  "Task/1",
 				Principal:     auth.TestPrincipal1,
 				LocalIdentity: &auth.TestPrincipal2.Organization.Identifier[0],
-			}, tx)
+			}
+			if tt.args.requestFn != nil {
+				tt.args.requestFn(&request)
+			}
+			handlerResult, err := handler.Handle(context.Background(), request, tx)
 			if tt.wantErr != nil {
 				tt.wantErr(t, err)
 			} else {

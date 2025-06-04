@@ -110,8 +110,6 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
         console.warn(`No Task Condition found for ServiceRequest/${serviceRequest.id}`)
     }
 
-    debugger
-
     set({
         patient: patient as Patient,
         practitioner: practitioner as Practitioner,

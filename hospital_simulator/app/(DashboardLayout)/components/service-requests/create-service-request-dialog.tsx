@@ -398,6 +398,18 @@ function createServiceRequestBundle(patient: PatientDetails,
             {
                 "fullUrl": "urn:uuid:patient-1",
                 "resource": {
+                    "extension": [
+                        {
+                            "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+                            "valueReference": {
+                                "type": "Organization",
+                                "identifier": {
+                                    "system": requesterIdentifier.system,
+                                    "value": requesterIdentifier.value
+                                }
+                            }
+                        }
+                    ],
                     "resourceType": "Patient",
                     "identifier": [
                         {
