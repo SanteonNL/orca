@@ -436,8 +436,26 @@ func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request 
 	}
 	log.Debug().Msg("Handling BgZ FHIR API request carePlanURL: " + carePlanURLValue[0])
 
+	carePlanURL := carePlanURLValue[0]
+
+	// Validate that the header value is a properly formatted URL
+	parsedURL, err := url.Parse(carePlanURL)
+	if err != nil {
+		return coolfhir.BadRequestError(fmt.Errorf("specified SCP context header is not a valid URL: %w", err))
+	}
+
+	// Ensure it's a fully qualified URL (has scheme and host)
+	if parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return coolfhir.BadRequest("specified SCP context header must be a fully qualified URL with scheme and host")
+	}
+
+	// Validate scheme is http or https
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return coolfhir.BadRequest("specified SCP context header must use http or https scheme")
+	}
+
 	// Get the CPS base URL from the X-SCP-Context header (everything before /CarePlan/<id>).
-	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURLValue[0], "CarePlan")
+	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
 	if err != nil {
 		return coolfhir.BadRequestError(fmt.Errorf("invalid %s header: %w", carePlanURLHeaderKey, err))
 	}
@@ -538,6 +556,22 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, coolfhir.BadRequest("%s header can't contain multiple values", carePlanURLHeaderKey)
 	}
 	carePlanURL := carePlanURLValue[0]
+
+	// Validate that the header value is a properly formatted URL
+	parsedURL, err := url.Parse(carePlanURL)
+	if err != nil {
+		return nil, coolfhir.BadRequest("specified SCP context header is not a valid URL: %v", err)
+	}
+
+	// Ensure it's a fully qualified URL (has scheme and host)
+	if parsedURL.Scheme == "" || parsedURL.Host == "" {
+		return nil, coolfhir.BadRequest("specified SCP context header must be a fully qualified URL with scheme and host")
+	}
+
+	// Validate scheme is http or https
+	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
+		return nil, coolfhir.BadRequest("specified SCP context header must use http or https scheme")
+	}
 
 	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
 	if err != nil {

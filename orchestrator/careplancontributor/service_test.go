@@ -77,9 +77,39 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: X-Scp-Context header must be set"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
+			name:           "Fails: header value is not a valid URL",
+			expectedStatus: http.StatusBadRequest,
+			xSCPContext:    "not-a-valid-url",
+			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
+		},
+		{
+			name:           "Fails: header value is relative URL (missing scheme and host)",
+			expectedStatus: http.StatusInternalServerError,
+			xSCPContext:    "/CarePlan/123",
+			expectedJSON:   ``,
+		},
+		{
+			name:           "Fails: header value missing scheme",
+			expectedStatus: http.StatusInternalServerError,
+			xSCPContext:    "example.com/fhir/CarePlan/123",
+			expectedJSON:   ``,
+		},
+		{
+			name:           "Fails: header value missing host",
+			expectedStatus: http.StatusInternalServerError,
+			xSCPContext:    "https:///fhir/CarePlan/123",
+			expectedJSON:   ``,
+		},
+		{
+			name:           "Fails: header value has invalid scheme",
+			expectedStatus: http.StatusInternalServerError,
+			xSCPContext:    "ftp://example.com/fhir/CarePlan/123",
+			expectedJSON:   ``,
+		},
+		{
 			name:           "Fails: header resource is not CarePlan",
 			expectedStatus: http.StatusBadRequest,
-			xSCPContext:    "SomeResource/invalid",
+			xSCPContext:    "https://example.com/fhir/SomeResource/invalid",
 			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
