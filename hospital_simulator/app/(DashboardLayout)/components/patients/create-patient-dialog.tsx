@@ -15,6 +15,8 @@ import {AdapterDayjs} from "@mui/x-date-pickers/AdapterDayjs";
 import {DesktopDatePicker, LocalizationProvider} from "@mui/x-date-pickers";
 import dayjs from "dayjs";
 import 'dayjs/locale/nl';
+import {Organization} from "fhir/r4";
+import {getLocalOrganization} from "@/utils/config";
 
 type AdministrativeGender = "male" | "female" | "unknown" | "other";
 
@@ -68,9 +70,10 @@ const CreatePatientDialog: React.FC = () => {
         if (patientFirstName && patientLastName && !selfSetPatientEmail) {
             setPatientEmail(generatePatientEmail(patientFirstName, patientLastName))
         }
-    }, [patientFirstName, patientLastName]);
+    }, [patientFirstName, patientLastName, selfSetPatientEmail]);
 
     const createPatient = async () => {
+        const localOrg = await getLocalOrganization()
         let firstName = patientFirstName || "John";
         let lastName = patientLastName || "Doe";
         const patientDetails: PatientDetails = {
@@ -85,7 +88,7 @@ const CreatePatientDialog: React.FC = () => {
             address: patientAdress,
             city: patientCity,
         }
-        const bundle = createPatientBundle(patientDetails)
+        const bundle = createPatientBundle(patientDetails, localOrg)
 
         const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir`, {
             method: "POST",
@@ -107,9 +110,9 @@ const CreatePatientDialog: React.FC = () => {
 
     return (
         <LocalizationProvider dateAdapter={AdapterDayjs} adapterLocale="nl">
-            <Button sx={{ position: 'absolute', top: '10px', right: '10px' }} variant="contained"
-                onClick={handleClickOpen}>
-                <IconPlus />
+            <Button sx={{position: 'absolute', top: '10px', right: '10px'}} variant="contained"
+                    onClick={handleClickOpen}>
+                <IconPlus/>
             </Button>
             <Dialog
                 open={open}
@@ -121,16 +124,16 @@ const CreatePatientDialog: React.FC = () => {
                 <DialogContent>
                     <Grid container spacing={2}>
                         {error && (
-                            <Grid size={{xs:12}}>
+                            <Grid size={{xs: 12}}>
                                 <Alert severity="error">Something went wrong: {error}</Alert>
                             </Grid>
                         )}
-                        <Grid size={{xs:12}}>
+                        <Grid size={{xs: 12}}>
                             <DialogContentText>
                                 Create a patient.
                             </DialogContentText>
                         </Grid>
-                        <Grid size={{xs:12, md:6}}>
+                        <Grid size={{xs: 12, md: 6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -143,7 +146,7 @@ const CreatePatientDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid size={{xs:12, md:6}}>
+                        <Grid size={{xs: 12, md: 6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -156,7 +159,7 @@ const CreatePatientDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid size={{xs:12, md:6}}>
+                        <Grid size={{xs: 12, md: 6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -171,7 +174,7 @@ const CreatePatientDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid size={{xs:12, md:6}}>
+                        <Grid size={{xs: 12, md: 6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -185,7 +188,7 @@ const CreatePatientDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid size={{xs:12, md:6}}>
+                        <Grid size={{xs: 12, md: 6}}>
                             <TextField
                                 autoFocus
                                 required
@@ -198,7 +201,7 @@ const CreatePatientDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid size={{xs:12, md:6}}>
+                        <Grid size={{xs: 12, md: 6}}>
                             <InputLabel id="select-gender">Gender</InputLabel>
                             <Select
                                 autoFocus
@@ -215,7 +218,7 @@ const CreatePatientDialog: React.FC = () => {
                                 <MenuItem value={"other"}>other</MenuItem>
                             </Select>
                         </Grid>
-                        <Grid size={{xs:12, md:6}}>
+                        <Grid size={{xs: 12, md: 6}}>
                             <DesktopDatePicker
                                 label="Birthdate"
                                 value={patientBirthdate}
@@ -226,7 +229,7 @@ const CreatePatientDialog: React.FC = () => {
                                 }}
                             />
                         </Grid>
-                        <Grid size={{xs:12, md:12}}>
+                        <Grid size={{xs: 12, md: 12}}>
                             <TextField
                                 autoFocus
                                 required
@@ -239,7 +242,7 @@ const CreatePatientDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid size={{xs:12, md:8}}>
+                        <Grid size={{xs: 12, md: 8}}>
                             <TextField
                                 autoFocus
                                 required
@@ -252,7 +255,7 @@ const CreatePatientDialog: React.FC = () => {
                                 variant="standard"
                             />
                         </Grid>
-                        <Grid size={{xs:12, md:4}}>
+                        <Grid size={{xs: 12, md: 4}}>
                             <TextField
                                 autoFocus
                                 required
@@ -309,13 +312,14 @@ function generatePatientPhone() {
     // let bsn = prefix + tail;
     // return bsn
 }
+
 /**
  * Nederlandse burgerservicenummers, de vroegere sofinummers, voldoen aan een variant van de elfproef.
  * In de elfproef is het laatste cijfer het controlecijfer. Bij burgerservicenummers wordt het laatste
  * getal met −1 vermenigvuldigd in plaats van met 1. Uitgaande van een nummer dat voldoet aan de elfproef
  * kan geen nieuw geldig nummer worden gegenereerd door één cijfer te veranderen of door twee cijfers te verwisselen.
  */
-function test11Proef(bsn:string) {
+function test11Proef(bsn: string) {
     const reversed = bsn.split("").reverse().join("")
     let total = 0
     for (let i = 0; i < reversed.length; i++) {
@@ -330,7 +334,7 @@ function test11Proef(bsn:string) {
     return total % 11 === 0
 }
 
-function createPatientBundle(patient: PatientDetails) {
+function createPatientBundle(patient: PatientDetails, localOrg: Organization) {
     return {
         "resourceType": "Bundle",
         "type": "transaction",
@@ -339,6 +343,18 @@ function createPatientBundle(patient: PatientDetails) {
                 "fullUrl": "urn:uuid:patient-1",
                 "resource": {
                     "resourceType": "Patient",
+                    "extension": [
+                        {
+                            "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+                            "valueReference": {
+                                "type": "Organization",
+                                "identifier": {
+                                    "system": localOrg.identifier?.[0].system || "",
+                                    "value": localOrg.identifier?.[0].value || "",
+                                }
+                            }
+                        }
+                    ],
                     "identifier": [
                         {
                             "use": "usual",

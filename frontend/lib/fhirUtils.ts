@@ -240,7 +240,8 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
     }
 
-    const patientIdentifier = getPatientIdentifier(patient)!;
+    const patientToken = encodeURIComponent(identifierToToken(getPatientIdentifier(patient)) || '');
+
     const bundle = {
         resourceType: "Bundle",
         type: "transaction",
@@ -249,9 +250,8 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                 fullUrl: "urn:uuid:patient",
                 resource: cleanedPatient,
                 request: {
-                    method: "POST",
-                    url: "Patient",
-                    ifNoneExist: `identifier=${patientIdentifier.system}|${patientIdentifier.value}`
+                    method: "PUT",
+                    url: `Patient?identifier=${patientToken}`
                 }
             },
             serviceRequestEntry,
@@ -286,7 +286,7 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
  * @param identifier
  * @returns
  */
-export function identifierToString(identifier?: Identifier) {
+export function identifierToToken(identifier?: Identifier) {
 
     if (!identifier?.system || !identifier.value) {
         return

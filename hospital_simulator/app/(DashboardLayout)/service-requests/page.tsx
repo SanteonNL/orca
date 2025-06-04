@@ -1,9 +1,8 @@
 import {Box, Typography} from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import DashboardCard from '@/app/(DashboardLayout)/components/shared/DashboardCard';
-import Page from '@/app/(DashboardLayout)/components/service-requests/page';
-import {FormatHumanName} from "@/utils/fhir";
-import {Bundle, Patient} from "fhir/r4";
+import Overview from '@/app/(DashboardLayout)/components/service-requests/overview';
+import {FormatHumanName, ReadPatient, TokenToIdentifier} from "@/utils/fhir";
 import React from "react";
 
 export default async function ServiceRequestsPage(
@@ -11,27 +10,18 @@ export default async function ServiceRequestsPage(
         params: Promise<{ slug: string }>
         searchParams: Promise<{ [key: string]: string | string[] | undefined }>
     }) {
-    const patientIdentifier = (await searchParams).patient as string | undefined;
-    if (!patientIdentifier) {
+    const patientIdentifierStr = (await searchParams).patient as string | undefined;
+    if (!patientIdentifierStr) {
         return <>missing patient identifier</>;
     }
-    const patientResponse = await fetch(`${process.env.FHIR_BASE_URL}/Patient?identifier=${encodeURIComponent(patientIdentifier)}`, {
-        cache: 'no-store',
-        headers: {
-            "Cache-Control": "no-cache"
-        }
-    });
-    if (!patientResponse.ok) {
-        const errorText = await patientResponse.text();
-        console.error('Failed to fetch patient: ', errorText);
-        throw new Error('Failed to fetch patient: ' + errorText);
+    const patientIdentifier = TokenToIdentifier(patientIdentifierStr);
+    if (!patientIdentifier) {
+        return <>invalid patient identifier: {patientIdentifierStr}</>;
     }
-    const patientBundle = await patientResponse.json() as Bundle<Patient>;
-    if (patientBundle.entry?.length == 0) {
-        return <>No patient found for identifier: {patientIdentifier}</>;
+    const patient = await ReadPatient(patientIdentifier);
+    if (!patient) {
+        return <>patient not found: {patientIdentifierStr}</>;
     }
-    const patient = patientBundle.entry!![0]!!.resource!! as Patient;
-
     return (
         <Box sx={{position: 'relative'}}>
             <PageContainer
@@ -41,7 +31,7 @@ export default async function ServiceRequestsPage(
                 <DashboardCard title="Service Requests">
                     <>
                         <Typography>Service requests for patient: {FormatHumanName(patient.name!![0])}</Typography>
-                        <Page patient={patient}/>
+                        <Overview patientID={patient.id!!}/>
                     </>
                 </DashboardCard>
             </PageContainer>

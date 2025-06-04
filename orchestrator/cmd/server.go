@@ -116,7 +116,7 @@ func Start(ctx context.Context, config Config) error {
 			messageBroker,
 			eventManager,
 			ehrFhirProxy,
-			cpsURL)
+			cpsURL, httpHandler)
 		if err != nil {
 			return err
 		}

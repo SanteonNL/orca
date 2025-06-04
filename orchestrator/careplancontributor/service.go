@@ -64,7 +64,8 @@ func New(
 	messageBroker messaging.Broker,
 	eventManager events.Manager,
 	ehrFhirProxy coolfhir.HttpProxy,
-	localCarePlanServiceURL *url.URL) (*Service, error) {
+	localCarePlanServiceURL *url.URL,
+	httpHandler http.Handler) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 
@@ -127,6 +128,7 @@ func New(
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 		eventManager:                  eventManager,
 		sseService:                    sse.New(),
+		httpHandler:                   httpHandler,
 	}
 	if config.OIDCProvider.Enabled {
 		result.oidcProvider, err = oidc.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDCProvider)
@@ -168,6 +170,7 @@ type Service struct {
 	sseService                    *sse.Service
 	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
 	oidcProvider                  *oidc.Service
+	httpHandler                   http.Handler
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -294,15 +297,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	}))
-	// The aggregate endpoint is used to proxy requests to all CarePlanContributors in the CarePlan. It is used by the HealthDataView to aggregate data from all CarePlanContributors.
-	mux.HandleFunc("POST "+basePath+"/aggregate/fhir/{resourceType}/_search", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
-		log.Ctx(request.Context()).Debug().Msg("Handling aggregate _search FHIR API request")
-		err := s.proxyToAllCareTeamMembers(writer, request)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributer/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-	}))
 	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
 	// Allow the front-end to subscribe to specific Task updates via Server-Sent Events (SSE)
@@ -425,101 +419,6 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		return err
 	}
 	s.ehrFhirProxy.ServeHTTP(writer, request)
-	return nil
-}
-
-// proxyToAllCareTeamMembers is a convenience façade method that can be used proxy the request to all CPC nodes localized from the Shared CarePlan.participants.
-func (s *Service) proxyToAllCareTeamMembers(writer http.ResponseWriter, request *http.Request) error {
-	carePlanURLValue := request.Header[carePlanURLHeaderKey]
-	if len(carePlanURLValue) != 1 {
-		return coolfhir.BadRequest("%s header must only contain one value", carePlanURLHeaderKey)
-	}
-	log.Debug().Msg("Handling BgZ FHIR API request carePlanURL: " + carePlanURLValue[0])
-
-	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURLValue[0], "CarePlan")
-	if err != nil {
-		return coolfhir.BadRequestError(fmt.Errorf("invalid %s header: %w", carePlanURLHeaderKey, err))
-	}
-	cpsFHIRClient, _, err := s.createFHIRClientForURL(request.Context(), cpsBaseURL)
-	if err != nil {
-		return err
-	}
-
-	var carePlan fhir.CarePlan
-
-	err = cpsFHIRClient.ReadWithContext(request.Context(), carePlanRef, &carePlan)
-	if err != nil {
-		return fmt.Errorf("failed to get CarePlan %s for X-SCP-Context: %w", carePlanRef, err)
-	}
-
-	careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
-	if err != nil {
-		return fmt.Errorf("failed to resolve CareTeam (carePlan=%s): %w", carePlanRef, err)
-	}
-
-	// Collect participants. Use a map to ensure we don't send the same request to the same participant multiple times.
-	participantIdentifiers := make(map[string]fhir.Identifier)
-	for _, participant := range careTeam.Participant {
-		if !coolfhir.IsLogicalReference(participant.Member) {
-			continue
-		}
-		activeMember, err := coolfhir.ValidateCareTeamParticipantPeriod(participant, time.Now())
-		if err != nil {
-			log.Ctx(request.Context()).Warn().Err(err).Msg("Failed to validate CareTeam participant period")
-		} else if activeMember {
-			participantIdentifiers[coolfhir.ToString(participant.Member.Identifier)] = *participant.Member.Identifier
-		}
-	}
-	if len(participantIdentifiers) == 0 {
-		return coolfhir.NewErrorWithCode("no active participants found in CareTeam", http.StatusNotFound)
-	}
-
-	localIdentities, err := s.profile.Identities(request.Context())
-	if err != nil {
-		return err
-	}
-
-	type queryTarget struct {
-		fhirBaseURL *url.URL
-		httpClient  *http.Client
-	}
-	var queryTargets []queryTarget
-	for _, identifier := range participantIdentifiers {
-		// Don't fetch data from own endpoint, since we don't support querying from multiple endpoints yet
-		if coolfhir.HasIdentifier(identifier, coolfhir.OrganizationIdentifiers(localIdentities)...) {
-			continue
-		}
-		fhirEndpoints, err := s.profile.CsdDirectory().LookupEndpoint(request.Context(), &identifier, profile.FHIRBaseURLEndpointName)
-		if err != nil {
-			return fmt.Errorf("failed to lookup FHIR base URL for participant %s: %w", coolfhir.ToString(identifier), err)
-		}
-		for _, fhirEndpoint := range fhirEndpoints {
-			parsedEndpointAddress, err := url.Parse(fhirEndpoint.Address)
-			if err != nil {
-				// TODO: When querying multiple participants, we should continue with the next participant instead of returning an error, and return an entry for the OperationOutcome
-				return fmt.Errorf("failed to parse FHIR base URL for participant %s: %w", coolfhir.ToString(identifier), err)
-			}
-			httpClient, err := s.profile.HttpClient(request.Context(), identifier)
-			if err != nil {
-				return fmt.Errorf("failed to create HTTP client for participant %s: %w", coolfhir.ToString(identifier), err)
-			}
-			queryTargets = append(queryTargets, queryTarget{fhirBaseURL: parsedEndpointAddress, httpClient: httpClient})
-		}
-	}
-
-	// Could add more information in the future with OperationOutcome messages
-	if len(queryTargets) == 0 {
-		return errors.New("didn't find any queryable FHIR endpoints for any active participant in related CareTeams")
-	}
-	if len(queryTargets) > 1 {
-		// TODO: In this case, we need to aggregate the results from multiple endpoints
-		return errors.New("found multiple queryable FHIR endpoints for active participants in related CareTeams, currently not supported")
-	}
-	const proxyBasePath = basePath + "/aggregate/fhir/"
-	for _, target := range queryTargets {
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", target.fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), target.httpClient.Transport, true, true)
-		fhirProxy.ServeHTTP(writer, request)
-	}
 	return nil
 }
 
@@ -800,22 +699,23 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		switch header {
 		case scpFHIRBaseURL:
 			var err error
-			if headerValue == "local-cps" {
-				// TODO: This should probably be optimized by the EHR/ORCA Frontend having a internal endpoint on the CPS, instead.
-				//       Accessing one's own CPS this way causes it to go through the Nuts authentication layer, which adds latency.
+			if headerValue == "local-cps" ||
+				(s.localCarePlanServiceUrl != nil && headerValue == s.localCarePlanServiceUrl.String()) {
+				// Targeted FHIR API is local CPS, either through 'local-cps' or because the target URL matches the local CPS URL
 				fhirBaseURL = s.localCarePlanServiceUrl
 				if fhirBaseURL == nil {
 					return nil, nil, fmt.Errorf("%s: no local CarePlanService", header)
 				}
+				httpClient = s.httpClientForLocalCPS(httpClient)
 			} else {
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
 				if err != nil {
 					return nil, nil, fmt.Errorf("%s: %w", header, err)
 				}
-			}
-			_, httpClient, err = s.createFHIRClientForURL(ctx, fhirBaseURL)
-			if err != nil {
-				return nil, nil, fmt.Errorf("%s: failed to create HTTP client: %w", header, err)
+				_, httpClient, err = s.createFHIRClientForURL(ctx, fhirBaseURL)
+				if err != nil {
+					return nil, nil, fmt.Errorf("%s: failed to create HTTP client: %w", header, err)
+				}
 			}
 			break
 		case scpEntityIdentifierHeaderKey:
@@ -846,6 +746,28 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		return nil, nil, coolfhir.BadRequest("can't determine the external SCP-node to query from the HTTP request headers")
 	}
 	return fhirBaseURL, httpClient, nil
+}
+
+func (s Service) httpClientForLocalCPS(httpClient *http.Client) *http.Client {
+	httpClient = &http.Client{Transport: internalDispatchHTTPRoundTripper{
+		profile: s.profile,
+		handler: s.httpHandler,
+		requestVisitor: func(request *http.Request) {
+			if s.orcaPublicURL.Path == "" || s.orcaPublicURL.Path == "/" {
+				return
+			}
+			originalURL := request.URL
+			newURL := new(url.URL)
+			*newURL = *request.URL
+			// Remove ORCA Public URL prefix from the request path, since we're dispatching internally
+			newURL.Path = strings.TrimPrefix(strings.TrimPrefix(originalURL.Path, "/"), strings.TrimPrefix(s.orcaPublicURL.Path, "/"))
+			// Earlier, I tried http.Request.Clone(), but that caused a redirect-loop. This worked.
+			newHTTPRequest, _ := http.NewRequestWithContext(request.Context(), request.Method, newURL.String(), request.Body)
+			newHTTPRequest.Header = request.Header.Clone()
+			*request = *newHTTPRequest
+		},
+	}}
+	return httpClient
 }
 
 func (s Service) parseFHIRBaseURL(fhirBaseURL string) (*url.URL, error) {
