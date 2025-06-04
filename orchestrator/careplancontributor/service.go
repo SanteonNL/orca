@@ -282,8 +282,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
-	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
-	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType...}", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		log.Ctx(request.Context()).Debug().Msgf("GET resource handler called - healthdataviewEndpointEnabled: %v, StrictMode: %v", s.healthdataviewEndpointEnabled, globals.StrictMode)
 		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
 		if !s.healthdataviewEndpointEnabled || globals.StrictMode {
@@ -295,67 +294,20 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 
-		// If the request has query parameters, convert GET to POST _search with body params
-		if len(request.URL.Query()) > 0 {
-			log.Ctx(request.Context()).Debug().Msg("Converting GET with query params to POST _search")
-
-			// Create a new request for POST _search
-			resourceType := request.PathValue("resourceType")
-			searchURL := fmt.Sprintf("%s/_search", resourceType)
-
-			// Encode query parameters as form data for the body
-			formData := request.URL.Query().Encode()
-			body := strings.NewReader(formData)
-
-			// Create a new request with POST method and _search path
-			newRequest, err := http.NewRequestWithContext(request.Context(), "POST", searchURL, body)
-			if err != nil {
-				coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-				return
+		err := s.handleProxyExternalRequestToEHR(writer, request)
+		if err != nil {
+			log.Ctx(request.Context()).Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
+			// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
+			var operationOutcomeErr fhirclient.OperationOutcomeError
+			if errors.As(err, &operationOutcomeErr) {
+				operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
+				err = operationOutcomeErr
 			}
-
-			// Copy headers from original request
-			for key, values := range request.Header {
-				for _, value := range values {
-					newRequest.Header.Add(key, value)
-				}
-			}
-
-			// Set content type for form data
-			newRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-
-			// Clear query parameters from the new request URL
-			newRequest.URL.RawQuery = ""
-
-			// Forward the modified request
-			err = s.handleProxyExternalRequestToEHR(writer, newRequest)
-			if err != nil {
-				log.Ctx(request.Context()).Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", newRequest.URL.String())
-				// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
-				var operationOutcomeErr fhirclient.OperationOutcomeError
-				if errors.As(err, &operationOutcomeErr) {
-					operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
-					err = operationOutcomeErr
-				}
-				coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-				return
-			}
-		} else {
-			// No query parameters, handle as regular GET
-			err := s.handleProxyExternalRequestToEHR(writer, request)
-			if err != nil {
-				log.Ctx(request.Context()).Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
-				// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
-				var operationOutcomeErr fhirclient.OperationOutcomeError
-				if errors.As(err, &operationOutcomeErr) {
-					operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
-					err = operationOutcomeErr
-				}
-				coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-				return
-			}
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			return
 		}
 	}))
+	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
