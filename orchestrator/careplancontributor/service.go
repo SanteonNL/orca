@@ -279,6 +279,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
+	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
@@ -435,6 +436,11 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, coolfhir.BadRequest("%s header can't contain multiple values", carePlanURLHeaderKey)
 	}
 	carePlanURL := carePlanURLValue[0]
+	// Validate that the header value is a properly formatted SCP context URL
+	_, err := s.parseFHIRBaseURL(carePlanURL)
+	if err != nil {
+		return nil, coolfhir.BadRequest("specified SCP context header is not a valid URL")
+	}
 
 	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
 	if err != nil {
