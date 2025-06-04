@@ -13,7 +13,7 @@ const Menuitems = [
     id: uniqueId(),
     title: "Patients",
     icon: IconEyeCog,
-    href: "/patients",
+    href: "/",
   },
 ];
 

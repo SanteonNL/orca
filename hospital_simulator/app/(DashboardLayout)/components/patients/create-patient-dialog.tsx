@@ -68,7 +68,7 @@ const CreatePatientDialog: React.FC = () => {
         if (patientFirstName && patientLastName && !selfSetPatientEmail) {
             setPatientEmail(generatePatientEmail(patientFirstName, patientLastName))
         }
-    }, [patientFirstName, patientLastName]);
+    }, [patientFirstName, patientLastName, selfSetPatientEmail]);
 
     const createPatient = async () => {
         let firstName = patientFirstName || "John";
