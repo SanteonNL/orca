@@ -33,7 +33,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
 		return nil, coolfhir.BadRequest("invalid %s: %s", resourceType, err)
 	}
-	resourceID := coolfhir.ResourceID(resource)
 
 	// Check we're only allowing secure external literal references
 	if err := validateLiteralReferences(ctx, h.profile, &resource); err != nil {
@@ -43,15 +42,20 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	// Search for the existing resource
 	var searchBundle fhir.Bundle
 
-	resourceId := ""
-	if resourceID != nil {
-		resourceId = *resourceID
+	searchParams := make(url.Values)
+	if request.ResourceId != "" {
+		if coolfhir.ResourceID(resource) != nil && *coolfhir.ResourceID(resource) != request.ResourceId {
+			return nil, coolfhir.BadRequest("resource ID mismatch: %s != %s", *coolfhir.ResourceID(resource), request.ResourceId)
+		}
+		searchParams = url.Values{
+			"_id": []string{request.ResourceId},
+		}
+	} else if len(request.RequestUrl.Query()) > 0 {
+		searchParams = request.RequestUrl.Query()
 	}
 
-	if resourceId != "" {
-		err := h.fhirClient.SearchWithContext(ctx, resourceType, url.Values{
-			"_id": []string{resourceId},
-		}, &searchBundle)
+	if len(searchParams) > 0 {
+		err := h.fhirClient.SearchWithContext(ctx, resourceType, searchParams, &searchBundle)
 		if err != nil {
 			return nil, fmt.Errorf("failed to search for %s: %w", resourceType, err)
 		}
@@ -59,7 +63,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	// If no entries found, handle as a create operation
 	if len(searchBundle.Entry) == 0 {
-		log.Ctx(ctx).Info().Msgf("%s not found, handling as create: %s", resourceType, resourceId)
+		log.Ctx(ctx).Info().Msgf("%s not found, handling as create: %s", resourceType, searchParams.Encode())
 		request.Upsert = true
 		return h.createHandler.Handle(ctx, request, tx)
 	}

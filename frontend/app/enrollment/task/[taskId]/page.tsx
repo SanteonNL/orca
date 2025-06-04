@@ -10,6 +10,7 @@ import DataViewer from '@/components/data-viewer'
 import { viewerFeatureIsEnabled } from '@/app/actions'
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
 import {getLaunchableApps} from "@/app/applaunch";
+import {Questionnaire} from "fhir/r4";
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
@@ -18,10 +19,11 @@ export default function EnrollmentTaskPage() {
     const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
     const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
     const [showViewer, setShowViewer] = useState(false)
-    const [shouldReload, setShouldReload] = useState(false);
+    const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
 
     useEffect(() => {
         if (taskId) {
+            console.log(`Task ID from URL: ${taskId}`);
             //TODO: Currently we only have one Questionnaire per enrollment flow. But we support multiple. The UX for multiple still needs to be made. When it's there, this is the place to add it
             const selectedTaskId = Array.isArray(taskId) ? taskId[0] : taskId;
             setSelectedTaskId(selectedTaskId);
@@ -55,14 +57,14 @@ export default function EnrollmentTaskPage() {
     }, [serviceRequest])
 
     useEffect(() => {
-        if (shouldReload) {
-            const timeout = setTimeout(() => {
-                window.location.reload();
-                setShouldReload(false);
-            }, 1000);
-            return () => clearTimeout(timeout);
+        if (!taskToQuestionnaireMap) {
+            return undefined
         }
-    }, [shouldReload]);
+        if (!subTasks || subTasks.length === 0) {
+            return undefined
+        }
+        setCurrentQuestionnaire(taskToQuestionnaireMap[subTasks[0].id!!])
+    }, [taskToQuestionnaireMap, subTasks]);
 
     if (loading || !initialized) return <Loading />
 
@@ -76,16 +78,10 @@ export default function EnrollmentTaskPage() {
             <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
 
-    if (task.status === "received") {
-        if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
-            if (!shouldReload) {
-                setShouldReload(true);
-            }
-            return <>Task is ontvangen, maar er ontbreekt informatie.</>
-        }
+    if (task.status === "received" && currentQuestionnaire && subTasks?.[0]) {
         return <>
             <QuestionnaireRenderer
-                questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
+                questionnaire={currentQuestionnaire}
                 inputTask={subTasks[0]}
             />
             <TaskSseConnectionStatus />

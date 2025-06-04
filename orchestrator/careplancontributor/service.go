@@ -65,7 +65,8 @@ func New(
 	messageBroker messaging.Broker,
 	eventManager events.Manager,
 	ehrFhirProxy coolfhir.HttpProxy,
-	localCarePlanServiceURL *url.URL) (*Service, error) {
+	localCarePlanServiceURL *url.URL,
+	httpHandler http.Handler) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 
@@ -128,6 +129,7 @@ func New(
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 		eventManager:                  eventManager,
 		sseService:                    sse.New(),
+		httpHandler:                   httpHandler,
 	}
 	if config.OIDCProvider.Enabled {
 		result.oidcProvider, err = oidc.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDCProvider)
@@ -175,6 +177,7 @@ type Service struct {
 	sseService                    *sse.Service
 	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
 	oidcProvider                  *oidc.Service
+	httpHandler                   http.Handler
 	tokenClient                   *token.Client
 }
 
@@ -284,6 +287,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	})
 	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
+	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
@@ -441,6 +445,11 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, coolfhir.BadRequest("%s header can't contain multiple values", carePlanURLHeaderKey)
 	}
 	carePlanURL := carePlanURLValue[0]
+	// Validate that the header value is a properly formatted SCP context URL
+	_, err := s.parseFHIRBaseURL(carePlanURL)
+	if err != nil {
+		return nil, coolfhir.BadRequest("specified SCP context header is not a valid URL")
+	}
 
 	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
 	if err != nil {
@@ -728,22 +737,23 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		switch header {
 		case scpFHIRBaseURL:
 			var err error
-			if headerValue == "local-cps" {
-				// TODO: This should probably be optimized by the EHR/ORCA Frontend having a internal endpoint on the CPS, instead.
-				//       Accessing one's own CPS this way causes it to go through the Nuts authentication layer, which adds latency.
+			if headerValue == "local-cps" ||
+				(s.localCarePlanServiceUrl != nil && headerValue == s.localCarePlanServiceUrl.String()) {
+				// Targeted FHIR API is local CPS, either through 'local-cps' or because the target URL matches the local CPS URL
 				fhirBaseURL = s.localCarePlanServiceUrl
 				if fhirBaseURL == nil {
 					return nil, nil, fmt.Errorf("%s: no local CarePlanService", header)
 				}
+				httpClient = s.httpClientForLocalCPS(httpClient)
 			} else {
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
 				if err != nil {
 					return nil, nil, fmt.Errorf("%s: %w", header, err)
 				}
-			}
-			_, httpClient, err = s.createFHIRClientForURL(ctx, fhirBaseURL)
-			if err != nil {
-				return nil, nil, fmt.Errorf("%s: failed to create HTTP client: %w", header, err)
+				_, httpClient, err = s.createFHIRClientForURL(ctx, fhirBaseURL)
+				if err != nil {
+					return nil, nil, fmt.Errorf("%s: failed to create HTTP client: %w", header, err)
+				}
 			}
 			break
 		case scpEntityIdentifierHeaderKey:
@@ -774,6 +784,28 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		return nil, nil, coolfhir.BadRequest("can't determine the external SCP-node to query from the HTTP request headers")
 	}
 	return fhirBaseURL, httpClient, nil
+}
+
+func (s Service) httpClientForLocalCPS(httpClient *http.Client) *http.Client {
+	httpClient = &http.Client{Transport: internalDispatchHTTPRoundTripper{
+		profile: s.profile,
+		handler: s.httpHandler,
+		requestVisitor: func(request *http.Request) {
+			if s.orcaPublicURL.Path == "" || s.orcaPublicURL.Path == "/" {
+				return
+			}
+			originalURL := request.URL
+			newURL := new(url.URL)
+			*newURL = *request.URL
+			// Remove ORCA Public URL prefix from the request path, since we're dispatching internally
+			newURL.Path = strings.TrimPrefix(strings.TrimPrefix(originalURL.Path, "/"), strings.TrimPrefix(s.orcaPublicURL.Path, "/"))
+			// Earlier, I tried http.Request.Clone(), but that caused a redirect-loop. This worked.
+			newHTTPRequest, _ := http.NewRequestWithContext(request.Context(), request.Method, newURL.String(), request.Body)
+			newHTTPRequest.Header = request.Header.Clone()
+			*request = *newHTTPRequest
+		},
+	}}
+	return httpClient
 }
 
 func (s Service) parseFHIRBaseURL(fhirBaseURL string) (*url.URL, error) {

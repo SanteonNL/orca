@@ -75,7 +75,6 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
 
     launchContext = await launchContextRes.json();
 
-
     set({ launchContext });
 
     return launchContext;
@@ -109,8 +108,6 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
     } else {
         console.warn(`No Task Condition found for ServiceRequest/${serviceRequest.id}`)
     }
-
-    debugger
 
     set({
         patient: patient as Patient,

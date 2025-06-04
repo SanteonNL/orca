@@ -10,7 +10,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/comp
 import { cn } from "@/lib/utils"
 import type { Observation } from "fhir/r4"
 import { getObservationIcon } from "./observation-icons"
-import { identifierToString } from "@/lib/fhirUtils"
+import { identifierToToken } from "@/lib/fhirUtils"
 import { nl } from "date-fns/locale"
 
 // Animation variants
@@ -223,7 +223,7 @@ export default function ObservationCard({
                                         <p className="font-medium">Betrokkene</p>
                                         <p>
                                             {observation.subject?.display ||
-                                                identifierToString(observation.subject?.identifier) ||
+                                                identifierToToken(observation.subject?.identifier) ||
                                                 observation.subject?.reference ||
                                                 "Onbekend"}
                                         </p>
