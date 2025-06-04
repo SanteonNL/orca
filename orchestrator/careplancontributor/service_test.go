@@ -192,6 +192,16 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			patientStatusReturn: to.Ptr(http.StatusOK),
 		},
 		{
+			name:                "Success: valid request - GET (search)",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient"),
+			url:                 to.Ptr("/cpc/fhir/Patient"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
+		},
+		{
 			name:                "Success: valid request - GET - Allow caching",
 			expectedStatus:      http.StatusOK,
 			readBodyReturnFile:  "./testdata/careplan-valid.json",
