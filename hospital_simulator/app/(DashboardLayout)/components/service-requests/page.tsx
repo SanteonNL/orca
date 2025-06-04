@@ -33,22 +33,25 @@ export default async function Page(props: Input) {
     const serviceRequests = serviceRequestsData.entry ?? [];
 
 
-    let rows = serviceRequests.map((entry: any) => {
-        const serviceRequest = entry.resource;
-        const patientIdentifier = serviceRequest.subject ? serviceRequest.subject.identifier.value : ""
-        const patientName = patient?.name && patient.name[0] ? patient.name[0].text : patientIdentifier;
-        const reasonRef = serviceRequest.reasonReference?.[0].display || "unknown";
+    let rows = serviceRequests.
+        map((entry: any) => entry.resource).
+        filter((resource) => resource).
+        map(resource => {
+            const serviceRequest = resource!!;
+            const patientIdentifier = serviceRequest.subject.identifier ? serviceRequest.subject.identifier.value : ""
+            const patientName = patient?.name && patient.name[0] ? patient.name[0].text : patientIdentifier;
+            const reasonRef = serviceRequest.reasonReference?.[0].display || "unknown";
 
-        return {
-            id: serviceRequest.id,
-            lastUpdated: new Date(serviceRequest.meta.lastUpdated),
-            title: serviceRequest.code.coding[0].display,
-            patient: patientName,
-            status: serviceRequest.status,
-            patientId: patient ? `Patient/${patient.id}` : patientIdentifier,
-            reasonReference: reasonRef,
-        }
-    });
+            return {
+                id: serviceRequest.id,
+                lastUpdated: new Date(serviceRequest.meta?.lastUpdated || 0),
+                title: serviceRequest.code?.coding!![0].display || "N/A",
+                patient: patientName,
+                status: serviceRequest.status,
+                patientId: patient ? `Patient/${patient.id}` : patientIdentifier,
+                reasonReference: reasonRef,
+            }
+        });
     return (
         <div>
             <CreateServiceRequestDialog patient={patient}/>

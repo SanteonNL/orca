@@ -1,13 +1,11 @@
 'use client'
-import {useRouter} from "next/navigation";
+import {redirect, useRouter} from "next/navigation";
 import {useEffect} from "react";
 
 const Dashboard = () => {
-    const { push } = useRouter();
-
     useEffect(() => {
-        push('/patients');
-    }, []);
+        redirect('/patients');
+    }, [redirect]);
     return <p></p>;
 }
 
