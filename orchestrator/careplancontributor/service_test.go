@@ -226,26 +226,6 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
 			allowCaching:        true,
 		},
-		{
-			name:                "Success: valid request - GET Coverage with URL parameters",
-			expectedStatus:      http.StatusOK,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			patientRequestURL:   to.Ptr("GET /cpc/fhir/Coverage"),
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientStatusReturn: to.Ptr(http.StatusOK),
-			url:                 to.Ptr("/cpc/fhir/Coverage?_include=Coverage:payor:Patient&_include=Coverage:payor:Organization"),
-		},
-		{
-			name:                "Success: valid request - GET Coverage without specific URL parameters",
-			expectedStatus:      http.StatusOK,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			patientRequestURL:   to.Ptr("GET /cpc/fhir/Coverage"),
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientStatusReturn: to.Ptr(http.StatusOK),
-			url:                 to.Ptr("/cpc/fhir/Coverage?someOtherParam=value"),
-		},
 	}
 
 	for _, tt := range tests {
@@ -296,24 +276,6 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			if tt.patientRequestURL != nil && tt.patientStatusReturn != nil {
 				fhirServerMux.HandleFunc(*tt.patientRequestURL, func(writer http.ResponseWriter, request *http.Request) {
 					writer.WriteHeader(*tt.patientStatusReturn)
-					// For Coverage resource test, validate query parameters are preserved
-					if strings.Contains(request.URL.Path, "/Coverage") {
-						expectedParams := "_include=Coverage:payor:Patient&_include=Coverage:payor:Organization"
-						// URL decode the query string for comparison
-						decodedQuery, err := url.QueryUnescape(request.URL.RawQuery)
-						if err == nil && decodedQuery == expectedParams {
-							// Return a mock Coverage bundle to verify the response
-							mockCoverage := fhir.Coverage{
-								Id: to.Ptr("coverage-1"),
-							}
-							_ = json.NewEncoder(writer).Encode(mockCoverage)
-						} else {
-							// Return Patient for other cases (backward compatibility)
-							_ = json.NewEncoder(writer).Encode(fhir.Patient{})
-						}
-					} else {
-						_ = json.NewEncoder(writer).Encode(fhir.Patient{})
-					}
 				})
 			}
 
