@@ -54,10 +54,14 @@ const taskProgressStore = create<StoreState>((set, get) => ({
         try {
             set({ loading: true, error: undefined })
 
-            const [task, subTasks] = await Promise.all([
-                await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
-                await fetchSubTasks(selectedTaskId)
-            ])
+            // const [task, subTasks] = await Promise.all([
+            //     await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
+            //     await fetchSubTasks(selectedTaskId)
+            // ])
+
+            const task = await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task
+            const subTaskBundle = await fetchSubTaskBundle(selectedTaskId);
+            const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle)
 
             console.log(`Fetched Task: ${JSON.stringify(task)}`);
             console.log(`Fetched SubTasks: ${JSON.stringify(subTasks)}`);
@@ -102,16 +106,14 @@ const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState |
     return questionnaireMap
 }
 
-const fetchSubTasks = async (taskId: string) => {
-    const subTaskBundle = await cpsClient.search({
+const fetchSubTaskBundle = async (taskId: string) => {
+    return await cpsClient.search({
         resourceType: 'Task',
         searchParams: { "part-of": `Task/${taskId}` },
         headers: { "Cache-Control": "no-cache" },
         // @ts-ignore
         options: { postSearch: true }
     }) as Bundle<Task>
-    console.log(`Fetched subtask bundle: ${JSON.stringify(subTaskBundle)}`);
-    return await fetchAllBundlePages(cpsClient, subTaskBundle)
 }
 
 const useTaskProgressStore = () => {
