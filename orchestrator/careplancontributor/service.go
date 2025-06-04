@@ -851,8 +851,14 @@ func (s Service) httpClientForLocalCPS(httpClient *http.Client) *http.Client {
 	httpClient = &http.Client{Transport: internalDispatchHTTPRoundTripper{
 		profile: s.profile,
 		handler: s.httpHandler,
-		matcher: func(request *http.Request) bool {
-			return true
+		requestVisitor: func(request *http.Request) {
+			if s.orcaPublicURL.Path == "" || s.orcaPublicURL.Path == "/" {
+				return
+			}
+			// Remove ORCA Public URL prefix from the request path, since we're dispatching internally
+			newRequest := request.Clone(request.Context())
+			newRequest.URL.Path = strings.TrimPrefix(strings.TrimPrefix(newRequest.URL.Path, "/"), strings.TrimPrefix(s.orcaPublicURL.Path, "/"))
+			*request = *newRequest
 		},
 	}}
 	return httpClient

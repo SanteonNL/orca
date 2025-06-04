@@ -990,6 +990,25 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 			require.NoError(t, err)
 			assert.NotEmpty(t, responseData)
 		})
+		t.Run("local-cps, non-root base URL", func(t *testing.T) {
+			t.Log("calls to local CPS are dispatched internally, this test makes sure this also works when ORCA is running on a subpath")
+			service.localCarePlanServiceUrl = must.ParseURL(httpServer.URL + "/orca/fhir")
+			service.orcaPublicURL = must.ParseURL(httpServer.URL).JoinPath("orca")
+			defer func() {
+				service.localCarePlanServiceUrl = must.ParseURL(httpServer.URL + "/fhir")
+				service.orcaPublicURL = must.ParseURL(httpServer.URL)
+			}()
+
+			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/2", nil)
+			httpRequest.Header.Set("Authorization", "Bearer secret")
+			httpRequest.Header.Set("X-Scp-Fhir-Url", "local-cps")
+			httpResponse, err := httpServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			responseData, err := io.ReadAll(httpResponse.Body)
+			require.NoError(t, err)
+			assert.NotEmpty(t, responseData)
+		})
 	})
 	t.Run("can't determine remote node", func(t *testing.T) {
 		httpRequest, _ := http.NewRequest(http.MethodPost, httpServer.URL+"/cpc/external/fhir/Task/_search", nil)
