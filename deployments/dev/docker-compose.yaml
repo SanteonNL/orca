@@ -50,7 +50,7 @@ services:
       dockerfile: Dockerfile-dev
     volumes:
       - ../../frontend:/app
-      - /app/node_modules
+      - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
     environment:
       #TERMINOLOGY_SERVER_BASE_URL=https://terminologieserver.nl/fhir
       NEXT_PUBLIC_BASE_PATH: /frontend
@@ -145,6 +145,9 @@ services:
       ORCA_PERFORMER_ORGANIZATION_NAME: Demo Clinic
       NEXT_ALLOWED_ORIGINS: localhost:8081
       FHIR_BASE_URL: http://fhirstore:8080/fhir
+    volumes:
+      - ../../hospital_simulator:/app
+      - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
   clinic_proxy:
     image: nginx:latest
     depends_on:
@@ -183,6 +186,7 @@ services:
       # If this value is set, the clinic will send task notifications over http to the provided endpoint. Cannot be used in conjunction with the strict mode
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC=orca-enroll-patient
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-healthcareservices.json,https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-questionnaires.json
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTE_ACCEPTED=Work on the Task will start tomorrow.
     volumes:
       # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
       # used by the Task Filler Engine
@@ -199,6 +203,9 @@ services:
       CLINIC_IDENTIFIER: http://fhir.nl/fhir/NamingSystem/ura|1234
       CLINIC_CPS_URL: http://hospital_orchestrator:8080/cps
       NEXT_ALLOWED_ORIGINS: localhost:8081
+    volumes:
+      - ../../viewer_simulator:/app
+      - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
   # Orchestrator's Task Engine posts to Viewer over HTTP, but the first call will time-out due to NextJS compilation.
   # So, we use curl to force NextJS to make sure the receiving endpoint is compiled.
   clinic_viewer-init:
