@@ -54,14 +54,12 @@ const taskProgressStore = create<StoreState>((set, get) => ({
         try {
             set({ loading: true, error: undefined })
 
-            // const [task, subTasks] = await Promise.all([
-            //     await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
-            //     await fetchSubTasks(selectedTaskId)
-            // ])
 
-            const task = await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task
-            const subTaskBundle = await fetchSubTaskBundle(selectedTaskId);
-            const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle)
+
+            const [task, subTasks] = await Promise.all([
+                await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
+                await fetchSubTasks(selectedTaskId)
+            ])
 
             console.log(`Fetched Task: ${JSON.stringify(task)}`);
             console.log(`Fetched SubTasks: ${JSON.stringify(subTasks)}`);
@@ -106,14 +104,34 @@ const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState |
     return questionnaireMap
 }
 
-const fetchSubTaskBundle = async (taskId: string) => {
-    return await cpsClient.search({
-        resourceType: 'Task',
-        searchParams: { "part-of": `Task/${taskId}` },
-        headers: { "Cache-Control": "no-cache" },
-        // @ts-ignore
-        options: { postSearch: true }
-    }) as Bundle<Task>
+const fetchSubTasks = async (taskId: string) => {
+    let attempts = 0;
+    const maxRetries = 3;
+    const baseDelay = 200; // ms
+
+    while (true) {
+        try {
+            const subTaskBundle = await cpsClient.search({
+                resourceType: 'Task',
+                searchParams: { "part-of": `Task/${taskId}` },
+                headers: { "Cache-Control": "no-cache" },
+                // @ts-ignore
+                options: { postSearch: true }
+            }) as Bundle<Task>;
+            const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle);
+            if (!Array.isArray(subTasks) || subTasks.length === 0) {
+                throw new Error('No subTasks found');
+            }
+            return subTasks;
+        } catch (error) {
+            attempts++;
+            if (attempts > maxRetries) {
+                throw new Error(`Failed to fetch subTasks after ${maxRetries} retries: ${error}`);
+            }
+            const delay = baseDelay * Math.pow(2, attempts - 1);
+            await new Promise(res => setTimeout(res, delay));
+        }
+    }
 }
 
 const useTaskProgressStore = () => {
@@ -143,7 +161,7 @@ const useTaskProgressStore = () => {
 
         globalEventSource.onerror = (error) => {
             setEventSourceConnected(false);
-            console.error(`Error in global EventSource: ${error}`);
+            console.error(`Error in global EventSource: ${JSON.stringify(error)}`);
         };
 
         globalEventSource.onmessage = (event) => {
