@@ -110,6 +110,7 @@ const fetchSubTasks = async (taskId: string) => {
         // @ts-ignore
         options: { postSearch: true }
     }) as Bundle<Task>
+    console.log(`Fetched subtask bundle: ${JSON.stringify(subTaskBundle)}`);
     return await fetchAllBundlePages(cpsClient, subTaskBundle)
 }
 
