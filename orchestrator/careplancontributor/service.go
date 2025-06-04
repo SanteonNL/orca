@@ -556,21 +556,10 @@ func (s Service) authorizeScpMember(request *http.Request) (*ScpValidationResult
 		return nil, coolfhir.BadRequest("%s header can't contain multiple values", carePlanURLHeaderKey)
 	}
 	carePlanURL := carePlanURLValue[0]
-
-	// Validate that the header value is a properly formatted URL
-	parsedURL, err := url.Parse(carePlanURL)
+	// Validate that the header value is a properly formatted SCP context URL
+	_, err := s.parseFHIRBaseURL(carePlanURL)
 	if err != nil {
-		return nil, coolfhir.BadRequest("specified SCP context header is not a valid URL: %v", err)
-	}
-
-	// Ensure it's a fully qualified URL (has scheme and host)
-	if parsedURL.Scheme == "" || parsedURL.Host == "" {
-		return nil, coolfhir.BadRequest("specified SCP context header must be a fully qualified URL with scheme and host")
-	}
-
-	// Validate scheme is http or https
-	if parsedURL.Scheme != "http" && parsedURL.Scheme != "https" {
-		return nil, coolfhir.BadRequest("specified SCP context header must use http or https scheme")
+		return nil, coolfhir.BadRequest("specified SCP context header is not a valid URL")
 	}
 
 	cpsBaseURL, carePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanURL, "CarePlan")
