@@ -75,7 +75,6 @@ const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState
 
     launchContext = await launchContextRes.json();
 
-
     set({ launchContext });
 
     return launchContext;
