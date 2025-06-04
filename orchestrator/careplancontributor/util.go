@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/rs/zerolog/log"
 	"io"
 	"net/http"
 )
@@ -55,6 +56,8 @@ func (i internalDispatchHTTPRoundTripper) RoundTrip(request *http.Request) (*htt
 		i.requestVisitor(request)
 	}
 	i.handler.ServeHTTP(responseWriter, request)
+	log.Ctx(ctx).Info().Msgf("InternalDispatch HTTP Respone.status: %d", responseWriter.status)
+	log.Ctx(ctx).Info().Msgf("InternalDispatch HTTP Respone.headers: %v", responseWriter.headers)
 	return &http.Response{
 		StatusCode: responseWriter.status,
 		Header:     responseWriter.headers,

@@ -855,10 +855,15 @@ func (s Service) httpClientForLocalCPS(httpClient *http.Client) *http.Client {
 			if s.orcaPublicURL.Path == "" || s.orcaPublicURL.Path == "/" {
 				return
 			}
+			originalURL := request.URL
+			newURL := new(url.URL)
+			*newURL = *request.URL
 			// Remove ORCA Public URL prefix from the request path, since we're dispatching internally
-			newRequest := request.Clone(request.Context())
-			newRequest.URL.Path = strings.TrimPrefix(strings.TrimPrefix(newRequest.URL.Path, "/"), strings.TrimPrefix(s.orcaPublicURL.Path, "/"))
-			*request = *newRequest
+			newURL.Path = strings.TrimPrefix(strings.TrimPrefix(originalURL.Path, "/"), strings.TrimPrefix(s.orcaPublicURL.Path, "/"))
+			// Earlier, I tried http.Request.Clone(), but that caused a redirect-loop. This worked.
+			newHTTPRequest, _ := http.NewRequestWithContext(request.Context(), request.Method, newURL.String(), request.Body)
+			newHTTPRequest.Header = request.Header.Clone()
+			*request = *newHTTPRequest
 		},
 	}}
 	return httpClient
