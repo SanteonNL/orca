@@ -1,20 +1,20 @@
 import React from 'react';
 import CreateServiceRequestDialog from './create-service-request-dialog';
 import ServiceRequestTable from './service-request-table';
-import {Bundle, Patient, ServiceRequest} from 'fhir/r4';
+import {Bundle, ServiceRequest} from 'fhir/r4';
+import {ReadPatient} from "@/utils/fhir";
 
 type Input = {
-    patient: Patient
+    patientID: string
 }
 
-export default async function Page(props: Input) {
+export default async function Overview(props: Input) {
     if (!process.env.FHIR_BASE_URL) {
         console.error('FHIR_BASE_URL is not defined');
         return <>FHIR_BASE_URL is not defined</>;
     }
-    const patient = props.patient;
 
-    const response = await fetch(`${process.env.FHIR_BASE_URL}/ServiceRequest?patient=Patient/${patient.id!!}&_count=500`, {
+    const response = await fetch(`${process.env.FHIR_BASE_URL}/ServiceRequest?patient=Patient/${props.patientID}&_count=500`, {
         cache: 'no-store',
         headers: {
             "Cache-Control": "no-cache"
@@ -32,20 +32,24 @@ export default async function Page(props: Input) {
     console.log(`Found [${serviceRequestsData.total}] ServiceRequest resources`);
     const serviceRequests = serviceRequestsData.entry ?? [];
 
+   const patient = await ReadPatient(props.patientID);
+    if (!patient) {
+        return <>Patient not found: {props.patientID}</>;
+    }
 
-    let rows = serviceRequests.map((entry: any) => {
-        const serviceRequest = entry.resource;
-        const patientIdentifier = serviceRequest.subject ? serviceRequest.subject.identifier.value : ""
-        const patientName = patient?.name && patient.name[0] ? patient.name[0].text : patientIdentifier;
+    let rows = serviceRequests.map(entry => {
+        const serviceRequest = entry.resource as ServiceRequest;
+        const patientIdentifier = serviceRequest.subject.identifier ? serviceRequest.subject.identifier.value : ""
+        const patientName = patient.name && patient.name[0] ? patient.name[0].text : patientIdentifier;
         const reasonRef = serviceRequest.reasonReference?.[0].display || "unknown";
 
         return {
             id: serviceRequest.id,
-            lastUpdated: new Date(serviceRequest.meta.lastUpdated),
-            title: serviceRequest.code.coding[0].display,
+            lastUpdated: new Date(serviceRequest.meta?.lastUpdated || 0),
+            title: serviceRequest.code?.coding!![0].display || "N/A",
             patient: patientName,
             status: serviceRequest.status,
-            patientId: patient ? `Patient/${patient.id}` : patientIdentifier,
+            patientId: `Patient/${patient.id}`,
             reasonReference: reasonRef,
         }
     });
