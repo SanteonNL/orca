@@ -59,8 +59,8 @@ const taskProgressStore = create<StoreState>((set, get) => ({
                 await fetchSubTasks(selectedTaskId)
             ])
 
-            console.log(`Fetched Task: ${JSON.stringify(task)}`);
-            console.log(`Fetched SubTasks: ${JSON.stringify(subTasks)}`);
+            // console.log(`Fetched Task: ${JSON.stringify(task)}`);
+            // console.log(`Fetched SubTasks: ${JSON.stringify(subTasks)}`);
 
             set({ task, subTasks })
             await fetchQuestionnaires(subTasks, set)
