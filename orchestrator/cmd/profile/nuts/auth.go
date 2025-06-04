@@ -23,27 +23,35 @@ func (d DutchNutsProfile) Authenticator(resourceServerURL *url.URL, fn func(writ
 		TokenIntrospectionEndpoint: d.Config.API.Parse().JoinPath("internal/auth/v2/accesstoken/introspect").String(),
 		TokenIntrospectionClient:   tokenIntrospectionClient,
 	}
-	return middleware.Secure(authConfig, func(response http.ResponseWriter, request *http.Request) {
-		userInfo := middleware.UserInfo(request.Context())
-		if userInfo == nil {
-			// would be weird, should've been handled by middleware.Secure()
-			log.Ctx(request.Context()).Error().Msg("User info not found in context")
-			http.Error(response, "Unauthorized", http.StatusUnauthorized)
-			return
-		}
-
-		organization, err := claimsToOrganization(userInfo)
+	return func(writer http.ResponseWriter, request *http.Request) {
+		principal, err := auth.PrincipalFromContext(request.Context())
 		if err != nil {
-			log.Ctx(request.Context()).Err(err).Msg("Invalid user info in context")
-			http.Error(response, "Unauthorized", http.StatusUnauthorized)
-			return
+			middleware.Secure(authConfig, func(response http.ResponseWriter, request *http.Request) {
+				userInfo := middleware.UserInfo(request.Context())
+				if userInfo == nil {
+					// would be weird, should've been handled by middleware.Secure()
+					log.Ctx(request.Context()).Error().Msg("User info not found in context")
+					http.Error(response, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+
+				organization, err := claimsToOrganization(userInfo)
+				if err != nil {
+					log.Ctx(request.Context()).Err(err).Msg("Invalid user info in context")
+					http.Error(response, "Unauthorized", http.StatusUnauthorized)
+					return
+				}
+				principal := auth.Principal{
+					Organization: *organization,
+				}
+				log.Ctx(request.Context()).Debug().Msgf("Authenticated user: %v on route %s", principal, request.URL.Path)
+				fn(response, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
+			})(writer, request)
+		} else {
+			log.Ctx(request.Context()).Debug().Msgf("Pre-authenticated user: %v on route %s", principal, request.URL.Path)
+			fn(writer, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 		}
-		principal := auth.Principal{
-			Organization: *organization,
-		}
-		log.Ctx(request.Context()).Debug().Msgf("Authenticated user: %v on route %s", principal, request.URL.Path)
-		fn(response, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
-	})
+	}
 }
 
 func claimsToOrganization(claims map[string]interface{}) (*fhir.Organization, error) {
