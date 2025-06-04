@@ -315,7 +315,46 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			}
 			if tt.patientRequestURL != nil && tt.patientStatusReturn != nil {
 				fhirServerMux.HandleFunc(*tt.patientRequestURL, func(writer http.ResponseWriter, request *http.Request) {
+					writer.Header().Set("Content-Type", "application/fhir+json")
 					writer.WriteHeader(*tt.patientStatusReturn)
+					if *tt.patientStatusReturn == http.StatusOK {
+						// Return a valid FHIR response for successful requests
+						if strings.Contains(*tt.patientRequestURL, "_search") || !strings.Contains(*tt.patientRequestURL, "/1") {
+							// For search endpoints, return a Bundle
+							_, _ = writer.Write([]byte(`{
+								"resourceType": "Bundle",
+								"type": "searchset",
+								"total": 1,
+								"entry": [
+									{
+										"fullUrl": "http://example.com/fhir/Patient/1",
+										"resource": {
+											"resourceType": "Patient",
+											"id": "1",
+											"identifier": [
+												{
+													"system": "http://fhir.nl/fhir/NamingSystem/bsn",
+													"value": "1333333337"
+												}
+											]
+										}
+									}
+								]
+							}`))
+						} else {
+							// For individual resource endpoints, return a Patient
+							_, _ = writer.Write([]byte(`{
+								"resourceType": "Patient",
+								"id": "1",
+								"identifier": [
+									{
+										"system": "http://fhir.nl/fhir/NamingSystem/bsn",
+										"value": "1333333337"
+									}
+								]
+							}`))
+						}
+					}
 				})
 			}
 

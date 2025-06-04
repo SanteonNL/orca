@@ -248,7 +248,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
 
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), nil, carePlanServiceURL)
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), nil, carePlanServiceURL, nil)
 	require.NoError(t, err)
 
 	cpc.tokenClient = mockTokenClient.Client
