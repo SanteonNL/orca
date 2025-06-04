@@ -59,11 +59,14 @@ const taskProgressStore = create<StoreState>((set, get) => ({
                 await fetchSubTasks(selectedTaskId)
             ])
 
-            // console.log(`Fetched Task: ${JSON.stringify(task)}`);
-            // console.log(`Fetched SubTasks: ${JSON.stringify(subTasks)}`);
+            console.log(`Fetched Task: ${JSON.stringify(task)}`);
+            console.log(`Fetched SubTasks: ${JSON.stringify(subTasks)}`);
 
             set({ task, subTasks })
-            await fetchQuestionnaires(subTasks, set)
+            const questionnaireMap = await fetchQuestionnaires(subTasks, set)
+
+            console.log(`Fetched Questionnaires: ${JSON.stringify(questionnaireMap)}`);
+            set({ taskToQuestionnaireMap: questionnaireMap });
             set({ initialized: true, loading: false, })
 
         } catch (error: any) {
@@ -76,7 +79,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
 }));
 
 const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
-    const tmpMap: Record<string, Questionnaire> = {};
+    const questionnaireMap: Record<string, Questionnaire> = {};
     await Promise.all(subTasks.map(async (task: Task) => {
         if (task.input && task.input.length > 0) {
             const input = task.input.find(input => input.valueReference?.reference?.startsWith("Questionnaire"));
@@ -89,14 +92,14 @@ const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState |
                         id: questionnaireId.split("/")[1]
                     }) as Questionnaire;
                     console.log(`Found the questionnaire  ${task.id}: ${JSON.stringify(questionnaire)}`);
-                    tmpMap[task.id] = questionnaire;
+                    questionnaireMap[task.id] = questionnaire;
                 } catch (error) {
                     set({ error: `Failed to fetch questionnaire: ${error}` });
                 }
             }
         }
     }));
-    set({ taskToQuestionnaireMap: tmpMap });
+    return questionnaireMap
 }
 
 const fetchSubTasks = async (taskId: string) => {
