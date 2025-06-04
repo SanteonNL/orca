@@ -1,7 +1,7 @@
-import { Bundle, Questionnaire, Task } from 'fhir/r4';
-import { useEffect } from 'react';
-import { create } from 'zustand';
-import { createCpsClient, fetchAllBundlePages } from '../fhirUtils';
+import {Bundle, Questionnaire, Task} from 'fhir/r4';
+import {useEffect} from 'react';
+import {create} from 'zustand';
+import {createCpsClient, fetchAllBundlePages} from '../fhirUtils';
 
 const cpsClient = createCpsClient()
 // A module-level variable, to ensure only one SSE subscription is active (`use` hook for this store is used in multiple places).
@@ -50,7 +50,6 @@ const taskProgressStore = create<StoreState>((set, get) => ({
         set({ subTasks })
     },
     fetchAllResources: async (selectedTaskId: string) => {
-        console.log("Fetching all resources for the selected task...");
         try {
             set({ loading: true, error: undefined })
 
@@ -58,14 +57,9 @@ const taskProgressStore = create<StoreState>((set, get) => ({
                 await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
                 await fetchSubTasks(selectedTaskId)
             ])
-
-            console.log(`Fetched Task: ${JSON.stringify(task)}`);
-            console.log(`Fetched SubTasks: ${JSON.stringify(subTasks)}`);
-
             set({ task, subTasks })
             const questionnaireMap = await fetchQuestionnaires(subTasks, set)
 
-            console.log(`Fetched Questionnaires: ${JSON.stringify(questionnaireMap)}`);
             set({ taskToQuestionnaireMap: questionnaireMap });
             set({ initialized: true, loading: false, })
 
@@ -83,16 +77,13 @@ const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState |
     await Promise.all(subTasks.map(async (task: Task) => {
         if (task.input && task.input.length > 0) {
             const input = task.input.find(input => input.valueReference?.reference?.startsWith("Questionnaire"));
-            console.log(`Found the input for Task ${task.id}: ${JSON.stringify(input)}`);
             if (input && task.id && input.valueReference?.reference) {
                 const questionnaireId = input.valueReference.reference;
                 try {
-                    const questionnaire = await cpsClient.read({
+                    questionnaireMap[task.id] = await cpsClient.read({
                         resourceType: "Questionnaire",
                         id: questionnaireId.split("/")[1]
                     }) as Questionnaire;
-                    console.log(`Found the questionnaire  ${task.id}: ${JSON.stringify(questionnaire)}`);
-                    questionnaireMap[task.id] = questionnaire;
                 } catch (error) {
                     set({ error: `Failed to fetch questionnaire: ${error}` });
                 }
