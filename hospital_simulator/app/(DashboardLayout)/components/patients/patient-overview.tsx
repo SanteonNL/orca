@@ -28,11 +28,7 @@ export default async function PatientOverview() {
     }
     const searchSet = await searchResponse.json() as Bundle<Patient>;
     console.log(`Found [${searchSet.entry?.length}] Patient resources`);
-    const patients = searchSet.entry?.map(entry => entry.resource as Patient).
-        // Note: Demo EHR uses the same FHIR server for CPC and CPS to decrease resource costs,
-        // but ORCA Frontend recreates the Patient resource, leading to duplicate FHIR resources.
-        // We filter out the SCP-resources to avoid duplicate entries in the patient overview (SCP-resources have an extension).
-        filter(f => f.extension) || [];
+    const patients = searchSet.entry?.map(entry => entry.resource as Patient) || []
     const rows = patients.map((patient: Patient) => {
         return {
             id: patient.identifier?.find((identifier: Identifier) => identifier.system === "http://fhir.nl/fhir/NamingSystem/bsn")!!.value!!,
