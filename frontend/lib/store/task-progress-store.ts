@@ -54,8 +54,6 @@ const taskProgressStore = create<StoreState>((set, get) => ({
         try {
             set({ loading: true, error: undefined })
 
-
-
             const [task, subTasks] = await Promise.all([
                 await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
                 await fetchSubTasks(selectedTaskId)
@@ -105,33 +103,23 @@ const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState |
 }
 
 const fetchSubTasks = async (taskId: string) => {
-    let attempts = 0;
-    const maxRetries = 3;
-    const baseDelay = 200; // ms
+    for (let attempts = 0; attempts < 3; attempts++) {
+        const subTaskBundle = await cpsClient.search({
+            resourceType: 'Task',
+            searchParams: { "part-of": `Task/${taskId}` },
+            headers: { "Cache-Control": "no-cache" },
+            // @ts-ignore
+            options: { postSearch: true }
+        }) as Bundle<Task>;
+        const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle);
 
-    while (true) {
-        try {
-            const subTaskBundle = await cpsClient.search({
-                resourceType: 'Task',
-                searchParams: { "part-of": `Task/${taskId}` },
-                headers: { "Cache-Control": "no-cache" },
-                // @ts-ignore
-                options: { postSearch: true }
-            }) as Bundle<Task>;
-            const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle);
-            if (!Array.isArray(subTasks) || subTasks.length === 0) {
-                throw new Error('No subTasks found');
-            }
+        if (Array.isArray(subTasks) && subTasks.length > 0) {
             return subTasks;
-        } catch (error) {
-            attempts++;
-            if (attempts > maxRetries) {
-                throw new Error(`Failed to fetch subTasks after ${maxRetries} retries: ${error}`);
-            }
-            const delay = baseDelay * Math.pow(2, attempts - 1);
-            await new Promise(res => setTimeout(res, delay));
         }
+        const delay = 200 * Math.pow(2, attempts);
+        await new Promise(res => setTimeout(res, delay));
     }
+    return [];
 }
 
 const useTaskProgressStore = () => {
