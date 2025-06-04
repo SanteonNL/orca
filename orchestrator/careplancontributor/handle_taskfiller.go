@@ -136,6 +136,11 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	ref := "Task/" + *primaryTask.Id
 	log.Ctx(ctx).Info().Msgf("TaskEngine: Accepting primary Task (task=%s)", ref)
 	primaryTask.Status = fhir.TaskStatusAccepted
+	if note := s.getTaskStatusNote(primaryTask.Status); note != nil {
+		primaryTask.Note = append(primaryTask.Note, fhir.Annotation{
+			Text: *note,
+		})
+	}
 	// Update the task in the FHIR server
 	err := cpsClient.Update(ref, primaryTask, primaryTask)
 	if err != nil {
@@ -403,6 +408,20 @@ func (s *Service) getSubTask(parentTask *fhir.Task, questionnaireRef string) fhi
 			},
 		},
 	}
+}
+
+func (s *Service) getTaskStatusNote(status fhir.TaskStatus) *string {
+	// remove all non A-Z characters
+	mapKey := strings.Map(func(r rune) rune {
+		if r >= 'a' && r <= 'z' {
+			return r
+		}
+		return -1
+	}, status.Code())
+	if note, ok := s.config.TaskFiller.StatusNote[mapKey]; ok {
+		return &note
+	}
+	return nil
 }
 
 func (s *Service) partOf(task *fhir.Task, partOfRequired bool) (*string, error) {

@@ -93,6 +93,14 @@ Configure these options to achieve this:
 If you don't want to query the FHIR Questionnaire and HealthcareService resources from your FHIR API, only set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS`.
 The downside of this option is that the resources MUST be available on startup.
 
+##### Task status notes
+You can have the Task Filler engine add notes to the Task when changing its status by configuring `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTE`.
+It's a map with keys as Task status codes (non-letters removed) and values as the note to add, e.g.:
+
+```
+ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTES_ACCEPTED=Work on the task will start tomorrow.
+```
+
 ##### EHR integration
 If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
 to the messaging topic or queue on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
