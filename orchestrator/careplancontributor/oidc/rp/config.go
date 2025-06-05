@@ -1,4 +1,4 @@
-package token
+package rp
 
 import (
 	"errors"
@@ -16,17 +16,17 @@ type TrustedIssuer struct {
 
 type Config struct {
 	Enabled bool `koanf:"enabled"`
-	// ADB2CClientID is the name of the ADB2C client to use for authentication.
-	ADB2CClientID string `koanf:"clientid"`
-	// ADB2CTrustedIssuers is a map of friendly names to trusted issuer configurations.
+	// ClientID is the name of the RelyingParty client to use for authentication.
+	ClientID string `koanf:"clientid"`
+	// TrustedIssuers is a map of friendly names to trusted issuer configurations.
 	// The friendly names are used as environment variable suffixes.
-	ADB2CTrustedIssuers map[string]TrustedIssuer `koanf:"trustedissuers"`
+	TrustedIssuers map[string]TrustedIssuer `koanf:"trustedissuers"`
 }
 
-// TrustedIssuersMap converts the config format to the format expected by the ADB2C client
+// TrustedIssuersMap converts the config format to the format expected by the RelyingParty client
 func (c Config) TrustedIssuersMap() map[string]string {
 	result := make(map[string]string)
-	for _, issuer := range c.ADB2CTrustedIssuers {
+	for _, issuer := range c.TrustedIssuers {
 		result[issuer.IssuerURL] = issuer.DiscoveryURL
 	}
 	return result
@@ -38,15 +38,15 @@ func (c *Config) Validate() error {
 		return nil // Disabled config is always valid
 	}
 
-	if c.ADB2CClientID == "" {
-		return errors.New("ADB2C client ID is required when ADB2C is enabled")
+	if c.ClientID == "" {
+		return errors.New("RelyingParty client ID is required when RelyingParty client is enabled")
 	}
 
-	if len(c.ADB2CTrustedIssuers) == 0 {
-		return errors.New("at least one trusted issuer is required when ADB2C is enabled")
+	if len(c.TrustedIssuers) == 0 {
+		return errors.New("at least one trusted issuer is required when RelyingParty client is enabled")
 	}
 
-	for name, issuer := range c.ADB2CTrustedIssuers {
+	for name, issuer := range c.TrustedIssuers {
 		if name == "" {
 			return errors.New("trusted issuer name cannot be empty")
 		}
@@ -93,11 +93,11 @@ func (c *Config) Validate() error {
 	return nil
 }
 
-// DefaultConfig returns the default ADB2C configuration.
+// DefaultConfig returns the default RelyingParty configuration.
 func DefaultConfig() Config {
 	return Config{
-		Enabled:             false,
-		ADB2CClientID:       "",
-		ADB2CTrustedIssuers: make(map[string]TrustedIssuer),
+		Enabled:        false,
+		ClientID:       "",
+		TrustedIssuers: make(map[string]TrustedIssuer),
 	}
 }

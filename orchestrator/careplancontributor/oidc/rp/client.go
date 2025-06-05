@@ -1,4 +1,4 @@
-package token
+package rp
 
 import (
 	"context"
@@ -89,7 +89,7 @@ func NewClient(ctx context.Context, config *Config, options ...ClientOption) (*C
 	}
 
 	trustedIssuers := config.TrustedIssuersMap()
-	return newClientWithTrustedIssuers(ctx, trustedIssuers, config.ADB2CClientID, options...)
+	return newClientWithTrustedIssuers(ctx, trustedIssuers, config.ClientID, options...)
 }
 
 // newClientWithTrustedIssuers creates a new ADB2C client using trusted issuers map

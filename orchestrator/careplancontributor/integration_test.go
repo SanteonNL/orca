@@ -1,6 +1,7 @@
 package careplancontributor
 
 import (
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"net/http"
 	"net/http/httptest"
@@ -18,7 +19,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/SanteonNL/orca/orchestrator/lib/token"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -222,12 +222,12 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	defer mockExternalEndpoint.Close()
 
 	// Create a test token generator for JWT validation
-	tokenGen, err := token.NewTestTokenGenerator()
+	tokenGen, err := rp.NewTestTokenGenerator()
 	require.NoError(t, err)
 
 	// Create a mock token client
 	ctx := context.Background()
-	mockTokenClient, err := token.NewMockClient(ctx, tokenGen)
+	mockTokenClient, err := rp.NewMockClient(ctx, tokenGen)
 	require.NoError(t, err)
 
 	// Setup CPC service with JWT validation enabled
@@ -236,8 +236,8 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
 	cpcConfig.TokenClient.Enabled = true
-	cpcConfig.TokenClient.ADB2CClientID = tokenGen.ClientID
-	cpcConfig.TokenClient.ADB2CTrustedIssuers = map[string]token.TrustedIssuer{
+	cpcConfig.TokenClient.ClientID = tokenGen.ClientID
+	cpcConfig.TokenClient.TrustedIssuers = map[string]rp.TrustedIssuer{
 		"test": {
 			IssuerURL:    tokenGen.GetIssuerURL(),
 			DiscoveryURL: "https://mock-discovery.example.com/.well-known/openid_configuration",
@@ -398,7 +398,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 		require.NoError(t, err)
 
 		// Validate the token to ensure it contains the expected claims
-		claims, err := mockTokenClient.ValidateToken(ctx, validToken, token.WithValidateSignature(false))
+		claims, err := mockTokenClient.ValidateToken(ctx, validToken, rp.WithValidateSignature(false))
 		require.NoError(t, err)
 		require.Equal(t, "healthcare-provider-456", claims.Subject)
 		require.Equal(t, "Dr. Jane Smith", claims.Name)
@@ -441,7 +441,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 		require.NoError(t, err)
 
 		// Validate the token with signature verification enabled
-		claims, err := mockTokenClient.ValidateToken(ctx, validToken, token.WithValidateSignature(true))
+		claims, err := mockTokenClient.ValidateToken(ctx, validToken, rp.WithValidateSignature(true))
 		require.NoError(t, err)
 		require.Equal(t, "test-user-789", claims.Subject)
 		require.Equal(t, "Test User with Signature", claims.Name)

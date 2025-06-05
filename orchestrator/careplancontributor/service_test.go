@@ -7,10 +7,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/external"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
-	"github.com/SanteonNL/orca/orchestrator/lib/token"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	"github.com/rs/zerolog/log"
@@ -1039,7 +1039,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 
 func TestService_withSessionOrBearerToken(t *testing.T) {
 	// Generate a test token generator
-	tokenGenerator, err := token.NewTestTokenGenerator()
+	tokenGenerator, err := rp.NewTestTokenGenerator()
 	require.NoError(t, err)
 
 	// Generate a valid token
@@ -1052,7 +1052,7 @@ func TestService_withSessionOrBearerToken(t *testing.T) {
 
 	// Create a mock token client
 	ctx := context.Background()
-	mockClient, err := token.NewMockClient(ctx, tokenGenerator)
+	mockClient, err := rp.NewMockClient(ctx, tokenGenerator)
 	require.NoError(t, err)
 
 	// Make sure globals.StrictMode is false for the tests

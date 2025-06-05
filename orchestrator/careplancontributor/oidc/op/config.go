@@ -1,4 +1,4 @@
-package oidc
+package op
 
 type Config struct {
 	Enabled bool                    `koanf:"enabled"`

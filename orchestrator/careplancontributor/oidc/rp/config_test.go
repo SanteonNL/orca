@@ -1,4 +1,4 @@
-package token
+package rp
 
 import (
 	"github.com/knadh/koanf/providers/env"
@@ -14,9 +14,9 @@ func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
 	assert.False(t, config.Enabled)
-	assert.Equal(t, "", config.ADB2CClientID)
-	assert.NotNil(t, config.ADB2CTrustedIssuers)
-	assert.Len(t, config.ADB2CTrustedIssuers, 0)
+	assert.Equal(t, "", config.ClientID)
+	assert.NotNil(t, config.TrustedIssuers)
+	assert.Len(t, config.TrustedIssuers, 0)
 }
 
 // TestConfig holds the configuration for the Azure AD B2C integration test
@@ -48,7 +48,7 @@ func LoadTestConfig() *TestConfig {
 
 	// Override client ID from environment if provided
 	if testConfig.ClientID != "" {
-		config.ADB2CClientID = testConfig.ClientID
+		config.ClientID = testConfig.ClientID
 	}
 
 	testConfig.Config = &config
@@ -84,13 +84,13 @@ func TestLoadTestConfig(t *testing.T) {
 		// Verify koanf config is loaded
 		assert.NotNil(t, testConfig.Config)
 		assert.True(t, testConfig.Config.Enabled)
-		assert.Equal(t, "test-client-from-env", testConfig.Config.ADB2CClientID) // Should be overridden by ADB2C_CLIENT_ID
+		assert.Equal(t, "test-client-from-env", testConfig.Config.ClientID) // Should be overridden by ADB2C_CLIENT_ID
 
 		// Verify trusted issuers are loaded
-		assert.Len(t, testConfig.Config.ADB2CTrustedIssuers, 1)
-		assert.Contains(t, testConfig.Config.ADB2CTrustedIssuers, "tenant1")
+		assert.Len(t, testConfig.Config.TrustedIssuers, 1)
+		assert.Contains(t, testConfig.Config.TrustedIssuers, "tenant1")
 
-		trustedIssuer := testConfig.Config.ADB2CTrustedIssuers["tenant1"]
+		trustedIssuer := testConfig.Config.TrustedIssuers["tenant1"]
 		assert.Equal(t, "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/", trustedIssuer.IssuerURL)
 		assert.Equal(t, "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration", trustedIssuer.DiscoveryURL)
 
@@ -126,8 +126,8 @@ func TestLoadTestConfig(t *testing.T) {
 		// Verify fallback config is created
 		assert.NotNil(t, testConfig.Config)
 		assert.False(t, testConfig.Config.Enabled) // Should be false when no koanf config
-		assert.Equal(t, "test-client", testConfig.Config.ADB2CClientID)
-		assert.Len(t, testConfig.Config.ADB2CTrustedIssuers, 0)
+		assert.Equal(t, "test-client", testConfig.Config.ClientID)
+		assert.Len(t, testConfig.Config.TrustedIssuers, 0)
 	})
 
 	t.Run("client ID precedence", func(t *testing.T) {
@@ -143,13 +143,13 @@ func TestLoadTestConfig(t *testing.T) {
 		testConfig := LoadTestConfig()
 
 		assert.Equal(t, "client-from-client-id", testConfig.ClientID)
-		assert.Equal(t, "client-from-client-id", testConfig.Config.ADB2CClientID)
+		assert.Equal(t, "client-from-client-id", testConfig.Config.ClientID)
 	})
 }
 
 func TestConfig_ToTrustedIssuersMap(t *testing.T) {
 	config := Config{
-		ADB2CTrustedIssuers: map[string]TrustedIssuer{
+		TrustedIssuers: map[string]TrustedIssuer{
 			"tenant1": {
 				IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
 				DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
@@ -184,9 +184,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("enabled config requires client ID", func(t *testing.T) {
 		config := Config{
-			Enabled:       true,
-			ADB2CClientID: "", // Missing client ID
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "", // Missing client ID
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
 					DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
@@ -201,9 +201,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("enabled config requires trusted issuers", func(t *testing.T) {
 		config := Config{
-			Enabled:             true,
-			ADB2CClientID:       "test-client",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{}, // Empty trusted issuers
+			Enabled:        true,
+			ClientID:       "test-client",
+			TrustedIssuers: map[string]TrustedIssuer{}, // Empty trusted issuers
 		}
 
 		err := config.Validate()
@@ -213,9 +213,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("trusted issuer name cannot be empty", func(t *testing.T) {
 		config := Config{
-			Enabled:       true,
-			ADB2CClientID: "test-client",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "test-client",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"": { // Empty issuer name
 					IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
 					DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
@@ -230,9 +230,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("trusted issuer URL cannot be empty", func(t *testing.T) {
 		config := Config{
-			Enabled:       true,
-			ADB2CClientID: "test-client",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "test-client",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "", // Empty issuer URL
 					DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
@@ -247,9 +247,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("trusted discovery URL cannot be empty", func(t *testing.T) {
 		config := Config{
-			Enabled:       true,
-			ADB2CClientID: "test-client",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "test-client",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
 					DiscoveryURL: "", // Empty discovery URL
@@ -264,9 +264,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("trusted issuer URL must be valid", func(t *testing.T) {
 		config := Config{
-			Enabled:       true,
-			ADB2CClientID: "test-client",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "test-client",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "://invalid-url-with-no-scheme", // Invalid issuer URL
 					DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
@@ -281,9 +281,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("trusted discovery URL must be valid", func(t *testing.T) {
 		config := Config{
-			Enabled:       true,
-			ADB2CClientID: "test-client",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "test-client",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
 					DiscoveryURL: "://invalid-url-with-no-scheme", // Invalid discovery URL
@@ -298,9 +298,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("trusted issuer URL must use HTTPS", func(t *testing.T) {
 		config := Config{
-			Enabled:       true,
-			ADB2CClientID: "test-client",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "test-client",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "http://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/", // HTTP instead of HTTPS
 					DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
@@ -315,9 +315,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("trusted discovery URL must use HTTPS", func(t *testing.T) {
 		config := Config{
-			Enabled:       true,
-			ADB2CClientID: "test-client",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "test-client",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
 					DiscoveryURL: "http://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration", // HTTP instead of HTTPS
@@ -332,9 +332,9 @@ func TestConfig_Validate(t *testing.T) {
 
 	t.Run("valid enabled config", func(t *testing.T) {
 		config := Config{
-			Enabled:       true,
-			ADB2CClientID: "test-client",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "test-client",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
 					DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",

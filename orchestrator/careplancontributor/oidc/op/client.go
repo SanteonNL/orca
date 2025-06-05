@@ -1,4 +1,4 @@
-package oidc
+package op
 
 import (
 	"github.com/SanteonNL/orca/orchestrator/globals"

@@ -7,8 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
-	"github.com/SanteonNL/orca/orchestrator/lib/token"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"net/http"
 	"net/url"
 	"slices"
@@ -132,13 +132,13 @@ func New(
 		httpHandler:                   httpHandler,
 	}
 	if config.OIDCProvider.Enabled {
-		result.oidcProvider, err = oidc.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDCProvider)
+		result.oidcProvider, err = op.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDCProvider)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 		}
 	}
 	if config.TokenClient.Enabled {
-		result.tokenClient, err = token.NewClient(ctx, &config.TokenClient)
+		result.tokenClient, err = rp.NewClient(ctx, &config.TokenClient)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ADB2C client: %w", err)
 		}
@@ -176,9 +176,9 @@ type Service struct {
 	eventManager                  events.Manager
 	sseService                    *sse.Service
 	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
-	oidcProvider                  *oidc.Service
+	oidcProvider                  *op.Service
 	httpHandler                   http.Handler
-	tokenClient                   *token.Client
+	tokenClient                   *rp.Client
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
