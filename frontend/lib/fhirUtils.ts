@@ -250,8 +250,9 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                 fullUrl: "urn:uuid:patient",
                 resource: cleanedPatient,
                 request: {
-                    method: "PUT",
-                    url: `Patient?identifier=${patientToken}`
+                    method: "POST",
+                    url: "Patient",
+                    ifNoneExist: `identifier=${patientToken}`
                 }
             },
             serviceRequestEntry,

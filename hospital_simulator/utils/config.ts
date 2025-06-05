@@ -1,6 +1,6 @@
 "use server"
 
-import { Bundle, Organization } from "fhir/r4"
+import {Bundle, Organization} from "fhir/r4"
 
 export const getEnrollmentUrl = async (patientId: string, serviceRequestId: string) => {
 

@@ -15,8 +15,7 @@ import {AdapterDayjs} from "@mui/x-date-pickers/AdapterDayjs";
 import {DesktopDatePicker, LocalizationProvider} from "@mui/x-date-pickers";
 import dayjs from "dayjs";
 import 'dayjs/locale/nl';
-import {Organization} from "fhir/r4";
-import {getLocalOrganization} from "@/utils/config";
+import {Bundle, Patient} from "fhir/r4";
 
 type AdministrativeGender = "male" | "female" | "unknown" | "other";
 
@@ -73,7 +72,6 @@ const CreatePatientDialog: React.FC = () => {
     }, [patientFirstName, patientLastName, selfSetPatientEmail]);
 
     const createPatient = async () => {
-        const localOrg = await getLocalOrganization()
         let firstName = patientFirstName || "John";
         let lastName = patientLastName || "Doe";
         const patientDetails: PatientDetails = {
@@ -88,8 +86,7 @@ const CreatePatientDialog: React.FC = () => {
             address: patientAdress,
             city: patientCity,
         }
-        const bundle = createPatientBundle(patientDetails, localOrg)
-
+        const bundle = createPatientBundle(patientDetails)
         const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir`, {
             method: "POST",
             headers: {
@@ -334,7 +331,7 @@ function test11Proef(bsn: string) {
     return total % 11 === 0
 }
 
-function createPatientBundle(patient: PatientDetails, localOrg: Organization) {
+function createPatientBundle(patient: PatientDetails) : Bundle<Patient> {
     return {
         "resourceType": "Bundle",
         "type": "transaction",
@@ -343,18 +340,6 @@ function createPatientBundle(patient: PatientDetails, localOrg: Organization) {
                 "fullUrl": "urn:uuid:patient-1",
                 "resource": {
                     "resourceType": "Patient",
-                    "extension": [
-                        {
-                            "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
-                            "valueReference": {
-                                "type": "Organization",
-                                "identifier": {
-                                    "system": localOrg.identifier?.[0].system || "",
-                                    "value": localOrg.identifier?.[0].value || "",
-                                }
-                            }
-                        }
-                    ],
                     "identifier": [
                         {
                             "use": "usual",

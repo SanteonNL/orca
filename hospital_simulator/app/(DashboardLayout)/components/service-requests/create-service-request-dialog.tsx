@@ -10,7 +10,7 @@ import DialogTitle from '@mui/material/DialogTitle';
 import {IconPlus} from '@tabler/icons-react';
 import {Alert, Grid, MenuItem, Select} from '@mui/material';
 import {useRouter} from 'next/navigation';
-import {Coding, Organization, Patient} from 'fhir/r4';
+import {Coding, Organization, Patient, ServiceRequest} from 'fhir/r4';
 import {getLocalOrganization, getTaskPerformerOrganization} from "@/utils/config";
 import {AdapterDayjs} from "@mui/x-date-pickers/AdapterDayjs";
 import {LocalizationProvider} from "@mui/x-date-pickers";
@@ -47,11 +47,11 @@ const CreateServiceRequestDialog: React.FC<Props> = ({patient}) => {
             setError("Please select a condition")
             return
         }
-        const patientDetails: ServiceRequestDetails = {
+        const details: ServiceRequestDetails = {
             conditionCode: patientConditionCode,
             patient: patient
         }
-        const bundle = createServiceRequestBundle(patientDetails, requester, performer)
+        const bundle = createServiceRequestBundle(details, requester, performer)
 
         const resp = await fetch(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/api/fhir`, {
             method: "POST",
@@ -150,7 +150,6 @@ const supportedConditions: Array<Coding> = [
 function createServiceRequestBundle(requestDetails: ServiceRequestDetails,
                                     requester: Organization,
                                     performer: Organization) {
-
     if (requester.identifier?.length !== 1) {
         throw new Error("Requester must have exactly one identifier")
     }

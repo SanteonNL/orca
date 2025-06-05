@@ -30,7 +30,12 @@ export default async function Overview(props: Input) {
 
     const serviceRequestsData = await response.json() as Bundle<ServiceRequest>
     console.log(`Found [${serviceRequestsData.total}] ServiceRequest resources`);
-    const serviceRequests = serviceRequestsData.entry ?? [];
+    let serviceRequests = serviceRequestsData.entry ?? [];
+    // filter out ServiceRequests that have an extension, those were made through the CPS and are duplicates.
+    // This is due to Demo EHR not having its own FHIR server on local dev (for lower resource consumption).
+    serviceRequests = serviceRequests.filter(entry => {
+        return entry.resource && (!entry.resource.extension || entry.resource.extension.length === 0)
+    });
 
    const patient = await ReadPatient(props.patientID);
     if (!patient) {
