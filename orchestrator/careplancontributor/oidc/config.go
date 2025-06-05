@@ -1,15 +1,31 @@
 package oidc
 
+import (
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
+)
+
+// Config contains the configuration for both OpenID Connect Provider (OP) and Relying Party (RP)
 type Config struct {
-	Enabled bool                    `koanf:"enabled"`
-	Clients map[string]ClientConfig `koanf:"clients"`
+	// Provider contains the OpenID Connect Provider configuration
+	Provider op.Config `koanf:"provider"`
+	// RelyingParty contains the Relying Party configuration
+	RelyingParty rp.Config `koanf:"relyingparty"`
 }
 
-type ClientConfig struct {
-	// ID holds the OAuth2 client_id of the registered client.
-	ID string `koanf:"id"`
-	// RedirectURI holds the URI of the client to which the authorization server will redirect after authorization.
-	RedirectURI string `koanf:"redirecturi"`
-	// Secret is the hex-encoded, SHA-256 hash of the client secret, salted with the client_id and concatenated with a pipe (|).
-	Secret string `koanf:"secret"`
+// DefaultConfig returns the default OIDC configuration with both OP and RP defaults
+func DefaultConfig() Config {
+	return Config{
+		Provider:     op.Config{},
+		RelyingParty: rp.DefaultConfig(),
+	}
+}
+
+// Validate validates both OP and RP configurations
+func (c Config) Validate() error {
+	// Validate RelyingParty configuration (OP doesn't have validation)
+	if err := c.RelyingParty.Validate(); err != nil {
+		return err
+	}
+	return nil
 }

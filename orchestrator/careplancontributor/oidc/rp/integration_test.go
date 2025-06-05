@@ -1,4 +1,4 @@
-package token
+package rp
 
 import (
 	"context"
@@ -89,9 +89,9 @@ func TestNewClientFromConfig(t *testing.T) {
 
 	t.Run("creates client from valid config", func(t *testing.T) {
 		config := &Config{
-			Enabled:       true,
-			ADB2CClientID: "test-client-id",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: "test-client-id",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
 					DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
@@ -123,9 +123,9 @@ func TestNewClientFromConfig(t *testing.T) {
 
 	t.Run("fails with disabled config", func(t *testing.T) {
 		config := &Config{
-			Enabled:       false, // Disabled
-			ADB2CClientID: "test-client-id",
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  false, // Disabled
+			ClientID: "test-client-id",
+			TrustedIssuers: map[string]TrustedIssuer{
 				"tenant1": {
 					IssuerURL:    "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/",
 					DiscoveryURL: "https://tenant1.b2clogin.com/tenant1.onmicrosoft.com/v2.0/.well-known/openid_configuration",
@@ -142,9 +142,9 @@ func TestNewClientFromConfig(t *testing.T) {
 
 	t.Run("fails with invalid config", func(t *testing.T) {
 		config := &Config{
-			Enabled:             true,
-			ADB2CClientID:       "", // Missing client ID
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{},
+			Enabled:        true,
+			ClientID:       "", // Missing client ID
+			TrustedIssuers: map[string]TrustedIssuer{},
 		}
 
 		client, err := NewClient(ctx, config)
@@ -165,9 +165,9 @@ func TestNewClientFromConfig(t *testing.T) {
 
 		// Create a config that matches the mock client's setup
 		config := &Config{
-			Enabled:       true,
-			ADB2CClientID: tokenGen.ClientID,
-			ADB2CTrustedIssuers: map[string]TrustedIssuer{
+			Enabled:  true,
+			ClientID: tokenGen.ClientID,
+			TrustedIssuers: map[string]TrustedIssuer{
 				"test": {
 					IssuerURL:    tokenGen.GetIssuerURL(),
 					DiscoveryURL: "https://mock-discovery-url.example.com", // This will be mocked

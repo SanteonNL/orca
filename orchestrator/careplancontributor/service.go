@@ -7,7 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"net/http"
 	"net/url"
 	"slices"
@@ -130,10 +131,16 @@ func New(
 		sseService:                    sse.New(),
 		httpHandler:                   httpHandler,
 	}
-	if config.OIDCProvider.Enabled {
-		result.oidcProvider, err = oidc.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDCProvider)
+	if config.OIDC.Provider.Enabled {
+		result.oidcProvider, err = op.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDC.Provider)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
+		}
+	}
+	if config.OIDC.RelyingParty.Enabled {
+		result.tokenClient, err = rp.NewClient(ctx, &config.OIDC.RelyingParty)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ADB2C client: %w", err)
 		}
 	}
 
@@ -169,8 +176,9 @@ type Service struct {
 	eventManager                  events.Manager
 	sseService                    *sse.Service
 	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
-	oidcProvider                  *oidc.Service
+	oidcProvider                  *op.Service
 	httpHandler                   http.Handler
+	tokenClient                   *rp.Client
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -287,7 +295,8 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// This endpoint is used by the EHR and ORCA Frontend to query the FHIR API of a remote SCP-node.
 	// The remote SCP-node to query can be specified using the following HTTP headers:
 	// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL
-	mux.HandleFunc(basePath+"/external/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePath+"/external/fhir/{rest...}", s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
+		// TODO: Extract relevant data from the bearer JWT
 		fhirBaseURL, httpClient, err := s.createFHIRClientForExternalRequest(request.Context(), request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
@@ -522,15 +531,41 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 	_ = json.NewEncoder(response).Encode(contextData)
 }
 
-func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
+func (s Service) withUserAuth(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
-		// TODO: Change this to something more sophisticated (OpenID Connect?)
-		if (s.config.StaticBearerToken != "" && request.Header.Get("Authorization") == "Bearer "+s.config.StaticBearerToken) ||
-			s.SessionManager.Get(request) != nil {
+		// Session will be present for FE requests
+		if s.SessionManager.Get(request) != nil {
 			next(response, request)
 			return
 		}
-		http.Error(response, "no session found", http.StatusUnauthorized)
+
+		bearer := request.Header.Get("Authorization")
+		// Static bearer token, not valid in prod
+		if bearer == "Bearer "+s.config.StaticBearerToken {
+			next(response, request)
+			return
+		}
+
+		// Try to validate bearer token as adb2c jwt
+		if s.tokenClient != nil {
+			// Validate the token
+			bearerToken := strings.TrimPrefix(bearer, "Bearer ")
+
+			if bearerToken != "" {
+				if _, err := s.tokenClient.ValidateToken(request.Context(), bearerToken); err != nil {
+					log.Ctx(request.Context()).Err(err).Msg("Failed to validate ADB2C token")
+					http.Error(response, "invalid bearer token", http.StatusUnauthorized)
+					return
+				}
+
+				// TODO: additional validation: from the claims we need to at least extract the user ID so we can use that for BGZ data request
+
+				next(response, request)
+				return
+			}
+		}
+
+		http.Error(response, "no user authentication found", http.StatusUnauthorized)
 	}
 }
 

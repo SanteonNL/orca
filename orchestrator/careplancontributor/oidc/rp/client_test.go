@@ -1,4 +1,4 @@
-package token
+package rp
 
 import (
 	"context"
@@ -89,9 +89,9 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "disabled config",
 			config: &Config{
-				Enabled:       false,
-				ADB2CClientID: testClientID,
-				ADB2CTrustedIssuers: map[string]TrustedIssuer{
+				Enabled:  false,
+				ClientID: testClientID,
+				TrustedIssuers: map[string]TrustedIssuer{
 					"test": {
 						IssuerURL:    testIssuer,
 						DiscoveryURL: "https://test.example.com/.well-known/openid_configuration",
@@ -103,27 +103,27 @@ func TestNewClient(t *testing.T) {
 		{
 			name: "invalid config - missing client ID",
 			config: &Config{
-				Enabled:             true,
-				ADB2CClientID:       "",
-				ADB2CTrustedIssuers: map[string]TrustedIssuer{},
+				Enabled:        true,
+				ClientID:       "",
+				TrustedIssuers: map[string]TrustedIssuer{},
 			},
 			expectedError: errors.New("invalid configuration"),
 		},
 		{
 			name: "invalid config - no trusted issuers",
 			config: &Config{
-				Enabled:             true,
-				ADB2CClientID:       testClientID,
-				ADB2CTrustedIssuers: map[string]TrustedIssuer{},
+				Enabled:        true,
+				ClientID:       testClientID,
+				TrustedIssuers: map[string]TrustedIssuer{},
 			},
 			expectedError: errors.New("invalid configuration"),
 		},
 		{
 			name: "valid config but network error",
 			config: &Config{
-				Enabled:       true,
-				ADB2CClientID: testClientID,
-				ADB2CTrustedIssuers: map[string]TrustedIssuer{
+				Enabled:  true,
+				ClientID: testClientID,
+				TrustedIssuers: map[string]TrustedIssuer{
 					"test": {
 						IssuerURL:    testIssuer,
 						DiscoveryURL: "https://invalid.example.com/.well-known/openid_configuration",
@@ -143,7 +143,7 @@ func TestNewClient(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, client)
-				assert.Equal(t, tt.config.ADB2CClientID, client.ClientID)
+				assert.Equal(t, tt.config.ClientID, client.ClientID)
 			}
 		})
 	}

@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ func DefaultConfig() Config {
 	return Config{
 		Enabled:        true,
 		AppLaunch:      applaunch.DefaultConfig(),
+		OIDC:           oidc.DefaultConfig(),
 		SessionTimeout: 15 * time.Minute,
 		FrontendConfig: FrontendConfig{
 			URL: "/frontend/enrollment",
@@ -24,7 +26,7 @@ func DefaultConfig() Config {
 type Config struct {
 	FrontendConfig FrontendConfig   `koanf:"frontend"`
 	AppLaunch      applaunch.Config `koanf:"applaunch"`
-	OIDCProvider   oidc.Config      `koanf:"oidc"`
+	OIDC           oidc.Config      `koanf:"oidc"`
 	// FHIR contains the configuration to connect to the FHIR API holding EHR data,
 	// to be made available through the CarePlanContributor.
 	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
@@ -38,6 +40,12 @@ type Config struct {
 func (c Config) Validate() error {
 	if !c.Enabled {
 		return nil
+	}
+	if globals.StrictMode == true && c.StaticBearerToken != "" {
+		return errors.New("staticbearertoken is not allowed in strict mode")
+	}
+	if err := c.OIDC.Validate(); err != nil {
+		return err
 	}
 	return nil
 }
