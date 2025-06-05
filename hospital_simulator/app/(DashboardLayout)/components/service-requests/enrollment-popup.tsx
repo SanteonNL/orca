@@ -2,7 +2,6 @@ import { getEnrollmentUrl } from '@/utils/config';
 import { Button } from '@mui/material';
 import { IconCloudDataConnection } from '@tabler/icons-react';
 import React from 'react';
-import {Identifier} from "fhir/r4";
 
 interface Props {
     patientId: string,
