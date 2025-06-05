@@ -27,23 +27,19 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_FHIRPROXYURL`: Enable FHIR proxy for demo purposes on `/demo/fhirproxy`, which proxies requests to this URL.
 - `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
-
+- 
 ### Token Client configuration
-- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_ENABLED`: Enable the Token Client (default: `false`).
-- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_CLIENTID`: ClientID used for token validation, this will typically be the same as the `aud` claim in the JWT being validated.
-The following two fields can be repeated for multiple trusted issuers, but must both be set for each issuer:
-- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_<ISSUER_NAME>_ISSUERURL`: Same as the `iss` claim in the JWT.
-- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_<ISSUER_NAME>_DISCOVERYURL`: Same as the `iss` claim in the JWT, but with `tfp` before `/v2.0/` as well as the `.well-known/openid_configuration` suffix.
-Example:
-- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_EXAMPLE_ISSUERURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/v2.0/`
-- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_EXAMPLE_DISCOVERYURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/B2C_1_local_login/v2.0/.well-known/openid_configuration`
-
-### Token Client configuration
+API calls can be authenticated using a JWT bearer token, which is validated by the Token Client.
+A received token is validated against a trusted OpenID Connect provider, and the user information is extracted from the token.
+The trusted OpenID Connect provider is must be configured, it will be compared against the claim `iss` in the JWT.
+This is designed to work with OpenID Connect providers that support the discovery URL, such as Azure B2C (which has been tested)
 - `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_ENABLED`: Enable the Token Client (default: `false`).
 - `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_CLIENTID`: ClientID used for token validation, this will typically be the same as the `aud` claim in the JWT being validated.
 The following two fields can be repeated for multiple trusted issuers, but must both be set for each issuer:
 - `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_TRUSTEDISSUERS_<ISSUER_NAME>_ISSUERURL`: Same as the `iss` claim in the JWT.
-- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_TRUSTEDISSUERS_<ISSUER_NAME>_DISCOVERYURL`: Same as the `iss` claim in the JWT, but with `tfp` before `/v2.0/` as well as the `.well-known/openid_configuration` suffix.
+- `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_TRUSTEDISSUERS_<ISSUER_NAME>_DISCOVERYURL`: Same as the `iss` claim in the JWT, with the `.well-known/openid_configuration` suffix.
+Note: This has been tested with Azure B2C, but should work with any OpenID Connect provider that supports the discovery URL.
+For an ADB2C token, the format of the discovery URL is the same as the `iss` claim in the JWT, but with `tfp` before `/v2.0/` as well as the `.well-known/openid_configuration` suffix.
 Example:
 - `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_TRUSTEDISSUERS_EXAMPLE_ISSUERURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/v2.0/`
 - `ORCA_CAREPLANCONTRIBUTOR_TOKENCLIENT_TRUSTEDISSUERS_EXAMPLE_DISCOVERYURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/B2C_1_local_login/v2.0/.well-known/openid_configuration`

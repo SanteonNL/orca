@@ -295,7 +295,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// This endpoint is used by the EHR and ORCA Frontend to query the FHIR API of a remote SCP-node.
 	// The remote SCP-node to query can be specified using the following HTTP headers:
 	// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL
-	mux.HandleFunc(basePath+"/external/fhir/{rest...}", s.withSessionOrBearerToken(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePath+"/external/fhir/{rest...}", s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Extract relevant data from the bearer JWT
 		fhirBaseURL, httpClient, err := s.createFHIRClientForExternalRequest(request.Context(), request)
 		if err != nil {
@@ -531,7 +531,7 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 	_ = json.NewEncoder(response).Encode(contextData)
 }
 
-func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
+func (s Service) withUserAuth(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
 		// Session will be present for FE requests
 		if s.SessionManager.Get(request) != nil {
@@ -541,7 +541,7 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 
 		bearer := request.Header.Get("Authorization")
 		// Static bearer token, not valid in prod
-		if globals.StrictMode == false && s.config.StaticBearerToken != "" && bearer == "Bearer "+s.config.StaticBearerToken {
+		if bearer == "Bearer "+s.config.StaticBearerToken {
 			next(response, request)
 			return
 		}
@@ -549,26 +549,23 @@ func (s Service) withSessionOrBearerToken(next func(response http.ResponseWriter
 		// Try to validate bearer token as adb2c jwt
 		if s.tokenClient != nil {
 			// Validate the token
-			token := strings.TrimPrefix(bearer, "Bearer ")
-			if token == "" {
-				http.Error(response, "no bearer token found", http.StatusUnauthorized)
+			bearerToken := strings.TrimPrefix(bearer, "Bearer ")
+
+			if bearerToken != "" {
+				if _, err := s.tokenClient.ValidateToken(request.Context(), bearerToken); err != nil {
+					log.Ctx(request.Context()).Err(err).Msg("Failed to validate ADB2C token")
+					http.Error(response, "invalid bearer token", http.StatusUnauthorized)
+					return
+				}
+
+				// TODO: additional validation: from the claims we need to at least extract the user ID so we can use that for BGZ data request
+
+				next(response, request)
 				return
 			}
-
-			// Validate the token using ADB2C client
-			if _, err := s.tokenClient.ValidateToken(request.Context(), token); err != nil {
-				log.Ctx(request.Context()).Err(err).Msg("Failed to validate ADB2C token")
-				http.Error(response, "invalid bearer token", http.StatusUnauthorized)
-				return
-			}
-
-			// TODO: additional validation: from the claims we need to at least extract the user ID so we can use that for BGZ data request
-
-			next(response, request)
-			return
 		}
 
-		http.Error(response, "no session found", http.StatusUnauthorized)
+		http.Error(response, "no user authentication found", http.StatusUnauthorized)
 	}
 }
 

@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/token"
 	"strings"
 	"time"
@@ -40,6 +41,9 @@ type Config struct {
 func (c Config) Validate() error {
 	if !c.Enabled {
 		return nil
+	}
+	if globals.StrictMode == true && c.StaticBearerToken != "" {
+		return errors.New("staticbearertoken is not allowed in strict mode")
 	}
 	return nil
 }

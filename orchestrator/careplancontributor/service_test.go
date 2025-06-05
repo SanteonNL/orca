@@ -1086,15 +1086,6 @@ func TestService_withSessionOrBearerToken(t *testing.T) {
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name: "With static bearer token when strict mode is on",
-			requestSetup: func(req *http.Request) {
-				req.Header.Set("Authorization", "Bearer static-token")
-			},
-			staticToken:    "static-token",
-			expectedStatus: http.StatusUnauthorized,
-			strictMode:     true,
-		},
-		{
 			name: "With valid ADB2C token",
 			requestSetup: func(req *http.Request) {
 				req.Header.Set("Authorization", "Bearer "+validToken)
@@ -1157,7 +1148,7 @@ func TestService_withSessionOrBearerToken(t *testing.T) {
 			}
 
 			// Call the middleware with our handler
-			wrappedHandler := service.withSessionOrBearerToken(handler)
+			wrappedHandler := service.withUserAuth(handler)
 
 			// Create a test HTTP server with the wrapped handler
 			testServer := httptest.NewServer(wrappedHandler)
