@@ -235,9 +235,9 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
-	cpcConfig.TokenClient.Enabled = true
-	cpcConfig.TokenClient.ClientID = tokenGen.ClientID
-	cpcConfig.TokenClient.TrustedIssuers = map[string]rp.TrustedIssuer{
+	cpcConfig.OIDC.RelyingParty.Enabled = true
+	cpcConfig.OIDC.RelyingParty.ClientID = tokenGen.ClientID
+	cpcConfig.OIDC.RelyingParty.TrustedIssuers = map[string]rp.TrustedIssuer{
 		"test": {
 			IssuerURL:    tokenGen.GetIssuerURL(),
 			DiscoveryURL: "https://mock-discovery.example.com/.well-known/openid_configuration",
@@ -499,6 +499,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig.Enabled = true
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
+
 	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), cpsProxy, carePlanServiceURL, nil)
 	require.NoError(t, err)
 

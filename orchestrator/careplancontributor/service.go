@@ -131,14 +131,14 @@ func New(
 		sseService:                    sse.New(),
 		httpHandler:                   httpHandler,
 	}
-	if config.OIDCProvider.Enabled {
-		result.oidcProvider, err = op.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDCProvider)
+	if config.OIDC.Provider.Enabled {
+		result.oidcProvider, err = op.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDC.Provider)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OIDC provider: %w", err)
 		}
 	}
-	if config.TokenClient.Enabled {
-		result.tokenClient, err = rp.NewClient(ctx, &config.TokenClient)
+	if config.OIDC.RelyingParty.Enabled {
+		result.tokenClient, err = rp.NewClient(ctx, &config.OIDC.RelyingParty)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create ADB2C client: %w", err)
 		}
