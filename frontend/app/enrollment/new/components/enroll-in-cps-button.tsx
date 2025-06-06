@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation'
 import { ArrowRight, LoaderIcon } from 'lucide-react'
 import { Spinner } from '@/components/spinner'
 import { Button, createTheme, ThemeProvider } from '@mui/material'
+import {defaultTheme} from "@/app/theme";
 
 interface Props {
     className?: string
@@ -33,14 +34,6 @@ export default function EnrollInCpsButton({ className }: Props) {
     useEffect(() => {
         setDisabled(submitted || !taskCondition || loading)
     }, [taskCondition, selectedCarePlan, submitted, loading])
-
-    const theme = createTheme({
-        palette: {
-            primary: {
-                main: '#1c6268',
-            },
-        },
-    });
 
     const informCps = async () => {
         setSubmitted(true)
@@ -95,7 +88,7 @@ export default function EnrollInCpsButton({ className }: Props) {
 
     return (
 
-        <ThemeProvider theme={theme}>
+        <ThemeProvider theme={defaultTheme}>
             <Button variant='contained' disabled={disabled} onClick={informCps}>
                 {submitted && <Spinner className='h-6 mr-2 text-inherit' />}
                 Volgende stap
