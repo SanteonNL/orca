@@ -6,8 +6,6 @@ import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
 import { patientName, organizationName } from "@/lib/fhirRender";
-import DataViewer from '@/components/data-viewer'
-import { viewerFeatureIsEnabled } from '@/app/actions'
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
 import {getLaunchableApps} from "@/app/applaunch";
 import {Questionnaire} from "fhir/r4";
@@ -16,9 +14,7 @@ export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
     const { patient, serviceRequest } = useEnrollmentStore()
-    const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
     const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
-    const [showViewer, setShowViewer] = useState(false)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
 
     useEffect(() => {
@@ -29,17 +25,6 @@ export default function EnrollmentTaskPage() {
             setSelectedTaskId(selectedTaskId);
         }
     }, [taskId, setSelectedTaskId])
-
-    useEffect(() => {
-        setShowViewer(viewerFeatureEnabled && !!task && (task.status === "accepted" || task.status === "in-progress"))
-    }, [task, viewerFeatureEnabled])
-
-    useEffect(() => {
-        viewerFeatureIsEnabled()
-            .then((enabled) => {
-                setViewerFeatureEnabled(enabled)
-            })
-    }, [])
 
     useEffect(()=>{
         const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
@@ -108,7 +93,6 @@ export default function EnrollmentTaskPage() {
                 }
             </div>
             {patientViewerUrl && <a href={patientViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
-            {showViewer && <DataViewer task={task} />}
             <TaskSseConnectionStatus />
         </div>
     }
