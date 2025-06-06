@@ -185,11 +185,9 @@ function createServiceRequestBundle(requestDetails: ServiceRequestDetails,
                     ],
                     "name": [
                         {
-                            "family": "Smith",
-                            "given": [
-                                "Jane",
-                                "John"
-                            ]
+                            "family": "Hans",
+                            "given": ["Visser"],
+                            "prefix": ["dr."]
                         }
                     ],
                     "telecom": [
