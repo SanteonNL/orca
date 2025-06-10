@@ -37,7 +37,7 @@ export async function getLaunchableApps(organization: Identifier) : Promise<Laun
     }).map((entry) => {
         const endpoint = entry?.resource as Endpoint;
         return {
-            Name: endpoint.name!!,
+            Name: endpoint.name!,
             URL: endpoint.address,
         }
     }) ?? []
