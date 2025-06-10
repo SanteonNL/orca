@@ -2,7 +2,12 @@ import {Endpoint, Bundle, Identifier} from 'fhir/r4';
 import {getPatientViewerTestUrl} from "@/app/actions";
 import {createScpClient} from "@/lib/fhirUtils";
 
-export async function getLaunchableApps(organization: Identifier) {
+export interface LaunchableApp {
+    Name: string;
+    URL: string;
+}
+
+export async function getLaunchableApps(organization: Identifier) : Promise<LaunchableApp[]> {
     const testAppURL = await getPatientViewerTestUrl();
     if (testAppURL) {
         return [{
@@ -27,11 +32,12 @@ export async function getLaunchableApps(organization: Identifier) {
         const endpoint = entry?.resource as Endpoint;
         return endpoint.status == "active"
             && endpoint.connectionType?.system == "http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"
-            && endpoint.connectionType?.code == "web-oauth2";
+            && endpoint.connectionType?.code == "web-oauth2"
+            && endpoint.name;
     }).map((entry) => {
         const endpoint = entry?.resource as Endpoint;
         return {
-            Name: endpoint.name,
+            Name: endpoint.name!,
             URL: endpoint.address,
         }
     }) ?? []

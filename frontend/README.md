@@ -13,7 +13,8 @@ The following configuration options are supported:
 
 - `NEXT_PUBLIC_TITLE`: the title of the application, defaults to `ORCA Frontend`.
 - `ORCA_PATIENT_IDENTIFIER_SYSTEM`: the FHIR coding system for patient identifiers, defaults to `http://fhir.nl/fhir/NamingSystem/bsn`.
-- `SUPPORT_CONTACT_LINK`: a link to support resource, e.g. a `mailto:` link or an `https://` link to a support page. It will be shown on error pages. 
+- `SUPPORT_CONTACT_LINK`: a link to support resource, e.g. a `mailto:` link or an `https://` link to a support page. It will be shown on error pages.
+- `NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP`: when set to `true`, the application will automatically launch the external app (if there's exactly 1), exposed by the Task filler, if the Task is in the `in-progress` state. Defaults to `false`. 
 
 ## Getting Started
 ### 1. Install dependencies

@@ -7,14 +7,16 @@ import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
 import { patientName, organizationName } from "@/lib/fhirRender";
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
-import {getLaunchableApps} from "@/app/applaunch";
+import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
 import {Questionnaire} from "fhir/r4";
+import {Button, ThemeProvider} from "@mui/material";
+import {defaultTheme} from "@/app/theme";
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
     const { patient, serviceRequest } = useEnrollmentStore()
-    const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
+    const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
 
     useEffect(() => {
@@ -33,13 +35,9 @@ export default function EnrollmentTaskPage() {
         }
         getLaunchableApps(primaryTaskPerformer)
             .then((apps) => {
-                if (apps.length == 0) {
-                    return
-                }
-                // might want to support a list in the future
-                setPatientViewerUrl(apps[0].URL)
+                setLaunchableApps(apps)
             })
-    }, [serviceRequest])
+    }, [serviceRequest, setLaunchableApps])
 
     useEffect(() => {
         if (!taskToQuestionnaireMap) {
@@ -62,6 +60,18 @@ export default function EnrollmentTaskPage() {
             <div>{label}:</div>
             <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
+
+    // Auto-launch external app when the following conditions are met:
+    // - Task.status is "in-progress"
+    // - There is exactly one launchable app
+    // - Auto-launch is enabled
+    const autoLaunchExternalApps = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
+    const launchApp = (URL: string) => () => {
+        window.open(URL, "_self");
+    }
+    if (task.status === "in-progress" && launchableApps && launchableApps.length === 1 && autoLaunchExternalApps) {
+        launchApp(launchableApps[0].URL)();
+    }
 
     if (task.status === "received" && currentQuestionnaire && subTasks?.[0]) {
         return <>
@@ -92,7 +102,22 @@ export default function EnrollmentTaskPage() {
                     : <></>
                 }
             </div>
-            {patientViewerUrl && <a href={patientViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
+
+            {task.status === "accepted" /* note: change to in-progress */ && !autoLaunchExternalApps && launchableApps && launchableApps.length > 0 &&
+                <div className="w-[568px]">
+                    <ThemeProvider theme={defaultTheme}>
+                        {launchableApps.map((app, index) => (
+                            <Button
+                                key={index}
+                                variant="contained"
+                                className="mb-2"
+                                onClick={launchApp(app.URL)}
+                            >{app.Name}</Button>
+                        ))}
+                    </ThemeProvider>
+                </div>
+            }
+
             <TaskSseConnectionStatus />
         </div>
     }
