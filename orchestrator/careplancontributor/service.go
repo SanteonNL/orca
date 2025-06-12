@@ -169,16 +169,17 @@ type Service struct {
 	// transport is used to call the local FHIR store, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
-	transport                     http.RoundTripper
-	workflows                     taskengine.WorkflowProvider
-	healthdataviewEndpointEnabled bool
-	notifier                      ehr.Notifier
-	eventManager                  events.Manager
-	sseService                    *sse.Service
-	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
-	oidcProvider                  *op.Service
-	httpHandler                   http.Handler
-	tokenClient                   *rp.Client
+	transport                      http.RoundTripper
+	workflows                      taskengine.WorkflowProvider
+	healthdataviewEndpointEnabled  bool
+	notifier                       ehr.Notifier
+	questionnaireResponseValidator taskengine.QuestionnaireResponseValidator
+	eventManager                   events.Manager
+	sseService                     *sse.Service
+	createFHIRClientForURL         func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
+	oidcProvider                   *op.Service
+	httpHandler                    http.Handler
+	tokenClient                    *rp.Client
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {

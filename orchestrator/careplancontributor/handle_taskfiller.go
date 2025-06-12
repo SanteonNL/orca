@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -221,17 +222,53 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 			}
 			// TODO: Should we check if there's actually a QuestionnaireResponse?
 			// TODO: What if multiple Tasks match the conditions?
-			for _, item := range task.Input {
+			for inputIdx, item := range task.Input {
 				if ref := item.ValueReference; ref.Reference != nil && strings.HasPrefix(*ref.Reference, "Questionnaire/") {
 					questionnaireURL := *ref.Reference
 					var fetchedQuestionnaire fhir.Questionnaire
 					if err := s.fetchQuestionnaireByID(ctx, cpsClient, questionnaireURL, &fetchedQuestionnaire); err != nil {
 						// TODO: why return an error here, and not for the rest?
+						// TODO: Retryable errors shouldn't be TaskRejections
 						return &TaskRejection{
 							Reason:       "Failed to fetch questionnaire",
 							ReasonDetail: err,
 						}
 					}
+
+					// Check if there's a QuestionnaireResponse, and if so, if it's valid
+					if len(task.Output) >= inputIdx {
+						// TODO: Might not be the same order
+						log.Ctx(ctx).Debug().Msg("SubTask has a QuestionnaireResponse - validating")
+						if task.Output[inputIdx].ValueReference != nil ||
+							task.Output[inputIdx].ValueReference.Reference == nil ||
+							to.EmptyString(task.Output[inputIdx].ValueReference.Type) != "QuestionnaireResponse" {
+							return &TaskRejection{
+								Reason: fmt.Sprintf("Subtask output %d was expected to be a reference to a QuestionnaireResponse", inputIdx),
+							}
+						}
+						questionnaireResponseRef := task.Output[inputIdx].ValueReference.Reference
+						var questionnaireResponse fhir.QuestionnaireResponse
+						err := cpsClient.ReadWithContext(ctx, *questionnaireResponseRef, &questionnaireResponse)
+						if err != nil {
+							// TODO: Retryable errors shouldn't be TaskRejections
+							return &TaskRejection{
+								Reason:       "Failed to fetch QuestionnaireResponse",
+								ReasonDetail: err,
+							}
+						}
+						validationOutcome, err := s.questionnaireResponseValidator.Validate(ctx, &fetchedQuestionnaire, &questionnaireResponse)
+						if err != nil {
+							// TODO: Retryable errors shouldn't be TaskRejections
+							// TODO: Return issues in the task rejection detail
+							outcomeJSON, _ := json.Marshal(validationOutcome)
+							log.Ctx(ctx).Warn().Msgf("QuestionnaireResponse validation outcome: %s", string(outcomeJSON))
+							return &TaskRejection{
+								Reason:       "QuestionnaireResponse failed to validate",
+								ReasonDetail: err,
+							}
+						}
+					}
+
 					nextStep, err = workflow.Proceed(*item.ValueReference.Reference)
 					if err != nil {
 						log.Ctx(ctx).Error().Err(err).Msgf("Unable to determine next questionnaire (previous URL=%s)", *fetchedQuestionnaire.Url)
