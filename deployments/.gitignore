@@ -1,2 +1,4 @@
 *.private.pem
 extra.env
+hospital/**/tunnel*
+clinic/**/tunnel*

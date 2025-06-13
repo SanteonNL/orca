@@ -22,7 +22,7 @@ func TestFHIRValidatorCLIQuestionnaireResponseValidator_Validate(t *testing.T) {
 	require.NoError(t, err)
 	ctx := context.Background()
 
-	validator := FHIRValidatorCLIQuestionnaireResponseValidator{JARFile: "bin/fhir_validator_cli-6.5.7.jar"}
+	validator := FHIRValidatorAPIQuestionnaireResponseValidator{URL: "http://localhost:3500/validate", client: &http.Client{}}
 	t.Run("ok", func(t *testing.T) {
 		questionnaireData, err := testdata.FS.ReadFile("questionnaire-heartfailure-enrollment.json")
 		require.NoError(t, err)
