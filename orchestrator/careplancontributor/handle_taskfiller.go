@@ -239,7 +239,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 					if len(task.Output) > inputIdx {
 						// TODO: Might not be the same order
 						log.Ctx(ctx).Debug().Msg("SubTask has a QuestionnaireResponse - validating")
-						if task.Output[inputIdx].ValueReference != nil ||
+						if task.Output[inputIdx].ValueReference == nil ||
 							task.Output[inputIdx].ValueReference.Reference == nil ||
 							to.EmptyString(task.Output[inputIdx].ValueReference.Type) != "QuestionnaireResponse" {
 							return &TaskRejection{
