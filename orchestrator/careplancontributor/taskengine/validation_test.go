@@ -9,17 +9,10 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"testing"
 )
 
-func TestFHIRValidatorCLIQuestionnaireResponseValidator_Validate(t *testing.T) {
-	_, err := exec.LookPath("java")
-	if err != nil {
-		t.Skip("not running FHIR validator test, no Java installed")
-	}
-	err = downloadFHIRValidatorCLI()
-	require.NoError(t, err)
+func TestFHIRValidatorAPIQuestionnaireResponseValidator_Validate(t *testing.T) {
 	ctx := context.Background()
 
 	validator := FHIRValidatorAPIQuestionnaireResponseValidator{URL: "http://localhost:3500/validate", client: &http.Client{}}
