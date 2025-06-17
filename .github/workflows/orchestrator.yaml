@@ -61,7 +61,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           flavor: |
             latest=auto
-          sep-tags: ' ' # default is \n, use space to make splitting easier (for running e2e tests)
       # This step uses the `docker/build-push-action` action to build the image, based on your repository's `Dockerfile`. If the build succeeds, it pushes the image to GitHub Packages.
       # It uses the `context` parameter to define the build's context as the set of files located in the specified path. For more information, see "[Usage](https://github.com/docker/build-push-action#usage)" in the README of the `docker/build-push-action` repository.
       # It uses the `tags` and `labels` parameters to tag and label the image with the output from the "meta" step.
@@ -95,4 +94,4 @@ jobs:
       - name: Run E2E tests
         working-directory: ./e2e-tests
         # Docker outputs contains 2 docker tags, we only need the first one
-        run: ORCHESTRATOR_IMAGE=$(echo "${{needs.docker-image.outputs.fully_qualified}}" | cut -d' ' -f1-1) go test -v ./...
+        run: ORCHESTRATOR_IMAGE=$(echo "${{needs.docker-image.outputs.fully_qualified}}" | tr '\n' ' ' | cut -d' ' -f1-1) go test -v ./...
