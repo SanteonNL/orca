@@ -1,5 +1,3 @@
 *.private.pem
 /dev/shared_config/discovery/homemonitoring.json
-/dev/clinic/**/tunnel*
-/dev/hospital/**/tunnel*
 
