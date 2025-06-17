@@ -214,8 +214,3 @@ services:
       clinic_viewer:
         condition: service_healthy
     entrypoint: [ "sh", "-c", "curl -s -X POST -d '{}' http://clinic_viewer:3000/viewer/api/delivery/orca-enroll-patient" ]
-  hapi_validator:
-    image: markiantorno/validator-wrapper # TODO: use a more official image when it is released.
-    restart: always
-    ports:
-      - "3500:3500"
