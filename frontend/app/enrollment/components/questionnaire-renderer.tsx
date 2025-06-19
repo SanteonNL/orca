@@ -100,7 +100,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
     outputTask.status = "completed"
 
-    `const bundle: FhirResource & { type: "transaction" } = {
+    const bundle: FhirResource & { type: "transaction" } = {
       resourceType: 'Bundle',
       type: 'transaction',
       entry: [
