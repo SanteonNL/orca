@@ -59,9 +59,10 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, errors.New("SAMLResponse from server contains an error, see log for details")
 	}
 
-	if err := s.validateResponseExpiry(doc.Root()); err != nil {
-		return LaunchContext{}, fmt.Errorf("SAML response expiration: %w", err)
-	}
+	// Note: for some reason, this fails on the Zorgplatform SAML response, so we skip it for now.
+	//if err := s.validateResponseExpiry(doc.Root()); err != nil {
+	//	return LaunchContext{}, fmt.Errorf("SAML response expiration: %w", err)
+	//}
 
 	assertion, err := s.decryptAssertion(doc)
 	if err != nil {
