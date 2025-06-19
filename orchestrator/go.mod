@@ -13,7 +13,7 @@ require (
 	github.com/braineet/saml v0.4.15
 	github.com/go-jose/go-jose/v4 v4.1.0
 	github.com/google/uuid v1.6.0
-	github.com/jellydator/ttlcache/v3 v3.3.0
+	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/knadh/koanf/providers/env v1.1.0
 	github.com/knadh/koanf/v2 v2.2.1
 	github.com/nuts-foundation/go-nuts-client v0.1.9
