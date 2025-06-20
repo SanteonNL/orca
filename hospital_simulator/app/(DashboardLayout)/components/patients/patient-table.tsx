@@ -11,6 +11,7 @@ interface Props {
 
 interface PatientDetails {
     id: string
+    lastUpdated: Date
     primaryIdentifier: Identifier
     name: HumanName
     gender: string
@@ -22,6 +23,7 @@ const PatientTable: React.FC<Props> = ({ rows }) => {
             field: 'id',
             headerName: 'BSN',
         },
+        { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 1 },
         {
             field: 'name',
             headerName: 'Name',

@@ -41,6 +41,7 @@ export default async function PatientOverview() {
             primaryIdentifier: patient.identifier?.find((identifier: Identifier) => identifier.system === "http://fhir.nl/fhir/NamingSystem/bsn")!!,
             name: patient.name?.[0]!!,
             gender: patient.gender!!,
+            lastUpdated: new Date(patient.meta?.lastUpdated || 0),
         }
     })
     return (
