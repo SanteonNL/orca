@@ -57,8 +57,8 @@ export default function EnrollmentTaskPage() {
 
     const StatusElement = ({ label, value, noUpperCase }: { label: string, value: string, noUpperCase?: boolean | undefined }) =>
         <>
-            <div>{label}:</div>
-            <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
+            <div className={"font-[500]"}>{label}:</div>
+            <div className={!noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
 
     // Auto-launch external app when the following conditions are met:
@@ -82,13 +82,14 @@ export default function EnrollmentTaskPage() {
             <TaskSseConnectionStatus />
         </>
     } else {
-        return <div className='w-full flex flex-col auto-cols-max'>
+        return <div className='w-full flex flex-col auto-cols-max gap-y-10'>
+            <div className="w-[568px] font-[500]">
             {
                 // Either show Task.note, or a default message based on task status
                 task.note && task.note.length > 0 ? task.note.map(note => note.text).join("\n") :
-                executionText(task.status) ?
-                    <p className="w-[568px] text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
+                executionText(task.status) ? executionText(task.status) : ''
             }
+            </div>
             <div className="w-[568px] grid grid-cols-[1fr_2fr] gap-y-4">
                 <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} noUpperCase={true} />
                 <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
