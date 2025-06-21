@@ -202,9 +202,19 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 			},
 		},
 		{
-			name:        "error: requester is not a local organization",
-			principal:   auth.TestPrincipal2,
+			name:      "error: requester is not a local organization",
+			principal: auth.TestPrincipal2,
+			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
+				task.Requester = coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2")
+			}),
 			expectError: errors.New("requester must be local care organization in order to create new CarePlan and CareTeam"),
+		},
+		{
+			name: "error: principal is not Task.requester",
+			taskToCreate: deep.AlterCopy(defaultTask, func(task *fhir.Task) {
+				task.Requester = coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "3")
+			}),
+			expectError: errors.New("requester must be equal to Task.requester"),
 		},
 		{
 			name: "error: invalid 'intent' field",
@@ -401,19 +411,6 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 }
 
 func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	// Create a mock FHIR client using the generated mock
-	mockFHIRClient := mock.NewMockClient(ctrl)
-
-	// Create the service with the mock FHIR client
-	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
-	service := &Service{
-		fhirClient: mockFHIRClient,
-		profile:    profile.Test(),
-		fhirURL:    fhirBaseUrl,
-	}
 
 	tests := []struct {
 		name                  string
@@ -515,7 +512,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				},
 				Intent:    "order",
 				Status:    fhir.TaskStatusRequested,
-				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "3"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 				Meta: &fhir.Meta{
 					Profile: []string{coolfhir.SCPTaskProfile},
@@ -557,7 +554,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 				},
 				Intent:    "order",
 				Status:    fhir.TaskStatusRequested,
-				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+				Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "3"),
 				Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
 				Meta: &fhir.Meta{
 					Profile: []string{coolfhir.SCPTaskProfile},
@@ -595,6 +592,20 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			// Create a mock FHIR client using the generated mock
+			mockFHIRClient := mock.NewMockClient(ctrl)
+
+			// Create the service with the mock FHIR client
+			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
+			service := &Service{
+				fhirClient: mockFHIRClient,
+				profile:    profile.Test(),
+				fhirURL:    fhirBaseUrl,
+			}
+
 			// Create a Task
 			taskBytes, _ := json.Marshal(tt.taskToCreate)
 			fhirRequest := FHIRHandlerRequest{

@@ -1,6 +1,6 @@
 import Client from 'fhir-kit-client';
 import {
-    Bundle,
+    Bundle, CarePlan, CareTeam,
     Condition,
     Identifier,
     Patient,
@@ -19,20 +19,27 @@ export const patientIdentifierSystem = () => {
     return process.env.ORCA_PATIENT_IDENTIFIER_SYSTEM ?? "http://fhir.nl/fhir/NamingSystem/bsn";
 }
 
-export const createEhrClient = () => {
-    const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`
-        : "http://localhost:9090/fhir";
-
+// This function creates a FHIR client to communicate with other (remote) SCP nodes' FHIR APIs.
+export const createScpClient = () => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`;
     return new Client({ baseUrl });
 };
 
-export const createCpsClient = () => {
-    const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
-        : "http://localhost:9090/fhir";
-
+// This function creates a FHIR client to communicate with the EHR's FHIR API.
+export const createEhrClient = () => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`;
     return new Client({ baseUrl });
+};
+
+// This function creates a FHIR client to communicate with the ORCA instance's own CarePlanService.
+export const createCpsClient = () => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`;
+    return new Client({
+        baseUrl: baseUrl,
+        customHeaders: {
+            'X-Scp-Fhir-Url': 'local-cps',
+        }
+    });
 };
 
 export const fetchAllBundlePages = async <T extends Resource>(
@@ -233,7 +240,8 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
     }
 
-    const patientIdentifier = getPatientIdentifier(patient)!;
+    const patientToken = encodeURIComponent(identifierToToken(getPatientIdentifier(patient)) || '');
+
     const bundle = {
         resourceType: "Bundle",
         type: "transaction",
@@ -244,7 +252,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                 request: {
                     method: "POST",
                     url: "Patient",
-                    ifNoneExist: `identifier=${patientIdentifier.system}|${patientIdentifier.value}`
+                    ifNoneExist: `identifier=${patientToken}`
                 }
             },
             serviceRequestEntry,
@@ -276,10 +284,10 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
 
 /**
  * Returns a string representation of an Identifier ONLY if both the system and value are set. Otherwise, returns undefined.
- * @param identifier 
- * @returns 
+ * @param identifier
+ * @returns
  */
-export function identifierToString(identifier?: Identifier) {
+export function identifierToToken(identifier?: Identifier) {
 
     if (!identifier?.system || !identifier.value) {
         return

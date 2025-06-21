@@ -79,6 +79,18 @@ func Start(ctx context.Context, config Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to create profile: %w", err)
 	}
+
+	var cpsURL *url.URL
+	if config.CarePlanService.Enabled {
+		if config.CarePlanService.URL == "" {
+			cpsURL = config.Public.ParseURL().JoinPath("cps")
+		} else {
+			cpsURL, err = url.Parse(config.CarePlanService.URL)
+			if err != nil {
+				return fmt.Errorf("invalid CarePlanService URL: %w", err)
+			}
+		}
+	}
 	if config.CarePlanContributor.Enabled {
 		// App Launches
 		frontendUrl, _ := url.Parse(config.CarePlanContributor.FrontendConfig.URL)
@@ -96,10 +108,6 @@ func Start(ctx context.Context, config Config) error {
 			ehrFhirProxy = service.EhrFhirProxy()
 			services = append(services, service)
 		}
-		var cpsURL *url.URL
-		if config.CarePlanService.Enabled {
-			cpsURL = config.Public.ParseURL().JoinPath("cps")
-		}
 		carePlanContributor, err := careplancontributor.New(
 			config.CarePlanContributor,
 			activeProfile,
@@ -108,7 +116,7 @@ func Start(ctx context.Context, config Config) error {
 			messageBroker,
 			eventManager,
 			ehrFhirProxy,
-			cpsURL)
+			cpsURL, httpHandler)
 		if err != nil {
 			return err
 		}
@@ -123,7 +131,7 @@ func Start(ctx context.Context, config Config) error {
 		}()
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL(), messageBroker, eventManager)
+		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, cpsURL, messageBroker, eventManager)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

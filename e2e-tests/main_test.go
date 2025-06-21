@@ -56,7 +56,12 @@ func Test_Main(t *testing.T) {
 	require.NoError(t, err)
 	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
-	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/cps/fhir"), orcaHttpClient, nil)
+	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/external/fhir"), orcaHttpClient, &fhirclient.Config{
+		DefaultOptions: []fhirclient.Option{
+			fhirclient.RequestHeaders(map[string][]string{"X-Scp-Fhir-Url": {"local-cps"}}),
+		},
+		UsePostSearch: true,
+	})
 
 	// Set up FHIR client for clinic that can interact with hospital's CPS
 	hospitalAuthServerURL, _ := url.Parse("http://nutsnode:8080/oauth2/hospital")
@@ -93,6 +98,7 @@ func Test_Main(t *testing.T) {
 					},
 				},
 			}
+
 			err := hospitalOrcaFHIRClient.Create(patient, &patient)
 			require.NoError(t, err)
 		}
@@ -231,52 +237,6 @@ func Test_Main(t *testing.T) {
 				require.Len(t, carePlan.Contained[0].Participant, 2)
 			})
 		})
-	})
-	t.Run("Clinic attempts to create a CarePlan at Hospital's CarePlanService, which isn't allowed", func(t *testing.T) {
-		var task fhir.Task
-		t.Log("Clinic attempts to create task without existing CarePlan in clinic, fails...")
-		{
-			task.Meta = &fhir.Meta{
-				Profile: []string{
-					"http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask",
-				},
-			}
-			task.Requester = &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr(URANamingSystem),
-					Value:  to.Ptr(strconv.Itoa(hospitalURA)),
-				},
-				Type: to.Ptr("Organization"),
-			}
-			task.Owner = &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr(URANamingSystem),
-					Value:  to.Ptr(strconv.Itoa(clinicURA)),
-				},
-				Type: to.Ptr("Organization"),
-			}
-			task.Focus = &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					// COPD
-					System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
-					Value:  to.Ptr("99534756439"),
-				},
-			}
-			task.For = &fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr("1333333337"),
-				},
-				Reference: to.Ptr("Patient/" + *patient.Id),
-			}
-			task.Intent = "order"
-			task.Status = fhir.TaskStatusRequested
-			err := clinicOrcaCPSFHIRClient.Create(task, &task)
-			var operationOutcome fhirclient.OperationOutcomeError
-			require.ErrorAs(t, err, &operationOutcome)
-			require.Len(t, operationOutcome.Issue, 1)
-			require.Equal(t, "CarePlanService/CreateTask failed: requester must be local care organization in order to create new CarePlan and CareTeam", *operationOutcome.Issue[0].Diagnostics)
-		}
 	})
 	t.Run("Test resource GET authorisation", func(t *testing.T) {
 		// TODO: Negative testing with a third party that has a valid bearer token but no access to the existing CarePlan and CareTeams

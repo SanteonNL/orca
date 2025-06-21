@@ -22,6 +22,14 @@ func TestProxy(t *testing.T) {
 	var capturedCookies []*http.Cookie
 	var capturedHeaders http.Header
 	var capturedBody []byte
+	upstreamServerMux.HandleFunc("POST /fhir/", func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusOK)
+		capturedHost = request.Host
+		capturedQueryParams = request.URL.Query()
+		capturedCookies = request.Cookies()
+		capturedHeaders = request.Header
+		writer.Write([]byte(`{"resourceType":"Bundle"}`))
+	})
 	upstreamServerMux.HandleFunc("GET /fhir/DoGet", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
 		capturedHost = request.Host
@@ -29,14 +37,6 @@ func TestProxy(t *testing.T) {
 		capturedCookies = request.Cookies()
 		capturedHeaders = request.Header
 		writer.Write([]byte(`{"resourceType":"Patient"}`))
-	})
-	upstreamServerMux.HandleFunc("/fhir/InvalidJsonResponse", func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusOK)
-		capturedHost = request.Host
-		capturedQueryParams = request.URL.Query()
-		capturedCookies = request.Cookies()
-		capturedHeaders = request.Header
-		writer.Write([]byte(`this is not JSON`))
 	})
 	upstreamServerMux.HandleFunc("POST /fhir/DoPost", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusCreated)
@@ -122,6 +122,26 @@ func TestProxy(t *testing.T) {
 		err := client.Read("DoGet", &patient, fhirclient.QueryParam("_id", "1"))
 		require.NoError(t, err)
 		require.Equal(t, "1", capturedQueryParams.Get("_id"))
+	})
+	t.Run("FHIRClient sending Bundle to FHIR server root", func(t *testing.T) {
+		upstreamServerURL, _ := url.Parse(upstreamServer.URL)
+		upstreamServerURL.Path = "/fhir/"
+		proxy := NewProxy("Test", upstreamServerURL, "/postfixslash/", proxyBaseUrl, decoratingRoundTripper{
+			inner: http.DefaultTransport,
+			decorator: func(request *http.Request) *http.Request {
+				for name, value := range proxyTransportRequestHeaders {
+					request.Header[name] = value
+				}
+				return request
+			},
+		}, false, false)
+		proxyServer := httptest.NewServer(proxyServerMux)
+		proxyServerMux.HandleFunc("/postfixslash/{rest...}", proxy.ServeHTTP)
+
+		baseUrl, _ := url.Parse(proxyServer.URL + "/postfixslash")
+		client := fhirclient.New(baseUrl, http.DefaultClient, nil)
+		err := client.Create(fhir.Bundle{}, new(fhir.Bundle), fhirclient.AtPath("/"))
+		require.NoError(t, err)
 	})
 	t.Run("upstream error", func(t *testing.T) {
 		t.Run("invalid FHIR response (not valid JSON)", func(t *testing.T) {

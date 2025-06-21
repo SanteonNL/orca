@@ -7,6 +7,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/external"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
@@ -77,9 +79,39 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: X-Scp-Context header must be set"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
+			name:           "Fails: header value is not a valid URL",
+			expectedStatus: http.StatusBadRequest,
+			xSCPContext:    "not-a-valid-url",
+			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
+		},
+		{
+			name:           "Fails: header value is relative URL (missing scheme and host)",
+			expectedStatus: http.StatusInternalServerError,
+			xSCPContext:    "/CarePlan/123",
+			expectedJSON:   ``,
+		},
+		{
+			name:           "Fails: header value missing scheme",
+			expectedStatus: http.StatusInternalServerError,
+			xSCPContext:    "example.com/fhir/CarePlan/123",
+			expectedJSON:   ``,
+		},
+		{
+			name:           "Fails: header value missing host",
+			expectedStatus: http.StatusInternalServerError,
+			xSCPContext:    "https:///fhir/CarePlan/123",
+			expectedJSON:   ``,
+		},
+		{
+			name:           "Fails: header value has invalid scheme",
+			expectedStatus: http.StatusInternalServerError,
+			xSCPContext:    "ftp://example.com/fhir/CarePlan/123",
+			expectedJSON:   ``,
+		},
+		{
 			name:           "Fails: header resource is not CarePlan",
 			expectedStatus: http.StatusBadRequest,
-			xSCPContext:    "SomeResource/invalid",
+			xSCPContext:    "https://example.com/fhir/SomeResource/invalid",
 			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
@@ -192,6 +224,16 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			patientStatusReturn: to.Ptr(http.StatusOK),
 		},
 		{
+			name:                "Success: valid request - GET (search)",
+			expectedStatus:      http.StatusOK,
+			readBodyReturnFile:  "./testdata/careplan-valid.json",
+			patientRequestURL:   to.Ptr("/cpc/fhir/Patient"),
+			url:                 to.Ptr("/cpc/fhir/Patient"),
+			readStatusReturn:    http.StatusOK,
+			xSCPContext:         "CarePlan/cps-careplan-01",
+			patientStatusReturn: to.Ptr(http.StatusOK),
+		},
+		{
 			name:                "Success: valid request - GET - Allow caching",
 			expectedStatus:      http.StatusOK,
 			readBodyReturnFile:  "./testdata/careplan-valid.json",
@@ -259,7 +301,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 					BaseURL: fhirServer.URL + "/fhir",
 				},
 				HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled,
-			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), proxy, carePlanServiceURL)
+			}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), proxy, carePlanServiceURL, nil)
 
 			// Setup: configure the service to proxy to the backing FHIR server
 			frontServerMux := http.NewServeMux()
@@ -273,8 +315,46 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			}
 			if tt.patientRequestURL != nil && tt.patientStatusReturn != nil {
 				fhirServerMux.HandleFunc(*tt.patientRequestURL, func(writer http.ResponseWriter, request *http.Request) {
+					writer.Header().Set("Content-Type", "application/fhir+json")
 					writer.WriteHeader(*tt.patientStatusReturn)
-					_ = json.NewEncoder(writer).Encode(fhir.Patient{})
+					if *tt.patientStatusReturn == http.StatusOK {
+						// Return a valid FHIR response for successful requests
+						if strings.Contains(*tt.patientRequestURL, "_search") || !strings.Contains(*tt.patientRequestURL, "/1") {
+							// For search endpoints, return a Bundle
+							_, _ = writer.Write([]byte(`{
+								"resourceType": "Bundle",
+								"type": "searchset",
+								"total": 1,
+								"entry": [
+									{
+										"fullUrl": "http://example.com/fhir/Patient/1",
+										"resource": {
+											"resourceType": "Patient",
+											"id": "1",
+											"identifier": [
+												{
+													"system": "http://fhir.nl/fhir/NamingSystem/bsn",
+													"value": "1333333337"
+												}
+											]
+										}
+									}
+								]
+							}`))
+						} else {
+							// For individual resource endpoints, return a Patient
+							_, _ = writer.Write([]byte(`{
+								"resourceType": "Patient",
+								"id": "1",
+								"identifier": [
+									{
+										"system": "http://fhir.nl/fhir/NamingSystem/bsn",
+										"value": "1333333337"
+									}
+								]
+							}`))
+						}
+					}
 				})
 			}
 
@@ -381,7 +461,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL), nil)
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -505,7 +585,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		},
 	}, profile.TestProfile{
 		Principal: auth.TestPrincipal2,
-	}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
+	}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL), nil)
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
@@ -590,7 +670,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL))
+	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, must.ParseURL(fhirServer.URL), nil)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -637,100 +717,6 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
 }
 
-func TestService_Proxy_ProxyToCPS_WithLogout(t *testing.T) {
-	// Test that the service registers the CarePlanService FHIR proxy URL that proxies to the CarePlanService
-	// Setup: configure CarePlanService to which the service proxies
-	carePlanServiceMux := http.NewServeMux()
-	var capturedHost string
-	var capturedBody []byte
-	carePlanServiceMux.HandleFunc("POST /fhir/Patient/_search", func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusOK)
-		capturedHost = request.Host
-		capturedBody, _ = io.ReadAll(request.Body)
-		_ = json.NewEncoder(writer).Encode(fhir.Bundle{})
-	})
-	carePlanServiceMux.HandleFunc("GET /fhir/Patient/1", func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusOK)
-		capturedHost = request.Host
-		_ = json.NewEncoder(writer).Encode(fhir.Patient{
-			Id: to.Ptr("1"),
-		})
-	})
-	carePlanService := httptest.NewServer(carePlanServiceMux)
-	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/fhir"
-
-	messageBroker, err := messaging.New(messaging.Config{}, nil)
-	require.NoError(t, err)
-	sessionManager, sessionID := createTestSession()
-
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, carePlanServiceURL)
-	require.NoError(t, err)
-	// Setup: configure the service to proxy to the upstream CarePlanService
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
-
-	params := url.Values{
-		"foo": {"bar"},
-	}
-	httpRequest, _ := http.NewRequest("POST", frontServer.URL+"/cpc/cps/fhir/Patient/_search", strings.NewReader(params.Encode()))
-	httpRequest.AddCookie(&http.Cookie{
-		Name:  "sid",
-		Value: sessionID,
-	})
-	httpResponse, err := frontServer.Client().Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-	require.Equal(t, carePlanServiceURL.Host, capturedHost)
-	expectedValues := url.Values{
-		"foo": {"bar"},
-	}
-	actualValues, err := url.ParseQuery(string(capturedBody))
-	require.NoError(t, err)
-	require.Equal(t, expectedValues, actualValues)
-
-	t.Run("check meta.source is set for read operations", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/cps/fhir/Patient/1", nil)
-		httpRequest.AddCookie(&http.Cookie{
-			Name:  "sid",
-			Value: sessionID,
-		})
-		httpResponse, err := frontServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		responseData, err := io.ReadAll(httpResponse.Body)
-		require.NoError(t, err)
-		var patient fhir.Patient
-		err = json.Unmarshal(responseData, &patient)
-		require.NoError(t, err)
-		require.NotNil(t, patient.Meta)
-		require.NotNil(t, patient.Meta.Source)
-	})
-
-	t.Run("caching is not allowed", func(t *testing.T) {
-		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
-	})
-
-	// Logout and attempt to get the patient again
-	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/logout", nil)
-	httpRequest.AddCookie(&http.Cookie{
-		Name:  "sid",
-		Value: sessionID,
-	})
-	httpResponse, err = frontServer.Client().Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-
-	httpRequest, _ = http.NewRequest("POST", frontServer.URL+"/cpc/cps/fhir/Patient/_search", strings.NewReader(params.Encode()))
-	httpRequest.AddCookie(&http.Cookie{
-		Name:  "sid",
-		Value: sessionID,
-	})
-	httpResponse, err = frontServer.Client().Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
-}
-
 func TestService_HandleSearchEndpoints(t *testing.T) {
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
@@ -751,7 +737,7 @@ func TestService_HandleSearchEndpoints(t *testing.T) {
 				},
 			},
 		},
-	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, nil)
+	}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, nil, nil)
 	require.NoError(t, err)
 
 	// Setup: configure the service to proxy to the backing FHIR server
@@ -779,110 +765,20 @@ func TestService_HandleSearchEndpoints(t *testing.T) {
 	})
 }
 
-func TestService_ProxyToExternalCPS(t *testing.T) {
-	// Test that providing an X-Cps-Url header will proxy to an external CPS via NUTS authz
-	// Setup: configure a "local" CarePlanService
-	localCarePlanServiceMux := http.NewServeMux()
-	localCarePlanService := httptest.NewServer(localCarePlanServiceMux)
-	localCarePlanServiceURL, _ := url.Parse(localCarePlanService.URL)
-
-	// Setup: configure a "remote" CarePlanService
-	remoteCarePlanServiceMux := http.NewServeMux()
-	var capturedHost string
-	var capturedBody []byte
-	remoteCarePlanServiceMux.HandleFunc("POST /fhir/Patient/_search", func(writer http.ResponseWriter, request *http.Request) {
-		writer.WriteHeader(http.StatusOK)
-		capturedHost = request.Host
-		capturedBody, _ = io.ReadAll(request.Body)
-		searchBundle := fhir.Bundle{
-			Entry: []fhir.BundleEntry{
-				{
-					Resource: func() json.RawMessage {
-						b, _ := json.Marshal(fhir.Patient{
-							Id: to.Ptr("1"),
-						})
-						return b
-					}(),
-				},
-			},
-		}
-		_ = json.NewEncoder(writer).Encode(searchBundle)
-	})
-	remoteCarePlanService := httptest.NewServer(remoteCarePlanServiceMux)
-	remoteCarePlanServiceURL, _ := url.Parse(remoteCarePlanService.URL)
-	remoteCarePlanServiceURL.Path = "/fhir"
-
-	messageBroker, err := messaging.New(messaging.Config{}, nil)
-	require.NoError(t, err)
-	sessionManager, sessionID := createTestSession()
-
-	service, err := New(Config{}, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), &httputil.ReverseProxy{}, localCarePlanServiceURL)
-	require.NoError(t, err)
-
-	// Setup: configure the service to proxy to the upstream CarePlanService
-	frontServerMux := http.NewServeMux()
-	service.RegisterHandlers(frontServerMux)
-	frontServer := httptest.NewServer(frontServerMux)
-
-	params := url.Values{
-		"foo": {"bar"},
-	}
-	httpRequest, _ := http.NewRequest("POST", frontServer.URL+"/cpc/cps/fhir/Patient/_search", strings.NewReader(params.Encode()))
-	httpRequest.Header.Add("X-Cps-Url", remoteCarePlanServiceURL.String())
-	httpRequest.AddCookie(&http.Cookie{
-		Name:  "sid",
-		Value: sessionID,
-	})
-	httpResponse, err := frontServer.Client().Do(httpRequest)
-	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
-	require.Equal(t, remoteCarePlanServiceURL.Host, capturedHost)
-	expectedValues := url.Values{
-		"foo": {"bar"},
-	}
-	actualValues, err := url.ParseQuery(string(capturedBody))
-	require.NoError(t, err)
-	require.Equal(t, expectedValues, actualValues)
-
-	var bundle fhir.Bundle
-	err = json.NewDecoder(httpResponse.Body).Decode(&bundle)
-	require.NoError(t, err)
-	require.Len(t, bundle.Entry, 1)
-
-	patientBytes, err := json.Marshal(bundle.Entry[0].Resource)
-	require.NoError(t, err)
-	var patient fhir.Patient
-	err = json.Unmarshal(patientBytes, &patient)
-	require.NoError(t, err)
-	require.NotNil(t, patient.Id)
-	require.Equal(t, "1", *patient.Id)
-
-	t.Run("it should fail with invalid URL", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+"/cpc/cps/fhir/Patient/_search", strings.NewReader(params.Encode()))
-		httpRequest.Header.Add("X-Cps-Url", "invalid-url")
-		httpRequest.AddCookie(&http.Cookie{
-			Name:  "sid",
-			Value: sessionID,
-		})
-		httpResponse, err := frontServer.Client().Do(httpRequest)
-		require.NoError(t, err)
-		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
-	})
-}
-
 func TestService_handleGetContext(t *testing.T) {
-	httpResponse := httptest.NewRecorder()
-	sessionData := session.Data{
-		TaskIdentifier: to.Ptr("task-identifier-123"),
-	}
-	sessionData.Set("Practitioner/the-doctor", nil)
-	sessionData.Set("PractitionerRole/the-doctor-role", nil)
-	sessionData.Set("ServiceRequest/1", nil)
-	sessionData.Set("Patient/1", nil)
-	sessionData.Set("Task/1", nil)
-	Service{}.handleGetContext(httpResponse, nil, &sessionData)
-	assert.Equal(t, http.StatusOK, httpResponse.Code)
-	assert.JSONEq(t, `{
+	t.Run("everything present", func(t *testing.T) {
+		httpResponse := httptest.NewRecorder()
+		sessionData := session.Data{
+			TaskIdentifier: to.Ptr("task-identifier-123"),
+		}
+		sessionData.Set("Practitioner/the-doctor", nil)
+		sessionData.Set("PractitionerRole/the-doctor-role", nil)
+		sessionData.Set("ServiceRequest/1", nil)
+		sessionData.Set("Patient/1", nil)
+		sessionData.Set("Task/1", nil)
+		Service{}.handleGetContext(httpResponse, nil, &sessionData)
+		assert.Equal(t, http.StatusOK, httpResponse.Code)
+		assert.JSONEq(t, `{
 		"practitioner": "Practitioner/the-doctor",
 		"practitionerRole": "PractitionerRole/the-doctor-role",
 		"serviceRequest": "ServiceRequest/1",
@@ -890,70 +786,26 @@ func TestService_handleGetContext(t *testing.T) {
 		"task": "Task/1",
 		"taskIdentifier": "task-identifier-123"
 	}`, httpResponse.Body.String())
-}
-
-func TestService_proxyToAllCareTeamMembers(t *testing.T) {
-	// TODO: Non-happy tests:
-	//       - CarePlan not found
-	//       - Non-active members aren't queried
-	//       - etc...
-	//       - duplicate endpoints; aren't queried twice
-	t.Run("ok", func(t *testing.T) {
-		remoteContributorFHIRAPIMux := http.NewServeMux()
-		// CPC endpoints
-		remoteContributorFHIRAPIMux.HandleFunc("POST /cpc/fhir/Patient/_search", func(writer http.ResponseWriter, request *http.Request) {
-			results := coolfhir.SearchSet().Append(fhir.Patient{
-				Id: to.Ptr("1"),
-			}, nil, nil)
-			coolfhir.SendResponse(writer, http.StatusOK, results)
-		})
-		// CPS endpoints
-		carePlanData, err := os.ReadFile("./testdata/careplan-valid.json")
-		require.NoError(t, err)
-		var carePlan fhir.CarePlan
-		require.NoError(t, json.Unmarshal(carePlanData, &carePlan))
-
-		remoteContributorFHIRAPIMux.HandleFunc("GET /cps/fhir/CarePlan/1", func(writer http.ResponseWriter, request *http.Request) {
-			coolfhir.SendResponse(writer, http.StatusOK, carePlan)
-		})
-
-		remoteContributorFHIRAPI := httptest.NewServer(remoteContributorFHIRAPIMux)
-		cpcBaseURL := remoteContributorFHIRAPI.URL + "/cpc/fhir"
-		cpsBaseURL := remoteContributorFHIRAPI.URL + "/cps/fhir"
-		scpContext := cpsBaseURL + "/CarePlan/1"
-
-		publicURL, _ := url.Parse("https://example.com")
-		service := &Service{
-			orcaPublicURL: publicURL,
-			profile: profile.TestProfile{
-				Principal: auth.TestPrincipal2,
-				CSD: profile.TestCsdDirectory{
-					Endpoints: map[string]map[string]string{
-						"http://fhir.nl/fhir/NamingSystem/ura|2": {
-							"fhirBaseURL": "http://example.com",
-						},
-						"http://fhir.nl/fhir/NamingSystem/ura|1": {
-							"fhirBaseURL": cpcBaseURL,
-						},
-					},
-				},
-			},
-		}
-		service.createFHIRClientForURL = service.defaultCreateFHIRClientForURL
-		expectedBody := url.Values{}
-
-		httpRequest := httptest.NewRequest("POST", publicURL.JoinPath("/cpc/aggregate/fhir/Patient/_search").String(), strings.NewReader(expectedBody.Encode()))
-		httpRequest.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		httpRequest.Header.Add("X-SCP-Context", scpContext)
+	})
+	t.Run("no PractitionerRole", func(t *testing.T) {
 		httpResponse := httptest.NewRecorder()
-
-		err = service.proxyToAllCareTeamMembers(httpResponse, httpRequest)
-
-		require.NoError(t, err)
-		require.Equal(t, http.StatusOK, httpResponse.Code)
-		var actualBundle fhir.Bundle
-		require.NoError(t, json.Unmarshal(httpResponse.Body.Bytes(), &actualBundle))
-		require.Len(t, actualBundle.Entry, 1)
+		sessionData := session.Data{
+			TaskIdentifier: to.Ptr("task-identifier-123"),
+		}
+		sessionData.Set("Practitioner/the-doctor", nil)
+		sessionData.Set("ServiceRequest/1", nil)
+		sessionData.Set("Patient/1", nil)
+		sessionData.Set("Task/1", nil)
+		Service{}.handleGetContext(httpResponse, nil, &sessionData)
+		assert.Equal(t, http.StatusOK, httpResponse.Code)
+		assert.JSONEq(t, `{
+		"practitioner": "Practitioner/the-doctor",
+		"practitionerRole": "",
+		"serviceRequest": "ServiceRequest/1",
+		"patient": "Patient/1",
+		"task": "Task/1",
+		"taskIdentifier": "task-identifier-123"
+	}`, httpResponse.Body.String())
 	})
 }
 
@@ -1067,13 +919,282 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 	}
 }
 
+func TestService_ExternalFHIRProxy(t *testing.T) {
+	t.Log("This tests the external FHIR proxy functionality (/cpc/external/fhir, used by the EHR and ORCA Frontend to query remote SCP-nodes' FHIR APIs.")
+
+	remoteFHIRAPIMux := http.NewServeMux()
+	remoteFHIRAPIMux.HandleFunc("GET /fhir/Task/1", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{Id: to.Ptr("1")})
+	})
+	remoteSCPNode := httptest.NewServer(remoteFHIRAPIMux)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /fhir/Task/2", func(writer http.ResponseWriter, request *http.Request) {
+		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{Id: to.Ptr("2")})
+	})
+
+	httpServer := httptest.NewServer(mux)
+	service := &Service{
+		profile: profile.TestProfile{
+			Principal: auth.TestPrincipal1,
+			CSD: profile.TestCsdDirectory{
+				Endpoints: map[string]map[string]string{
+					"http://fhir.nl/fhir/NamingSystem/ura|2": {
+						"fhirBaseURL": remoteSCPNode.URL + "/fhir",
+					},
+				},
+			},
+		},
+		httpHandler:             mux,
+		localCarePlanServiceUrl: must.ParseURL(httpServer.URL + "/fhir"),
+		orcaPublicURL:           must.ParseURL(httpServer.URL),
+		config:                  Config{StaticBearerToken: "secret"},
+	}
+	service.createFHIRClientForURL = service.defaultCreateFHIRClientForURL
+	service.RegisterHandlers(mux)
+
+	t.Run("X-Scp-Entity-Identifier", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/1", nil)
+		httpRequest.Header.Set("Authorization", "Bearer secret")
+		httpRequest.Header.Set("X-Scp-Entity-Identifier", "http://fhir.nl/fhir/NamingSystem/ura|2")
+		httpResponse, err := httpServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+		responseData, err := io.ReadAll(httpResponse.Body)
+		require.NoError(t, err)
+		assert.NotEmpty(t, responseData)
+
+		t.Run("assert meta source is set", func(t *testing.T) {
+			var bundle fhir.Bundle
+			err = json.Unmarshal(responseData, &bundle)
+			require.NoError(t, err)
+			assert.Equal(t, remoteSCPNode.URL+"/fhir/Task/1", *bundle.Meta.Source)
+		})
+	})
+	t.Run("X-Scp-Fhir-Url", func(t *testing.T) {
+		t.Run("URL, external", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/1", nil)
+			httpRequest.Header.Set("Authorization", "Bearer secret")
+			httpRequest.Header.Set("X-Scp-Fhir-Url", remoteSCPNode.URL+"/fhir")
+			httpResponse, err := httpServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			responseData, err := io.ReadAll(httpResponse.Body)
+			require.NoError(t, err)
+			assert.NotEmpty(t, responseData)
+		})
+		t.Run("URL, local", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/2", nil)
+			httpRequest.Header.Set("Authorization", "Bearer secret")
+			httpRequest.Header.Set("X-Scp-Fhir-Url", service.localCarePlanServiceUrl.String())
+			httpResponse, err := httpServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			responseData, err := io.ReadAll(httpResponse.Body)
+			require.NoError(t, err)
+			assert.NotEmpty(t, responseData)
+		})
+		t.Run("local-cps", func(t *testing.T) {
+			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/2", nil)
+			httpRequest.Header.Set("Authorization", "Bearer secret")
+			httpRequest.Header.Set("X-Scp-Fhir-Url", "local-cps")
+			httpResponse, err := httpServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			responseData, err := io.ReadAll(httpResponse.Body)
+			require.NoError(t, err)
+			assert.NotEmpty(t, responseData)
+		})
+		t.Run("local-cps, non-root base URL", func(t *testing.T) {
+			t.Log("calls to local CPS are dispatched internally, this test makes sure this also works when ORCA is running on a subpath")
+			service.localCarePlanServiceUrl = must.ParseURL(httpServer.URL + "/orca/fhir")
+			service.orcaPublicURL = must.ParseURL(httpServer.URL).JoinPath("orca")
+			defer func() {
+				service.localCarePlanServiceUrl = must.ParseURL(httpServer.URL + "/fhir")
+				service.orcaPublicURL = must.ParseURL(httpServer.URL)
+			}()
+
+			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/2", nil)
+			httpRequest.Header.Set("Authorization", "Bearer secret")
+			httpRequest.Header.Set("X-Scp-Fhir-Url", "local-cps")
+			httpResponse, err := httpServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			responseData, err := io.ReadAll(httpResponse.Body)
+			require.NoError(t, err)
+			assert.NotEmpty(t, responseData)
+		})
+	})
+	t.Run("can't determine remote node", func(t *testing.T) {
+		httpRequest, _ := http.NewRequest(http.MethodPost, httpServer.URL+"/cpc/external/fhir/Task/_search", nil)
+		httpRequest.Header.Set("Authorization", "Bearer secret")
+		httpResponse, err := httpServer.Client().Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+		responseData, err := io.ReadAll(httpResponse.Body)
+		require.NoError(t, err)
+		assert.Contains(t, string(responseData), "can't determine the external SCP-node to query from the HTTP request headers")
+	})
+}
+
+func TestService_withSessionOrBearerToken(t *testing.T) {
+	// Generate a test token generator
+	tokenGenerator, err := rp.NewTestTokenGenerator()
+	require.NoError(t, err)
+
+	// Generate a valid token
+	validToken, err := tokenGenerator.CreateToken(nil)
+	require.NoError(t, err)
+
+	// Generate an invalid token (expired)
+	invalidToken, err := tokenGenerator.CreateExpiredToken()
+	require.NoError(t, err)
+
+	// Create a mock token client
+	ctx := context.Background()
+	mockClient, err := rp.NewMockClient(ctx, tokenGenerator)
+	require.NoError(t, err)
+
+	// Make sure globals.StrictMode is false for the tests
+	origStrictMode := globals.StrictMode
+	globals.StrictMode = false
+	defer func() {
+		globals.StrictMode = origStrictMode
+	}()
+
+	tests := []struct {
+		name           string
+		requestSetup   func(req *http.Request)
+		staticToken    string
+		expectedStatus int
+		withMockClient bool
+		strictMode     bool
+	}{
+		{
+			name: "With valid session",
+			requestSetup: func(req *http.Request) {
+				// Session cookie is added by the test setup
+			},
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "With static bearer token when strict mode is off",
+			requestSetup: func(req *http.Request) {
+				req.Header.Set("Authorization", "Bearer static-token")
+			},
+			staticToken:    "static-token",
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "With valid ADB2C token",
+			requestSetup: func(req *http.Request) {
+				req.Header.Set("Authorization", "Bearer "+validToken)
+			},
+			withMockClient: true,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name: "With invalid ADB2C token",
+			requestSetup: func(req *http.Request) {
+				req.Header.Set("Authorization", "Bearer "+invalidToken)
+			},
+			withMockClient: true,
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "With no authorization",
+			requestSetup: func(req *http.Request) {
+			},
+			expectedStatus: http.StatusUnauthorized,
+		},
+		{
+			name: "With empty bearer token",
+			requestSetup: func(req *http.Request) {
+				req.Header.Set("Authorization", "Bearer ")
+			},
+			withMockClient: true,
+			expectedStatus: http.StatusUnauthorized,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Save original strict mode and restore after test
+			origMode := globals.StrictMode
+			globals.StrictMode = tt.strictMode
+			defer func() {
+				globals.StrictMode = origMode
+			}()
+
+			// Setup: Create a session manager with a test session
+			sessionManager, sessionCookie := createTestSession()
+
+			// Setup: Create a handler that will be called if authentication is successful
+			handlerCalled := false
+			handler := func(writer http.ResponseWriter, request *http.Request) {
+				handlerCalled = true
+				writer.WriteHeader(http.StatusOK)
+			}
+
+			// Setup: Create the service with the session manager
+			service := &Service{
+				SessionManager: sessionManager,
+				config:         Config{StaticBearerToken: tt.staticToken},
+				tokenClient:    nil,
+			}
+
+			if tt.withMockClient {
+				service.tokenClient = mockClient.Client
+			}
+
+			// Call the middleware with our handler
+			wrappedHandler := service.withUserAuth(handler)
+
+			// Create a test HTTP server with the wrapped handler
+			testServer := httptest.NewServer(wrappedHandler)
+			defer testServer.Close()
+
+			// Create a test request
+			req, err := http.NewRequest("GET", testServer.URL, nil)
+			require.NoError(t, err)
+
+			// Add a session cookie if the test case needs it
+			if tt.name == "With valid session" {
+				// Set the correct cookie name and format from the createTestSession function
+				req.AddCookie(&http.Cookie{
+					Name:  "sid", // This should match what's used in the session manager
+					Value: sessionCookie,
+				})
+			}
+
+			// Apply any custom request setup
+			tt.requestSetup(req)
+
+			// Make the request
+			resp, err := testServer.Client().Do(req) // Use the test server's client to ensure cookies are handled properly
+			require.NoError(t, err)
+			defer resp.Body.Close()
+
+			// Check the response status code
+			assert.Equal(t, tt.expectedStatus, resp.StatusCode, "Unexpected status code for test: %s", tt.name)
+
+			// Verify if the handler was called when expected
+			if tt.expectedStatus == http.StatusOK {
+				assert.True(t, handlerCalled, "Handler should have been called for successful auth")
+			} else {
+				assert.False(t, handlerCalled, "Handler should not have been called for failed auth")
+			}
+		})
+	}
+}
+
 func createTestSession() (*user.SessionManager[session.Data], string) {
 	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 	sessionHttpResponse := httptest.NewRecorder()
 	sessionManager.Create(sessionHttpResponse, session.Data{
 		FHIRLauncher: "test",
 	})
-	// extract session ID; s_id=<something>;
+	// extract session ID; sid=<something>;
 	cookieValue := sessionHttpResponse.Header().Get("Set-Cookie")
 	cookieValue = strings.Split(cookieValue, ";")[0]
 	cookieValue = strings.Split(cookieValue, "=")[1]

@@ -123,7 +123,7 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 		defer c.receivers.Done()
 		for c.ctx.Err() == nil {
 			messages, err := receiver.ReceiveMessages(c.ctx, 1, &azservicebus.ReceiveMessagesOptions{})
-			if err != nil {
+			if err != nil || len(messages) == 0 {
 				const backoffTime = time.Minute
 				if !errors.Is(err, context.Canceled) {
 					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: receive message failed, backing off for %s (src: %s)", backoffTime, fullName)

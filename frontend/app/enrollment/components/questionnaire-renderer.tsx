@@ -4,13 +4,11 @@ import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'f
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import useCpsClient from '@/hooks/use-cps-client';
-import useTaskProgressStore from '@/lib/store/task-progress-store';
 import { findQuestionnaireResponse, getPatientIdentifier } from '@/lib/fhirUtils';
 import { Spinner } from '@/components/spinner';
 import { v4 } from 'uuid';
 import { populateQuestionnaire } from '../../utils/populate';
 import useEnrollmentStore from '@/lib/store/enrollment-store';
-import { useRouter } from 'next/navigation';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Button, createTheme, Shadows, ThemeProvider } from '@mui/material';
 import Loading from '../loading';
@@ -35,8 +33,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const [, setPrevQuestionnaireResponse] = useState<QuestionnaireResponse>()
 
   const cpsClient = useCpsClient()
-  const { task } = useTaskProgressStore()
-  const router = useRouter()
 
   useEffect(() => {
 
@@ -45,8 +41,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       if (!inputTask || !questionnaire) return
 
       const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire) as QuestionnaireResponse
-
-      console.log(`Found QuestionnaireResponse: ${JSON.stringify(questionnaireResponse)}`)
 
       if (questionnaireResponse) {
         setPrevQuestionnaireResponse(questionnaireResponse)

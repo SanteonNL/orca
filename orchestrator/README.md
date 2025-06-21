@@ -15,7 +15,7 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_NUTS_SUBJECT`: Nuts subject of the local party, as it was created in/by the Nuts node.
 - `ORCA_NUTS_DISCOVERYSERVICE`: ID of the Nuts Discovery Service that is used for CSD lookups (finding (local) care organizations and looking up their endpoints).
 - `ORCA_NUTS_AZUREKV_URL`: URL of the Azure Key Vault that holds the client certificate for outbound HTTP requests.
-- `ORCA_NUTS_AZUREKV_CLIENTCERTNAME`: Name of the certificate for outbound HTTP requests.
+- `ORCA_NUTS_AZUREKV_CLIENTCERTNAME`: Name of the certificate(s) for outbound HTTP requests. You can use a comma-separated list of names to use multiple certificates.
 - `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 
 ### Care Plan Contributor configuration
@@ -28,11 +28,38 @@ Use the following environment variables to configure the orchestrator:
 - `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
+### OIDC Configuration
+ORCA supports OpenID Connect (OIDC) for both acting as a Relying Party (validating JWT tokens) and as an OpenID Connect Provider (issuing ID tokens for authenticated users).
+
+#### Relying Party Configuration (JWT Token Validation)
+API calls can be authenticated using a JWT bearer token, which is validated by the Relying Party.
+A received token is validated against a trusted OpenID Connect provider, and the user information is extracted from the token.
+The trusted OpenID Connect provider must be configured, it will be compared against the claim `iss` in the JWT.
+This is designed to work with OpenID Connect providers that support the discovery URL, such as Azure B2C (which has been tested).
+
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_ENABLED`: Enable the Relying Party for JWT token validation (default: `false`).
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_CLIENTID`: ClientID used for token validation, this will typically be the same as the `aud` claim in the JWT being validated.
+
+The following two fields can be repeated for multiple trusted issuers, but must both be set for each issuer:
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_<ISSUER_NAME>_ISSUERURL`: Same as the `iss` claim in the JWT.
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_<ISSUER_NAME>_DISCOVERYURL`: OpenID Connect discovery URL for the issuer.
+
+Note: This has been tested with Azure B2C, but should work with any OpenID Connect provider that supports the discovery URL.
+For an Azure B2C token, the format of the discovery URL is the same as the `iss` claim in the JWT, but with `tfp` before `/v2.0/` as well as the `.well-known/openid_configuration` suffix.
+
+Example:
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_EXAMPLE_ISSUERURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/v2.0/`
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_EXAMPLE_DISCOVERYURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/B2C_1_local_login/v2.0/.well-known/openid_configuration`
+
 #### OpenID Connect Provider Configuration
 ORCA can act as OpenID Connect Provider for users that have an existing session (initiated through app launch).
 This allows the launch of OIDC-enabled applications that can't directly authenticate using the EHR.
 It supports the following scopes:
-- `openid`: required, adds the `sub` claim.
+- `openid`: required, adds the `sub`  and `orgid` claims.
+  - The `sub` claim contains the user identifier unique to the integrated EHR. Its format depends on the EHR (e.g., for ChipSoft HiX it's `<user id>@<HL7 NL OID>`).
+  - The `orgid` claim contains an array of organization identifiers (string) for which the user is authenticated in HL7 FHIR token format.
+    It follows the following format: `<system>|<value>`, where the `system` depends on the SCP profile.
+    Note: currently, the system of the identifier will always be URA (`http://fhir.nl/fhir/NamingSystem/ura`).
 - `profile`: adds the `name` and `roles` claims.
 - `email`: adds the `email` claim.
 - `patient`: adds `patient` claim, which contains an array with identifiers of the patient associated with the ORCA user session. The format of the identifiers is `<system>|<value>`.
@@ -40,11 +67,14 @@ It supports the following scopes:
 The claims in the ID token are based on the user information from the EHR.
 
 To configure the OIDC Provider, set the following environment variables:
-- `ORCA_CAREPLANCONTRIBUTOR_OIDC_ENABLED`: Enables the OIDC provider (default: `false`).
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_ENABLED`: Enables the OIDC provider (default: `false`).
 
 To register a client (application), set the following environment variables for that client:
-- `ORCA_CAREPLANCONTRIBUTOR_OIDC_CLIENTS_<clientname>_ID`: ID of the client, which will be used as `client_id` in the OIDC flow.
-- `ORCA_CAREPLANCONTRIBUTOR_OIDC_CLIENTS_<clientname>_REDIRECTURI`: URL to which the OIDC provider will redirect the user after authentication.
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_CLIENTS_<clientname>_ID`: ID of the client, which will be used as `client_id` in the OIDC flow.
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_CLIENTS_<clientname>_REDIRECTURI`: URL to which the OIDC provider will redirect the user after authentication.
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_CLIENTS_<clientname>_SECRET`: `client_secret` to authenticate the client. It can be either stored in hashed form (recommended) or plaintext (if it can be stored securely).
+  If using a hashed secret, it must be prefixed with `sha256|` and salted with the `client_id` (`<client_id>|<secret>`) to ensure uniqueness and security:
+  `concat('sha256|', hex(sha256(<client_id>|<secret>)))`. Note that the hexadecimal function should yield a lowercase string.
 
 #### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
@@ -65,6 +95,14 @@ Configure these options to achieve this:
 
 If you don't want to query the FHIR Questionnaire and HealthcareService resources from your FHIR API, only set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS`.
 The downside of this option is that the resources MUST be available on startup.
+
+##### Task status notes
+You can have the Task Filler engine add notes to the Task when changing its status by configuring `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTE`.
+It's a map with keys as Task status codes (non-letters removed) and values as the note to add, e.g.:
+
+```
+ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTES_ACCEPTED=Work on the task will start tomorrow.
+```
 
 ##### EHR integration
 If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`

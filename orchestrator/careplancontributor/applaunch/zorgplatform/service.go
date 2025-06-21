@@ -361,7 +361,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// Redirect to landing page
 	log.Ctx(request.Context()).Info().Msg("Successfully launched through ChipSoft HiX app launch")
 
-	taskResource := sessionData.Get("Task")
+	taskResource := sessionData.GetByType("Task")
 	redirectURL := s.frontendLandingUrl
 	// If the task doesn't exist yet, send the user to the new page, where data is first confirmed
 	if taskResource == nil {

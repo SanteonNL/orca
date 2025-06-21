@@ -1,9 +1,7 @@
-import { Bundle, Questionnaire, Task } from 'fhir/r4';
-import { useEffect } from 'react';
-import { create } from 'zustand';
-import { createCpsClient, fetchAllBundlePages } from '../fhirUtils';
-import { set } from 'date-fns/set';
-import { gl } from 'date-fns/locale';
+import {Bundle, Questionnaire, Task} from 'fhir/r4';
+import {useEffect} from 'react';
+import {create} from 'zustand';
+import {createCpsClient, fetchAllBundlePages} from '../fhirUtils';
 
 const cpsClient = createCpsClient()
 // A module-level variable, to ensure only one SSE subscription is active (`use` hook for this store is used in multiple places).
@@ -24,7 +22,7 @@ interface StoreState {
     setTask: (task?: Task) => void
     nextStep: () => void
     setSubTasks: (subTasks: Task[]) => void
-    fetchAllResources: () => Promise<void>
+    fetchAllResources: (selectedTaskId: string) => Promise<void>
     setEventSourceConnected: (connected: boolean) => void
 }
 
@@ -39,6 +37,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     error: undefined,
     eventSourceConnected: false,
     setSelectedTaskId: (taskId: string) => {
+        console.log(`Setting selected task ID: ${taskId}`);
         set({ selectedTaskId: taskId })
     },
     setTask: (task?: Task) => {
@@ -50,23 +49,20 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     setSubTasks: (subTasks: Task[]) => {
         set({ subTasks })
     },
-    fetchAllResources: async () => {
-
+    fetchAllResources: async (selectedTaskId: string) => {
         try {
-            const { loading, selectedTaskId } = get()
+            set({ loading: true, error: undefined })
 
-            if (!loading && selectedTaskId) {
-                set({ loading: true, error: undefined })
+            const [task, subTasks] = await Promise.all([
+                await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
+                await fetchSubTasks(selectedTaskId)
+            ])
+            set({ task, subTasks })
+            const questionnaireMap = await fetchQuestionnaires(subTasks, set)
 
-                const [task, subTasks] = await Promise.all([
-                    await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
-                    await fetchSubTasks(selectedTaskId)
-                ])
+            set({ taskToQuestionnaireMap: questionnaireMap });
+            set({ initialized: true, loading: false, })
 
-                set({ task, subTasks })
-                await fetchQuestionnaires(subTasks, set)
-                set({ initialized: true, loading: false, })
-            }
         } catch (error: any) {
             set({ error: `Something went wrong while fetching all resources: ${error?.message || error}`, loading: false })
         }
@@ -77,36 +73,44 @@ const taskProgressStore = create<StoreState>((set, get) => ({
 }));
 
 const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
-    const tmpMap: Record<string, Questionnaire> = {};
+    const questionnaireMap: Record<string, Questionnaire> = {};
     await Promise.all(subTasks.map(async (task: Task) => {
         if (task.input && task.input.length > 0) {
             const input = task.input.find(input => input.valueReference?.reference?.startsWith("Questionnaire"));
             if (input && task.id && input.valueReference?.reference) {
                 const questionnaireId = input.valueReference.reference;
                 try {
-                    const questionnaire = await cpsClient.read({
+                    questionnaireMap[task.id] = await cpsClient.read({
                         resourceType: "Questionnaire",
                         id: questionnaireId.split("/")[1]
                     }) as Questionnaire;
-                    tmpMap[task.id] = questionnaire;
                 } catch (error) {
                     set({ error: `Failed to fetch questionnaire: ${error}` });
                 }
             }
         }
     }));
-    set({ taskToQuestionnaireMap: tmpMap });
+    return questionnaireMap
 }
 
 const fetchSubTasks = async (taskId: string) => {
-    const subTaskBundle = await cpsClient.search({
-        resourceType: 'Task',
-        searchParams: { "part-of": `Task/${taskId}` },
-        headers: { "Cache-Control": "no-cache" },
-        // @ts-ignore
-        options: { postSearch: true }
-    }) as Bundle<Task>
-    return await fetchAllBundlePages(cpsClient, subTaskBundle)
+    for (let attempts = 0; attempts < 3; attempts++) {
+        const subTaskBundle = await cpsClient.search({
+            resourceType: 'Task',
+            searchParams: { "part-of": `Task/${taskId}` },
+            headers: { "Cache-Control": "no-cache" },
+            // @ts-ignore
+            options: { postSearch: true }
+        }) as Bundle<Task>;
+        const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle);
+
+        if (Array.isArray(subTasks) && subTasks.length > 0) {
+            return subTasks;
+        }
+        const delay = 200 * Math.pow(2, attempts);
+        await new Promise(res => setTimeout(res, delay));
+    }
+    return [];
 }
 
 const useTaskProgressStore = () => {
@@ -120,12 +124,11 @@ const useTaskProgressStore = () => {
 
     useEffect(() => {
         if (!loading && !initialized && selectedTaskId) {
-            fetchAllResources()
+            fetchAllResources(selectedTaskId)
         }
     }, [selectedTaskId, loading, initialized, fetchAllResources]);
 
     useEffect(() => {
-
         // Only subscribe if we have a selectedTaskId and no active global subscription yet.
         if (!selectedTaskId || globalEventSource) return
 
@@ -137,6 +140,7 @@ const useTaskProgressStore = () => {
 
         globalEventSource.onerror = (error) => {
             setEventSourceConnected(false);
+            console.error(`Error in global EventSource: ${JSON.stringify(error)}`);
         };
 
         globalEventSource.onmessage = (event) => {

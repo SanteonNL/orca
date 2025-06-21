@@ -22,7 +22,7 @@ export default function Error({
         }
 
         if (!supportContactLink) fetchSupportContactLink()
-    }, [])
+    }, [supportContactLink])
 
     return (
         <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50">

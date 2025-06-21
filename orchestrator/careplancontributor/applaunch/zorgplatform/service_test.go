@@ -191,6 +191,12 @@ func TestService(t *testing.T) {
 			return http.ErrUseLastResponse
 		},
 	}
+	now = func() time.Time {
+		return time.Date(2024, 11, 06, 15, 57, 0, 0, time.UTC)
+	}
+	defer func() {
+		now = time.Now
+	}()
 
 	t.Run("ok, new Task", func(t *testing.T) {
 		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
@@ -250,7 +256,7 @@ func TestService(t *testing.T) {
 		sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
 		require.NotNil(t, sessionData)
 		require.Equal(t, "/frontend/task/12345678910", launchHttpResponse.Header.Get("Location"))
-		assert.Equal(t, "Task/"+*existingTask.Id, sessionData.Get("Task").Path)
+		assert.Equal(t, "Task/"+*existingTask.Id, sessionData.GetByType("Task").Path)
 	})
 
 	t.Run("test invalid SAML response", func(t *testing.T) {

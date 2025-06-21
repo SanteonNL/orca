@@ -6,43 +6,48 @@ import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
 import { patientName, organizationName } from "@/lib/fhirRender";
-import DataViewer from '@/components/data-viewer'
-import { viewerFeatureIsEnabled, getPatientViewerUrl } from '@/app/actions'
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
+import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
+import {Questionnaire} from "fhir/r4";
+import {Button, ThemeProvider} from "@mui/material";
+import {defaultTheme} from "@/app/theme";
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
-    const { patient } = useEnrollmentStore()
-    const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
-    const [patientViewerUrl, setPatientViewerUrl] = useState<string | undefined>(undefined)
-    const [showViewer, setShowViewer] = useState(false)
+    const { patient, serviceRequest } = useEnrollmentStore()
+    const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
+    const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
 
     useEffect(() => {
         if (taskId) {
+            console.log(`Task ID from URL: ${taskId}`);
             //TODO: Currently we only have one Questionnaire per enrollment flow. But we support multiple. The UX for multiple still needs to be made. When it's there, this is the place to add it
             const selectedTaskId = Array.isArray(taskId) ? taskId[0] : taskId;
             setSelectedTaskId(selectedTaskId);
         }
     }, [taskId, setSelectedTaskId])
 
-    useEffect(() => {
-        setShowViewer(viewerFeatureEnabled && !!task && (task.status === "accepted" || task.status === "in-progress"))
-    }, [task, viewerFeatureEnabled])
-
-    useEffect(() => {
-        viewerFeatureIsEnabled()
-            .then((enabled) => {
-                setViewerFeatureEnabled(enabled)
-            })
-    }, [])
-
     useEffect(()=>{
-        getPatientViewerUrl()
-            .then((url) => {
-                setPatientViewerUrl(url)
+        const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
+        if (!primaryTaskPerformer) {
+            return
+        }
+        getLaunchableApps(primaryTaskPerformer)
+            .then((apps) => {
+                setLaunchableApps(apps)
             })
-    })
+    }, [serviceRequest, setLaunchableApps])
+
+    useEffect(() => {
+        if (!taskToQuestionnaireMap) {
+            return undefined
+        }
+        if (!subTasks || subTasks.length === 0) {
+            return undefined
+        }
+        setCurrentQuestionnaire(taskToQuestionnaireMap[subTasks[0].id!!])
+    }, [taskToQuestionnaireMap, subTasks]);
 
     if (loading || !initialized) return <Loading />
 
@@ -52,27 +57,39 @@ export default function EnrollmentTaskPage() {
 
     const StatusElement = ({ label, value, noUpperCase }: { label: string, value: string, noUpperCase?: boolean | undefined }) =>
         <>
-            <div>{label}:</div>
-            <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
+            <div className={"font-[500]"}>{label}:</div>
+            <div className={!noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
         </>
 
-    if (task.status === "received") {
-        if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
-            return <>Task is ontvangen, maar er ontbreekt informatie.</>
-        }
+    // Auto-launch external app when the following conditions are met:
+    // - Task.status is "in-progress"
+    // - There is exactly one launchable app
+    // - Auto-launch is enabled
+    const autoLaunchExternalApps = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
+    const launchApp = (URL: string) => () => {
+        window.open(URL, "_self");
+    }
+    if (task.status === "in-progress" && launchableApps && launchableApps.length === 1 && autoLaunchExternalApps) {
+        launchApp(launchableApps[0].URL)();
+    }
+
+    if (task.status === "received" && currentQuestionnaire && subTasks?.[0]) {
         return <>
             <QuestionnaireRenderer
-                questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
+                questionnaire={currentQuestionnaire}
                 inputTask={subTasks[0]}
             />
             <TaskSseConnectionStatus />
         </>
     } else {
-        return <div className='w-full flex flex-col auto-cols-max'>
+        return <div className='w-full flex flex-col auto-cols-max gap-y-10'>
+            <div className="w-[568px] font-[500]">
             {
-                task && executionText(task.status) ?
-                    <p className="w-[568px] text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
+                // Either show Task.note, or a default message based on task status
+                task.note && task.note.length > 0 ? task.note.map(note => note.text).join("\n") :
+                executionText(task.status) ? executionText(task.status) : ''
             }
+            </div>
             <div className="w-[568px] grid grid-cols-[1fr_2fr] gap-y-4">
                 <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} noUpperCase={true} />
                 <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
@@ -86,8 +103,22 @@ export default function EnrollmentTaskPage() {
                     : <></>
                 }
             </div>
-            {patientViewerUrl && <a href={patientViewerUrl}>Klik hier voor het inzien van verzamelde gegevens gedurende het thuismeet traject</a>}
-            {showViewer && <DataViewer task={task} />}
+
+            {task.status === "accepted" /* note: change to in-progress */ && !autoLaunchExternalApps && launchableApps && launchableApps.length > 0 &&
+                <div className="w-[568px]">
+                    <ThemeProvider theme={defaultTheme}>
+                        {launchableApps.map((app, index) => (
+                            <Button
+                                key={index}
+                                variant="contained"
+                                className="mb-2"
+                                onClick={launchApp(app.URL)}
+                            >{app.Name}</Button>
+                        ))}
+                    </ThemeProvider>
+                </div>
+            }
+
             <TaskSseConnectionStatus />
         </div>
     }
