@@ -16,7 +16,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.3.0
 	github.com/knadh/koanf/providers/env v1.1.0
 	github.com/knadh/koanf/v2 v2.2.1
-	github.com/nuts-foundation/go-nuts-client v0.1.9
+	github.com/nuts-foundation/go-nuts-client v0.2.0
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.37.0
