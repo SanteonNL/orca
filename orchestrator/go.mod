@@ -16,7 +16,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/knadh/koanf/providers/env v1.1.0
 	github.com/knadh/koanf/v2 v2.2.1
-	github.com/nuts-foundation/go-nuts-client v0.1.9
+	github.com/nuts-foundation/go-nuts-client v0.2.0
 	github.com/rs/zerolog v1.34.0
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.37.0
@@ -117,7 +117,7 @@ require (
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-base36 v0.2.0 // indirect
 	github.com/multiformats/go-multibase v0.2.0 // indirect
-	github.com/nuts-foundation/go-did v0.15.0
+	github.com/nuts-foundation/go-did v0.17.0
 	github.com/oapi-codegen/oapi-codegen/v2 v2.4.1 // indirect
 	github.com/oapi-codegen/runtime v1.1.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
