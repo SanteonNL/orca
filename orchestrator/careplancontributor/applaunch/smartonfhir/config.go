@@ -13,8 +13,9 @@ type Config struct {
 }
 
 type IssuerConfig struct {
-	URL      string `koanf:"url"`
-	ClientID string `koanf:"clientid"`
+	URL          string `koanf:"url"`
+	ClientID     string `koanf:"clientid"`
+	DiscoveryURL string `koanf:"discoveryurl"`
 }
 
 func DefaultConfig() Config {

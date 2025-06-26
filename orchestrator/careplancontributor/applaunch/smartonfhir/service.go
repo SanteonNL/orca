@@ -79,10 +79,11 @@ func New(config Config, sessionManager *user.SessionManager[session.Data], orcaB
 		issuerKeyBytes := md5.Sum([]byte(curr.URL))
 		issuerKey := hex.EncodeToString(issuerKeyBytes[:])
 		issuer := &trustedIssuer{
-			mux:       &sync.RWMutex{},
-			key:       issuerKey,
-			issuerURL: curr.URL,
-			clientID:  curr.ClientID,
+			mux:          &sync.RWMutex{},
+			key:          issuerKey,
+			issuerURL:    curr.URL,
+			clientID:     curr.ClientID,
+			discoveryURL: curr.DiscoveryURL,
 		}
 		issuersByURL[curr.URL] = issuer
 		issuersByKey[issuerKey] = issuer
