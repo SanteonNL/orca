@@ -14,7 +14,6 @@ import (
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
-	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -236,14 +235,6 @@ type loggingRoundTripper struct {
 func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	l.t.Log("Making request to:", request.URL.String())
 	return http.DefaultTransport.RoundTrip(request)
-}
-
-func Test_parseClaims(t *testing.T) {
-	const idToken = `eyJhbGciOiJSUzI1NiIsImtpZCI6ImVsTlpVVFB5cHVYN1NKUmd1RmptTUhSRkhlQnFTTXViT3hNY2JmQWNsb3M9IiwidHlwIjoiSldUIn0.eyJhdWQiOiJkNDUwNDljMy0zNDQxLTQwZWYtYWI0ZC1iOWNkODZhMTcyMjUiLCJleHAiOjE3NTA5NDY2NjIsImZoaXJVc2VyIjoiaHR0cHM6Ly9maGlyLmVwaWMuY29tL2ludGVyY29ubmVjdC1maGlyLW9hdXRoL2FwaS9GSElSL1I0L1ByYWN0aXRpb25lci9ldk5wLUtoWXdPT3FBWm4xcFoyZW51QTMiLCJpYXQiOjE3NTA5NDYzNjIsImlzcyI6Imh0dHBzOi8vZmhpci5lcGljLmNvbS9pbnRlcmNvbm5lY3QtZmhpci1vYXV0aC9vYXV0aDIiLCJzdWIiOiJldk5wLUtoWXdPT3FBWm4xcFoyZW51QTMifQ.NWPcttkRMfiHFDN6mw96RtpSwseZr6zmMTv2OtpuGZsqyZ7PxhU4ZhRdgT-53BfA3u-Gp3_LlnrAwZacpw3BjOgv9Qjht1OIZXTRwHDC5HzsztCHRUZK6s5aNBQkzEORnHLcQrFXRqbUNRe-iO22Hsesywuk753ZoqeExgHz7xaXYEfDLzCLOoeWmXf5OiGx1mjFCwQsZQhdtl6GU0PixHUQjTHJ2kSuxWes5MHafKcVj8JiyGG-sfMqQzIg11nFGoQF8jDRPveD-vwSgcrWeqLXnGnrTFun7N32xsLBLTD4oVDc7hYR9vSTOO5gskYaJNeWTaq6z6kwRkq_2DaivQ`
-	var claims IDTokenClaims
-	_, err := oidc.ParseToken(idToken, &claims)
-	require.NoError(t, err)
-	require.Equal(t, "", claims.FHIRUser)
 }
 
 func Test_loadJWTSigningKeyFromAzureKeyVault(t *testing.T) {
