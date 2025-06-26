@@ -176,11 +176,18 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 		urlOptions = append(urlOptions, rp.WithURLParam("launch", launch))
 	}
 	urlOptions = append(urlOptions, rp.WithURLParam("aud", issuer))
-	// TODO: add this to cookie, or encrypt the state?
-	state := hex.EncodeToString([]byte(request.URL.Query().Encode()))
+	var stateParams url.Values
+	for key, value := range request.URL.Query() {
+		switch key {
+		case "iss", "launch":
+			continue
+		default:
+			stateParams[key] = value
+		}
+	}
 	rp.AuthURLHandler(
 		func() string {
-			return state
+			return hex.EncodeToString([]byte(stateParams.Encode()))
 		},
 		provider,
 		urlOptions...,
