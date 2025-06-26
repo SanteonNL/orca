@@ -94,7 +94,9 @@ func Start(ctx context.Context, config Config) error {
 	if config.CarePlanContributor.Enabled {
 		// App Launches
 		frontendUrl, _ := url.Parse(config.CarePlanContributor.FrontendConfig.URL)
-		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, frontendUrl))
+		if config.CarePlanContributor.AppLaunch.SmartOnFhir.Enabled {
+			services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, frontendUrl))
+		}
 
 		var ehrFhirProxy coolfhir.HttpProxy //TODO: Rewrite to an array so we can support multiple login mechanisms and multiple EHR proxies
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {

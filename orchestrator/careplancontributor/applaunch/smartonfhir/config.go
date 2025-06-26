@@ -5,4 +5,5 @@ type Config struct {
 	ClientSecret string `koanf:"clientsecret"`
 	RedirectURI  string `koanf:"redirecturi"`
 	Scope        string `koanf:"scope"`
+	Enabled      bool   `koanf:"enabled"`
 }
