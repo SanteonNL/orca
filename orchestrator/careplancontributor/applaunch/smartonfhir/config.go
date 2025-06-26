@@ -37,6 +37,9 @@ func (c Config) Validate() error {
 		if issuer.ClientID == "" {
 			return fmt.Errorf("issuer %s clientid is required", key)
 		}
+		if issuer.OAuth2URL != "" && !strings.HasPrefix(issuer.OAuth2URL, "https://") && !strings.HasPrefix(issuer.OAuth2URL, "http://") {
+			return fmt.Errorf("issuer %s oauth2url must start with http:// or https://", key)
+		}
 	}
 	return c.AzureKeyVault.Validate()
 }
