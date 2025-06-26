@@ -175,7 +175,8 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 	if launch != "" {
 		urlOptions = append(urlOptions, rp.WithURLParam("launch", launch))
 	}
-	urlOptions = append(urlOptions, rp.WithURLParam("aud", issuer))
+	// TODO: is this required?
+	urlOptions = append(urlOptions, rp.WithURLParam("aud", provider.Issuer()))
 	var stateParams url.Values
 	for key, value := range request.URL.Query() {
 		switch key {
