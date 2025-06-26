@@ -64,12 +64,21 @@ type Service struct {
 }
 
 type trustedIssuer struct {
-	issuerURL    string
-	mux          *sync.RWMutex
-	client       rp.RelyingParty
-	key          string
-	clientID     string
-	discoveryURL string
+	issuerLaunchURL string
+	mux             *sync.RWMutex
+	client          rp.RelyingParty
+	key             string
+	clientID        string
+	realIssuerURL   string
+}
+
+func (t trustedIssuer) issuerURL() string {
+	// Epic's SMART on FHIR implementation uses an issuer URL that differs from the 'iss' parameter in the application launch,
+	// so we override the 'iss' URL from launch with the configured URL.
+	if t.realIssuerURL != "" {
+		return t.realIssuerURL
+	}
+	return t.issuerLaunchURL
 }
 
 func New(config Config, sessionManager *user.SessionManager[session.Data], orcaBaseURL *url.URL, frontendBaseURL *url.URL, strictMode bool) (*Service, error) {
@@ -79,11 +88,11 @@ func New(config Config, sessionManager *user.SessionManager[session.Data], orcaB
 		issuerKeyBytes := md5.Sum([]byte(curr.URL))
 		issuerKey := hex.EncodeToString(issuerKeyBytes[:])
 		issuer := &trustedIssuer{
-			mux:          &sync.RWMutex{},
-			key:          issuerKey,
-			issuerURL:    curr.URL,
-			clientID:     curr.ClientID,
-			discoveryURL: curr.DiscoveryURL,
+			mux:             &sync.RWMutex{},
+			key:             issuerKey,
+			issuerLaunchURL: curr.URL,
+			clientID:        curr.ClientID,
+			realIssuerURL:   curr.DiscoveryURL,
 		}
 		issuersByURL[curr.URL] = issuer
 		issuersByKey[issuerKey] = issuer
@@ -211,7 +220,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			FHIRLauncher: fhirLauncherKey,
 			LauncherProperties: map[string]string{
 				"access_token": tokens.AccessToken,
-				"iss":          issuer.issuerURL,
+				"iss":          issuer.issuerURL(),
 			},
 		}
 		sessionData.Set("Patient/"+*patient.Id, *patient)
@@ -224,7 +233,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 }
 
 func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens *oidc.Tokens[*oidc.IDTokenClaims]) (*fhir.Patient, *fhir.Practitioner, error) {
-	fhirClient := createFHIRClient(ctx, must.ParseURL(issuer.issuerURL), tokens.AccessToken)
+	fhirClient := createFHIRClient(ctx, must.ParseURL(issuer.issuerLaunchURL), tokens.AccessToken)
 	var patient fhir.Patient
 	patientID, hasPatientID := tokens.Extra("patient").(string)
 	if !hasPatientID || patientID == "" {
@@ -283,13 +292,10 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 		rp.WithSigningAlgsFromDiscovery(),
 		rp.WithLogger(logger),
 	}
-	if issuer.discoveryURL != "" {
-		options = append(options, rp.WithCustomDiscoveryUrl(issuer.discoveryURL))
-	}
 
 	scopes := []string{"openid", "profile", "patient/*.rs", "launch", "launch/patient"}
 	redirectURI := s.orcaBaseURL.JoinPath("smart-app-launch", "callback", issuer.key)
-	provider, err := rp.NewRelyingPartyOIDC(ctx, issuer.issuerURL, issuer.clientID, "client_secret_todo", redirectURI.String(), scopes, options...)
+	provider, err := rp.NewRelyingPartyOIDC(ctx, issuer.issuerURL(), issuer.clientID, "client_secret_todo", redirectURI.String(), scopes, options...)
 	if err != nil {
 		return nil, fmt.Errorf("provider: %w", err)
 	}
@@ -311,7 +317,7 @@ func (s *Service) handleGetJWKs(httpResponse http.ResponseWriter, httpRequest *h
 }
 
 func (s *Service) createClientAssertion(issuer *trustedIssuer) (string, error) {
-	return s.createClientAssertionForAudience(issuer.clientID, issuer.issuerURL)
+	return s.createClientAssertionForAudience(issuer.clientID, issuer.issuerURL())
 }
 
 func (s *Service) createClientAssertionForAudience(clientID string, audience string) (string, error) {
