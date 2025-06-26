@@ -201,7 +201,7 @@ type Service struct {
 	secureTokenService     SecureTokenService
 	getSessionData         func(ctx context.Context, accessToken string, launchContext LaunchContext) (*session.Data, error)
 	// accessTokenCache stores the Zorgplatform access tokens a given CarePlan (from X-SCP-Context)
-	// Requesting an access token involves an, chained lookup, so we cache the result for some time.
+	// Requesting an access token involves a chained lookup, so we cache the result for some time.
 	accessTokenCache *ttlcache.Cache[string, string]
 }
 
