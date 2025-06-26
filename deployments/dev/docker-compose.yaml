@@ -157,7 +157,7 @@ services:
       - nutsnode
       - clinic_orchestrator
     ports:
-      - "8080:8080"
+      - "8082:8080"
     volumes:
       - "./clinic/config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   clinic_orchestrator:
