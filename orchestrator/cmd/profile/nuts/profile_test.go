@@ -94,8 +94,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 	}
 	identifier1VC := vc.VerifiableCredential{
 		Type: []ssi.URI{ssi.MustParseURI("NutsUraCredential")},
-		CredentialSubject: []interface{}{
-			map[string]interface{}{
+		CredentialSubject: []map[string]any{
+			{
 				"organization": map[string]interface{}{
 					"ura":  *identifier1.Value,
 					"name": *identity1.Name,
@@ -113,8 +113,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 	}
 	identifier2VC := vc.VerifiableCredential{
 		Type: []ssi.URI{ssi.MustParseURI("NutsUraCredential")},
-		CredentialSubject: []interface{}{
-			map[string]interface{}{
+		CredentialSubject: []map[string]any{
+			{
 				"organization": map[string]interface{}{
 					"ura": *identifier2.Value,
 				},
@@ -123,8 +123,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 	}
 	identifier2UziCertVC := vc.VerifiableCredential{
 		Type: []ssi.URI{ssi.MustParseURI("X509Credential")},
-		CredentialSubject: []interface{}{
-			map[string]interface{}{
+		CredentialSubject: []map[string]any{
+			{
 				"san": map[string]interface{}{
 					"otherName": "2.16.528.1.1007.99.2110-1-111-S-" + *identifier2.Value + "-00.000-222",
 				},
@@ -135,8 +135,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		},
 	}
 	nonUraVC := vc.VerifiableCredential{
-		CredentialSubject: []interface{}{
-			map[string]interface{}{
+		CredentialSubject: []map[string]any{
+			{
 				"name": "test",
 			},
 		},
