@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
-	"crypto/md5"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -89,18 +88,16 @@ func (t trustedIssuer) issuerURL() string {
 func New(config Config, sessionManager *user.SessionManager[session.Data], orcaBaseURL *url.URL, frontendBaseURL *url.URL, strictMode bool) (*Service, error) {
 	issuersByURL := make(map[string]*trustedIssuer)
 	issuersByKey := make(map[string]*trustedIssuer)
-	for _, curr := range config.Issuer {
-		issuerKeyBytes := md5.Sum([]byte(curr.URL))
-		issuerKey := hex.EncodeToString(issuerKeyBytes[:])
+	for key, curr := range config.Issuer {
 		issuer := &trustedIssuer{
 			mux:             &sync.RWMutex{},
-			key:             issuerKey,
+			key:             key,
 			issuerLaunchURL: curr.URL,
 			clientID:        curr.ClientID,
 			realIssuerURL:   curr.DiscoveryURL,
 		}
 		issuersByURL[curr.URL] = issuer
-		issuersByKey[issuerKey] = issuer
+		issuersByKey[key] = issuer
 	}
 	cookieHashKey := make([]byte, 32)
 	if _, err := rand.Read(cookieHashKey); err != nil {
