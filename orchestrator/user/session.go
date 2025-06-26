@@ -123,6 +123,7 @@ func setSessionCookie(sessionID string, response http.ResponseWriter, lifetime t
 		Value:    sessionID,
 		HttpOnly: true,
 		Expires:  time.Now().Add(lifetime),
+		Path:     "/",
 	}
 	http.SetCookie(response, &cookie)
 }
