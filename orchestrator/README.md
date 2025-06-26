@@ -161,7 +161,9 @@ The JWK set will be available at `/smart-app-launch/.well-known/jwks.json`.
 
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ENABLED`: Enables the SMART on FHIR app launch endpoint (default: `false`).
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_CLIENTID` (required): The OAuth2 `client_id`.
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_URL` (required): A comma-separated list of SMART on FHIR servers that are allowed to launch the application.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_URL` (required): SMART on FHIR server base URL that launches the application.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_OAUTH2URL` (optional): In some cases (Epic on FHIR), the actual OAuth2 Authorization Server URL (`issuer` property in the discovered OpenID Configuration) differs from the SMART on FHIR server base URL (`iss` parameter in the launch).
+   Setting this option overrides the OAuth2 Authorization Server URL, if not set, the FHIR server base URL is used.
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_URL`: Azure Key Vault URL to source the JWT signing key from.
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_CREDENTIALTYPE`: Credential type for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_SIGNINGKEY`: Name of the JWT signing key in the Azure Key Vault.

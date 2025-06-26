@@ -89,7 +89,7 @@ func New(config Config, sessionManager *user.SessionManager[session.Data], orcaB
 			key:             key,
 			issuerLaunchURL: curr.URL,
 			clientID:        curr.ClientID,
-			realIssuerURL:   curr.DiscoveryURL,
+			realIssuerURL:   curr.OAuth2URL,
 		}
 		issuersByURL[curr.URL] = issuer
 		issuersByKey[key] = issuer

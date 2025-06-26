@@ -25,7 +25,6 @@ import (
 )
 
 func TestService(t *testing.T) {
-	t.Skip()
 	httpMux := http.NewServeMux()
 	httpServer := httptest.NewServer(httpMux)
 	sessionManager := user.NewSessionManager[session.Data](time.Minute)
@@ -116,7 +115,7 @@ func TestService(t *testing.T) {
 				ID:        uuid.NewString(),
 			}).
 			Claims(map[string]any{
-				"profile": "Practitioner/" + fhirPractitionerID,
+				"fhirUser": "Practitioner/" + fhirPractitionerID,
 			}).
 			Serialize()
 		require.NoError(t, err)
@@ -180,7 +179,7 @@ func TestService(t *testing.T) {
 			println(string(responseData))
 			require.Equal(t, http.StatusOK, httpResponse.StatusCode, "Expected status code 200 OK for app launch with launch parameter")
 			// Assert captured authorization request parameters
-			require.Equal(t, []string{"openid profile user/Patient.r user/Practitioner.r launch"}, capturedScope)
+			require.Equal(t, []string{"openid fhirUser user/Patient.r user/Practitioner.r launch"}, capturedScope)
 			require.Equal(t, []string{issuerURL}, capturedAudience)
 			require.Equal(t, []string{clientID}, capturedClientID)
 			require.Equal(t, []string{"test-launch"}, capturedLaunchParam)
