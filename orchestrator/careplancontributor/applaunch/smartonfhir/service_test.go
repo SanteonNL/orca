@@ -100,7 +100,9 @@ func TestService(t *testing.T) {
 		// Simulate an authorization response
 		http.Redirect(w, r, r.URL.Query().Get("redirect_uri")+"?state="+r.URL.Query().Get("state"), http.StatusFound)
 	})
+	var capturedClientAssertion string
 	httpMux.HandleFunc("/fhir/token", func(w http.ResponseWriter, r *http.Request) {
+		capturedClientAssertion = r.PostFormValue("client_assertion")
 		// Simulate a token response
 		idToken, err := jwt.Signed(issuerSigner).
 			Claims(jwt.Claims{
@@ -177,12 +179,23 @@ func TestService(t *testing.T) {
 			println(string(responseData))
 			require.Equal(t, http.StatusOK, httpResponse.StatusCode, "Expected status code 200 OK for app launch with launch parameter")
 			// Assert captured authorization request parameters
-			require.Equal(t, []string{"openid profile patient/*.rs launch launch/patient"}, capturedScope)
+			require.Equal(t, []string{"openid profile user/Patient.r user/Practitioner.r launch"}, capturedScope)
 			require.Equal(t, []string{issuerURL}, capturedAudience)
 			require.Equal(t, []string{clientID}, capturedClientID)
 			require.Equal(t, []string{"test-launch"}, capturedLaunchParam)
 			// Assert the "browser" was redirected to the frontend
 			require.True(t, frontendCalled)
+			// Assert client_assertion
+			require.NotEmpty(t, capturedClientAssertion)
+			decodedClientAssertion, err := jwt.ParseSigned(capturedClientAssertion, []jose.SignatureAlgorithm{jose.ES256})
+			require.NoError(t, err, "Failed to parse client assertion JWT")
+			var claims jwt.Claims
+			err = decodedClientAssertion.UnsafeClaimsWithoutVerification(&claims)
+			require.NoError(t, err, "Failed to extract claims from client assertion JWT")
+			require.Equal(t, clientID, claims.Issuer)
+			require.Equal(t, clientID, claims.Subject)
+			require.Equal(t, jwt.Audience{issuerURL + "/token"}, claims.Audience)
+			require.NotEmpty(t, claims.ID, "Client assertion JWT should have an ID")
 		})
 		t.Run("without launch parameter", func(t *testing.T) {
 			defer func() {
@@ -205,7 +218,6 @@ func TestService(t *testing.T) {
 			println(string(responseData))
 			require.Equal(t, http.StatusOK, httpResponse.StatusCode, "Expected status code 200 OK for app launch with launch parameter")
 			// Assert captured authorization request parameters
-			require.Equal(t, []string{"openid profile patient/*.rs launch launch/patient"}, capturedScope)
 			require.Equal(t, []string{issuerURL}, capturedAudience)
 			require.Equal(t, []string{clientID}, capturedClientID)
 			require.Equal(t, []string(nil), capturedLaunchParam)

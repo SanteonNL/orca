@@ -300,7 +300,7 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 		rp.WithLogger(logger),
 	}
 
-	scopes := []string{"openid", "profile", "patient/*.rs", "launch", "launch/patient"}
+	scopes := []string{"openid", "profile", "user/Patient.r", "user/Practitioner.r", "launch"}
 	redirectURI := s.orcaBaseURL.JoinPath("smart-app-launch", "callback", issuer.key)
 	provider, err := rp.NewRelyingPartyOIDC(ctx, issuer.issuerURL(), issuer.clientID, "client_secret_todo", redirectURI.String(), scopes, options...)
 	if err != nil {
@@ -324,7 +324,7 @@ func (s *Service) handleGetJWKs(httpResponse http.ResponseWriter, httpRequest *h
 }
 
 func (s *Service) createClientAssertion(issuer *trustedIssuer) (string, error) {
-	return s.createClientAssertionForAudience(issuer.clientID, issuer.issuerURL())
+	return s.createClientAssertionForAudience(issuer.clientID, issuer.client.OAuthConfig().Endpoint.TokenURL)
 }
 
 func (s *Service) createClientAssertionForAudience(clientID string, audience string) (string, error) {
