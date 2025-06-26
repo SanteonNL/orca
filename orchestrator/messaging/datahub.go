@@ -81,7 +81,7 @@ func (h DataHubBroker) doSend(ctx context.Context, message *Message) error {
 	if err != nil {
 		return nil
 	}
-	httpRequestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	httpRequestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	req, err := http.NewRequestWithContext(httpRequestCtx, http.MethodPost, endpoint.String(), strings.NewReader(string(jsonValue)))
 	if err != nil {
