@@ -167,3 +167,8 @@ The JWK set will be available at `/smart-app-launch/.well-known/jwks.json`.
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_URL`: Azure Key Vault URL to source the JWT signing key from.
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_CREDENTIALTYPE`: Credential type for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_SIGNINGKEY`: Name of the JWT signing key in the Azure Key Vault.
+
+You can test the SMART on FHIR app launch using the [SMART on FHIR sandbox](https://launch.smarthealthit.org/).
+Select launch type "Provider EHR Launch", select a patient (e.g. `14867dba-fb11-4df3-9829-8e8e081b39e6`),
+and fill in the following App Launch URL: `http://localhost:8081/orca/smart-app-launch` (assuming you're running `deployments/dev`).
+Click "Launch" to launch the application.
