@@ -39,6 +39,11 @@ const fhirLauncherKey = "smartonfhir"
 const clientAssertionExpiry = 5 * time.Minute
 const clockSkew = 5 * time.Second
 
+type IDTokenClaims struct {
+	oidc.IDTokenClaims
+	FHIRUser string `json:"fhirUser,omitempty"`
+}
+
 func init() {
 	// Register FHIR client factory that can create FHIR issuersByURL when the SMART on FHIR AppLaunch is used
 	clients.Factories[fhirLauncherKey] = func(properties map[string]string) clients.ClientProperties {
@@ -216,7 +221,9 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 	var codeExchangeOpts = []rp.URLParamOpt{
 		rp.URLParamOpt(rp.WithClientAssertionJWT(clientAssertion)),
 	}
-	rp.CodeExchangeHandler(func(httpResponse http.ResponseWriter, httpRequest *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], state string, rp rp.RelyingParty) {
+	rp.CodeExchangeHandler(func(httpResponse http.ResponseWriter, httpRequest *http.Request, tokens *oidc.Tokens[*IDTokenClaims], state string, rp rp.RelyingParty) {
+		idTokenJSON, _ := json.Marshal(tokens.IDTokenClaims)
+		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with ID token: %s", idTokenJSON)
 		patient, practitioner, err := s.loadContext(httpRequest.Context(), issuer, tokens)
 		if err != nil {
 			// TODO: make this a nicer error page
@@ -240,7 +247,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 	}, issuer.client, codeExchangeOpts...)(response, request)
 }
 
-func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens *oidc.Tokens[*oidc.IDTokenClaims]) (*fhir.Patient, *fhir.Practitioner, error) {
+func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens *oidc.Tokens[*IDTokenClaims]) (*fhir.Patient, *fhir.Practitioner, error) {
 	fhirClient := createFHIRClient(ctx, must.ParseURL(issuer.issuerLaunchURL), tokens.AccessToken)
 	var patient fhir.Patient
 	patientID, hasPatientID := tokens.Extra("patient").(string)
@@ -250,11 +257,13 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 	if err := fhirClient.Read("Patient/"+patientID, &patient); err != nil {
 		return nil, nil, fmt.Errorf("failed to read patient resource: %w", err)
 	}
-	if tokens.IDTokenClaims.Profile == "" {
-		return nil, nil, errors.New("profile claim (practitioner) not found in id_token claims")
+	if tokens.IDTokenClaims.FHIRUser == "" {
+		return nil, nil, errors.New("fhirUser claim (practitioner) not found in id_token claims")
 	}
+	// fhirUser claim can contain either a relative URL (SMART on FHIR Sandbox Launcher), or an absolute URL (Epic Sandbox).
+	// We assume, it's always a FHIR Practitioner resource.
 	var practitioner fhir.Practitioner
-	if err := fhirClient.Read(tokens.IDTokenClaims.Profile, &practitioner); err != nil {
+	if err := fhirClient.Read(tokens.IDTokenClaims.FHIRUser, &practitioner); err != nil {
 		return nil, nil, fmt.Errorf("failed to read practitioner resource: %w", err)
 	}
 	return &patient, &practitioner, nil
@@ -301,7 +310,7 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 		rp.WithLogger(logger),
 	}
 
-	scopes := []string{"openid", "profile", "user/Patient.r", "user/Practitioner.r", "launch"}
+	scopes := []string{"openid", "fhirUser", "user/Patient.r", "user/Practitioner.r", "launch"}
 	redirectURI := s.orcaBaseURL.JoinPath("smart-app-launch", "callback", issuer.key)
 	provider, err := rp.NewRelyingPartyOIDC(ctx, issuer.issuerURL(), issuer.clientID, "client_secret_todo", redirectURI.String(), scopes, options...)
 	if err != nil {
