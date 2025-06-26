@@ -28,22 +28,32 @@ export default function EnrollmentLayout({ children }: { children: React.ReactNo
         "entered-in-error": "Verzoek gemarkeerd als foutief",
     }
 
+    const isOverview = typeof window !== 'undefined' && window.location.pathname.endsWith('/list')
     const breadcrumb = isFirstStep
         ? <span className='font-medium'>Verzoek controleren</span>
         : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Verzoek controleren</a>
 
-    const title = task ? statusTitles[task.status] : "Verzoek controleren"
+    // Determine title:
+    // - If task is not null, use the status title based on task status
+    // - If we're at the 'new' page ('/new'), set title to "Verzoek controleren"
+    // - Otherwise, set title to 'Overzicht'
+    const title = task ? statusTitles[task.status]
+        : isOverview ? "Overzicht"
+        : "Verzoek controleren"
 
     return (
         <div className="w-full h-full">
             <div className="max-w-7xl px-5 mx-auto py-6">
-                <nav className={`flex items-center space-x-2 text-sm ${isLastStep ? 'invisible' : 'inherit'}`}>
-                    <>
-                        {breadcrumb}
-                        <ChevronRight className="h-4 w-4" />
-                        <span className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{service}</span>
-                    </>
-                </nav>
+                {
+                    isOverview ? <></> :
+                    <nav className={`flex items-center space-x-2 text-sm ${isLastStep ? 'invisible' : 'inherit'}`}>
+                        <>
+                            {breadcrumb}
+                            <ChevronRight className="h-4 w-4" />
+                            <span className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{service}</span>
+                        </>
+                    </nav>
+                }
                 <div className='text-2xl pt-2 first-letter:uppercase'>{title}</div>
             </div>
             <div className="h-px bg-gray-200 mb-10"></div>

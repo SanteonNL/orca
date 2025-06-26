@@ -92,8 +92,12 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
     const [patient, practitioner, practitionerRole, serviceRequest] = await Promise.all([
         ehrClient.read({ resourceType: 'Patient', id: launchContext.patient.replace("Patient/", "") }),
         ehrClient.read({ resourceType: 'Practitioner', id: launchContext.practitioner.replace("Practitioner/", "") }),
-        ehrClient.read({ resourceType: 'PractitionerRole', id: launchContext.practitionerRole.replace("PractitionerRole/", "") }),
-        ehrClient.read({ resourceType: 'ServiceRequest', id: launchContext.serviceRequest.replace("ServiceRequest/", "") }),
+        launchContext.practitionerRole
+            ? ehrClient.read({ resourceType: 'PractitionerRole', id: launchContext.practitionerRole.replace("PractitionerRole/", "") })
+            : Promise.resolve(undefined as PractitionerRole | undefined),
+        launchContext.serviceRequest
+            ? ehrClient.read({ resourceType: 'ServiceRequest', id: launchContext.serviceRequest.replace("ServiceRequest/", "") })
+            : Promise.resolve(undefined as ServiceRequest | undefined)
     ]);
 
     const sr = serviceRequest as ServiceRequest
@@ -106,7 +110,7 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
         const taskCondition = await ehrClient.read({ resourceType: 'Condition', id: taskReference.reference.replace("Condition/", "") }) as Condition
         set({ taskCondition });
     } else {
-        console.warn(`No Task Condition found for ServiceRequest/${serviceRequest.id}`)
+        console.warn(`No Task Condition found for ServiceRequest/${serviceRequest?.id ?? "(missing)"}`);
     }
 
     set({

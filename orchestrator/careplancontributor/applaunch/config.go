@@ -14,8 +14,13 @@ type Config struct {
 	External     map[string]external.Config `koanf:"external"`
 }
 
+func (c Config) Validate() error {
+	return c.SmartOnFhir.Validate()
+}
+
 func DefaultConfig() Config {
 	return Config{
 		ZorgPlatform: zorgplatform.DefaultConfig(),
+		SmartOnFhir:  smartonfhir.DefaultConfig(),
 	}
 }
