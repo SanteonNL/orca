@@ -34,3 +34,4 @@ go.work
 # draw.io backup files
 *.bkp
 **/.env
+!deployments/dev/.env

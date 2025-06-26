@@ -82,6 +82,7 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to create task notification bundle")
 		}
+		log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
 		return sendBundle(ctx, receiverTopicOrQueue, *bundles, n.broker)
 	})
 }
@@ -94,7 +95,7 @@ func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, set 
 	if err != nil {
 		return err
 	}
-	log.Ctx(ctx).Debug().Msgf("Sending set for task (ref=%s) to message broker", set.task)
+	log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to message broker with messages %s", set.task, jsonData)
 	msg := &messaging.Message{
 		Body:          jsonData,
 		ContentType:   "application/json",
