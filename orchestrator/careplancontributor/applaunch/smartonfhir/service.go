@@ -64,11 +64,12 @@ type Service struct {
 }
 
 type trustedIssuer struct {
-	issuerURL string
-	mux       *sync.RWMutex
-	client    rp.RelyingParty
-	key       string
-	clientID  string
+	issuerURL    string
+	mux          *sync.RWMutex
+	client       rp.RelyingParty
+	key          string
+	clientID     string
+	discoveryURL string
 }
 
 func New(config Config, sessionManager *user.SessionManager[session.Data], orcaBaseURL *url.URL, frontendBaseURL *url.URL, strictMode bool) (*Service, error) {
@@ -280,6 +281,9 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 		rp.WithHTTPClient(http.DefaultClient),
 		rp.WithSigningAlgsFromDiscovery(),
 		rp.WithLogger(logger),
+	}
+	if issuer.discoveryURL != "" {
+		options = append(options, rp.WithCustomDiscoveryUrl(issuer.discoveryURL))
 	}
 
 	scopes := []string{"openid", "profile", "patient/*.rs", "launch", "launch/patient"}
