@@ -154,6 +154,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Request) {
 	// TODO: check whether the issuer is trusted
 	issuer := request.URL.Query().Get("iss")
+	log.Ctx(request.Context()).Info().Msgf("SMART on FHIR app launch request: %s", request.URL.String())
 	if len(issuer) == 0 {
 		http.Error(response, "invalid iss parameter", http.StatusBadRequest)
 		return
