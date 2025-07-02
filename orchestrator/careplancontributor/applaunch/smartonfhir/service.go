@@ -323,7 +323,7 @@ func (s *Service) handleGetJWKs(httpResponse http.ResponseWriter, httpRequest *h
 
 func (s *Service) SendError(ctx context.Context, issuer string, err error, httpResponse http.ResponseWriter) {
 	launchId := uuid.NewString()
-	log.Ctx(ctx).Error().Err(err).Msgf("SMART on FHIR (issuer=%s) failed (launch-id=%s): %s", issuer, launchId)
+	log.Ctx(ctx).Error().Err(err).Msgf("SMART on FHIR (issuer=%s) failed (launch-id=%s)", issuer, launchId)
 	// TODO: nice error page
 	msg := "SMART on FHIR launch failed (id=" + launchId + ")"
 	if !s.strictMode {
