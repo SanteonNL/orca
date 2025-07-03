@@ -66,6 +66,8 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 }
 
 func (n *notifier) start(receiverTopicOrQueue messaging.Entity) error {
+	// TODO: add sync call here to the API of DataHub for enrolling a patient
+	// IF the call fails here we want to create a subtask to let the hospital know that the enrollment failed
 	return n.eventManager.Subscribe(TaskAcceptedEvent{}, func(ctx context.Context, rawEvent events.Type) error {
 		event := rawEvent.(*TaskAcceptedEvent)
 		fhirBaseURL, err := url.Parse(event.FHIRBaseURL)
