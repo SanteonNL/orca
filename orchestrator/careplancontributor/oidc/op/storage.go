@@ -349,11 +349,11 @@ func (a AuthRequest) GetID() string {
 }
 
 func (a AuthRequest) GetACR() string {
-	return "TODO"
+	return ""
 }
 
 func (a AuthRequest) GetAMR() []string {
-	return []string{"TODO"}
+	return nil
 }
 
 func (a AuthRequest) GetAudience() []string {
