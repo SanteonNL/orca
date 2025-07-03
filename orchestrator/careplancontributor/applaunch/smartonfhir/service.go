@@ -156,7 +156,7 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 	issuer := request.URL.Query().Get("iss")
 	log.Ctx(request.Context()).Info().Msgf("SMART on FHIR app launch request: %s", request.URL.String())
 	if len(issuer) == 0 {
-		http.Error(response, "invalid iss parameter", http.StatusBadRequest)
+		s.SendError(request.Context(), issuer, errors.New("invalid iss parameter"), response, http.StatusBadRequest)
 		return
 	}
 	// TODO: check if 'launch' is needed
@@ -164,10 +164,7 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 
 	provider, err := s.getIssuerByURL(request, issuer)
 	if err != nil {
-		// TODO: make this a nicer error page
-		log.Ctx(request.Context()).Err(err).Msg("Failed to get OIDC client for issuer")
-		http.Error(response, clientError("SMART on FHIR initialization error", err, s.strictMode), http.StatusServiceUnavailable)
-		return
+		s.SendError(request.Context(), issuer, fmt.Errorf("failed to get OIDC client for issuer: %w", err), response, http.StatusInternalServerError)
 	}
 	urlOptions := []rp.URLParamOpt{}
 	if launch != "" {
@@ -197,18 +194,14 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 	issuerKey := request.PathValue("key")
 	issuer, ok := s.issuersByKey[issuerKey]
 	if !ok {
-		// TODO: make this a nicer error page
-		log.Ctx(request.Context()).Error().Msgf("Unknown issuer key: %s", issuerKey)
-		http.Error(response, "Unknown issuer", http.StatusBadRequest)
+		s.SendError(request.Context(), "key: "+issuerKey, fmt.Errorf("unknown issuer key: %s", issuerKey), response, http.StatusBadRequest)
 		return
 	}
 	// zitadel/oidc's client_assertion JWT profile doesn't support the 'jti' parameter,
 	// so we sign it ourselves and pass it as a URL parameter.
 	clientAssertion, err := s.createClientAssertion(issuer)
 	if err != nil {
-		// TODO: make this a nicer error page
-		log.Ctx(request.Context()).Error().Msgf("Failed to create client assertion for issuer %s: %v", issuerKey, err)
-		http.Error(response, clientError("Internal error", err, s.strictMode), http.StatusInternalServerError)
+		s.SendError(request.Context(), issuer.key, fmt.Errorf("failed to create client assertion: %w", err), response, http.StatusInternalServerError)
 		return
 	}
 	var codeExchangeOpts = []rp.URLParamOpt{
@@ -219,9 +212,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with ID token: %s", idTokenJSON)
 		patient, practitioner, err := s.loadContext(httpRequest.Context(), issuer, tokens)
 		if err != nil {
-			// TODO: make this a nicer error page
-			log.Ctx(httpRequest.Context()).Error().Err(err).Msg("Failed to load context for SMART App Launch")
-			http.Error(httpResponse, clientError("Failed to load context", err, s.strictMode), http.StatusInternalServerError)
+			s.SendError(request.Context(), issuer.key, fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
 			return
 		}
 		sessionData := session.Data{
@@ -302,6 +293,9 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 		rp.WithHTTPClient(http.DefaultClient),
 		rp.WithSigningAlgsFromDiscovery(),
 		rp.WithLogger(logger),
+		rp.WithUnauthorizedHandler(func(httpResponse http.ResponseWriter, httpRequest *http.Request, desc string, _ string) {
+			s.SendError(httpRequest.Context(), issuer.key, fmt.Errorf("unauthorized: %s", desc), httpResponse, http.StatusUnauthorized)
+		}),
 	}
 
 	scopes := []string{"openid", "fhirUser", "user/Patient.r", "user/Practitioner.r", "launch"}
@@ -325,6 +319,17 @@ func (s *Service) handleGetJWKs(httpResponse http.ResponseWriter, httpRequest *h
 		log.Ctx(httpRequest.Context()).Warn().Err(err).Msg("Failed to write JWKSet response")
 		return
 	}
+}
+
+func (s *Service) SendError(ctx context.Context, issuer string, err error, httpResponse http.ResponseWriter, httpStatusCode int) {
+	launchId := uuid.NewString()
+	log.Ctx(ctx).Error().Err(err).Msgf("SMART on FHIR (issuer=%s) failed (launch-id=%s)", issuer, launchId)
+	// TODO: nice error page
+	msg := "SMART on FHIR launch failed (id=" + launchId + ")"
+	if !s.strictMode {
+		msg += ": " + err.Error()
+	}
+	http.Error(httpResponse, msg, httpStatusCode)
 }
 
 func (s *Service) createClientAssertion(issuer *trustedIssuer) (string, error) {
@@ -352,14 +357,6 @@ func (s *Service) createClientAssertionForAudience(clientID string, audience str
 		return "", fmt.Errorf("failed to serialize JWT client assertion: %w", err)
 	}
 	return result, nil
-}
-
-func clientError(msg string, err error, strictMode bool) string {
-	if strictMode {
-		return msg
-	}
-	// In non-strict mode, we also return the underlying error
-	return fmt.Sprintf("%s: %v", msg, err)
 }
 
 func createHTTPClient(ctx context.Context, accessToken string) *http.Client {
