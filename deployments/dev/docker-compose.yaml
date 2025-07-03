@@ -4,8 +4,8 @@ services:
     ports:
       - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
-      - "./nuts/policy/:/nuts/config/policy:ro"
-      - "./nuts/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
+      - "${orca_dev_base}/nuts/policy/:/nuts/config/policy:ro"
+      - "${orca_dev_base}/nuts/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
     environment:
       - NUTS_VERBOSITY=debug
       - NUTS_STRICTMODE=false
@@ -18,7 +18,7 @@ services:
   nutsnode-init:
     image: badouralix/curl-jq:alpine
     volumes:
-      - "./nuts/nutsnode-init.sh:/nutsnode-init.sh:ro"
+      - "${orca_dev_base}/nuts/nutsnode-init.sh:/nutsnode-init.sh:ro"
     depends_on:
       nutsnode:
         condition: service_healthy
@@ -42,14 +42,14 @@ services:
     ports:
       - "8081:8080"
     volumes:
-      - "./hospital/config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
+      - "${orca_dev_base}/hospital/config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   hospital_frontend:
     #image: ghcr.io/santeonnl/orca_frontend:main
     build:
-      context: ../../frontend
+      context: ${orca_dev_base}/../../frontend
       dockerfile: Dockerfile-dev
     volumes:
-      - ../../frontend:/app
+      - ${orca_dev_base}/../../frontend:/app
       - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
     environment:
       #TERMINOLOGY_SERVER_BASE_URL=https://terminologieserver.nl/fhir
@@ -62,14 +62,14 @@ services:
   hospital_orchestrator:
     #image: ghcr.io/santeonnl/orca_orchestrator:main
     build:
-      context: ../../orchestrator
+      context: ${orca_dev_base}/../../orchestrator
       dockerfile: Dockerfile
     ports:
       - "8090:8080"
     volumes:
-      - "./hospital/config/test-decrypt-zorgplatform.private.pem:/keys/zorgplatform/test-decrypt-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
-      - "./hospital/config/test-sign-zorgplatform.private.pem:/keys/zorgplatform/test-sign-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
-      - "./hospital/config/test-tls-zorgplatform.private.pem:/keys/zorgplatform/test-tls-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
+      - "${orca_dev_base}/hospital/config/test-decrypt-zorgplatform.private.pem:/keys/zorgplatform/test-decrypt-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
+      - "${orca_dev_base}/hospital/config/test-sign-zorgplatform.private.pem:/keys/zorgplatform/test-sign-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
+      - "${orca_dev_base}/hospital/config/test-tls-zorgplatform.private.pem:/keys/zorgplatform/test-tls-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
     depends_on:
       fhirstore-healthcheck:
         condition: service_completed_successfully
@@ -134,7 +134,7 @@ services:
   hospital_ehr:
     #image: ghcr.io/santeonnl/orca_hospitalsimulator:main
     build:
-      context: ../../hospital_simulator
+      context: ${orca_dev_base}/../../hospital_simulator
       dockerfile: Dockerfile-dev
     ports:
       - "3001:3000"
@@ -149,7 +149,7 @@ services:
       NEXT_ALLOWED_ORIGINS: localhost:8081
       FHIR_BASE_URL: http://fhirstore:8080/fhir
     volumes:
-      - ../../hospital_simulator:/app
+      - ${orca_dev_base}/../../hospital_simulator:/app
       - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
   clinic_proxy:
     image: nginx:latest
@@ -159,11 +159,11 @@ services:
     ports:
       - "8082:8080"
     volumes:
-      - "./clinic/config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
+      - "${orca_dev_base}/clinic/config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
   clinic_orchestrator:
     #image: ghcr.io/santeonnl/orca_orchestrator:main
     build:
-      context: ../../orchestrator
+      context: ${orca_dev_base}/../../orchestrator
       dockerfile: Dockerfile
     ports:
       - "3030:8080"
@@ -180,6 +180,7 @@ services:
       - ORCA_STRICTMODE=false
       - ORCA_MESSAGING_HTTP_ENDPOINT=http://clinic_viewer:3000/viewer/api/delivery
       - ORCA_MESSAGING_HTTP_TOPICFILTER=orca-enroll-patient
+      - ORCA_MESSAGING_DATAHUB_ENDPOINT=http://host.docker.internal:5188/orca/v1/enroll
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://viewer:3000/viewer/api/fhir
@@ -193,12 +194,12 @@ services:
     volumes:
       # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
       # used by the Task Filler Engine
-      - "../../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json:/config/fhir/healthcareservices.json:ro"
-      - "../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
+      - "${orca_dev_base}/../../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json:/config/fhir/healthcareservices.json:ro"
+      - "${orca_dev_base}/../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
   clinic_viewer:
     #image: ghcr.io/santeonnl/orca_viewersimulator:main
     build:
-      context: ../../viewer_simulator
+      context: ${orca_dev_base}/../../viewer_simulator
       dockerfile: Dockerfile-dev
     environment:
       CLINIC_ORCA_URL: http://clinic_orchestrator:8080/
@@ -207,7 +208,7 @@ services:
       CLINIC_CPS_URL: http://hospital_orchestrator:8080/cps
       NEXT_ALLOWED_ORIGINS: localhost:8081
     volumes:
-      - ../../viewer_simulator:/app
+      - ${orca_dev_base}/../../viewer_simulator:/app
       - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
   # Orchestrator's Task Engine posts to Viewer over HTTP, but the first call will time-out due to NextJS compilation.
   # So, we use curl to force NextJS to make sure the receiving endpoint is compiled.
