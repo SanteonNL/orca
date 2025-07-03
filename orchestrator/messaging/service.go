@@ -26,10 +26,8 @@ func (t Entity) FullName(prefix string) string {
 func New(config Config, sources []Entity) (Broker, error) {
 	var broker Broker
 	var err error
-	log.Info().Msgf("Messaging: CONFIG %s", config)
 	if config.AzureServiceBus.Enabled() {
 		broker, err = newAzureServiceBusBroker(config.AzureServiceBus, sources, config.EntityPrefix)
-
 		if err != nil {
 			return nil, fmt.Errorf("azure service bus: %w", err)
 		}
@@ -43,10 +41,6 @@ func New(config Config, sources []Entity) (Broker, error) {
 		log.Info().Msgf("Messaging: sending messages over HTTP to %s", config.HTTP.Endpoint)
 		broker = NewHTTPBroker(config.HTTP, broker)
 	}
-	if config.DataHub.Endpoint != "" {
-		log.Info().Msgf("Messaging: sending messages to DataHub at %s", config.DataHub.Endpoint)
-		broker = NewDataHubBroker(config.DataHub, broker)
-	}
 	return broker, nil
 }
 
@@ -55,7 +49,6 @@ type Config struct {
 	// AzureServiceBus holds the configuration for messaging using Azure ServiceBus.
 	AzureServiceBus AzureServiceBusConfig `koanf:"azureservicebus"`
 	HTTP            HTTPBrokerConfig      `koanf:"http"`
-	DataHub         DataHubBrokerConfig   `koanf:"datahub"`
 	// EntityPrefix is the prefix to use for all topics and queues, which allows for multi-tenant use of the underlying message broker infrastructure.
 	EntityPrefix string `koanf:"entityprefix"`
 }

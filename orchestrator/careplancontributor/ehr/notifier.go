@@ -66,8 +66,6 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 }
 
 func (n *notifier) start(receiverTopicOrQueue messaging.Entity) error {
-	// TODO: add sync call here to the API of DataHub for enrolling a patient
-	// IF the call fails here we want to create a subtask to let the hospital know that the enrollment failed
 	return n.eventManager.Subscribe(TaskAcceptedEvent{}, func(ctx context.Context, rawEvent events.Type) error {
 		event := rawEvent.(*TaskAcceptedEvent)
 		fhirBaseURL, err := url.Parse(event.FHIRBaseURL)
@@ -84,7 +82,6 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity) error {
 		if err != nil {
 			return errors.Wrap(err, "failed to create task notification bundle")
 		}
-		log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
 		return sendBundle(ctx, receiverTopicOrQueue, *bundles, n.broker)
 	})
 }
@@ -97,7 +94,7 @@ func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, set 
 	if err != nil {
 		return err
 	}
-	log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to message broker with messages %s", set.task, jsonData)
+	log.Ctx(ctx).Debug().Msgf("Sending set for task (ref=%s) to message broker", set.task)
 	msg := &messaging.Message{
 		Body:          jsonData,
 		ContentType:   "application/json",

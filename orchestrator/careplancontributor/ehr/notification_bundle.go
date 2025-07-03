@@ -45,7 +45,6 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 		return nil, err
 	}
 
-	// TODO: We can fetch the patient if the task isn't accepted.
 	patientBundle, err := fetchPatient(ctx, cpsClient, carePlan)
 	if err != nil {
 		return nil, err
