@@ -94,6 +94,9 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://fhirstore:8080/fhir
       - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=http://localhost:8081/frontend/enrollment
       - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_0_URL=https://launch.smarthealthit.org/v/r4/fhir
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_0_CLIENTID=demo-client
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       #   Uncomment and set the <...> values below to enable Zorgplatform integration - using zorgplatform production URLs as that is what their developer portal uses
       # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_ENABLED=true

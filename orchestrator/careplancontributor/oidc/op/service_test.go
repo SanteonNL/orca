@@ -127,4 +127,6 @@ func TestService_IntegrationTest(t *testing.T) {
 	assert.Equal(t, "john@example.com", capturedIDTokenClaims.GetUserInfo().Email)
 	assert.Equal(t, []any{"nurse-level-4@example.com/CodeSystem"}, capturedIDTokenClaims.Claims["roles"])
 	assert.Equal(t, []any{"example.com/CodeSystem|SOME-PATIENT-IDENTIFIER"}, capturedIDTokenClaims.Claims["patient"])
+	assert.NotContains(t, capturedIDTokenClaims.Claims, "amr")
+	assert.NotContains(t, capturedIDTokenClaims.Claims, "acr")
 }

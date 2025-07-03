@@ -47,6 +47,9 @@ func (c Config) Validate() error {
 	if err := c.OIDC.Validate(); err != nil {
 		return err
 	}
+	if err := c.AppLaunch.Validate(); err != nil {
+		return err
+	}
 	return nil
 }
 

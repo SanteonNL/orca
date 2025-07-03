@@ -14,8 +14,8 @@ github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.9.0 h1:4qvUx+l3Z
 github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.9.0/go.mod h1:pSvDbbKKKZ/m3yIsZ56I62DJ8OYyjwP4IhIFIu2+5GQ=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.4.0 h1:mtvR5ZXH5Ew6PSONd5lO5OXovWP1E3oAlgC8fpxor2Q=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.4.0/go.mod h1:u560+RFVfG0CBPzkXlDW43slESbBAQjgDGi3r6z+wk8=
-github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.3.1 h1:Wgf5rZba3YZqeTNJPtvqZoBu1sBN/L4sry+u2U3Y75w=
-github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.3.1/go.mod h1:xxCBG/f/4Vbmh2XQJBsOmNdxWUY5j/s27jujKPbQf14=
+github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.4.0 h1:E4MgwLBGeVB5f2MdcIVD3ELVAWpr+WD6MUe1i+tM/PA=
+github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.4.0/go.mod h1:Y2b/1clN4zsAoUd/pgNAQHjLDnTis/6ROkUfyob6psM=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.2.0 h1:nCYfgcSyHZXJI8J0IWE5MsCGlb2xp9fJiXyxWgmOFg4=
 github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/internal v1.2.0/go.mod h1:ucUjca2JtSZboY8IoUqyQyuuXvwbMBVwFOm0vdQPNhA=
 github.com/Azure/go-amqp v1.4.0 h1:Xj3caqi4comOF/L1Uc5iuBxR/pB6KumejC01YQOqOR4=
@@ -248,10 +248,10 @@ github.com/multiformats/go-base36 v0.2.0 h1:lFsAbNOGeKtuKozrtBsAkSVhv1p9D0/qedU9
 github.com/multiformats/go-base36 v0.2.0/go.mod h1:qvnKE++v+2MWCfePClUEjE78Z7P2a1UV0xHgWc0hkp4=
 github.com/multiformats/go-multibase v0.2.0 h1:isdYCVLvksgWlMW9OZRYJEa9pZETFivncJHmHnnd87g=
 github.com/multiformats/go-multibase v0.2.0/go.mod h1:bFBZX4lKCA/2lyOFSAoKH5SS6oPyjtnzK/XTFDPkNuk=
-github.com/nuts-foundation/go-did v0.15.0 h1:aNl6KC8jiyRJGl9PPKFBboLLC0wUm5h+tjE1UBDQEPw=
-github.com/nuts-foundation/go-did v0.15.0/go.mod h1:swjCJvcRxc+i1nyieIERWEb3vFb4N7iYC+qen2OIbNg=
-github.com/nuts-foundation/go-nuts-client v0.1.9 h1:008GwYhBieMGlwyrf/lZ+NkqBlHkXTuIKiv43MXlJeU=
-github.com/nuts-foundation/go-nuts-client v0.1.9/go.mod h1:/apCT1jOnplzvbAsP0GvTgMyUA0fPtesUDwi7VGEi5U=
+github.com/nuts-foundation/go-did v0.17.0 h1:nLmMiiKjIJwgZsfJ98ywATiCb9VHomnb3r86oWHdILw=
+github.com/nuts-foundation/go-did v0.17.0/go.mod h1:8VLZhVjkFH9VgGu//3y7ICowwItpym3NWkOih1Ka1fw=
+github.com/nuts-foundation/go-nuts-client v0.2.0 h1:cpcMWXrTsAYjv/QLXrHQbQUc3sdYnAOt9UL5TQ0wwYM=
+github.com/nuts-foundation/go-nuts-client v0.2.0/go.mod h1:geZFrcdoeaqchUa78a4NQwZ3/pU5/uVAtOdBvTOkFaA=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8 h1:nPr65rt6Y5JFSKQO7qToXr7pePgD6Gwiw05lkbyAQTE=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=

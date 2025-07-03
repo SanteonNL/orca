@@ -142,9 +142,9 @@ If you're Azure Service Bus, depending on the features you've enabled, you'll ne
 - Queue `orca.hl7.fhir.careplan-created` (if `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL` is set).
 - Queue `orca.subscriptionmgr.notification` (if `ORCA_CAREPLANSERVICE_ENABLED` is `true`).
 
-## App Launch options
+### App Launch options
 
-### Demo
+#### Demo
 
 Redirect the browser to `/demo-app-launch`, and provide the following query parameters:
 
@@ -153,11 +153,22 @@ Redirect the browser to `/demo-app-launch`, and provide the following query para
 - `practitioner`: reference to the FHIR PractitionerRole resource of the current user.
 - `iss`: FHIR server base URL.
 
-### SMART on FHIR
+#### SMART on FHIR
 
-Currently not up-to-date, it probably won't work.
+Tested with SMART on FHIR Sandbox. It will always act as confidential client with JWT client assertions.
+If the JWT signing key is not sourced from an external source, it will generate an in-memory key pair on startup.
+The JWK set will be available at `/smart-app-launch/.well-known/jwks.json`.
 
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_REDIRECTURI`: SMART App launch redirect URI that is used to send the `code` to by the EHR
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_CLIENTID`:  The `client_id` assigned by the EHR
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_CLIENT_SECRET`: The `client_secret` assigned by the EHR
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_SCOPE`: Any specific scope, for example `launch fhirUser`
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ENABLED`: Enables the SMART on FHIR app launch endpoint (default: `false`).
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_CLIENTID` (required): The OAuth2 `client_id`.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_URL` (required): SMART on FHIR server base URL that launches the application.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_OAUTH2URL` (optional): In some cases (Epic on FHIR), the actual OAuth2 Authorization Server URL (`issuer` property in the discovered OpenID Configuration) differs from the SMART on FHIR server base URL (`iss` parameter in the launch).
+   Setting this option overrides the OAuth2 Authorization Server URL, if not set, the FHIR server base URL is used.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_URL`: Azure Key Vault URL to source the JWT signing key from.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_CREDENTIALTYPE`: Credential type for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_SIGNINGKEY`: Name of the JWT signing key in the Azure Key Vault.
+
+You can test the SMART on FHIR app launch using the [SMART on FHIR sandbox](https://launch.smarthealthit.org/).
+Select launch type "Provider EHR Launch", select a patient (e.g. `14867dba-fb11-4df3-9829-8e8e081b39e6`),
+and fill in the following App Launch URL: `http://localhost:8081/orca/smart-app-launch` (assuming you're running `deployments/dev`).
+Click "Launch" to launch the application.
