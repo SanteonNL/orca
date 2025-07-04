@@ -180,7 +180,6 @@ services:
       - ORCA_STRICTMODE=false
       - ORCA_MESSAGING_HTTP_ENDPOINT=http://clinic_viewer:3000/viewer/api/delivery
       - ORCA_MESSAGING_HTTP_TOPICFILTER=orca-enroll-patient
-      - ORCA_MESSAGING_DATAHUB_ENDPOINT=http://host.docker.internal:5188/orca/v1/enroll
       - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://viewer:3000/viewer/api/fhir
@@ -189,6 +188,7 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_URL=https://example.com
       # If this value is set, the clinic will send task notifications over http to the provided endpoint. Cannot be used in conjunction with the strict mode
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC=orca-enroll-patient
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLEENDPOINT=http://host.docker.internal:5188/orca/v1/enroll
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-healthcareservices.json,https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-questionnaires.json
       - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTE_ACCEPTED=Work on the Task will start tomorrow.
     volumes:

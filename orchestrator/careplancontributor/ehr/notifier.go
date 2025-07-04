@@ -2,6 +2,7 @@
 package ehr
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -45,13 +46,13 @@ type notifier struct {
 }
 
 // NewNotifier creates and returns a Notifier implementation using the provided ServiceBusClient for message handling.
-func NewNotifier(eventManager events.Manager, messageBroker messaging.Broker, receiverTopicOrQueue messaging.Entity, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
+func NewNotifier(eventManager events.Manager, messageBroker messaging.Broker, receiverTopicOrQueue messaging.Entity, taskAcceptedBundleEndpoint string, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
 	n := &notifier{
 		eventManager:      eventManager,
 		broker:            messageBroker,
 		fhirClientFactory: fhirClientFactory,
 	}
-	if err := n.start(receiverTopicOrQueue); err != nil {
+	if err := n.start(receiverTopicOrQueue, taskAcceptedBundleEndpoint); err != nil {
 		return nil, err
 	}
 	return n, nil
@@ -65,7 +66,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 	})
 }
 
-func (n *notifier) start(receiverTopicOrQueue messaging.Entity) error {
+func (n *notifier) start(receiverTopicOrQueue messaging.Entity, taskAcceptedBundleEndpoint string) error {
 	// TODO: add sync call here to the API of DataHub for enrolling a patient
 	// IF the call fails here we want to create a subtask to let the hospital know that the enrollment failed
 	return n.eventManager.Subscribe(TaskAcceptedEvent{}, func(ctx context.Context, rawEvent events.Type) error {
@@ -85,30 +86,43 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity) error {
 			return errors.Wrap(err, "failed to create task notification bundle")
 		}
 		log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
-		return sendBundle(ctx, receiverTopicOrQueue, *bundles, n.broker)
+		return sendBundle(ctx, receiverTopicOrQueue, taskAcceptedBundleEndpoint, *bundles, n.broker)
 	})
 }
 
 // sendBundle sends a serialized BundleSet to a Service Bus using the provided ServiceBusClient.
 // It logs the process and errors during submission while wrapping and returning them.
 // Returns an error if serialization or message submission fails.
-func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, set BundleSet, messageBroker messaging.Broker) error {
+func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, taskAcceptedBundleEndpoint string, set BundleSet, messageBroker messaging.Broker) error {
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
 		return err
 	}
-	log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to message broker with messages %s", set.task, jsonData)
-	msg := &messaging.Message{
-		Body:          jsonData,
-		ContentType:   "application/json",
-		CorrelationID: &set.Id,
+	// TODO: Remove support for receiverTopicOrQueue, and then this if-guard
+	if taskAcceptedBundleEndpoint != "" {
+		log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
+		httpResponse, err := http.Post(taskAcceptedBundleEndpoint, "application/json", bytes.NewBuffer(jsonData))
+		if err != nil {
+			log.Ctx(ctx).Warn().Err(err).Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
+			return errors.Wrap(err, "failed to send task to endpoint")
+		}
+		defer httpResponse.Body.Close()
+		if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
+			return errors.Errorf("failed to send task to endpoint, status code: %d", httpResponse.StatusCode)
+		}
+	} else {
+		log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to message broker with messages %s", set.task, jsonData)
+		msg := &messaging.Message{
+			Body:          jsonData,
+			ContentType:   "application/json",
+			CorrelationID: &set.Id,
+		}
+		err = messageBroker.SendMessage(ctx, receiverTopicOrQueue, msg)
+		if err != nil {
+			log.Ctx(ctx).Warn().Msgf("Sending set for task (ref=%s) to message broker failed, error: %s", set.task, err.Error())
+			return errors.Wrap(err, "failed to send task to message broker")
+		}
 	}
-	err = messageBroker.SendMessage(ctx, receiverTopicOrQueue, msg)
-	if err != nil {
-		log.Ctx(ctx).Warn().Msgf("Sending set for task (ref=%s) to message broker failed, error: %s", set.task, err.Error())
-		return errors.Wrap(err, "failed to send task to message broker")
-	}
-
 	log.Ctx(ctx).Info().Msgf("Notified EHR of accepted Task with bundle (ref=%s)", set.task)
 	return nil
 }
