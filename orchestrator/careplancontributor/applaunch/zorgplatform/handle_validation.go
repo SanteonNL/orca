@@ -2,7 +2,6 @@ package zorgplatform
 
 import (
 	"context"
-	"crypto/x509"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -181,7 +180,7 @@ func (s *Service) validateZorgplatformSignature(decryptedAssertion *etree.Elemen
 	}
 
 	validationContext := dsig.NewDefaultValidationContext(&dsig.MemoryX509CertificateStore{
-		Roots: []*x509.Certificate{s.zorgplatformCert},
+		Roots: s.zorgplatformSignCerts, // certs are pinned, so set as root CA certs
 	})
 
 	_, err := validationContext.Validate(decryptedAssertion)

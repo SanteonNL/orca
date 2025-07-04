@@ -50,7 +50,7 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 				},
 			},
 		},
-		zorgplatformCert: zorgplatformX509Cert,
+		zorgplatformSignCerts: []*x509.Certificate{zorgplatformX509Cert},
 		config: Config{
 			SAMLRequestTimeout: 10 * time.Second,
 			BaseUrl:            "https://zorgplatform.online",
@@ -117,7 +117,7 @@ func TestService_FetchApplicationToken_IntegrationTest(t *testing.T) {
 				},
 			},
 		},
-		zorgplatformCert: zorgplatformX509Cert,
+		zorgplatformSignCerts: []*x509.Certificate{zorgplatformX509Cert},
 		config: Config{
 			SAMLRequestTimeout: 10 * time.Second,
 			BaseUrl:            "https://zorgplatform.online",

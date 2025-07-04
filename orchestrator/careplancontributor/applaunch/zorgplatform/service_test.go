@@ -690,3 +690,58 @@ func setupCarePlanService(t *testing.T) *httptest.Server {
 	globals.CarePlanServiceFhirClient = fhirclient.New(must.ParseURL(httpServer.URL).JoinPath("fhir"), http.DefaultClient, nil)
 	return httpServer
 }
+
+func Test_getCertificates(t *testing.T) {
+	const certPEM = "-----BEGIN CERTIFICATE-----\nMIIGpTCCBY2gAwIBAgIJAJ7SiMwCRCiBMA0GCSqGSIb3DQEBCwUAMIG0MQswCQYD\nVQQGEwJVUzEQMA4GA1UECBMHQXJpem9uYTETMBEGA1UEBxMKU2NvdHRzZGFsZTEa\nMBgGA1UEChMRR29EYWRkeS5jb20sIEluYy4xLTArBgNVBAsTJGh0dHA6Ly9jZXJ0\ncy5nb2RhZGR5LmNvbS9yZXBvc2l0b3J5LzEzMDEGA1UEAxMqR28gRGFkZHkgU2Vj\ndXJlIENlcnRpZmljYXRlIEF1dGhvcml0eSAtIEcyMB4XDTI0MDcwMzE2MDMyNFoX\nDTI1MDgwNDE2MDMyNFowIDEeMBwGA1UEAwwVKi56b3JncGxhdGZvcm0ub25saW5l\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAptpmGW3pOURCzuF1+oyP\nvIW8bGEjPLyRzMfn29WhNFj8HrkH7+tQCaNE3aL1TTcskwAZEsXTxC9pGAbuqGrU\nUkc8TIDX/Ze6W9CnT/bUYfYl43hLXmmdElxdCtYZAcJtbIeR3bSR1hqdH0w3T/Ob\nQ8bDl5TXGX6IPPf/vZ/tBsv/886brz+bXSwArSzNwVBqvVW+EpSyWnDm45/oXzbE\nN9Sl7kRzlUuzMDH+GWGNRGOItBfIfixRp4NiopBt7WYBw/lOaUvjYH+GsC46fZzT\nXu0gwzkw8/AqJRyS0OkYGmddEswUizBIPH6OLmjPskpqc6WrsoL2VipcaA+hr0Fz\nZwIDAQABo4IDSzCCA0cwDAYDVR0TAQH/BAIwADAdBgNVHSUEFjAUBggrBgEFBQcD\nAQYIKwYBBQUHAwIwDgYDVR0PAQH/BAQDAgWgMDkGA1UdHwQyMDAwLqAsoCqGKGh0\ndHA6Ly9jcmwuZ29kYWRkeS5jb20vZ2RpZzJzMS0yNDM0MS5jcmwwXQYDVR0gBFYw\nVDBIBgtghkgBhv1tAQcXATA5MDcGCCsGAQUFBwIBFitodHRwOi8vY2VydGlmaWNh\ndGVzLmdvZGFkZHkuY29tL3JlcG9zaXRvcnkvMAgGBmeBDAECATB2BggrBgEFBQcB\nAQRqMGgwJAYIKwYBBQUHMAGGGGh0dHA6Ly9vY3NwLmdvZGFkZHkuY29tLzBABggr\nBgEFBQcwAoY0aHR0cDovL2NlcnRpZmljYXRlcy5nb2RhZGR5LmNvbS9yZXBvc2l0\nb3J5L2dkaWcyLmNydDAfBgNVHSMEGDAWgBRAwr0njsw0gzCiM9f7bLPwtCyAzjA1\nBgNVHREELjAsghUqLnpvcmdwbGF0Zm9ybS5vbmxpbmWCE3pvcmdwbGF0Zm9ybS5v\nbmxpbmUwHQYDVR0OBBYEFPZefQaBIVcTvBQ6Q7aL5Xs9z+OrMIIBfQYKKwYBBAHW\neQIEAgSCAW0EggFpAWcAdgAS8U40vVNyTIQGGcOPP3oT+Oe1YoeInG0wBYTr5YYm\nOgAAAZB5Vh7tAAAEAwBHMEUCIQDdEs3O/Bh0XyB/bNCDYHnGsvy2uvIqLGLUyXcI\nzi97pwIgWUdyVuJi9r6l0iVFJpNiHIl/7OdG6v7F1ppRsRQ4gFwAdQB9WR4S4Xgq\nexxhZ3xe/fjQh1wUoE6VnrkDL9kOjC55uAAAAZB5Vh/1AAAEAwBGMEQCIBZ0Y+G1\njNdhFJXKRwhWkkIhRmCKPuBN/U596oL7Yta7AiAZ9hEqvZw8qqWckQR5M0He2rgF\nWE9w3frfzuYNd9OsGAB2AMz7D2qFcQll/pWbU87psnwi6YVcDZeNtql+VMD+TA2w\nAAABkHlWIKkAAAQDAEcwRQIhAKI5arrZ02GLep/gElJGSxNJp4HepzjXJC5dF9N7\n5et3AiAqQHOYLY1u8xWl45guYPxpBiSKf+bKxhyZYPCN1wRQEzANBgkqhkiG9w0B\nAQsFAAOCAQEAGFpFlsmdTCsiSEgwSHW1NPgeZV0EkiS7wz52iuLdphheoIY9xw44\niPNrUknBcP9gfoMpUmMGKelwDdauUitEsHQYo2cFATJvIGyMkK5hxcldZdmjgehi\n8tXl7/3gH3R2f6CPOEUbG/+Tlc50cdN0o4jd/qZlfMjDo9odblOVHe4oOlnJYugB\nKLh5Cy6PjY6n28xqStJFd2Aximzius46N1XC1XjtMCpwUov+wrf3/CkDTc7dWSU3\nyBBl3pbBMYkf2wjOBGWWXcRuK+Tldk1nA0SI0zRRlzjgi4mD74fXdUwtr8Chsh9u\nU6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==\n-----END CERTIFICATE-----"
+	t.Run("fallback to embedded certs", func(t *testing.T) {
+		globals.StrictMode = false
+		certificates, err := getCertificates(context.Background(), "not valid")
+		require.NoError(t, err)
+		require.Len(t, certificates, 1)
+	})
+	t.Run("not falling back to embedded cert in strict mode", func(t *testing.T) {
+		globals.StrictMode = true
+		certificates, err := getCertificates(context.Background(), "not valid")
+		require.Error(t, err)
+		require.Empty(t, certificates)
+	})
+	t.Run("not configured", func(t *testing.T) {
+		globals.StrictMode = true
+		certificates, err := getCertificates(context.Background(), "")
+		require.EqualError(t, err, "no Zorgplatform signing certificate configured")
+		require.Empty(t, certificates)
+	})
+	t.Run("one cert", func(t *testing.T) {
+		globals.StrictMode = true
+		certificates, err := getCertificates(context.Background(), certPEM)
+		require.NoError(t, err)
+		require.Len(t, certificates, 1)
+	})
+	t.Run("multiple certs", func(t *testing.T) {
+		globals.StrictMode = true
+		certificates, err := getCertificates(context.Background(), certPEM+"\n"+certPEM)
+		require.NoError(t, err)
+		require.Len(t, certificates, 2)
+	})
+	t.Run("second cert is not valid PEM", func(t *testing.T) {
+		globals.StrictMode = true
+		certificates, err := getCertificates(context.Background(), certPEM+"\n-----BEGIN CERTIFICATE-----\nINVALID\n-----END CERTIFICATE-----")
+		require.Error(t, err)
+		require.Empty(t, certificates)
+		require.EqualError(t, err, "failed to decode certificate PEM block #1")
+	})
+	t.Run("second cert is not valid a valid certificate", func(t *testing.T) {
+		globals.StrictMode = true
+		certificates, err := getCertificates(context.Background(), certPEM+"\n-----BEGIN CERTIFICATE-----\n"+base64.StdEncoding.EncodeToString([]byte("Hello, World!"))+"\n-----END CERTIFICATE-----")
+		require.Error(t, err)
+		require.Empty(t, certificates)
+		require.EqualError(t, err, "failed to parse certificate #1: x509: malformed certificate")
+	})
+	t.Run("PEM block is not a certificate", func(t *testing.T) {
+		globals.StrictMode = true
+		certificates, err := getCertificates(context.Background(), certPEM+"\n-----BEGIN FOOBAR-----\n\n-----END FOOBAR-----")
+		require.Error(t, err)
+		require.Empty(t, certificates)
+		require.EqualError(t, err, "expected CERTIFICATE block, got FOOBAR in PEM block #1")
+	})
+}

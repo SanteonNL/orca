@@ -300,9 +300,9 @@ func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
 
 	s := &Service{
 		sessionManager:        sessionManager,
-		zorgplatformCert:      zorgplatformX509Cert,                 // used to verify the signature
-		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey), // used by the forger to sign the assertion
-		signingCertificate:    keyPair.Certificate,                  // used by the forger to sign the assertion
+		zorgplatformSignCerts: []*x509.Certificate{zorgplatformX509Cert}, // used to verify the signature
+		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey),      // used by the forger to sign the assertion
+		signingCertificate:    keyPair.Certificate,                       // used by the forger to sign the assertion
 	}
 
 	forgedAssertion, err := s.createSAMLAssertion(launchContext, hcpTokenType)
@@ -330,7 +330,7 @@ func TestService_parseSamlResponse(t *testing.T) {
 				PrivateKey: certificate.PrivateKey.(*rsa.PrivateKey),
 				Cert:       certificate.Leaf,
 			},
-			zorgplatformCert: certificate.Leaf,
+			zorgplatformSignCerts: []*x509.Certificate{certificate.Leaf},
 			config: Config{
 				DecryptConfig: DecryptConfig{
 					Audience: "https://partner-application.nl",

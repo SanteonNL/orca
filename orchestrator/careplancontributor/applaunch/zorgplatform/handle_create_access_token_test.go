@@ -208,7 +208,7 @@ func TestService_RequestAccessToken_IntegrationTest(t *testing.T) {
 		tlsClientCertificate:  &clientCert,
 		signingCertificateKey: signCert.PrivateKey.(*rsa.PrivateKey),
 		signingCertificate:    signCert.Certificate,
-		zorgplatformCert:      zorgplatformX509Cert,
+		zorgplatformSignCerts: []*x509.Certificate{zorgplatformX509Cert},
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
 				TLSClientConfig: &tls.Config{
