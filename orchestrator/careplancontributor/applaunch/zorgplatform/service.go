@@ -146,7 +146,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager[ses
 		tlsClientCert = *tlsClientCertPtr
 	}
 
-	cert, err := getCertificate(ctx, config.DecryptConfig.SignCertPem)
+	zorgplatformSignCerts, err := getCertificates(ctx, config.DecryptConfig.SignCertPem)
 	if err != nil {
 		return nil, fmt.Errorf("unable to load Zorgplatform's public signing certificate: %w", err)
 	}
@@ -160,7 +160,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager[ses
 		signingCertificateKey: signCertKey.SigningKey(),
 		tlsClientCertificate:  &tlsClientCert,
 		decryptCertificate:    decryptCert,
-		zorgplatformCert:      cert,
+		zorgplatformSignCerts: zorgplatformSignCerts,
 		profile:               profile,
 		accessTokenCache: ttlcache.New[string, string](
 			ttlcache.WithTTL[string, string](accessTokenCacheTTL),
@@ -196,7 +196,7 @@ type Service struct {
 	tlsClientCertificate   *tls.Certificate
 	decryptCertificate     crypto.Suite
 	zorgplatformHttpClient *http.Client
-	zorgplatformCert       *x509.Certificate
+	zorgplatformSignCerts  []*x509.Certificate
 	profile                profile.Provider
 	secureTokenService     SecureTokenService
 	getSessionData         func(ctx context.Context, accessToken string, launchContext LaunchContext) (*session.Data, error)
@@ -692,9 +692,12 @@ func (a authHeaderRoundTripper) RoundTrip(request *http.Request) (*http.Response
 	return a.inner.RoundTrip(request)
 }
 
-func getCertificate(ctx context.Context, pemCert string) (*x509.Certificate, error) {
-	block, _ := pem.Decode([]byte(pemCert))
-	if block == nil {
+func getCertificates(ctx context.Context, pemCert string) ([]*x509.Certificate, error) {
+	if len(pemCert) == 0 {
+		return nil, errors.New("no Zorgplatform signing certificate configured")
+	}
+	block, rest := pem.Decode([]byte(pemCert))
+	if block == nil && len(rest) > 0 {
 		if globals.StrictMode {
 			return nil, errors.New("failed to decode certificate PEM")
 		}
@@ -738,12 +741,27 @@ KLh5Cy6PjY6n28xqStJFd2Aximzius46N1XC1XjtMCpwUov+wrf3/CkDTc7dWSU3
 yBBl3pbBMYkf2wjOBGWWXcRuK+Tldk1nA0SI0zRRlzjgi4mD74fXdUwtr8Chsh9u
 U6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
 -----END CERTIFICATE-----`
-		block, _ = pem.Decode([]byte(pemCert))
 	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse certificate: %w", err)
+	var result []*x509.Certificate
+	rest = []byte(pemCert)
+	for len(rest) > 0 {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			return nil, fmt.Errorf("failed to decode certificate PEM block #%d", len(result))
+		}
+		if block.Type != "CERTIFICATE" {
+			return nil, fmt.Errorf("expected CERTIFICATE block, got %s in PEM block #%d", block.Type, len(result))
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse certificate #%d: %w", len(result), err)
+		}
+		result = append(result, cert)
+		log.Ctx(ctx).Info().Msgf("Successfully loaded Zorgplatform signing certificate, expiry=%s", cert.NotAfter)
 	}
-	log.Ctx(ctx).Info().Msgf("Successfully loaded Zorgplatform certificate, expiry=%s", cert.NotAfter)
-	return cert, nil
+	if len(result) == 0 {
+		return nil, fmt.Errorf("no valid certificates found in PEM data")
+	}
+	return result, nil
 }
