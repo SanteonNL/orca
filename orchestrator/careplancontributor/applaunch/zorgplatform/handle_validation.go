@@ -97,6 +97,11 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	if err != nil {
 		return LaunchContext{}, fmt.Errorf("unable to extract PractitionerRole from SAML Assertion.Subject: %w", err)
 	}
+	if len(practitioner.Identifier) > 0 {
+		practitionerRole.Practitioner = &fhir.Reference{
+			Identifier: &practitioner.Identifier[0],
+		}
+	}
 
 	// Extract resource-id claim to select the correct patient
 	resourceID, err := s.extractResourceID(assertion)
