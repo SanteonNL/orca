@@ -24,15 +24,13 @@ var now = func() time.Time {
 
 type LaunchContext struct {
 	Bsn              string
-	SubjectNameId    string
 	Practitioner     fhir.Practitioner
 	PractitionerRole fhir.PractitionerRole
 	ServiceRequest   fhir.ServiceRequest
 	WorkflowId       string
 }
 
-const HIX_LOCALUSER_SYSTEM = "https://www.cwz.nl/hix-user"
-const HIX_ORG_OID_SYSTEM = "https://www.cwz.nl/hix-org-oid"
+const HIX_LOCALUSER_SYSTEM = "https://santeonnl.github.io/shared-care-planning/ehr/hix/userid"
 
 // parseSamlResponse takes a SAML Response, validates it and extracts the SAML assertion, which is then returned as LaunchContext.
 // If the SAML Assertion is encrypted, it decrypts it.
@@ -87,6 +85,10 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("invalid issuer: %w", err)
 	}
 
+	return s.parseAssertion(ctx, assertion)
+}
+
+func (s *Service) parseAssertion(ctx context.Context, assertion *etree.Element) (LaunchContext, error) {
 	// Extract Subject/NameID and log in the user
 	practitioner, err := s.extractPractitioner(ctx, assertion)
 	if err != nil {
@@ -124,7 +126,6 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		PractitionerRole: *practitionerRole,
 		WorkflowId:       workflowID,
 	}, nil
-
 }
 
 func (s *Service) decryptAssertion(doc *etree.Document) (*etree.Element, error) {
@@ -273,23 +274,10 @@ func (s *Service) extractPractitionerRole(assertion *etree.Element) (*fhir.Pract
 		if el == nil || strings.TrimSpace(el.Text()) == "" {
 			return nil, errors.New("Subject.NameID not found")
 		}
-		parts := strings.Split(el.Text(), "@")
-
-		if len(parts) != 2 {
-			return nil, errors.New("Subject.NameID is not in the correct format - Expecting 2 parts on splitting by '@'")
-		}
-
-		userIdentifier := fhir.Identifier{
+		result.Identifier = []fhir.Identifier{{
 			System: to.Ptr(HIX_LOCALUSER_SYSTEM),
-			Value:  to.Ptr(parts[0]),
-		}
-
-		orgIdentifier := fhir.Identifier{
-			System: to.Ptr(HIX_ORG_OID_SYSTEM),
-			Value:  to.Ptr(parts[1]),
-		}
-
-		result.Identifier = []fhir.Identifier{userIdentifier, orgIdentifier}
+			Value:  to.Ptr(el.Text()),
+		}}
 	}
 
 	return &result, nil
@@ -303,18 +291,13 @@ func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Elem
 		if el == nil || strings.TrimSpace(el.Text()) == "" {
 			return nil, errors.New("Subject.NameID not found")
 		}
-		parts := strings.Split(el.Text(), "@")
-		identifier := fhir.Identifier{
-			Value: to.Ptr(parts[0]),
-		}
-		if len(parts) > 1 {
-			identifier.System = to.Ptr(parts[1])
-		}
-		result.Identifier = []fhir.Identifier{identifier}
+		result.Identifier = []fhir.Identifier{{
+			System: to.Ptr(HIX_LOCALUSER_SYSTEM),
+			Value:  to.Ptr(el.Text()),
+		}}
 	}
 	// Name (e.g.: Jansen, Doctor - optional)
 	{
-
 		value, _ := getSubjectAttribute(assertion, "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name")
 		if value != "" {
 			parts := strings.Split(value, ",")
