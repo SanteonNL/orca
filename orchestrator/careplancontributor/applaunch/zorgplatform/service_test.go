@@ -213,7 +213,7 @@ func TestService(t *testing.T) {
 			sessionData := user.SessionFromHttpResponse(sessionManager, launchHttpResponse)
 			require.NotNil(t, sessionData)
 
-			t.Run("check Practitioner is in session", func(t *testing.T) {
+			t.Run("check Practitioner in session", func(t *testing.T) {
 				assert.NotNil(t, session.Get[fhir.Practitioner](sessionData))
 			})
 			t.Run("check ServiceRequest is in session", func(t *testing.T) {

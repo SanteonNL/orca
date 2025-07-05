@@ -499,12 +499,6 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
 		return nil, fmt.Errorf("unable to find Patient resource in Bundle: %w", err)
 	}
-	var practitioner fhir.Practitioner
-	//TODO: The Practitioner has no identifier set, so we cannot ensure this is the launched Practitioner. Verify with Zorgplatform
-	// if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryHasIdentifier(launchContext.Practitioner.Identifier[0]), &practitioner); err != nil {
-	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Practitioner"), &practitioner); err != nil {
-		return nil, fmt.Errorf("unable to find Practitioner resource in Bundle: %w", err)
-	}
 
 	// var conditionBundle fhir.Bundle
 	//TODO: We assume this is in context as the HCP token is workflow-specific. Double-check with Zorgplatform
@@ -608,7 +602,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	}
 	sessionData.Set("Patient/"+*patient.Id, patient)
 	sessionData.Set("ServiceRequest/magic-"+uuid.NewString(), *serviceRequest)
-	sessionData.Set("Practitioner/magic-"+uuid.NewString(), practitioner)
+	sessionData.Set("Practitioner/magic-"+uuid.NewString(), launchContext.Practitioner)
 	sessionData.Set("PractitionerRole/magic-"+uuid.NewString(), launchContext.PractitionerRole)
 	sessionData.Set("Organization/magic-"+uuid.NewString(), organization)
 	sessionData.Set(*reasonReference.Reference, reason)

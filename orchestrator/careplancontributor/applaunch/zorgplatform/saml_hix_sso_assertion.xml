@@ -1,0 +1,69 @@
+<Assertion ID="_c202b2cb-522f-4e4e-a08b-215010dd0066" IssueInstant="2025-06-05T14:28:06.122Z" Version="2.0"
+           xmlns="urn:oasis:names:tc:SAML:2.0:assertion">
+    <Issuer>https://zorgplatform.online/sts</Issuer>
+    <Subject>
+        <NameID>1234@1.2.3.4.5</NameID>
+        <SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"/>
+    </Subject>
+    <Conditions NotBefore="2025-06-05T14:28:06.122Z" NotOnOrAfter="2025-06-05T14:40:06.122Z">
+        <AudienceRestriction>
+            <Audience>https://example.com/audience/</Audience>
+        </AudienceRestriction>
+    </Conditions>
+    <AttributeStatement>
+        <Attribute Name="urn:ihe:iti:xca:2010:homeCommunityId">
+            <AttributeValue>urn:oid:5.4.3.2.1</AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xspa:1.0:subject:purposeofuse"
+                   a:OriginalIssuer="CN=example.com"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>
+                <PurposeOfUse code="TREATMENT" codeSystem="2.16.840.1.113883.3.18.7.1" codeSystemName="nhin-purpose"
+                              displayName="" xmlns="urn:hl7-org:v3"/>
+            </AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xacml:1.0:resource:resource-id"
+                   a:OriginalIssuer="CN=example.com"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>
+                <InstanceIdentifier root="2.16.840.1.113883.2.4.6.3" extension="999999102" xmlns="urn:hl7-org:v3"/>
+            </AttributeValue>
+        </Attribute>
+        <Attribute Name="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+                   a:OriginalIssuer="CN=example.com"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>chipsoft@zorgplatform.online</AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xspa:1.0:subject:organization-id"
+                   a:OriginalIssuer="CN=example.com"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>orgid:1.2.3.4.5</AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xacml:2.0:subject:role"
+                   a:OriginalIssuer="CN=example.com"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>
+                <Role code="223366009" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT"
+                      displayName="Healthcare professional (occupation)" xmlns="urn:hl7-org:v3"/>
+            </AttributeValue>
+        </Attribute>
+        <Attribute Name="http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+                   a:OriginalIssuer="CN=example.com"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>Arts, H.</AttributeValue>
+        </Attribute>
+        <Attribute Name="http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"
+                   a:OriginalIssuer="CN=example.com"
+                   xmlns:a="http://schemas.xmlsoap.org/ws/2009/09/identity/claims">
+            <AttributeValue>f8cab0af-901b-417e-8bb4-5198e2c47732</AttributeValue>
+        </Attribute>
+        <Attribute Name="http://sts.zorgplatform.online/ws/claims/2017/07/identity/patient-connectionTypeId">
+            <AttributeValue>c0b98bf2-de02-4b97-94fb-ffffd57b058a</AttributeValue>
+        </Attribute>
+    </AttributeStatement>
+    <AuthnStatement AuthnInstant="2025-06-05T14:28:05.693Z">
+        <AuthnContext>
+            <AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:X509</AuthnContextClassRef>
+        </AuthnContext>
+    </AuthnStatement>
+</Assertion>
