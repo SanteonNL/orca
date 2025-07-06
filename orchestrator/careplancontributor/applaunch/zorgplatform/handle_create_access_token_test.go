@@ -169,7 +169,6 @@ func TestService_sign(t *testing.T) {
 				},
 			},
 		},
-		SubjectNameId:  "Subject",
 		WorkflowId:     "workflow-1234",
 		ServiceRequest: fhir.ServiceRequest{},
 	}
