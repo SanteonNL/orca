@@ -11,7 +11,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 	"os"
-	"strings"
 	"testing"
 	"time"
 
@@ -140,8 +139,8 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
 				require.NoError(t, err)
-				subjectNameId := *practitioner.Identifier[0].Value + "@" + *practitioner.Identifier[0].System
-				assert.Equal(t, tt.expectedSubj, subjectNameId)
+				assert.Equal(t, HIX_LOCALUSER_SYSTEM, *practitioner.Identifier[0].System)
+				assert.Equal(t, tt.expectedSubj, *practitioner.Identifier[0].Value)
 			}
 
 			// Extract Resource ID
@@ -171,21 +170,12 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 				assert.Equal(t, tt.expectedRoleCode, *practitionerRole.Code[0].Coding[0].Code)
 				assert.Equal(t, tt.expectedRoleCodeSystem, *practitionerRole.Code[0].Coding[0].System)
 
-				// Verify both identifiers are set
-				assert.Len(t, practitionerRole.Identifier, 2)
-				expectedParts := strings.Split(tt.expectedSubj, "@")
-				userIdentifier := fhir.Identifier{
-					System: to.Ptr(HIX_LOCALUSER_SYSTEM),
-					Value:  to.Ptr(expectedParts[0]),
-				}
-
-				orgIdentifier := fhir.Identifier{
-					System: to.Ptr(HIX_ORG_OID_SYSTEM),
-					Value:  to.Ptr(expectedParts[1]),
-				}
-
-				assert.Contains(t, practitionerRole.Identifier, userIdentifier)
-				assert.Contains(t, practitionerRole.Identifier, orgIdentifier)
+				assert.Equal(t, []fhir.Identifier{
+					{
+						System: to.Ptr(HIX_LOCALUSER_SYSTEM),
+						Value:  to.Ptr(tt.expectedSubj),
+					},
+				}, practitionerRole.Identifier)
 			}
 
 			//TODO: Add signature validation
@@ -293,16 +283,15 @@ func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
 				},
 			},
 		},
-		SubjectNameId:  "Subject",
 		WorkflowId:     "workflow-1234",
 		ServiceRequest: fhir.ServiceRequest{},
 	}
 
 	s := &Service{
 		sessionManager:        sessionManager,
-		zorgplatformCert:      zorgplatformX509Cert,                 // used to verify the signature
-		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey), // used by the forger to sign the assertion
-		signingCertificate:    keyPair.Certificate,                  // used by the forger to sign the assertion
+		zorgplatformSignCerts: []*x509.Certificate{zorgplatformX509Cert}, // used to verify the signature
+		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey),      // used by the forger to sign the assertion
+		signingCertificate:    keyPair.Certificate,                       // used by the forger to sign the assertion
 	}
 
 	forgedAssertion, err := s.createSAMLAssertion(launchContext, hcpTokenType)
@@ -330,7 +319,7 @@ func TestService_parseSamlResponse(t *testing.T) {
 				PrivateKey: certificate.PrivateKey.(*rsa.PrivateKey),
 				Cert:       certificate.Leaf,
 			},
-			zorgplatformCert: certificate.Leaf,
+			zorgplatformSignCerts: []*x509.Certificate{certificate.Leaf},
 			config: Config{
 				DecryptConfig: DecryptConfig{
 					Audience: "https://partner-application.nl",
@@ -346,8 +335,8 @@ func TestService_parseSamlResponse(t *testing.T) {
 		assert.NotEmpty(t, actual)
 		assert.Equal(t, "999999151", actual.Bsn)
 		assert.Len(t, actual.Practitioner.Identifier, 1)
-		assert.Equal(t, "urn:oid:2.16.840.1.113883.4.1", *actual.Practitioner.Identifier[0].System)
-		assert.Equal(t, "999999999", *actual.Practitioner.Identifier[0].Value)
+		assert.Equal(t, HIX_LOCALUSER_SYSTEM, *actual.Practitioner.Identifier[0].System)
+		assert.Equal(t, "999999999@urn:oid:2.16.840.1.113883.4.1", *actual.Practitioner.Identifier[0].Value)
 		assert.Equal(t, "b526e773-e1a6-4533-bd00-1360c97e745f", actual.WorkflowId)
 
 	})
@@ -365,4 +354,23 @@ func TestService_parseSamlResponse(t *testing.T) {
 		assert.Empty(t, actual)
 		require.EqualError(t, err, "SAMLResponse from server contains an error, see log for details")
 	})
+}
+
+func TestService_parseAssertion(t *testing.T) {
+	assertionXML, err := os.ReadFile("saml_hix_sso_assertion.xml")
+	require.NoError(t, err)
+	doc := etree.NewDocument()
+	err = doc.ReadFromBytes(assertionXML)
+	require.NoError(t, err)
+
+	launchContext, err := (&Service{}).parseAssertion(context.Background(), doc.Root())
+
+	require.NoError(t, err)
+	assert.Equal(t, "999999102", launchContext.Bsn)
+	assert.Len(t, launchContext.Practitioner.Identifier, 1)
+	assert.Equal(t, HIX_LOCALUSER_SYSTEM, *launchContext.Practitioner.Identifier[0].System)
+	assert.Equal(t, "1234@1.2.3.4.5", *launchContext.Practitioner.Identifier[0].Value)
+	assert.Equal(t, "Arts", *launchContext.Practitioner.Name[0].Family)
+	assert.Equal(t, "H.", launchContext.Practitioner.Name[0].Given[0])
+	assert.Equal(t, "f8cab0af-901b-417e-8bb4-5198e2c47732", launchContext.WorkflowId)
 }
