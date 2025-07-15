@@ -3,6 +3,7 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -52,10 +53,9 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	// TODO: Field validation
 	if h.validator != nil {
 		if err := h.validator.Validate(resource); err != nil {
-			return nil, &coolfhir.ErrorWithCode{
-				Message:    fmt.Sprintf("Validation failed for resource: %s with errors: %s", resourceType, err),
-				StatusCode: http.StatusBadRequest,
-			}
+			var msg = errors.Join(err...).Error()
+			log.Ctx(ctx).Info().Msgf("Validation failed for %s: %s", resourceType, msg)
+			return nil, coolfhir.BadRequest(errors.Join(err...).Error())
 		}
 	}
 	resourceBundleEntry := request.bundleEntryWithResource(resource)

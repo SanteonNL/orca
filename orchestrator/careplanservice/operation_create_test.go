@@ -262,7 +262,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 			},
 			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
 				expectedErr := new(coolfhir.ErrorWithCode)
-				return assert.EqualError(t, err, "Validation failed for resource: Task with errors: assert.AnError general error for testing") &&
+				return assert.EqualError(t, err, "assert.AnError general error for testing\nassert.AnError general error for testing") &&
 					assert.ErrorAs(t, err, &expectedErr) &&
 					assert.Equal(t, http.StatusBadRequest, expectedErr.StatusCode)
 			},
@@ -309,10 +309,12 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 
 type successValidator struct{}
 
-func (v *successValidator) Validate(t *fhir.Task) error { return nil }
+func (v *successValidator) Validate(t *fhir.Task) []error { return nil }
 
 type failureValidator struct{}
 
-func (v *failureValidator) Validate(t *fhir.Task) error {
-	return assert.AnError
+func (v *failureValidator) Validate(t *fhir.Task) []error {
+	var errs = make([]error, 2)
+	errs = append(errs, assert.AnError)
+	return append(errs, assert.AnError)
 }

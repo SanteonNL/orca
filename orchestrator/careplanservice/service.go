@@ -485,6 +485,7 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 			fhirClient:  s.fhirClient,
 			profile:     s.profile,
 			fhirURL:     s.fhirURL,
+			validator:   &PatientValidator{},
 		}.Handle
 	case "Questionnaire":
 		return FHIRCreateOperationHandler[*fhir.Questionnaire]{
