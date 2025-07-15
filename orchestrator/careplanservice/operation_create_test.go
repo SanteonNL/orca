@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/lib/validation"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -47,6 +48,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 	type args struct {
 		resource     fhir.Task
 		resourceData []byte
+		validator    validation.Validator[*fhir.Task]
 	}
 	type testCase struct {
 		name      string
@@ -216,6 +218,55 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 					assert.Equal(t, http.StatusBadRequest, expectedErr.StatusCode)
 			},
 		},
+		{
+			name: "passed validation",
+			args: args{
+				resource:  task,
+				validator: &successValidator{},
+			},
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
+				assertContainsAuditEvent(t, tx, fhir.Reference{Type: to.Ptr("Task")}, auth.TestPrincipal1.Organization.Identifier[0], auth.TestPrincipal2.Organization.Identifier[0], fhir.AuditEventActionC)
+				assertBundleEntry(t, tx, coolfhir.EntryIsOfType("Task"), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, fhir.HTTPVerbPOST, entry.Request.Method)
+					assert.Equal(t, "Task", entry.Request.Url)
+					// Validate resource creation extension
+					task.Extension = TestCreatorExtension
+					assert.JSONEq(t, string(must.MarshalJSON(task)), string(entry.Resource))
+				})
+				// Should respond with 1 bundle entry, and 1 notification
+				txResponse := coolfhir.Transaction().
+					Append(task, nil, &fhir.BundleEntryResponse{
+						Status:   "200 OK",
+						Location: to.Ptr("Task/1"),
+					}).Bundle()
+				responseEntries, notifications, err := result(&txResponse)
+				require.NoError(t, err)
+				assert.Len(t, responseEntries, 1)
+				assertBundleEntry(t, toBundle(responseEntries), coolfhir.EntryIsOfType("Task"), func(t *testing.T, entry fhir.BundleEntry) {
+					assert.Equal(t, "200 OK", entry.Response.Status)
+					assert.Equal(t, "Task/1", *entry.Response.Location)
+					assert.JSONEq(t, string(must.MarshalJSON(task)), string(entry.Resource))
+				})
+				assert.Len(t, notifications, 1)
+				assert.IsType(t, &fhir.Task{}, notifications[0])
+			},
+		},
+		{
+			name: "failed validation",
+			args: args{
+				resource:  task,
+				validator: &failureValidator{},
+			},
+			want: func(t *testing.T, tx fhir.Bundle, result FHIRHandlerResult) {
+				assert.Empty(t, tx.Entry)
+			},
+			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
+				expectedErr := new(coolfhir.ErrorWithCode)
+				return assert.EqualError(t, err, "Validation failed for resource: Task with errors: assert.AnError general error for testing") &&
+					assert.ErrorAs(t, err, &expectedErr) &&
+					assert.Equal(t, http.StatusBadRequest, expectedErr.StatusCode)
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -225,11 +276,13 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 			if policy == nil {
 				policy = AnyonePolicy[*fhir.Task]{}
 			}
+
 			handler := &FHIRCreateOperationHandler[*fhir.Task]{
 				authzPolicy: policy,
 				fhirClient:  fhirClient,
 				profile:     profile.Test(),
 				fhirURL:     fhirBaseURL,
+				validator:   tt.args.validator,
 			}
 			requestData := tt.args.resourceData
 			if requestData == nil {
@@ -252,4 +305,14 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 			tt.want(t, tx.Bundle(), handlerResult)
 		})
 	}
+}
+
+type successValidator struct{}
+
+func (v *successValidator) Validate(t *fhir.Task) error { return nil }
+
+type failureValidator struct{}
+
+func (v *failureValidator) Validate(t *fhir.Task) error {
+	return assert.AnError
 }

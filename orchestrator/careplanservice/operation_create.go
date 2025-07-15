@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/lib/validation"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -23,6 +24,7 @@ type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
 	authzPolicy Policy[T]
 	profile     profile.Provider
 	fhirURL     *url.URL
+	validator   validation.Validator[T]
 }
 
 func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -48,6 +50,14 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	}
 	log.Ctx(ctx).Info().Msgf("Creating %s (authz=%s)", resourceType, strings.Join(authzDecision.Reasons, ";"))
 	// TODO: Field validation
+	if h.validator != nil {
+		if err := h.validator.Validate(resource); err != nil {
+			return nil, &coolfhir.ErrorWithCode{
+				Message:    fmt.Sprintf("Validation failed for resource: %s with errors: %s", resourceType, err),
+				StatusCode: http.StatusBadRequest,
+			}
+		}
+	}
 	resourceBundleEntry := request.bundleEntryWithResource(resource)
 	if resourceBundleEntry.FullUrl == nil {
 		resourceBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())
