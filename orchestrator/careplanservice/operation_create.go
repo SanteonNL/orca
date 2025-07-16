@@ -55,7 +55,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		if err := h.validator.Validate(resource); err != nil {
 			var msg = errors.Join(err...).Error()
 			log.Ctx(ctx).Info().Msgf("Validation failed for %s: %s", resourceType, msg)
-			return nil, coolfhir.BadRequest(errors.Join(err...).Error())
+			return nil, coolfhir.BadRequestError(errors.Join(err...))
 		}
 	}
 	resourceBundleEntry := request.bundleEntryWithResource(resource)
