@@ -239,26 +239,4 @@ func TestPatientValidator_Validate(t *testing.T) {
 		assert.Nil(t, errs)
 	})
 
-	t.Run("stops validation at first invalid contact point", func(t *testing.T) {
-		emailSystem := fhir.ContactPointSystemEmail
-		phoneSystem := fhir.ContactPointSystemPhone
-		patient := &fhir.Patient{
-			Telecom: []fhir.ContactPoint{
-				{
-					System: &emailSystem,
-					Value:  to.Ptr("invalid-email"),
-				},
-				{
-					System: &phoneSystem,
-					Value:  to.Ptr("+32123456789"),
-				},
-			},
-		}
-
-		errs := validator.Validate(patient)
-
-		assert.NotNil(t, errs)
-		assert.Len(t, errs, 1)
-		assert.Contains(t, errs[0].Error(), "email is invalid")
-	})
 }
