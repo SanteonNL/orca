@@ -52,10 +52,25 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	log.Ctx(ctx).Info().Msgf("Creating %s (authz=%s)", resourceType, strings.Join(authzDecision.Reasons, ";"))
 	// TODO: Field validation
 	if h.validator != nil {
-		if err := h.validator.Validate(resource); err != nil {
-			var msg = errors.Join(err...).Error()
+		if errs := h.validator.Validate(resource); errs != nil {
+			var issues []fhir.OperationOutcomeIssue
+
+			for _, err := range errs {
+				issues = append(issues, fhir.OperationOutcomeIssue{
+					Severity:    fhir.IssueSeverityError,
+					Code:        fhir.IssueTypeInvalid,
+					Diagnostics: to.Ptr(err.Error()),
+				})
+			}
+			var err = &fhirclient.OperationOutcomeError{
+				OperationOutcome: fhir.OperationOutcome{
+					Issue: issues,
+				},
+				HttpStatusCode: http.StatusBadRequest,
+			}
+			var msg = errors.Join(errs...).Error()
 			log.Ctx(ctx).Info().Msgf("Validation failed for %s: %s", resourceType, msg)
-			return nil, coolfhir.BadRequestError(errors.Join(err...))
+			return nil, err
 		}
 	}
 	resourceBundleEntry := request.bundleEntryWithResource(resource)

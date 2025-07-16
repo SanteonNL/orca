@@ -855,7 +855,12 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		}
 		entryResult, err := s.handleTransactionEntry(httpRequest.Context(), fhirRequest, tx)
 		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("bundle.entry[%d]: %w", entryIdx, err), op, httpResponse)
+			var operationOutcomeErr *fhirclient.OperationOutcomeError
+			userError := err
+			if !errors.As(err, &operationOutcomeErr) {
+				userError = coolfhir.BadRequest("bundle.entry[%d]: %w", entryIdx, err)
+			}
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), userError, op, httpResponse)
 			return
 		}
 		resultHandlers = append(resultHandlers, entryResult)

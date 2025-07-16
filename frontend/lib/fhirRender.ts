@@ -15,6 +15,31 @@ export const patientName = (patient: Patient): string => {
     return [name.family, name.given?.join(" ")].filter(Boolean).join(", ");
 }
 
+export const findTelecom = (patient: Patient): Telecom => {
+    let phone = "Onbekend";
+    let email = "Onbekend";
+
+    if (patient.telecom) {
+        for (const telecom of patient.telecom) {
+            if (telecom.system === 'phone') {
+                phone = telecom.value || "Onbekend";
+            } else if (telecom.system === 'email') {
+                email = telecom.value || "Onbekend";
+            }
+        }
+    }
+    return new Telecom(phone, email);
+}
+
+
+export class Telecom {
+    constructor(
+        public readonly telephone: string,
+        public readonly email: string
+    ) {
+    }
+}
+
 
 export const organizationName = (reference?: Reference) => {
     if (!reference) {

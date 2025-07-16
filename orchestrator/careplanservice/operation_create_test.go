@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -251,6 +252,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 				assert.IsType(t, &fhir.Task{}, notifications[0])
 			},
 		},
+
 		{
 			name: "failed validation",
 			args: args{
@@ -261,10 +263,10 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 				assert.Empty(t, tx.Entry)
 			},
 			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
-				expectedErr := new(coolfhir.ErrorWithCode)
-				return assert.EqualError(t, err, "assert.AnError general error for testing\nassert.AnError general error for testing") &&
+				expectedErr := new(fhirclient.OperationOutcomeError)
+				return assert.EqualError(t, err, "OperationOutcome, issues: [invalid error] assert.AnError general error for testing; [invalid error] assert.AnError general error for testing") &&
 					assert.ErrorAs(t, err, &expectedErr) &&
-					assert.Equal(t, http.StatusBadRequest, expectedErr.StatusCode)
+					assert.Equal(t, http.StatusBadRequest, expectedErr.HttpStatusCode)
 			},
 		},
 	}
@@ -314,7 +316,7 @@ func (v *successValidator) Validate(t *fhir.Task) []error { return nil }
 type failureValidator struct{}
 
 func (v *failureValidator) Validate(t *fhir.Task) []error {
-	var errs = make([]error, 2)
+	var errs []error
 	errs = append(errs, assert.AnError)
 	return append(errs, assert.AnError)
 }

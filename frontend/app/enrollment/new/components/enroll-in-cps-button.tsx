@@ -6,9 +6,9 @@ import {Bundle, Condition, OperationOutcome, PractitionerRole} from 'fhir/r4'
 import React, {useEffect, useState} from 'react'
 import {toast} from "sonner"
 import {useRouter} from 'next/navigation'
-import {ArrowRight, LoaderIcon} from 'lucide-react'
+import {ArrowRight} from 'lucide-react'
 import {Spinner} from '@/components/spinner'
-import {Button, createTheme, ThemeProvider} from '@mui/material'
+import {Button, ThemeProvider} from '@mui/material'
 import {defaultTheme} from "@/app/theme";
 
 interface Props {
@@ -36,6 +36,7 @@ export default function EnrollInCpsButton({className}: Props) {
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
     const [error, setError] = useState<string>()
+    const [validationErrors, setValidationErrors] = useState<OperationOutcome>()
 
     const router = useRouter()
     const cpsClient = useCpsClient()
@@ -47,6 +48,7 @@ export default function EnrollInCpsButton({className}: Props) {
     const informCps = async () => {
         setSubmitted(true)
         setError(undefined)
+        setValidationErrors(undefined)
 
         if (!taskCondition) {
             const errorMsg = "Something went wrong with CarePlan creation"
@@ -98,9 +100,8 @@ export default function EnrollInCpsButton({className}: Props) {
 
             // Handle 400 errors specifically
             if (error.response?.status === 400) {
-                const operationOutcome: OperationOutcome = error.response?.data;
-                const errorMessage = operationOutcome?.issue[0].diagnostics || error.message || "Bad request";
-                throw new Error(`Validation error: ${errorMessage}`);
+                setValidationErrors(error.response?.data)
+                throw new Error("Validation errors");
             }
 
             throw new Error(`Failed to execute Task Bundle: ${error.message || "Unknown error"}`);
@@ -110,12 +111,14 @@ export default function EnrollInCpsButton({className}: Props) {
     return (
         <ThemeProvider theme={defaultTheme}>
             <div>
-                {error && (
+                {validationErrors && (
                     <div className='text-red-500 mb-2'>
-                        {error}
-                        <p className='text-muted-foreground mb-2'>
-                            Indien het verzoek niet klopt, pas het dan aan in het EPD.
-                        </p>
+                        <h3 className='font-semibold'>Validation Errors:</h3>
+                            {validationErrors.issue?.map((issue, index) => (
+                                <p key={index}>
+                                    {issue.diagnostics || "Unknown error"}
+                                </p>
+                            ))}
                     </div>
                 )}
             </div>
