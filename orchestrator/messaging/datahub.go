@@ -96,7 +96,7 @@ func (h DataHubBroker) doSend(ctx context.Context, message *Message) error {
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("received non-OK response: %d with body: %d", resp.StatusCode, resp.Body)
+		return fmt.Errorf("received non-OK response: %d with body: %v", resp.StatusCode, resp.Body)
 	}
 	return nil
 }
