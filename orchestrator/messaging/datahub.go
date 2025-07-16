@@ -79,7 +79,7 @@ func (h DataHubBroker) doSend(ctx context.Context, message *Message) error {
 	log.Ctx(ctx).Info().Msgf("Sending json message %s", jsonValue)
 	endpoint, err := url.Parse(h.endpoint)
 	if err != nil {
-		return nil
+		return fmt.Errorf("invalid endpoint URL: %w", err)
 	}
 	httpRequestCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
