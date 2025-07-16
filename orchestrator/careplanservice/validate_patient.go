@@ -12,7 +12,7 @@ type PatientValidator struct {
 }
 
 func (v *PatientValidator) Validate(patient *fhir.Patient) []error {
-	var errs = make([]error, 2)
+	var errs []error
 
 	if patient == nil {
 		return append(errs, errors.New("patient is required"))
@@ -41,6 +41,7 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []error {
 			}
 		}
 	}
+
 	if len(errs) > 0 {
 		log.Error().Msgf("Validation errors: %v", errs)
 		return errs
