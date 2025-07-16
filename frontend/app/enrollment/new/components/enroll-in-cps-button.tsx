@@ -2,7 +2,7 @@
 import useCpsClient from '@/hooks/use-cps-client'
 import {findInBundle, getPatientIdentifier, constructTaskBundle} from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import {Bundle, Condition, OperationOutcome, PractitionerRole} from 'fhir/r4'
+import {Bundle, Condition, OperationOutcome, OperationOutcomeIssue, PractitionerRole} from 'fhir/r4'
 import React, {useEffect, useState} from 'react'
 import {toast} from "sonner"
 import {useRouter} from 'next/navigation'
@@ -35,8 +35,8 @@ export default function EnrollInCpsButton({className}: Props) {
     } = useEnrollment()
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
-    const [error, setError] = useState<string>()
-    const [validationErrors, setValidationErrors] = useState<OperationOutcome>()
+    const [error, setError] = useState<string | null>()
+    const [validationErrors, setValidationErrors] = useState<OperationOutcomeIssue[]>()
 
     const router = useRouter()
     const cpsClient = useCpsClient()
@@ -100,7 +100,8 @@ export default function EnrollInCpsButton({className}: Props) {
 
             // Handle 400 errors specifically
             if (error.response?.status === 400) {
-                setValidationErrors(error.response?.data)
+                const operationOutcome: OperationOutcome = error.response?.data;
+                setValidationErrors(operationOutcome.issue || []);
                 throw new Error("Validation errors");
             }
 
@@ -114,7 +115,7 @@ export default function EnrollInCpsButton({className}: Props) {
                 {validationErrors && (
                     <div className='text-red-500 mb-2'>
                         <h3 className='font-semibold'>Validation Errors:</h3>
-                            {validationErrors.issue?.map((issue, index) => (
+                            {validationErrors?.map((issue, index) => (
                                 <p key={index}>
                                     {issue.diagnostics || "Unknown error"}
                                 </p>
