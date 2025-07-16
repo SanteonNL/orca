@@ -97,6 +97,16 @@ func Test_Main(t *testing.T) {
 						Value:  to.Ptr("1333333337"),
 					},
 				},
+				Telecom: []fhir.ContactPoint{
+					{
+						System: to.Ptr(fhir.ContactPointSystemPhone),
+						Value:  to.Ptr("+31612345678"),
+					},
+					{
+						System: to.Ptr(fhir.ContactPointSystemEmail),
+						Value:  to.Ptr("test@test.com"),
+					},
+				},
 			}
 
 			err := hospitalOrcaFHIRClient.Create(patient, &patient)
