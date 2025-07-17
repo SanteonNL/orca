@@ -3,11 +3,13 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/lib/validation"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -23,6 +25,7 @@ type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
 	authzPolicy Policy[T]
 	profile     profile.Provider
 	fhirURL     *url.URL
+	validator   validation.Validator[T]
 }
 
 func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -47,7 +50,28 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		}
 	}
 	log.Ctx(ctx).Info().Msgf("Creating %s (authz=%s)", resourceType, strings.Join(authzDecision.Reasons, ";"))
-	// TODO: Field validation
+	if h.validator != nil {
+		if errs := h.validator.Validate(resource); errs != nil {
+			var issues []fhir.OperationOutcomeIssue
+
+			for _, err := range errs {
+				issues = append(issues, fhir.OperationOutcomeIssue{
+					Severity:    fhir.IssueSeverityError,
+					Code:        fhir.IssueTypeInvalid,
+					Diagnostics: to.Ptr(err.Error()),
+				})
+			}
+			var err = &fhirclient.OperationOutcomeError{
+				OperationOutcome: fhir.OperationOutcome{
+					Issue: issues,
+				},
+				HttpStatusCode: http.StatusBadRequest,
+			}
+			var msg = errors.Join(errs...).Error()
+			log.Ctx(ctx).Info().Msgf("Validation failed for %s: %s", resourceType, msg)
+			return nil, err
+		}
+	}
 	resourceBundleEntry := request.bundleEntryWithResource(resource)
 	if resourceBundleEntry.FullUrl == nil {
 		resourceBundleEntry.FullUrl = to.Ptr("urn:uuid:" + uuid.NewString())

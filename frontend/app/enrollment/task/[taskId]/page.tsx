@@ -5,7 +5,7 @@ import { useParams } from 'next/navigation'
 import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
-import { patientName, organizationName } from "@/lib/fhirRender";
+import {patientName, organizationName} from "@/lib/fhirRender";
 import TaskSseConnectionStatus from '../../components/sse-connection-status'
 import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
 import {Questionnaire} from "fhir/r4";
@@ -18,7 +18,6 @@ export default function EnrollmentTaskPage() {
     const { patient, serviceRequest } = useEnrollmentStore()
     const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
-
     useEffect(() => {
         if (taskId) {
             console.log(`Task ID from URL: ${taskId}`);
@@ -92,6 +91,8 @@ export default function EnrollmentTaskPage() {
             </div>
             <div className="w-[568px] grid grid-cols-[1fr_2fr] gap-y-4">
                 <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} noUpperCase={true} />
+                <StatusElement label="E-mailadres" value={patient?.telecom?.find(m => m.system === 'email')?.value ?? 'Onbekend'} />
+                <StatusElement label="Telefoonnummer" value={patient?.telecom?.find(m => m.system === 'phone')?.value ?? 'Onbekend'} />
                 <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
                 <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"} />
                 <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)} />

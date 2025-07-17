@@ -31,6 +31,17 @@ var patientReference = fhir.Reference{
 	},
 }
 
+var telecom = []fhir.ContactPoint{
+	{
+		System: to.Ptr(fhir.ContactPointSystemPhone),
+		Value:  to.Ptr("+31612345678"),
+	},
+	{
+		System: to.Ptr(fhir.ContactPointSystemEmail),
+		Value:  to.Ptr("test@test.com"),
+	},
+}
+
 func Test_Integration(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
@@ -97,6 +108,7 @@ func Test_Integration(t *testing.T) {
 		Identifier: []fhir.Identifier{
 			*patientReference.Identifier,
 		},
+		Telecom: telecom,
 	}
 	err := carePlanContributor1.Create(patient, &patient)
 	require.NoError(t, err)
@@ -107,6 +119,7 @@ func Test_Integration(t *testing.T) {
 		Identifier: []fhir.Identifier{
 			*patientReference.Identifier,
 		},
+		Telecom: telecom,
 	}, &patient2)
 	require.NoError(t, err)
 
@@ -686,6 +699,7 @@ func testBundleCreation(t *testing.T, carePlanContributor1 *fhirclient.BaseClien
 			Identifier: []fhir.Identifier{
 				*patientReference.Identifier,
 			},
+			Telecom: telecom,
 		}
 		patientRaw, err := json.Marshal(patient)
 		require.NoError(t, err)

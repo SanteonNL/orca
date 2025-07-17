@@ -2,7 +2,7 @@
 import React from 'react'
 import useEnrollmentStore from '@/lib/store/enrollment-store'
 import { Spinner } from '@/components/spinner'
-import { patientName, organizationName } from "@/lib/fhirRender";
+import {patientName, organizationName} from "@/lib/fhirRender";
 
 export default function EnrollmentDetails() {
 
@@ -13,18 +13,24 @@ export default function EnrollmentDetails() {
     return (
         (
             <div className="grid grid-cols-[1fr_2fr] gap-y-4 w-[568px]">
-                <div className="font-[500]">Patiënt:</div>
+                <div className="font-medium">Patiënt:</div>
                 <div>{patient ? patientName(patient) : "Onbekend"}</div>
 
-                <div className="font-[500]">Verzoek:</div>
+                <div className="font-medium">E-mailadres:</div>
+                <div>{patient?.telecom?.find(m => m.system === 'email')?.value ?? 'Onbekend'}</div>
+
+                <div className="font-medium">Telefoonnummer:</div>
+                <div>{patient?.telecom?.find(m => m.system === 'phone')?.value ?? 'Onbekend'}</div>
+
+                <div className="font-medium">Verzoek:</div>
                 <div className="first-letter:uppercase">{serviceRequest?.code?.coding?.[0].display || "Onbekend"}</div>
 
-                <div className="font-[500]">Diagnose:</div>
+                <div className="font-medium">Diagnose:</div>
                 <div className="first-letter:uppercase">
                     {taskCondition?.code?.text || taskCondition?.code?.coding?.[0].display || "Onbekend"}
                 </div>
 
-                <div className="font-[500]">Uitvoerende organisatie:</div>
+                <div className="font-medium">Uitvoerende organisatie:</div>
                 <div>
                     {organizationName(serviceRequest?.performer?.[0])}
                 </div>

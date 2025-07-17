@@ -61,7 +61,8 @@ type TaskFillerConfig struct {
 	QuestionnaireSyncURLs []string              `koanf:"questionnairesyncurls"`
 	// Taskacceptedbundletopic is a Message Broker topic or queue to which the TaskFiller will publish a message when a Task is accepted.
 	// The bundle will contain the Task, Patient, and other relevant resources.
-	TaskAcceptedBundleTopic string `koanf:"taskacceptedbundletopic"`
+	TaskAcceptedBundleTopic    string `koanf:"taskacceptedbundletopic"`
+	TaskAcceptedBundleEndpoint string `koanf:"taskacceptedbundleendpoint"`
 	// StatusNote contains notes that'll be added on the Task when a Task status is updated.
 	// The key is the Task status, and the value is the note to be set.
 	StatusNote map[string]string `koanf:"statusnote"`

@@ -136,7 +136,7 @@ func TestNotifier_NotifyTaskAccepted(t *testing.T) {
 				return nil
 			}))
 
-			notifier, _ := NewNotifier(events.NewManager(messageBroker), messageBroker, bundleTopic, func(_ context.Context, _ *url.URL) (fhirclient.Client, *http.Client, error) {
+			notifier, _ := NewNotifier(events.NewManager(messageBroker), messageBroker, bundleTopic, "", func(_ context.Context, _ *url.URL) (fhirclient.Client, *http.Client, error) {
 				return fhirClient, nil, nil
 			})
 

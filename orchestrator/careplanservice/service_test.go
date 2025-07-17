@@ -310,6 +310,53 @@ func TestService_ErrorHandling(t *testing.T) {
 	require.Equal(t, "CarePlanService/CreateTask failed: invalid fhir.Task: unexpected end of JSON input", *target.Issue[0].Diagnostics)
 }
 
+func TestService_ValidationErrorHandling(t *testing.T) {
+	fhirServerMux := http.NewServeMux()
+	mockCustomSearchParams(fhirServerMux)
+	fhirServer := httptest.NewServer(fhirServerMux)
+	// Setup: configure the service
+	messageBroker := messaging.NewMemoryBroker()
+	service, err := New(
+		Config{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirServer.URL + "/fhir",
+			},
+		},
+		profile.Test(),
+		orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
+	require.NoError(t, err)
+
+	service.RegisterHandlers(fhirServerMux)
+	server := httptest.NewServer(fhirServerMux)
+
+	// Setup: configure the client
+	httpClient := server.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(server.Client().Transport, auth.TestPrincipal1, "")
+
+	var body = `{"meta":{"versionId":"1","lastUpdated":"2025-07-16T09:52:29.238+00:00","source":"#UDij7lTAHXv1rLRt"},"identifier":[{"use":"usual","system":"http://fhir.nl/fhir/NamingSystem/bsn","value":"99999511"}],"name":[{"text":"abv, abv","family":"abv","given":["abv"]}],"telecom":[{"system":"phone","value":"000","use":"home"},{"system":"email","value":"abv","use":"home"}],"gender":"unknown","birthDate":"1980-01-15","address":[{"use":"home","type":"postal","line":["123 Main Street"],"city":"Hometown","state":"State","postalCode":"12345","country":"Country"}],"resourceType":"Patient"}`
+	// Make an invalid call (not providing JSON payload)
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/cps/Patient", strings.NewReader(body))
+	require.NoError(t, err)
+	request.Header.Set("Content-Type", "application/fhir+json")
+
+	httpResponse, err := httpClient.Do(request)
+	require.NoError(t, err)
+
+	// Test response
+	require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+	require.Equal(t, "application/fhir+json", httpResponse.Header.Get("Content-Type"))
+
+	var target OperationOutcomeWithResourceType
+	err = json.NewDecoder(httpResponse.Body).Decode(&target)
+	require.NoError(t, err)
+	require.Equal(t, "OperationOutcome", *target.ResourceType)
+
+	require.NotNil(t, target)
+	require.NotEmpty(t, target.Issue)
+	require.Equal(t, "phone number must start with +31", *target.Issue[0].Diagnostics)
+	require.Equal(t, "email is invalid", *target.Issue[1].Diagnostics)
+}
+
 //func TestService_DefaultOperationHandler(t *testing.T) {
 //	t.Run("handles unmanaged FHIR operations - allow unmanaged operations", func(t *testing.T) {
 //		// For now, we have a flag that can be enabled in config that will allow unmanaged FHIR operations. This defaults to false and should not be enabled in test or prod environments

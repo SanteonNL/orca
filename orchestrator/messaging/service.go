@@ -26,8 +26,10 @@ func (t Entity) FullName(prefix string) string {
 func New(config Config, sources []Entity) (Broker, error) {
 	var broker Broker
 	var err error
+	log.Info().Msgf("Messaging: CONFIG %+v", config)
 	if config.AzureServiceBus.Enabled() {
 		broker, err = newAzureServiceBusBroker(config.AzureServiceBus, sources, config.EntityPrefix)
+
 		if err != nil {
 			return nil, fmt.Errorf("azure service bus: %w", err)
 		}

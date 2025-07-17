@@ -59,6 +59,16 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 				Family: to.Ptr("Patient"),
 			},
 		},
+		Telecom: []fhir.ContactPoint{
+			{
+				System: to.Ptr(fhir.ContactPointSystemPhone),
+				Value:  to.Ptr("+31612345678"),
+			},
+			{
+				System: to.Ptr(fhir.ContactPointSystemEmail),
+				Value:  to.Ptr("test@test.com"),
+			},
+		},
 	}
 	err := carePlanContributor1.Create(patient, &patient)
 	require.NoError(t, err)
