@@ -43,10 +43,6 @@ func New(config Config, sources []Entity) (Broker, error) {
 		log.Info().Msgf("Messaging: sending messages over HTTP to %s", config.HTTP.Endpoint)
 		broker = NewHTTPBroker(config.HTTP, broker)
 	}
-	if config.DataHub.Endpoint != "" {
-		log.Info().Msgf("Messaging: sending messages to DataHub at %s", config.DataHub.Endpoint)
-		broker = NewDataHubBroker(config.DataHub, broker)
-	}
 	return broker, nil
 }
 
@@ -55,7 +51,6 @@ type Config struct {
 	// AzureServiceBus holds the configuration for messaging using Azure ServiceBus.
 	AzureServiceBus AzureServiceBusConfig `koanf:"azureservicebus"`
 	HTTP            HTTPBrokerConfig      `koanf:"http"`
-	DataHub         DataHubBrokerConfig   `koanf:"datahub"`
 	// EntityPrefix is the prefix to use for all topics and queues, which allows for multi-tenant use of the underlying message broker infrastructure.
 	EntityPrefix string `koanf:"entityprefix"`
 }
