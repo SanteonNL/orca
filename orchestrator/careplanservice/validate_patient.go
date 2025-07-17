@@ -13,33 +13,46 @@ type PatientValidator struct {
 
 func (v *PatientValidator) Validate(patient *fhir.Patient) []error {
 	var errs []error
+	hasEmail, hasPhone := false, false
 
 	if patient == nil {
-		return append(errs, errors.New("patient is required"))
+		errs = append(errs, errors.New("patient is required"))
+		return errs
 	}
 
-	log.Info().Msg("Validating Patient")
-	log.Info().Msgf("Patient: %+v", *patient)
+	log.Info().Msgf("Validating Patient: %+v", *patient)
 
 	if patient.Telecom == nil || len(patient.Telecom) == 0 {
-		return append(errs, errors.New("patient telecom required"))
+		errs = append(errs, errors.New("patient telecom required"))
+		return errs
 	}
 
 	for _, point := range patient.Telecom {
-		log.Info().Msgf("Point system: %+v", *point.System)
 
-		if point.System != nil && *point.System == fhir.ContactPointSystemEmail {
-			err := validateEmail(point.Value)
-			if err != nil {
-				errs = append(errs, err)
+		if point.System != nil {
+			switch *point.System {
+			case fhir.ContactPointSystemEmail:
+				if err := validateEmail(point.Value); err != nil {
+					errs = append(errs, err)
+				}
+				hasEmail = true
+			case fhir.ContactPointSystemPhone:
+				if err := validatePhone(point.Value); err != nil {
+					errs = append(errs, err)
+				}
+				hasPhone = true
+			default:
+				continue
 			}
 		}
-		if point.System != nil && *point.System == fhir.ContactPointSystemPhone {
-			err := validatePhone(point.Value)
-			if err != nil {
-				errs = append(errs, err)
-			}
-		}
+	}
+
+	if !hasEmail && !hasPhone {
+		errs = append(errs, errors.New("patient must have both email and phone"))
+	} else if !hasEmail {
+		errs = append(errs, errors.New("patient must have email"))
+	} else if !hasPhone {
+		errs = append(errs, errors.New("patient must have phone"))
 	}
 
 	if len(errs) > 0 {
@@ -54,7 +67,6 @@ func validateEmail(email *string) error {
 	if email == nil || *email == "" {
 		return errors.New("email is required")
 	}
-	log.Info().Msg("Validating email, email: " + *email)
 
 	_, err := mail.ParseAddress(*email)
 	if err != nil {
@@ -67,7 +79,6 @@ func validatePhone(phone *string) error {
 	if phone == nil || *phone == "" {
 		return errors.New("phone number is required")
 	}
-	log.Info().Msg("Validating phone, phone: " + *phone)
 
 	if !strings.HasPrefix(*phone, "+31") {
 		return errors.New("phone number must start with +31")

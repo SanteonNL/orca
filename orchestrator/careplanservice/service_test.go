@@ -310,7 +310,6 @@ func TestService_ErrorHandling(t *testing.T) {
 	require.Equal(t, "CarePlanService/CreateTask failed: invalid fhir.Task: unexpected end of JSON input", *target.Issue[0].Diagnostics)
 }
 
-// Added a test for tbe validation
 func TestService_ValidationErrorHandling(t *testing.T) {
 	fhirServerMux := http.NewServeMux()
 	mockCustomSearchParams(fhirServerMux)

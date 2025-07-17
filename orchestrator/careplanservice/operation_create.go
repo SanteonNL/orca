@@ -50,7 +50,6 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		}
 	}
 	log.Ctx(ctx).Info().Msgf("Creating %s (authz=%s)", resourceType, strings.Join(authzDecision.Reasons, ";"))
-	// TODO: Field validation
 	if h.validator != nil {
 		if errs := h.validator.Validate(resource); errs != nil {
 			var issues []fhir.OperationOutcomeIssue
