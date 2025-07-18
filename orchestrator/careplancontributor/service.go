@@ -837,3 +837,20 @@ func (s Service) createFHIRClientForIdentifier(ctx context.Context, fhirBaseURL 
 func createFHIRClient(fhirBaseURL *url.URL, httpClient *http.Client) fhirclient.Client {
 	return fhirclient.New(fhirBaseURL, httpClient, coolfhir.Config())
 }
+
+func (s Service) handleBundle(httpRequest *http.Request) error {
+	var notification fhir.Bundle
+	if err := json.NewDecoder(httpRequest.Body).Decode(&notification); err != nil {
+		return coolfhir.BadRequest("failed to decode bundle: %w", err)
+	}
+	if coolfhir.IsBatchSearchBundle(&notification) {
+		return nil
+	}
+	if !coolfhir.IsSubscriptionNotification(&notification) {
+		return coolfhir.BadRequest("bundle type not supported: %s", notification.Type.String())
+	}
+	if err := s.handleNotification(httpRequest.Context(), (*coolfhir.SubscriptionNotification)(&notification)); err != nil {
+		return err
+	}
+	return nil
+}

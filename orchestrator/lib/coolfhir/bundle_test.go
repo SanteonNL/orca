@@ -618,3 +618,290 @@ func TestExecuteTransaction(t *testing.T) {
 		assert.Equal(t, fhir.Bundle{}, result)
 	})
 }
+
+func TestIsBatchSearchBundle(t *testing.T) {
+	tests := []struct {
+		name     string
+		bundle   *fhir.Bundle
+		expected bool
+	}{
+		{
+			name:     "nil bundle",
+			bundle:   nil,
+			expected: false,
+		},
+		{
+			name: "wrong bundle type - transaction",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeTransaction,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Patient/123",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "wrong bundle type - searchset",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeSearchset,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Patient/123",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "correct bundle type with empty entries",
+			bundle: &fhir.Bundle{
+				Type:  fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{},
+			},
+			expected: true,
+		},
+		{
+			name: "single GET entry - valid batch search bundle",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Patient/123",
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "multiple GET entries - valid batch search bundle",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Patient/123",
+						},
+					},
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Observation?patient=123",
+						},
+					},
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Condition?patient=123",
+						},
+					},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "entry with nil request",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: nil,
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "single POST entry - invalid",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+							Url:    "Patient",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "single PUT entry - invalid",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPUT,
+							Url:    "Patient/123",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "single DELETE entry - invalid",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbDELETE,
+							Url:    "Patient/123",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "single PATCH entry - invalid",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPATCH,
+							Url:    "Patient/123",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "mixed GET and POST entries - invalid",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Patient/123",
+						},
+					},
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+							Url:    "Patient",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "mixed GET and PUT entries - invalid",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Patient/123",
+						},
+					},
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPUT,
+							Url:    "Patient/456",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "mixed GET and DELETE entries - invalid",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Patient/123",
+						},
+					},
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbDELETE,
+							Url:    "Patient/456",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "multiple non-GET entries - invalid",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPOST,
+							Url:    "Patient",
+						},
+					},
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbPUT,
+							Url:    "Patient/456",
+						},
+					},
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbDELETE,
+							Url:    "Patient/789",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+		{
+			name: "entry with nil request among valid GET entries",
+			bundle: &fhir.Bundle{
+				Type: fhir.BundleTypeBatch,
+				Entry: []fhir.BundleEntry{
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Patient/123",
+						},
+					},
+					{
+						Request: nil,
+					},
+					{
+						Request: &fhir.BundleEntryRequest{
+							Method: fhir.HTTPVerbGET,
+							Url:    "Observation?patient=123",
+						},
+					},
+				},
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := IsBatchSearchBundle(tt.bundle)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

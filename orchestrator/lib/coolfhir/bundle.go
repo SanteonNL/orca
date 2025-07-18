@@ -487,3 +487,18 @@ func NormalizeTransactionBundleResponseEntry(ctx context.Context, fhirClient fhi
 	}
 	return &resultEntry, nil
 }
+
+func IsBatchSearchBundle(bundle *fhir.Bundle) bool {
+	if bundle == nil || bundle.Type != fhir.BundleTypeBatch {
+		return false
+	}
+
+	// Ensure that all entries are of type GET
+	for _, entry := range bundle.Entry {
+		if entry.Request == nil || entry.Request.Method != fhir.HTTPVerbGET {
+			return false
+		}
+	}
+
+	return true
+}
