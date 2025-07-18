@@ -7,6 +7,7 @@ const TERMINOLOGY_SERVER_USERNAME = process.env.TERMINOLOGY_SERVER_USERNAME || '
 const TERMINOLOGY_SERVER_PASSWORD = process.env.TERMINOLOGY_SERVER_PASSWORD || '';
 const tokenMutex = new Mutex();
 
+
 const cache = new Map<string, { body: any, expiration: Date }>();
 
 /**
@@ -30,6 +31,12 @@ export async function GET(req: NextRequest) {
     } catch (error) {
         return NextResponse.json({ error: "Failed to proxy ValueSet" }, { status: 500 });
     }
+}
+
+export const resetCache = () => {
+    cache.clear();
+    terminologyToken = '';
+    terminologyTokenExpiration = new Date(0);
 }
 
 // Helper function to get cached response
