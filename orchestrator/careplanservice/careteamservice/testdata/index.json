@@ -1,0 +1,37 @@
+[
+  {
+    "key": "001",
+    "name": "Empty CarePlan, new Task with status 'requested'",
+    "description": "Empty CarePlan, new Task with status 'requested'. Leads to CareTeam with requesting organization."
+  },
+  {
+    "key": "002",
+    "name": "Task is accepted",
+    "description": "CarePlan with 1 Task, which is updated to status 'accepted'. Leads to CareTeam with requesting and owning organization."
+  },
+  {
+    "key": "003",
+    "name": "Task is rejected (filler not part of CareTeam)",
+    "description": "Empty CarePlan, Task changed status from 'requested' to 'rejected'. Leads to CareTeam with only the requesting organization."
+  },
+  {
+    "key": "004",
+    "name": "Task.status=rejected (filler part of CareTeam due to existing Task)",
+    "description": "CarePlan with 1 accepted Task, then a second Task comes in which is rejected. Leads to CareTeam with requesting and owning organization. The CareTeam participant.Period should not be updated."
+  },
+  {
+    "key": "005",
+    "name": "Task.status=completed (no other active Tasks)",
+    "description": "The only Task of a participant is completed, leading to Period.end to be set."
+  },
+  {
+    "key": "006",
+    "name": "Task.status=received (no other active Tasks)",
+    "description": "The only Task of a participant is rejected, Task.owner shouldn't be in CareTeam."
+  },
+  {
+    "key": "007",
+    "name": "Task.status=completed, but it's a subtask",
+    "description": "A subtask is completed (e.g. Questionnaire required by Task Filler to accept the primary Task). The CareTeam should not be updated for subtask updates."
+  }
+]

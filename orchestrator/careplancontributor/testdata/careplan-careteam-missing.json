@@ -1,0 +1,42 @@
+{
+  "resourceType": "CarePlan",
+  "id": "cps-careplan-01",
+  "meta": {
+    "versionId": "2",
+    "lastUpdated": "2024-09-18T09:46:40.978+00:00",
+    "source": "#wQpGfE5pFgBIwjfo",
+    "profile": [ "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPCareplan" ]
+  },
+  "status": "active",
+  "intent": "order",
+  "category": [ {
+    "coding": [ {
+      "system": "http://snomed.info/sct",
+      "code": "135411000146103",
+      "display": "Multidisciplinary care regime"
+    } ]
+  } ],
+  "subject": {
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+      "value": "111222333"
+    }
+  },
+  "author": {
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/uzi",
+      "value": "UZI-1"
+    }
+  },
+  "careTeam": [ {
+    "reference": "CareTeam/cps-careteam-01"
+  } ],
+  "addresses": [ {
+    "reference": "Condition/2.16.528.1.1007.3.3.21514.ehr.diagnoses-56476575765"
+  } ],
+  "activity": [ {
+    "reference": {
+      "reference": "Task/cps-task-01"
+    }
+  } ]
+}

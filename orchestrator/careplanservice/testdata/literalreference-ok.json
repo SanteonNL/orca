@@ -1,0 +1,62 @@
+{
+  "resourceType": "Task",
+  "id": "cps-task-01",
+  "meta": {
+    "versionId": "1",
+    "profile": [
+      "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
+    ]
+  },
+  "text": {
+    "status": "generated",
+    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p class=\"res-header-id\"><b>Generated Narrative: Task cps-task-01</b></p><a name=\"cps-task-01\"> </a><a name=\"hccps-task-01\"> </a><a name=\"cps-task-01-en-US\"> </a><div style=\"display: inline-block; background-color: #d9e0e7; padding: 6px; margin: 4px; border: 1px solid #8da1b4; border-radius: 5px; line-height: 60%\"><p style=\"margin-bottom: 0px\">version: 1</p><p style=\"margin-bottom: 0px\">Profile: <a href=\"StructureDefinition-SCPTask.html\">Shared Care Planning: Task Profile</a></p></div><p><b>status</b>: Requested</p><p><b>intent</b>: order</p><p><b>code</b>: <span title=\"Codes:{http://hl7.org/fhir/CodeSystem/task-code fullfill}\">fullfill</span></p><p><b>focus</b>: <a href=\"Bundle-cps-bundle-01.html#urn-uuid-cps-servicerequest-telemonitoring\">Bundle: type = transaction</a></p><p><b>for</b>: <a href=\"Bundle-cps-bundle-01.html#urn-uuid-cps-patient-patrick\">Bundle: type = transaction</a></p><p><b>requester</b>: Identifier: <code>http://fhir.nl/fhir/NamingSystem/uzi</code>/UZI-1</p><p><b>owner</b>: Identifier: <code>http://fhir.nl/fhir/NamingSystem/ura</code>/URA-2</p><p><b>reasonCode</b>: <span title=\"Codes:{http://snomed.info/sct 195111005}\">Hartfalen</span></p></div>"
+  },
+  "status": "requested",
+  "intent": "order",
+  "code": {
+    "coding": [
+      {
+        "system": "http://hl7.org/fhir/CodeSystem/task-code",
+        "code": "fullfill"
+      }
+    ]
+  },
+  "focus": {
+    "reference": "urn:uuid:cps-servicerequest-telemonitoring"
+  },
+  "for": {
+    "reference": "https://example.com/fhir/Patient/1"
+  },
+  "partOf": [
+    {
+      "reference": "https://example.com/fhir/CarePlan/1"
+    },
+    {
+      "reference": "https://example.com/fhir/CarePlan/2"
+    },
+    {
+      "reference": "CarePlan/3"
+    }
+  ],
+  "requester": {
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/uzi",
+      "value": "UZI-1"
+    }
+  },
+  "owner": {
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "URA-2"
+    }
+  },
+  "reasonCode": {
+    "coding": [
+      {
+        "system": "http://snomed.info/sct",
+        "code": "195111005",
+        "display": "Hartfalen"
+      }
+    ]
+  }
+}

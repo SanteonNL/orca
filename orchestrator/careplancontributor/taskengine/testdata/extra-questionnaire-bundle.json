@@ -1,0 +1,132 @@
+{
+  "resourceType": "Bundle",
+  "id": "zbj-bundle-questionnaires-copd",
+  "type": "batch",
+  "entry": [
+    {
+      "resource": {
+        "date": "2024-09-02T13:40:17Z",
+        "effectivePeriod": {
+          "start": "2024-09-02T13:40:17Z"
+        },
+        "experimental": false,
+        "id": "questionnaire-copd",
+        "identifier": [
+          {
+            "system": "urn:ietf:rfc:3986",
+            "value": "urn:oid:2.16.840.1.113883.2.4.3.11.60.909.26.34-1"
+          }
+        ],
+        "useContext": [
+          {
+            "code": {
+              "code": "task",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "OE",
+                  "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+                  "display": "order entry task"
+                }
+              ]
+            }
+          },
+          {
+            "code": {
+              "code": "focus",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "719858009",
+                  "system": "http://snomed.info/sct",
+                  "display": "monitoren via telegeneeskunde (regime/therapie)"
+                }
+              ]
+            }
+          },
+          {
+            "code": {
+              "code": "focus",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "13645005",
+                  "system": "http://snomed.info/sct",
+                  "display": "COPD (aandoening)"
+                }
+              ]
+            }
+          }
+        ],
+        "item": [
+          {
+            "linkId": "2.16.840.1.113883.2.4.3.11.60.909.2.2.2208",
+            "readOnly": false,
+            "repeats": false,
+            "required": true,
+            "text": "Patient heeft smartphone",
+            "type": "boolean"
+          },
+          {
+            "linkId": "2.16.840.1.113883.2.4.3.11.60.909.2.2.2209",
+            "readOnly": false,
+            "repeats": false,
+            "required": true,
+            "text": "Patient of mantelzorger leest e-mail op smartphone",
+            "type": "boolean"
+          },
+          {
+            "linkId": "2.16.840.1.113883.2.4.3.11.60.909.2.2.2210",
+            "readOnly": false,
+            "repeats": false,
+            "required": true,
+            "text": "Patient of mantelzorger kan apps installeren op smartphone",
+            "type": "boolean"
+          },
+          {
+            "linkId": "2.16.840.1.113883.2.4.3.11.60.909.2.2.2211",
+            "readOnly": false,
+            "repeats": false,
+            "required": true,
+            "text": "Patient of mantelzorger is Nederlandse taal machtig",
+            "type": "boolean"
+          },
+          {
+            "linkId": "2.16.840.1.113883.2.4.3.11.60.909.2.2.2212",
+            "readOnly": false,
+            "repeats": false,
+            "required": true,
+            "text": "Patient beschikt over een weegschaal of bloeddrukmeter (of gaat deze aanschaffen)",
+            "type": "boolean"
+          }
+        ],
+        "language": "nl-NL",
+        "meta": {
+          "source": "http://decor.nictiz.nl/fhir/4.0/sansa-",
+          "tag": [
+            {
+              "code": "4.0.1",
+              "system": "http://hl7.org/fhir/FHIR-version"
+            }
+          ]
+        },
+        "name": "Telemonitoring - enrollment criteria",
+        "publisher": "Medical Service Centre",
+        "resourceType": "Questionnaire",
+        "status": "active",
+        "title": "Telemonitoring - enrollment criteria",
+        "url": "http://decor.nictiz.nl/fhir/Questionnaire/2.16.840.1.113883.2.4.3.11.60.909.26.34-1--20240902134017"
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Questionnaire?identifier=urn:uuid:copd"
+      }
+    }
+  ]
+}

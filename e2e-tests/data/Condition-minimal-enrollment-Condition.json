@@ -1,0 +1,33 @@
+{
+  "resourceType" : "Condition",
+  "id" : "minimal-enrollment-Condition",
+  "meta" : {
+    "profile" : ["http://nictiz.nl/fhir/StructureDefinition/nl-core-Problem"]
+  },
+  "text" : {
+    "status" : "generated",
+    "div" : "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p><b>Generated Narrative: Condition </b><a name=\"minimal-enrollment-Condition\"> </a><a name=\"hcminimal-enrollment-Condition\"> </a></p><div style=\"display: inline-block; background-color: #d9e0e7; padding: 6px; margin: 4px; border: 1px solid #8da1b4; border-radius: 5px; line-height: 60%\"><p style=\"margin-bottom: 0px\">ResourceCondition &quot;minimal-enrollment-Condition&quot; </p><p style=\"margin-bottom: 0px\">Profile: <a href=\"https://simplifier.net/resolve?scope=nictiz.fhir.nl.r4.nl-core@0.10.0-beta.1&amp;canonical=http://nictiz.nl/fhir/StructureDefinition/nl-core-Problem\">nl core Problem</a></p></div><p><b>category</b>: Interpretatie van diagnose <span style=\"background: LightGoldenRodYellow; margin: 4px; border: 1px solid khaki\"> (<a href=\"https://browser.ihtsdotools.org/\">SNOMED CT</a>#282291009)</span></p><p><b>code</b>: Hartfalen <span style=\"background: LightGoldenRodYellow; margin: 4px; border: 1px solid khaki\"> (<a href=\"https://browser.ihtsdotools.org/\">SNOMED CT</a>#195111005)</span></p><p><b>subject</b>: <a href=\"Patient-minimal-enrollment-Patient.html\">Patient/minimal-enrollment-Patient: Patient, Jean Jacques van Putten-van der Giessen</a> &quot; VAN PUTTEN-VAN DER GIESSEN&quot;</p><p><b>note</b>: Hier een zinnige tekst over de diagnose Hartfalen</p></div>"
+  },
+  "category" : [{
+    "coding" : [{
+      "system" : "http://snomed.info/sct",
+      "code" : "282291009",
+      "display" : "Interpretatie van diagnose"
+    }]
+  }],
+  "code" : {
+    "coding" : [{
+      "system" : "http://snomed.info/sct",
+      "code" : "195111005",
+      "display" : "Hartfalen"
+    }]
+  },
+  "subject" : {
+    "reference" : "Patient/minimal-enrollment-Patient",
+    "type" : "Patient",
+    "display" : "Patient, Jean Jacques van Putten-van der Giessen"
+  },
+  "note" : [{
+    "text" : "Hier een zinnige tekst over de diagnose Hartfalen"
+  }]
+}

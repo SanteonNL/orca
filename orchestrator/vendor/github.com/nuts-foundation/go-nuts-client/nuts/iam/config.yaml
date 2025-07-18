@@ -1,0 +1,6 @@
+package: iam
+generate:
+  models: true
+  client: true
+import-mapping:
+  "../common/ssi_types.yaml": "github.com/nuts-foundation/go-nuts-client/nuts/common"

@@ -1,0 +1,12 @@
+package: common
+generate:
+  models: true
+output-options:
+  skip-prune: true
+  exclude-schemas:
+    - DID
+    - DIDDocument
+    - PresentationDefinition
+    - PresentationSubmission
+    - VerifiablePresentation
+    - VerifiableCredential

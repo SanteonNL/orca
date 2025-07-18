@@ -1,0 +1,78 @@
+{
+  "resourceType": "Bundle",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "CarePlan",
+        "id": "1",
+        "contained": [
+          {
+            "resourceType": "CareTeam",
+            "id": "contained-careteam-10",
+            "participant": [
+              {
+                "member": {
+                  "type": "Organization",
+                  "identifier": {
+                    "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                    "value": "1"
+                  }
+                },
+                "period": {
+                  "start": "1999-01-01T00:00:00Z"
+                }
+              },
+              {
+                "member": {
+                  "type": "Organization",
+                  "identifier": {
+                    "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                    "value": "2"
+                  }
+                },
+                "period": {
+                  "start": "1999-01-01T00:00:00Z"
+                }
+              }
+            ]
+          }
+        ],
+        "activity": [
+          {
+            "reference": {
+              "reference": "Task/1",
+              "type": "Task"
+            }
+          }
+        ],
+        "careTeam": [
+          {
+            "type": "CareTeam",
+            "reference": "#contained-careteam-10"
+          }
+        ]
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Task",
+        "id": "1",
+        "status": "accepted",
+        "requester": {
+          "type": "Organization",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "1"
+          }
+        },
+        "owner": {
+          "type": "Organization",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "2"
+          }
+        }
+      }
+    }
+  ]
+}

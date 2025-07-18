@@ -1,0 +1,878 @@
+{
+  "resourceType": "Bundle",
+  "id": "zbj-bundle-questionnaires",
+  "type": "batch",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Questionnaire",
+        "id": "zbj-telemonitoring-heartfailure-enrollment",
+        "meta": {
+          "tag": [
+            {
+              "code": "4.0.1",
+              "system": "http://hl7.org/fhir/FHIR-version"
+            }
+          ]
+        },
+        "language": "nl-NL",
+        "title": "Vragenlijst voor aanmelding van patienten met hartfalen voor telemonitoring",
+        "url": "https://zorgbijjou.github.io/scp-homemonitoring/Questionnaire-zbj-telemonitoring-heartfailure-enrollment|0.4",
+        "identifier": [
+          {
+            "system": "urn:ietf:rfc:3986",
+            "value": "urn:uuid:ca893f5c-2868-4349-bc0f-66f67d4ab3a2"
+          }
+        ],
+        "status": "active",
+        "publisher": "Zorg bij jou B.V.",
+        "contact": [
+          {
+            "telecom": [
+              {
+                "system": "url",
+                "value": "https://zorgbijjou.nl"
+              }
+            ]
+          }
+        ],
+        "experimental": false,
+        "date": "2024-12-11",
+        "effectivePeriod": {
+          "start": "2024-12-11"
+        },
+        "useContext": [
+          {
+            "code": {
+              "code": "task",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "OE",
+                  "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+                  "display": "order entry task"
+                }
+              ]
+            }
+          },
+          {
+            "code": {
+              "code": "focus",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "719858009",
+                  "system": "http://snomed.info/sct",
+                  "display": "monitoren via telegeneeskunde (regime/therapie)"
+                }
+              ]
+            }
+          },
+          {
+            "code": {
+              "code": "focus",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "84114007",
+                  "system": "http://snomed.info/sct",
+                  "display": "hartfalen (aandoening)"
+                }
+              ]
+            }
+          },
+          {
+            "code": {
+              "code": "focus",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "879780004",
+                  "system": "http://snomed.info/sct",
+                  "display": "monitoren van chronisch hartfalen via telegeneeskunde (regime/therapie)"
+                }
+              ]
+            }
+          }
+        ],
+        "item": [
+          {
+            "linkId": "5c167c2d-f518-4bc1-adb7-ea06bc789a36",
+            "text": "Zorgpad",
+            "code": [
+              {
+                "code": "64572001",
+                "system": "http://snomed.info/sct",
+                "display": "aandoening"
+              }
+            ],
+            "type": "choice",
+            "readOnly": true,
+            "answerOption": [
+              {
+                "valueCoding": {
+                  "code": "84114007",
+                  "system": "http://snomed.info/sct",
+                  "display": "Hartfalen"
+                },
+                "initialSelected": true
+              }
+            ]
+          },
+          {
+            "linkId": "245f3b7e-47d2-4b78-b751-fb04f38b17b9",
+            "text": "Meetprotocol",
+            "code": [
+              {
+                "code": "362981000",
+                "system": "http://snomed.info/sct",
+                "display": "kwalificatiewaarde"
+              }
+            ],
+            "type": "choice",
+            "required": true,
+            "answerOption": [
+              {
+                "valueCoding": {
+                  "code": "255299009",
+                  "system": "http://snomed.info/sct",
+                  "display": "Instabiel"
+                }
+              },
+              {
+                "valueCoding": {
+                  "code": "58158008",
+                  "system": "http://snomed.info/sct",
+                  "display": "Stabiel"
+                }
+              }
+            ]
+          },
+          {
+            "linkId": "2f505566-ac92-4347-8731-840e6bc84851",
+            "type": "group",
+            "enableWhen": [
+              {
+                "question": "245f3b7e-47d2-4b78-b751-fb04f38b17b9",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "255299009",
+                  "system": "http://snomed.info/sct"
+                }
+              }
+            ],
+            "item": [
+              {
+                "linkId": "e0163609-a771-44c8-88e0-1c3bbeff2028",
+                "text": "Selecteer titratie en/of recompensatie",
+                "type": "display",
+                "required": true
+              },
+              {
+                "linkId": "1b81f13b-923e-4fc8-b758-08b3f172b2de",
+                "text": "Titratie",
+                "code": [
+                  {
+                    "code": "713838004",
+                    "system": "http://snomed.info/sct",
+                    "display": "optimaliseren van medicatie"
+                  }
+                ],
+                "type": "choice",
+                "repeats": true,
+                "answerOption": [
+                  {
+                    "valueCoding": {
+                      "code": "373066001",
+                      "system": "http://snomed.info/sct",
+                      "display": "ja, titratie"
+                    }
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                    "valueCodeableConcept": {
+                      "coding": [
+                        {
+                          "code": "check-box",
+                          "system": "http://hl7.org/fhir/questionnaire-item-control"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "linkId": "dcba2829-32d8-4390-b1d4-32a5fefda539",
+                "text": "Recompensatie",
+                "code": [
+                  {
+                    "code": "308118002",
+                    "system": "http://snomed.info/sct",
+                    "display": "behandelen van hartfalen"
+                  }
+                ],
+                "type": "choice",
+                "repeats": true,
+                "answerOption": [
+                  {
+                    "valueCoding": {
+                      "code": "373066001",
+                      "system": "http://snomed.info/sct",
+                      "display": "ja, recompensatie"
+                    }
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                    "valueCodeableConcept": {
+                      "coding": [
+                        {
+                          "code": "check-box",
+                          "system": "http://hl7.org/fhir/questionnaire-item-control"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "linkId": "170292e5-3163-43b4-88af-affb3e4c27ab",
+            "type": "group",
+            "enableWhen": [
+              {
+                "question": "245f3b7e-47d2-4b78-b751-fb04f38b17b9",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "58158008",
+                  "system": "http://snomed.info/sct"
+                }
+              },
+              {
+                "question": "1b81f13b-923e-4fc8-b758-08b3f172b2de",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct"
+                }
+              },
+              {
+                "question": "dcba2829-32d8-4390-b1d4-32a5fefda539",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct"
+                }
+              }
+            ],
+            "enableBehavior": "any",
+            "item": [
+              {
+                "linkId": "4e973bcb-bbbb-4a9f-877b-fbf45ab94361",
+                "text": "Streefgewicht",
+                "required": true,
+                "type": "decimal",
+                "code": [
+                  {
+                    "code": "1078215008",
+                    "system": "http://snomed.info/sct",
+                    "display": "Target body weight"
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-unit",
+                    "valueCoding": {
+                      "code": "kg",
+                      "system": "http://unitsofmeasure.org",
+                      "display": "kg"
+                    }
+                  },
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+                    "valueString": "Streefgewicht '0.0'"
+                  }
+                ]
+              },
+              {
+                "linkId": "135aec2f-e410-4668-9a26-f745dc1789af",
+                "text": "Ziekenhuispatiënt",
+                "code": [
+                  {
+                    "code": "266938001",
+                    "system": "http://snomed.info/sct",
+                    "display": "ziekenhuispatiënt"
+                  }
+                ],
+                "type": "choice",
+                "repeats": true,
+                "answerOption": [
+                  {
+                    "valueCoding": {
+                      "code": "373066001",
+                      "system": "http://snomed.info/sct",
+                      "display": "ja, patiënt is opgenomen geweest"
+                    }
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                    "valueCodeableConcept": {
+                      "coding": [
+                        {
+                          "code": "check-box",
+                          "system": "http://hl7.org/fhir/questionnaire-item-control"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "linkId": "be4b671d-f91f-4fc3-a6d8-fcafa8e67161",
+                "text": "Notitie",
+                "code": [
+                  {
+                    "code": "11221000146107",
+                    "system": "http://snomed.info/sct",
+                    "display": "notitie (gegevensobject)"
+                  }
+                ],
+                "type": "text",
+                "repeats": false,
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+                    "valueString": "Notitie (optioneel)"
+                  }
+                ],
+                "item": [
+                  {
+                    "linkId": "c230b150-c66f-4892-b9f6-5fff067962ee",
+                    "text": "Voorbeelden: patiënt is slechthorend, patiënt wordt geholpen door mantelzorger.",
+                    "type": "display",
+                    "extension": [
+                      {
+                        "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-displayCategory",
+                        "valueCodeableConcept": {
+                          "coding": [
+                            {
+                              "code": "instructions",
+                              "system": "http://hl7.org/fhir/questionnaire-display-category"
+                            }
+                          ]
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "linkId": "2bc0b73f-506a-48a4-994d-fe355a5825f3",
+            "text": "Begeleiding bij onboarding",
+            "_text": {
+              "extension": [
+                {
+                  "url": "http://hl7.org/fhir/StructureDefinition/rendering-style",
+                  "valueString": "font-size: 1.25rem;"
+                }
+              ]
+            },
+            "type": "group",
+            "enableWhen": [
+              {
+                "question": "245f3b7e-47d2-4b78-b751-fb04f38b17b9",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "58158008",
+                  "system": "http://snomed.info/sct"
+                }
+              },
+              {
+                "question": "1b81f13b-923e-4fc8-b758-08b3f172b2de",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct"
+                }
+              },
+              {
+                "question": "dcba2829-32d8-4390-b1d4-32a5fefda539",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct"
+                }
+              }
+            ],
+            "enableBehavior": "any",
+            "item": [
+              {
+                "linkId": "295a22d7-d0ff-4546-b2a0-ce46beeba086",
+                "text": "Moeite met apps",
+                "code": [
+                  {
+                    "code": "761731000000100",
+                    "system": "http://snomed.info/sct",
+                    "display": "moeite met gebruiken van personal computer"
+                  }
+                ],
+                "type": "choice",
+                "repeats": true,
+                "answerOption": [
+                  {
+                    "valueCoding": {
+                      "code": "373066001",
+                      "system": "http://snomed.info/sct",
+                      "display": "ja, patiënt heeft hulp nodig bij het downloaden en inloggen in de app"
+                    }
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                    "valueCodeableConcept": {
+                      "coding": [
+                        {
+                          "code": "check-box",
+                          "system": "http://hl7.org/fhir/questionnaire-item-control"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Questionnaire?identifier=urn:uuid:ca893f5c-2868-4349-bc0f-66f67d4ab3a2"
+      }
+    },
+    {
+      "resource": {
+        "resourceType": "Questionnaire",
+        "id": "zbj-telemonitoring-asthma-enrollment",
+        "meta": {
+          "tag": [
+            {
+              "code": "4.0.1",
+              "system": "http://hl7.org/fhir/FHIR-version"
+            }
+          ]
+        },
+        "language": "nl-NL",
+        "title": "Vragenlijst voor aanmelding van patienten met astma voor telemonitoring",
+        "url": "https://zorgbijjou.github.io/scp-homemonitoring/Questionnaire-zbj-telemonitoring-asthma-enrollment|0.2",
+        "identifier": [
+          {
+            "system": "urn:ietf:rfc:3986",
+            "value": "urn:uuid:503d6f64-27af-4480-ad99-e357cea2decb"
+          }
+        ],
+        "status": "active",
+        "publisher": "Zorg bij jou B.V.",
+        "contact": [
+          {
+            "telecom": [
+              {
+                "system": "url",
+                "value": "https://zorgbijjou.nl"
+              }
+            ]
+          }
+        ],
+        "experimental": false,
+        "date": "2024-12-23",
+        "effectivePeriod": {
+          "start": "2024-12-23"
+        },
+        "useContext": [
+          {
+            "code": {
+              "code": "task",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "OE",
+                  "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+                  "display": "order entry task"
+                }
+              ]
+            }
+          },
+          {
+            "code": {
+              "code": "focus",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "719858009",
+                  "system": "http://snomed.info/sct",
+                  "display": "monitoren via telegeneeskunde (regime/therapie)"
+                }
+              ]
+            }
+          },
+          {
+            "code": {
+              "code": "focus",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "195967001",
+                  "system": "http://snomed.info/sct",
+                  "display": "astma (aandoening)"
+                }
+              ]
+            }
+          },
+          {
+            "code": {
+              "code": "focus",
+              "system": "http://terminology.hl7.org/CodeSystem/usage-context-type"
+            },
+            "valueCodeableConcept": {
+              "coding": [
+                {
+                  "code": "715191006",
+                  "system": "http://snomed.info/sct",
+                  "display": "monitoren van astma via e-health (regime/therapie)"
+                }
+              ]
+            }
+          }
+        ],
+        "item": [
+          {
+            "linkId": "2302252c-9360-4a96-a75e-e04f84952af8",
+            "text": "Zorgpad",
+            "code": [
+              {
+                "code": "64572001",
+                "system": "http://snomed.info/sct",
+                "display": "aandoening"
+              }
+            ],
+            "type": "choice",
+            "readOnly": true,
+            "answerOption": [
+              {
+                "valueCoding": {
+                  "code": "195967001",
+                  "system": "http://snomed.info/sct",
+                  "display": "Astma"
+                },
+                "initialSelected": true
+              }
+            ]
+          },
+          {
+            "linkId": "da65ffd8-fb90-4918-becf-dfe0439577d8",
+            "text": "Instel / titratiefase",
+            "code": [
+              {
+                "code": "713838004",
+                "system": "http://snomed.info/sct",
+                "display": "optimaliseren van medicatie"
+              }
+            ],
+            "type": "choice",
+            "required": true,
+            "answerOption": [
+              {
+                "valueCoding": {
+                  "code": "373066001",
+                  "system": "http://snomed.info/sct",
+                  "display": "ja, instel / titratiefase"
+                },
+                "initialSelected": true
+              },
+              {
+                "valueCoding": {
+                  "code": "373067005",
+                  "system": "http://snomed.info/sct",
+                  "display": "nee, bestaande patient"
+                }
+              }
+            ],
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "code": "radio-button",
+                      "system": "http://hl7.org/fhir/questionnaire-item-control"
+                    }
+                  ]
+                }
+              },
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                "valueCode": "horizontal"
+              }
+            ]
+          },
+          {
+            "linkId": "4b2e2ce0-37c5-4240-a733-872836382c5b",
+            "type": "group",
+            "enableWhen": [
+              {
+                "question": "da65ffd8-fb90-4918-becf-dfe0439577d8",
+                "operator": "=",
+                "answerCoding": {
+                  "code": "373067005",
+                  "system": "http://snomed.info/sct"
+                }
+              }
+            ],
+            "item": [
+              {
+                "linkId": "6635f5c1-8ed0-44ad-ad3d-8f763b9ca123",
+                "text": "Biologicals",
+                "code": [
+                  {
+                    "code": "76334006",
+                    "system": "http://snomed.info/sct",
+                    "display": "immunotherapie"
+                  }
+                ],
+                "type": "choice",
+                "repeats": true,
+                "answerOption": [
+                  {
+                    "valueCoding": {
+                      "code": "373066001",
+                      "system": "http://snomed.info/sct",
+                      "display": "ja, biologicals"
+                    }
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                    "valueCodeableConcept": {
+                      "coding": [
+                        {
+                          "code": "check-box",
+                          "system": "http://hl7.org/fhir/questionnaire-item-control"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              },
+              {
+                "linkId": "fd9da7fd-aab7-4dc4-8ca5-6b70c1c671df",
+                "text": "Frequentie",
+                "code": [
+                  {
+                    "code": "307459002",
+                    "system": "http://snomed.info/sct",
+                    "display": "frequentie interval"
+                  }
+                ],
+                "type": "choice",
+                "answerOption": [
+                  {
+                    "valueCoding": {
+                      "code": "14497002",
+                      "system": "http://snomed.info/sct",
+                      "display": "wekelijks"
+                    }
+                  },
+                  {
+                    "valueCoding": {
+                      "code": "89185003",
+                      "system": "http://snomed.info/sct",
+                      "display": "maandelijks"
+                    }
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                    "valueCodeableConcept": {
+                      "coding": [
+                        {
+                          "code": "radio-button",
+                          "system": "http://hl7.org/fhir/questionnaire-item-control"
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-choiceOrientation",
+                    "valueCode": "horizontal"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "linkId": "7cc84231-040b-49b4-beff-64ca901f776c",
+            "type": "group",
+            "item": [
+              {
+                "linkId": "2c1136b1-6f99-444a-b3d3-c0a2521091dd",
+                "text": "Long aanval actie plan",
+                "code": [
+                  {
+                    "code": "80796-6",
+                    "system": "http://loinc.org",
+                    "display": "behandelplan longaandoening notitie (document)"
+                  }
+                ],
+                "required": true,
+                "type": "text",
+                "repeats": false,
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+                    "valueString": "Plak hier het LAAP uit het EPD"
+                  }
+                ]
+              },
+              {
+                "linkId": "90770491-49f9-4e2e-b629-046fe98f1716",
+                "text": "Asthma Control Questionnaire score",
+                "code": [
+                  {
+                    "code": "763077003",
+                    "system": "http://snomed.info/sct",
+                    "display": "Asthma Control Questionnaire score"
+                  }
+                ],
+                "required": true,
+                "type": "decimal",
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+                    "valueString": "ACQ '0.0'"
+                  }
+                ]
+              },
+              {
+                "linkId": "2c1136b1-6f99-444a-b3d3-c0a2521091dd",
+                "text": "Medicatie",
+                "code": [
+                  {
+                    "code": "410942007",
+                    "system": "http://snomed.info/sct",
+                    "display": "drug of geneesmiddel"
+                  }
+                ],
+                "required": true,
+                "type": "text",
+                "repeats": false,
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+                    "valueString": "Rescuemedicatie, onderhoudsmedicatie, ..."
+                  }
+                ]
+              },
+              {
+                "linkId": "c758a1da-4938-4f95-abf5-a2956761dcd4",
+                "text": "Notitie",
+                "code": [
+                  {
+                    "code": "11221000146107",
+                    "system": "http://snomed.info/sct",
+                    "display": "notitie (gegevensobject)"
+                  }
+                ],
+                "type": "text",
+                "repeats": false,
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/entryFormat",
+                    "valueString": "Notitie (optioneel)"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "linkId": "ec55071b-b4b0-44c9-927c-9df3b9508afc",
+            "text": "Begeleiding bij onboarding",
+            "_text": {
+              "extension": [
+                {
+                  "url": "http://hl7.org/fhir/StructureDefinition/rendering-style",
+                  "valueString": "font-size: 1.25rem;"
+                }
+              ]
+            },
+            "type": "group",
+            "item": [
+              {
+                "linkId": "d1965bee-c1ca-408b-9085-ff748390d2d6",
+                "text": "Moeite met apps",
+                "code": [
+                  {
+                    "code": "761731000000100",
+                    "system": "http://snomed.info/sct",
+                    "display": "moeite met gebruiken van personal computer"
+                  }
+                ],
+                "type": "choice",
+                "repeats": true,
+                "answerOption": [
+                  {
+                    "valueCoding": {
+                      "code": "373066001",
+                      "system": "http://snomed.info/sct",
+                      "display": "ja, patiënt heeft hulp nodig bij het downloaden en inloggen in de app"
+                    }
+                  }
+                ],
+                "extension": [
+                  {
+                    "url": "http://hl7.org/fhir/StructureDefinition/questionnaire-itemControl",
+                    "valueCodeableConcept": {
+                      "coding": [
+                        {
+                          "code": "check-box",
+                          "system": "http://hl7.org/fhir/questionnaire-item-control"
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "Questionnaire?identifier=urn:uuid:503d6f64-27af-4480-ad99-e357cea2decb"
+      }
+    }
+  ]
+}

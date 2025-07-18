@@ -1,0 +1,41 @@
+Hosting port: 7080
+Connect via browser: https://hr15f79n-7080.euw.devtunnels.ms
+Inspect network activity: https://hr15f79n-7080-inspect.euw.devtunnels.ms
+
+Ready to accept connections for tunnel: quick-chair-dvspkjg.euw
+ClientSSH: Microsoft.DevTunnels.Ssh.SshConnectionException: Connection lost.
+Reason: ConnectionLost
+ ---> Microsoft.DevTunnels.Ssh.SshConnectionException: Session is disconnected.
+Reason: ConnectionLost
+   at Microsoft.DevTunnels.Ssh.SshSession.SendMessageAsync(SshMessage message, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.SshChannel.SendAsync(Buffer data, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.SshStream.WriteAsync(Byte[] buffer, Int32 offset, Int32 count, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.IO.SshProtocol.WriteAsync(Buffer data, Boolean flush, CancellationToken cancellation)
+   --- End of inner exception stack trace ---
+   at Microsoft.DevTunnels.Ssh.IO.SshProtocol.WriteAsync(Buffer data, Boolean flush, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.IO.SshProtocol.SendMessageAsync(SshMessage message, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.SshSession.TrySendDisconnectMessageAsync(DisconnectMessage message)
+ClientSSH: Microsoft.DevTunnels.Ssh.SshConnectionException: Connection lost.
+Reason: ConnectionLost
+ ---> Microsoft.DevTunnels.Ssh.SshConnectionException: Session is disconnected.
+Reason: ConnectionLost
+   at Microsoft.DevTunnels.Ssh.SshSession.SendMessageAsync(SshMessage message, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.SshChannel.SendAsync(Buffer data, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.SshStream.WriteAsync(Byte[] buffer, Int32 offset, Int32 count, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.IO.SshProtocol.WriteAsync(Buffer data, Boolean flush, CancellationToken cancellation)
+   --- End of inner exception stack trace ---
+   at Microsoft.DevTunnels.Ssh.IO.SshProtocol.WriteAsync(Buffer data, Boolean flush, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.IO.SshProtocol.SendMessageAsync(SshMessage message, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.SshSession.TrySendDisconnectMessageAsync(DisconnectMessage message)
+ClientSSH: Microsoft.DevTunnels.Ssh.SshConnectionException: Connection lost.
+Reason: ConnectionLost
+ ---> Microsoft.DevTunnels.Ssh.SshConnectionException: Session is disconnected.
+Reason: ConnectionLost
+   at Microsoft.DevTunnels.Ssh.SshSession.SendMessageAsync(SshMessage message, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.SshChannel.SendAsync(Buffer data, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.SshStream.WriteAsync(Byte[] buffer, Int32 offset, Int32 count, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.IO.SshProtocol.WriteAsync(Buffer data, Boolean flush, CancellationToken cancellation)
+   --- End of inner exception stack trace ---
+   at Microsoft.DevTunnels.Ssh.IO.SshProtocol.WriteAsync(Buffer data, Boolean flush, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.IO.SshProtocol.SendMessageAsync(SshMessage message, CancellationToken cancellation)
+   at Microsoft.DevTunnels.Ssh.SshSession.TrySendDisconnectMessageAsync(DisconnectMessage message)

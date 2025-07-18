@@ -1,0 +1,664 @@
+{
+  "resourceType": "Bundle",
+  "id": "9f99b0b0-4b4b-4007-a5bd-06cfdc6580f7",
+  "meta": {
+    "lastUpdated": "2025-06-20T08:52:59.9447626+00:00"
+  },
+  "type": "searchset",
+  "link": [
+    {
+      "relation": "self",
+      "url": "https://zbjintzpfactcpswev2-zbjintzpfactcpswev2.fhir.azurehealthcareapis.com/Patient?identifier=http%3A%2F%2Ffhir.nl%2Ffhir%2FNamingSystem%2Fbsn%7C999990019"
+    }
+  ],
+  "entry": [
+    {
+      "fullUrl": "https://zbjintzpfactcpswev2-zbjintzpfactcpswev2.fhir.azurehealthcareapis.com/Patient/8c2bc60c-444f-4c32-baf4-ba1545afe164",
+      "resource": {
+        "resourceType": "Patient",
+        "id": "8c2bc60c-444f-4c32-baf4-ba1545afe164",
+        "meta": {
+          "versionId": "1",
+          "lastUpdated": "2025-06-19T14:11:08.708+00:00",
+          "profile": [
+            "http://fhir.nl/fhir/StructureDefinition/nl-core-patient"
+          ]
+        },
+        "text": {
+          "status": "generated",
+          "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><h3>Patient resource:</h3><ul><li><p><strong>Names:</strong></p><table><thead><tr><th>Name</th><th>Period</th><th>Preferred display order</th></tr></thead><tbody><tr><td>B (B.) XXX-Aansluittest-B</td><td></td><td>Eigen geslachtsnaam</td></tr></tbody></table></li><li><p><strong>Identification:</strong></p><table><thead><tr><th>System</th><th>Value</th></tr></thead><tbody><tr><td>http://fhir.nl/fhir/NamingSystem/bsn</td><td>999990019</td></tr><tr><td>urn:oid:2.16.840.1.113883.2.4.3.124.7.51851.4</td><td>000202912092831</td></tr></tbody></table></li><li><p><strong>Address:</strong></p><table><thead><tr><th>Address</th><th>Address type</th><th>Additional information</th><th>Period</th></tr></thead><tbody><tr><td>Knolweg 1000, 9999ZZ Stitswerd (Netherlands (the))</td><td>Home</td><td>Officieel adres</td><td></td></tr></tbody></table></li><li><p><strong>Contact information:</strong></p><table><thead><tr><th>System</th><th>Use</th><th>Additional information</th><th>Value</th></tr></thead><tbody><tr><td>Phone</td><td>Mobile</td><td>Mobiel telefoonnummer</td><td>&#x2B;31699888888</td></tr></tbody></table></li><li><p><strong>Gender:</strong> &#x27;Vrouw&#x27;</p></li><li><p><strong>Birthdate:</strong> &#x27;1950-02-02&#x27;</p></li><li><p><strong>Deceased:</strong> &#x27;No&#x27;</p></li><li><p><strong>General practitioner:</strong></p><table><thead><tr><th>Identifier</th><th>Display</th><th>Reference</th></tr></thead><tbody><tr><td></td><td>Onbekende Huisarts (tbv. Pati&#xEB;ntregistratie Nb: dit is g&#xE9;&#xE9;n geldige verwijzer / aanvrager)</td><td>D4FDB1EEEF8B0FFCB67CCF67858BC949103D6BB80A77798DA0296091139E3B59</td></tr></tbody></table></li></ul></div>"
+        },
+        "extension": [
+          {
+            "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+            "valueReference": {
+              "type": "Organization",
+              "identifier": {
+                "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                "value": "00020291"
+              }
+            }
+          }
+        ],
+        "identifier": [
+          {
+            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+            "value": "999990019"
+          },
+          {
+            "system": "urn:oid:2.16.840.1.113883.2.4.3.124.7.51851.4",
+            "value": "000202912092831"
+          }
+        ],
+        "name": [
+          {
+            "extension": [
+              {
+                "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                "valueCode": "NL1"
+              }
+            ],
+            "text": "B B. XXX-Aansluittest-B",
+            "family": "XXX-Aansluittest-B",
+            "given": [
+              "B",
+              "B."
+            ]
+          }
+        ],
+        "telecom": [
+          {
+            "extension": [
+              {
+                "url": "http://nictiz.nl/fhir/StructureDefinition/zib-ContactInformation-TelecomType",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "system": "http://hl7.org/fhir/v3/AddressUse",
+                      "code": "MC",
+                      "display": "Mobile Phone"
+                    }
+                  ],
+                  "text": "Mobiel telefoonnummer"
+                }
+              }
+            ],
+            "system": "phone",
+            "value": "+31699888888",
+            "use": "mobile"
+          }
+        ],
+        "gender": "female",
+        "birthDate": "1950-02-02",
+        "deceasedBoolean": false,
+        "address": [
+          {
+            "extension": [
+              {
+                "url": "http://nictiz.nl/fhir/StructureDefinition/zib-AddressInformation-AddressType",
+                "valueCodeableConcept": {
+                  "coding": [
+                    {
+                      "system": "http://hl7.org/fhir/v3/AddressUse",
+                      "code": "HP",
+                      "display": "Primary Home"
+                    }
+                  ],
+                  "text": "Officieel adres"
+                }
+              },
+              {
+                "url": "http://fhir.nl/fhir/StructureDefinition/nl-core-address-official",
+                "valueBoolean": true
+              }
+            ],
+            "use": "home",
+            "line": [
+              "Knolweg 1000"
+            ],
+            "city": "Stitswerd",
+            "postalCode": "9999ZZ",
+            "country": "Netherlands (the)"
+          }
+        ],
+        "generalPractitioner": [
+          {
+            "extension": [
+              {
+                "url": "http://nictiz.nl/fhir/StructureDefinition/practitionerrole-reference",
+                "valueReference": {
+                  "reference": "PractitionerRole/600F50696A2E6uni@zorgbijjou.nl",
+                  "use": "home"
+                }
+                ],
+                "gender": "female",
+                "birthDate": "1950-02-02",
+                "deceasedBoolean": false,
+                "address": [
+                  {
+                    "extension": [
+                      {
+                        "url": "http://nictiz.nl/fhir/StructureDefinition/zib-AddressInformation-AddressType",
+                        "valueCodeableConcept": {
+                          "coding": [
+                            {
+                              "system": "http://hl7.org/fhir/v3/AddressUse",
+                              "code": "HP",
+                              "display": "Primary Home"
+                            }
+                          ],
+                          "text": "Officieel adres"
+                        }
+                      },
+                      {
+                        "url": "http://fhir.nl/fhir/StructureDefinition/nl-core-address-official",
+                        "valueBoolean": true
+                      }
+                    ],
+                    "use": "home",
+                    "line": [
+                      "Knolweg 1000"
+                    ],
+                    "city": "Stitswerd",
+                    "postalCode": "9999ZZ",
+                    "country": "Netherlands (the)"
+                  }
+                ],
+                "maritalStatus": {
+                  "coding": [
+                    {
+                      "system": "http://hl7.org/fhir/v3/MaritalStatus",
+                      "code": "M",
+                      "display": "Married"
+                    }
+                  ],
+                  "text": "Gehuwd"
+                },
+                "contact": [
+                  {
+                    "relationship": [
+                      {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/v3/RoleCode",
+                            "code": "SONC",
+                            "display": "Son"
+                          }
+                        ],
+                        "text": "Zoon"
+                      },
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.2.4.3.11.22.472",
+                            "code": "1",
+                            "display": "Eerste relatie/contactpersoon"
+                          }
+                        ],
+                        "text": "Eerste relatie/contactpersoon"
+                      }
+                    ],
+                    "name": {
+                      "extension": [
+                        {
+                          "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                          "valueCode": "NL1"
+                        }
+                      ],
+                      "text": "P. Pietersen",
+                      "family": "Pietersen",
+                      "given": [
+                        "P."
+                      ]
+                    },
+                    "telecom": [
+                      {
+                        "extension": [
+                          {
+                            "url": "http://nictiz.nl/fhir/StructureDefinition/zib-ContactInformation-TelecomType",
+                            "valueCodeableConcept": {
+                              "coding": [
+                                {
+                                  "system": "http://hl7.org/fhir/v3/AddressUse",
+                                  "code": "MC",
+                                  "display": "Mobile Phone"
+                                }
+                              ],
+                              "text": "Mobiel telefoonnummer"
+                            }
+                          }
+                        ],
+                        "system": "phone",
+                        "value": "+31612345678",
+                        "use": "mobile"
+                      }
+                    ]
+                  },
+                  {
+                    "relationship": [
+                      {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/v3/RoleCode",
+                            "code": "DAUC",
+                            "display": "Daughter"
+                          }
+                        ],
+                        "text": "Dochter"
+                      },
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.2.4.3.11.22.472",
+                            "code": "2",
+                            "display": "Tweede relatie/contactpersoon"
+                          }
+                        ],
+                        "text": "Tweede relatie/contactpersoon"
+                      }
+                    ],
+                    "name": {
+                      "extension": [
+                        {
+                          "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                          "valueCode": "NL3"
+                        }
+                      ],
+                      "text": "Jansen Pietersen",
+                      "family": "Jansen Pietersen"
+                    },
+                    "telecom": [
+                      {
+                        "extension": [
+                          {
+                            "url": "http://nictiz.nl/fhir/StructureDefinition/zib-ContactInformation-TelecomType",
+                            "valueCodeableConcept": {
+                              "coding": [
+                                {
+                                  "system": "http://hl7.org/fhir/v3/AddressUse",
+                                  "code": "MC",
+                                  "display": "Mobile Phone"
+                                }
+                              ],
+                              "text": "Mobiel telefoonnummer"
+                            }
+                          }
+                        ],
+                        "system": "phone",
+                        "value": "+31698765432",
+                        "use": "mobile"
+                      }
+                    ]
+                  }
+                ],
+                "generalPractitioner": [
+                  {
+                    "extension": [
+                      {
+                        "url": "http://nictiz.nl/fhir/StructureDefinition/practitionerrole-reference",
+                        "valueReference": {
+                          "reference": "PractitionerRole/600F50696A2E66A3D37FFBEA064B0739161980F1B791A104F7D2405B8FE4F07C",
+                          "display": "primary care physician"
+                        }
+                      }
+                    ],
+                    "display": "Onbekende Huisarts (tbv. Patiëntregistratie Nb: dit is géén geldige verwijzer / aanvrager)"
+                  }
+                ]
+              },
+              "search": {
+                "mode": "match"
+              }
+              },
+              {
+                "fullUrl": "https://zbjintzpfactcpswev2-zbjintzpfactcpswev2.fhir.azurehealthcareapis.com/Patient/70735a29-95fd-4d56-9623-a15da7475a09",
+                "resource": {
+                  "resourceType": "Patient",
+                  "id": "70735a29-95fd-4d56-9623-a15da7475a09",
+                  "meta": {
+                    "versionId": "1",
+                    "lastUpdated": "2025-06-20T08:52:21.643+00:00",
+                    "profile": [
+                      "http://fhir.nl/fhir/StructureDefinition/nl-core-patient"
+                    ]
+                  },
+                  "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><h3>Patient resource:</h3><ul><li><p><strong>Names:</strong></p><table><thead><tr><th>Name</th><th>Period</th><th>Preferred display order</th></tr></thead><tbody><tr><td>B (B.) Test XXX-Aansluittest-B</td><td></td><td>Geslachtsnaam partner gevolgd door eigen geslachtsnaam</td></tr></tbody></table></li><li><p><strong>Identification:</strong></p><table><thead><tr><th>System</th><th>Value</th></tr></thead><tbody><tr><td>http://fhir.nl/fhir/NamingSystem/bsn</td><td>999990019</td></tr><tr><td>urn:oid:2.16.840.1.113883.2.4.3.124.7.51851.4</td><td>000202912092831</td></tr></tbody></table></li><li><p><strong>Address:</strong></p><table><thead><tr><th>Address</th><th>Address type</th><th>Additional information</th><th>Period</th></tr></thead><tbody><tr><td>Knolweg 1000, 9999ZZ Stitswerd (Netherlands (the))</td><td>Home</td><td>Officieel adres</td><td></td></tr></tbody></table></li><li><p><strong>Contact information:</strong></p><table><thead><tr><th>System</th><th>Use</th><th>Additional information</th><th>Value</th></tr></thead><tbody><tr><td>Phone</td><td>Mobile</td><td>Mobiel telefoonnummer</td><td>&#x2B;31699888888</td></tr><tr><td>Email</td><td>Home</td><td></td><td>j.spee&#x2B;qbrjuni@zorgbijjou.nl</td></tr></tbody></table></li><li><p><strong>Gender:</strong> &#x27;Vrouw&#x27;</p></li><li><p><strong>Birthdate:</strong> &#x27;1950-02-02&#x27;</p></li><li><p><strong>Deceased:</strong> &#x27;No&#x27;</p></li><li><p><strong>Marital status:</strong> &#x27;Gehuwd&#x27;</p></li><li><p><strong>Contact person:</strong></p><table><thead><tr><th>Name (Preferred display order)</th><th>Relationship</th><th>Contact information</th><th>Address</th></tr></thead><tbody><tr><td>(P.) Pietersen<br />(Eigen geslachtsnaam)</td><td>Zoon, Eerste relatie/contactpersoon</td><td>Phone (Mobile: Mobiel telefoonnummer): +31612345678</td><td></td></tr><tr><td>Jansen Pietersen<br />(Geslachtsnaam partner gevolgd door eigen geslachtsnaam)</td><td>Dochter, Tweede relatie/contactpersoon</td><td>Phone (Mobile: Mobiel telefoonnummer): +31698765432</td><td></td></tr></tbody></table></li><li><p><strong>General practitioner:</strong></p><table><thead><tr><th>Identifier</th><th>Display</th><th>Reference</th></tr></thead><tbody><tr><td></td><td>Onbekende Huisarts (tbv. Pati&#xEB;ntregistratie Nb: dit is g&#xE9;&#xE9;n geldige verwijzer / aanvrager)</td><td>D4FDB1EEEF8B0FFCB67CCF67858BC949103D6BB80A77798DA0296091139E3B59</td></tr></tbody></table></li></ul></div>"
+                  },
+                  "extension": [
+                    {
+                      "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+                      "valueReference": {
+                        "type": "Organization",
+                        "identifier": {
+                          "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                          "value": "00020291"
+                        }
+                      }
+                    }
+                  ],
+                  "identifier": [
+                    {
+                      "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+                      "value": "999990019"
+                    },
+                    {
+                      "system": "urn:oid:2.16.840.1.113883.2.4.3.124.7.51851.4",
+                      "value": "000202912092831"
+                    }
+                  ],
+                  "name": [
+                    {
+                      "extension": [
+                        {
+                          "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                          "valueCode": "NL3"
+                        }
+                      ],
+                      "text": "B B. Test XXX-Aansluittest-B",
+                      "family": "Test XXX-Aansluittest-B",
+                      "given": [
+                        "B",
+                        "B."
+                      ]
+                    }
+                  ],
+                  "telecom": [
+                    {
+                      "extension": [
+                        {
+                          "url": "http://nictiz.nl/fhir/StructureDefinition/zib-ContactInformation-TelecomType",
+                          "valueCodeableConcept": {
+                            "coding": [
+                              {
+                                "system": "http://hl7.org/fhir/v3/AddressUse",
+                                "code": "MC",
+                                "display": "Mobile Phone"
+                              }
+                            ],
+                            "text": "Mobiel telefoonnummer"
+                          }
+                        }
+                      ],
+                      "system": "phone",
+                      "value": "+31699888888",
+                      "use": "mobile"
+                    },
+                    {
+                      "system": "email",
+                      "value": "j.spee+qbrjuni@zorgbijjou.nl",
+                      "use": "home"
+                    }
+                  ],
+                  "gender": "female",
+                  "birthDate": "1950-02-02",
+                  "deceasedBoolean": false,
+                  "address": [
+                    {
+                      "extension": [
+                        {
+                          "url": "http://nictiz.nl/fhir/StructureDefinition/zib-AddressInformation-AddressType",
+                          "valueCodeableConcept": {
+                            "coding": [
+                              {
+                                "system": "http://hl7.org/fhir/v3/AddressUse",
+                                "code": "HP",
+                                "display": "Primary Home"
+                              }
+                            ],
+                            "text": "Offi6A3D37FFBEA064B0739161980F1B791A104F7D2405B8FE4F07C",
+                            "display": "primary care physician"
+                          }
+                        }
+                      ],
+                      "display": "Onbekende Huisarts (tbv. Patiëntregistratie Nb: dit is géén geldige verwijzer / aanvrager)"
+                    }
+                  ]
+                },
+                "search": {
+                  "mode": "match"
+                }
+              },
+              {
+                "fullUrl": "https://zbjintzpfactcpswev2-zbjintzpfactcpswev2.fhir.azurehealthcareapis.com/Patient/88b88a33-acf6-4f9d-bb89-e6f9139c9fb2",
+                "resource": {
+                  "resourceType": "Patient",
+                  "id": "88b88a33-acf6-4f9d-bb89-e6f9139c9fb2",
+                  "meta": {
+                    "versionId": "1",
+                    "lastUpdated": "2025-06-20T08:46:47.5+00:00",
+                    "profile": [
+                      "http://fhir.nl/fhir/StructureDefinition/nl-core-patient"
+                    ]
+                  },
+                  "text": {
+                    "status": "generated",
+                    "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><h3>Patient resource:</h3><ul><li><p><strong>Names:</strong></p><table><thead><tr><th>Name</th><th>Period</th><th>Preferred display order</th></tr></thead><tbody><tr><td>B (B.) Test XXX-Aansluittest-B</td><td></td><td>Geslachtsnaam partner gevolgd door eigen geslachtsnaam</td></tr></tbody></table></li><li><p><strong>Identification:</strong></p><table><thead><tr><th>System</th><th>Value</th></tr></thead><tbody><tr><td>http://fhir.nl/fhir/NamingSystem/bsn</td><td>999990019</td></tr><tr><td>urn:oid:2.16.840.1.113883.2.4.3.124.7.51851.4</td><td>000202912092831</td></tr></tbody></table></li><li><p><strong>Address:</strong></p><table><thead><tr><th>Address</th><th>Address type</th><th>Additional information</th><th>Period</th></tr></thead><tbody><tr><td>Knolweg 1000, 9999ZZ Stitswerd (Netherlands (the))</td><td>Home</td><td>Officieel adres</td><td></td></tr></tbody></table></li><li><p><strong>Contact information:</strong></p><table><thead><tr><th>System</th><th>Use</th><th>Additional information</th><th>Value</th></tr></thead><tbody><tr><td>Phone</td><td>Mobile</td><td>Mobiel telefoonnummer</td><td>&#x2B;31699888888</td></tr><tr><td>Email</td><td>Home</td><td></td><td>j.spee&#x2B;qbrjuni@zorgbijjou.nl</td></tr></tbody></table></li><li><p><strong>Gender:</strong> &#x27;Vrouw&#x27;</p></li><li><p><strong>Birthdate:</strong> &#x27;1950-02-02&#x27;</p></li><li><p><strong>Deceased:</strong> &#x27;No&#x27;</p></li><li><p><strong>Marital status:</strong> &#x27;Gehuwd&#x27;</p></li><li><p><strong>Contact person:</strong></p><table><thead><tr><th>Name (Preferred display order)</th><th>Relationship</th><th>Contact information</th><th>Address</th></tr></thead><tbody><tr><td>(P.) Pietersen<br />(Eigen geslachtsnaam)</td><td>Zoon, Eerste relatie/contactpersoon</td><td>Phone (Mobile: Mobiel telefoonnummer): +31612345678</td><td></td></tr><tr><td>Jansen Pietersen<br />(Geslachtsnaam partner gevolgd door eigen geslachtsnaam)</td><td>Dochter, Tweede relatie/contactpersoon</td><td>Phone (Mobile: Mobiel telefoonnummer): +31698765432</td><td></td></tr></tbody></table></li><li><p><strong>General practitioner:</strong></p><table><thead><tr><th>Identifier</th><th>Display</th><th>Reference</th></tr></thead><tbody><tr><td></td><td>Onbekende Huisarts (tbv. Pati&#xEB;ntregistratie Nb: dit is g&#xE9;&#xE9;n geldige verwijzer / aanvrager)</td><td>D4FDB1EEEF8B0FFCB67CCF67858BC949103D6BB80A77798DA0296091139E3B59</td></tr></tbody></table></li></ul></div>"
+                  },
+                  "extension": [
+                    {
+                      "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+                      "valueReference": {
+                        "type": "Organization",
+                        "identifier": {
+                          "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                          "value": "00020291"
+                        }
+                      }
+                    }
+                  ],
+                  "identifier": [
+                    {
+                      "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+                      "value": "999990019"
+                    },
+                    {
+                      "system": "urn:oid:2.16.840.1.113883.2.4.3.124.7.51851.4",
+                      "value": "000202912092831"
+                    }
+                  ],
+                  "name": [
+                    {
+                      "extension": [
+                        {
+                          "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                          "valueCode": "NL3"
+                        }
+                      ],
+                      "text": "B B. Test XXX-Aansluittest-B",
+                      "family": "Test XXX-Aansluittest-B",
+                      "given": [
+                        "B",
+                        "B."
+                      ]
+                    }
+                  ],
+                  "telecom": [
+                    {
+                      "extension": [
+                        {
+                          "url": "http://nictiz.nl/fhir/StructureDefinition/zib-ContactInformation-TelecomType",
+                          "valueCodeableConcept": {
+                            "coding": [
+                              {
+                                "system": "http://hl7.org/fhir/v3/AddressUse",
+                                "code": "MC",
+                                "display": "Mobile Phone"
+                              }
+                            ],
+                            "text": "Mobiel telefoonnummer"
+                          }
+                        }
+                      ],
+                      "system": "phone",
+                      "value": "+31699888888",
+                      "use": "mobile"
+                    },
+                    {
+                      "system": "email",
+                      "value": "j.spee+qbrjcieel adres"
+                    }
+                    },
+                    {
+                      "url": "http://fhir.nl/fhir/StructureDefinition/nl-core-address-official",
+                      "valueBoolean": true
+                    }
+                  ],
+                  "use": "home",
+                  "line": [
+                    "Knolweg 1000"
+                  ],
+                  "city": "Stitswerd",
+                  "postalCode": "9999ZZ",
+                  "country": "Netherlands (the)"
+                }
+              ],
+                "maritalStatus": {
+                  "coding": [
+                    {
+                      "system": "http://hl7.org/fhir/v3/MaritalStatus",
+                      "code": "M",
+                      "display": "Married"
+                    }
+                  ],
+                  "text": "Gehuwd"
+                },
+                "contact": [
+                  {
+                    "relationship": [
+                      {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/v3/RoleCode",
+                            "code": "SONC",
+                            "display": "Son"
+                          }
+                        ],
+                        "text": "Zoon"
+                      },
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.2.4.3.11.22.472",
+                            "code": "1",
+                            "display": "Eerste relatie/contactpersoon"
+                          }
+                        ],
+                        "text": "Eerste relatie/contactpersoon"
+                      }
+                    ],
+                    "name": {
+                      "extension": [
+                        {
+                          "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                          "valueCode": "NL1"
+                        }
+                      ],
+                      "text": "P. Pietersen",
+                      "family": "Pietersen",
+                      "given": [
+                        "P."
+                      ]
+                    },
+                    "telecom": [
+                      {
+                        "extension": [
+                          {
+                            "url": "http://nictiz.nl/fhir/StructureDefinition/zib-ContactInformation-TelecomType",
+                            "valueCodeableConcept": {
+                              "coding": [
+                                {
+                                  "system": "http://hl7.org/fhir/v3/AddressUse",
+                                  "code": "MC",
+                                  "display": "Mobile Phone"
+                                }
+                              ],
+                              "text": "Mobiel telefoonnummer"
+                            }
+                          }
+                        ],
+                        "system": "phone",
+                        "value": "+31612345678",
+                        "use": "mobile"
+                      }
+                    ]
+                  },
+                  {
+                    "relationship": [
+                      {
+                        "coding": [
+                          {
+                            "system": "http://hl7.org/fhir/v3/RoleCode",
+                            "code": "DAUC",
+                            "display": "Daughter"
+                          }
+                        ],
+                        "text": "Dochter"
+                      },
+                      {
+                        "coding": [
+                          {
+                            "system": "urn:oid:2.16.840.1.113883.2.4.3.11.22.472",
+                            "code": "2",
+                            "display": "Tweede relatie/contactpersoon"
+                          }
+                        ],
+                        "text": "Tweede relatie/contactpersoon"
+                      }
+                    ],
+                    "name": {
+                      "extension": [
+                        {
+                          "url": "http://hl7.org/fhir/StructureDefinition/humanname-assembly-order",
+                          "valueCode": "NL3"
+                        }
+                      ],
+                      "text": "Jansen Pietersen",
+                      "family": "Jansen Pietersen"
+                    },
+                    "telecom": [
+                      {
+                        "extension": [
+                          {
+                            "url": "http://nictiz.nl/fhir/StructureDefinition/zib-ContactInformation-TelecomType",
+                            "valueCodeableConcept": {
+                              "coding": [
+                                {
+                                  "system": "http://hl7.org/fhir/v3/AddressUse",
+                                  "code": "MC",
+                                  "display": "Mobile Phone"
+                                }
+                              ],
+                              "text": "Mobiel telefoonnummer"
+                            }
+                          }
+                        ],
+                        "system": "phone",
+                        "value": "+31698765432",
+                        "use": "mobile"
+                      }
+                    ]
+                  }
+                ],
+                "generalPractitioner": [
+                  {
+                    "extension": [
+                      {
+                        "url": "http://nictiz.nl/fhir/StructureDefinition/practitionerrole-reference",
+                        "valueReference": {
+                          "reference": "PractitionerRole/600F50696A2E66A3D37FFBEA064B0739161980F1B791A104F7D2405B8FE4F07C",
+                          "display": "primary care physician"
+                        }
+                      }
+                    ],
+                    "display": "Onbekende Huisarts (tbv. Patiëntregistratie Nb: dit is géén geldige verwijzer / aanvrager)"
+                  }
+                ]
+              },
+              "search": {
+                "mode": "match"
+              }
+              }
+            ]
+          }

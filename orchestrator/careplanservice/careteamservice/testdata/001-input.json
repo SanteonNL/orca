@@ -1,0 +1,23 @@
+{
+  "resourceType": "Bundle",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "CarePlan",
+        "id": "1",
+        "contained": [
+          {
+            "resourceType": "CareTeam",
+            "id": "contained-careteam-10"
+          }
+        ],
+        "careTeam": [
+          {
+            "type": "CareTeam",
+            "reference": "#contained-careteam-10"
+          }
+        ]
+      }
+    }
+  ]
+}

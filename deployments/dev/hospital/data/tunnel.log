@@ -1,0 +1,6 @@
+Hosting port: 9080
+Connect via browser: https://pqt9gd8m-9080.euw.devtunnels.ms
+Inspect network activity: https://pqt9gd8m-9080-inspect.euw.devtunnels.ms
+
+Ready to accept connections for tunnel: interesting-pond-18l0fq9.euw
+ClientSSH: PortForwardingService connection  to localhost:9080 failed: Connection refused

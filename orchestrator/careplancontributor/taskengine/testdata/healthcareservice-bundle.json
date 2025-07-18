@@ -1,0 +1,124 @@
+{
+  "resourceType": "Bundle",
+  "id": "zbj-bundle-healthcareservices",
+  "type": "batch",
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "HealthcareService",
+        "id": "zbj-healthcareservice-telemonitoring",
+        "identifier": [
+          {
+            "system": "urn:oid:2.16.840.1.113883.2.4.3.224",
+            "value": "urn:uuid:91a9be09-eb97-4c0f-9a61-27a1985ae38b"
+          }
+        ],
+        "active": true,
+        "providedBy": {
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "86446"
+          }
+        },
+        "category": [
+          {
+            "coding": [
+              {
+                "code": "719858009",
+                "system": "http://snomed.info/sct",
+                "display": "monitoren via telegeneeskunde (regime/therapie)"
+              }
+            ]
+          }
+        ],
+        "type": [
+          {
+            "coding": [
+              {
+                "code": "715191006",
+                "system": "http://snomed.info/sct",
+                "display": "monitoren van asthma via telegeneeskunde (regime/therapie)"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "code": "879780004",
+                "system": "http://snomed.info/sct",
+                "display": "monitoren van chronisch hartfalen via telegeneeskunde (regime/therapie)"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "code": "716358000",
+                "system": "http://snomed.info/sct",
+                "display": "monitoren van chronische obstructieve longziekte via telegeneeskunde (regime/therapie)"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "code": "84114007",
+                "system": "http://snomed.info/sct",
+                "display": "hartfalen (aandoening)"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "code": "195979001",
+                "system": "http://snomed.info/sct",
+                "display": "Asthma unspecified (disorder)"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "code": "195967001",
+                "system": "http://snomed.info/sct",
+                "display": "astma (aandoening)"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "code": "304527002",
+                "system": "http://snomed.info/sct",
+                "display": "acuut astma (aandoening)"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "code": "389145006",
+                "system": "http://snomed.info/sct",
+                "display": "allergisch astma (aandoening)"
+              }
+            ]
+          },
+          {
+            "coding": [
+              {
+                "code": "13645005",
+                "system": "http://snomed.info/sct",
+                "display": "chronische obstructieve longaandoening (aandoening)"
+              }
+            ]
+          }
+        ]
+      },
+      "request": {
+        "method": "PUT",
+        "url": "HealthcareService?identifier=urn:uuid:91a9be09-eb97-4c0f-9a61-27a1985ae38b"
+      }
+    }
+  ]
+}

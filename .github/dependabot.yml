@@ -1,0 +1,36 @@
+# Documentation: https://docs.github.com/en/code-security/dependabot/dependabot-version-updates/configuration-options-for-the-dependabot.yml-file
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "daily"
+
+  # Go
+  - package-ecosystem: "gomod"
+    directories:
+      - "/orchestrator"
+      - "/smartonfhir_backend_adapter"
+      - "/e2e-tests"
+    schedule:
+      interval: "daily"
+
+  # Docker
+  - package-ecosystem: "docker"
+    directories:
+      - "/orchestrator"
+      - "/smartonfhir_backend_adapter"
+      - "/frontend"
+      - "/hospital_simulator"
+      - "/viewer_simulator"
+    schedule:
+      interval: "daily"
+
+  # npm
+  - package-ecosystem: "npm"
+    directories:
+      - "/frontend"
+      - "/hospital_simulator"
+      - "/viewer_simulator"
+    schedule:
+      interval: "daily"

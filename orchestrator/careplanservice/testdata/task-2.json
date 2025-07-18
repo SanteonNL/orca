@@ -1,0 +1,26 @@
+{
+  "id": "2",
+  "basedOn": [
+    {
+      "reference": "CarePlan/1",
+      "type": "CarePlan"
+    }
+  ],
+  "status": "requested",
+  "intent": "order",
+  "requester": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "999"
+    }
+  },
+  "owner": {
+    "type": "Organization",
+    "identifier": {
+      "system": "http://fhir.nl/fhir/NamingSystem/ura",
+      "value": "111"
+    }
+  },
+  "resourceType": "Task"
+}

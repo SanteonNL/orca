@@ -1,0 +1,105 @@
+@startuml
+'https://plantuml.com/sequence-diagram
+autonumber
+skinparam legendBackgroundColor none
+
+title System-Level Sequence Diagram
+legend top
+   (25-04-2024 v1) Describes:
+   - A care professional using local XIS to access FHIR APIs at one or more remote XIS's.
+   - A care professional from another care organization, using a remote XIS to access the FHIR APIs at the local XIS.
+
+   The local XIS uses Orca to offload localisation, authentication and data retrieval (or writing).
+   Low-level browser/OAuth2 interactions are not omitted for brevity/clarity.
+end legend
+
+box "Local Care Organization" #Lavender
+    actor LocalCP as "Care Professional"
+    participant LocalXIS as "XIS"
+    participant LocalOrca as "Orca"
+end box
+participant CPS as "Care Plan Service"
+
+box "Remote Care Organization" #Lavender
+    participant RemoteXIS as "Remote XIS"
+    actor RemoteCP as "Care Professional"
+end box
+
+LocalCP -> LocalXIS : Show details
+group App Launch
+    LocalXIS -> LocalOrca : Browser App Launch\n(user, patient context)
+    note left
+        App Launch is vendor/XIS-specific.
+        Epic: SMART on FHIR?
+    end note
+    LocalXIS --> LocalCP : Redirect/Popup browser
+end group
+
+group Data Localisation
+    LocalOrca -> LocalXIS : Find external Care Plan\nreferences for patient (FHIR)
+    LocalXIS --> LocalOrca : Care Plan References
+
+    group OAuth2 authentication at CPS
+        LocalOrca -> CPS : Request Access Token\n for user
+        note left
+            This involves the user presenting a Care Organization-
+            credential and a personal Care Professional credential.
+        end note
+        CPS --> LocalOrca : Access Token
+    end group
+
+    loop Collect CarePlans and CareTeams
+        LocalOrca -> CPS : Get CarePlan/CareTeam (FHIR)
+        CPS --> LocalOrca : CarePlan/CareTeam
+    end loop
+end group
+
+group Data Retrieval
+    loop Remote XIS (1 or more)
+        group OAuth2 authentication at Remote XIS
+            LocalOrca -> RemoteXIS : Request Access Token\n for user
+            note left
+                This involves the user presenting a Care Organization-
+                credential and a personal Care Professional credential.
+            end note
+            RemoteXIS --> LocalOrca : Access Token
+        end group
+        LocalOrca -> RemoteXIS : Get resources (FHIR)
+        RemoteXIS --> LocalOrca : Resources
+    end loop
+
+    LocalOrca -> LocalOrca : Collect results\ninto FHIR Bundle
+end loop
+
+group App Termination
+    LocalOrca --> LocalCP : Redirect back to XIS\nor close browser
+    LocalCP --> LocalXIS :
+    note right
+        App Termination is vendor/XIS-specific.
+    end note
+    LocalXIS -> LocalOrca : Retrieve FHIR Bundle
+end group
+LocalXIS --> LocalCP : Display results
+
+newpage
+RemoteCP -> RemoteXIS : Show details
+RemoteXIS --> RemoteCP : Redirect/Popup browser
+
+group OAuth2 authentication at local XIS
+    RemoteXIS -> LocalOrca : Request Access Token\n for user
+    note left
+        This involves the user presenting a Care Organization-
+        credential and a personal Care Professional credential.
+    end note
+    LocalOrca --> RemoteXIS : Access Token
+end group
+
+group Data Retrieval
+    RemoteXIS -> LocalOrca : Get resources (FHIR)
+    LocalOrca -> LocalOrca : Authorize access\n(evaluate policy)
+    LocalOrca -> LocalXIS : Get resources (FHIR)
+    LocalXIS --> LocalOrca : Resources
+    LocalOrca --> RemoteXIS : Resources
+end group
+RemoteXIS --> RemoteCP : Display results
+@enduml
