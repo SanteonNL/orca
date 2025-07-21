@@ -165,6 +165,7 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 	provider, err := s.getIssuerByURL(request, issuer)
 	if err != nil {
 		s.SendError(request.Context(), issuer, fmt.Errorf("failed to get OIDC client for issuer: %w", err), response, http.StatusInternalServerError)
+		return
 	}
 	urlOptions := []rp.URLParamOpt{}
 	if launch != "" {
