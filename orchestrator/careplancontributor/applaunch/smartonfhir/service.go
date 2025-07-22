@@ -390,9 +390,10 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 		}, &jose.JSONWebKeySet{
 			Keys: []jose.JSONWebKey{
 				{
-					Key:   key.Public(),
-					KeyID: key.KeyID(),
-					Use:   "sig",
+					Key:       key.Public(),
+					KeyID:     key.KeyID(),
+					Use:       "sig",
+					Algorithm: key.SigningAlgorithm(),
 				},
 			},
 		}, nil
