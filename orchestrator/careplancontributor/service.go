@@ -9,6 +9,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"net/http"
 	"net/url"
 	"slices"
@@ -59,6 +60,7 @@ type ScpValidationResult struct {
 
 func New(
 	config Config,
+	tenants map[string]TenantConfig,
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager[session.Data],
@@ -117,6 +119,7 @@ func New(
 
 	result := &Service{
 		config:                        config,
+		tenants:                       tenants,
 		orcaPublicURL:                 orcaPublicURL,
 		localCarePlanServiceUrl:       localCarePlanServiceURL,
 		SessionManager:                sessionManager,
@@ -158,6 +161,7 @@ func New(
 
 type Service struct {
 	config         Config
+	tenants        map[string]TenantConfig
 	profile        profile.Provider
 	orcaPublicURL  *url.URL
 	SessionManager *user.SessionManager[session.Data]
@@ -175,7 +179,7 @@ type Service struct {
 	notifier                      ehr.Notifier
 	eventManager                  events.Manager
 	sseService                    *sse.Service
-	createFHIRClientForURL        func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
+	createFHIRClientForURL        func(ctx context.Context, tenantID string, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
 	oidcProvider                  *op.Service
 	httpHandler                   http.Handler
 	tokenClient                   *rp.Client
@@ -373,7 +377,7 @@ func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http
 	}
 
 	//Ensure the sessions taskIdentifier matches the requested task
-	cpsClient, _, err := s.createFHIRClientForURL(request.Context(), s.localCarePlanServiceUrl)
+	cpsClient, _, err := s.createFHIRClientForURL(request.Context(), tenantID, s.localCarePlanServiceUrl)
 	if err != nil {
 		log.Ctx(request.Context()).Err(err).Msgf("Failed to create local CarePlanService FHIR client: %v", err)
 		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "Failed to create local SCP client", writer)
@@ -629,7 +633,8 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		return err
 	}
 
-	fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, fhirBaseURL, sender.Organization.Identifier[0])
+	tenantID, _ := tenants.Sole(s.tenants)
+	fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, tenantID, fhirBaseURL, sender.Organization.Identifier[0])
 	if err != nil {
 		return err
 	}
@@ -710,13 +715,13 @@ func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task 
 	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
 }
 
-func (s Service) defaultCreateFHIRClientForURL(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
+func (s Service) defaultCreateFHIRClientForURL(ctx context.Context, tenantID string, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
 	// We only have the FHIR base URL, we need to read the CapabilityStatement to find out the Authorization Server URL
 	identifier := fhir.Identifier{
 		System: to.Ptr("https://build.fhir.org/http.html#root"),
 		Value:  to.Ptr(fhirBaseURL.String()),
 	}
-	return s.createFHIRClientForIdentifier(ctx, fhirBaseURL, identifier)
+	return s.createFHIRClientForIdentifier(ctx, tenantID, fhirBaseURL, identifier)
 }
 
 // createFHIRClientForExternalRequest creates a FHIR client for a request that should be proxied to an external SCP-node's FHIR API.
@@ -770,7 +775,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 			if err != nil {
 				return nil, nil, fmt.Errorf("%s: registered FHIR base URL is invalid (identifier=%s): %w", header, headerValue, err)
 			}
-			_, httpClient, err = s.createFHIRClientForIdentifier(ctx, fhirBaseURL, *identifier)
+			_, httpClient, err = s.createFHIRClientForIdentifier(ctx, tenantID, fhirBaseURL, *identifier)
 			if err != nil {
 				return nil, nil, fmt.Errorf("%s: failed to create HTTP client (identifier=%s): %w", header, headerValue, err)
 			}
@@ -826,8 +831,8 @@ func (s Service) validateFHIRBaseURL(fhirBaseURL *url.URL) error {
 	return nil
 }
 
-func (s Service) createFHIRClientForIdentifier(ctx context.Context, fhirBaseURL *url.URL, identifier fhir.Identifier) (fhirclient.Client, *http.Client, error) {
-	httpClient, err := s.profile.HttpClient(ctx, identifier)
+func (s Service) createFHIRClientForIdentifier(ctx context.Context, tenantID string, fhirBaseURL *url.URL, identifier fhir.Identifier) (fhirclient.Client, *http.Client, error) {
+	httpClient, err := s.profile.HttpClient(ctx, tenantID, identifier)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to create HTTP client (identifier=%s): %w", coolfhir.ToString(identifier), err)
 	}

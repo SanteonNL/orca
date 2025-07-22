@@ -25,6 +25,9 @@ type Config struct {
 	X509FileConfig X509FileConfig `koanf:"x509"`
 }
 
+type TenantConfig struct {
+}
+
 type SigningConfig struct {
 	Issuer   string `koanf:"iss"`
 	Audience string `koanf:"aud"`

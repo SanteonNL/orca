@@ -529,7 +529,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	}
 
 	// Resolve identity of local care organization
-	identities, err := s.profile.Identities(ctx)
+	identities, err := s.profile.Identities(ctx, tenantID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch identities: %w", err)
 	}
