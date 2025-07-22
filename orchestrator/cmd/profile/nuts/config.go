@@ -8,9 +8,19 @@ import (
 type Config struct {
 	API              APIConfig           `koanf:"api"`
 	Public           PublicConfig        `koanf:"public"`
-	OwnSubject       string              `koanf:"subject"`
 	DiscoveryService string              `koanf:"discoveryservice"`
 	AzureKeyVault    AzureKeyVaultConfig `koanf:"azurekv"`
+}
+
+type TenantConfig struct {
+	Subject string `koanf:"subject"`
+}
+
+func (v TenantConfig) Validate() error {
+	if v.Subject == "" {
+		return errors.New("invalid/empty Nuts subject")
+	}
+	return nil
 }
 
 type AzureKeyVaultConfig struct {
@@ -21,9 +31,6 @@ type AzureKeyVaultConfig struct {
 
 func (c Config) Validate() error {
 	_, err := url.Parse(c.API.URL)
-	if c.OwnSubject == "" {
-		return errors.New("invalid/empty Nuts subject")
-	}
 	if err != nil || c.API.URL == "" {
 		return errors.New("invalid Nuts API URL")
 	}
