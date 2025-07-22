@@ -251,4 +251,9 @@ func Test_loadJWTSigningKeyFromAzureKeyVault(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, signingKey)
 	require.NotNil(t, jwkKeySet)
+
+	require.Len(t, jwkKeySet.Keys, 1, "Expected one key in JWK set")
+	require.Equal(t, "RS256", jwkKeySet.Keys[0].Algorithm, "Expected key algorithm to be RS256")
+	require.Equal(t, "sig", jwkKeySet.Keys[0].Use, "Expected key use to be 'sig'")
+	require.NotNil(t, jwkKeySet.Keys[0].Key)
 }
