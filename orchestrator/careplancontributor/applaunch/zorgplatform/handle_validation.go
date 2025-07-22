@@ -66,7 +66,7 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("unable to decrypt assertion: %w", err)
 	}
 
-	if log.Ctx(ctx).GetLevel() >= zerolog.DebugLevel {
+	if log.Ctx(ctx).GetLevel() <= zerolog.DebugLevel {
 		debugDoc := etree.NewDocument()
 		debugDoc.SetRoot(assertion)
 		xml, _ := debugDoc.WriteToString()
