@@ -1,4 +1,4 @@
-import {render, screen, fireEvent, act, waitFor} from '@testing-library/react';
+import {render, screen, act, waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import EnrollmentTaskPage from '@/app/enrollment/task/[taskId]/page';
 import useTaskProgressStore from '@/lib/store/task-progress-store';
