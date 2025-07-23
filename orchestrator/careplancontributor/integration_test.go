@@ -151,6 +151,26 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, fetchedBundle.Entry, 1)
 	}
+	t.Log("Read data from EHR after Task is accepted")
+	{
+		requestBundle := fhir.Bundle{
+			Type: fhir.BundleTypeBatch,
+			Entry: []fhir.BundleEntry{
+				{
+					Request: &fhir.BundleEntryRequest{
+						Method: fhir.HTTPVerbGET,
+						Url:    "Task/" + *task.Id,
+					},
+				},
+			},
+		}
+		var responseBundle fhir.Bundle
+		err := cpcDataRequester.Create(requestBundle, &responseBundle, fhirclient.AtPath("/"))
+		require.NoError(t, err)
+		require.Len(t, responseBundle.Entry, 1)
+		require.NotNil(t, responseBundle.Entry[0].Response)
+		require.Equal(t, "200 OK", responseBundle.Entry[0].Response.Status)
+	}
 	t.Log("Reading task after accepted - header references non-existent careplan - Fails")
 	{
 		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: invalidCareplanTransport}, nil)
