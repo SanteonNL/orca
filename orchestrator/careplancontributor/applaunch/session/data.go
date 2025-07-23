@@ -11,6 +11,7 @@ type FHIRResource struct {
 }
 
 type Data struct {
+	TenantID string
 	// FHIRLauncher is the name of the FHIRLauncher (FHIR client factory) that should be used to create a FHIR client
 	// to interact with the EHR's FHIR API.
 	FHIRLauncher string

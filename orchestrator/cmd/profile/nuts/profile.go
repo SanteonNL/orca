@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -47,10 +48,15 @@ type DutchNutsProfile struct {
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
 	clientCerts           []tls.Certificate
-	tenants               map[string]TenantConfig
 }
 
-func New(config Config, tenants map[string]TenantConfig) (*DutchNutsProfile, error) {
+func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
+	for id, t := range tenants {
+		if t.NutsSubject == "" {
+			return nil, fmt.Errorf("invalid/empty Nuts subject (tenant=%s)", id)
+		}
+	}
+
 	var clientCerts []tls.Certificate
 	if len(config.AzureKeyVault.ClientCertName) > 0 {
 		if config.AzureKeyVault.CredentialType == "" {
@@ -91,15 +97,10 @@ func New(config Config, tenants map[string]TenantConfig) (*DutchNutsProfile, err
 		},
 		cachedIdentities: map[string][]fhir.Organization{},
 		clientCerts:      clientCerts,
-		tenants:          tenants,
 	}, nil
 }
 
-func (d DutchNutsProfile) HttpClient(ctx context.Context, tenantID string, serverIdentity fhir.Identifier) (*http.Client, error) {
-	tenant, err := d.getTenant(tenantID)
-	if err != nil {
-		return nil, err
-	}
+func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Identifier) (*http.Client, error) {
 	if serverIdentity.System == nil || serverIdentity.Value == nil {
 		return nil, fmt.Errorf("server identity must have system and value")
 	}
@@ -160,11 +161,15 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, tenantID string, serve
 		underlyingTransport = http.DefaultTransport.(*http.Transport).Clone()
 		underlyingTransport.TLSClientConfig = globals.DefaultTLSConfig
 	}
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	client := &http.Client{
 		Transport: &oauth2.Transport{
 			UnderlyingTransport: underlyingTransport,
 			TokenSource: nuts.OAuth2TokenSource{
-				NutsSubject: tenant.Subject,
+				NutsSubject: tenant.NutsSubject,
 				NutsAPIURL:  d.Config.API.URL,
 			},
 			Scope:          careplancontributor.CarePlanServiceOAuth2Scope,
@@ -175,9 +180,13 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, tenantID string, serve
 }
 
 // Identities consults the Nuts node to retrieve the local identities of the SCP node, given the credentials in the subject's wallet.
-func (d *DutchNutsProfile) Identities(ctx context.Context, tenantID string) ([]fhir.Organization, error) {
+func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization, error) {
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
-		identifiers, err := d.identities(ctx, tenantID)
+		identifiers, err := d.identities(ctx, tenant)
 		if err != nil {
 			log.Ctx(ctx).Warn().Err(err).Msg("Failed to refresh local identities using Nuts node")
 			if d.cachedIdentities == nil {
@@ -185,11 +194,11 @@ func (d *DutchNutsProfile) Identities(ctx context.Context, tenantID string) ([]f
 				return nil, fmt.Errorf("failed to load local identities: %w", err)
 			}
 		} else {
-			d.cachedIdentities[tenantID] = identifiers
+			d.cachedIdentities[tenant.ID] = identifiers
 			d.identitiesRefreshedAt = time.Now()
 		}
 	}
-	return d.cachedIdentities[tenantID], nil
+	return d.cachedIdentities[tenant.ID], nil
 }
 
 func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseURL string) (*fhir.CapabilityStatement, error) {
@@ -212,12 +221,8 @@ func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseU
 	return &cp, nil
 }
 
-func (d DutchNutsProfile) identities(ctx context.Context, tenantID string) ([]fhir.Organization, error) {
-	tenant, err := d.getTenant(tenantID)
-	if err != nil {
-		return nil, err
-	}
-	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, tenant.Subject)
+func (d DutchNutsProfile) identities(ctx context.Context, tenant tenants.Properties) ([]fhir.Organization, error) {
+	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, tenant.NutsSubject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
 	}
@@ -293,8 +298,8 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 	return results, nil
 }
 
-func (d DutchNutsProfile) CapabilityStatement(cp *fhir.CapabilityStatement, tenantID string) error {
-	tenant, err := d.getTenant(tenantID)
+func (d DutchNutsProfile) CapabilityStatement(ctx context.Context, cp *fhir.CapabilityStatement) error {
+	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
 		return err
 	}
@@ -307,19 +312,11 @@ func (d DutchNutsProfile) CapabilityStatement(cp *fhir.CapabilityStatement, tena
 			Extension: []fhir.Extension{
 				{
 					Url:         nutsAuthorizationServerExtensionURL,
-					ValueString: to.Ptr(d.Config.Public.Parse().JoinPath("oauth2", tenant.Subject).String()),
+					ValueString: to.Ptr(d.Config.Public.Parse().JoinPath("oauth2", tenant.NutsSubject).String()),
 				},
 			},
 		})
 		cp.Rest[i] = rest
 	}
 	return nil
-}
-
-func (d DutchNutsProfile) getTenant(tenantID string) (TenantConfig, error) {
-	tenant, ok := d.tenants[tenantID]
-	if !ok {
-		return TenantConfig{}, fmt.Errorf("unknown tenant (id=%s)", tenantID)
-	}
-	return tenant, nil
 }

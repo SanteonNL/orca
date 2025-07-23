@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/rs/zerolog"
 
@@ -24,11 +25,11 @@ type Config struct {
 	// CarePlanContributor holds the configuration for the CarePlanContributor.
 	CarePlanContributor careplancontributor.Config `koanf:"careplancontributor"`
 	// CarePlanService holds the configuration for the CarePlanService.
-	CarePlanService careplanservice.Config  `koanf:"careplanservice"`
-	Tenants         map[string]TenantConfig `koanf:"tenants"`
-	Messaging       messaging.Config        `koanf:"messaging"`
-	LogLevel        zerolog.Level           `koanf:"loglevel"`
-	StrictMode      bool                    `koanf:"strictmode"`
+	CarePlanService careplanservice.Config `koanf:"careplanservice"`
+	Tenants         tenant.Config          `koanf:"tenants"`
+	Messaging       messaging.Config       `koanf:"messaging"`
+	LogLevel        zerolog.Level          `koanf:"loglevel"`
+	StrictMode      bool                   `koanf:"strictmode"`
 }
 
 func (c Config) Validate() error {
@@ -50,21 +51,6 @@ func (c Config) Validate() error {
 	}
 	if err := c.CarePlanService.Validate(); err != nil {
 		return err
-	}
-	return nil
-}
-
-type TenantConfig struct {
-	ID   string            `koanf:"id"`
-	Nuts nuts.TenantConfig `koanf:"nuts"`
-}
-
-func (c TenantConfig) Validate() error {
-	if c.ID == "" {
-		return errors.New("tenant ID is not configured")
-	}
-	if err := c.Nuts.Validate(); err != nil {
-		return fmt.Errorf("invalid Nuts configuration (tenant=%s): %w", c.ID, err)
 	}
 	return nil
 }

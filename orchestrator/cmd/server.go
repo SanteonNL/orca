@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/rs/zerolog/log"
 	"net/http"
@@ -75,7 +76,7 @@ func Start(ctx context.Context, config Config) error {
 
 	services = append(services, healthcheck.New())
 
-	activeProfile, err := nuts.New(config.Nuts)
+	activeProfile, err := nuts.New(config.Nuts, config.Tenants)
 	if err != nil {
 		return fmt.Errorf("failed to create profile: %w", err)
 	}

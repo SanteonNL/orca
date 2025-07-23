@@ -37,10 +37,6 @@ type Config struct {
 	StaticBearerToken             string
 }
 
-type TenantConfig struct {
-	AppLaunch applaunch.TenantConfig `koanf:"applaunch"`
-}
-
 func (c Config) Validate() error {
 	if !c.Enabled {
 		return nil

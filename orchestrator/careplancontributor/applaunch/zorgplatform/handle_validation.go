@@ -23,11 +23,12 @@ var now = func() time.Time {
 }
 
 type LaunchContext struct {
-	Bsn              string
-	Practitioner     fhir.Practitioner
-	PractitionerRole fhir.PractitionerRole
-	ServiceRequest   fhir.ServiceRequest
-	WorkflowId       string
+	Bsn                    string
+	Practitioner           fhir.Practitioner
+	PractitionerRole       fhir.PractitionerRole
+	ServiceRequest         fhir.ServiceRequest
+	WorkflowId             string
+	ChipSoftOrganizationID string
 }
 
 const HIX_LOCALUSER_SYSTEM = "https://santeonnl.github.io/shared-care-planning/ehr/hix/userid"
@@ -115,16 +116,21 @@ func (s *Service) parseAssertion(ctx context.Context, assertion *etree.Element) 
 		return LaunchContext{}, fmt.Errorf("unable to extract workflow-id: %w", err)
 	}
 
+	chipSoftOrgID, err := s.extractOrganizationID(assertion)
+	if err != nil {
+		return LaunchContext{}, fmt.Errorf("unable to extract organization ID: %w", err)
+	}
 	// // Process any other required attributes (claims)
 	// if err := s.processAdditionalAttributes(assertion); err != nil {
 	// 	return fmt.Errorf("unable to process additional attributes: %w", err)
 	// }
 
 	return LaunchContext{
-		Bsn:              resourceID,
-		Practitioner:     *practitioner,
-		PractitionerRole: *practitionerRole,
-		WorkflowId:       workflowID,
+		Bsn:                    resourceID,
+		Practitioner:           *practitioner,
+		PractitionerRole:       *practitionerRole,
+		WorkflowId:             workflowID,
+		ChipSoftOrganizationID: chipSoftOrgID,
 	}, nil
 }
 
@@ -236,6 +242,20 @@ func (s *Service) validateIssuer(decryptedAssertion *etree.Element) error {
 		return nil
 	}
 	return fmt.Errorf("invalid iss. Found [%s] but expected [%s]", iss, s.config.DecryptConfig.Issuer)
+}
+
+func (s *Service) extractOrganizationID(assertion *etree.Element) (string, error) {
+	// Identifier (e.g.: USER1@2.16.840.1.113883.2.4.3.124.8.50.8)
+	el := assertion.FindElement("//Subject/NameID")
+	if el == nil || strings.TrimSpace(el.Text()) == "" {
+		return "", errors.New("Subject.NameID not found")
+	}
+	value := strings.TrimSpace(el.Text())
+	idx := strings.IndexAny(value, "@")
+	if idx == -1 || idx == len(value)-1 {
+		return "", fmt.Errorf("invalid NameID format, expected '<name>@<oid>' but got '%s'", value)
+	}
+	return value[idx+1:], nil
 }
 
 func (s *Service) extractPractitionerRole(assertion *etree.Element) (*fhir.PractitionerRole, error) {

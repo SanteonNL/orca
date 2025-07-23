@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"net/http"
 	"net/url"
 	"os"
@@ -53,7 +54,7 @@ type OtherSessionData struct {
 	AccessToken   string
 }
 
-func New(sessionManager *user.SessionManager[session.Data], config Config, baseURL string, frontendLandingUrl *url.URL, profile profile.Provider) (*Service, error) {
+func New(sessionManager *user.SessionManager[session.Data], config Config, tenants tenants.Config, baseURL string, frontendLandingUrl *url.URL, profile profile.Provider) (*Service, error) {
 	azKeysClient, err := azkeyvault.NewKeysClient(config.AzureConfig.KeyVaultConfig.KeyVaultURL, config.AzureConfig.CredentialType, false)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
@@ -65,10 +66,10 @@ func New(sessionManager *user.SessionManager[session.Data], config Config, baseU
 
 	ctx := context.Background()
 
-	return newWithClients(ctx, sessionManager, config, baseURL, frontendLandingUrl, azKeysClient, azCertClient, profile)
+	return newWithClients(ctx, sessionManager, config, tenants, baseURL, frontendLandingUrl, azKeysClient, azCertClient, profile)
 }
 
-func newWithClients(ctx context.Context, sessionManager *user.SessionManager[session.Data], config Config, baseURL string, frontendLandingUrl *url.URL,
+func newWithClients(ctx context.Context, sessionManager *user.SessionManager[session.Data], config Config, tenants tenants.Config, baseURL string, frontendLandingUrl *url.URL,
 	keysClient azkeyvault.KeysClient, certsClient azkeyvault.CertificatesClient, profile profile.Provider) (*Service, error) {
 	var appLaunchURL string
 	if strings.HasPrefix(baseURL, "http://") || strings.HasPrefix(baseURL, "https://") {
@@ -154,6 +155,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager[ses
 	result := &Service{
 		sessionManager:        sessionManager,
 		config:                config,
+		tenants:               tenants,
 		baseURL:               baseURL,
 		frontendLandingUrl:    frontendLandingUrl,
 		signingCertificate:    signCert,
@@ -189,6 +191,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager[ses
 type Service struct {
 	sessionManager         *user.SessionManager[session.Data]
 	config                 Config
+	tenants                tenants.Config
 	baseURL                string
 	frontendLandingUrl     *url.URL
 	signingCertificate     [][]byte
@@ -245,7 +248,8 @@ type stsAccessTokenRoundTripper struct {
 	transport          http.RoundTripper
 	cpsFhirClient      func() fhirclient.Client
 	secureTokenService SecureTokenService
-	accessTokenCache   *ttlcache.Cache[string, string]
+	// TODO: Make multi-tenant?
+	accessTokenCache *ttlcache.Cache[string, string]
 }
 
 func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
@@ -529,7 +533,11 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	}
 
 	// Resolve identity of local care organization
-	identities, err := s.profile.Identities(ctx, tenantID)
+	tenant, err := s.lookupTenant(launchContext.ChipSoftOrganizationID)
+	if err != nil {
+		return nil, err
+	}
+	identities, err := s.profile.Identities(ctx, tenant.ID)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch identities: %w", err)
 	}
@@ -610,6 +618,15 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 		sessionData.Set(*existingTaskRef, nil)
 	}
 	return &sessionData, nil
+}
+
+func (s *Service) lookupTenant(chipSoftOrgID string) (*tenants.Properties, error) {
+	for _, props := range s.tenants {
+		if props.ChipSoftOrgID == chipSoftOrgID {
+			return &props, nil
+		}
+	}
+	return nil, fmt.Errorf("tenant not found with ChipSoft organization ID: %s", chipSoftOrgID)
 }
 
 func (s *Service) cpsFhirClient() fhirclient.Client {

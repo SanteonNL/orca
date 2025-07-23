@@ -61,7 +61,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		}
 	}
 
-	identities, err := s.profile.Identities(ctx)
+	identities, err := s.profile.Identities(ctx, s.tenants.Sole().ID)
 	if err != nil {
 		return err
 	}

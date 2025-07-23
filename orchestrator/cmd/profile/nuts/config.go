@@ -12,17 +12,6 @@ type Config struct {
 	AzureKeyVault    AzureKeyVaultConfig `koanf:"azurekv"`
 }
 
-type TenantConfig struct {
-	Subject string `koanf:"subject"`
-}
-
-func (v TenantConfig) Validate() error {
-	if v.Subject == "" {
-		return errors.New("invalid/empty Nuts subject")
-	}
-	return nil
-}
-
 type AzureKeyVaultConfig struct {
 	URL            string   `koanf:"url"`
 	CredentialType string   `koanf:"credentialtype"`

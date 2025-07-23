@@ -14,9 +14,6 @@ type Config struct {
 	External     map[string]external.Config `koanf:"external"`
 }
 
-type TenantConfig struct {
-}
-
 func (c Config) Validate() error {
 	return c.SmartOnFhir.Validate()
 }

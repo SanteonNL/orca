@@ -5,6 +5,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/user"
@@ -29,12 +30,13 @@ func init() {
 	}
 }
 
-func New(sessionManager *user.SessionManager[session.Data], config Config, frontendLandingUrl *url.URL, profile profile.Provider) *Service {
+func New(sessionManager *user.SessionManager[session.Data], config Config, tenants tenants.Config, frontendLandingUrl *url.URL, profile profile.Provider) *Service {
 	return &Service{
 		sessionManager:     sessionManager,
 		config:             config,
 		frontendLandingUrl: frontendLandingUrl,
 		profile:            profile,
+		tenants:            tenants,
 		ehrFHIRClientFactory: func(baseURL *url.URL, httpClient *http.Client) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, nil)
 		},
@@ -44,6 +46,7 @@ func New(sessionManager *user.SessionManager[session.Data], config Config, front
 type Service struct {
 	sessionManager       *user.SessionManager[session.Data]
 	config               Config
+	tenants              tenants.Config
 	baseURL              string
 	frontendLandingUrl   *url.URL
 	ehrFHIRClientFactory func(*url.URL, *http.Client) fhirclient.Client
@@ -102,7 +105,8 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	}
 	sessionData.Set("Patient/"+*patient.Id, patient)
 
-	organizations, err := s.profile.Identities(request.Context())
+	// TODO: Might want to support more than one, but not needed for now?
+	organizations, err := s.profile.Identities(request.Context(), s.tenants.Sole().ID)
 	if err != nil {
 		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to get active organization")
 		http.Error(response, "Failed to get active organization: "+err.Error(), http.StatusInternalServerError)
