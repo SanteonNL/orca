@@ -42,7 +42,7 @@ jobs:
         with:
           projectBaseDir: frontend
           args:
-            -Dsonar.sources=frontend/
+            -Dsonar.sources=.
             -Dsonar.verbose=true
             -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
             -Dsonar.coverage.exclusions=**/*.test.ts,**/*.test.js,**/*.test.jsx,**/*.test.tsx,**/*.spec.ts,**/*.spec.js,**/*.spec.jsx,**/*.spec.tsx,**/*.stories.jsx,**/*.stories.tsx*,**/*.test-data.ts
