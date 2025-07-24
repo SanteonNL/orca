@@ -73,7 +73,7 @@ beforeEach(() => {
 });
 
 describe("taskid page tests", () => {
-    it('displays loading component when store is loading', () => {
+    it('displays loading component when store is loading', async () => {
         (useTaskProgressStore as jest.Mock).mockReturnValue({
             loading: true,
             initialized: false,
@@ -81,13 +81,13 @@ describe("taskid page tests", () => {
             subTasks: [],
             taskToQuestionnaireMap: {}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByTestId('loading')).toBeInTheDocument();
     });
 
-    it('displays loading component when store is not initialized', () => {
+    it('displays loading component when store is not initialized', async () => {
         (useTaskProgressStore as jest.Mock).mockReturnValue({
             loading: false,
             initialized: false,
@@ -95,13 +95,13 @@ describe("taskid page tests", () => {
             subTasks: [],
             taskToQuestionnaireMap: {}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByTestId('loading')).toBeInTheDocument();
     });
 
-    it('displays task not found message when task is null', () => {
+    it('displays task not found message when task is null', async () => {
         (useTaskProgressStore as jest.Mock).mockReturnValue({
             task: null,
             loading: false,
@@ -110,13 +110,13 @@ describe("taskid page tests", () => {
             subTasks: [],
             taskToQuestionnaireMap: {}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByText('Taak niet gevonden')).toBeInTheDocument();
     });
 
-    it('sets selected task id from url params on mount', () => {
+    it('sets selected task id from url params on mount', async () => {
         const mockSetSelectedTaskId = jest.fn();
         (useTaskProgressStore as jest.Mock).mockReturnValue({
             task: mockTask,
@@ -126,13 +126,13 @@ describe("taskid page tests", () => {
             subTasks: [],
             taskToQuestionnaireMap: {}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(mockSetSelectedTaskId).toHaveBeenCalledWith('task-1');
     });
 
-    it('handles array task id by taking first element', () => {
+    it('handles array task id by taking first element', async () => {
         const mockSetSelectedTaskId = jest.fn();
         (useParams as jest.Mock).mockReturnValue({taskId: ['task-1', 'task-2']});
         (useTaskProgressStore as jest.Mock).mockReturnValue({
@@ -143,13 +143,13 @@ describe("taskid page tests", () => {
             subTasks: [],
             taskToQuestionnaireMap: {}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(mockSetSelectedTaskId).toHaveBeenCalledWith('task-1');
     });
 
-    it('renders questionnaire when task status is received and questionnaire available', () => {
+    it('renders questionnaire when task status is received and questionnaire available', async () => {
         const mockQuestionnaire = {id: 'questionnaire-1'};
         const mockSubTask = {id: 'subtask-1'};
         (useTaskProgressStore as jest.Mock).mockReturnValue({
@@ -160,15 +160,15 @@ describe("taskid page tests", () => {
             subTasks: [mockSubTask],
             taskToQuestionnaireMap: {'subtask-1': mockQuestionnaire}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByTestId('questionnaire-renderer')).toBeInTheDocument();
         expect(screen.getByText('Questionnaire: questionnaire-1, Task: subtask-1')).toBeInTheDocument();
     });
 
-    it('displays task status information when not in questionnaire mode', () => {
-        act(() => {
+    it('displays task status information when not in questionnaire mode', async () => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByText('Patiënt:')).toBeInTheDocument();
@@ -179,7 +179,7 @@ describe("taskid page tests", () => {
         expect(screen.getByText('+31612345678')).toBeInTheDocument();
     });
 
-    it('displays task note when available', () => {
+    it('displays task note when available', async () => {
         const taskWithNote = {
             ...mockTask,
             note: [{text: 'Custom task note'}]
@@ -192,14 +192,14 @@ describe("taskid page tests", () => {
             subTasks: [],
             taskToQuestionnaireMap: {}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByText('Custom task note')).toBeInTheDocument();
     });
 
-    it('displays execution text when no task note available', () => {
-        act(() => {
+    it('displays execution text when no task note available', async () => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByText('Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
@@ -222,19 +222,19 @@ describe("taskid page tests", () => {
         });
     });
 
-    it('displays onbekend when patient data is missing', () => {
+    it('displays onbekend when patient data is missing', async () => {
         (useEnrollmentStore as jest.Mock).mockReturnValue({
             patient: null,
             serviceRequest: mockServiceRequest
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         const patientRow = screen.getByText('Patiënt:').nextElementSibling;
         expect(patientRow).toHaveTextContent('Onbekend');
     });
 
-    it('displays onbekend when email telecom is missing', () => {
+    it('displays onbekend when email telecom is missing', async () => {
         const patientWithoutEmail = {
             ...mockPatient,
             telecom: [{system: 'phone', value: '+31612345678'}]
@@ -243,14 +243,14 @@ describe("taskid page tests", () => {
             patient: patientWithoutEmail,
             serviceRequest: mockServiceRequest
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         const emailRow = screen.getByText('E-mailadres:').nextElementSibling;
         expect(emailRow).toHaveTextContent('Onbekend');
     });
 
-    it('displays onbekend when phone telecom is missing', () => {
+    it('displays onbekend when phone telecom is missing', async () => {
         const patientWithoutPhone = {
             ...mockPatient,
             telecom: [{system: 'email', value: 'patient@example.com'}]
@@ -259,21 +259,21 @@ describe("taskid page tests", () => {
             patient: patientWithoutPhone,
             serviceRequest: mockServiceRequest
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         const phoneRow = screen.getByText('Telefoonnummer:').nextElementSibling;
         expect(phoneRow).toHaveTextContent('Onbekend');
     });
 
-    it('displays formatted last updated date in status', () => {
-        act(() => {
+    it('displays formatted last updated date in status', async () => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByText(/Geaccepteerd op 15-1-2024/)).toBeInTheDocument();
     });
 
-    it('displays onbekend when last updated date is missing', () => {
+    it('displays onbekend when last updated date is missing', async () => {
         const taskWithoutDate = {
             ...mockTask,
             meta: {}
@@ -286,13 +286,13 @@ describe("taskid page tests", () => {
             subTasks: [],
             taskToQuestionnaireMap: {}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByText(/Geaccepteerd op Onbekend/)).toBeInTheDocument();
     });
 
-    it('displays status reason when available', () => {
+    it('displays status reason when available', async () => {
         const taskWithStatusReason = {
             ...mockTask,
             statusReason: {text: 'Additional information needed'}
@@ -305,28 +305,28 @@ describe("taskid page tests", () => {
             subTasks: [],
             taskToQuestionnaireMap: {}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByText('Statusreden:')).toBeInTheDocument();
         expect(screen.getByText('Additional information needed')).toBeInTheDocument();
     });
 
-    it('does not display status reason section when not available', () => {
-        act(() => {
+    it('does not display status reason section when not available', async () => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.queryByText('Statusreden:')).not.toBeInTheDocument();
     });
 
-    it('renders sse connection status component', () => {
-        act(() => {
+    it('renders sse connection status component', async () => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByTestId('sse-status')).toBeInTheDocument();
     });
 
-    it('does not render launch buttons when auto launch is disabled and task is not accepted', () => {
+    it('does not render launch buttons when auto launch is disabled and task is not accepted', async () => {
         const taskInProgress = {...mockTask, status: 'in-progress'};
         (useTaskProgressStore as jest.Mock).mockReturnValue({
             task: taskInProgress,
@@ -336,7 +336,7 @@ describe("taskid page tests", () => {
             subTasks: [],
             taskToQuestionnaireMap: {}
         });
-        act(() => {
+        await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.queryByRole('button')).not.toBeInTheDocument();
