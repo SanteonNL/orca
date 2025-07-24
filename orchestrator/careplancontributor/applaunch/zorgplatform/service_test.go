@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -45,6 +46,13 @@ import (
 	"github.com/stretchr/testify/require"
 	"go.uber.org/mock/gomock"
 )
+
+var tenantConfig = tenants.Config{
+	"test": tenants.Properties{
+		ID:            "test",
+		ChipSoftOrgID: "urn:oid:2.16.840.1.113883.4.1",
+	},
+}
 
 func TestService(t *testing.T) {
 	httpServerMux := http.NewServeMux()
@@ -181,7 +189,7 @@ func TestService(t *testing.T) {
 	}
 
 	sessionManager := user.NewSessionManager[session.Data](time.Minute)
-	service, err := newWithClients(context.Background(), sessionManager, cfg, httpServer.URL, must.ParseURL("/frontend"), keysClient, certsClient, profile.Test())
+	service, err := newWithClients(context.Background(), sessionManager, cfg, tenantConfig, httpServer.URL, must.ParseURL("/frontend"), keysClient, certsClient, profile.Test())
 	require.NoError(t, err)
 	service.secureTokenService = &stubSecureTokenService{}
 	service.RegisterHandlers(httpServerMux)
@@ -259,6 +267,19 @@ func TestService(t *testing.T) {
 		assert.Equal(t, "Task/"+*existingTask.Id, sessionData.GetByType("Task").Path)
 	})
 
+	t.Run("test tenant not found", func(t *testing.T) {
+		old := service.tenants
+		defer func() {
+			service.tenants = old
+		}()
+		service.tenants = tenants.Config{}
+		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
+			"SAMLResponse": {createSAMLResponse(t, certificate.Leaf)},
+		})
+
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, launchHttpResponse.StatusCode)
+	})
 	t.Run("test invalid SAML response", func(t *testing.T) {
 		invalidSAMLResponse := "invalidSAMLResponse"
 		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{

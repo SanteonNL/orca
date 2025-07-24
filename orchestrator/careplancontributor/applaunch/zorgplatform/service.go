@@ -326,6 +326,15 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
+	// Validate the tenant
+	_, err = s.lookupTenant(launchContext.ChipSoftOrganizationID)
+	if err != nil {
+		// Only log sensitive information, the response just sends out 400
+		log.Ctx(request.Context()).Err(err).Msg("can't determine tenant")
+		http.Error(response, "Application launch failed.", http.StatusBadRequest)
+		return
+	}
+
 	// TODO: Remove this debug logging later
 	log.Ctx(request.Context()).Info().Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
 

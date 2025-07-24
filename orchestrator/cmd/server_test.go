@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/stretchr/testify/require"
 	"net"
@@ -16,7 +17,7 @@ import (
 func TestStart(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Nuts.API.URL = "http://example.com"
-	cfg.Nuts.OwnSubject = "subject"
+	cfg.Tenants = tenants.Test()
 	cfg.Nuts.Public.URL = "http://example.com"
 	cfg.Nuts.DiscoveryService = "http://example.com"
 

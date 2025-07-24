@@ -4,6 +4,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
@@ -55,6 +56,7 @@ func TestService_handle(t *testing.T) {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+			tenants: tenants.Test(),
 		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=ServiceRequest/b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
@@ -80,6 +82,7 @@ func TestService_handle(t *testing.T) {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+			tenants: tenants.Test(),
 		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
@@ -99,6 +102,7 @@ func TestService_handle(t *testing.T) {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+			tenants: tenants.Test(),
 		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
@@ -126,6 +130,7 @@ func TestService_handle(t *testing.T) {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+			tenants: tenants.Test(),
 		}
 		response := httptest.NewRecorder()
 		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)

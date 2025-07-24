@@ -20,6 +20,11 @@ func (c Config) Validate(zorgplatformEnabled bool) error {
 			if props.ChipSoftOrgID == "" {
 				return fmt.Errorf("tenant %s: missing ChipSoftOrgID", id)
 			}
+		} else {
+			// Sanity check: if Zorgplatform is not enabled, ChipSoftOrgID should not be set (could be a mistake)
+			if props.ChipSoftOrgID != "" {
+				return fmt.Errorf("tenant %s: ChipSoftOrgID set, but Zorgplatform not enabled", id)
+			}
 		}
 	}
 	return nil
