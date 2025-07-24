@@ -105,7 +105,7 @@ export default function EnrollmentTaskPage() {
                 }
             </div>
 
-            {task.status === "accepted" /* note: change to in-progress */ && !autoLaunchExternalApps && launchableApps && launchableApps.length > 0 &&
+            {task.status === "in-progress" && !autoLaunchExternalApps && launchableApps && launchableApps.length > 0 &&
                 <div className="w-[568px]">
                     <ThemeProvider theme={defaultTheme}>
                         {launchableApps.map((app, index) => (
