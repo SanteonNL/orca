@@ -90,7 +90,7 @@ jest.mock('@tanstack/react-query', () => ({
 
 beforeEach(() => {
     jest.restoreAllMocks();
-    isValid = true;
+    mockResponseIsValid.mockReturnValue(true);
     (useEnrollmentStore as jest.Mock).mockReturnValue({patient: mockPatient, practitioner: mockPractitioner});
     (useCpsClient as jest.Mock).mockReturnValue({transaction: jest.fn().mockResolvedValue({})});
     (fhirUtils.findQuestionnaireResponse as jest.Mock).mockResolvedValue(mockQuestionnaireResponse);
@@ -116,7 +116,7 @@ describe("QuestionnaireRenderer", () => {
     })
 //
     it('disables submit button when response is invalid', async () => {
-        isValid = false;
+        mockResponseIsValid.mockReturnValue(false)
         await act(async () => {
             render(<QuestionnaireRenderer questionnaire={mockQuestionnaire} inputTask={mockTask}/>)
         });
