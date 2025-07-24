@@ -79,7 +79,6 @@ func Start(ctx context.Context, config Config) error {
 
 	// Register services
 	var services []Service
-
 	services = append(services, healthcheck.New())
 
 	activeProfile, err := nuts.New(config.Nuts, config.Tenants)
