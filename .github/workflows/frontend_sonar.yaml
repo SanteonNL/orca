@@ -30,7 +30,6 @@ jobs:
       - name: run frontend tests
         working-directory: ./frontend
         run: |
-          cd frontend
           pnpm run test
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v5
