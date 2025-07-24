@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/url"
 	"strings"
@@ -27,6 +28,12 @@ func Transaction() *BundleBuilder {
 func SearchSet() *BundleBuilder {
 	return &BundleBuilder{
 		Type: fhir.BundleTypeSearchset,
+	}
+}
+
+func BatchResponse() *BundleBuilder {
+	return &BundleBuilder{
+		Type: fhir.BundleTypeBatchResponse,
 	}
 }
 
@@ -87,6 +94,18 @@ func (t *BundleBuilder) AppendEntry(entry fhir.BundleEntry, opts ...BundleEntryO
 			postOpt(&entry)
 		}
 	}
+	return t
+}
+
+func (t *BundleBuilder) AppendOperationOutcome(statusCode int, issues ...fhir.OperationOutcomeIssue) *BundleBuilder {
+	t.AppendEntry(fhir.BundleEntry{
+		Response: &fhir.BundleEntryResponse{
+			Status: fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
+			Outcome: must.MarshalJSON(fhir.OperationOutcome{
+				Issue: issues,
+			}),
+		},
+	})
 	return t
 }
 

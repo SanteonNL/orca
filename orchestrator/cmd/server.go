@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/rs/zerolog/log"
@@ -102,7 +103,8 @@ func Start(ctx context.Context, config Config) error {
 			services = append(services, service)
 		}
 
-		var ehrFhirProxy coolfhir.HttpProxy //TODO: Rewrite to an array so we can support multiple login mechanisms and multiple EHR proxies
+		var ehrFHIRProxy coolfhir.HttpProxy //TODO: Rewrite to an array so we can support multiple login mechanisms and multiple EHR proxies
+		var ehrFHIRClient fhirclient.Client
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
 			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, frontendUrl, activeProfile))
 		}
@@ -111,7 +113,7 @@ func Start(ctx context.Context, config Config) error {
 			if err != nil {
 				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
 			}
-			ehrFhirProxy = service.EhrFhirProxy()
+			ehrFHIRProxy, ehrFHIRClient = service.EhrFhirProxy()
 			services = append(services, service)
 		}
 		carePlanContributor, err := careplancontributor.New(
@@ -121,7 +123,8 @@ func Start(ctx context.Context, config Config) error {
 			sessionManager,
 			messageBroker,
 			eventManager,
-			ehrFhirProxy,
+			ehrFHIRProxy,
+			ehrFHIRClient,
 			cpsURL, httpHandler)
 		if err != nil {
 			return err
