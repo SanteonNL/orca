@@ -537,7 +537,9 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	if err != nil {
 		return nil, err
 	}
-	identities, err := s.profile.Identities(ctx, tenant.ID)
+	ctx = tenants.WithTenant(ctx, *tenant)
+
+	identities, err := s.profile.Identities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch identities: %w", err)
 	}

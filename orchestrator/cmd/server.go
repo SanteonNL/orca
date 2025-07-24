@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/rs/zerolog/log"
 	"net/http"
@@ -105,10 +104,10 @@ func Start(ctx context.Context, config Config) error {
 
 		var ehrFhirProxy coolfhir.HttpProxy //TODO: Rewrite to an array so we can support multiple login mechanisms and multiple EHR proxies
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
-			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, frontendUrl, activeProfile))
+			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Tenants, frontendUrl, activeProfile))
 		}
 		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
-			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, frontendUrl, activeProfile)
+			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Tenants, config.Public.URL, frontendUrl, activeProfile)
 			if err != nil {
 				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
 			}
@@ -117,6 +116,7 @@ func Start(ctx context.Context, config Config) error {
 		}
 		carePlanContributor, err := careplancontributor.New(
 			config.CarePlanContributor,
+			config.Tenants,
 			activeProfile,
 			config.Public.ParseURL(),
 			sessionManager,
@@ -138,7 +138,7 @@ func Start(ctx context.Context, config Config) error {
 		}()
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, cpsURL, messageBroker, eventManager)
+		carePlanService, err := careplanservice.New(config.CarePlanService, config.Tenants, activeProfile, cpsURL, messageBroker, eventManager)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

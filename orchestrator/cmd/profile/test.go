@@ -32,7 +32,7 @@ type TestProfile struct {
 	CSD                    csd.Directory
 }
 
-func (t TestProfile) CapabilityStatement(cp *fhir.CapabilityStatement, tenantID string) error {
+func (t TestProfile) CapabilityStatement(ctx context.Context, cp *fhir.CapabilityStatement) error {
 	cp.Rest[0].Security = &fhir.CapabilityStatementRestSecurity{
 		Service: []fhir.CodeableConcept{
 			{
@@ -48,7 +48,7 @@ func (t TestProfile) CapabilityStatement(cp *fhir.CapabilityStatement, tenantID 
 	return nil
 }
 
-func (t TestProfile) Identities(_ context.Context, tenantID string) ([]fhir.Organization, error) {
+func (t TestProfile) Identities(_ context.Context) ([]fhir.Organization, error) {
 	return []fhir.Organization{t.Principal.Organization}, nil
 }
 
@@ -89,7 +89,7 @@ func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWrite
 	}
 }
 
-func (t TestProfile) HttpClient(_ context.Context, tenantID string, _ fhir.Identifier) (*http.Client, error) {
+func (t TestProfile) HttpClient(_ context.Context, _ fhir.Identifier) (*http.Client, error) {
 	p := t.Principal
 	if p != nil {
 		p = auth.TestPrincipal1

@@ -376,8 +376,8 @@ func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http
 		return
 	}
 
-	//Ensure the sessions taskIdentifier matches the requested task
-	cpsClient, _, err := s.createFHIRClientForURL(request.Context(), s.tenants.Sole().ID, s.localCarePlanServiceUrl)
+	// Ensure the sessions taskIdentifier matches the requested task
+	cpsClient, _, err := s.createFHIRClientForURL(request.Context(), s.localCarePlanServiceUrl)
 	if err != nil {
 		log.Ctx(request.Context()).Err(err).Msgf("Failed to create local CarePlanService FHIR client: %v", err)
 		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "Failed to create local SCP client", writer)
@@ -632,7 +632,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	if err != nil {
 		return err
 	}
-	fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, s.tenants.Sole().ID, fhirBaseURL, sender.Organization.Identifier[0])
+	fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, fhirBaseURL, sender.Organization.Identifier[0])
 	if err != nil {
 		return err
 	}
@@ -713,13 +713,13 @@ func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task 
 	return client.UpdateWithContext(ctx, "Task/"+*task.Id, task, &task)
 }
 
-func (s Service) defaultCreateFHIRClientForURL(ctx context.Context, tenantID string, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
+func (s Service) defaultCreateFHIRClientForURL(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
 	// We only have the FHIR base URL, we need to read the CapabilityStatement to find out the Authorization Server URL
 	identifier := fhir.Identifier{
 		System: to.Ptr("https://build.fhir.org/http.html#root"),
 		Value:  to.Ptr(fhirBaseURL.String()),
 	}
-	return s.createFHIRClientForIdentifier(ctx, tenantID, fhirBaseURL, identifier)
+	return s.createFHIRClientForIdentifier(ctx, fhirBaseURL, identifier)
 }
 
 // createFHIRClientForExternalRequest creates a FHIR client for a request that should be proxied to an external SCP-node's FHIR API.

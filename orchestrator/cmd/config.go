@@ -26,7 +26,7 @@ type Config struct {
 	CarePlanContributor careplancontributor.Config `koanf:"careplancontributor"`
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
-	Tenants         tenant.Config          `koanf:"tenants"`
+	Tenants         tenants.Config         `koanf:"tenant"`
 	Messaging       messaging.Config       `koanf:"messaging"`
 	LogLevel        zerolog.Level          `koanf:"loglevel"`
 	StrictMode      bool                   `koanf:"strictmode"`

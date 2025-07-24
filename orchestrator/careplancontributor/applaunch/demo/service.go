@@ -105,8 +105,11 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	}
 	sessionData.Set("Patient/"+*patient.Id, patient)
 
+	tenant := s.tenants.Sole()
+	ctx := tenants.WithTenant(request.Context(), tenant)
+
 	// TODO: Might want to support more than one, but not needed for now?
-	organizations, err := s.profile.Identities(request.Context(), s.tenants.Sole().ID)
+	organizations, err := s.profile.Identities(ctx)
 	if err != nil {
 		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to get active organization")
 		http.Error(response, "Failed to get active organization: "+err.Error(), http.StatusInternalServerError)

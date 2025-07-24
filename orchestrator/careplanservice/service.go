@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"io"
 	"net/http"
 	"net/url"
@@ -43,7 +44,7 @@ const basePath = "/cps"
 // We might want to make this configurable at some point.
 var subscriberNotificationTimeout = 10 * time.Second
 
-func New(config Config, profile profile.Provider, cpsURL *url.URL, messageBroker messaging.Broker, eventManager events.Manager) (*Service, error) {
+func New(config Config, tenants tenants.Config, profile profile.Provider, cpsURL *url.URL, messageBroker messaging.Broker, eventManager events.Manager) (*Service, error) {
 	upstreamFhirBaseUrl, _ := url.Parse(config.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 	transport, fhirClient, err := coolfhir.NewAuthRoundTripper(config.FHIR, fhirClientConfig)
@@ -59,6 +60,7 @@ func New(config Config, profile profile.Provider, cpsURL *url.URL, messageBroker
 	}
 
 	s := Service{
+		tenants:             tenants,
 		profile:             profile,
 		fhirURL:             upstreamFhirBaseUrl,
 		orcaPublicURL:       cpsURL,
@@ -100,6 +102,7 @@ func New(config Config, profile profile.Provider, cpsURL *url.URL, messageBroker
 }
 
 type Service struct {
+	tenants                      tenants.Config
 	orcaPublicURL                *url.URL
 	fhirURL                      *url.URL
 	transport                    http.RoundTripper
@@ -176,7 +179,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 	// Binding to actual routing
 	// Metadata
-	mux.HandleFunc("GET "+basePath+"/metadata", func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/metadata", s.tenants.HttpHandler(func(httpResponse http.ResponseWriter, request *http.Request) {
 		md := fhir.CapabilityStatement{
 			FhirVersion: fhir.FHIRVersion4_0_1,
 			Date:        time.Now().Format(time.RFC3339),
@@ -189,14 +192,18 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				},
 			},
 		}
-		s.profile.CapabilityStatement(&md)
+		if err := s.profile.CapabilityStatement(request.Context(), &md); err != nil {
+			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to generate CapabilityStatement")
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanService/Metadata", httpResponse)
+			return
+		}
 		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
-	})
+	}))
 	// Creating a resource
-	mux.HandleFunc("POST "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/{type}", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
-	}))
+	})))
 	// Searching for a resource via POST
 	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
