@@ -179,7 +179,7 @@ func TestService(t *testing.T) {
 			println(string(responseData))
 			require.Equal(t, http.StatusOK, httpResponse.StatusCode, "Expected status code 200 OK for app launch with launch parameter")
 			// Assert captured authorization request parameters
-			require.Equal(t, []string{"openid fhirUser user/Patient.r user/Practitioner.r launch"}, capturedScope)
+			require.Equal(t, []string{"openid fhirUser launch"}, capturedScope)
 			require.Equal(t, []string{issuerURL}, capturedAudience)
 			require.Equal(t, []string{clientID}, capturedClientID)
 			require.Equal(t, []string{"test-launch"}, capturedLaunchParam)
@@ -251,4 +251,9 @@ func Test_loadJWTSigningKeyFromAzureKeyVault(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, signingKey)
 	require.NotNil(t, jwkKeySet)
+
+	require.Len(t, jwkKeySet.Keys, 1, "Expected one key in JWK set")
+	require.Equal(t, "RS256", jwkKeySet.Keys[0].Algorithm, "Expected key algorithm to be RS256")
+	require.Equal(t, "sig", jwkKeySet.Keys[0].Use, "Expected key use to be 'sig'")
+	require.NotNil(t, jwkKeySet.Keys[0].Key)
 }

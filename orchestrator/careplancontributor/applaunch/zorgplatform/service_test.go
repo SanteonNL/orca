@@ -629,8 +629,10 @@ func TestService_EhrFhirProxy(t *testing.T) {
 		carePlanUrl := cpsHttpServer.URL + "/fhir/" + testCarePlanReference
 		zorgplatformFHIRServerMux := http.NewServeMux()
 		var actualQueryParams url.Values
+		var actualHeaders http.Header
 		zorgplatformFHIRServerMux.HandleFunc("GET /fhir/Condition", func(w http.ResponseWriter, r *http.Request) {
 			actualQueryParams = r.URL.Query()
+			actualHeaders = r.Header
 			coolfhir.SendResponse(w, http.StatusOK, fhir.Bundle{})
 		})
 		zorgplatformFHIRServer := httptest.NewServer(zorgplatformFHIRServerMux)
@@ -651,10 +653,13 @@ func TestService_EhrFhirProxy(t *testing.T) {
 		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		httpRequest.Header.Set("X-SCP-Context", carePlanUrl)
 		httpResponse := httptest.NewRecorder()
-		service.EhrFhirProxy().ServeHTTP(httpResponse, httpRequest)
+		proxy, roundTripper := service.EhrFhirProxy()
+		proxy.ServeHTTP(httpResponse, httpRequest)
 
+		require.NotNil(t, roundTripper, "expected round tripper to be set")
 		require.Equal(t, http.StatusOK, httpResponse.Code)
 		require.Equal(t, expectedSearchParams, actualQueryParams, "expected search parameters to be passed through")
+		require.Empty(t, actualHeaders.Get("X-Scp-Context"), "expected X-Scp-Context header to be removed")
 	})
 }
 

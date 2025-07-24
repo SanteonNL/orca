@@ -212,17 +212,18 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+appLaunchUrl, s.handleLaunch)
 }
 
-func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
+func (s *Service) EhrFhirProxy() (coolfhir.HttpProxy, fhirclient.Client) {
 	targetFhirBaseUrl, _ := url.Parse(s.config.ApiUrl)
 	const proxyBasePath = "/cpc/fhir"
 	rewriteUrl, _ := url.Parse(s.baseURL)
 	rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
-	result := coolfhir.NewProxy("App->EHR (ZPF)", targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
+	roundTripper := &stsAccessTokenRoundTripper{
 		transport:          s.zorgplatformHttpClient.Transport,
 		cpsFhirClient:      s.cpsFhirClient,
 		secureTokenService: s.secureTokenService,
 		accessTokenCache:   s.accessTokenCache,
-	}, true, false)
+	}
+	result := coolfhir.NewProxy("App->EHR (ZPF)", targetFhirBaseUrl, proxyBasePath, rewriteUrl, roundTripper, true, false)
 	// Zorgplatform's FHIR API only allows GET-based FHIR searches, while ORCA only allows POST-based FHIR searches.
 	// If the request is a POST-based search, we need to rewrite the request to a GET-based search.
 	result.HTTPRequestModifier = func(req *http.Request) (*http.Request, error) {
@@ -239,7 +240,16 @@ func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 		}
 		return req, nil
 	}
-	return result
+	// Create FHIR client
+	httpClient := &http.Client{
+		Transport: &coolfhir.LoggingRoundTripper{
+			Name: "App->EHR (ZPF)",
+			Next: roundTripper,
+		},
+	}
+	fhirClientCfg := fhirclient.DefaultConfig()
+	fhirClientCfg.UsePostSearch = false // Zorgplatform only supports GET-based searches
+	return result, fhirclient.New(targetFhirBaseUrl, httpClient, &fhirClientCfg)
 }
 
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
@@ -264,6 +274,8 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		log.Ctx(httpRequest.Context()).Error().Msg("Missing X-Scp-Context header")
 		return nil, fmt.Errorf("missing X-Scp-Context header")
 	}
+	// We don't want to propagate the X-Scp-Context header to Zorgplatform, as it's specific to the Shared Care Planning domain.
+	newHttpRequest.Header.Del("X-Scp-Context")
 
 	log.Ctx(httpRequest.Context()).Debug().Msgf("Found SCP context: %s", carePlanReference)
 	// First see if cached
@@ -334,9 +346,6 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
-
-	// TODO: Remove this debug logging later
-	log.Ctx(request.Context()).Info().Msgf("SAML token validated, bsn=%s, workflowId=%s", launchContext.Bsn, launchContext.WorkflowId)
 
 	//TODO: launchContext.Practitioner needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
 	// Cache FHIR resources that don't exist in the EHR in the session,
