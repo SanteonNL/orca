@@ -10,13 +10,17 @@ Use the following environment variables to configure the orchestrator:
    - Zorgplatform app launch: patient BSN `999911120` is changed to `999999151` (to cope with a bug in its test data).
 
 #### Required configuration for Nuts
+- `ORCA_TENANT_<ID>_NUTSSUBJECT`: Nuts subject of the tenant, as it was created in/by the Nuts node.
 - `ORCA_NUTS_PUBLIC_URL`: public URL of the Nuts, used for informing OAuth2 clients of the URL of the OAuth2 Authorization Server, e.g. `http://example.com/nuts`.
 - `ORCA_NUTS_API_URL`: address of the Nuts node API to use, e.g. `http://nutsnode:8081`.
-- `ORCA_NUTS_SUBJECT`: Nuts subject of the local party, as it was created in/by the Nuts node.
 - `ORCA_NUTS_DISCOVERYSERVICE`: ID of the Nuts Discovery Service that is used for CSD lookups (finding (local) care organizations and looking up their endpoints).
 - `ORCA_NUTS_AZUREKV_URL`: URL of the Azure Key Vault that holds the client certificate for outbound HTTP requests.
 - `ORCA_NUTS_AZUREKV_CLIENTCERTNAME`: Name of the certificate(s) for outbound HTTP requests. You can use a comma-separated list of names to use multiple certificates.
 - `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
+
+#### Required configuration for Zorgplatform integration
+- `ORCA_ZORGPLATFORM_ENABLED`: Enable Zorgplatform integration (default: `false`).
+- `ORCA_TENANT_<ID>_CHIPSOFTORGID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
 
 ### Care Plan Contributor configuration
 - `ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN`: Secures the EHR-facing endpoints with a static HTTP Bearer token. Only intended for development and testing purposes, since they're unpractical to change often.

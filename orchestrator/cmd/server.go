@@ -46,6 +46,12 @@ func Start(ctx context.Context, config Config) error {
 	httpHandler := http.NewServeMux()
 	sessionManager := user.NewSessionManager[session.Data](config.CarePlanContributor.SessionTimeout)
 
+	// Set up tenant config
+	for id, props := range config.Tenants {
+		props.ID = id
+		config.Tenants[id] = props
+	}
+
 	if err := config.Validate(); err != nil {
 		return err
 	}
