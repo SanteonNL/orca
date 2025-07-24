@@ -251,9 +251,9 @@ func (f *FHIRClientProxy) sanitizeRequestHeaders(header http.Header) http.Header
 func NewProxy(name string, upstreamBaseUrl *url.URL, proxyBasePath string, rewriteUrl *url.URL,
 	transport http.RoundTripper, allowCaching bool, setMetaSource bool) *FHIRClientProxy {
 	httpClient := &http.Client{
-		Transport: &loggingRoundTripper{
-			name: name,
-			next: transport,
+		Transport: &LoggingRoundTripper{
+			Name: name,
+			Next: transport,
 		},
 	}
 	return &FHIRClientProxy{
@@ -266,22 +266,22 @@ func NewProxy(name string, upstreamBaseUrl *url.URL, proxyBasePath string, rewri
 	}
 }
 
-var _ http.RoundTripper = &loggingRoundTripper{}
+var _ http.RoundTripper = &LoggingRoundTripper{}
 
-type loggingRoundTripper struct {
-	name string
-	next http.RoundTripper
+type LoggingRoundTripper struct {
+	Name string
+	Next http.RoundTripper
 }
 
-func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
+func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
 	logger := log.Ctx(request.Context())
-	logger.Info().Msgf("%s request: %s %s", l.name, request.Method, request.URL.String())
+	logger.Info().Msgf("%s request: %s %s", l.Name, request.Method, request.URL.String())
 	if logger.Debug().Enabled() {
 		var headers []string
 		for key, values := range request.Header {
 			headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 		}
-		logger.Debug().Msgf("%s request headers: %s", l.name, strings.Join(headers, ", "))
+		logger.Debug().Msgf("%s request headers: %s", l.Name, strings.Join(headers, ", "))
 	}
 	if logger.Trace().Enabled() {
 		var requestBody []byte
@@ -292,26 +292,26 @@ func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 				return nil, err
 			}
 		}
-		logger.Trace().Msgf("%s request body: %s", l.name, string(requestBody))
+		logger.Trace().Msgf("%s request body: %s", l.Name, string(requestBody))
 		request.Body = io.NopCloser(bytes.NewReader(requestBody))
 	}
-	response, err := l.next.RoundTrip(request)
+	response, err := l.Next.RoundTrip(request)
 	if err != nil {
-		logger.Warn().Err(err).Msgf("%s request failed (url=%s)", l.name, request.URL.String())
+		logger.Warn().Err(err).Msgf("%s request failed (url=%s)", l.Name, request.URL.String())
 	} else {
 		if logger.Debug().Enabled() {
 			var headers []string
 			for key, values := range response.Header {
 				headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 			}
-			logger.Debug().Msgf("%s response: %s, headers: %s", l.name, response.Status, strings.Join(headers, ", "))
+			logger.Debug().Msgf("%s response: %s, headers: %s", l.Name, response.Status, strings.Join(headers, ", "))
 		}
 		if logger.Trace().Enabled() {
 			responseBody, err := io.ReadAll(response.Body)
 			if err != nil {
 				return nil, err
 			}
-			logger.Trace().Msgf("%s response body: %s", l.name, string(responseBody))
+			logger.Trace().Msgf("%s response body: %s", l.Name, string(responseBody))
 			response.Body = io.NopCloser(bytes.NewReader(responseBody))
 		}
 	}

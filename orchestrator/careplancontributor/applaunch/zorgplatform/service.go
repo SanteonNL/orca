@@ -214,12 +214,13 @@ func (s *Service) EhrFhirProxy() (coolfhir.HttpProxy, fhirclient.Client) {
 	const proxyBasePath = "/cpc/fhir"
 	rewriteUrl, _ := url.Parse(s.baseURL)
 	rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
-	result := coolfhir.NewProxy("App->EHR (ZPF)", targetFhirBaseUrl, proxyBasePath, rewriteUrl, &stsAccessTokenRoundTripper{
+	roundTripper := &stsAccessTokenRoundTripper{
 		transport:          s.zorgplatformHttpClient.Transport,
 		cpsFhirClient:      s.cpsFhirClient,
 		secureTokenService: s.secureTokenService,
 		accessTokenCache:   s.accessTokenCache,
-	}, true, false)
+	}
+	result := coolfhir.NewProxy("App->EHR (ZPF)", targetFhirBaseUrl, proxyBasePath, rewriteUrl, roundTripper, true, false)
 	// Zorgplatform's FHIR API only allows GET-based FHIR searches, while ORCA only allows POST-based FHIR searches.
 	// If the request is a POST-based search, we need to rewrite the request to a GET-based search.
 	result.HTTPRequestModifier = func(req *http.Request) (*http.Request, error) {
@@ -236,9 +237,16 @@ func (s *Service) EhrFhirProxy() (coolfhir.HttpProxy, fhirclient.Client) {
 		}
 		return req, nil
 	}
+	// Create FHIR client
+	httpClient := &http.Client{
+		Transport: &coolfhir.LoggingRoundTripper{
+			Name: "App->EHR (ZPF)",
+			Next: roundTripper,
+		},
+	}
 	fhirClientCfg := fhirclient.DefaultConfig()
 	fhirClientCfg.UsePostSearch = false // Zorgplatform only supports GET-based searches
-	return result, fhirclient.New(targetFhirBaseUrl, s.zorgplatformHttpClient, &fhirClientCfg)
+	return result, fhirclient.New(targetFhirBaseUrl, httpClient, &fhirClientCfg)
 }
 
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
