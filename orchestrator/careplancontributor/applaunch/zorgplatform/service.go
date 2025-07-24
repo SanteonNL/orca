@@ -209,7 +209,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+appLaunchUrl, s.handleLaunch)
 }
 
-func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
+func (s *Service) EhrFhirProxy() (coolfhir.HttpProxy, fhirclient.Client) {
 	targetFhirBaseUrl, _ := url.Parse(s.config.ApiUrl)
 	const proxyBasePath = "/cpc/fhir"
 	rewriteUrl, _ := url.Parse(s.baseURL)
@@ -236,7 +236,9 @@ func (s *Service) EhrFhirProxy() coolfhir.HttpProxy {
 		}
 		return req, nil
 	}
-	return result
+	fhirClientCfg := fhirclient.DefaultConfig()
+	fhirClientCfg.UsePostSearch = false // Zorgplatform only supports GET-based searches
+	return result, fhirclient.New(targetFhirBaseUrl, s.zorgplatformHttpClient, &fhirClientCfg)
 }
 
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}

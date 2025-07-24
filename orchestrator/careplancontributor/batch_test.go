@@ -27,7 +27,7 @@ func TestService_handleBatch(t *testing.T) {
 			HttpStatusCode: 500,
 		}
 		s := &Service{
-			localFHIRStoreClient: &fhirClient,
+			ehrFhirClient: &fhirClient,
 		}
 		requestBundle := fhir.Bundle{
 			Entry: []fhir.BundleEntry{
@@ -53,7 +53,7 @@ func TestService_handleBatch(t *testing.T) {
 	})
 	t.Run("non-GET request", func(t *testing.T) {
 		s := &Service{
-			localFHIRStoreClient: &test.StubFHIRClient{},
+			ehrFhirClient: &test.StubFHIRClient{},
 		}
 		requestBundle := fhir.Bundle{
 			Entry: []fhir.BundleEntry{
@@ -79,7 +79,7 @@ func TestService_handleBatch(t *testing.T) {
 	})
 	t.Run("successful GET request", func(t *testing.T) {
 		s := &Service{
-			localFHIRStoreClient: &test.StubFHIRClient{
+			ehrFhirClient: &test.StubFHIRClient{
 				Resources: []any{
 					fhir.Task{
 						Id: to.Ptr("123"),
@@ -110,7 +110,7 @@ func TestService_handleBatch(t *testing.T) {
 	})
 	t.Run("with query parameters", func(t *testing.T) {
 		s := &Service{
-			localFHIRStoreClient: &test.StubFHIRClient{
+			ehrFhirClient: &test.StubFHIRClient{
 				Resources: []any{
 					fhir.Task{
 						Id: to.Ptr("123"),
@@ -142,7 +142,7 @@ func TestService_handleBatch(t *testing.T) {
 		fhirClient := test.StubFHIRClient{}
 		fhirClient.Error = errors.New("network error")
 		s := &Service{
-			localFHIRStoreClient: &fhirClient,
+			ehrFhirClient: &fhirClient,
 		}
 		requestBundle := fhir.Bundle{
 			Entry: []fhir.BundleEntry{

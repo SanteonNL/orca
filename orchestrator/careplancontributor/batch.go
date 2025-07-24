@@ -47,10 +47,10 @@ func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bu
 		var err error
 		if !strings.Contains(requestEntry.Request.Url, "/") {
 			// It's a search operation
-			err = s.localFHIRStoreClient.SearchWithContext(httpRequest.Context(), requestURL.Path, requestURL.Query(), &responseData, requestOpts...)
+			err = s.ehrFhirClient.SearchWithContext(httpRequest.Context(), requestURL.Path, requestURL.Query(), &responseData, requestOpts...)
 		} else {
 			// It's a read operation
-			err = s.localFHIRStoreClient.ReadWithContext(httpRequest.Context(), requestURL.Path, &responseData, requestOpts...)
+			err = s.ehrFhirClient.ReadWithContext(httpRequest.Context(), requestURL.Path, &responseData, requestOpts...)
 		}
 		if err != nil {
 			var opOutcomeErr fhirclient.OperationOutcomeError

@@ -630,8 +630,10 @@ func TestService_EhrFhirProxy(t *testing.T) {
 		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		httpRequest.Header.Set("X-SCP-Context", carePlanUrl)
 		httpResponse := httptest.NewRecorder()
-		service.EhrFhirProxy().ServeHTTP(httpResponse, httpRequest)
+		proxy, roundTripper := service.EhrFhirProxy()
+		proxy.ServeHTTP(httpResponse, httpRequest)
 
+		require.NotNil(t, roundTripper, "expected round tripper to be set")
 		require.Equal(t, http.StatusOK, httpResponse.Code)
 		require.Equal(t, expectedSearchParams, actualQueryParams, "expected search parameters to be passed through")
 	})
