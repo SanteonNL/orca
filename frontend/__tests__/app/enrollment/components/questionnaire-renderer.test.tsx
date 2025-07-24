@@ -59,12 +59,12 @@ const mockQuestionnaireResponse = {
 }
 
 
-let isValid = true;
+const mockResponseIsValid = jest.fn();
 jest.mock('@aehrc/smart-forms-renderer', () => ({
     useQuestionnaireResponseStore: {
         use: {
             updatableResponse: jest.fn().mockImplementation(() => mockUpdatableResponse),
-            responseIsValid: jest.fn().mockImplementation(() => isValid)
+            responseIsValid: jest.fn().mockImplementation(() => mockResponseIsValid())
         },
         setState: jest.fn()
     },
