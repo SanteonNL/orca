@@ -23,7 +23,7 @@ export default function EnrollmentDetails() {
                 <div>{patient?.telecom?.find(m => m.system === 'phone')?.value ?? 'Onbekend'}</div>
 
                 <div className="font-medium">Verzoek:</div>
-                <div className="first-letter:uppercase">{serviceRequest?.code?.coding?.[0]?.display || "Onbekend"}</div>
+                <div className="first-letter:uppercase">{serviceRequest?.code?.coding?.[0]?.display ?? "Onbekend"}</div>
 
                 <div className="font-medium">Diagnose:</div>
                 <div className="first-letter:uppercase">
