@@ -20,9 +20,11 @@ beforeAll(() => {
 
 describe('RootLayout', () => {
   it('renders children correctly', () => {
-    const testContent = <div data-testid="test-content">Test Content</div>
-
-    render(<RootLayout>{testContent}</RootLayout>)
+    render(
+      <RootLayout>
+        <main data-testid="test-content">Test Content</main>
+      </RootLayout>
+    )
 
     // Check if content is rendered
     expect(screen.getByTestId('test-content')).toBeInTheDocument()
