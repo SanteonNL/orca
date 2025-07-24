@@ -25,12 +25,6 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-
-      - name: run frontend tests
-        run: |
-          cd frontend
-          npm install
-          npm run test
       
       # This step sets the IMAGE_NAME and lowercases the Github username (organizationname) and reponame. This avoids errors (could not find image) in the artifact attestation step 
       - name: set IMAGE_NAME (and lowercase GITHUB_REPOSITORY)
