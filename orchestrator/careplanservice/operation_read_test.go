@@ -46,6 +46,7 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 			ResourcePath: "Task/1",
 			ResourceId:   "1",
 			Principal:    auth.TestPrincipal1,
+			FhirHeaders:  new(fhirclient.Headers),
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRReadOperationHandler[*fhir.Task]{
@@ -76,6 +77,7 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 				Value:  to.Ptr("1"),
 			},
+			FhirHeaders: new(fhirclient.Headers),
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRReadOperationHandler[*fhir.Task]{

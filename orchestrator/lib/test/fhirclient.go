@@ -53,15 +53,38 @@ func (s StubFHIRClient) ReadWithContext(ctx context.Context, path string, target
 		var baseResource BaseResource
 		unmarshalInto(resource, &baseResource)
 		if path == baseResource.Type+"/"+baseResource.Id {
-			if err := json.Unmarshal(baseResource.Data, target); err != nil {
-				panic(err)
+			switch target.(type) {
+			case *[]byte:
+				*target.(*[]byte) = baseResource.Data
+			default:
+				if err := json.Unmarshal(baseResource.Data, target); err != nil {
+					panic(err)
+				}
+			}
+			if err := processPostRequestOpts(opts); err != nil {
+				return err
 			}
 			return nil
 		}
 	}
+
 	return fhirclient.OperationOutcomeError{
 		HttpStatusCode: http.StatusNotFound,
 	}
+}
+
+func processPostRequestOpts(opts []fhirclient.Option) error {
+	for _, opt := range opts {
+		if post, ok := opt.(fhirclient.PostRequestOption); ok {
+			if err := post(nil, &http.Response{
+				Status:     "200 OK",
+				StatusCode: 200,
+			}); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func (s StubFHIRClient) Create(resource any, result any, opts ...fhirclient.Option) error {
@@ -72,7 +95,7 @@ func (s StubFHIRClient) Search(resourceType string, query url.Values, target any
 	return s.SearchWithContext(context.Background(), resourceType, query, target, opts...)
 }
 
-func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType string, query url.Values, target any, opts ...fhirclient.Option) error {
+func (s *StubFHIRClient) SearchWithContext(ctx context.Context, resourceType string, query url.Values, target any, opts ...fhirclient.Option) error {
 	if s.Error != nil {
 		return s.Error
 	}
@@ -277,8 +300,11 @@ func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType stri
 			Resource: additionalResource.Data,
 		})
 	}
-	resultJSON, _ := json.Marshal(result)
-	return json.Unmarshal(resultJSON, target)
+	unmarshalInto(result, target)
+	if err := processPostRequestOpts(opts); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *StubFHIRClient) CreateWithContext(_ context.Context, resource any, result any, opts ...fhirclient.Option) error {

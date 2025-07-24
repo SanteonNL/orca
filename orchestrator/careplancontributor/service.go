@@ -64,21 +64,25 @@ func New(
 	sessionManager *user.SessionManager[session.Data],
 	messageBroker messaging.Broker,
 	eventManager events.Manager,
-	ehrFhirProxy coolfhir.HttpProxy,
+	ehrFHIRProxy coolfhir.HttpProxy,
+	ehrFHIRClient fhirclient.Client,
 	localCarePlanServiceURL *url.URL,
 	httpHandler http.Handler) (*Service, error) {
 
 	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
 
-	localFhirStoreTransport, _, err := coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
-	if err != nil {
-		return nil, err
-	}
 	ctx := context.Background()
-	if config.HealthDataViewEndpointEnabled {
-		if ehrFhirProxy == nil {
-			ehrFhirProxy = coolfhir.NewProxy("App->EHR (DataView)", fhirURL, basePath+"/fhir", orcaPublicURL.JoinPath(basePath, "fhir"), localFhirStoreTransport, false, false)
+
+	// In case the EHR FHIR API isn't made available through the app launch system (demo, SMART on FHIR),
+	// we assume we can just reach it through the configured FHIR URL.
+	if ehrFHIRProxy == nil {
+		var ehrFHIRTransport http.RoundTripper
+		var err error
+		ehrFHIRTransport, ehrFHIRClient, err = coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
+		if err != nil {
+			return nil, err
 		}
+		ehrFHIRProxy = coolfhir.NewProxy("App->EHR", fhirURL, basePath+"/fhir", orcaPublicURL.JoinPath(basePath, "fhir"), ehrFHIRTransport, false, false)
 	}
 
 	// Initialize workflow provider, which is used to select FHIR Questionnaires by the Task Filler engine
@@ -123,14 +127,15 @@ func New(
 		profile:                       profile,
 		frontendUrl:                   config.FrontendConfig.URL,
 		fhirURL:                       fhirURL,
-		ehrFhirProxy:                  ehrFhirProxy,
-		transport:                     localFhirStoreTransport,
+		ehrFhirProxy:                  ehrFHIRProxy,
+		ehrFhirClient:                 ehrFHIRClient,
 		workflows:                     workflowProvider,
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 		eventManager:                  eventManager,
 		sseService:                    sse.New(),
 		httpHandler:                   httpHandler,
 	}
+	var err error
 	if config.OIDC.Provider.Enabled {
 		result.oidcProvider, err = op.New(globals.StrictMode, orcaPublicURL.JoinPath(basePath), config.OIDC.Provider)
 		if err != nil {
@@ -166,10 +171,10 @@ type Service struct {
 	localCarePlanServiceUrl *url.URL
 	fhirURL                 *url.URL
 	ehrFhirProxy            coolfhir.HttpProxy
-	// transport is used to call the local FHIR store, used to:
+	// ehrFhirClient is used to call the local FHIR store, used to:
 	// - proxy requests from the Frontend application (e.g. initiating task workflow)
 	// - proxy requests from EHR (e.g. fetching remote FHIR data)
-	transport                     http.RoundTripper
+	ehrFhirClient                 fhirclient.Client
 	workflows                     taskengine.WorkflowProvider
 	healthdataviewEndpointEnabled bool
 	notifier                      ehr.Notifier
@@ -192,32 +197,34 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// The section below defines endpoints specified by Shared Care Planning.
 	// These are secured through the profile (e.g. Nuts access tokens)
 	//
-	handleBundle := func(httpRequest *http.Request) error {
-		var notification fhir.Bundle
-		if err := json.NewDecoder(httpRequest.Body).Decode(&notification); err != nil {
-			return coolfhir.BadRequest("failed to decode bundle: %w", err)
+	handleBundle := func(httpRequest *http.Request) (*fhir.Bundle, error) {
+		var bundle fhir.Bundle
+		if err := json.NewDecoder(httpRequest.Body).Decode(&bundle); err != nil {
+			return nil, coolfhir.BadRequest("failed to decode bundle: %w", err)
 		}
-		if !coolfhir.IsSubscriptionNotification(&notification) {
-			return coolfhir.BadRequest("bundle type not supported: %s", notification.Type.String())
+		if coolfhir.IsSubscriptionNotification(&bundle) {
+			if err := s.handleNotification(httpRequest.Context(), (*coolfhir.SubscriptionNotification)(&bundle)); err != nil {
+				return nil, err
+			}
+			return &fhir.Bundle{Type: fhir.BundleTypeHistory}, nil
+		} else if bundle.Type == fhir.BundleTypeBatch {
+			return s.handleBatch(httpRequest, bundle)
 		}
-		if err := s.handleNotification(httpRequest.Context(), (*coolfhir.SubscriptionNotification)(&notification)); err != nil {
-			return err
-		}
-		return nil
+		return nil, coolfhir.BadRequest("bundle type not supported: %s", bundle.Type.String())
 	}
 	mux.HandleFunc("POST "+basePath+"/fhir", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		if err := handleBundle(request); err != nil {
+		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
-			return
+		} else {
+			coolfhir.SendResponse(writer, http.StatusOK, bundle)
 		}
-		writer.WriteHeader(http.StatusOK)
 	}))
 	mux.HandleFunc("POST "+basePath+"/fhir/", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
-		if err := handleBundle(request); err != nil {
+		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
-			return
+		} else {
+			coolfhir.SendResponse(writer, http.StatusOK, bundle)
 		}
-		writer.WriteHeader(http.StatusOK)
 	}))
 
 	//

@@ -151,6 +151,26 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, fetchedBundle.Entry, 1)
 	}
+	t.Log("Read data from EHR after Task is accepted")
+	{
+		requestBundle := fhir.Bundle{
+			Type: fhir.BundleTypeBatch,
+			Entry: []fhir.BundleEntry{
+				{
+					Request: &fhir.BundleEntryRequest{
+						Method: fhir.HTTPVerbGET,
+						Url:    "Task/" + *task.Id,
+					},
+				},
+			},
+		}
+		var responseBundle fhir.Bundle
+		err := cpcDataRequester.Create(requestBundle, &responseBundle, fhirclient.AtPath("/"))
+		require.NoError(t, err)
+		require.Len(t, responseBundle.Entry, 1)
+		require.NotNil(t, responseBundle.Entry[0].Response)
+		require.Equal(t, "200 OK", responseBundle.Entry[0].Response.Status)
+	}
 	t.Log("Reading task after accepted - header references non-existent careplan - Fails")
 	{
 		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: invalidCareplanTransport}, nil)
@@ -258,7 +278,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
 
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), nil, carePlanServiceURL, nil)
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), nil, nil, carePlanServiceURL, nil)
 	require.NoError(t, err)
 
 	cpc.tokenClient = mockTokenClient.Client
@@ -483,8 +503,8 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	config.Enabled = true
 	config.FHIR.BaseURL = fhirBaseURL.String()
 
-	fhirClient := fhirclient.New(fhirBaseURL, http.DefaultClient, nil)
-	taskengine.LoadTestQuestionnairesAndHealthcareSevices(t, fhirClient)
+	cpsFHIRClient := fhirclient.New(fhirBaseURL, http.DefaultClient, nil)
+	taskengine.LoadTestQuestionnairesAndHealthcareSevices(t, cpsFHIRClient)
 
 	activeProfile := profile.TestProfile{
 		Principal: auth.TestPrincipal1,
@@ -510,7 +530,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
 
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), cpsProxy, carePlanServiceURL, nil)
+	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), cpsProxy, cpsFHIRClient, carePlanServiceURL, nil)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()

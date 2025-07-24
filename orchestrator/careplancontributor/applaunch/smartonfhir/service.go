@@ -165,6 +165,7 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 	provider, err := s.getIssuerByURL(request, issuer)
 	if err != nil {
 		s.SendError(request.Context(), issuer, fmt.Errorf("failed to get OIDC client for issuer: %w", err), response, http.StatusInternalServerError)
+		return
 	}
 	urlOptions := []rp.URLParamOpt{}
 	if launch != "" {
@@ -298,7 +299,7 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 		}),
 	}
 
-	scopes := []string{"openid", "fhirUser", "user/Patient.r", "user/Practitioner.r", "launch"}
+	scopes := []string{"openid", "fhirUser", "launch"}
 	redirectURI := s.orcaBaseURL.JoinPath("smart-app-launch", "callback", issuer.key)
 	provider, err := rp.NewRelyingPartyOIDC(ctx, issuer.issuerURL(), issuer.clientID, "client_secret_todo", redirectURI.String(), scopes, options...)
 	if err != nil {
@@ -389,9 +390,10 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 		}, &jose.JSONWebKeySet{
 			Keys: []jose.JSONWebKey{
 				{
-					Key:   key.Public(),
-					KeyID: key.KeyID(),
-					Use:   "sig",
+					Key:       key.Public(),
+					KeyID:     key.KeyID(),
+					Use:       "sig",
+					Algorithm: key.SigningAlgorithm(),
 				},
 			},
 		}, nil
