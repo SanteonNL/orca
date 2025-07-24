@@ -11,6 +11,20 @@ import (
 
 type Config map[string]Properties
 
+func (c Config) Validate(zorgplatformEnabled bool) error {
+	for id, props := range c {
+		if props.NutsSubject == "" {
+			return fmt.Errorf("tenant %s: missing Nuts subject", id)
+		}
+		if zorgplatformEnabled {
+			if props.ChipSoftOrgID == "" {
+				return fmt.Errorf("tenant %s: missing ChipSoftOrgID", id)
+			}
+		}
+	}
+	return nil
+}
+
 func (c Config) Get(tenantID string) (*Properties, error) {
 	if props, ok := c[tenantID]; ok {
 		return &props, nil
