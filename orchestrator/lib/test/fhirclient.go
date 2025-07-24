@@ -95,7 +95,7 @@ func (s StubFHIRClient) Search(resourceType string, query url.Values, target any
 	return s.SearchWithContext(context.Background(), resourceType, query, target, opts...)
 }
 
-func (s StubFHIRClient) SearchWithContext(ctx context.Context, resourceType string, query url.Values, target any, opts ...fhirclient.Option) error {
+func (s *StubFHIRClient) SearchWithContext(ctx context.Context, resourceType string, query url.Values, target any, opts ...fhirclient.Option) error {
 	if s.Error != nil {
 		return s.Error
 	}

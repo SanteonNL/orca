@@ -43,6 +43,11 @@ func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bu
 		var responseData []byte
 		requestOpts := []fhirclient.Option{
 			fhirclient.ResponseStatusCode(&responseStatusCode),
+			fhirclient.RequestHeaders(map[string][]string{
+				// We need to propagate the X-Scp-Context header to FHIR client doing the request,
+				// Zorgplatform STS RoundTripper needs it.
+				"X-Scp-Context": {httpRequest.Header.Get("X-Scp-Context")},
+			}),
 		}
 		var err error
 		if !strings.Contains(requestEntry.Request.Url, "/") {

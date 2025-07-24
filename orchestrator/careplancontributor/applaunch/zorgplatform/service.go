@@ -270,6 +270,8 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		log.Ctx(httpRequest.Context()).Error().Msg("Missing X-Scp-Context header")
 		return nil, fmt.Errorf("missing X-Scp-Context header")
 	}
+	// We don't want to propagate the X-Scp-Context header to Zorgplatform, as it's specific to the Shared Care Planning domain.
+	newHttpRequest.Header.Del("X-Scp-Context")
 
 	log.Ctx(httpRequest.Context()).Debug().Msgf("Found SCP context: %s", carePlanReference)
 	// First see if cached

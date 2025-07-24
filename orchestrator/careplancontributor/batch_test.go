@@ -14,6 +14,7 @@ import (
 
 func TestService_handleBatch(t *testing.T) {
 	httpRequest, _ := http.NewRequest(http.MethodGet, "/", nil)
+	httpRequest.Header.Add("X-Scp-Context", "valid")
 	t.Run("upstream server returns error", func(t *testing.T) {
 		fhirClient := test.StubFHIRClient{}
 		fhirClient.Error = fhirclient.OperationOutcomeError{
