@@ -14,6 +14,8 @@ func init() {
 	zerolog.DefaultContextLogger = &log.Logger
 }
 
+// CreateCPSFHIRClient creates a FHIR client for the Care Plan Service (CPS), based on the tenant information in the context.
+// If the tenant is not found or no client is registered for the tenant, it returns an error.
 func CreateCPSFHIRClient(ctx context.Context) (fhirclient.Client, error) {
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
@@ -26,6 +28,7 @@ func CreateCPSFHIRClient(ctx context.Context) (fhirclient.Client, error) {
 	return fhirClient, nil
 }
 
+// RegisterCPSFHIRClient registers a FHIR client for the Care Plan Service (CPS) for a specific tenant.
 func RegisterCPSFHIRClient(tenantID string, client fhirclient.Client) {
 	if _, exists := cpsFHIRClientsByTenant[tenantID]; StrictMode && exists {
 		panic(fmt.Sprintf("CPS FHIR client for tenant %s already exists", tenantID))
