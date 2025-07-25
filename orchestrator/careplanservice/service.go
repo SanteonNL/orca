@@ -100,18 +100,17 @@ func New(config Config, profile profile.Provider, cpsURL *url.URL, messageBroker
 }
 
 type Service struct {
-	orcaPublicURL                *url.URL
-	fhirURL                      *url.URL
-	transport                    http.RoundTripper
-	fhirClient                   fhirclient.Client
-	profile                      profile.Provider
-	subscriptionManager          subscriptions.Manager
-	eventManager                 events.Manager
-	maxReadBodySize              int
-	proxy                        coolfhir.HttpProxy
-	allowUnmanagedFHIROperations bool
-	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
-	pipeline                     pipeline.Instance
+	orcaPublicURL       *url.URL
+	fhirURL             *url.URL
+	transport           http.RoundTripper
+	fhirClient          fhirclient.Client
+	profile             profile.Provider
+	subscriptionManager subscriptions.Manager
+	eventManager        events.Manager
+	maxReadBodySize     int
+	proxy               coolfhir.HttpProxy
+	handlerProvider     func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
+	pipeline            pipeline.Instance
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
