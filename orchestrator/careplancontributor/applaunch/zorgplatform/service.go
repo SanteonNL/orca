@@ -621,6 +621,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	}
 
 	sessionData := session.Data{
+		TenantID:       tenant.ID,
 		FHIRLauncher:   launcherKey,
 		TaskIdentifier: to.Ptr(zorgplatformWorkflowIdSystem + "|" + launchContext.WorkflowId),
 		LauncherProperties: map[string]string{
@@ -637,6 +638,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	if existingTaskRef != nil {
 		sessionData.Set(*existingTaskRef, nil)
 	}
+
 	return &sessionData, nil
 }
 

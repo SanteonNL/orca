@@ -108,7 +108,6 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	tenant := s.tenants.Sole()
 	ctx := tenants.WithTenant(request.Context(), tenant)
 
-	// TODO: Might want to support more than one, but not needed for now?
 	organizations, err := s.profile.Identities(ctx)
 	if err != nil {
 		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to get active organization")

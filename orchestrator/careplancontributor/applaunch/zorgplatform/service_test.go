@@ -237,6 +237,9 @@ func TestService(t *testing.T) {
 			t.Run("check Patient is in session", func(t *testing.T) {
 				assert.NotNil(t, session.Get[fhir.Patient](sessionData))
 			})
+			t.Run("check tenant is set on session", func(t *testing.T) {
+				assert.Equal(t, "test", sessionData.TenantID)
+			})
 		})
 	})
 	t.Run("ok, existing Task", func(t *testing.T) {
@@ -265,6 +268,7 @@ func TestService(t *testing.T) {
 		require.NotNil(t, sessionData)
 		require.Equal(t, "/frontend/task/12345678910", launchHttpResponse.Header.Get("Location"))
 		assert.Equal(t, "Task/"+*existingTask.Id, sessionData.GetByType("Task").Path)
+		assert.Equal(t, "test", sessionData.TenantID)
 	})
 
 	t.Run("test tenant not found", func(t *testing.T) {
