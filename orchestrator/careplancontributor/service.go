@@ -216,25 +216,25 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		return nil, coolfhir.BadRequest("bundle type not supported: %s", bundle.Type.String())
 	}
-	mux.HandleFunc("POST "+basePath+"/fhir", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/fhir", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
 			coolfhir.SendResponse(writer, http.StatusOK, bundle)
 		}
-	}))
-	mux.HandleFunc("POST "+basePath+"/fhir/", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	})))
+	mux.HandleFunc("POST "+basePath+"/fhir/", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
 			coolfhir.SendResponse(writer, http.StatusOK, bundle)
 		}
-	}))
+	})))
 
 	//
 	// This is a special endpoint, used by other SCP-nodes to discovery applications.
 	//
-	mux.HandleFunc("GET "+basePath+"/fhir/Endpoint", s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/fhir/Endpoint", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
 		if len(request.URL.Query()) > 0 {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("search parameters are not supported on this endpoint"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		}
@@ -271,7 +271,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			bundle.Append(endpoints[name], nil, nil)
 		}
 		coolfhir.SendResponse(writer, http.StatusOK, bundle, nil)
-	}))
+	})))
 	// The code to GET or POST/_search are the same, so we can use the same handler for both
 	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
@@ -296,9 +296,9 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
-	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
-	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
-	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}", s.profile.Authenticator(baseURL, proxyGetOrSearchHandler))
+	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, proxyGetOrSearchHandler)))
+	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, proxyGetOrSearchHandler)))
+	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, proxyGetOrSearchHandler)))
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
@@ -306,7 +306,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// This endpoint is used by the EHR and ORCA Frontend to query the FHIR API of a remote SCP-node.
 	// The remote SCP-node to query can be specified using the following HTTP headers:
 	// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL
-	mux.HandleFunc(basePath+"/external/fhir/{rest...}", s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePath+"/external/fhir/{rest...}", s.tenants.HttpHandler(s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Extract relevant data from the bearer JWT
 		fhirBaseURL, httpClient, err := s.createFHIRClientForExternalRequest(request.Context(), request)
 		if err != nil {
@@ -316,11 +316,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		const proxyBasePath = basePath + "/external/fhir/"
 		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, true, true)
 		fhirProxy.ServeHTTP(writer, request)
-	}))
-	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
-	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.withSession(s.handleProxyAppRequestToEHR))
+	})))
+	mux.HandleFunc("GET "+basePath+"/context", s.tenants.HttpHandler(s.withSession(s.handleGetContext)))
+	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR)))
 	// Allow the front-end to subscribe to specific Task updates via Server-Sent Events (SSE)
-	mux.HandleFunc("GET "+basePath+"/subscribe/fhir/Task/{id}", s.withSession(s.handleSubscribeToTask))
+	mux.HandleFunc("GET "+basePath+"/subscribe/fhir/Task/{id}", s.tenants.HttpHandler(s.withSession(s.handleSubscribeToTask)))
 
 	// Logout endpoint
 	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
@@ -751,7 +751,11 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 				if fhirBaseURL == nil {
 					return nil, nil, fmt.Errorf("%s: no local CarePlanService", header)
 				}
-				httpClient = s.httpClientForLocalCPS(httpClient)
+				tenant, err := tenants.FromContext(ctx)
+				if err != nil {
+					return nil, nil, err
+				}
+				httpClient = s.httpClientForLocalCPS(tenant, httpClient)
 			} else {
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
 				if err != nil {
@@ -793,7 +797,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 	return fhirBaseURL, httpClient, nil
 }
 
-func (s Service) httpClientForLocalCPS(httpClient *http.Client) *http.Client {
+func (s Service) httpClientForLocalCPS(tenant tenants.Properties, httpClient *http.Client) *http.Client {
 	httpClient = &http.Client{Transport: internalDispatchHTTPRoundTripper{
 		profile: s.profile,
 		handler: s.httpHandler,
@@ -806,8 +810,10 @@ func (s Service) httpClientForLocalCPS(httpClient *http.Client) *http.Client {
 			*newURL = *request.URL
 			// Remove ORCA Public URL prefix from the request path, since we're dispatching internally
 			newURL.Path = strings.TrimPrefix(strings.TrimPrefix(originalURL.Path, "/"), strings.TrimPrefix(s.orcaPublicURL.Path, "/"))
+			// Add tenant to the request context
+			ctx := tenants.WithTenant(request.Context(), tenant)
 			// Earlier, I tried http.Request.Clone(), but that caused a redirect-loop. This worked.
-			newHTTPRequest, _ := http.NewRequestWithContext(request.Context(), request.Method, newURL.String(), request.Body)
+			newHTTPRequest, _ := http.NewRequestWithContext(ctx, request.Method, newURL.String(), request.Body)
 			newHTTPRequest.Header = request.Header.Clone()
 			*request = *newHTTPRequest
 		},

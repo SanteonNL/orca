@@ -57,6 +57,9 @@ var tenantContextKey = tenantContextKeyType{}
 func FromContext(ctx context.Context) (Properties, error) {
 	principal, ok := ctx.Value(tenantContextKey).(Properties)
 	if !ok {
+		if true {
+			panic(ErrNoTenant)
+		}
 		return Properties{}, ErrNoTenant
 	}
 	return principal, nil

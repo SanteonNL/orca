@@ -205,38 +205,38 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	})))
 	// Searching for a resource via POST
-	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleSearchRequest(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
-	}))
+	})))
 	// Handle bundle
-	mux.HandleFunc("POST "+basePath+"/", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePath+"/", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != basePath+"/" {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("invalid path"), "CarePlanService/POST", httpResponse)
 			return
 		}
 		s.handleBundle(request, httpResponse)
-	}))
-	mux.HandleFunc("POST "+basePath, s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	})))
+	mux.HandleFunc("POST "+basePath, s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		s.handleBundle(request, httpResponse)
-	}))
+	})))
 	// Updating a resource by ID
-	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleModification(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
-	}))
+	})))
 	// Updating a resource by selecting it based on query params
-	mux.HandleFunc("PUT "+basePath+"/{type}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePath+"/{type}", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
-	}))
+	})))
 	// Handle reading a specific resource instance
-	mux.HandleFunc("GET "+basePath+"/{type}/{id}", s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePath+"/{type}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
-	}))
+	})))
 }
 
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
@@ -398,7 +398,7 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
 	}
-	localIdentity, err := s.getLocalIdentity()
+	localIdentity, err := s.getLocalIdentity(httpRequest.Context())
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
@@ -440,7 +440,7 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 
 	tx := coolfhir.Transaction()
 
-	localIdentity, err := s.getLocalIdentity()
+	localIdentity, err := s.getLocalIdentity(httpRequest.Context())
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
@@ -752,7 +752,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 	// Set up the transaction and handler request
 	tx := coolfhir.Transaction()
 
-	localIdentity, err := s.getLocalIdentity()
+	localIdentity, err := s.getLocalIdentity(httpRequest.Context())
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
 		return
@@ -839,7 +839,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
 			return
 		}
-		localIdentity, err := s.getLocalIdentity()
+		localIdentity, err := s.getLocalIdentity(httpRequest.Context())
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
 			return
@@ -1194,8 +1194,8 @@ func collectLiteralReferences(resource any, path []string, result map[string]str
 	}
 }
 
-func (s *Service) getLocalIdentity() (*fhir.Identifier, error) {
-	localIdentity, err := s.profile.Identities(context.Background())
+func (s *Service) getLocalIdentity(ctx context.Context) (*fhir.Identifier, error) {
+	localIdentity, err := s.profile.Identities(ctx)
 	if err != nil {
 		return nil, err
 	}

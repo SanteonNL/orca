@@ -468,7 +468,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
 	service.RegisterHandlers(frontServerMux)
-	ctx := context.Background()
+	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
 	httpClient, _ := prof.HttpClient(ctx, auth.TestPrincipal1.Organization.Identifier[0])
 
 	t.Run("invalid notification - wrong data type", func(t *testing.T) {
@@ -569,7 +569,8 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	prof := profile.TestProfile{
 		Principal: auth.TestPrincipal2,
 	}
-	httpClient, _ := prof.HttpClient(nil, auth.TestPrincipal2.Organization.Identifier[0])
+	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+	httpClient, _ := prof.HttpClient(ctx, auth.TestPrincipal2.Organization.Identifier[0])
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -949,6 +950,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 				},
 			},
 		},
+		tenants:                 tenants.Test(),
 		httpHandler:             mux,
 		localCarePlanServiceUrl: must.ParseURL(httpServer.URL + "/fhir"),
 		orcaPublicURL:           must.ParseURL(httpServer.URL),

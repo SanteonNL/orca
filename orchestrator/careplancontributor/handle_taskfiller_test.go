@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 
@@ -29,6 +30,8 @@ import (
 )
 
 func TestService_handleTaskFillerCreate(t *testing.T) {
+	defaultCtx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+	defaultCtx = tenants.WithTenant(defaultCtx, tenants.Test().Sole())
 	var capturedTask fhir.Task
 	tests := []struct {
 		name                    string
@@ -53,7 +56,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		{
 			name:             "primary task, owner != local organization, nothing should happen",
 			profile:          profile.TestProfile{Principal: auth.TestPrincipal2},
-			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
+			ctx:              auth.WithPrincipal(defaultCtx, *auth.TestPrincipal2),
 			notificationTask: deep.Copy(primaryTask),
 		},
 		{
@@ -354,7 +357,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			if tt.profile != nil {
 				service.profile = tt.profile
 			}
-			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+			var ctx = defaultCtx
 			if tt.ctx != nil {
 				ctx = tt.ctx
 			}
