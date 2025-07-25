@@ -354,7 +354,7 @@ func TestService_ValidationErrorHandling(t *testing.T) {
 
 	require.NotNil(t, target)
 	require.NotEmpty(t, target.Issue)
-	require.Equal(t, "phone number must start with +31", *target.Issue[0].Diagnostics)
+	require.Equal(t, "patient phone number should be a dutch mobile number", *target.Issue[0].Diagnostics)
 	require.Equal(t, "email is invalid", *target.Issue[1].Diagnostics)
 }
 

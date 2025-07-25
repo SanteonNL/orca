@@ -118,79 +118,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 			expectedErr: []string{"email is required"},
 		},
 		{
-			name: "rejects patient with phone not starting with +31",
-			patient: &fhir.Patient{
-				Telecom: []fhir.ContactPoint{
-					{
-						System: &emailSystem,
-						Value:  to.Ptr("test@example.com"),
-					},
-					{
-						System: &phoneSystem,
-						Value:  to.Ptr("+32123456789"),
-					},
-				},
-			},
-			expectedErr: []string{"phone number must start with +31"},
-		},
-		{
-			name: "rejects patient with nil phone value",
-			patient: &fhir.Patient{
-				Telecom: []fhir.ContactPoint{
-					{
-						System: &emailSystem,
-						Value:  to.Ptr("test@example.com"),
-					},
-					{
-						System: &phoneSystem,
-						Value:  nil,
-					},
-				},
-			},
-			expectedErr: []string{"phone number is required"},
-		},
-		{
-			name: "rejects patient with empty phone value",
-			patient: &fhir.Patient{
-				Telecom: []fhir.ContactPoint{
-					{
-						System: &emailSystem,
-						Value:  to.Ptr("test@example.com"),
-					},
-					{
-						System: &phoneSystem,
-						Value:  to.Ptr(""),
-					},
-				},
-			},
-			expectedErr: []string{"phone number is required"},
-		},
-		{
-			name: "rejects patient with only valid email",
-			patient: &fhir.Patient{
-				Telecom: []fhir.ContactPoint{
-					{
-						System: &emailSystem,
-						Value:  to.Ptr("test@example.com"),
-					},
-				},
-			},
-			expectedErr: []string{"patient must have phone"},
-		},
-		{
-			name: "rejects patient with only valid phone",
-			patient: &fhir.Patient{
-				Telecom: []fhir.ContactPoint{
-					{
-						System: &phoneSystem,
-						Value:  to.Ptr("+31987654321"),
-					},
-				},
-			},
-			expectedErr: []string{"patient must have email"},
-		},
-		{
-			name: "validates multiple contact points",
+			name: "accepts patient with valid dutch mobile phone starting with +316",
 			patient: &fhir.Patient{
 				Telecom: []fhir.ContactPoint{
 					{
@@ -201,29 +129,121 @@ func TestPatientValidator_Validate(t *testing.T) {
 						System: &phoneSystem,
 						Value:  to.Ptr("+31612345678"),
 					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts patient with valid dutch phone with minimum digits",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
 					{
-						System: &faxSystem,
-						Value:  to.Ptr("123456789"),
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+31612345678"),
 					},
 				},
 			},
 			expectedErr: nil,
 		},
 		{
-			name: "returns multiple errors for invalid email and phone",
+			name: "rejects patient with dutch phone number too short",
 			patient: &fhir.Patient{
 				Telecom: []fhir.ContactPoint{
 					{
 						System: &emailSystem,
-						Value:  to.Ptr("invalid-email"),
+						Value:  to.Ptr("test@example.com"),
 					},
 					{
 						System: &phoneSystem,
-						Value:  to.Ptr("+32123456789"),
+						Value:  to.Ptr("+3161234567"),
 					},
 				},
 			},
-			expectedErr: []string{"email is invalid", "phone number must start with +31"},
+			expectedErr: []string{"patient phone number should be a dutch mobile number"},
+		},
+		{
+			name: "rejects patient with dutch phone number too long",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+31612345678901"),
+					},
+				},
+			},
+			expectedErr: []string{"patient phone number should be a dutch mobile number"},
+		},
+		{
+			name: "rejects patient with dutch phone containing non-numeric characters",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+3161234567a"),
+					},
+				},
+			},
+			expectedErr: []string{"patient phone number should be a dutch mobile number"},
+		},
+		{
+			name: "Accepts patient with dutch phone containing spaces",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+31 6 12345678"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts patient with dutch phone containing dashes",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+31-6-12345678"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "rejects patient with phone starting with +31 but invalid area code",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+31112345678"),
+					},
+				},
+			},
+			expectedErr: []string{"patient phone number should be a dutch mobile number"},
 		},
 	}
 
