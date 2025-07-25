@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"net/http"
 	"net/http/httptest"
@@ -278,7 +279,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
 
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), nil, nil, carePlanServiceURL, nil)
+	cpc, err := New(cpcConfig, tenants.Test(), profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), nil, nil, carePlanServiceURL, nil)
 	require.NoError(t, err)
 
 	cpc.tokenClient = mockTokenClient.Client
@@ -512,7 +513,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	}
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
-	service, err := careplanservice.New(config, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
+	service, err := careplanservice.New(config, tenants.Test(), activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
@@ -530,7 +531,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
 
-	cpc, err := New(cpcConfig, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), cpsProxy, cpsFHIRClient, carePlanServiceURL, nil)
+	cpc, err := New(cpcConfig, tenants.Test(), profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), cpsProxy, cpsFHIRClient, carePlanServiceURL, nil)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()

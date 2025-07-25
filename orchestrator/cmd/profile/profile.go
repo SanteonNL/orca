@@ -26,5 +26,5 @@ type Provider interface {
 	CsdDirectory() csd.Directory
 	// Identities returns the identities of the local tenant (e.g., a care organization).
 	Identities(ctx context.Context) ([]fhir.Organization, error)
-	CapabilityStatement(cp *fhir.CapabilityStatement)
+	CapabilityStatement(ctx context.Context, cp *fhir.CapabilityStatement) error
 }

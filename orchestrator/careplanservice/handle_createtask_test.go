@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/url"
@@ -347,7 +348,8 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 
 			tx := coolfhir.Transaction()
 
-			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+			ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+			ctx = auth.WithPrincipal(ctx, *auth.TestPrincipal1)
 			if tt.principal != nil {
 				fhirRequest.Principal = tt.principal
 			}

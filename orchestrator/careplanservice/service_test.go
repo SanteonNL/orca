@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
@@ -276,7 +277,7 @@ func TestService_ErrorHandling(t *testing.T) {
 			FHIR: coolfhir.ClientConfig{
 				BaseURL: fhirServer.URL + "/fhir",
 			},
-		},
+		}, tenants.Test(),
 		profile.Test(),
 		orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
@@ -321,7 +322,7 @@ func TestService_ValidationErrorHandling(t *testing.T) {
 			FHIR: coolfhir.ClientConfig{
 				BaseURL: fhirServer.URL + "/fhir",
 			},
-		},
+		}, tenants.Test(),
 		profile.Test(),
 		orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
@@ -528,7 +529,7 @@ func TestService_Handle(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
+	}, tenants.Test(), profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 
 	var capturedHeaders []http.Header
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -1098,7 +1099,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 		FHIR: coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
 		},
-	}, profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
+	}, tenants.Test(), profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	t.Run("invalid content type - fails", func(t *testing.T) {

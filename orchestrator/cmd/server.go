@@ -46,6 +46,12 @@ func Start(ctx context.Context, config Config) error {
 	httpHandler := http.NewServeMux()
 	sessionManager := user.NewSessionManager[session.Data](config.CarePlanContributor.SessionTimeout)
 
+	// Set up tenant config
+	for id, props := range config.Tenants {
+		props.ID = id
+		config.Tenants[id] = props
+	}
+
 	if err := config.Validate(); err != nil {
 		return err
 	}
@@ -73,10 +79,9 @@ func Start(ctx context.Context, config Config) error {
 
 	// Register services
 	var services []Service
-
 	services = append(services, healthcheck.New())
 
-	activeProfile, err := nuts.New(config.Nuts)
+	activeProfile, err := nuts.New(config.Nuts, config.Tenants)
 	if err != nil {
 		return fmt.Errorf("failed to create profile: %w", err)
 	}
@@ -106,10 +111,10 @@ func Start(ctx context.Context, config Config) error {
 		var ehrFHIRProxy coolfhir.HttpProxy //TODO: Rewrite to an array so we can support multiple login mechanisms and multiple EHR proxies
 		var ehrFHIRClient fhirclient.Client
 		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
-			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, frontendUrl, activeProfile))
+			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, config.Tenants, frontendUrl, activeProfile))
 		}
 		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
-			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, frontendUrl, activeProfile)
+			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Tenants, config.Public.URL, frontendUrl, activeProfile)
 			if err != nil {
 				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
 			}
@@ -118,6 +123,7 @@ func Start(ctx context.Context, config Config) error {
 		}
 		carePlanContributor, err := careplancontributor.New(
 			config.CarePlanContributor,
+			config.Tenants,
 			activeProfile,
 			config.Public.ParseURL(),
 			sessionManager,
@@ -140,7 +146,7 @@ func Start(ctx context.Context, config Config) error {
 		}()
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, cpsURL, messageBroker, eventManager)
+		carePlanService, err := careplanservice.New(config.CarePlanService, config.Tenants, activeProfile, cpsURL, messageBroker, eventManager)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

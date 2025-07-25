@@ -3,6 +3,7 @@ package cmd
 import (
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/rs/zerolog"
 
@@ -25,6 +26,7 @@ type Config struct {
 	CarePlanContributor careplancontributor.Config `koanf:"careplancontributor"`
 	// CarePlanService holds the configuration for the CarePlanService.
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
+	Tenants         tenants.Config         `koanf:"tenant"`
 	Messaging       messaging.Config       `koanf:"messaging"`
 	LogLevel        zerolog.Level          `koanf:"loglevel"`
 	StrictMode      bool                   `koanf:"strictmode"`

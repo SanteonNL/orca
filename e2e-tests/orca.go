@@ -12,7 +12,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, fhirStoreURL string, questionnaireFhirStoreUrl string, allowUnmanagedFHIROperations bool) *url.URL {
+func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, tenant string, cpsEnabled bool, fhirStoreURL string, questionnaireFhirStoreUrl string, allowUnmanagedFHIROperations bool) *url.URL {
 	image := os.Getenv("ORCHESTRATOR_IMAGE")
 	pullImage := false
 	if image == "" {
@@ -35,7 +35,7 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_PUBLIC_URL":                                   "http://" + containerName + ":8080",
 			"ORCA_NUTS_API_URL":                                 "http://nutsnode:8081",
 			"ORCA_NUTS_PUBLIC_URL":                              "http://nutsnode:8080",
-			"ORCA_NUTS_SUBJECT":                                 nutsSubject,
+			"ORCA_TENANT_" + tenant + "_NUTSSUBJECT":            tenant,
 			"ORCA_NUTS_DISCOVERYSERVICE":                        "dev:HomeMonitoring2024",
 			"ORCA_CAREPLANSERVICE_ENABLED":                      strconv.FormatBool(cpsEnabled),
 			"ORCA_CAREPLANSERVICE_FHIR_URL":                     fhirStoreURL,

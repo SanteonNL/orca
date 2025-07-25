@@ -6,6 +6,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -83,7 +84,7 @@ func TestDutchNutsProfile_identifiersFromCredential(t *testing.T) {
 }
 
 func TestDutchNutsProfile_Identities(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
 	identifier1 := fhir.Identifier{
 		System: to.Ptr(coolfhir.URANamingSystem),
 		Value:  to.Ptr("1234"),
@@ -156,8 +157,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
-			vcrClient: vcrClient,
-			Config:    Config{OwnSubject: "sub"},
+			vcrClient:        vcrClient,
+			cachedIdentities: map[string][]fhir.Organization{},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
 			JSON200: &[]vcr.VerifiableCredential{identifier1VC, identifier2UziCertVC},
@@ -174,8 +175,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
-			vcrClient: vcrClient,
-			Config:    Config{OwnSubject: "sub"},
+			vcrClient:        vcrClient,
+			cachedIdentities: map[string][]fhir.Organization{},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
 			JSON200: &[]vcr.VerifiableCredential{identifier1VC, nonUraVC},
@@ -191,8 +192,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
-			vcrClient: vcrClient,
-			Config:    Config{OwnSubject: "sub"},
+			vcrClient:        vcrClient,
+			cachedIdentities: map[string][]fhir.Organization{},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
 			JSON200: &[]vcr.VerifiableCredential{identifier1VC, identifier2VC},
@@ -214,7 +215,6 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
 			vcrClient: vcrClient,
-			Config:    Config{OwnSubject: "sub"},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(nil, errors.New("failed"))
 
@@ -227,7 +227,6 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
 			vcrClient: vcrClient,
-			Config:    Config{OwnSubject: "sub"},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(problemResponse, nil)
 
@@ -240,10 +239,11 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
 			vcrClient: vcrClient,
-			Config:    Config{OwnSubject: "sub"},
-			cachedIdentities: []fhir.Organization{
-				{
-					Identifier: []fhir.Identifier{identifier1},
+			cachedIdentities: map[string][]fhir.Organization{
+				tenants.Test().Sole().ID: {
+					{
+						Identifier: []fhir.Identifier{identifier1},
+					},
 				},
 			},
 		}
@@ -258,8 +258,8 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
-			vcrClient: vcrClient,
-			Config:    Config{OwnSubject: "sub"},
+			vcrClient:        vcrClient,
+			cachedIdentities: map[string][]fhir.Organization{},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
 			JSON200: &[]vcr.VerifiableCredential{identifier1VC, identifier2VC},
@@ -292,7 +292,7 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 			},
 		}, nil).
 		AnyTimes()
-	ctx := context.Background()
+	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
 	httpMux := http.NewServeMux()
 	httpMux.HandleFunc("/internal/auth/v2/sub/request-service-access-token", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -321,7 +321,6 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 				API: APIConfig{
 					URL: httpServer.URL,
 				},
-				OwnSubject: "sub",
 			},
 		}
 		httpClient, err := profile.HttpClient(ctx, serverIdentity)
@@ -357,7 +356,6 @@ func TestDutchNutsProfile_HttpClient(t *testing.T) {
 				API: APIConfig{
 					URL: nutsNode.URL,
 				},
-				OwnSubject: "sub",
 			},
 		}
 		httpClient, err := profile.HttpClient(ctx, serverIdentity)
@@ -423,7 +421,7 @@ func TestNew(t *testing.T) {
 				URL:            kv.TestHttpServer.URL,
 				ClientCertName: []string{"test-client-cert", "test-client-cert-2"},
 			},
-		})
+		}, tenants.Test())
 		require.NoError(t, err)
 		require.Len(t, profile.clientCerts, 2)
 	})
@@ -439,11 +437,12 @@ func TestDutchNutsProfile_CapabilityStatement(t *testing.T) {
 	}
 	profile := DutchNutsProfile{
 		Config: Config{
-			Public:     PublicConfig{URL: "https://example.com"},
-			OwnSubject: "sub",
+			Public: PublicConfig{URL: "https://example.com"},
 		},
 	}
-	profile.CapabilityStatement(&md)
+	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+	err := profile.CapabilityStatement(ctx, &md)
+	require.NoError(t, err)
 	actual, err := json.Marshal(md)
 	require.NoError(t, err)
 	expected := `
