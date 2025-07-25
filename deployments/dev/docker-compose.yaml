@@ -52,7 +52,6 @@ services:
       - ${orca_dev_base}/../../frontend:/app
       - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
     environment:
-      #TERMINOLOGY_SERVER_BASE_URL=https://terminologieserver.nl/fhir
       NEXT_PUBLIC_BASE_PATH: /frontend
       SUPPORT_CONTACT_LINK: mailto:support@example.com #This link will be shown at the bottom of the error.tsx page if configured
       PATIENT_VIEWER_URL: https://msc-viewer-url/ehr/patient # When set, this will add a link to the task details page to open the patient in the viewer
