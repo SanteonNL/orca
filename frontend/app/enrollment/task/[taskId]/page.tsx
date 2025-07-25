@@ -6,7 +6,6 @@ import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollmentStore from "@/lib/store/enrollment-store";
 import {patientName, organizationName} from "@/lib/fhirRender";
-import TaskSseConnectionStatus from '../../components/sse-connection-status'
 import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
 import {Questionnaire} from "fhir/r4";
 import {Button, ThemeProvider} from "@mui/material";
@@ -78,7 +77,6 @@ export default function EnrollmentTaskPage() {
                 questionnaire={currentQuestionnaire}
                 inputTask={subTasks[0]}
             />
-            <TaskSseConnectionStatus />
         </>
     } else {
         return <div className='w-full flex flex-col auto-cols-max gap-y-10'>
@@ -119,8 +117,6 @@ export default function EnrollmentTaskPage() {
                     </ThemeProvider>
                 </div>
             }
-
-            <TaskSseConnectionStatus />
         </div>
     }
 }
