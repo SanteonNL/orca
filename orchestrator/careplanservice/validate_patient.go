@@ -5,6 +5,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/mail"
+	"regexp"
 	"strings"
 )
 
@@ -80,8 +81,21 @@ func validatePhone(phone *string) error {
 		return errors.New("phone number is required")
 	}
 
-	if !strings.HasPrefix(*phone, "+31") {
-		return errors.New("phone number must start with +31")
+	return isDutchPhoneNumber(phone)
+}
+
+func isDutchPhoneNumber(phone *string) error {
+	var normalised = regexp.MustCompile("[^0-9+]").ReplaceAllString(*phone, "")
+	const phoneLength = 10
+	const internationalPhoneLength = 12
+
+	if len(normalised) == phoneLength && strings.HasPrefix(normalised, "06") {
+		return nil
 	}
-	return nil
+
+	if len(normalised) == internationalPhoneLength && strings.HasPrefix(normalised, "+316") {
+		return nil
+	}
+	return errors.New("patient phone number should be a dutch mobile number")
+
 }
