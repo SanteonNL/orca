@@ -80,8 +80,26 @@ func validatePhone(phone *string) error {
 		return errors.New("phone number is required")
 	}
 
-	if !strings.HasPrefix(*phone, "+31") {
-		return errors.New("phone number must start with +31")
+	return isDutchPhoneNumber(phone)
+}
+
+func isDutchPhoneNumber(phone *string) error {
+	normalised := strings.NewReplacer("-", "", " ", "", "(", "", ")", "").Replace(strings.TrimSpace(*phone))
+
+	normalised = strings.Map(func(r rune) rune {
+		if r >= '0' && r <= '9' || r == '+' {
+			return r
+		}
+		return -1
+	}, normalised)
+
+	if len(normalised) == 10 && strings.HasPrefix(normalised, "06") {
+		return nil
 	}
-	return nil
+
+	if len(normalised) == 12 && strings.HasPrefix(normalised, "+316") {
+		return nil
+	}
+	return errors.New("patient phone number should be a dutch mobile number")
+
 }
