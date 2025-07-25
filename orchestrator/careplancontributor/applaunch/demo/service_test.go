@@ -41,11 +41,13 @@ func TestService_handle(t *testing.T) {
 			},
 		},
 	}
-	globals.CarePlanServiceFhirClient = &test.StubFHIRClient{
+
+	tenant := tenants.Test().Sole()
+	globals.RegisterCPSFHIRClient(tenant.ID, &test.StubFHIRClient{
 		Resources: []interface{}{
 			existingTask,
 		},
-	}
+	})
 
 	t.Run("root base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)

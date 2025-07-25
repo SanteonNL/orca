@@ -11,7 +11,7 @@ import (
 
 type Config map[string]Properties
 
-func (c Config) Validate(zorgplatformEnabled bool) error {
+func (c Config) Validate(zorgplatformEnabled bool, cpsEnabled bool) error {
 	for id, props := range c {
 		if props.NutsSubject == "" {
 			return fmt.Errorf("tenant %s: missing Nuts subject", id)
@@ -24,6 +24,11 @@ func (c Config) Validate(zorgplatformEnabled bool) error {
 			// Sanity check: if Zorgplatform is not enabled, ChipSoftOrgID should not be set (could be a mistake)
 			if props.ChipSoftOrgID != "" {
 				return fmt.Errorf("tenant %s: ChipSoftOrgID set, but Zorgplatform not enabled", id)
+			}
+		}
+		if cpsEnabled {
+			if props.CPSFHIR.BaseURL == "" {
+				return fmt.Errorf("tenant %s: CPS FHIR URL is not configured", id)
 			}
 		}
 	}

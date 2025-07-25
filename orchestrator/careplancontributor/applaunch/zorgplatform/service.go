@@ -219,7 +219,7 @@ func (s *Service) EhrFhirProxy() (coolfhir.HttpProxy, fhirclient.Client) {
 	rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
 	roundTripper := &stsAccessTokenRoundTripper{
 		transport:          s.zorgplatformHttpClient.Transport,
-		cpsFhirClient:      s.cpsFhirClient,
+		cpsFhirClient:      globals.CreateCPSFHIRClient,
 		secureTokenService: s.secureTokenService,
 		accessTokenCache:   s.accessTokenCache,
 	}
@@ -256,7 +256,7 @@ var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
 
 type stsAccessTokenRoundTripper struct {
 	transport          http.RoundTripper
-	cpsFhirClient      func() fhirclient.Client
+	cpsFhirClient      func(ctx context.Context) (fhirclient.Client, error)
 	secureTokenService SecureTokenService
 	// TODO: Make multi-tenant?
 	accessTokenCache *ttlcache.Cache[string, string]
@@ -339,40 +339,41 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	}
 
 	// Validate the tenant
-	_, err = s.lookupTenant(launchContext.ChipSoftOrganizationID)
+	tenant, err := s.lookupTenant(launchContext.ChipSoftOrganizationID)
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
 		log.Ctx(request.Context()).Err(err).Msg("can't determine tenant")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
+	ctx := tenants.WithTenant(request.Context(), *tenant)
 
 	//TODO: launchContext.Practitioner needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
 	// Cache FHIR resources that don't exist in the EHR in the session,
 	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
 
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
-	accessToken, err := s.secureTokenService.RequestAccessToken(request.Context(), launchContext, hcpTokenType)
+	accessToken, err := s.secureTokenService.RequestAccessToken(ctx, launchContext, hcpTokenType)
 	if err != nil {
-		log.Ctx(request.Context()).Err(err).Msg("unable to request access token for HCP ProfessionalService")
+		log.Ctx(ctx).Err(err).Msg("unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
 
-	log.Ctx(request.Context()).Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
+	log.Ctx(ctx).Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 
 	var sessionData *session.Data
 	// INT-572: Adding a retry mechanism, as in some cases the Patient returns a 404 when a new workflow is created and directly launched in HiX
 	for i := 1; i <= 4; i++ {
-		sessionData, err = s.getSessionData(request.Context(), accessToken, launchContext)
+		sessionData, err = s.getSessionData(ctx, accessToken, launchContext)
 		if err == nil {
 			break
 		}
 		if i < 4 {
-			log.Ctx(request.Context()).Warn().Msg("unable to create session data, retrying")
+			log.Ctx(ctx).Warn().Msg("unable to create session data, retrying")
 			sleep(200 * time.Duration(i) * time.Millisecond)
 		} else {
-			log.Ctx(request.Context()).Err(err).Msg("unable to create session data - retry limit reached")
+			log.Ctx(ctx).Err(err).Msg("unable to create session data - retry limit reached")
 			http.Error(response, "Application launch failed.", http.StatusInternalServerError)
 			return
 		}
@@ -381,7 +382,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	s.sessionManager.Create(response, *sessionData)
 
 	// Redirect to landing page
-	log.Ctx(request.Context()).Info().Msg("Successfully launched through ChipSoft HiX app launch")
+	log.Ctx(ctx).Info().Msg("Successfully launched through ChipSoft HiX app launch")
 
 	taskResource := sessionData.GetByType("Task")
 	redirectURL := s.frontendLandingUrl
@@ -411,8 +412,13 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	// query.Add("_include:iterate", "Task:focus") //chain the Task.focus from the joined CarePlan.activity-references
 	// urlRef.RawQuery = query.Encode()
 
+	fhirClient, err := s.cpsFhirClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var carePlan fhir.CarePlan
-	err = s.cpsFhirClient().ReadWithContext(ctx, localCarePlanRef, &carePlan)
+	err = fhirClient.ReadWithContext(ctx, localCarePlanRef, &carePlan)
 	if err != nil {
 		log.Ctx(ctx).Error().Msgf("Unable to fetch CarePlan resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch CarePlan resource: %w", err)
@@ -420,14 +426,14 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 
 	// TODO: What if there's no activities?
 	var task fhir.Task
-	err = s.cpsFhirClient().ReadWithContext(ctx, *carePlan.Activity[0].Reference.Reference, &task)
+	err = fhirClient.ReadWithContext(ctx, *carePlan.Activity[0].Reference.Reference, &task)
 	if err != nil {
 		log.Ctx(ctx).Error().Msgf("Unable to fetch Task resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
 	}
 
 	var serviceRequest fhir.ServiceRequest
-	err = s.cpsFhirClient().ReadWithContext(ctx, *task.Focus.Reference, &serviceRequest)
+	err = fhirClient.ReadWithContext(ctx, *task.Focus.Reference, &serviceRequest)
 	if err != nil {
 		log.Ctx(ctx).Error().Msgf("Unable to fetch ServiceRequest resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err)
@@ -440,7 +446,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	workflowID := *workflowIdIdentifiers[0].Value
 
 	var patient fhir.Patient
-	err = s.cpsFhirClient().ReadWithContext(ctx, *carePlan.Subject.Reference, &patient)
+	err = fhirClient.ReadWithContext(ctx, *carePlan.Subject.Reference, &patient)
 	if err != nil {
 		log.Ctx(ctx).Error().Msgf("Unable to fetch Patient resource: %v", err)
 		return nil, fmt.Errorf("unable to fetch Patient resource: %w", err)
@@ -484,8 +490,13 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 		return nil, err
 	}
 
+	cpsFHIRClient, err := globals.CreateCPSFHIRClient(ctx)
+	if err != nil {
+		return nil, err
+	}
+
 	var existingTaskRef *string
-	existingTask, err := coolfhir.GetTaskByIdentifier(ctx, s.cpsFhirClient(), fhir.Identifier{
+	existingTask, err := coolfhir.GetTaskByIdentifier(ctx, cpsFHIRClient, fhir.Identifier{
 		System: to.Ptr(zorgplatformWorkflowIdSystem),
 		Value:  to.Ptr(launchContext.WorkflowId),
 	})
@@ -551,12 +562,6 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	}
 
 	// Resolve identity of local care organization
-	tenant, err := s.lookupTenant(launchContext.ChipSoftOrganizationID)
-	if err != nil {
-		return nil, err
-	}
-	ctx = tenants.WithTenant(ctx, *tenant)
-
 	identities, err := s.profile.Identities(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to fetch identities: %w", err)
@@ -620,6 +625,10 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 		},
 	}
 
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	sessionData := session.Data{
 		TenantID:       tenant.ID,
 		FHIRLauncher:   launcherKey,
@@ -649,10 +658,6 @@ func (s *Service) lookupTenant(chipSoftOrgID string) (*tenants.Properties, error
 		}
 	}
 	return nil, fmt.Errorf("tenant not found with ChipSoft organization ID: %s", chipSoftOrgID)
-}
-
-func (s *Service) cpsFhirClient() fhirclient.Client {
-	return globals.CarePlanServiceFhirClient
 }
 
 // getConditionCodeFromWorkflowTask returns a CodeableConcept based on the workflow definition reference of the Task.
