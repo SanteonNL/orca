@@ -87,6 +87,7 @@ The notification is then handled to perform the Task negotiation:
 - Filler: notification is received by ORCA's *Orchestrator* and handled by the task engine.
   The task engine then decides whether to accept the Task, and if not, what additional information is required.
 - Placer: notification is received by ORCA's *Orchestrator* and handled by the task engine.
+  The *Frontend* can be notified through an EventSource stream about Task updates.
 
 ### FHIR patient data access
 Participants of a CarePlan can query each other's FHIR APIs to access the patient's data related to that CarePlan, [according to Shared Care Planning](https://santeonnl.github.io/shared-care-planning/overview.html#getting-data-from-careteam-members).
