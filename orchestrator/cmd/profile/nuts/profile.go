@@ -186,7 +186,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 		return nil, err
 	}
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
-		identifiers, err := d.identities(ctx, tenant)
+		identifiers, err := d.identities(ctx, tenant.NutsSubject)
 		if err != nil {
 			log.Ctx(ctx).Warn().Err(err).Msg("Failed to refresh local identities using Nuts node")
 			if d.cachedIdentities == nil {
@@ -221,8 +221,8 @@ func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseU
 	return &cp, nil
 }
 
-func (d DutchNutsProfile) identities(ctx context.Context, tenant tenants.Properties) ([]fhir.Organization, error) {
-	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, tenant.NutsSubject)
+func (d DutchNutsProfile) identities(ctx context.Context, subject string) ([]fhir.Organization, error) {
+	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, subject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
 	}
