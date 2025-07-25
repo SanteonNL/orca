@@ -87,7 +87,7 @@ func isDutchPhoneNumber(phone *string) error {
 	normalised := strings.NewReplacer("-", "", " ", "", "(", "", ")", "").Replace(strings.TrimSpace(*phone))
 
 	normalised = strings.Map(func(r rune) rune {
-		if r >= '0' && r <= '9' || r == '+' {
+		if (r >= '0' && r <= '9') || r == '+' {
 			return r
 		}
 		return -1
