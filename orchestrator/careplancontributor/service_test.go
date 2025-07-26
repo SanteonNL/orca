@@ -44,9 +44,10 @@ import (
 	"time"
 )
 
-var orcaPublicURL, _ = url.Parse("https://example.com/orca")
-
 func TestService_Proxy_Get_And_Search(t *testing.T) {
+	tenant := tenants.Test().Sole()
+	orcaPublicURL := must.ParseURL("http://example.com/fhir")
+
 	tests := []struct {
 		name string
 		// Set if it should be anything other than the default (auth.TestPrincipal1)
@@ -57,11 +58,10 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 		xSCPContext                   string
 		readBodyReturnFile            string
 		readStatusReturn              int
-		// Allows us to test both GET and POST requests
-		patientRequestURL   *string
-		patientStatusReturn *int
-		expectedJSON        string
-		expectedError       error
+		mockedFHIRRequestURL          *string
+		mockedFHIRResponseStatusCode  *int
+		expectedJSON                  string
+		expectedError                 error
 		// Default is GET
 		method *string
 		// Default is "/cpc/fhir/Patient/1"
@@ -76,13 +76,13 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 		{
 			name:           "Fails: No header",
 			expectedStatus: http.StatusBadRequest,
-			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: X-Scp-Context header must be set"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: X-Scp-Context header must be set"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:           "Fails: header value is not a valid URL",
 			expectedStatus: http.StatusBadRequest,
 			xSCPContext:    "not-a-valid-url",
-			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:           "Fails: header value is relative URL (missing scheme and host)",
@@ -112,7 +112,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			name:           "Fails: header resource is not CarePlan",
 			expectedStatus: http.StatusBadRequest,
 			xSCPContext:    "https://example.com/fhir/SomeResource/invalid",
-			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:   `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: specified SCP context header does not refer to a CarePlan"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: CarePlan in header not found - GET",
@@ -120,7 +120,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readStatusReturn:   http.StatusNotFound,
 			readBodyReturnFile: "./testdata/careplan-not-found.json",
 			xSCPContext:        "CarePlan/not-exists",
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: CarePlan in header not found - POST",
@@ -129,8 +129,8 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readBodyReturnFile: "./testdata/careplan-not-found.json",
 			xSCPContext:        "CarePlan/not-exists",
 			method:             to.Ptr("POST"),
-			url:                to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
+			url:                to.Ptr("/cpc/test/fhir/Patient/_search"),
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: CareTeam not present in bundle - GET",
@@ -138,7 +138,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readBodyReturnFile: "./testdata/careplan-careteam-missing.json",
 			readStatusReturn:   http.StatusOK,
 			xSCPContext:        "CarePlan/cps-careplan-01",
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: CareTeam not present in bundle - POST",
@@ -147,8 +147,8 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readStatusReturn:   http.StatusOK,
 			xSCPContext:        "CarePlan/cps-careplan-01",
 			method:             to.Ptr("POST"),
-			url:                to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
+			url:                to.Ptr("/cpc/test/fhir/Patient/_search"),
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: requester not part of CareTeam - GET",
@@ -157,7 +157,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readBodyReturnFile: "./testdata/careplan-valid.json",
 			readStatusReturn:   http.StatusOK,
 			xSCPContext:        "CarePlan/cps-careplan-01",
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: requester not part of CareTeam - POST",
@@ -167,104 +167,104 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readStatusReturn:   http.StatusOK,
 			xSCPContext:        "CarePlan/cps-careplan-01",
 			method:             to.Ptr("POST"),
-			url:                to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			url:                to.Ptr("/cpc/test/fhir/Patient/_search"),
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                "Fails: proxied request returns error - GET",
-			expectedStatus:      http.StatusNotFound,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn: to.Ptr(http.StatusNotFound),
+			name:                         "Fails: proxied request returns error - GET",
+			expectedStatus:               http.StatusNotFound,
+			readBodyReturnFile:           "./testdata/careplan-valid.json",
+			readStatusReturn:             http.StatusOK,
+			xSCPContext:                  "CarePlan/cps-careplan-01",
+			mockedFHIRRequestURL:         to.Ptr("GET /fhir/Patient/1"),
+			mockedFHIRResponseStatusCode: to.Ptr(http.StatusNotFound),
 		},
 		{
-			name:                "Fails: proxied request returns error - POST",
-			expectedStatus:      http.StatusNotFound,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn: to.Ptr(http.StatusNotFound),
-			method:              to.Ptr("POST"),
-			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
+			name:                         "Fails: proxied request returns error - POST",
+			expectedStatus:               http.StatusNotFound,
+			readBodyReturnFile:           "./testdata/careplan-valid.json",
+			readStatusReturn:             http.StatusOK,
+			xSCPContext:                  "CarePlan/cps-careplan-01",
+			mockedFHIRRequestURL:         to.Ptr("GET /fhir/Patient/1"),
+			mockedFHIRResponseStatusCode: to.Ptr(http.StatusNotFound),
+			method:                       to.Ptr("POST"),
+			url:                          to.Ptr("/cpc/test/fhir/Patient/_search"),
 		},
 		{
-			name:                "Fails: requester is CareTeam member but Period is expired - GET",
-			principal:           auth.TestPrincipal2,
-			expectedStatus:      http.StatusForbidden,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn: to.Ptr(http.StatusOK),
-			expectedJSON:        `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:                         "Fails: requester is CareTeam member but Period is expired - GET",
+			principal:                    auth.TestPrincipal2,
+			expectedStatus:               http.StatusForbidden,
+			readBodyReturnFile:           "./testdata/careplan-valid.json",
+			readStatusReturn:             http.StatusOK,
+			xSCPContext:                  "CarePlan/cps-careplan-01",
+			mockedFHIRRequestURL:         to.Ptr("GET /fhir/Patient/1"),
+			mockedFHIRResponseStatusCode: to.Ptr(http.StatusOK),
+			expectedJSON:                 `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                "Fails: requester is CareTeam member but Period is expired - POST",
-			principal:           auth.TestPrincipal2,
-			expectedStatus:      http.StatusForbidden,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientRequestURL:   to.Ptr("GET /fhir/Patient/1"),
-			patientStatusReturn: to.Ptr(http.StatusOK),
-			method:              to.Ptr("POST"),
-			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
-			expectedJSON:        `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			name:                         "Fails: requester is CareTeam member but Period is expired - POST",
+			principal:                    auth.TestPrincipal2,
+			expectedStatus:               http.StatusForbidden,
+			readBodyReturnFile:           "./testdata/careplan-valid.json",
+			readStatusReturn:             http.StatusOK,
+			xSCPContext:                  "CarePlan/cps-careplan-01",
+			mockedFHIRRequestURL:         to.Ptr("GET /fhir/Patient/1"),
+			mockedFHIRResponseStatusCode: to.Ptr(http.StatusOK),
+			method:                       to.Ptr("POST"),
+			url:                          to.Ptr("/cpc/test/fhir/Patient/_search"),
+			expectedJSON:                 `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
-			name:                "Success: valid request - GET",
-			expectedStatus:      http.StatusOK,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/1"),
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientStatusReturn: to.Ptr(http.StatusOK),
+			name:                         "Success: valid request - GET",
+			expectedStatus:               http.StatusOK,
+			readBodyReturnFile:           "./testdata/careplan-valid.json",
+			mockedFHIRRequestURL:         to.Ptr("/Patient/1"),
+			readStatusReturn:             http.StatusOK,
+			xSCPContext:                  "CarePlan/cps-careplan-01",
+			mockedFHIRResponseStatusCode: to.Ptr(http.StatusOK),
 		},
 		{
-			name:                "Success: valid request - GET (search)",
-			expectedStatus:      http.StatusOK,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			patientRequestURL:   to.Ptr("/cpc/fhir/Patient"),
-			url:                 to.Ptr("/cpc/fhir/Patient"),
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientStatusReturn: to.Ptr(http.StatusOK),
+			name:                         "Success: valid request - GET (search)",
+			expectedStatus:               http.StatusOK,
+			readBodyReturnFile:           "./testdata/careplan-valid.json",
+			mockedFHIRRequestURL:         to.Ptr("/Patient"),
+			url:                          to.Ptr("/cpc/test/fhir/Patient"),
+			readStatusReturn:             http.StatusOK,
+			xSCPContext:                  "CarePlan/cps-careplan-01",
+			mockedFHIRResponseStatusCode: to.Ptr(http.StatusOK),
 		},
 		{
-			name:                "Success: valid request - GET - Allow caching",
-			expectedStatus:      http.StatusOK,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/1"),
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientStatusReturn: to.Ptr(http.StatusOK),
-			allowCaching:        true,
+			name:                         "Success: valid request - GET - Allow caching",
+			expectedStatus:               http.StatusOK,
+			readBodyReturnFile:           "./testdata/careplan-valid.json",
+			mockedFHIRRequestURL:         to.Ptr("/Patient/1"),
+			readStatusReturn:             http.StatusOK,
+			xSCPContext:                  "CarePlan/cps-careplan-01",
+			mockedFHIRResponseStatusCode: to.Ptr(http.StatusOK),
+			allowCaching:                 true,
 		},
 		{
-			name:                "Success: valid request - POST",
-			expectedStatus:      http.StatusOK,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/_search"),
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientStatusReturn: to.Ptr(http.StatusOK),
-			method:              to.Ptr("POST"),
-			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
+			name:                         "Success: valid request - POST",
+			expectedStatus:               http.StatusOK,
+			readBodyReturnFile:           "./testdata/careplan-valid.json",
+			mockedFHIRRequestURL:         to.Ptr("/Patient/_search"),
+			readStatusReturn:             http.StatusOK,
+			xSCPContext:                  "CarePlan/cps-careplan-01",
+			mockedFHIRResponseStatusCode: to.Ptr(http.StatusOK),
+			method:                       to.Ptr("POST"),
+			url:                          to.Ptr("/cpc/test/fhir/Patient/_search"),
 		},
 		{
-			name:                "Success: valid request - POST - Allow caching",
-			expectedStatus:      http.StatusOK,
-			readBodyReturnFile:  "./testdata/careplan-valid.json",
-			patientRequestURL:   to.Ptr("/cpc/fhir/Patient/_search"),
-			readStatusReturn:    http.StatusOK,
-			xSCPContext:         "CarePlan/cps-careplan-01",
-			patientStatusReturn: to.Ptr(http.StatusOK),
-			method:              to.Ptr("POST"),
-			url:                 to.Ptr("/cpc/fhir/Patient/_search"),
-			allowCaching:        true,
+			name:                         "Success: valid request - POST - Allow caching",
+			expectedStatus:               http.StatusOK,
+			readBodyReturnFile:           "./testdata/careplan-valid.json",
+			mockedFHIRRequestURL:         to.Ptr("/Patient/_search"),
+			readStatusReturn:             http.StatusOK,
+			xSCPContext:                  "CarePlan/cps-careplan-01",
+			mockedFHIRResponseStatusCode: to.Ptr(http.StatusOK),
+			method:                       to.Ptr("POST"),
+			url:                          to.Ptr("/cpc/test/fhir/Patient/_search"),
+			allowCaching:                 true,
 		},
 	}
 
@@ -280,25 +280,23 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			carePlanServiceMux := http.NewServeMux()
 			carePlanService := httptest.NewServer(carePlanServiceMux)
 			carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-			carePlanServiceURL.Path = "/cps"
+			carePlanServiceURL.Path = "/cps/test"
 
 			healthDataViewEndpointEnabled := true
 			if tt.healthDataViewEndpointEnabled != nil {
 				healthDataViewEndpointEnabled = *tt.healthDataViewEndpointEnabled
 			}
 
-			tenant := tenants.Test().Sole()
-
 			service, _ := New(
 				Config{HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled},
 				tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker,
-				events.NewManager(messageBroker), carePlanServiceURL, nil)
+				events.NewManager(messageBroker), true, nil)
 			service.ehrFHIRProxyByTenant = map[string]coolfhir.HttpProxy{
 				tenant.ID: coolfhir.NewProxy(
 					"MockProxy",
 					fhirServerURL,
-					"/cpc/cps/fhir",
-					orcaPublicURL.JoinPath("/cpc/cps/fhir"),
+					"/cpc/test/fhir",
+					orcaPublicURL.JoinPath("/cpc/test/fhir"),
 					http.DefaultTransport,
 					tt.allowCaching, false,
 				),
@@ -311,19 +309,19 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			frontServerMux := http.NewServeMux()
 
 			if tt.readBodyReturnFile != "" {
-				carePlanServiceMux.HandleFunc(fmt.Sprintf("GET /cps/%s", tt.xSCPContext), func(writer http.ResponseWriter, request *http.Request) {
+				carePlanServiceMux.HandleFunc(fmt.Sprintf("GET /cps/test/%s", tt.xSCPContext), func(writer http.ResponseWriter, request *http.Request) {
 					rawJson, _ := os.ReadFile(tt.readBodyReturnFile)
 					writer.WriteHeader(tt.readStatusReturn)
 					_, _ = writer.Write(rawJson)
 				})
 			}
-			if tt.patientRequestURL != nil && tt.patientStatusReturn != nil {
-				fhirServerMux.HandleFunc(*tt.patientRequestURL, func(writer http.ResponseWriter, request *http.Request) {
+			if tt.mockedFHIRRequestURL != nil && tt.mockedFHIRResponseStatusCode != nil {
+				fhirServerMux.HandleFunc(*tt.mockedFHIRRequestURL, func(writer http.ResponseWriter, request *http.Request) {
 					writer.Header().Set("Content-Type", "application/fhir+json")
-					writer.WriteHeader(*tt.patientStatusReturn)
-					if *tt.patientStatusReturn == http.StatusOK {
+					writer.WriteHeader(*tt.mockedFHIRResponseStatusCode)
+					if *tt.mockedFHIRResponseStatusCode == http.StatusOK {
 						// Return a valid FHIR response for successful requests
-						if strings.Contains(*tt.patientRequestURL, "_search") || !strings.Contains(*tt.patientRequestURL, "/1") {
+						if strings.Contains(*tt.mockedFHIRRequestURL, "_search") || !strings.Contains(*tt.mockedFHIRRequestURL, "/1") {
 							// For search endpoints, return a Bundle
 							_, _ = writer.Write([]byte(`{
 								"resourceType": "Bundle",
@@ -380,13 +378,13 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			if tt.method != nil {
 				method = *tt.method
 			}
-			reqURL := "/cpc/fhir/Patient/1"
+			reqURL := "/cpc/" + tenant.ID + "/fhir/Patient/1"
 			if tt.url != nil {
 				reqURL = *tt.url
 			}
 			log.Info().Msgf("Requesting %s %s", method, frontServer.URL+reqURL)
 			log.Info().Msgf("FHIR Server URL: %s", fhirServer.URL)
-			log.Info().Msgf("CarePlan Service URL: %s", carePlanService.URL)
+			log.Info().Msgf("CarePlan Service URL: %s", carePlanServiceURL)
 
 			httpRequest, _ := http.NewRequest(method, frontServer.URL+reqURL, nil)
 			httpResponse, err := httpClient.Do(httpRequest)
@@ -413,6 +411,8 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 // Invalid test cases are simpler, can be tested with http endpoint mocking
 func TestService_HandleNotification_Invalid(t *testing.T) {
 	prof := profile.Test()
+	orcaPublicURL := must.ParseURL("http://example.com/fhir")
+
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
 	fhirServerMux := http.NewServeMux()
@@ -424,10 +424,10 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	require.NoError(t, err)
 
 	carePlanServiceMux := http.NewServeMux()
-	carePlanServiceMux.HandleFunc("GET /cps/Task/999", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{tenant}/Task/999", func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNotFound)
 	})
-	carePlanServiceMux.HandleFunc("GET /cps/Task/1", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{tenant}/Task/1", func(writer http.ResponseWriter, request *http.Request) {
 		rawJson, _ := os.ReadFile("./testdata/task-1.json")
 		var data fhir.Task
 		_ = json.Unmarshal(rawJson, &data)
@@ -435,7 +435,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		writer.WriteHeader(http.StatusOK)
 		_, _ = writer.Write(responseData)
 	})
-	carePlanServiceMux.HandleFunc("GET /cps/Task/2", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{tenant}/Task/2", func(writer http.ResponseWriter, request *http.Request) {
 		rawJson, _ := os.ReadFile("./testdata/task-2.json")
 		var data fhir.Task
 		_ = json.Unmarshal(rawJson, &data)
@@ -444,12 +444,12 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 		_, _ = writer.Write(responseData)
 	})
 	var capturedTaskUpdate fhir.Task
-	carePlanServiceMux.HandleFunc("PUT /cps/Task/2", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("PUT /cps/{tenant}/Task/2", func(writer http.ResponseWriter, request *http.Request) {
 		rawJson, _ := io.ReadAll(request.Body)
 		_ = json.Unmarshal(rawJson, &capturedTaskUpdate)
 		writer.WriteHeader(http.StatusOK)
 	})
-	carePlanServiceMux.HandleFunc("GET /cps/Task/3", func(writer http.ResponseWriter, request *http.Request) {
+	carePlanServiceMux.HandleFunc("GET /cps/{tenant}/Task/3", func(writer http.ResponseWriter, request *http.Request) {
 		rawJson, _ := os.ReadFile("./testdata/task-3.json")
 		var data fhir.Task
 		_ = json.Unmarshal(rawJson, &data)
@@ -459,9 +459,9 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	})
 	carePlanService := httptest.NewServer(carePlanServiceMux)
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
-	carePlanServiceURL.Path = "/cps"
+	carePlanServiceURL.Path = "/cps/test"
 
-	service, _ := New(Config{}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), must.ParseURL(fhirServer.URL), nil)
+	service, _ := New(Config{}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -469,10 +469,11 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
 	httpClient, _ := prof.HttpClient(ctx, auth.TestPrincipal1.Organization.Identifier[0])
 
+	cpcBaseURL := frontServer.URL + basePath + "/test/fhir"
 	t.Run("invalid notification - wrong data type", func(t *testing.T) {
 		notification := fhir.Task{Id: to.Ptr("1")}
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", cpcBaseURL, strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -484,7 +485,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", cpcBaseURL, strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -496,7 +497,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Patient/1"), Type: to.Ptr("Patient")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir/", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/test/fhir/", strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -508,7 +509,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/999"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", cpcBaseURL, strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -520,7 +521,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/1"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", cpcBaseURL, strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -532,7 +533,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			time.Date(2021, 1, 1, 0, 0, 0, 0, time.UTC),
 			fhir.Reference{Reference: to.Ptr("CareTeam/1")}, 1, fhir.Reference{Reference: to.Ptr("Task/2"), Type: to.Ptr("Task")})
 		notificationJSON, _ := json.Marshal(notification)
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
+		httpRequest, _ := http.NewRequest("POST", cpcBaseURL, strings.NewReader(string(notificationJSON)))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -547,7 +548,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 
 	})
 	t.Run("invalid notification", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader("invalid"))
+		httpRequest, _ := http.NewRequest("POST", cpcBaseURL, strings.NewReader("invalid"))
 		httpResponse, err := httpClient.Do(httpRequest)
 
 		require.NoError(t, err)
@@ -563,6 +564,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 
 	// Create a mock FHIR client using the generated mock
 	mockFHIRClient := mock.NewMockClient(ctrl)
+	orcaPublicURL := must.ParseURL("http://example.com/fhir")
 
 	prof := profile.TestProfile{
 		Principal: auth.TestPrincipal2,
@@ -584,7 +586,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		Config{},
 		tenants.Test(), profile.TestProfile{
 			Principal: auth.TestPrincipal2,
-		}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), must.ParseURL(fhirServer.URL), nil)
+		}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
@@ -636,7 +638,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 			return nil
 		})
 
-	httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/fhir", strings.NewReader(string(notificationJSON)))
+	httpRequest, _ := http.NewRequest("POST", frontServer.URL+basePath+"/test/fhir", strings.NewReader(string(notificationJSON)))
 	httpResponse, err := httpClient.Do(httpRequest)
 
 	require.NoError(t, err)
@@ -658,6 +660,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	fhirServerURL, _ := url.Parse(fhirServer.URL)
 	fhirServerURL.Path = "/fhir"
 	// Setup: create the service
+	orcaPublicURL := must.ParseURL("http://example.com/fhir")
 
 	clients.Factories["test"] = func(properties map[string]string) clients.ClientProperties {
 		return clients.ClientProperties{
@@ -669,14 +672,14 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), must.ParseURL(fhirServer.URL), nil)
+	service, err := New(Config{}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
 	service.RegisterHandlers(frontServerMux)
 	frontServer := httptest.NewServer(frontServerMux)
 
-	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/ehr/fhir/Patient/1", nil)
+	httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/test/ehr/fhir/Patient/1", nil)
 	httpRequest.AddCookie(&http.Cookie{
 		Name:  "sid",
 		Value: sessionID,
@@ -706,7 +709,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
 
-	httpRequest, _ = http.NewRequest("GET", frontServer.URL+"/cpc/ehr/fhir/Patient/1", nil)
+	httpRequest, _ = http.NewRequest("GET", frontServer.URL+"/cpc/test/ehr/fhir/Patient/1", nil)
 	httpRequest.AddCookie(&http.Cookie{
 		Name:  "sid",
 		Value: sessionID,
@@ -722,6 +725,7 @@ func TestService_HandleSearchEndpoints(t *testing.T) {
 	sessionManager, _ := createTestSession()
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
+	orcaPublicURL := must.ParseURL("http://example.com/fhir")
 
 	service, err := New(Config{
 		AppLaunch: applaunch.Config{
@@ -736,7 +740,7 @@ func TestService_HandleSearchEndpoints(t *testing.T) {
 				},
 			},
 		},
-	}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), nil, nil)
+	}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), false, nil)
 	require.NoError(t, err)
 
 	// Setup: configure the service to proxy to the backing FHIR server
@@ -747,7 +751,7 @@ func TestService_HandleSearchEndpoints(t *testing.T) {
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 
 	t.Run("ok", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Endpoint", nil)
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/test/fhir/Endpoint", nil)
 		httpResponse, err := httpClient.Do(httpRequest)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
@@ -757,7 +761,7 @@ func TestService_HandleSearchEndpoints(t *testing.T) {
 		require.JSONEq(t, string(expectedData), string(responseData))
 	})
 	t.Run("search parameters not allowed", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/fhir/Endpoint?foo=bar", nil)
+		httpRequest, _ := http.NewRequest("GET", frontServer.URL+"/cpc/test/fhir/Endpoint?foo=bar", nil)
 		httpResponse, err := httpClient.Do(httpRequest)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
@@ -809,25 +813,20 @@ func TestService_handleGetContext(t *testing.T) {
 }
 
 func TestService_HandleSubscribeToTask(t *testing.T) {
-
 	validToken := "http://fhir.nl/fhir/NamingSystem/task-workflow-identifier|12345"
-
-	// Create a dummy local CarePlanService URL.
-	localCPSUrl, err := url.Parse("http://dummy-cps")
-	require.NoError(t, err)
 
 	tests := []struct {
 		name            string
 		sessionData     session.Data
 		client          mock.MockClient
-		setLocalCPS     bool
+		enableLocalCPS  bool
 		expectedStatus  int
 		expectedContent string
 	}{
 		{
 			name:            "No taskIdentifier in session",
 			sessionData:     session.Data{},
-			setLocalCPS:     true,
+			enableLocalCPS:  true,
 			expectedStatus:  http.StatusBadRequest,
 			expectedContent: "No taskIdentifier found in session",
 		},
@@ -836,7 +835,7 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 			sessionData: session.Data{
 				TaskIdentifier: to.Ptr("invalid-token"),
 			},
-			setLocalCPS:     true,
+			enableLocalCPS:  true,
 			expectedStatus:  http.StatusBadRequest,
 			expectedContent: "Invalid taskIdentifier in session",
 		},
@@ -845,7 +844,7 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 			sessionData: session.Data{
 				TaskIdentifier: &validToken,
 			},
-			setLocalCPS:     false,
+			enableLocalCPS:  false,
 			expectedStatus:  http.StatusBadRequest,
 			expectedContent: "No local CarePlanService configured",
 		},
@@ -854,7 +853,7 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 			sessionData: session.Data{
 				TaskIdentifier: to.Ptr("https://some.other.domain/fhir/NamingSystem/task-workflow-identifier|12345"),
 			},
-			setLocalCPS:     true,
+			enableLocalCPS:  true,
 			expectedStatus:  http.StatusBadRequest,
 			expectedContent: "Task identifier does not match the taskIdentifier in the session",
 		},
@@ -863,17 +862,16 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 			sessionData: session.Data{
 				TaskIdentifier: to.Ptr(validToken),
 			},
-			setLocalCPS:     true,
+			enableLocalCPS:  true,
 			expectedStatus:  http.StatusOK,
 			expectedContent: "",
 		},
 	}
 
-	ctx := context.Background()
 	rawJson, _ := os.ReadFile("./testdata/task-3.json")
 
 	var taskData map[string]interface{}
-	err = json.Unmarshal(rawJson, &taskData)
+	err := json.Unmarshal(rawJson, &taskData)
 	require.NoError(t, err)
 	mockFhirClient := &test.StubFHIRClient{
 		Resources: []any{taskData},
@@ -881,10 +879,13 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 
 	sseService := sse.New()
 	sseService.ServeHTTP = func(topic string, writer http.ResponseWriter, request *http.Request) {
-		log.Ctx(ctx).Info().Msgf("Unit-Test: Transform request to SSE stream for topic: %s", topic)
+		log.Ctx(request.Context()).Info().Msgf("Unit-Test: Transform request to SSE stream for topic: %s", topic)
 	}
 
-	svc := &Service{sseService: sseService, profile: profile.TestProfile{Principal: auth.TestPrincipal1}}
+	svc := &Service{
+		sseService: sseService, profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+		orcaPublicURL: must.ParseURL("http://example.com"),
+	}
 
 	svc.createFHIRClientForURL = func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
 		return mockFhirClient, nil, nil
@@ -894,16 +895,13 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			session := &tt.sessionData
 
-			req := httptest.NewRequest("GET", "/cpc/subscribe/fhir/Task/3", nil)
+			ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+			req := httptest.NewRequestWithContext(ctx, "GET", "/cpc/subscribe/fhir/Task/3", nil)
 			req.SetPathValue("id", "3")
 
 			resp := httptest.NewRecorder()
 
-			if tt.setLocalCPS {
-				svc.localCarePlanServiceUrl = localCPSUrl
-			} else {
-				svc.localCarePlanServiceUrl = nil
-			}
+			svc.cpsEnabled = tt.enableLocalCPS
 
 			// Call method under test.
 			svc.handleSubscribeToTask(resp, req, session)
@@ -928,7 +926,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 	remoteSCPNode := httptest.NewServer(remoteFHIRAPIMux)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /fhir/Task/2", func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET /cps/test/Task/2", func(writer http.ResponseWriter, request *http.Request) {
 		coolfhir.SendResponse(writer, http.StatusOK, fhir.Task{Id: to.Ptr("2")})
 	})
 
@@ -944,17 +942,18 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 				},
 			},
 		},
-		tenants:                 tenants.Test(),
-		httpHandler:             mux,
-		localCarePlanServiceUrl: must.ParseURL(httpServer.URL + "/fhir"),
-		orcaPublicURL:           must.ParseURL(httpServer.URL),
-		config:                  Config{StaticBearerToken: "secret"},
+		tenants:       tenants.Test(),
+		httpHandler:   mux,
+		cpsEnabled:    true,
+		orcaPublicURL: must.ParseURL(httpServer.URL),
+		config:        Config{StaticBearerToken: "secret"},
 	}
 	service.createFHIRClientForURL = service.defaultCreateFHIRClientForURL
 	service.RegisterHandlers(mux)
 
+	baseURL := httpServer.URL + "/cpc/test/external/fhir"
 	t.Run("X-Scp-Entity-Identifier", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/1", nil)
+		httpRequest, _ := http.NewRequest(http.MethodGet, baseURL+"/Task/1", nil)
 		httpRequest.Header.Set("Authorization", "Bearer secret")
 		httpRequest.Header.Set("X-Scp-Entity-Identifier", "http://fhir.nl/fhir/NamingSystem/ura|2")
 		httpResponse, err := httpServer.Client().Do(httpRequest)
@@ -973,7 +972,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 	})
 	t.Run("X-Scp-Fhir-Url", func(t *testing.T) {
 		t.Run("URL, external", func(t *testing.T) {
-			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/1", nil)
+			httpRequest, _ := http.NewRequest(http.MethodGet, baseURL+"/Task/1", nil)
 			httpRequest.Header.Set("Authorization", "Bearer secret")
 			httpRequest.Header.Set("X-Scp-Fhir-Url", remoteSCPNode.URL+"/fhir")
 			httpResponse, err := httpServer.Client().Do(httpRequest)
@@ -984,9 +983,9 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 			assert.NotEmpty(t, responseData)
 		})
 		t.Run("URL, local", func(t *testing.T) {
-			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/2", nil)
+			httpRequest, _ := http.NewRequest(http.MethodGet, baseURL+"/Task/2", nil)
 			httpRequest.Header.Set("Authorization", "Bearer secret")
-			httpRequest.Header.Set("X-Scp-Fhir-Url", service.localCarePlanServiceUrl.String())
+			httpRequest.Header.Set("X-Scp-Fhir-Url", httpServer.URL+"/cps/test")
 			httpResponse, err := httpServer.Client().Do(httpRequest)
 			require.NoError(t, err)
 			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
@@ -995,7 +994,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 			assert.NotEmpty(t, responseData)
 		})
 		t.Run("local-cps", func(t *testing.T) {
-			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/2", nil)
+			httpRequest, _ := http.NewRequest(http.MethodGet, baseURL+"/Task/2", nil)
 			httpRequest.Header.Set("Authorization", "Bearer secret")
 			httpRequest.Header.Set("X-Scp-Fhir-Url", "local-cps")
 			httpResponse, err := httpServer.Client().Do(httpRequest)
@@ -1007,14 +1006,12 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 		})
 		t.Run("local-cps, non-root base URL", func(t *testing.T) {
 			t.Log("calls to local CPS are dispatched internally, this test makes sure this also works when ORCA is running on a subpath")
-			service.localCarePlanServiceUrl = must.ParseURL(httpServer.URL + "/orca/fhir")
 			service.orcaPublicURL = must.ParseURL(httpServer.URL).JoinPath("orca")
 			defer func() {
-				service.localCarePlanServiceUrl = must.ParseURL(httpServer.URL + "/fhir")
 				service.orcaPublicURL = must.ParseURL(httpServer.URL)
 			}()
 
-			httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/external/fhir/Task/2", nil)
+			httpRequest, _ := http.NewRequest(http.MethodGet, baseURL+"/Task/2", nil)
 			httpRequest.Header.Set("Authorization", "Bearer secret")
 			httpRequest.Header.Set("X-Scp-Fhir-Url", "local-cps")
 			httpResponse, err := httpServer.Client().Do(httpRequest)
@@ -1026,7 +1023,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 		})
 	})
 	t.Run("can't determine remote node", func(t *testing.T) {
-		httpRequest, _ := http.NewRequest(http.MethodPost, httpServer.URL+"/cpc/external/fhir/Task/_search", nil)
+		httpRequest, _ := http.NewRequest(http.MethodPost, baseURL+"/Task/_search", nil)
 		httpRequest.Header.Set("Authorization", "Bearer secret")
 		httpResponse, err := httpServer.Client().Do(httpRequest)
 		require.NoError(t, err)

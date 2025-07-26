@@ -11,7 +11,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -66,7 +65,7 @@ func (t TestProfile) CsdDirectory() csd.Directory {
 	return t.CSD
 }
 
-func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request) {
+func (t TestProfile) Authenticator(fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		// Get tenant to mimic the behavior of a real profile
 		if _, err := tenants.FromContext(request.Context()); err != nil {

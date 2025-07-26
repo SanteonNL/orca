@@ -4,10 +4,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"sync/atomic"
 	"testing"
 
 	"context"
@@ -27,19 +27,19 @@ import (
 	"strings"
 )
 
-var notificationCounter = new(atomic.Int32)
-var fhirBaseURL *url.URL
-var httpService *httptest.Server
-
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	notificationEndpoint := setupNotificationEndpoint(t)
-	carePlanServiceURL, httpService, cpcURL := setupIntegrationTest(t, notificationEndpoint)
+	httpService := setupIntegrationTest(t, notificationEndpoint)
+
+	tenant := tenants.Test().Sole()
+	cpsBaseURL := tenant.URL(must.ParseURL(httpService.URL), careplanservice.FHIRBaseURL)
+	cpcBaseURL := tenant.URL(must.ParseURL(httpService.URL), FHIRBaseURL)
 
 	dataHolderTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
-	invalidCareplanTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/999")
+	invalidCareplanTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, cpsBaseURL.String()+"/CarePlan/999")
 	noXSCPHeaderTransport := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")
 
-	cpsDataHolder := fhirclient.New(carePlanServiceURL, &http.Client{Transport: dataHolderTransport}, nil)
+	cpsDataHolder := fhirclient.New(cpsBaseURL, &http.Client{Transport: dataHolderTransport}, nil)
 
 	// Create Patient that Task will be related to
 	var patient fhir.Patient
@@ -109,8 +109,8 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		})
 	}
 
-	cpsDataRequester := fhirclient.New(carePlanServiceURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
-	cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
+	cpsDataRequester := fhirclient.New(cpsBaseURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, cpsBaseURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
+	cpcDataRequester := fhirclient.New(cpcBaseURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, cpsBaseURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 
 	t.Log("Read data from EHR before Task is accepted - Fails")
 	{
@@ -174,7 +174,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	}
 	t.Log("Reading task after accepted - header references non-existent careplan - Fails")
 	{
-		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: invalidCareplanTransport}, nil)
+		cpcDataRequester := fhirclient.New(cpcBaseURL, &http.Client{Transport: invalidCareplanTransport}, nil)
 		var fetchedTask fhir.Task
 		// Read
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
@@ -187,7 +187,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	}
 	t.Log("Reading task after accepted - no xSCP header - Fails")
 	{
-		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: noXSCPHeaderTransport}, nil)
+		cpcDataRequester := fhirclient.New(cpcBaseURL, &http.Client{Transport: noXSCPHeaderTransport}, nil)
 		var fetchedTask fhir.Task
 		// Read
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
@@ -200,7 +200,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	}
 	t.Log("Reading task after accepted - invalid principal - Fails")
 	{
-		cpcDataRequester := fhirclient.New(cpcURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, carePlanServiceURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
+		cpcDataRequester := fhirclient.New(cpcBaseURL, &http.Client{Transport: auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal3, cpsBaseURL.String()+"/CarePlan/"+*carePlan.Id)}, nil)
 		var fetchedTask fhir.Task
 		// Read
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
@@ -215,7 +215,8 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 
 func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	notificationEndpoint := setupNotificationEndpoint(t)
-	carePlanServiceURL, _, _ := setupIntegrationTest(t, notificationEndpoint)
+	httpService := setupIntegrationTest(t, notificationEndpoint)
+	orcaPublicURL := must.ParseURL(httpService.URL)
 
 	// Setup mock external endpoint that will be called after JWT validation
 	var externalEndpointCalled bool
@@ -278,7 +279,9 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
 
-	cpc, err := New(cpcConfig, tenants.Test(), profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), carePlanServiceURL, nil)
+	tenantCfg := tenants.Test()
+	tenant := tenantCfg.Sole()
+	cpc, err := New(cpcConfig, tenantCfg, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
 	require.NoError(t, err)
 
 	cpc.tokenClient = mockTokenClient.Client
@@ -289,6 +292,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	defer cpcHttpService.Close()
 	cpc.RegisterHandlers(cpcServerMux)
 
+	requestURL := cpcHttpService.URL + "/cpc/" + tenant.ID + "/external/fhir/Patient/test-patient-123"
 	t.Run("Valid JWT token allows access to external endpoint", func(t *testing.T) {
 		externalEndpointCalled = false
 		receivedRequestBody = ""
@@ -306,7 +310,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 		client := &http.Client{}
 
 		// Make request to CPC external endpoint with JWT token
-		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient/test-patient-123", nil)
+		req, err := http.NewRequest("GET", requestURL, nil)
 		require.NoError(t, err)
 		req.Header.Set("Authorization", "Bearer "+validToken)
 		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
@@ -346,7 +350,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 		client := &http.Client{}
 
 		// Make request to CPC external endpoint with expired JWT token
-		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient/test-patient-123", nil)
+		req, err := http.NewRequest("GET", requestURL, nil)
 		require.NoError(t, err)
 		req.Header.Set("Authorization", "Bearer "+expiredToken)
 		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
@@ -369,7 +373,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 		client := &http.Client{}
 
 		// Make request to CPC external endpoint with malformed JWT token
-		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient/test-patient-123", nil)
+		req, err := http.NewRequest("GET", requestURL, nil)
 		require.NoError(t, err)
 		req.Header.Set("Authorization", "Bearer invalid.malformed.token")
 		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
@@ -392,7 +396,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 		client := &http.Client{}
 
 		// Make request to CPC external endpoint without JWT token
-		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient/test-patient-123", nil)
+		req, err := http.NewRequest("GET", requestURL, nil)
 		require.NoError(t, err)
 		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
 
@@ -438,7 +442,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 		client := &http.Client{}
 
 		// Make request to CPC external endpoint with custom JWT token
-		req, err := http.NewRequest("POST", cpcHttpService.URL+"/cpc/external/fhir/Patient/_search", strings.NewReader("identifier=1333333337"))
+		req, err := http.NewRequest("POST", cpcHttpService.URL+"/cpc/"+tenant.ID+"/external/fhir/Patient/_search", strings.NewReader("identifier=1333333337"))
 		require.NoError(t, err)
 		req.Header.Set("Authorization", "Bearer "+validToken)
 		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
@@ -480,7 +484,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 		client := &http.Client{}
 
 		// Make request to CPC external endpoint
-		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/external/fhir/Patient", nil)
+		req, err := http.NewRequest("GET", cpcHttpService.URL+"/cpc/"+tenant.ID+"/external/fhir/Patient", nil)
 		require.NoError(t, err)
 		req.Header.Set("Authorization", "Bearer "+validToken)
 		req.Header.Set("X-Scp-Fhir-Url", mockExternalEndpoint.URL)
@@ -497,8 +501,8 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	})
 }
 
-func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL, *httptest.Server, *url.URL) {
-	fhirBaseURL = test.SetupHAPI(t)
+func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) *httptest.Server {
+	fhirBaseURL := test.SetupHAPI(t)
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
 
@@ -519,14 +523,14 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 			BaseURL: fhirBaseURL.String(),
 		}
 	})
-	service, err := careplanservice.New(config, tenantCfg, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
-	require.NoError(t, err)
-
 	serverMux := http.NewServeMux()
-	httpService = httptest.NewServer(serverMux)
-	service.RegisterHandlers(serverMux)
+	httpService := httptest.NewServer(serverMux)
+	orcaPublicURL := must.ParseURL(httpService.URL)
 
-	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
+	cpsService, err := careplanservice.New(config, tenantCfg, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+	require.NoError(t, err)
+	cpsService.RegisterHandlers(serverMux)
+
 	sessionManager, _ := createTestSession()
 
 	// TODO: Tests using the Zorgplatform service
@@ -536,24 +540,17 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	cpcConfig.AppLaunch.Demo.Enabled = true
 	cpcConfig.HealthDataViewEndpointEnabled = true
 
-	cpc, err := New(cpcConfig, tenantCfg, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), carePlanServiceURL, nil)
+	cpc, err := New(cpcConfig, tenantCfg, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
 	require.NoError(t, err)
 	err = cpc.initializeAppLaunches(sessionManager, false)
 	require.NoError(t, err)
 
-	cpcServerMux := http.NewServeMux()
-	cpcHttpService := httptest.NewServer(cpcServerMux)
-	cpc.RegisterHandlers(cpcServerMux)
-	cpcURL, _ := url.Parse(cpcHttpService.URL + "/cpc/fhir")
-
-	// Return the URLs and httpService of the cpsDataRequester, cpcDataRequester, cpsDataHolder
-	// these will be used to construct clients with both the correct and incorrect auth for positive and negative testing
-	return carePlanServiceURL, httpService, cpcURL
+	cpc.RegisterHandlers(serverMux)
+	return httpService
 }
 
 func setupNotificationEndpoint(t *testing.T) *url.URL {
 	notificationEndpoint := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		notificationCounter.Add(1)
 		writer.WriteHeader(http.StatusOK)
 	}))
 	t.Cleanup(func() {

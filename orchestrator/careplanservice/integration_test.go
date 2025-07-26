@@ -1014,7 +1014,7 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	httpService := httptest.NewServer(serverMux)
 	service.RegisterHandlers(serverMux)
 
-	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
+	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps/" + tenantCfg.Sole().ID)
 
 	transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
 	transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")

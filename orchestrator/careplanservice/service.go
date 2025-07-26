@@ -40,13 +40,18 @@ type FHIROperation interface {
 	Handle(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 }
 
+func FHIRBaseURL(tenantID string, orcaBaseURL *url.URL) *url.URL {
+	return orcaBaseURL.JoinPath("cps", tenantID)
+}
+
+const basePathWithTenant = basePath + "/{tenant}"
 const basePath = "/cps"
 
 // subscriberNotificationTimeout is the timeout for notifying subscribers of changes in FHIR resources.
 // We might want to make this configurable at some point.
 var subscriberNotificationTimeout = 10 * time.Second
 
-func New(config Config, tenantCfg tenants.Config, profile profile.Provider, cpsURL *url.URL, messageBroker messaging.Broker, eventManager events.Manager) (*Service, error) {
+func New(config Config, tenantCfg tenants.Config, profile profile.Provider, orcaPublicURL *url.URL, messageBroker messaging.Broker, eventManager events.Manager) (*Service, error) {
 	upstreamFhirBaseUrl, _ := url.Parse(tenantCfg.Sole().CPS.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 
@@ -62,9 +67,10 @@ func New(config Config, tenantCfg tenants.Config, profile profile.Provider, cpsU
 		fhirClientByTenant[tenant.ID] = fhirClient
 		globals.RegisterCPSFHIRClient(tenant.ID, fhirClient)
 	}
-	baseUrl := cpsURL
 
-	subscriptionMgr, err := subscriptions.NewManager(baseUrl, subscriptions.CsdChannelFactory{Profile: profile}, messageBroker)
+	subscriptionMgr, err := subscriptions.NewManager(func(tenant tenants.Properties) *url.URL {
+		return tenant.URL(orcaPublicURL, FHIRBaseURL)
+	}, tenantCfg, subscriptions.CsdChannelFactory{Profile: profile}, messageBroker)
 	if err != nil {
 		return nil, fmt.Errorf("SubscriptionManager initialization: %w", err)
 	}
@@ -73,7 +79,7 @@ func New(config Config, tenantCfg tenants.Config, profile profile.Provider, cpsU
 		tenants:             tenantCfg,
 		profile:             profile,
 		fhirURL:             upstreamFhirBaseUrl,
-		orcaPublicURL:       cpsURL,
+		orcaPublicURL:       orcaPublicURL,
 		transportByTenant:   transportByTenant,
 		fhirClientByTenant:  fhirClientByTenant,
 		subscriptionManager: subscriptionMgr,
@@ -89,20 +95,25 @@ func New(config Config, tenantCfg tenants.Config, profile profile.Provider, cpsU
 		}
 	}
 
-	s.pipeline = pipeline.New().
-		// Rewrite the upstream FHIR server URL in the response body to the public URL of the CPS instance.
-		// E.g.: http://fhir-server:8080/fhir -> https://example.com/cps)
-		// Required, because Microsoft Azure FHIR doesn't allow overriding the FHIR base URL
-		// (https://github.com/microsoft/fhir-server/issues/3526).
-		AppendResponseTransformer(pipeline.ResponseBodyRewriter{
-			Old: []byte(upstreamFhirBaseUrl.String()),
-			New: []byte(baseUrl.String()),
-		}).
-		// Rewrite the upstream FHIR server URL in the response headers (same as for the response body).
-		AppendResponseTransformer(pipeline.ResponseHeaderRewriter{
-			Old: upstreamFhirBaseUrl.String(),
-			New: baseUrl.String(),
-		})
+	s.pipelineByTenant = make(map[string]pipeline.Instance)
+	for _, tenant := range tenantCfg {
+		cpsBaseURL := tenant.URL(orcaPublicURL, FHIRBaseURL).String()
+		s.pipelineByTenant[tenant.ID] = pipeline.New().
+			// Rewrite the upstream FHIR server URL in the response body to the public URL of the CPS instance.
+			// E.g.: http://fhir-server:8080/fhir -> https://example.com/cps)
+			// Required, because Microsoft Azure FHIR doesn't allow overriding the FHIR base URL
+			// (https://github.com/microsoft/fhir-server/issues/3526).
+			AppendResponseTransformer(pipeline.ResponseBodyRewriter{
+				Old: []byte(upstreamFhirBaseUrl.String()),
+				New: []byte(cpsBaseURL),
+			}).
+			// Rewrite the upstream FHIR server URL in the response headers (same as for the response body).
+			AppendResponseTransformer(pipeline.ResponseHeaderRewriter{
+				Old: upstreamFhirBaseUrl.String(),
+				New: cpsBaseURL,
+			})
+	}
+
 	s.handlerProvider = s.defaultHandlerProvider
 	for _, tenant := range tenantCfg {
 		err = s.ensureCustomSearchParametersExists(tenants.WithTenant(context.Background(), tenant))
@@ -119,6 +130,7 @@ type Service struct {
 	fhirURL             *url.URL
 	transportByTenant   map[string]http.RoundTripper
 	fhirClientByTenant  map[string]fhirclient.Client
+	pipelineByTenant    map[string]pipeline.Instance
 	profile             profile.Provider
 	subscriptionManager subscriptions.Manager
 	eventManager        events.Manager
@@ -126,7 +138,6 @@ type Service struct {
 
 	allowUnmanagedFHIROperations bool
 	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
-	pipeline                     pipeline.Instance
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.
@@ -186,11 +197,9 @@ func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
 type FHIRHandlerResult func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error)
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	baseUrl := s.baseUrl()
-
 	// Binding to actual routing
 	// Metadata
-	mux.HandleFunc("GET "+basePath+"/metadata", s.tenants.HttpHandler(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePathWithTenant+"/metadata", s.tenants.HttpHandler(func(httpResponse http.ResponseWriter, request *http.Request) {
 		md := fhir.CapabilityStatement{
 			FhirVersion: fhir.FHIRVersion4_0_1,
 			Date:        time.Now().Format(time.RFC3339),
@@ -211,39 +220,35 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
 	}))
 	// Creating a resource
-	mux.HandleFunc("POST "+basePath+"/{type}", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/{type}", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	})))
 	// Searching for a resource via POST
-	mux.HandleFunc("POST "+basePath+"/{type}/_search", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/{type}/_search", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleSearchRequest(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
 	})))
 	// Handle bundle
-	mux.HandleFunc("POST "+basePath+"/", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != basePath+"/" {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("invalid path"), "CarePlanService/POST", httpResponse)
-			return
-		}
+	mux.HandleFunc("POST "+basePathWithTenant+"/", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		s.handleBundle(request, httpResponse)
 	})))
-	mux.HandleFunc("POST "+basePath, s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		s.handleBundle(request, httpResponse)
 	})))
 	// Updating a resource by ID
-	mux.HandleFunc("PUT "+basePath+"/{type}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleModification(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 	})))
 	// Updating a resource by selecting it based on query params
-	mux.HandleFunc("PUT "+basePath+"/{type}", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
 	})))
 	// Handle reading a specific resource instance
-	mux.HandleFunc("GET "+basePath+"/{type}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(baseUrl, func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePathWithTenant+"/{type}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
@@ -365,7 +370,8 @@ func (s *Service) writeTransactionResponse(httpResponse http.ResponseWriter, txR
 		resultResource = txResult.Entry[0].Resource
 	}
 
-	s.pipeline.
+	tenant, _ := tenants.FromContext(ctx)
+	s.pipelineByTenant[tenant.ID].
 		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
 		DoAndWrite(httpResponse, resultResource, statusCode)
 }
@@ -376,7 +382,8 @@ func (s *Service) writeSearchResponse(httpResponse http.ResponseWriter, txResult
 	if len(txResult.Entry) == 0 {
 		log.Ctx(ctx).Warn().Msg("No entries in search result")
 		// Return an empty bundle instead of 204 No Content
-		s.pipeline.DoAndWrite(httpResponse, &fhir.Bundle{
+		tenant, _ := tenants.FromContext(ctx)
+		s.pipelineByTenant[tenant.ID].DoAndWrite(httpResponse, &fhir.Bundle{
 			Type:  fhir.BundleTypeSearchset,
 			Entry: []fhir.BundleEntry{},
 			Total: to.Ptr(0),
@@ -386,8 +393,8 @@ func (s *Service) writeSearchResponse(httpResponse http.ResponseWriter, txResult
 
 	// For search results, we get headers from the first entry but return the full bundle
 	headers, statusCode := s.extractResponseHeadersAndStatus(&txResult.Entry[0], ctx)
-
-	s.pipeline.
+	tenant, _ := tenants.FromContext(ctx)
+	s.pipelineByTenant[tenant.ID].
 		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
 		DoAndWrite(httpResponse, txResult, statusCode)
 }
@@ -917,8 +924,8 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, "Bundle", httpResponse)
 		return
 	}
-
-	s.pipeline.DoAndWrite(httpResponse, resultBundle, http.StatusOK)
+	tenant, _ = tenants.FromContext(httpRequest.Context())
+	s.pipelineByTenant[tenant.ID].DoAndWrite(httpResponse, resultBundle, http.StatusOK)
 }
 
 func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -956,10 +963,6 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 				Msgf("Failed to notify subscribers for %T", resource)
 		}
 	}
-}
-
-func (s Service) baseUrl() *url.URL {
-	return s.orcaPublicURL.JoinPath(basePath)
 }
 
 func getResourceID(resourcePath string) string {

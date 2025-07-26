@@ -291,7 +291,7 @@ func TestService_ErrorHandling(t *testing.T) {
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(server.Client().Transport, auth.TestPrincipal1, "")
 
 	// Make an invalid call (not providing JSON payload)
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/cps/Task", nil)
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/cps/"+tenantCfg.Sole().ID+"/Task", nil)
 	require.NoError(t, err)
 	request.Header.Set("Content-Type", "application/fhir+json")
 
@@ -338,7 +338,7 @@ func TestService_ValidationErrorHandling(t *testing.T) {
 
 	var body = `{"meta":{"versionId":"1","lastUpdated":"2025-07-16T09:52:29.238+00:00","source":"#UDij7lTAHXv1rLRt"},"identifier":[{"use":"usual","system":"http://fhir.nl/fhir/NamingSystem/bsn","value":"99999511"}],"name":[{"text":"abv, abv","family":"abv","given":["abv"]}],"telecom":[{"system":"phone","value":"000","use":"home"},{"system":"email","value":"abv","use":"home"}],"gender":"unknown","birthDate":"1980-01-15","address":[{"use":"home","type":"postal","line":["123 Main Street"],"city":"Hometown","state":"State","postalCode":"12345","country":"Country"}],"resourceType":"Patient"}`
 	// Make an invalid call (not providing JSON payload)
-	request, err := http.NewRequest(http.MethodPost, server.URL+"/cps/Patient", strings.NewReader(body))
+	request, err := http.NewRequest(http.MethodPost, server.URL+"/cps/"+tenantCfg.Sole().ID+"/Patient", strings.NewReader(body))
 	require.NoError(t, err)
 	request.Header.Set("Content-Type", "application/fhir+json")
 
@@ -601,7 +601,7 @@ func TestService_Handle(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 	cpsBaseUrl, _ := url.Parse(frontServer.URL)
-	fhirClient := fhirclient.New(cpsBaseUrl.JoinPath("cps"), httpClient, nil)
+	fhirClient := fhirclient.New(cpsBaseUrl.JoinPath("cps", tenantCfg.Sole().ID), httpClient, nil)
 
 	t.Run("Bundle", func(t *testing.T) {
 		t.Run("POST 2 items (CarePlan, Task)", func(t *testing.T) {
@@ -1120,7 +1120,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("invalid content type - fails", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", nil)
+		req := httptest.NewRequest(http.MethodPost, "/cps/"+tenantCfg.Sole().ID+"/CarePlan/_search", nil)
 		req.Header.Set("Content-Type", "application/json")
 
 		err := service.validateSearchRequest(req)
@@ -1129,7 +1129,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 	})
 
 	t.Run("invalid encoded body parameters JSON - fails", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader(`{"invalid":"param"}`))
+		req := httptest.NewRequest(http.MethodPost, "/cps/"+tenantCfg.Sole().ID+"/CarePlan/_search", strings.NewReader(`{"invalid":"param"}`))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 		err := service.validateSearchRequest(req)
@@ -1138,7 +1138,7 @@ func TestService_validateSearchRequest(t *testing.T) {
 	})
 
 	t.Run("invalid encoded body parameters - fails", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodPost, "/cps/CarePlan/_search", strings.NewReader("valid=param&invalid"))
+		req := httptest.NewRequest(http.MethodPost, "/cps/"+tenantCfg.Sole().ID+"/CarePlan/_search", strings.NewReader("valid=param&invalid"))
 		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 		err := service.validateSearchRequest(req)
