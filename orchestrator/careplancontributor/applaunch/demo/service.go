@@ -53,10 +53,6 @@ type Service struct {
 	profile              profile.Provider
 }
 
-func (s *Service) cpsFhirClient() fhirclient.Client {
-	return globals.CarePlanServiceFhirClient
-}
-
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("/demo-app-launch", s.handle)
 }
@@ -129,7 +125,12 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 			http.Error(response, "Failed to parse task identifier: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), *taskIdentifier)
+		fhirClient, err := globals.CreateCPSFHIRClient(ctx)
+		if err != nil {
+			http.Error(response, "Failed to create FHIR client for existing Task check: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), fhirClient, *taskIdentifier)
 		if err != nil {
 			log.Ctx(request.Context()).Error().Err(err).Msg("Existing CPS Task check failed for task with identifier: " + coolfhir.ToString(taskIdentifier))
 			http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)

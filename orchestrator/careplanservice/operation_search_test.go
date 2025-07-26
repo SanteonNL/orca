@@ -21,8 +21,8 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRSearchOperationHandler[fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: AnyonePolicy[fhir.Task]{},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       AnyonePolicy[fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -50,8 +50,8 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRSearchOperationHandler[fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: AnyonePolicy[fhir.Task]{},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       AnyonePolicy[fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -84,8 +84,8 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRSearchOperationHandler[fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: TestPolicy[fhir.Task]{},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       TestPolicy[fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		searchResults, notifications, err := result(nil)
@@ -110,8 +110,8 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRSearchOperationHandler[fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: TestPolicy[fhir.Task]{Error: assert.AnError},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       TestPolicy[fhir.Task]{Error: assert.AnError},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		searchResults, notifications, err := result(nil)

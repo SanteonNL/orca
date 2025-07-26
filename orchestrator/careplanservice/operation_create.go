@@ -21,11 +21,11 @@ import (
 var _ FHIROperation = &FHIRCreateOperationHandler[fhir.HasExtension]{}
 
 type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
-	fhirClient  fhirclient.Client
-	authzPolicy Policy[T]
-	profile     profile.Provider
-	fhirURL     *url.URL
-	validator   validation.Validator[T]
+	fhirClientFactory FHIRClientFactory
+	authzPolicy       Policy[T]
+	profile           profile.Provider
+	fhirURL           *url.URL
+	validator         validation.Validator[T]
 }
 
 func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -106,9 +106,13 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		}))
 	}
 
+	fhirClient, err := h.fhirClientFactory(ctx)
+	if err != nil {
+		return nil, err
+	}
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var createdResource T
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, h.fhirClient, h.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdResource)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, h.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdResource)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process %s creation result: %w", resourceType, err)
 		}

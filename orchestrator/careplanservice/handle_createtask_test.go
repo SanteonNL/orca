@@ -120,10 +120,13 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 	mockFHIRClient := mock.NewMockClient(ctrl)
 
 	// Create the service with the mock FHIR client
+	tenant := tenants.Test().Sole()
 	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
-		profile:      profile.Test(),
-		fhirClient:   mockFHIRClient,
+		profile: profile.Test(),
+		fhirClientByTenant: map[string]fhirclient.Client{
+			tenant.ID: mockFHIRClient,
+		},
 		fhirURL:      fhirBaseUrl,
 		eventManager: events.NewManager(messaging.NewMemoryBroker()),
 	}
@@ -344,11 +347,12 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
 				}),
+				Tenant: tenant,
 			}
 
 			tx := coolfhir.Transaction()
 
-			ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+			ctx := tenants.WithTenant(context.Background(), tenant)
 			ctx = auth.WithPrincipal(ctx, *auth.TestPrincipal1)
 			if tt.principal != nil {
 				fhirRequest.Principal = tt.principal
@@ -601,15 +605,19 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 			mockFHIRClient := mock.NewMockClient(ctrl)
 
 			// Create the service with the mock FHIR client
+			tenant := tenants.Test().Sole()
 			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 			service := &Service{
-				fhirClient: mockFHIRClient,
-				profile:    profile.Test(),
-				fhirURL:    fhirBaseUrl,
+				fhirClientByTenant: map[string]fhirclient.Client{
+					tenant.ID: mockFHIRClient,
+				},
+				profile: profile.Test(),
+				fhirURL: fhirBaseUrl,
 			}
 
 			// Create a Task
 			taskBytes, _ := json.Marshal(tt.taskToCreate)
+
 			fhirRequest := FHIRHandlerRequest{
 				ResourcePath: "Task",
 				ResourceData: taskBytes,
@@ -619,6 +627,7 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
 				}),
+				Tenant: tenant,
 			}
 
 			tx := coolfhir.Transaction()

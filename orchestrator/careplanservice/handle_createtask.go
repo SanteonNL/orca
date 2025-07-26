@@ -75,6 +75,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		carePlanBundleEntry    *fhir.BundleEntry
 	)
 
+	fhirClient := s.fhirClientByTenant[request.Tenant.ID]
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
 
@@ -121,7 +122,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 		if task.For.Reference == nil {
 			headers := fhirclient.Headers{}
-			patients, _, err := handleSearchResource[fhir.Patient](ctx, s, "Patient", map[string][]string{"identifier": {fmt.Sprintf("%s|%s", *task.For.Identifier.System, *task.For.Identifier.Value)}}, &headers)
+			patients, _, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", map[string][]string{"identifier": {fmt.Sprintf("%s|%s", *task.For.Identifier.System, *task.For.Identifier.Value)}}, &headers)
 			if err != nil {
 				return nil, err
 			}
@@ -211,7 +212,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		var carePlan fhir.CarePlan
 
-		if err := s.fhirClient.ReadWithContext(ctx, *carePlanRef, &carePlan); err != nil {
+		if err := fhirClient.ReadWithContext(ctx, *carePlanRef, &carePlan); err != nil {
 			return nil, fmt.Errorf("failed to read CarePlan: %w", err)
 		}
 
@@ -249,7 +250,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			}
 			// Get the parent task
 			var parentTask fhir.Task
-			err = s.fhirClient.ReadWithContext(ctx, *task.PartOf[0].Reference, &parentTask)
+			err = fhirClient.ReadWithContext(ctx, *task.PartOf[0].Reference, &parentTask)
 			if err != nil {
 				return nil, err
 			}
@@ -304,7 +305,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				},
 			})
 
-			updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, request.LocalIdentity, tx)
+			updated, err := careteamservice.Update(ctx, fhirClient, *carePlan.Id, task, request.LocalIdentity, tx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to update CareTeam: %w", err)
 			}
@@ -332,7 +333,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		{
 			var createdTask fhir.Task
 			var err error
-			result, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
+			result, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -342,7 +343,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		// If CarePlan was updated/created, notify about CarePlan
 		if carePlanBundleEntry != nil {
 			var createdCarePlan fhir.CarePlan
-			_, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, carePlanBundleEntry, &txResult.Entry[carePlanBundleEntryIdx], &createdCarePlan)
+			_, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, s.fhirURL, carePlanBundleEntry, &txResult.Entry[carePlanBundleEntryIdx], &createdCarePlan)
 			if err != nil {
 				return nil, nil, err
 			}

@@ -15,14 +15,13 @@ import (
 
 // handleSearchResource is a generic function to search for a resource of a given type and return the results
 // it returns a processed list of the required resource type, the full bundle and an error
-func handleSearchResource[T any](ctx context.Context, s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
+func handleSearchResource[T any](ctx context.Context, fhirClient fhirclient.Client, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
 	form := url.Values{}
 	for k, v := range queryParams {
 		form.Add(k, strings.Join(v, ","))
 	}
-
 	var bundle fhir.Bundle
-	err := s.fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
+	err := fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, &fhir.Bundle{}, err
 	}

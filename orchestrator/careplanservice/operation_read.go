@@ -17,14 +17,18 @@ import (
 var _ FHIROperation = &FHIRReadOperationHandler[fhir.HasExtension]{}
 
 type FHIRReadOperationHandler[T fhir.HasExtension] struct {
-	fhirClient  fhirclient.Client
-	authzPolicy Policy[T]
+	fhirClientFactory FHIRClientFactory
+	authzPolicy       Policy[T]
 }
 
 func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	resourceType := getResourceType(request.ResourcePath)
 	var resource T
-	err := h.fhirClient.ReadWithContext(ctx, resourceType+"/"+request.ResourceId, &resource, fhirclient.ResponseHeaders(request.FhirHeaders))
+	fhirClient, err := h.fhirClientFactory(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = fhirClient.ReadWithContext(ctx, resourceType+"/"+request.ResourceId, &resource, fhirclient.ResponseHeaders(request.FhirHeaders))
 	if err != nil {
 		return nil, err
 	}

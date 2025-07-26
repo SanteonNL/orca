@@ -502,7 +502,6 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	fhirBaseURL = test.SetupHAPI(t)
 	config := careplanservice.DefaultConfig()
 	config.Enabled = true
-	config.FHIR.BaseURL = fhirBaseURL.String()
 
 	cpsFHIRClient := fhirclient.New(fhirBaseURL, http.DefaultClient, nil)
 	taskengine.LoadTestQuestionnairesAndHealthcareSevices(t, cpsFHIRClient)
@@ -513,7 +512,12 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	}
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
-	service, err := careplanservice.New(config, tenants.Test(), activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.CPSFHIR = coolfhir.ClientConfig{
+			BaseURL: fhirBaseURL.String(),
+		}
+	})
+	service, err := careplanservice.New(config, tenantCfg, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()

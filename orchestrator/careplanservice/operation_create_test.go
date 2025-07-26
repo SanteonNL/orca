@@ -4,6 +4,7 @@ import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
@@ -280,11 +281,11 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 			}
 
 			handler := &FHIRCreateOperationHandler[*fhir.Task]{
-				authzPolicy: policy,
-				fhirClient:  fhirClient,
-				profile:     profile.Test(),
-				fhirURL:     fhirBaseURL,
-				validator:   tt.args.validator,
+				authzPolicy:       policy,
+				fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+				profile:           profile.Test(),
+				fhirURL:           fhirBaseURL,
+				validator:         tt.args.validator,
 			}
 			requestData := tt.args.resourceData
 			if requestData == nil {
@@ -297,6 +298,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 				ResourcePath:  "Task",
 				Principal:     auth.TestPrincipal1,
 				LocalIdentity: &auth.TestPrincipal2.Organization.Identifier[0],
+				Tenant:        tenants.Test().Sole(),
 			}, tx)
 			if tt.wantErr != nil {
 				tt.wantErr(t, err)

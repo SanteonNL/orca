@@ -57,7 +57,7 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 		})
 	})
 	t.Run("read", func(t *testing.T) {
-		policy := ReadServiceRequestAuthzPolicy(fhirClient)
+		policy := ReadServiceRequestAuthzPolicy(FHIRClientFactoryFor(fhirClient))
 		testPolicies(t, []AuthzPolicyTest[*fhir.ServiceRequest]{
 			{
 				name:      "allow (is creator)",
@@ -83,7 +83,7 @@ func TestServiceRequestAuthzPolicy(t *testing.T) {
 		})
 	})
 	t.Run("update", func(t *testing.T) {
-		policy := ReadServiceRequestAuthzPolicy(fhirClient)
+		policy := ReadServiceRequestAuthzPolicy(FHIRClientFactoryFor(fhirClient))
 		testPolicies(t, []AuthzPolicyTest[*fhir.ServiceRequest]{
 			{
 				name:      "allow (is creator)",

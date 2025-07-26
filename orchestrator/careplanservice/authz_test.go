@@ -88,7 +88,7 @@ func TestRelatedResourcePolicy_HasAccess(t *testing.T) {
 		relatedPolicy.EXPECT().HasAccess(gomock.Any(), carePlan3, gomock.Any()).Return(&PolicyDecision{Allowed: true}, nil)
 
 		result, err := RelatedResourcePolicy[fhir.Patient, fhir.CarePlan]{
-			fhirClient:            fhirClient,
+			fhirClientFactory:     FHIRClientFactoryFor(fhirClient),
 			relatedResourcePolicy: relatedPolicy,
 			relatedResourceSearchParams: func(_ context.Context, _ fhir.Patient) (resourceType string, searchParams url.Values) {
 				return "CarePlan", url.Values{
