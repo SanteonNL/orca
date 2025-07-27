@@ -6,7 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
@@ -66,27 +70,9 @@ func New(
 	sessionManager *user.SessionManager[session.Data],
 	messageBroker messaging.Broker,
 	eventManager events.Manager,
-	ehrFHIRProxy coolfhir.HttpProxy,
-	ehrFHIRClient fhirclient.Client,
 	localCarePlanServiceURL *url.URL,
 	httpHandler http.Handler) (*Service, error) {
-
-	fhirURL, _ := url.Parse(config.FHIR.BaseURL)
-
 	ctx := context.Background()
-
-	// In case the EHR FHIR API isn't made available through the app launch system (demo, SMART on FHIR),
-	// we assume we can just reach it through the configured FHIR URL.
-	if ehrFHIRProxy == nil {
-		var ehrFHIRTransport http.RoundTripper
-		var err error
-		ehrFHIRTransport, ehrFHIRClient, err = coolfhir.NewAuthRoundTripper(config.FHIR, coolfhir.Config())
-		if err != nil {
-			return nil, err
-		}
-		ehrFHIRProxy = coolfhir.NewProxy("App->EHR", fhirURL, basePath+"/fhir", orcaPublicURL.JoinPath(basePath, "fhir"), ehrFHIRTransport, false, false)
-	}
-
 	// Initialize workflow provider, which is used to select FHIR Questionnaires by the Task Filler engine
 	var workflowProvider taskengine.WorkflowProvider
 	if config.TaskFiller.QuestionnaireFHIR.BaseURL == "" {
@@ -128,10 +114,8 @@ func New(
 		localCarePlanServiceUrl:       localCarePlanServiceURL,
 		SessionManager:                sessionManager,
 		profile:                       profile,
-		frontendUrl:                   config.FrontendConfig.URL,
-		fhirURL:                       fhirURL,
-		ehrFhirProxy:                  ehrFHIRProxy,
-		ehrFhirClient:                 ehrFHIRClient,
+		ehrFHIRProxyByTenant:          make(map[string]coolfhir.HttpProxy),
+		ehrFHIRClientByTenant:         make(map[string]fhirclient.Client),
 		workflows:                     workflowProvider,
 		healthdataviewEndpointEnabled: config.HealthDataViewEndpointEnabled,
 		eventManager:                  eventManager,
@@ -170,15 +154,10 @@ type Service struct {
 	profile        profile.Provider
 	orcaPublicURL  *url.URL
 	SessionManager *user.SessionManager[session.Data]
-	frontendUrl    string
 	// localCarePlanServiceUrl is the URL of the local Care Plan Service, used to create new CarePlans.
-	localCarePlanServiceUrl *url.URL
-	fhirURL                 *url.URL
-	ehrFhirProxy            coolfhir.HttpProxy
-	// ehrFhirClient is used to call the local FHIR store, used to:
-	// - proxy requests from the Frontend application (e.g. initiating task workflow)
-	// - proxy requests from EHR (e.g. fetching remote FHIR data)
-	ehrFhirClient                 fhirclient.Client
+	localCarePlanServiceUrl       *url.URL
+	ehrFHIRProxyByTenant          map[string]coolfhir.HttpProxy
+	ehrFHIRClientByTenant         map[string]fhirclient.Client
 	workflows                     taskengine.WorkflowProvider
 	healthdataviewEndpointEnabled bool
 	notifier                      ehr.Notifier
@@ -188,6 +167,7 @@ type Service struct {
 	oidcProvider                  *op.Service
 	httpHandler                   http.Handler
 	tokenClient                   *rp.Client
+	appLaunches                   []applaunch.Service
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -330,9 +310,53 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			http.Redirect(writer, request, referer, http.StatusFound)
 		} else {
 			// This redirection will be handled by middleware in the frontend
-			http.Redirect(writer, request, s.frontendUrl, http.StatusOK)
+			http.Redirect(writer, request, s.config.FrontendConfig.URL, http.StatusOK)
 		}
 	}))
+
+	// App launch endpoints
+	for _, appLaunch := range s.appLaunches {
+		appLaunch.RegisterHandlers(mux)
+	}
+}
+
+func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[session.Data], strictMode bool) error {
+	frontendUrl, _ := url.Parse(s.config.FrontendConfig.URL)
+
+	if s.config.AppLaunch.SmartOnFhir.Enabled {
+		service, err := smartonfhir.New(s.config.AppLaunch.SmartOnFhir, sessionManager, s.orcaPublicURL, frontendUrl, strictMode)
+		if err != nil {
+			return fmt.Errorf("failed to create SMART on FHIR AppLaunch service: %w", err)
+		}
+		s.appLaunches = append(s.appLaunches, service)
+	}
+	if s.config.AppLaunch.Demo.Enabled {
+		service := demo.New(sessionManager, s.config.AppLaunch.Demo, s.tenants, s.orcaPublicURL, frontendUrl, s.profile)
+		s.appLaunches = append(s.appLaunches, service)
+	}
+	if s.config.AppLaunch.ZorgPlatform.Enabled {
+		service, err := zorgplatform.New(sessionManager, s.config.AppLaunch.ZorgPlatform, s.tenants, s.orcaPublicURL.String(), frontendUrl, s.profile)
+		if err != nil {
+			return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
+		}
+		s.appLaunches = append(s.appLaunches, service)
+	}
+	for _, appLaunch := range s.appLaunches {
+		proxies, fhirClients := appLaunch.CreateEHRProxies()
+		for tenantID, proxy := range proxies {
+			if _, exists := s.ehrFHIRProxyByTenant[tenantID]; exists {
+				return fmt.Errorf("EHR FHIR proxy for tenant %s already exists", tenantID)
+			}
+			s.ehrFHIRProxyByTenant[tenantID] = proxy
+		}
+		for tenantID, fhirClient := range fhirClients {
+			if _, exists := s.ehrFHIRClientByTenant[tenantID]; exists {
+				return fmt.Errorf("EHR FHIR client for tenant %s already exists", tenantID)
+			}
+			s.ehrFHIRClientByTenant[tenantID] = fhirClient
+		}
+	}
+	return nil
 }
 
 // withSession is a middleware that retrieves the session for the given request.
@@ -427,18 +451,20 @@ func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http
 // handleProxyExternalRequestToEHR handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
 // This is typically used by remote parties to retrieve patient data from the local EHR.
 func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, request *http.Request) error {
-
-	if s.ehrFhirProxy == nil {
-		return coolfhir.BadRequest("EHR API is not supported")
-	}
-
-	log.Ctx(request.Context()).Debug().Msg("Handling external FHIR API request")
-
-	_, err := s.authorizeScpMember(request)
+	tenant, err := tenants.FromContext(request.Context())
 	if err != nil {
 		return err
 	}
-	s.ehrFhirProxy.ServeHTTP(writer, request)
+	ehrProxy := s.ehrFHIRProxyByTenant[tenant.ID]
+	if ehrProxy == nil {
+		return coolfhir.BadRequest("EHR API is not supported")
+	}
+	log.Ctx(request.Context()).Debug().Msg("Handling external FHIR API request")
+	_, err = s.authorizeScpMember(request)
+	if err != nil {
+		return err
+	}
+	ehrProxy.ServeHTTP(writer, request)
 	return nil
 }
 

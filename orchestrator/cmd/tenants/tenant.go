@@ -11,23 +11,13 @@ import (
 
 type Config map[string]Properties
 
-func (c Config) Validate(zorgplatformEnabled bool, cpsEnabled bool) error {
+func (c Config) Validate(cpsEnabled bool) error {
 	for id, props := range c {
-		if props.NutsSubject == "" {
+		if props.Nuts.Subject == "" {
 			return fmt.Errorf("tenant %s: missing Nuts subject", id)
 		}
-		if zorgplatformEnabled {
-			if props.ChipSoftOrgID == "" {
-				return fmt.Errorf("tenant %s: missing ChipSoftOrgID", id)
-			}
-		} else {
-			// Sanity check: if Zorgplatform is not enabled, ChipSoftOrgID should not be set (could be a mistake)
-			if props.ChipSoftOrgID != "" {
-				return fmt.Errorf("tenant %s: ChipSoftOrgID set, but Zorgplatform not enabled", id)
-			}
-		}
 		if cpsEnabled {
-			if props.CPSFHIR.BaseURL == "" {
+			if props.CPS.FHIR.BaseURL == "" {
 				return fmt.Errorf("tenant %s: CPS FHIR URL is not configured", id)
 			}
 		}

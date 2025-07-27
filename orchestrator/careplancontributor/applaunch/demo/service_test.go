@@ -52,7 +52,7 @@ func TestService_handle(t *testing.T) {
 	t.Run("root base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
-			sessionManager: sessionManager, baseURL: "/",
+			sessionManager: sessionManager, orcaPublicURL: must.ParseURL("/"),
 			frontendLandingUrl: must.ParseURL("/cpc/"),
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
@@ -78,7 +78,7 @@ func TestService_handle(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager:     sessionManager,
-			baseURL:            "/orca",
+			orcaPublicURL:      must.ParseURL("/orca"),
 			frontendLandingUrl: must.ParseURL("/frontend/landing"),
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
@@ -98,7 +98,7 @@ func TestService_handle(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager:     sessionManager,
-			baseURL:            "/orca",
+			orcaPublicURL:      must.ParseURL("/orca"),
 			frontendLandingUrl: must.ParseURL("/cpc/"),
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
@@ -126,7 +126,7 @@ func TestService_handle(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager:     sessionManager,
-			baseURL:            "/orca",
+			orcaPublicURL:      must.ParseURL("/orca"),
 			frontendLandingUrl: must.ParseURL("/frontend/enrollment"),
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient

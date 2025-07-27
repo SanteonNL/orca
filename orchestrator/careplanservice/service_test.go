@@ -273,8 +273,10 @@ func TestService_ErrorHandling(t *testing.T) {
 	// Setup: configure the service
 	messageBroker := messaging.NewMemoryBroker()
 	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
-		properties.CPSFHIR = coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
+		properties.CPS = tenants.CarePlanServiceProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirServer.URL + "/fhir",
+			},
 		}
 	})
 	service, err := New(DefaultConfig(), tenantCfg, profile.Test(),
@@ -317,8 +319,10 @@ func TestService_ValidationErrorHandling(t *testing.T) {
 	// Setup: configure the service
 	messageBroker := messaging.NewMemoryBroker()
 	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
-		properties.CPSFHIR = coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
+		properties.CPS = tenants.CarePlanServiceProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirServer.URL + "/fhir",
+			},
 		}
 	})
 	service, err := New(DefaultConfig(), tenantCfg, profile.Test(),
@@ -524,8 +528,10 @@ func TestService_Handle(t *testing.T) {
 	// Setup: create the service
 	messageBroker := messaging.NewMemoryBroker()
 	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
-		properties.CPSFHIR = coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
+		properties.CPS = tenants.CarePlanServiceProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirServer.URL + "/fhir",
+			},
 		}
 	})
 	service, err := New(DefaultConfig(), tenantCfg, profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
@@ -1104,8 +1110,10 @@ func TestService_validateSearchRequest(t *testing.T) {
 	// Setup: create the service
 	messageBroker := messaging.NewMemoryBroker()
 	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
-		properties.CPSFHIR = coolfhir.ClientConfig{
-			BaseURL: fhirServer.URL + "/fhir",
+		properties.CPS = tenants.CarePlanServiceProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirServer.URL + "/fhir",
+			},
 		}
 	})
 	service, err := New(DefaultConfig(), tenantCfg, profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))

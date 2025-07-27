@@ -164,9 +164,6 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager[ses
 		decryptCertificate:    decryptCert,
 		zorgplatformSignCerts: zorgplatformSignCerts,
 		profile:               profile,
-		accessTokenCache: ttlcache.New[string, string](
-			ttlcache.WithTTL[string, string](accessTokenCacheTTL),
-		),
 		// performing HTTP requests with Zorgplatform requires mutual TLS
 		zorgplatformHttpClient: &http.Client{
 			Transport: &http.Transport{
@@ -178,9 +175,6 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager[ses
 			},
 		},
 	}
-	// Start cache expiry
-	go result.accessTokenCache.Start()
-
 	result.secureTokenService = result
 	result.registerFhirClientFactory(config)
 	result.getSessionData = result.defaultGetSessionData
@@ -203,53 +197,71 @@ type Service struct {
 	profile                profile.Provider
 	secureTokenService     SecureTokenService
 	getSessionData         func(ctx context.Context, accessToken string, launchContext LaunchContext) (*session.Data, error)
-	// accessTokenCache stores the Zorgplatform access tokens a given CarePlan (from X-SCP-Context)
-	// Requesting an access token involves a chained lookup, so we cache the result for some time.
-	accessTokenCache *ttlcache.Cache[string, string]
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("POST "+appLaunchUrl, s.handleLaunch)
 }
 
-func (s *Service) EhrFhirProxy() (coolfhir.HttpProxy, fhirclient.Client) {
+// CreateEHRProxies creates HTTP proxies and FHIR clients to interact with the Zorgplatform FHIR API.
+// It should only be invoked once, because it creates caches with background goroutines.
+func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {
 	targetFhirBaseUrl, _ := url.Parse(s.config.ApiUrl)
-	const proxyBasePath = "/cpc/fhir"
-	rewriteUrl, _ := url.Parse(s.baseURL)
-	rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
-	roundTripper := &stsAccessTokenRoundTripper{
-		transport:          s.zorgplatformHttpClient.Transport,
-		cpsFhirClient:      globals.CreateCPSFHIRClient,
-		secureTokenService: s.secureTokenService,
-		accessTokenCache:   s.accessTokenCache,
-	}
-	result := coolfhir.NewProxy("App->EHR (ZPF)", targetFhirBaseUrl, proxyBasePath, rewriteUrl, roundTripper, true, false)
-	// Zorgplatform's FHIR API only allows GET-based FHIR searches, while ORCA only allows POST-based FHIR searches.
-	// If the request is a POST-based search, we need to rewrite the request to a GET-based search.
-	result.HTTPRequestModifier = func(req *http.Request) (*http.Request, error) {
-		if strings.HasSuffix(req.URL.Path, "_search") && req.Method == http.MethodPost {
-			newReq := req.Clone(req.Context())
-			newReq.Method = http.MethodGet
-			if err := req.ParseForm(); err != nil {
-				return nil, err
-			}
-			newReq.URL.RawQuery = req.Form.Encode()
-			newReq.URL.Path = strings.TrimSuffix(req.URL.Path, "/_search")
-			newReq.Body = nil
-			return newReq, nil
+
+	proxies := make(map[string]coolfhir.HttpProxy)
+	fhirClients := make(map[string]fhirclient.Client)
+	for _, tenant := range s.tenants {
+		if tenant.ChipSoft.OrganizationID == "" {
+			continue
 		}
-		return req, nil
+		proxyBasePath := "/cpc/fhir"
+		rewriteUrl, _ := url.Parse(s.baseURL)
+		rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
+
+		// accessTokenCache stores the Zorgplatform access tokens a given CarePlan (from X-SCP-Context)
+		// Requesting an access token involves a chained lookup, so we cache the result for some time.
+		accessTokenCache := ttlcache.New[string, string](
+			ttlcache.WithTTL[string, string](accessTokenCacheTTL),
+		)
+		go accessTokenCache.Start()
+
+		roundTripper := &stsAccessTokenRoundTripper{
+			transport:          s.zorgplatformHttpClient.Transport,
+			cpsFhirClient:      globals.CreateCPSFHIRClient,
+			secureTokenService: s.secureTokenService,
+			accessTokenCache:   accessTokenCache,
+		}
+		proxy := coolfhir.NewProxy("App->EHR (ZPF)", targetFhirBaseUrl, proxyBasePath, rewriteUrl, roundTripper, true, false)
+		// Zorgplatform's FHIR API only allows GET-based FHIR searches, while ORCA only allows POST-based FHIR searches.
+		// If the request is a POST-based search, we need to rewrite the request to a GET-based search.
+		proxy.HTTPRequestModifier = func(req *http.Request) (*http.Request, error) {
+			if strings.HasSuffix(req.URL.Path, "_search") && req.Method == http.MethodPost {
+				newReq := req.Clone(req.Context())
+				newReq.Method = http.MethodGet
+				if err := req.ParseForm(); err != nil {
+					return nil, err
+				}
+				newReq.URL.RawQuery = req.Form.Encode()
+				newReq.URL.Path = strings.TrimSuffix(req.URL.Path, "/_search")
+				newReq.Body = nil
+				return newReq, nil
+			}
+			return req, nil
+		}
+		// Create FHIR client
+		httpClient := &http.Client{
+			Transport: &coolfhir.LoggingRoundTripper{
+				Name: "App->EHR (ZPF)",
+				Next: roundTripper,
+			},
+		}
+		fhirClientCfg := fhirclient.DefaultConfig()
+		fhirClientCfg.UsePostSearch = false // Zorgplatform only supports GET-based searches
+
+		fhirClients[tenant.ID] = fhirclient.New(targetFhirBaseUrl, httpClient, &fhirClientCfg)
+		proxies[tenant.ID] = proxy
 	}
-	// Create FHIR client
-	httpClient := &http.Client{
-		Transport: &coolfhir.LoggingRoundTripper{
-			Name: "App->EHR (ZPF)",
-			Next: roundTripper,
-		},
-	}
-	fhirClientCfg := fhirclient.DefaultConfig()
-	fhirClientCfg.UsePostSearch = false // Zorgplatform only supports GET-based searches
-	return result, fhirclient.New(targetFhirBaseUrl, httpClient, &fhirClientCfg)
+	return proxies, fhirClients
 }
 
 var _ http.RoundTripper = &stsAccessTokenRoundTripper{}
@@ -258,8 +270,7 @@ type stsAccessTokenRoundTripper struct {
 	transport          http.RoundTripper
 	cpsFhirClient      func(ctx context.Context) (fhirclient.Client, error)
 	secureTokenService SecureTokenService
-	// TODO: Make multi-tenant?
-	accessTokenCache *ttlcache.Cache[string, string]
+	accessTokenCache   *ttlcache.Cache[string, string]
 }
 
 func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
@@ -653,7 +664,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 
 func (s *Service) lookupTenant(chipSoftOrgID string) (*tenants.Properties, error) {
 	for _, props := range s.tenants {
-		if props.ChipSoftOrgID == chipSoftOrgID {
+		if props.ChipSoft.OrganizationID == chipSoftOrgID {
 			return &props, nil
 		}
 	}

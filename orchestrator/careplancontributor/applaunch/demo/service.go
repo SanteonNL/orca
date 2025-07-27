@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
@@ -8,6 +9,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -30,10 +32,11 @@ func init() {
 	}
 }
 
-func New(sessionManager *user.SessionManager[session.Data], config Config, tenants tenants.Config, frontendLandingUrl *url.URL, profile profile.Provider) *Service {
+func New(sessionManager *user.SessionManager[session.Data], config Config, tenants tenants.Config, orcaPublicURL *url.URL, frontendLandingUrl *url.URL, profile profile.Provider) *Service {
 	return &Service{
 		sessionManager:     sessionManager,
 		config:             config,
+		orcaPublicURL:      orcaPublicURL,
 		frontendLandingUrl: frontendLandingUrl,
 		profile:            profile,
 		tenants:            tenants,
@@ -47,7 +50,7 @@ type Service struct {
 	sessionManager       *user.SessionManager[session.Data]
 	config               Config
 	tenants              tenants.Config
-	baseURL              string
+	orcaPublicURL        *url.URL
 	frontendLandingUrl   *url.URL
 	ehrFHIRClientFactory func(*url.URL, *http.Client) fhirclient.Client
 	profile              profile.Provider
@@ -147,4 +150,35 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	// Redirect to landing page
 	log.Ctx(request.Context()).Debug().Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
 	http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
+}
+
+func (s *Service) lookupTenant(iss string) (*tenants.Properties, error) {
+	for _, tenant := range s.tenants {
+		if tenant.Demo.BaseURL == iss {
+			return &tenant, nil
+		}
+	}
+	return nil, fmt.Errorf("tenant with demo FHIR base URL '%s' not found", iss)
+}
+
+func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {
+	proxies := make(map[string]coolfhir.HttpProxy)
+	fhirClients := make(map[string]fhirclient.Client)
+
+	for _, tenant := range s.tenants {
+		if tenant.Demo.BaseURL == "" {
+			continue
+		}
+		fhirBaseURL := must.ParseURL(tenant.Demo.BaseURL)
+		transport, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.Demo, coolfhir.Config())
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to create FHIR client for tenant '%s' with base URL '%s'", tenant.ID, fhirBaseURL.String())
+			continue
+		}
+		proxy := coolfhir.NewProxy("App->EHR", fhirBaseURL, "/cpc/fhir", s.orcaPublicURL.JoinPath("cpc", "fhir"), transport, false, false)
+		proxies[tenant.ID] = proxy
+		fhirClients[tenant.ID] = fhirClient
+	}
+
+	return proxies, fhirClients
 }

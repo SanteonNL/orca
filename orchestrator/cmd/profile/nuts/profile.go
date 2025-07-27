@@ -51,12 +51,6 @@ type DutchNutsProfile struct {
 }
 
 func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
-	for id, t := range tenants {
-		if t.NutsSubject == "" {
-			return nil, fmt.Errorf("invalid/empty Nuts subject (tenant=%s)", id)
-		}
-	}
-
 	var clientCerts []tls.Certificate
 	if len(config.AzureKeyVault.ClientCertName) > 0 {
 		if config.AzureKeyVault.CredentialType == "" {
@@ -169,7 +163,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		Transport: &oauth2.Transport{
 			UnderlyingTransport: underlyingTransport,
 			TokenSource: nuts.OAuth2TokenSource{
-				NutsSubject: tenant.NutsSubject,
+				NutsSubject: tenant.Nuts.Subject,
 				NutsAPIURL:  d.Config.API.URL,
 			},
 			Scope:          careplancontributor.CarePlanServiceOAuth2Scope,
@@ -186,7 +180,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 		return nil, err
 	}
 	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
-		identifiers, err := d.identities(ctx, tenant.NutsSubject)
+		identifiers, err := d.identities(ctx, tenant.Nuts.Subject)
 		if err != nil {
 			log.Ctx(ctx).Warn().Err(err).Msg("Failed to refresh local identities using Nuts node")
 			if d.cachedIdentities == nil {
@@ -312,7 +306,7 @@ func (d DutchNutsProfile) CapabilityStatement(ctx context.Context, cp *fhir.Capa
 			Extension: []fhir.Extension{
 				{
 					Url:         nutsAuthorizationServerExtensionURL,
-					ValueString: to.Ptr(d.Config.Public.Parse().JoinPath("oauth2", tenant.NutsSubject).String()),
+					ValueString: to.Ptr(d.Config.Public.Parse().JoinPath("oauth2", tenant.Nuts.Subject).String()),
 				},
 			},
 		})

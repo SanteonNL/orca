@@ -2,9 +2,13 @@ package tenants
 
 func Test(mod ...func(*Properties)) Config {
 	props := Properties{
-		ID:            "test",
-		ChipSoftOrgID: "1.2.3.4.5",
-		NutsSubject:   "sub",
+		ID: "test",
+		ChipSoft: ChipSoftProperties{
+			OrganizationID: "1.2.3.4.5",
+		},
+		Nuts: NutsProperties{
+			Subject: "sub",
+		},
 	}
 	for _, m := range mod {
 		m(&props)
