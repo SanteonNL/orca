@@ -2,16 +2,11 @@
  * @jest-environment node
  */
 
-jest.mock('@/app/actions', () => ({
-  getPatientViewerTestUrl: jest.fn(),
-}));
-
 jest.mock('@/lib/fhirUtils', () => ({
   createScpClient: jest.fn(),
 }));
 
 import { getLaunchableApps } from '@/app/applaunch';
-import { getPatientViewerTestUrl } from '@/app/actions';
 import { createScpClient } from '@/lib/fhirUtils';
 import type { Identifier, Bundle, Endpoint } from 'fhir/r4';
 
@@ -23,16 +18,17 @@ describe('getLaunchableApps', () => {
 
   const mockSearchFn = jest.fn();
 
+
+
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.PATIENT_VIEWER_URL = 'https://test-viewer.example.com';
     (createScpClient as jest.Mock).mockReturnValue({
       search: mockSearchFn
     });
   });
 
   it('returns test app when patient viewer URL is available', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue('https://test-viewer.example.com');
-
     const result = await getLaunchableApps(mockOrganization);
 
     expect(result).toEqual([{
@@ -43,7 +39,7 @@ describe('getLaunchableApps', () => {
   });
 
   it('searches for endpoints when no test app URL is available', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const mockBundle: Bundle<Endpoint> = {
       resourceType: 'Bundle',
       type: 'searchset',
@@ -65,7 +61,7 @@ describe('getLaunchableApps', () => {
   });
 
   it('returns active web-oauth2 endpoints with correct connection type', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const mockBundle: Bundle<Endpoint> = {
       resourceType: 'Bundle',
       type: 'searchset',
@@ -79,11 +75,13 @@ describe('getLaunchableApps', () => {
             connectionType: {
               system: 'http://santeonnl.github.io/shared-care-planning/endpoint-connection-type',
               code: 'web-oauth2'
-            }
+            },
+            payloadType: []
           }
         }
       ]
     };
+
     mockSearchFn.mockResolvedValue(mockBundle);
 
     const result = await getLaunchableApps(mockOrganization);
@@ -95,7 +93,7 @@ describe('getLaunchableApps', () => {
   });
 
   it('filters out inactive endpoints', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const mockBundle: Bundle<Endpoint> = {
       resourceType: 'Bundle',
       type: 'searchset',
@@ -109,20 +107,20 @@ describe('getLaunchableApps', () => {
             connectionType: {
               system: 'http://santeonnl.github.io/shared-care-planning/endpoint-connection-type',
               code: 'web-oauth2'
-            }
+            },
+            payloadType: []
           }
         }
       ]
     };
     mockSearchFn.mockResolvedValue(mockBundle);
-
     const result = await getLaunchableApps(mockOrganization);
 
     expect(result).toEqual([]);
   });
 
   it('filters out endpoints with incorrect connection type system', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const mockBundle: Bundle<Endpoint> = {
       resourceType: 'Bundle',
       type: 'searchset',
@@ -136,20 +134,20 @@ describe('getLaunchableApps', () => {
             connectionType: {
               system: 'http://different-system.com',
               code: 'web-oauth2'
-            }
+            },
+            payloadType: []
           }
         }
       ]
     };
     mockSearchFn.mockResolvedValue(mockBundle);
-
     const result = await getLaunchableApps(mockOrganization);
 
     expect(result).toEqual([]);
   });
 
   it('filters out endpoints with incorrect connection type code', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const mockBundle: Bundle<Endpoint> = {
       resourceType: 'Bundle',
       type: 'searchset',
@@ -163,20 +161,20 @@ describe('getLaunchableApps', () => {
             connectionType: {
               system: 'http://santeonnl.github.io/shared-care-planning/endpoint-connection-type',
               code: 'hl7-fhir-rest'
-            }
+            },
+            payloadType: []
           }
         }
       ]
     };
     mockSearchFn.mockResolvedValue(mockBundle);
-
     const result = await getLaunchableApps(mockOrganization);
 
     expect(result).toEqual([]);
   });
 
   it('filters out endpoints without names', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const mockBundle: Bundle<Endpoint> = {
       resourceType: 'Bundle',
       type: 'searchset',
@@ -189,20 +187,20 @@ describe('getLaunchableApps', () => {
             connectionType: {
               system: 'http://santeonnl.github.io/shared-care-planning/endpoint-connection-type',
               code: 'web-oauth2'
-            }
+            },
+            payloadType: []
           }
         }
       ]
     };
     mockSearchFn.mockResolvedValue(mockBundle);
-
     const result = await getLaunchableApps(mockOrganization);
 
     expect(result).toEqual([]);
   });
 
   it('filters out entries without resources', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const mockBundle: Bundle<Endpoint> = {
       resourceType: 'Bundle',
       type: 'searchset',
@@ -217,13 +215,13 @@ describe('getLaunchableApps', () => {
             connectionType: {
               system: 'http://santeonnl.github.io/shared-care-planning/endpoint-connection-type',
               code: 'web-oauth2'
-            }
+            },
+            payloadType: []
           }
         }
       ]
     };
     mockSearchFn.mockResolvedValue(mockBundle);
-
     const result = await getLaunchableApps(mockOrganization);
 
     expect(result).toEqual([{
@@ -233,7 +231,7 @@ describe('getLaunchableApps', () => {
   });
 
   it('returns multiple valid endpoints', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const mockBundle: Bundle<Endpoint> = {
       resourceType: 'Bundle',
       type: 'searchset',
@@ -247,7 +245,8 @@ describe('getLaunchableApps', () => {
             connectionType: {
               system: 'http://santeonnl.github.io/shared-care-planning/endpoint-connection-type',
               code: 'web-oauth2'
-            }
+            },
+            payloadType: []
           }
         },
         {
@@ -259,13 +258,14 @@ describe('getLaunchableApps', () => {
             connectionType: {
               system: 'http://santeonnl.github.io/shared-care-planning/endpoint-connection-type',
               code: 'web-oauth2'
-            }
+            },
+            payloadType: []
           }
         }
       ]
     };
-    mockSearchFn.mockResolvedValue(mockBundle);
 
+    mockSearchFn.mockResolvedValue(mockBundle);
     const result = await getLaunchableApps(mockOrganization);
 
     expect(result).toEqual([
@@ -281,21 +281,20 @@ describe('getLaunchableApps', () => {
   });
 
   it('returns empty array when bundle has no entries', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const mockBundle: Bundle<Endpoint> = {
       resourceType: 'Bundle',
       type: 'searchset',
       entry: undefined
     };
     mockSearchFn.mockResolvedValue(mockBundle);
-
     const result = await getLaunchableApps(mockOrganization);
 
     expect(result).toEqual([]);
   });
 
   it('handles organization identifier with special characters', async () => {
-    (getPatientViewerTestUrl as jest.Mock).mockResolvedValue(undefined);
+    delete process.env.PATIENT_VIEWER_URL;
     const specialOrganization: Identifier = {
       system: 'https://example.com/orgs',
       value: 'org-with-special@chars#123'
