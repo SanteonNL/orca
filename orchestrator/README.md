@@ -10,7 +10,7 @@ Use the following environment variables to configure the orchestrator:
    - Zorgplatform app launch: patient BSN `999911120` is changed to `999999151` (to cope with a bug in its test data).
 
 #### Required configuration for Nuts
-- `ORCA_TENANT_<ID>_NUTSSUBJECT`: Nuts subject of the tenant, as it was created in/by the Nuts node.
+- `ORCA_TENANT_<ID>_NUTS_SUBJECT`: Nuts subject of the tenant, as it was created in/by the Nuts node.
 - `ORCA_NUTS_PUBLIC_URL`: public URL of the Nuts, used for informing OAuth2 clients of the URL of the OAuth2 Authorization Server, e.g. `http://example.com/nuts`.
 - `ORCA_NUTS_API_URL`: address of the Nuts node API to use, e.g. `http://nutsnode:8081`.
 - `ORCA_NUTS_DISCOVERYSERVICE`: ID of the Nuts Discovery Service that is used for CSD lookups (finding (local) care organizations and looking up their endpoints).
@@ -21,23 +21,24 @@ Use the following environment variables to configure the orchestrator:
 ### Care Plan Service configuration
 - `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
 - `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL`: URL to which the CPS sends webhooks when a CarePlan is created. It sends the CarePlan resource as HTTP POST request with content type `application/json`.
-- `ORCA_TENANT_<ID>_CPSFHIR_URL`: Base URL of the FHIR API the CPS uses for storage, for the specified tenant.
-- `ORCA_TENANT_<ID>_CPSFHIR_AUTH_TYPE`: Authentication type for this tenant's CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
-- `ORCA_TENANT_<ID>_CPSFHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with this tenant's CPS FHIR store. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
+- `ORCA_TENANT_<ID>_CPS_FHIR_URL`: Base URL of the FHIR API the CPS uses for storage, for the specified tenant.
+- `ORCA_TENANT_<ID>_CPS_FHIR_AUTH_TYPE`: Authentication type for this tenant's CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
+- `ORCA_TENANT_<ID>_CPS_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with this tenant's CPS FHIR store. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
 
 ### Care Plan Contributor configuration
 - `ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN`: Secures the EHR-facing endpoints with a static HTTP Bearer token. Only intended for development and testing purposes, since they're unpractical to change often.
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_URL`: Base URL of the FHIR API the CPC uses for storage. When `ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED` is enabled, data is retrieved from this FHIR API.
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_AUTH_TYPE`: Authentication type for the CPC FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_FHIRPROXYURL`: Enable FHIR proxy for demo purposes on `/demo/fhirproxy`, which proxies requests to this URL.
 - `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
 #### Zorgplatform integration
 - `ORCA_ZORGPLATFORM_ENABLED`: Enable Zorgplatform integration (default: `false`).
-- `ORCA_TENANT_<ID>_CHIPSOFTORGID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
+- `ORCA_TENANT_<ID>_CHIPSOFT_ORGID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
+
+### Demo configuration
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the "demo" EHR integration, as alternative to production-grade integrations like SMART on FHIR or Zorgplatform (default: `false`).
+- `ORCA_TENANT_<ID>_DEMO_FHIR_URL`: Base URL of the FHIR API of the "demo" EHR, for the specified tenant.
+- `ORCA_TENANT_<ID>_DEMO_FHIR_AUTH_TYPE`: Authentication type for this tenant's demo FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
+- `ORCA_TENANT_<ID>_DEMO_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with this tenant's demo FHIR store. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
 
 #### OIDC Configuration
 ORCA supports OpenID Connect (OIDC) for both acting as a Relying Party (validating JWT tokens) and as an OpenID Connect Provider (issuing ID tokens for authenticated users).

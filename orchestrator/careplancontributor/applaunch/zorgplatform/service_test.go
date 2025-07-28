@@ -49,8 +49,10 @@ import (
 
 var tenantConfig = tenants.Config{
 	"test": tenants.Properties{
-		ID:            "test",
-		ChipSoftOrgID: "urn:oid:2.16.840.1.113883.4.1",
+		ID: "test",
+		ChipSoft: tenants.ChipSoftProperties{
+			OrganizationID: "urn:oid:2.16.840.1.113883.4.1",
+		},
 	},
 }
 
@@ -643,10 +645,8 @@ func TestService_EhrFhirProxy(t *testing.T) {
 		service := &Service{
 			zorgplatformHttpClient: zorgplatformFHIRServer.Client(),
 			secureTokenService:     &stubSecureTokenService{},
-			accessTokenCache: ttlcache.New[string, string](
-				ttlcache.WithTTL[string, string](accessTokenCacheTTL),
-			),
-			config: Config{ApiUrl: zorgplatformFHIRServer.URL + "/fhir"},
+			config:                 Config{ApiUrl: zorgplatformFHIRServer.URL + "/fhir"},
+			tenants:                tenantConfig,
 		}
 
 		expectedSearchParams := url.Values{
@@ -657,10 +657,13 @@ func TestService_EhrFhirProxy(t *testing.T) {
 		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		httpRequest.Header.Set("X-SCP-Context", carePlanUrl)
 		httpResponse := httptest.NewRecorder()
-		proxy, roundTripper := service.EhrFhirProxy()
-		proxy.ServeHTTP(httpResponse, httpRequest)
+		proxies, clients := service.CreateEHRProxies()
 
-		require.NotNil(t, roundTripper, "expected round tripper to be set")
+		require.NotEmpty(t, proxies)
+		require.NotEmpty(t, clients)
+
+		proxies[tenant.ID].ServeHTTP(httpResponse, httpRequest)
+
 		require.Equal(t, http.StatusOK, httpResponse.Code)
 		require.Equal(t, expectedSearchParams, actualQueryParams, "expected search parameters to be passed through")
 		require.Empty(t, actualHeaders.Get("X-Scp-Context"), "expected X-Scp-Context header to be removed")

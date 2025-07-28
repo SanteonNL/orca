@@ -264,7 +264,6 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	// Setup CPC service with JWT validation enabled
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true
-	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
 	cpcConfig.HealthDataViewEndpointEnabled = true
 	cpcConfig.OIDC.RelyingParty.Enabled = true
 	cpcConfig.OIDC.RelyingParty.ClientID = tokenGen.ClientID
@@ -279,7 +278,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
 
-	cpc, err := New(cpcConfig, tenants.Test(), profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), nil, nil, carePlanServiceURL, nil)
+	cpc, err := New(cpcConfig, tenants.Test(), profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), carePlanServiceURL, nil)
 	require.NoError(t, err)
 
 	cpc.tokenClient = mockTokenClient.Client
@@ -513,7 +512,10 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	messageBroker, err := messaging.New(messaging.Config{}, nil)
 	require.NoError(t, err)
 	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
-		properties.CPSFHIR = coolfhir.ClientConfig{
+		properties.CPS.FHIR = coolfhir.ClientConfig{
+			BaseURL: fhirBaseURL.String(),
+		}
+		properties.Demo = coolfhir.ClientConfig{
 			BaseURL: fhirBaseURL.String(),
 		}
 	})
@@ -528,14 +530,15 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) (*url.URL
 	sessionManager, _ := createTestSession()
 
 	// TODO: Tests using the Zorgplatform service
-	cpsProxy := coolfhir.NewProxy("CPS->CPC", fhirBaseURL, "/cpc/fhir", orcaPublicURL, httpService.Client().Transport, true, false)
 
 	cpcConfig := DefaultConfig()
 	cpcConfig.Enabled = true
-	cpcConfig.FHIR.BaseURL = fhirBaseURL.String()
+	cpcConfig.AppLaunch.Demo.Enabled = true
 	cpcConfig.HealthDataViewEndpointEnabled = true
 
-	cpc, err := New(cpcConfig, tenants.Test(), profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), cpsProxy, cpsFHIRClient, carePlanServiceURL, nil)
+	cpc, err := New(cpcConfig, tenantCfg, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), carePlanServiceURL, nil)
+	require.NoError(t, err)
+	err = cpc.initializeAppLaunches(sessionManager, false)
 	require.NoError(t, err)
 
 	cpcServerMux := http.NewServeMux()

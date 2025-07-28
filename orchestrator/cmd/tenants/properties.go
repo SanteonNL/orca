@@ -3,12 +3,30 @@ package tenants
 import "github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 
 type Properties struct {
-	ID string
-	// TODO: Add "CPSURL" here when we add tenants to the ORCA URLs.
-	// ChipSoftOrgID is the ID used by ChipSoft for this care organization, e.g. 2.16.840.1.113883.2.4.3.124.8.50.26.03
-	ChipSoftOrgID string `koanf:"chipsoftorgid"`
-	NutsSubject   string `koanf:"nutssubject"`
-	// CPSFHIR specifies the connection to the Care Plan Service FHIR API.
+	ID       string
+	Nuts     NutsProperties            `koanf:"nuts"`
+	ChipSoft ChipSoftProperties        `koanf:"chipsoft"`
+	Demo     coolfhir.ClientConfig     `koanf:"demo"`
+	CPS      CarePlanServiceProperties `koanf:"cps"`
+}
+
+type NutsProperties struct {
+	// Subject is the subject identifier used by Nuts for this care organization, e.g.
+	Subject string `koanf:"subject"`
+}
+
+type ChipSoftProperties struct {
+	// OrganizationID is the ID used by ChipSoft to identify this care organization, e.g. 2.16.840.1.113883.2.4.3.124.8.50.26.03
+	OrganizationID string `koanf:"organizationid"`
+}
+
+type DemoProperties struct {
+	// FHIR specifies the connection to the FHIR API of the demo EHR.
+	FHIR coolfhir.ClientConfig `koanf:"fhir"`
+}
+
+type CarePlanServiceProperties struct {
+	// FHIR specifies the connection to the Care Plan Service FHIR API.
 	// It's required if the Care Plan Service is enabled.
-	CPSFHIR coolfhir.ClientConfig `koanf:"cpsfhir"`
+	FHIR coolfhir.ClientConfig `koanf:"fhir"`
 }

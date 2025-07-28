@@ -1001,8 +1001,10 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 
 	messageBroker := messaging.NewMemoryBroker()
 	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
-		properties.CPSFHIR = coolfhir.ClientConfig{
-			BaseURL: fhirBaseURL.String(),
+		properties.CPS = tenants.CarePlanServiceProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirBaseURL.String(),
+			},
 		}
 	})
 	service, err := New(config, tenantCfg, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))

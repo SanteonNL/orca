@@ -47,14 +47,14 @@ const basePath = "/cps"
 var subscriberNotificationTimeout = 10 * time.Second
 
 func New(config Config, tenantCfg tenants.Config, profile profile.Provider, cpsURL *url.URL, messageBroker messaging.Broker, eventManager events.Manager) (*Service, error) {
-	upstreamFhirBaseUrl, _ := url.Parse(tenantCfg.Sole().CPSFHIR.BaseURL)
+	upstreamFhirBaseUrl, _ := url.Parse(tenantCfg.Sole().CPS.FHIR.BaseURL)
 	fhirClientConfig := coolfhir.Config()
 
 	// Initialize connections to per-tenant CPS FHIR servers.
 	transportByTenant := make(map[string]http.RoundTripper)
 	fhirClientByTenant := make(map[string]fhirclient.Client)
 	for _, tenant := range tenantCfg {
-		transport, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.CPSFHIR, fhirClientConfig)
+		transport, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.CPS.FHIR, fhirClientConfig)
 		if err != nil {
 			return nil, err
 		}

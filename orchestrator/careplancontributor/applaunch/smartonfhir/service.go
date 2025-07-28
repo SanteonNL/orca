@@ -13,6 +13,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/go-jose/go-jose/v4"
@@ -60,6 +61,11 @@ type Service struct {
 	cookieHandler      *zitadelHTTP.CookieHandler
 	jwtSigningKey      *jose.SigningKey
 	jwtSigingKeyJWKSet *jose.JSONWebKeySet
+}
+
+func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {
+	// Currently not supported
+	return map[string]coolfhir.HttpProxy{}, map[string]fhirclient.Client{}
 }
 
 type trustedIssuer struct {
