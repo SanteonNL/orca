@@ -293,15 +293,15 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				policy = AnyonePolicy[*fhir.Task]{}
 			}
 			handler := &FHIRUpdateOperationHandler[*fhir.Task]{
-				authzPolicy: policy,
-				fhirClient:  fhirClient,
-				profile:     profile.Test(),
-				fhirURL:     fhirBaseURL,
+				authzPolicy:       policy,
+				fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+				profile:           profile.Test(),
+				fhirURL:           fhirBaseURL,
 				createHandler: &FHIRCreateOperationHandler[*fhir.Task]{
-					authzPolicy: policy,
-					fhirClient:  fhirClient,
-					profile:     profile.Test(),
-					fhirURL:     fhirBaseURL,
+					authzPolicy:       policy,
+					fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+					profile:           profile.Test(),
+					fhirURL:           fhirBaseURL,
 				},
 			}
 			requestData := tt.args.resourceData

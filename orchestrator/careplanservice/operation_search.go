@@ -18,8 +18,8 @@ import (
 var _ FHIROperation = &FHIRSearchOperationHandler[any]{}
 
 type FHIRSearchOperationHandler[T any] struct {
-	fhirClient  fhirclient.Client
-	authzPolicy Policy[T]
+	fhirClientFactory FHIRClientFactory
+	authzPolicy       Policy[T]
 }
 
 func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -78,7 +78,7 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 }
 
 func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, queryParams url.Values, principal *auth.Principal, resourceType string) ([]T, *fhir.Bundle, []PolicyDecision, error) {
-	resources, bundle, err := searchResources[T](ctx, h.fhirClient, resourceType, queryParams, new(fhirclient.Headers))
+	resources, bundle, err := searchResources[T](ctx, h.fhirClientFactory, resourceType, queryParams, new(fhirclient.Headers))
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -105,7 +105,7 @@ func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, quer
 	return resources, bundle, allowedPolicyDecisions, nil
 }
 
-func searchResources[T any](ctx context.Context, fhirClient fhirclient.Client, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
+func searchResources[T any](ctx context.Context, fhirClientFactory FHIRClientFactory, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
 	form := url.Values{}
 	for k, v := range queryParams {
 		form.Add(k, strings.Join(v, ","))
@@ -128,7 +128,11 @@ func searchResources[T any](ctx context.Context, fhirClient fhirclient.Client, r
 	}
 
 	var bundle fhir.Bundle
-	err := fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
+	fhirClient, err := fhirClientFactory(ctx)
+	if err != nil {
+		return nil, &fhir.Bundle{}, err
+	}
+	err = fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, &fhir.Bundle{}, err
 	}

@@ -54,6 +54,8 @@ var tenantConfig = tenants.Config{
 	},
 }
 
+var tenant = tenants.Test().Sole()
+
 func TestService(t *testing.T) {
 	httpServerMux := http.NewServeMux()
 	httpServer := httptest.NewServer(httpServerMux)
@@ -207,7 +209,7 @@ func TestService(t *testing.T) {
 	}()
 
 	t.Run("ok, new Task", func(t *testing.T) {
-		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
+		globals.RegisterCPSFHIRClient(tenant.ID, &test.StubFHIRClient{})
 
 		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
 			"SAMLResponse": {createSAMLResponse(t, certificate.Leaf)},
@@ -252,12 +254,11 @@ func TestService(t *testing.T) {
 				},
 			},
 		}
-		cpsFHIRClient := &test.StubFHIRClient{
+		globals.RegisterCPSFHIRClient(tenant.ID, &test.StubFHIRClient{
 			Resources: []interface{}{
 				existingTask,
 			},
-		}
-		globals.CarePlanServiceFhirClient = cpsFHIRClient
+		})
 
 		launchHttpResponse, err := client.PostForm(httpServer.URL+"/zorgplatform-app-launch", url.Values{
 			"SAMLResponse": {createSAMLResponse(t, certificate.Leaf)},
@@ -300,7 +301,7 @@ func TestService(t *testing.T) {
 	})
 
 	t.Run("retry getSessionData 3 times - should work", func(t *testing.T) {
-		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
+		globals.RegisterCPSFHIRClient(tenant.ID, &test.StubFHIRClient{})
 
 		// Save the original sleep function and restore it after the test.
 		originalSleep := sleep
@@ -333,7 +334,7 @@ func TestService(t *testing.T) {
 	})
 
 	t.Run("Consistent error - should fail after 3 retries", func(t *testing.T) {
-		globals.CarePlanServiceFhirClient = &test.StubFHIRClient{}
+		globals.RegisterCPSFHIRClient(tenant.ID, &test.StubFHIRClient{})
 
 		// Save the original sleep function and restore it after the test.
 		originalSleep := sleep
@@ -538,9 +539,6 @@ func TestSTSAccessTokenRoundTripper(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			defer ctrl.Finish()
-
 			cpsFHIRClient := &test.StubFHIRClient{}
 			if tt.carePlan == nil {
 				cpsFHIRClient.Resources = append(cpsFHIRClient.Resources, fhir.CarePlan{
@@ -601,8 +599,8 @@ func TestSTSAccessTokenRoundTripper(t *testing.T) {
 			}))
 			rt := stsAccessTokenRoundTripper{
 				transport: httpServer.Client().Transport,
-				cpsFhirClient: func() fhirclient.Client {
-					return cpsFHIRClient
+				cpsFhirClient: func(ctx context.Context) (fhirclient.Client, error) {
+					return cpsFHIRClient, nil
 				},
 				secureTokenService: &stubSecureTokenService{},
 				accessTokenCache: ttlcache.New[string, string](
@@ -610,8 +608,9 @@ func TestSTSAccessTokenRoundTripper(t *testing.T) {
 				),
 			}
 
+			ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
 			for i := 0; i < tt.expectedCacheHits+1; i++ {
-				httpRequest := httptest.NewRequest("POST", httpServer.URL, nil)
+				httpRequest := httptest.NewRequestWithContext(ctx, "POST", httpServer.URL, nil)
 				httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 				httpRequest.Header.Set("X-SCP-Context", tt.carePlanReference)
 				httpResponse, err := rt.RoundTrip(httpRequest)
@@ -653,7 +652,8 @@ func TestService_EhrFhirProxy(t *testing.T) {
 		expectedSearchParams := url.Values{
 			"_id": {"123"},
 		}
-		httpRequest := httptest.NewRequest("POST", "/cpc/fhir/Condition/_search", strings.NewReader(expectedSearchParams.Encode()))
+		ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+		httpRequest := httptest.NewRequestWithContext(ctx, "POST", "/cpc/fhir/Condition/_search", strings.NewReader(expectedSearchParams.Encode()))
 		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		httpRequest.Header.Set("X-SCP-Context", carePlanUrl)
 		httpResponse := httptest.NewRecorder()
@@ -717,7 +717,8 @@ func setupCarePlanService(t *testing.T) *httptest.Server {
 		})
 	})
 	httpServer := httptest.NewServer(mux)
-	globals.CarePlanServiceFhirClient = fhirclient.New(must.ParseURL(httpServer.URL).JoinPath("fhir"), http.DefaultClient, nil)
+	tenant := tenants.Test().Sole()
+	globals.RegisterCPSFHIRClient(tenant.ID, fhirclient.New(must.ParseURL(httpServer.URL).JoinPath("fhir"), http.DefaultClient, nil))
 	return httpServer
 }
 

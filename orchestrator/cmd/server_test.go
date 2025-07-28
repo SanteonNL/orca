@@ -17,7 +17,9 @@ import (
 func TestStart(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Nuts.API.URL = "http://example.com"
-	cfg.Tenants = tenants.Test()
+	cfg.Tenants = tenants.Test(func(properties *tenants.Properties) {
+		properties.ChipSoftOrgID = ""
+	})
 	cfg.Nuts.Public.URL = "http://example.com"
 	cfg.Nuts.DiscoveryService = "http://example.com"
 

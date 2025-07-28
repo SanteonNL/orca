@@ -272,13 +272,12 @@ func TestService_ErrorHandling(t *testing.T) {
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: configure the service
 	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(
-		Config{
-			FHIR: coolfhir.ClientConfig{
-				BaseURL: fhirServer.URL + "/fhir",
-			},
-		}, tenants.Test(),
-		profile.Test(),
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.CPSFHIR = coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		}
+	})
+	service, err := New(DefaultConfig(), tenantCfg, profile.Test(),
 		orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
@@ -317,13 +316,12 @@ func TestService_ValidationErrorHandling(t *testing.T) {
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: configure the service
 	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(
-		Config{
-			FHIR: coolfhir.ClientConfig{
-				BaseURL: fhirServer.URL + "/fhir",
-			},
-		}, tenants.Test(),
-		profile.Test(),
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.CPSFHIR = coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		}
+	})
+	service, err := New(DefaultConfig(), tenantCfg, profile.Test(),
 		orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
@@ -525,11 +523,12 @@ func TestService_Handle(t *testing.T) {
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
 	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(Config{
-		FHIR: coolfhir.ClientConfig{
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.CPSFHIR = coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
-		},
-	}, tenants.Test(), profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
+		}
+	})
+	service, err := New(DefaultConfig(), tenantCfg, profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 
 	var capturedHeaders []http.Header
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -937,11 +936,14 @@ func Test_collectLiteralReferences(t *testing.T) {
 }
 
 func TestService_ensureCustomSearchParametersExists(t *testing.T) {
-	ctx := context.Background()
+	tenant := tenants.Test().Sole()
+	ctx := tenants.WithTenant(context.Background(), tenant)
 	t.Run("parameters are created", func(t *testing.T) {
 		fhirClient := test.StubFHIRClient{}
 		service := &Service{
-			fhirClient: &fhirClient,
+			fhirClientByTenant: map[string]fhirclient.Client{
+				tenant.ID: &fhirClient,
+			},
 		}
 		err := service.ensureCustomSearchParametersExists(ctx)
 		require.NoError(t, err)
@@ -995,7 +997,9 @@ func TestService_ensureCustomSearchParametersExists(t *testing.T) {
 			},
 		}
 		service := &Service{
-			fhirClient: &fhirClient,
+			fhirClientByTenant: map[string]fhirclient.Client{
+				tenant.ID: &fhirClient,
+			},
 		}
 		err := service.ensureCustomSearchParametersExists(ctx)
 		require.NoError(t, err)
@@ -1020,7 +1024,9 @@ func TestService_ensureCustomSearchParametersExists(t *testing.T) {
 			Resources: resources,
 		}
 		service := &Service{
-			fhirClient: &fhirClient,
+			fhirClientByTenant: map[string]fhirclient.Client{
+				tenant.ID: &fhirClient,
+			},
 		}
 		err := service.ensureCustomSearchParametersExists(ctx)
 		require.NoError(t, err)
@@ -1073,7 +1079,9 @@ func TestService_ensureCustomSearchParametersExists(t *testing.T) {
 			},
 		}
 		service := &Service{
-			fhirClient: &fhirClient,
+			fhirClientByTenant: map[string]fhirclient.Client{
+				tenant.ID: &fhirClient,
+			},
 		}
 		err := service.ensureCustomSearchParametersExists(ctx)
 		require.NoError(t, err)
@@ -1095,11 +1103,12 @@ func TestService_validateSearchRequest(t *testing.T) {
 	fhirServer := httptest.NewServer(fhirServerMux)
 	// Setup: create the service
 	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(Config{
-		FHIR: coolfhir.ClientConfig{
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.CPSFHIR = coolfhir.ClientConfig{
 			BaseURL: fhirServer.URL + "/fhir",
-		},
-	}, tenants.Test(), profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
+		}
+	})
+	service, err := New(DefaultConfig(), tenantCfg, profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	t.Run("invalid content type - fails", func(t *testing.T) {
