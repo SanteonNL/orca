@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import TaskSseConnectionStatus from '@/app/enrollment/components/sse-connection-status';
 import '@testing-library/jest-dom';
 
@@ -19,16 +19,16 @@ beforeEach(() => {
 describe('TaskSseConnectionStatus', () => {
   it('shows green indicator when connected', () => {
     render(<TaskSseConnectionStatus />);
-    const indicator = document.querySelector('.bg-green-500');
+    const indicator = screen.getByTestId('sse-connection-indicator');
     expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveClass('bg-green-500');
   });
-
 
   it('shows red indicator when disconnected', () => {
     connected = false;
     render(<TaskSseConnectionStatus />);
-    const indicator = document.querySelector('.bg-red-500');
+    const indicator = screen.getByTestId('sse-connection-indicator');
     expect(indicator).toBeInTheDocument();
+    expect(indicator).toHaveClass('bg-red-500');
   });
-
 });
