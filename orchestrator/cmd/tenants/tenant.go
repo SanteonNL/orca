@@ -13,6 +13,9 @@ type Config map[string]Properties
 
 func (c Config) Validate(cpsEnabled bool) error {
 	for id, props := range c {
+		if !isIDValid(id) {
+			return fmt.Errorf("tenant %s: invalid ID", id)
+		}
 		if props.Nuts.Subject == "" {
 			return fmt.Errorf("tenant %s: missing Nuts subject", id)
 		}
@@ -23,6 +26,16 @@ func (c Config) Validate(cpsEnabled bool) error {
 		}
 	}
 	return nil
+}
+
+func isIDValid(tenantID string) bool {
+	// Only alphanumeric, dashes, and underscores are allowed in tenant IDs
+	for _, r := range tenantID {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return len(tenantID) > 0
 }
 
 func (c Config) Get(tenantID string) (*Properties, error) {
