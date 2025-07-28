@@ -43,12 +43,8 @@ it('applies correct styling to card container', () => {
 it('applies correct styling to card header', () => {
   render(<ConfirmDataPreEnrollment />);
   const cardHeader = screen.getByText('Indien het verzoek niet klopt, pas het dan aan in het EPD.').parentElement;
-  expect(cardHeader).toHaveClass('px-0', 'space-y-0', 'pt-0', 'pb-8');
-});
-
-it('applies muted foreground styling to instruction text', () => {
-  render(<ConfirmDataPreEnrollment />);
   expect(screen.getByText('Indien het verzoek niet klopt, pas het dan aan in het EPD.')).toHaveClass('text-muted-foreground');
+  expect(cardHeader).toHaveClass('px-0', 'space-y-0', 'pt-0', 'pb-8');
 });
 
 it('applies correct styling to card content', () => {

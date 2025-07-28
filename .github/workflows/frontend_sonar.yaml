@@ -3,9 +3,6 @@ name: ORCA Frontend Sonar Scan
 
 # Configures this workflow to run every time a change is pushed.
 on:
-  pull_request:
-    branches:
-      - main
   push:
     paths:
       - frontend/**
