@@ -52,6 +52,11 @@ const mockServiceRequest = {
     performer: [{identifier: {system: 'http://example.com', value: 'org-123'}}]
 };
 
+const mockOrganization = {
+    id: 'org-1',
+    name: 'Test Hospital'
+};
+
 beforeEach(() => {
     jest.clearAllMocks();
     (useParams as jest.Mock).mockReturnValue({taskId: 'task-1'});
@@ -211,6 +216,24 @@ describe("taskid page tests", () => {
             {Name: 'App 2', URL: 'http://app2.example.com'}
         ];
         (applaunch.getLaunchableApps as jest.Mock).mockResolvedValue(mockApps);
+
+        // Mock the task progress store with in-progress status and autoLaunch disabled
+        (useTaskProgressStore as jest.Mock).mockReturnValue({
+            task: { ...mockTask, status: 'in-progress' },
+            loading: false,
+            initialized: true,
+            setSelectedTaskId: jest.fn(),
+            subTasks: [],
+            taskToQuestionnaireMap: {},
+            autoLaunchExternalApps: false
+        });
+
+        // Mock enrollment store with proper data
+        (useEnrollmentStore as jest.Mock).mockReturnValue({
+            patient: mockPatient,
+            serviceRequest: mockServiceRequest,
+            organization: mockOrganization
+        });
 
         await act(async () => {
             render(<EnrollmentTaskPage/>);
