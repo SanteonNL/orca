@@ -18,7 +18,7 @@ export default function TaskSseConnectionStatus() {
                     <div className="flex items-center justify-between">
                         <h3 className="text-lg font-medium">Real-time updates</h3>
                         <div className="flex items-center space-x-2">
-                            <div className={`h-3 w-3 rounded-full ${eventSourceConnected ? "bg-green-500" : "bg-red-500"}`} />
+                            <div data-testid="sse-connection" className={`h-3 w-3 rounded-full ${eventSourceConnected ? "bg-green-500" : "bg-red-500"}`} />
                             <span className="text-sm font-medium capitalize">{eventSourceConnected ? 'Verbonden' : 'Verbinding verbroken'}</span>
                         </div>
                     </div>
