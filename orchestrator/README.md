@@ -27,13 +27,18 @@ Use the following environment variables to configure the orchestrator:
 
 ### Care Plan Contributor configuration
 - `ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN`: Secures the EHR-facing endpoints with a static HTTP Bearer token. Only intended for development and testing purposes, since they're unpractical to change often.
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
 - `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
 #### Zorgplatform integration
 - `ORCA_ZORGPLATFORM_ENABLED`: Enable Zorgplatform integration (default: `false`).
 - `ORCA_TENANT_<ID>_CHIPSOFT_ORGID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
+
+### Demo configuration
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the "demo" EHR integration, as alternative to production-grade integrations like SMART on FHIR or Zorgplatform (default: `false`).
+- `ORCA_TENANT_<ID>_DEMO_FHIR_URL`: Base URL of the FHIR API of the "demo" EHR, for the specified tenant.
+- `ORCA_TENANT_<ID>_DEMO_FHIR_AUTH_TYPE`: Authentication type for this tenant's demo FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
+- `ORCA_TENANT_<ID>_DEMO_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with this tenant's demo FHIR store. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
 
 #### OIDC Configuration
 ORCA supports OpenID Connect (OIDC) for both acting as a Relying Party (validating JWT tokens) and as an OpenID Connect Provider (issuing ID tokens for authenticated users).
