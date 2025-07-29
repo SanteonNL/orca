@@ -44,7 +44,7 @@ func Test_Main(t *testing.T) {
 	const hospitalURA = 2
 
 	// Setup Clinic
-	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir", false)
+	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/clinic/fhir", false)
 	require.NoError(t, err)
 	_ = setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 
@@ -52,11 +52,11 @@ func Test_Main(t *testing.T) {
 	// Questionnaires can't be created in HAPI FHIR server partitions, only in the default partition.
 	// Otherwise, the following error occurs: HAPI-1318: Resource type Questionnaire can not be partitioned
 	// This is why the hospital, running the CPS, stores its data in the default partition.
-	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir", true)
+	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/hospital/fhir", true)
 	require.NoError(t, err)
 	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
-	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/external/fhir"), orcaHttpClient, &fhirclient.Config{
+	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/hospital/external/fhir"), orcaHttpClient, &fhirclient.Config{
 		DefaultOptions: []fhirclient.Option{
 			fhirclient.RequestHeaders(map[string][]string{"X-Scp-Fhir-Url": {"local-cps"}}),
 		},
@@ -76,7 +76,7 @@ func Test_Main(t *testing.T) {
 			AuthzServerURL: hospitalAuthServerURL,
 		},
 	}
-	clinicOrcaCPSFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cps"), clinicHTTPClient, nil)
+	clinicOrcaCPSFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cps/hospital"), clinicHTTPClient, nil)
 
 	var patient fhir.Patient
 	var task fhir.Task

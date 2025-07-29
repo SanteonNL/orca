@@ -2,6 +2,8 @@ package subscriptions
 
 import (
 	"context"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/url"
 	"testing"
@@ -14,7 +16,10 @@ import (
 )
 
 func TestDerivingManager_Notify(t *testing.T) {
-	fhirBaseURL, _ := url.Parse("http://example.com/fhir")
+	baseURLFunc := func(tenant tenants.Properties) *url.URL {
+		return must.ParseURL("http://example.com/fhir")
+	}
+	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
 
 	t.Run("CarePlan with a single CareTeam", func(t *testing.T) {
 		carePlan := &fhir.CarePlan{
@@ -28,10 +33,10 @@ func TestDerivingManager_Notify(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		channelFactory := NewMockChannelFactory(ctrl)
 
-		manager, err := NewManager(fhirBaseURL, channelFactory, messaging.NewMemoryBroker())
+		manager, err := NewManager(baseURLFunc, tenants.Test(), channelFactory, messaging.NewMemoryBroker())
 		require.NoError(t, err)
 
-		err = manager.Notify(context.Background(), carePlan)
+		err = manager.Notify(ctx, carePlan)
 
 		require.NoError(t, err)
 	})
@@ -65,10 +70,10 @@ func TestDerivingManager_Notify(t *testing.T) {
 		member3Channel.EXPECT().Notify(gomock.Any(), gomock.Any()).Return(nil)
 		channelFactory.EXPECT().Create(gomock.Any(), *careTeam.Participant[2].Member.Identifier).Return(member3Channel, nil)
 
-		manager, err := NewManager(fhirBaseURL, channelFactory, messaging.NewMemoryBroker())
+		manager, err := NewManager(baseURLFunc, tenants.Test(), channelFactory, messaging.NewMemoryBroker())
 		require.NoError(t, err)
 
-		err = manager.Notify(context.Background(), careTeam)
+		err = manager.Notify(ctx, careTeam)
 
 		require.NoError(t, err)
 		focus, _ := capturedMember1Notification.GetFocus()

@@ -16,7 +16,6 @@ import (
 
 func TestDutchNutsProfile_Authenticator(t *testing.T) {
 	introspectionEndpoint := setupAuthorizationServer(t)
-	resourceServerURL, _ := url.Parse("http://example.com/resource")
 	t.Run("authenticated", func(t *testing.T) {
 		profile := DutchNutsProfile{
 			Config: Config{
@@ -28,7 +27,7 @@ func TestDutchNutsProfile_Authenticator(t *testing.T) {
 
 		var capturedPrincipal auth.Principal
 		var capturedError error
-		handler := profile.Authenticator(resourceServerURL, func(writer http.ResponseWriter, request *http.Request) {
+		handler := profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 			log.Ctx(request.Context()).Info().Msg("test")
 			capturedPrincipal, capturedError = auth.PrincipalFromContext(request.Context())
 			_, _ = io.ReadAll(request.Body)
@@ -57,7 +56,7 @@ func TestDutchNutsProfile_Authenticator(t *testing.T) {
 		}
 
 		var capturedError error
-		handler := profile.Authenticator(resourceServerURL, func(writer http.ResponseWriter, request *http.Request) {
+		handler := profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 			assert.Fail(t, "Should not reach here")
 		})
 		httpRequest := httptest.NewRequest("GET", "/", nil)

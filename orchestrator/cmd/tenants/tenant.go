@@ -25,6 +25,16 @@ func (c Config) Validate(cpsEnabled bool) error {
 	return nil
 }
 
+func isIDValid(tenantID string) bool {
+	// Only alphanumeric, dashes, and underscores are allowed in tenant IDs
+	for _, r := range tenantID {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return len(tenantID) > 0
+}
+
 func (c Config) Get(tenantID string) (*Properties, error) {
 	if props, ok := c[tenantID]; ok {
 		return &props, nil
@@ -71,8 +81,19 @@ func WithTenant(ctx context.Context, props Properties) context.Context {
 // HttpHandler wraps an HTTP handler to inject the tenant into the request context.
 func (c Config) HttpHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
-		tenant := c.Sole()
-		ctx := WithTenant(request.Context(), tenant)
+		tenantID := request.PathValue("tenant")
+		if tenantID == "" {
+			log.Ctx(request.Context()).Error().Msgf("No tenant ID in HTTP request path: %s", request.URL.Path)
+			http.Error(writer, "Unable to determine tenant", http.StatusInternalServerError)
+			return
+		}
+		tenant, err := c.Get(tenantID)
+		if err != nil {
+			log.Ctx(request.Context()).Error().Err(err).Msgf("Unknown tenant (id=%s, request=%s)", tenantID, request.URL.Path)
+			http.Error(writer, "Unknown tenant", http.StatusBadRequest)
+			return
+		}
+		ctx := WithTenant(request.Context(), *tenant)
 		log.Ctx(ctx).Debug().Msgf("Handling request for tenant: %s", tenant.ID)
 		request = request.WithContext(ctx)
 		handler(writer, request)

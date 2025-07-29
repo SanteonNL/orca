@@ -7,7 +7,6 @@ func DefaultConfig() Config {
 type Config struct {
 	Enabled bool         `koanf:"enabled"`
 	Events  EventsConfig `koanf:"events"`
-	URL     string       `koanf:"url"`
 }
 
 func (c Config) Validate() error {

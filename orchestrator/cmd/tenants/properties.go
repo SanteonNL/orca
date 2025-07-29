@@ -1,6 +1,9 @@
 package tenants
 
-import "github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+import (
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"net/url"
+)
 
 type Properties struct {
 	ID       string
@@ -30,3 +33,9 @@ type CarePlanServiceProperties struct {
 	// It's required if the Care Plan Service is enabled.
 	FHIR coolfhir.ClientConfig `koanf:"fhir"`
 }
+
+func (c Properties) URL(baseURL *url.URL, spec URLSpec) *url.URL {
+	return spec(c.ID, baseURL)
+}
+
+type URLSpec func(tenantID string, baseURL *url.URL) *url.URL

@@ -8,7 +8,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/rs/zerolog/log"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"sync"
@@ -81,27 +80,17 @@ func Start(ctx context.Context, config Config) error {
 		return fmt.Errorf("failed to create profile: %w", err)
 	}
 
-	var cpsURL *url.URL
-	if config.CarePlanService.Enabled {
-		if config.CarePlanService.URL == "" {
-			cpsURL = config.Public.ParseURL().JoinPath("cps")
-		} else {
-			cpsURL, err = url.Parse(config.CarePlanService.URL)
-			if err != nil {
-				return fmt.Errorf("invalid CarePlanService URL: %w", err)
-			}
-		}
-	}
+	orcaBaseURL := config.Public.ParseURL()
 	if config.CarePlanContributor.Enabled {
 		carePlanContributor, err := careplancontributor.New(
 			config.CarePlanContributor,
 			config.Tenants,
 			activeProfile,
-			config.Public.ParseURL(),
+			orcaBaseURL,
 			sessionManager,
 			messageBroker,
 			eventManager,
-			cpsURL, httpHandler)
+			config.CarePlanService.Enabled, httpHandler)
 		if err != nil {
 			return err
 		}
@@ -116,7 +105,7 @@ func Start(ctx context.Context, config Config) error {
 		}()
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, config.Tenants, activeProfile, cpsURL, messageBroker, eventManager)
+		carePlanService, err := careplanservice.New(config.CarePlanService, config.Tenants, activeProfile, orcaBaseURL, messageBroker, eventManager)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}

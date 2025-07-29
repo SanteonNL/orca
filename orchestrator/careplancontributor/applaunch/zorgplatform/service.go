@@ -214,7 +214,7 @@ func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]
 		if tenant.ChipSoft.OrganizationID == "" {
 			continue
 		}
-		proxyBasePath := "/cpc/fhir"
+		proxyBasePath := "/cpc/" + tenant.ID + "/fhir"
 		rewriteUrl, _ := url.Parse(s.baseURL)
 		rewriteUrl = rewriteUrl.JoinPath(proxyBasePath)
 

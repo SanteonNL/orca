@@ -13,6 +13,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"net/http"
 	"net/url"
@@ -39,7 +40,12 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
+const basePathWithTenant = basePath + "/{tenant}"
 const basePath = "/cpc"
+
+func FHIRBaseURL(tenantID string, orcaBaseURL *url.URL) *url.URL {
+	return orcaBaseURL.JoinPath(basePath, tenantID, "fhir")
+}
 
 // scpIdentifierHeaderKey specifies the HTTP request header used to specify the identifier of the external entity (care organization),
 // whose FHIR API should be queried. The identifier is in the form of <system>|<value>.
@@ -70,7 +76,7 @@ func New(
 	sessionManager *user.SessionManager[session.Data],
 	messageBroker messaging.Broker,
 	eventManager events.Manager,
-	localCarePlanServiceURL *url.URL,
+	cpsEnabled bool,
 	httpHandler http.Handler) (*Service, error) {
 	ctx := context.Background()
 	// Initialize workflow provider, which is used to select FHIR Questionnaires by the Task Filler engine
@@ -111,7 +117,7 @@ func New(
 		config:                        config,
 		tenants:                       tenants,
 		orcaPublicURL:                 orcaPublicURL,
-		localCarePlanServiceUrl:       localCarePlanServiceURL,
+		cpsEnabled:                    cpsEnabled,
 		SessionManager:                sessionManager,
 		profile:                       profile,
 		ehrFHIRProxyByTenant:          make(map[string]coolfhir.HttpProxy),
@@ -149,13 +155,11 @@ func New(
 }
 
 type Service struct {
-	config         Config
-	tenants        tenants.Config
-	profile        profile.Provider
-	orcaPublicURL  *url.URL
-	SessionManager *user.SessionManager[session.Data]
-	// localCarePlanServiceUrl is the URL of the local Care Plan Service, used to create new CarePlans.
-	localCarePlanServiceUrl       *url.URL
+	config                        Config
+	tenants                       tenants.Config
+	profile                       profile.Provider
+	orcaPublicURL                 *url.URL
+	SessionManager                *user.SessionManager[session.Data]
 	ehrFHIRProxyByTenant          map[string]coolfhir.HttpProxy
 	ehrFHIRClientByTenant         map[string]fhirclient.Client
 	workflows                     taskengine.WorkflowProvider
@@ -168,6 +172,7 @@ type Service struct {
 	httpHandler                   http.Handler
 	tokenClient                   *rp.Client
 	appLaunches                   []applaunch.Service
+	cpsEnabled                    bool
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -176,7 +181,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
 	}
 
-	baseURL := s.orcaPublicURL.JoinPath(basePath)
 	//
 	// The section below defines endpoints specified by Shared Care Planning.
 	// These are secured through the profile (e.g. Nuts access tokens)
@@ -196,14 +200,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		return nil, coolfhir.BadRequest("bundle type not supported: %s", bundle.Type.String())
 	}
-	mux.HandleFunc("POST "+basePath+"/fhir", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
 			coolfhir.SendResponse(writer, http.StatusOK, bundle)
 		}
 	})))
-	mux.HandleFunc("POST "+basePath+"/fhir/", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
@@ -214,7 +218,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	// This is a special endpoint, used by other SCP-nodes to discovery applications.
 	//
-	mux.HandleFunc("GET "+basePath+"/fhir/Endpoint", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/Endpoint", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if len(request.URL.Query()) > 0 {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("search parameters are not supported on this endpoint"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		}
@@ -276,9 +280,9 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
-	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, proxyGetOrSearchHandler)))
-	mux.HandleFunc("POST "+basePath+"/fhir/{resourceType}/_search", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, proxyGetOrSearchHandler)))
-	mux.HandleFunc("GET "+basePath+"/fhir/{resourceType}", s.tenants.HttpHandler(s.profile.Authenticator(baseURL, proxyGetOrSearchHandler)))
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler)))
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{resourceType}/_search", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler)))
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler)))
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
@@ -286,21 +290,26 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// This endpoint is used by the EHR and ORCA Frontend to query the FHIR API of a remote SCP-node.
 	// The remote SCP-node to query can be specified using the following HTTP headers:
 	// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL
-	mux.HandleFunc(basePath+"/external/fhir/{rest...}", s.tenants.HttpHandler(s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePathWithTenant+"/external/fhir/{rest...}", s.tenants.HttpHandler(s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Extract relevant data from the bearer JWT
 		fhirBaseURL, httpClient, err := s.createFHIRClientForExternalRequest(request.Context(), request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 			return
 		}
-		const proxyBasePath = basePath + "/external/fhir/"
+		proxyBasePath, err := s.tenantBasePath(request.Context())
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+			return
+		}
+		proxyBasePath += "/external/fhir/"
 		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	})))
 	mux.HandleFunc("GET "+basePath+"/context", s.tenants.HttpHandler(s.withSession(s.handleGetContext)))
-	mux.HandleFunc(basePath+"/ehr/fhir/{rest...}", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR)))
+	mux.HandleFunc(basePathWithTenant+"/ehr/fhir/{rest...}", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR)))
 	// Allow the front-end to subscribe to specific Task updates via Server-Sent Events (SSE)
-	mux.HandleFunc("GET "+basePath+"/subscribe/fhir/Task/{id}", s.withSession(s.handleSubscribeToTask))
+	mux.HandleFunc("GET "+basePathWithTenant+"/subscribe/fhir/Task/{id}", s.withSession(s.handleSubscribeToTask))
 
 	// Logout endpoint
 	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
@@ -376,7 +385,12 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 // handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
 	clientFactory := clients.Factories[sessionData.FHIRLauncher](sessionData.LauncherProperties)
-	proxyBasePath := basePath + "/ehr/fhir"
+	proxyBasePath, err := s.tenantBasePath(request.Context())
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+	proxyBasePath += "/ehr/fhir"
 	proxy := coolfhir.NewProxy("App->EHR FHIR proxy", clientFactory.BaseURL, proxyBasePath,
 		s.orcaPublicURL.JoinPath(proxyBasePath), clientFactory.Client, false, false)
 
@@ -402,13 +416,19 @@ func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http
 		return
 	}
 
-	if s.localCarePlanServiceUrl == nil {
+	if !s.cpsEnabled {
 		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No local CarePlanService configured - cannot verify Task identifiers"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 
 	//Ensure the sessions taskIdentifier matches the requested task
-	cpsClient, _, err := s.createFHIRClientForURL(request.Context(), s.localCarePlanServiceUrl)
+	tenant, err := tenants.FromContext(request.Context())
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+	cpsBaseURL := tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL)
+	cpsClient, _, err := s.createFHIRClientForURL(request.Context(), cpsBaseURL)
 	if err != nil {
 		log.Ctx(request.Context()).Err(err).Msgf("Failed to create local CarePlanService FHIR client: %v", err)
 		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "Failed to create local SCP client", writer)
@@ -760,6 +780,10 @@ func (s Service) defaultCreateFHIRClientForURL(ctx context.Context, fhirBaseURL 
 // - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL.
 // - X-Scp-Fhir-Url: Uses the FHIR base URL directly.
 func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request *http.Request) (*url.URL, *http.Client, error) {
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
 	var httpClient *http.Client
 	var fhirBaseURL *url.URL
 	for _, header := range []string{scpEntityIdentifierHeaderKey, scpFHIRBaseURL} {
@@ -769,19 +793,16 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		}
 		switch header {
 		case scpFHIRBaseURL:
+			localCPSURL := tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL)
 			var err error
-			if headerValue == "local-cps" ||
-				(s.localCarePlanServiceUrl != nil && headerValue == s.localCarePlanServiceUrl.String()) {
+			if headerValue == "local-cps" || headerValue == localCPSURL.String() {
 				// Targeted FHIR API is local CPS, either through 'local-cps' or because the target URL matches the local CPS URL
-				fhirBaseURL = s.localCarePlanServiceUrl
-				if fhirBaseURL == nil {
+				if !s.cpsEnabled && headerValue == "local-cps" {
+					// invalid usage
 					return nil, nil, fmt.Errorf("%s: no local CarePlanService", header)
 				}
-				tenant, err := tenants.FromContext(ctx)
-				if err != nil {
-					return nil, nil, err
-				}
 				httpClient = s.httpClientForLocalCPS(tenant, httpClient)
+				fhirBaseURL = localCPSURL
 			} else {
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
 				if err != nil {
@@ -874,6 +895,14 @@ func (s Service) createFHIRClientForIdentifier(ctx context.Context, fhirBaseURL 
 		return nil, nil, fmt.Errorf("failed to create HTTP client (identifier=%s): %w", coolfhir.ToString(identifier), err)
 	}
 	return fhirClientFactory(fhirBaseURL, httpClient), httpClient, nil
+}
+
+func (s Service) tenantBasePath(ctx context.Context) (string, error) {
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return "", err
+	}
+	return basePath + "/" + tenant.ID, nil
 }
 
 func createFHIRClient(fhirBaseURL *url.URL, httpClient *http.Client) fhirclient.Client {

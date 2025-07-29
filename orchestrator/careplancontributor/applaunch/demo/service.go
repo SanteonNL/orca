@@ -175,7 +175,8 @@ func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]
 			log.Error().Err(err).Msgf("Failed to create FHIR client for tenant '%s' with base URL '%s'", tenant.ID, fhirBaseURL.String())
 			continue
 		}
-		proxy := coolfhir.NewProxy("App->EHR", fhirBaseURL, "/cpc/fhir", s.orcaPublicURL.JoinPath("cpc", "fhir"), transport, false, false)
+		tenantBasePath := "/cpc/" + tenant.ID + "/fhir"
+		proxy := coolfhir.NewProxy("App->EHR", fhirBaseURL, tenantBasePath, s.orcaPublicURL.JoinPath(tenantBasePath), transport, false, false)
 		proxies[tenant.ID] = proxy
 		fhirClients[tenant.ID] = fhirClient
 	}

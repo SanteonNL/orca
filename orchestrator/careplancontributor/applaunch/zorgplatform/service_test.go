@@ -653,7 +653,7 @@ func TestService_EhrFhirProxy(t *testing.T) {
 			"_id": {"123"},
 		}
 		ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
-		httpRequest := httptest.NewRequestWithContext(ctx, "POST", "/cpc/fhir/Condition/_search", strings.NewReader(expectedSearchParams.Encode()))
+		httpRequest := httptest.NewRequestWithContext(ctx, "POST", "/cpc/"+tenant.ID+"/fhir/Condition/_search", strings.NewReader(expectedSearchParams.Encode()))
 		httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 		httpRequest.Header.Set("X-SCP-Context", carePlanUrl)
 		httpResponse := httptest.NewRecorder()
