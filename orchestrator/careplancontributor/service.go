@@ -306,7 +306,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	})))
-	mux.HandleFunc("GET "+basePathWithTenant+"/context", s.tenants.HttpHandler(s.withSession(s.handleGetContext)))
+	mux.HandleFunc("GET "+basePath+"/context", s.tenants.HttpHandler(s.withSession(s.handleGetContext)))
 	mux.HandleFunc(basePathWithTenant+"/ehr/fhir/{rest...}", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR)))
 	// Allow the front-end to subscribe to specific Task updates via Server-Sent Events (SSE)
 	mux.HandleFunc("GET "+basePathWithTenant+"/subscribe/fhir/Task/{id}", s.withSession(s.handleSubscribeToTask))
