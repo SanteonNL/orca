@@ -13,6 +13,9 @@ type Config map[string]Properties
 
 func (c Config) Validate(cpsEnabled bool) error {
 	for id, props := range c {
+		if !isIDValid(id) {
+			return fmt.Errorf("tenant %s: invalid ID", id)
+		}
 		if props.Nuts.Subject == "" {
 			return fmt.Errorf("tenant %s: missing Nuts subject", id)
 		}
