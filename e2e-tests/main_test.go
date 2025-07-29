@@ -76,7 +76,7 @@ func Test_Main(t *testing.T) {
 			AuthzServerURL: hospitalAuthServerURL,
 		},
 	}
-	clinicOrcaCPSFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cps/clinic"), clinicHTTPClient, nil)
+	clinicOrcaCPSFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cps/hospital"), clinicHTTPClient, nil)
 
 	var patient fhir.Patient
 	var task fhir.Task
