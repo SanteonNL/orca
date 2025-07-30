@@ -1,18 +1,17 @@
 "use client"
 import React, {useEffect, useState} from 'react'
 import useEnrollmentStore from '@/lib/store/enrollment-store'
-import useCpsClient from "@/hooks/use-cps-client";
 import type {Task, Patient} from "fhir/r4";
 import {getPatientIdentifier} from "@/lib/fhirUtils";
+import {useContextStore} from "@/lib/store/context-store";
 
 export default function TaskOverviewTable() {
-
-    const cpsClient = useCpsClient()
     const { patient } = useEnrollmentStore()
+    const { cpsClient } = useContextStore()
     const [tasks, setTasks] = useState([] as Task[]);
 
     useEffect(() => {
-        if (!patient) {
+        if (!patient || !cpsClient) {
             return
         }
         let patientIdentifier = getPatientIdentifier(patient as Patient);
@@ -25,12 +24,14 @@ export default function TaskOverviewTable() {
         if (!patientIdentifier) {
             throw new Error("No patient identifier found for the patient");
         }
-        cpsClient?.search({
+        cpsClient.search({
             resourceType: 'Task',
             searchParams: {
                 'patient': `${patientIdentifier.system}|${patientIdentifier.value}`
             }
-        });
+        }).then(bundle => {
+            setTasks(bundle.entry?.map((entry: { resource: Task; }) => entry.resource as Task) ?? []);
+        })
     }, [cpsClient, setTasks, patient]);
 
     return <div className="overflow-x-auto">

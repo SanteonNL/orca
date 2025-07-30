@@ -11,7 +11,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	"github.com/rs/zerolog/log"
@@ -773,6 +772,7 @@ func TestService_handleGetContext(t *testing.T) {
 		httpResponse := httptest.NewRecorder()
 		sessionData := session.Data{
 			TaskIdentifier: to.Ptr("task-identifier-123"),
+			TenantID:       "test",
 		}
 		sessionData.Set("Practitioner/the-doctor", nil)
 		sessionData.Set("PractitionerRole/the-doctor-role", nil)
@@ -787,13 +787,15 @@ func TestService_handleGetContext(t *testing.T) {
 		"serviceRequest": "ServiceRequest/1",
 		"patient": "Patient/1",
 		"task": "Task/1",
-		"taskIdentifier": "task-identifier-123"
+		"taskIdentifier": "task-identifier-123",
+		"tenantId": "test"
 	}`, httpResponse.Body.String())
 	})
 	t.Run("no PractitionerRole", func(t *testing.T) {
 		httpResponse := httptest.NewRecorder()
 		sessionData := session.Data{
 			TaskIdentifier: to.Ptr("task-identifier-123"),
+			TenantID:       "test",
 		}
 		sessionData.Set("Practitioner/the-doctor", nil)
 		sessionData.Set("ServiceRequest/1", nil)
@@ -807,7 +809,8 @@ func TestService_handleGetContext(t *testing.T) {
 		"serviceRequest": "ServiceRequest/1",
 		"patient": "Patient/1",
 		"task": "Task/1",
-		"taskIdentifier": "task-identifier-123"
+		"taskIdentifier": "task-identifier-123",
+		"tenantId": "test"
 	}`, httpResponse.Body.String())
 	})
 }
@@ -870,26 +873,26 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 
 	rawJson, _ := os.ReadFile("./testdata/task-3.json")
 
-	var taskData map[string]interface{}
-	err := json.Unmarshal(rawJson, &taskData)
+	var task fhir.Task
+	err := json.Unmarshal(rawJson, &task)
 	require.NoError(t, err)
-	mockFhirClient := &test.StubFHIRClient{
-		Resources: []any{taskData},
-	}
 
 	sseService := sse.New()
 	sseService.ServeHTTP = func(topic string, writer http.ResponseWriter, request *http.Request) {
 		log.Ctx(request.Context()).Info().Msgf("Unit-Test: Transform request to SSE stream for topic: %s", topic)
 	}
 
+	fhirServerMux := http.NewServeMux()
 	svc := &Service{
 		sseService: sseService, profile: profile.TestProfile{Principal: auth.TestPrincipal1},
 		orcaPublicURL: must.ParseURL("http://example.com"),
+		httpHandler:   fhirServerMux,
 	}
-
-	svc.createFHIRClientForURL = func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error) {
-		return mockFhirClient, nil, nil
-	}
+	fhirServerMux.HandleFunc("GET /cps/test/Task/"+*task.Id, func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/fhir+json")
+		writer.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(writer).Encode(task)
+	})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

@@ -1,7 +1,6 @@
 package demo
 
 import (
-	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
@@ -62,14 +61,24 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	log.Ctx(request.Context()).Debug().Msg("Handling demo app launch")
-	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss")
+	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "tenant")
 	if !ok {
+		return
+	}
+	tenant, err := s.tenants.Get(values["tenant"])
+	if err != nil {
+		http.Error(response, "App launch failed: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if tenant.Demo.FHIR.BaseURL == "" {
+		http.Error(response, "App launch failed: FHIR base URL is not configured for tenant "+tenant.ID, http.StatusBadRequest)
 		return
 	}
 	sessionData := session.Data{
 		FHIRLauncher: fhirLauncherKey,
+		TenantID:     tenant.ID,
 		LauncherProperties: map[string]string{
-			"iss": values["iss"],
+			"iss": tenant.Demo.FHIR.BaseURL,
 		},
 	}
 	sessionData.Set(values["serviceRequest"], nil)
@@ -85,7 +94,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		s.sessionManager.Destroy(response, request)
 	}
 
-	ehrFHIRClientProps := clients.Factories[fhirLauncherKey](values)
+	ehrFHIRClientProps := clients.Factories[fhirLauncherKey](sessionData.LauncherProperties)
 	ehrFHIRClient := s.ehrFHIRClientFactory(ehrFHIRClientProps.BaseURL, &http.Client{Transport: ehrFHIRClientProps.Client})
 
 	var practitioner fhir.Practitioner
@@ -104,8 +113,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	}
 	sessionData.Set("Patient/"+*patient.Id, patient)
 
-	tenant := s.tenants.Sole()
-	ctx := tenants.WithTenant(request.Context(), tenant)
+	ctx := tenants.WithTenant(request.Context(), *tenant)
 
 	organizations, err := s.profile.Identities(ctx)
 	if err != nil {
@@ -152,25 +160,16 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
 }
 
-func (s *Service) lookupTenant(iss string) (*tenants.Properties, error) {
-	for _, tenant := range s.tenants {
-		if tenant.Demo.BaseURL == iss {
-			return &tenant, nil
-		}
-	}
-	return nil, fmt.Errorf("tenant with demo FHIR base URL '%s' not found", iss)
-}
-
 func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {
 	proxies := make(map[string]coolfhir.HttpProxy)
 	fhirClients := make(map[string]fhirclient.Client)
 
 	for _, tenant := range s.tenants {
-		if tenant.Demo.BaseURL == "" {
+		if tenant.Demo.FHIR.BaseURL == "" {
 			continue
 		}
-		fhirBaseURL := must.ParseURL(tenant.Demo.BaseURL)
-		transport, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.Demo, coolfhir.Config())
+		fhirBaseURL := must.ParseURL(tenant.Demo.FHIR.BaseURL)
+		transport, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.Demo.FHIR, coolfhir.Config())
 		if err != nil {
 			log.Error().Err(err).Msgf("Failed to create FHIR client for tenant '%s' with base URL '%s'", tenant.ID, fhirBaseURL.String())
 			continue

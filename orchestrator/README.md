@@ -1,5 +1,11 @@
 ## Configuration
-Use the following environment variables to configure the orchestrator:
+This section describes how to configure the service.
+
+### Multi-tenancy
+ORCA is multi-tenant, which means it can handle multiple care organizations (tenants) in a single instance.
+Each tenant can have its own CarePlanService FHIR store and app launch settings.
+
+Note: the tenant ID is converted to lower case, even if it's in upper case in the environment variables.
 
 ### General configuration
 - `ORCA_PUBLIC_BASEURL` (required): base URL of the public endpoints.

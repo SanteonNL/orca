@@ -519,8 +519,10 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) *httptest
 		properties.CPS.FHIR = coolfhir.ClientConfig{
 			BaseURL: fhirBaseURL.String(),
 		}
-		properties.Demo = coolfhir.ClientConfig{
-			BaseURL: fhirBaseURL.String(),
+		properties.Demo = tenants.DemoProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirBaseURL.String(),
+			},
 		}
 	})
 	serverMux := http.NewServeMux()
@@ -541,8 +543,6 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) *httptest
 	cpcConfig.HealthDataViewEndpointEnabled = true
 
 	cpc, err := New(cpcConfig, tenantCfg, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
-	require.NoError(t, err)
-	err = cpc.initializeAppLaunches(sessionManager, false)
 	require.NoError(t, err)
 
 	cpc.RegisterHandlers(serverMux)

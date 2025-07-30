@@ -1,13 +1,13 @@
 import {Endpoint, Bundle, Identifier} from 'fhir/r4';
 import {getPatientViewerTestUrl} from "@/app/actions";
-import {createScpClient} from "@/lib/fhirUtils";
+import Client from "fhir-kit-client";
 
 export interface LaunchableApp {
     Name: string;
     URL: string;
 }
 
-export async function getLaunchableApps(organization: Identifier) : Promise<LaunchableApp[]> {
+export async function getLaunchableApps(scpClient: Client, organization: Identifier) : Promise<LaunchableApp[]> {
     const testAppURL = await getPatientViewerTestUrl();
     if (testAppURL) {
         return [{
@@ -15,7 +15,7 @@ export async function getLaunchableApps(organization: Identifier) : Promise<Laun
             URL: testAppURL,
         }]
     }
-    let endpoints = await createScpClient().search({
+    let endpoints = await scpClient.search({
         resourceType: "Endpoint",
         headers: {
             "Cache-Control": "no-cache",

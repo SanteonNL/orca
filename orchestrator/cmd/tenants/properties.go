@@ -9,7 +9,7 @@ type Properties struct {
 	ID       string
 	Nuts     NutsProperties            `koanf:"nuts"`
 	ChipSoft ChipSoftProperties        `koanf:"chipsoft"`
-	Demo     coolfhir.ClientConfig     `koanf:"demo"`
+	Demo     DemoProperties            `koanf:"demo"`
 	CPS      CarePlanServiceProperties `koanf:"cps"`
 }
 

@@ -1,20 +1,11 @@
 import { CarePlan, Condition, Patient, Practitioner, PractitionerRole, ServiceRequest } from 'fhir/r4';
 import { useEffect } from 'react';
 import { create } from 'zustand';
-import { createEhrClient } from '../fhirUtils';
-
-interface LaunchContext {
-    patient: string
-    practitioner: string
-    practitionerRole: string
-    serviceRequest: string
-    task?: string
-    taskIdentifier?: string
-}
+import useContext, {LaunchContext, useContextStore} from "@/lib/store/context-store";
+import Client from "fhir-kit-client";
 
 interface StoreState {
     initialized: boolean
-    launchContext?: LaunchContext
     patient?: Patient
     practitioner?: Practitioner
     practitionerRole?: PractitionerRole
@@ -47,16 +38,16 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
         set({ taskCondition: condition });
     },
     fetchAllResources: async () => {
-
         try {
             const { loading } = get()
 
             if (!loading) {
                 set({ loading: true, error: undefined })
 
-                await fetchLaunchContext(set);
-                await fetchEhrResources(get, set);
-
+                const contextState = useContextStore.getState();
+                if (contextState.launchContext && contextState.ehrClient) {
+                    await fetchEhrResources(contextState.launchContext, contextState.ehrClient, get, set);
+                }
                 set({ initialized: true, loading: false });
             }
 
@@ -66,28 +57,8 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     },
 }));
 
-const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
-
-    let launchContext: LaunchContext;
-
-    const launchContextRes = await fetch(`/orca/cpc/context`);
-    if (!launchContextRes.ok) throw new Error(`Failed to fetch patient: ${launchContextRes.statusText}`);
-
-    launchContext = await launchContextRes.json();
-
-    set({ launchContext });
-
-    return launchContext;
-};
-
-const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
-    const { launchContext } = get();
-
-    if (!launchContext) throw new Error("Unable to fetch EHR resources without LaunchContext")
-
+const fetchEhrResources = async (launchContext: LaunchContext, ehrClient: Client, get: () => StoreState, set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
     if (typeof window === "undefined") return //skip during build
-
-    const ehrClient = createEhrClient()
 
     const [patient, practitioner, practitionerRole, serviceRequest] = await Promise.all([
         ehrClient.read({ resourceType: 'Patient', id: launchContext.patient.replace("Patient/", "") }),
@@ -124,6 +95,7 @@ const fetchEhrResources = async (get: () => StoreState, set: (partial: StoreStat
 };
 
 const useEnrollment = () => {
+    const {cpsClient, launchContext} = useContext()
     const store = useEnrollmentStore();
     const initialized = useEnrollmentStore(state => state.initialized);
     const fetchAllResources = useEnrollmentStore(state => state.fetchAllResources);
@@ -132,7 +104,7 @@ const useEnrollment = () => {
         if (!initialized) {
             fetchAllResources();
         }
-    }, [fetchAllResources, initialized]);
+    }, [fetchAllResources, initialized, cpsClient]);
 
     return store;
 };

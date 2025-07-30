@@ -6,6 +6,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/http/httptest"
@@ -42,7 +43,14 @@ func TestService_handle(t *testing.T) {
 		},
 	}
 
-	tenant := tenants.Test().Sole()
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.Demo = tenants.DemoProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: "https://example.com/fhir",
+			},
+		}
+	})
+	tenant := tenantCfg.Sole()
 	globals.RegisterCPSFHIRClient(tenant.ID, &test.StubFHIRClient{
 		Resources: []interface{}{
 			existingTask,
@@ -58,10 +66,10 @@ func TestService_handle(t *testing.T) {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
-			tenants: tenants.Test(),
+			tenants: tenantCfg,
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=ServiceRequest/b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=ServiceRequest/b&practitioner=Practitioner/c&tenant="+tenant.ID+"&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -84,10 +92,10 @@ func TestService_handle(t *testing.T) {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
-			tenants: tenants.Test(),
+			tenants: tenantCfg,
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&tenant="+tenant.ID+"&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -104,10 +112,10 @@ func TestService_handle(t *testing.T) {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
-			tenants: tenants.Test(),
+			tenants: tenantCfg,
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&tenant="+tenant.ID+"&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 		require.Equal(t, 1, sessionManager.SessionCount())
@@ -132,10 +140,10 @@ func TestService_handle(t *testing.T) {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
-			tenants: tenants.Test(),
+			tenants: tenantCfg,
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&tenant="+tenant.ID+"&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 

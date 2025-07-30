@@ -151,6 +151,10 @@ func New(
 		log.Ctx(ctx).Info().Msgf("TaskEngine: created EHR notifier for topic %s", config.TaskFiller.TaskAcceptedBundleTopic)
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
+
+	if err = result.initializeAppLaunches(sessionManager, globals.StrictMode); err != nil {
+		return nil, fmt.Errorf("failed to initialize AppLaunch services: %w", err)
+	}
 	return result, nil
 }
 
@@ -306,10 +310,10 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	})))
-	mux.HandleFunc("GET "+basePath+"/context", s.tenants.HttpHandler(s.withSession(s.handleGetContext)))
+	mux.HandleFunc("GET "+basePath+"/context", s.withSession(s.handleGetContext))
 	mux.HandleFunc(basePathWithTenant+"/ehr/fhir/{rest...}", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR)))
 	// Allow the front-end to subscribe to specific Task updates via Server-Sent Events (SSE)
-	mux.HandleFunc("GET "+basePathWithTenant+"/subscribe/fhir/Task/{id}", s.withSession(s.handleSubscribeToTask))
+	mux.HandleFunc("GET "+basePathWithTenant+"/subscribe/fhir/Task/{id}", s.tenants.HttpHandler(s.withSession(s.handleSubscribeToTask)))
 
 	// Logout endpoint
 	mux.HandleFunc("/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
@@ -428,12 +432,7 @@ func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http
 		return
 	}
 	cpsBaseURL := tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL)
-	cpsClient, _, err := s.createFHIRClientForURL(request.Context(), cpsBaseURL)
-	if err != nil {
-		log.Ctx(request.Context()).Err(err).Msgf("Failed to create local CarePlanService FHIR client: %v", err)
-		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "Failed to create local SCP client", writer)
-		return
-	}
+	cpsClient := fhirclient.New(cpsBaseURL, s.httpClientForLocalCPS(tenant), nil)
 
 	id := request.PathValue("id")
 	var task fhir.Task
@@ -575,6 +574,7 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 		PractitionerRole string  `json:"practitionerRole"`
 		Task             string  `json:"task"`
 		TaskIdentifier   *string `json:"taskIdentifier"`
+		TenantID         string  `json:"tenantId"`
 	}{
 		Patient:          to.Empty(sessionData.GetByType("Patient")).Path,
 		ServiceRequest:   to.Empty(sessionData.GetByType("ServiceRequest")).Path,
@@ -582,6 +582,7 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 		PractitionerRole: to.Empty(sessionData.GetByType("PractitionerRole")).Path,
 		Task:             to.Empty(sessionData.GetByType("Task")).Path,
 		TaskIdentifier:   sessionData.TaskIdentifier,
+		TenantID:         sessionData.TenantID,
 	}
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
@@ -801,7 +802,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 					// invalid usage
 					return nil, nil, fmt.Errorf("%s: no local CarePlanService", header)
 				}
-				httpClient = s.httpClientForLocalCPS(tenant, httpClient)
+				httpClient = s.httpClientForLocalCPS(tenant)
 				fhirBaseURL = localCPSURL
 			} else {
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
@@ -844,8 +845,8 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 	return fhirBaseURL, httpClient, nil
 }
 
-func (s Service) httpClientForLocalCPS(tenant tenants.Properties, httpClient *http.Client) *http.Client {
-	httpClient = &http.Client{Transport: internalDispatchHTTPRoundTripper{
+func (s Service) httpClientForLocalCPS(tenant tenants.Properties) *http.Client {
+	httpClient := &http.Client{Transport: internalDispatchHTTPRoundTripper{
 		profile: s.profile,
 		handler: s.httpHandler,
 		requestVisitor: func(request *http.Request) {
