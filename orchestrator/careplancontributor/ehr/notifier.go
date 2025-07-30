@@ -86,6 +86,9 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity, taskAcceptedBund
 			return errors.Wrap(err, "failed to create task notification bundle")
 		}
 		log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
+		//TODO: If this fails, we should create a subtask to let the hospital know that the enrollment failed and the datahub returns a
+		// questionnaire URL to fill in the missing data
+		// cpsClient.CreateWithContext(ctx, "Task", )
 		return sendBundle(ctx, receiverTopicOrQueue, taskAcceptedBundleEndpoint, *bundles, n.broker)
 	})
 }
@@ -117,6 +120,7 @@ func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, task
 			ContentType:   "application/json",
 			CorrelationID: &set.Id,
 		}
+		// TODO: Remove this and send the message directly with an API call to DataHub
 		err = messageBroker.SendMessage(ctx, receiverTopicOrQueue, msg)
 		if err != nil {
 			log.Ctx(ctx).Warn().Msgf("Sending set for task (ref=%s) to message broker failed, error: %s", set.task, err.Error())

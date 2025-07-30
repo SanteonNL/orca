@@ -21,8 +21,6 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []error {
 		return errs
 	}
 
-	log.Info().Msgf("Validating Patient: %+v", *patient)
-
 	if patient.Telecom == nil || len(patient.Telecom) == 0 {
 		errs = append(errs, errors.New("patient telecom required"))
 		return errs
@@ -57,7 +55,7 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []error {
 	}
 
 	if len(errs) > 0 {
-		log.Error().Msgf("Validation errors: %v", errs)
+		log.Debug().Msgf("Validation errors: %v", errs)
 		return errs
 	}
 	return nil

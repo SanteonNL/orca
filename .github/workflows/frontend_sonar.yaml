@@ -27,9 +27,23 @@ jobs:
         run: |
           pnpm -v
           pnpm install
+      - name: run frontend tests
+        working-directory: ./frontend
+        run: |
+          pnpm test:coverage
+
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v5
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         with:
           projectBaseDir: frontend
+          args:
+            -Dsonar.sources=.
+            -Dsonar.verbose=true
+            -Dsonar.javascript.lcov.reportPaths=./coverage/lcov.info
+            -Dsonar.coverage.exclusions=**/*.test.ts,**/*.test.js,**/*.test.jsx,**/*.test.tsx,**/*.spec.ts,**/*.spec.js,**/*.spec.jsx,**/*.spec.tsx,**/*.stories.jsx,**/*.stories.tsx*,**/*.test-data.ts
+            -Dsonar.cpd.exclusions=**/*.test.ts,**/*.test.js,**/*.test.jsx,**/*.test.tsx,**/*.spec.ts,**/*.spec.js,**/*.spec.jsx,**/*.spec.tsx,**/*.stories.jsx,**/*.stories.tsx*,**/*.test-data.ts,**/fhir-v*-response.ts,src/components/ui/fonts/index.ts
+            -Dsonar.issue.ignore.multicriteria=e1
+            -Dsonar.issue.ignore.multicriteria.e1.ruleKey=typescript:S5332
+            -Dsonar.issue.ignore.multicriteria.e1.resourceKey=**/*.test*.ts
