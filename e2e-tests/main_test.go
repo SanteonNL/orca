@@ -22,6 +22,17 @@ const URANamingSystem = "http://fhir.nl/fhir/NamingSystem/ura"
 func Test_Main(t *testing.T) {
 	dockerNetwork, err := setupDockerNetwork(t)
 	require.NoError(t, err)
+
+	// Setup Jaeger for OpenTelemetry traces
+	jaegerUIURL := setupJaeger(t, dockerNetwork.Name)
+	t.Logf("🔍 Jaeger UI available at: %s", jaegerUIURL.String())
+	t.Logf("📊 You can view FHIR traces in Jaeger after the test completes")
+
+	// Add cleanup to extract traces before containers shut down
+	t.Cleanup(func() {
+		extractJaegerTraces(t, jaegerUIURL)
+	})
+
 	// Setup HAPI FHIR server
 	hapiBaseURL := setupHAPI(t, dockerNetwork.Name)
 	hapiFhirClient := fhirclient.New(hapiBaseURL, http.DefaultClient, nil)
@@ -43,18 +54,25 @@ func Test_Main(t *testing.T) {
 	const hospitalBaseUrl = "http://hospital-orchestrator:8080"
 	const hospitalURA = 2
 
-	// Setup Clinic
+	// Setup Clinic with OpenTelemetry enabled
 	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir", false)
 	require.NoError(t, err)
+	t.Log("🏥 Setting up Clinic Orchestrator with OpenTelemetry...")
 	_ = setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL)
 
-	// Setup Hospital
+	// Setup Hospital with OpenTelemetry enabled
 	// Questionnaires can't be created in HAPI FHIR server partitions, only in the default partition.
 	// Otherwise, the following error occurs: HAPI-1318: Resource type Questionnaire can not be partitioned
 	// This is why the hospital, running the CPS, stores its data in the default partition.
 	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir", true)
 	require.NoError(t, err)
+	t.Log("🏥 Setting up Hospital Orchestrator with OpenTelemetry...")
 	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL)
+
+	t.Logf("✅ Both orchestrators are running with OpenTelemetry enabled")
+	t.Logf("🔗 Clinic service: orca-orchestrator-clinic")
+	t.Logf("🔗 Hospital service: orca-orchestrator-hospital")
+
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
 	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/external/fhir"), orcaHttpClient, &fhirclient.Config{
 		DefaultOptions: []fhirclient.Option{
