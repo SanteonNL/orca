@@ -1,9 +1,10 @@
 import {Bundle, Questionnaire, Task} from 'fhir/r4';
 import {useEffect} from 'react';
 import {create} from 'zustand';
-import {createCpsClient, fetchAllBundlePages} from '../fhirUtils';
+import {fetchAllBundlePages} from '../fhirUtils';
+import {useContextStore} from "@/lib/store/context-store";
+import Client from "fhir-kit-client";
 
-const cpsClient = createCpsClient()
 // A module-level variable, to ensure only one SSE subscription is active (`use` hook for this store is used in multiple places).
 let globalEventSource: EventSource | null = null;
 interface StoreState {
@@ -53,12 +54,18 @@ const taskProgressStore = create<StoreState>((set, get) => ({
         try {
             set({ loading: true, error: undefined })
 
+            const contextState = useContextStore.getState();
+            if (!contextState.cpsClient) {
+                set({ error: "CPS client is not initialized, ensure the context is loaded." });
+                return;
+            }
+
             const [task, subTasks] = await Promise.all([
-                await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
-                await fetchSubTasks(selectedTaskId)
+                await contextState.cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
+                await fetchSubTasks(contextState.cpsClient, selectedTaskId)
             ])
             set({ task, subTasks })
-            const questionnaireMap = await fetchQuestionnaires(subTasks, set)
+            const questionnaireMap = await fetchQuestionnaires(contextState.cpsClient, subTasks, set)
 
             set({ taskToQuestionnaireMap: questionnaireMap });
             set({ initialized: true, loading: false, })
@@ -72,7 +79,7 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     }
 }));
 
-const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
+const fetchQuestionnaires = async (cpsClient: Client, subTasks: Task[], set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
     const questionnaireMap: Record<string, Questionnaire> = {};
     await Promise.all(subTasks.map(async (task: Task) => {
         if (task.input && task.input.length > 0) {
@@ -93,7 +100,7 @@ const fetchQuestionnaires = async (subTasks: Task[], set: (partial: StoreState |
     return questionnaireMap
 }
 
-const fetchSubTasks = async (taskId: string) => {
+const fetchSubTasks = async (cpsClient: Client, taskId: string) => {
     for (let attempts = 0; attempts < 3; attempts++) {
         const subTaskBundle = await cpsClient.search({
             resourceType: 'Task',
@@ -114,6 +121,8 @@ const fetchSubTasks = async (taskId: string) => {
 }
 
 const useTaskProgressStore = () => {
+    const contextState = useContextStore.getState();
+
     const store = taskProgressStore();
 
     const loading = taskProgressStore(state => state.loading);
@@ -132,7 +141,7 @@ const useTaskProgressStore = () => {
         // Only subscribe if we have a selectedTaskId and no active global subscription yet.
         if (!selectedTaskId || globalEventSource) return
 
-        globalEventSource = new EventSource(`/orca/cpc/subscribe/fhir/Task/${selectedTaskId}`);
+        globalEventSource = new EventSource(`/orca/cpc/${contextState.launchContext?.tenantId}/subscribe/fhir/Task/${selectedTaskId}`);
 
         globalEventSource.onopen = () => {
             setEventSourceConnected(true);
@@ -171,7 +180,7 @@ const useTaskProgressStore = () => {
             globalEventSource = null;
             setEventSourceConnected(false);
         };
-    }, [selectedTaskId, setEventSourceConnected]);
+    }, [selectedTaskId, setEventSourceConnected, contextState]);
 
     return store;
 };

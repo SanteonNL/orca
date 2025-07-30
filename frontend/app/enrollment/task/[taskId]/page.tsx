@@ -11,11 +11,13 @@ import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
 import {Questionnaire} from "fhir/r4";
 import {Button, ThemeProvider} from "@mui/material";
 import {defaultTheme} from "@/app/theme";
+import {useContextStore} from "@/lib/store/context-store";
 
 export default function EnrollmentTaskPage() {
     const { taskId } = useParams()
     const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
     const { patient, serviceRequest } = useEnrollmentStore()
+    const { scpClient } = useContextStore()
     const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
     useEffect(() => {
@@ -29,14 +31,14 @@ export default function EnrollmentTaskPage() {
 
     useEffect(()=>{
         const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
-        if (!primaryTaskPerformer) {
+        if (!primaryTaskPerformer || !scpClient) {
             return
         }
-        getLaunchableApps(primaryTaskPerformer)
+        getLaunchableApps(scpClient, primaryTaskPerformer)
             .then((apps) => {
                 setLaunchableApps(apps)
             })
-    }, [serviceRequest, setLaunchableApps])
+    }, [serviceRequest, setLaunchableApps, scpClient])
 
     useEffect(() => {
         if (!taskToQuestionnaireMap) {

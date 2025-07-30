@@ -20,20 +20,20 @@ export const patientIdentifierSystem = () => {
 }
 
 // This function creates a FHIR client to communicate with other (remote) SCP nodes' FHIR APIs.
-export const createScpClient = () => {
-    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`;
+export const createScpClient = (tenantId: string) => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/${tenantId}/external/fhir`;
     return new Client({ baseUrl });
 };
 
 // This function creates a FHIR client to communicate with the EHR's FHIR API.
-export const createEhrClient = () => {
-    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`;
+export const createEhrClient = (tenantId: string) => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/${tenantId}/ehr/fhir`;
     return new Client({ baseUrl });
 };
 
 // This function creates a FHIR client to communicate with the ORCA instance's own CarePlanService.
-export const createCpsClient = () => {
-    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`;
+export const createCpsClient = (tenantId: string) => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/${tenantId}/external/fhir`;
     return new Client({
         baseUrl: baseUrl,
         customHeaders: {
@@ -263,7 +263,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     return bundle as Bundle & { type: "transaction" }
 }
 
-export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Questionnaire) => {
+export const findQuestionnaireResponse = async (cpsClient: FhirClient, task?: Task, questionnaire?: Questionnaire) => {
     if (!task || !task.output || !questionnaire) return
 
     const questionnaireResponse = task.output.find((output) => {
@@ -274,8 +274,6 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
 
     const questionnaireResponseId = questionnaireResponse.valueReference?.reference
     if (!questionnaireResponseId) return
-
-    const cpsClient = createCpsClient()
     return await cpsClient.read({
         resourceType: "QuestionnaireResponse",
         id: questionnaireResponseId.split("/")[1]
