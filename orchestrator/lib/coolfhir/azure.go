@@ -7,6 +7,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
@@ -86,6 +89,7 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 	if err != nil {
 		return nil, nil, err
 	}
+
 	switch config.Auth.Type {
 	case AzureManagedIdentity:
 		opts := &azidentity.ManagedIdentityCredentialOptions{
@@ -107,13 +111,57 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 			return nil, nil, fmt.Errorf("unable to get credential for Azure FHIR API client: %w", err)
 		}
 		httpClient := NewAzureHTTPClient(credential, scopes)
-		transport = httpClient.Transport
-		fhirClient = fhirclient.New(fhirURL, httpClient, fhirClientConfig)
+
+		// Wrap the transport with OTEL instrumentation
+		transport = otelhttp.NewTransport(
+			httpClient.Transport,
+			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+				return fmt.Sprintf("fhir.%s %s", strings.ToLower(r.Method), r.URL.Path)
+			}),
+			// Add FHIR-specific attributes to all spans
+			// TODO: Validate which attributes we want
+			otelhttp.WithSpanOptions(
+				trace.WithAttributes(
+					attribute.String("fhir.base_url", fhirURL.String()),
+					attribute.String("fhir.auth_type", string(config.Auth.Type)),
+					attribute.String("service.component", "fhir-client"),
+				),
+			),
+		)
+
+		// Create an instrumented HTTP client
+		instrumentedClient := &http.Client{
+			Transport: transport,
+			Timeout:   httpClient.Timeout,
+		}
+
+		fhirClient = fhirclient.New(fhirURL, instrumentedClient, fhirClientConfig)
 	case Default:
-		transport = http.DefaultTransport
-		fhirClient = fhirclient.New(fhirURL, http.DefaultClient, fhirClientConfig)
+		// Wrap default transport with OTEL instrumentation
+		transport = otelhttp.NewTransport(
+			http.DefaultTransport,
+			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+				return fmt.Sprintf("fhir.%s %s", strings.ToLower(r.Method), r.URL.Path)
+			}),
+			// Add FHIR-specific attributes to all spans
+			// TODO: Validate which attributes we want
+			otelhttp.WithSpanOptions(
+				trace.WithAttributes(
+					attribute.String("fhir.base_url", fhirURL.String()),
+					attribute.String("fhir.auth_type", string(config.Auth.Type)),
+					attribute.String("service.component", "fhir-client"),
+				),
+			),
+		)
+
+		instrumentedClient := &http.Client{
+			Transport: transport,
+		}
+
+		fhirClient = fhirclient.New(fhirURL, instrumentedClient, fhirClientConfig)
 	default:
 		return nil, nil, fmt.Errorf("invalid FHIR authentication type: %s", config.Auth.Type)
 	}
+
 	return transport, fhirClient, nil
 }
