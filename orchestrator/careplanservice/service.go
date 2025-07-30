@@ -135,9 +135,7 @@ type Service struct {
 	subscriptionManager subscriptions.Manager
 	eventManager        events.Manager
 	maxReadBodySize     int
-
-	allowUnmanagedFHIROperations bool
-	handlerProvider              func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
+	handlerProvider     func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 }
 
 // FHIRHandler defines a function that handles a FHIR request and returns a function to write the response.

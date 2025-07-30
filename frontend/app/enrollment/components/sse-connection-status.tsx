@@ -11,14 +11,14 @@ export default function TaskSseConnectionStatus() {
     return (
         <HoverCard>
             <HoverCardTrigger asChild>
-                <div className={`fixed bottom-5 right-5 h-3 w-3 rounded-full ${eventSourceConnected ? "bg-green-500" : "bg-red-500"}`} />
+                <div data-testid="sse-connection-indicator" className={`fixed bottom-5 right-5 h-3 w-3 rounded-full ${eventSourceConnected ? "bg-green-500" : "bg-red-500"}`} />
             </HoverCardTrigger>
             <HoverCardContent className="w-120">
                 <div className="flex flex-col space-y-2 p-4">
                     <div className="flex items-center justify-between">
                         <h3 className="text-lg font-medium">Real-time updates</h3>
                         <div className="flex items-center space-x-2">
-                            <div className={`h-3 w-3 rounded-full ${eventSourceConnected ? "bg-green-500" : "bg-red-500"}`} />
+                            <div data-testid="sse-connection" className={`h-3 w-3 rounded-full ${eventSourceConnected ? "bg-green-500" : "bg-red-500"}`} />
                             <span className="text-sm font-medium capitalize">{eventSourceConnected ? 'Verbonden' : 'Verbinding verbroken'}</span>
                         </div>
                     </div>

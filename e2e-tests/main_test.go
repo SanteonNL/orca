@@ -46,7 +46,7 @@ func Test_Main(t *testing.T) {
 	// Setup Clinic
 	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/clinic/fhir", false)
 	require.NoError(t, err)
-	_ = setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
+	_ = setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL)
 
 	// Setup Hospital
 	// Questionnaires can't be created in HAPI FHIR server partitions, only in the default partition.
@@ -54,7 +54,7 @@ func Test_Main(t *testing.T) {
 	// This is why the hospital, running the CPS, stores its data in the default partition.
 	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/hospital/fhir", true)
 	require.NoError(t, err)
-	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
+	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL)
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
 	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/hospital/external/fhir"), orcaHttpClient, &fhirclient.Config{
 		DefaultOptions: []fhirclient.Option{
