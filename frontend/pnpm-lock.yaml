@@ -13,7 +13,7 @@ importers:
         version: 3.0.3(@types/hapi@18.0.14)(@types/node@22.13.14)(expo@52.0.11(@babel/core@7.26.10)(@babel/preset-env@7.26.9(@babel/core@7.26.10))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.10)(@babel/preset-env@7.26.9(@babel/core@7.26.10))(@react-native-community/cli-server-api@15.1.2)(@types/react@19.0.12)(react@19.0.0))(react@19.0.0))(react-native@0.76.3(@babel/core@7.26.10)(@babel/preset-env@7.26.9(@babel/core@7.26.10))(@react-native-community/cli-server-api@15.1.2)(@types/react@19.0.12)(react@19.0.0))
       '@aehrc/smart-forms-renderer':
         specifier: ^0.45.1
-        version: 0.45.1(b7b8fa12f612635b33165eaab91fcecf)
+        version: 0.45.1(4z2hylgcc64g2tfjew5h6uu56y)
       '@babel/core':
         specifier: ^7.26.10
         version: 7.26.10
@@ -107,9 +107,6 @@ importers:
       tailwindcss-animate:
         specifier: ^1.0.7
         version: 1.0.7(tailwindcss@4.0.17)
-      usehooks-ts:
-        specifier: ^3.1.1
-        version: 3.1.1(react@19.0.0)
       uuid:
         specifier: ^11.1.0
         version: 11.1.0
@@ -1298,6 +1295,7 @@ packages:
   '@mui/base@5.0.0-beta.62':
     resolution: {integrity: sha512-TzJLCNlrMkSU4bTCdTT+TVUiGx4sjZLhH673UV6YN+rNNP8wJpkWfRSvjDB5HcbH2T0lUamnz643ZnV+8IiMjw==}
     engines: {node: '>=14.0.0'}
+    deprecated: This package has been replaced by @base-ui-components/react
     peerDependencies:
       '@types/react': ^17.0.0 || ^18.0.0
       react: ^17.0.0 || ^18.0.0
@@ -6120,12 +6118,6 @@ packages:
     peerDependencies:
       react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
 
-  usehooks-ts@3.1.1:
-    resolution: {integrity: sha512-I4diPp9Cq6ieSUH2wu+fDAVQO43xwtulo+fKEidHUwZPnYImbtkTjzIJYcDcJqxgmX31GVqNFURodvcgHcW0pA==}
-    engines: {node: '>=16.15.0'}
-    peerDependencies:
-      react: ^16.8.0  || ^17 || ^18 || ^19 || ^19.0.0-rc
-
   util-deprecate@1.0.2:
     resolution: {integrity: sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==}
 
@@ -6406,7 +6398,7 @@ snapshots:
       - react-native
       - supports-color
 
-  '@aehrc/smart-forms-renderer@0.45.1(b7b8fa12f612635b33165eaab91fcecf)':
+  '@aehrc/smart-forms-renderer@0.45.1(4z2hylgcc64g2tfjew5h6uu56y)':
     dependencies:
       '@aehrc/sdc-populate': 2.3.1(@types/hapi@18.0.14)(@types/node@22.13.14)(expo@52.0.11(@babel/core@7.26.10)(@babel/preset-env@7.26.9(@babel/core@7.26.10))(graphql@16.9.0)(react-native@0.76.3(@babel/core@7.26.10)(@babel/preset-env@7.26.9(@babel/core@7.26.10))(@react-native-community/cli-server-api@15.1.2)(@types/react@19.0.12)(react@19.0.0))(react@19.0.0))(react-native@0.76.3(@babel/core@7.26.10)(@babel/preset-env@7.26.9(@babel/core@7.26.10))(@react-native-community/cli-server-api@15.1.2)(@types/react@19.0.12)(react@19.0.0))
       '@emotion/react': 11.13.5(@types/react@19.0.12)(react@19.0.0)
@@ -14092,11 +14084,6 @@ snapshots:
 
   use-sync-external-store@1.4.0(react@19.0.0):
     dependencies:
-      react: 19.0.0
-
-  usehooks-ts@3.1.1(react@19.0.0):
-    dependencies:
-      lodash.debounce: 4.0.8
       react: 19.0.0
 
   util-deprecate@1.0.2: {}
