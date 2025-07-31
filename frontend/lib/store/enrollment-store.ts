@@ -47,8 +47,10 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
                 const contextState = useContextStore.getState();
                 if (contextState.launchContext && contextState.ehrClient) {
                     await fetchEhrResources(contextState.launchContext, contextState.ehrClient, get, set);
+                    set({ initialized: true, loading: false });
+                } else {
+                    set({ loading: false });
                 }
-                set({ initialized: true, loading: false });
             }
 
         } catch (error: any) {
@@ -95,7 +97,7 @@ const fetchEhrResources = async (launchContext: LaunchContext, ehrClient: Client
 };
 
 const useEnrollment = () => {
-    const {cpsClient, launchContext} = useContext()
+    const {cpsClient} = useContext()
     const store = useEnrollmentStore();
     const initialized = useEnrollmentStore(state => state.initialized);
     const fetchAllResources = useEnrollmentStore(state => state.fetchAllResources);
