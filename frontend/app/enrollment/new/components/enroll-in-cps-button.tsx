@@ -9,7 +9,8 @@ import {useRouter} from 'next/navigation'
 import {ArrowRight} from 'lucide-react'
 import {Spinner} from '@/components/spinner'
 import {Button, ThemeProvider} from '@mui/material'
-import {defaultTheme} from "@/app/theme";
+import {defaultTheme} from "@/app/theme"
+import ValidationErrors from './validation-errors'
 
 interface Props {
     className?: string
@@ -113,18 +114,7 @@ export default function EnrollInCpsButton({className}: Props) {
         <ThemeProvider theme={defaultTheme}>
             <div>
                 {validationErrors && (
-                    <div className='text-red-500 mb-2'>
-                        <h3 className='font-semibold'>Validation Errors:</h3>
-                        {validationErrors.every(m => !m.diagnostics) ? ('An unknown error occurred') :
-                            (
-                                validationErrors?.filter(issue => issue.diagnostics).map((issue, index) => (
-                                    <p key={index}>
-                                        {issue.diagnostics || "Unknown error"}
-                                    </p>
-                                ))
-                            )
-                        }
-                    </div>
+                    <ValidationErrors validationErrors={validationErrors} />
                 )}
             </div>
             <Button variant='contained' disabled={disabled} onClick={informCps}>
