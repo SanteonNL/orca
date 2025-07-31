@@ -45,9 +45,7 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
                 set({ loading: true, error: undefined })
 
                 const contextState = useContextStore.getState();
-                console.log('attempting load of enrollment resources', contextState.launchContext, contextState.ehrClient)
                 if (contextState.launchContext && contextState.ehrClient) {
-                    console.log('fetching enrollment resources');
                     await fetchEhrResources(contextState.launchContext, contextState.ehrClient, get, set);
                     set({ initialized: true, loading: false });
                 } else {
