@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
@@ -28,6 +29,13 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	resources, bundle, policyDecisions, err := h.searchAndFilter(ctx, request.QueryParams, request.Principal, resourceType)
 	if err != nil {
 		return nil, err
+	}
+
+	// Set meta.source
+	for i, resource := range resources {
+		updateMetaSource[T](&resource, request.BaseURL)
+		resources[i] = resource
+		bundle.Entry[i].Resource, _ = json.Marshal(resource)
 	}
 
 	results := []*fhir.BundleEntry{}

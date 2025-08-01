@@ -4,6 +4,7 @@ import (
 	"context"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
@@ -13,6 +14,7 @@ import (
 
 func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 	ctx := context.Background()
+	baseURL := must.ParseURL("https://example.com/fhir")
 	t.Run("no results", func(t *testing.T) {
 		fhirClient := &test.StubFHIRClient{}
 		request := FHIRHandlerRequest{
@@ -47,6 +49,7 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 			QueryParams:   map[string][]string{"_id": {"123"}},
 			Principal:     auth.TestPrincipal2,
 			LocalIdentity: &auth.TestPrincipal1.Organization.Identifier[0],
+			BaseURL:       baseURL,
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRSearchOperationHandler[fhir.Task]{
