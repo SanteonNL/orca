@@ -8,7 +8,7 @@ export default function EnrollmentDetails() {
 
     const { serviceRequest, taskCondition, patient, loading } = useEnrollmentStore()
 
-    if (loading) return <Spinner className="h-12 w-12 text-primary" />
+    if (!patient) return <Spinner className="h-12 w-12 text-primary" />
 
     return (
         (
