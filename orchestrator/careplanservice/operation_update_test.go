@@ -296,12 +296,10 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				authzPolicy:       policy,
 				fhirClientFactory: FHIRClientFactoryFor(fhirClient),
 				profile:           profile.Test(),
-				fhirURL:           fhirBaseURL,
 				createHandler: &FHIRCreateOperationHandler[*fhir.Task]{
 					authzPolicy:       policy,
 					fhirClientFactory: FHIRClientFactoryFor(fhirClient),
 					profile:           profile.Test(),
-					fhirURL:           fhirBaseURL,
 				},
 			}
 			requestData := tt.args.resourceData
@@ -316,6 +314,7 @@ func TestFHIRUpdateOperationHandler_Handle(t *testing.T) {
 				ResourcePath:  "Task/1",
 				Principal:     auth.TestPrincipal1,
 				LocalIdentity: &auth.TestPrincipal2.Organization.Identifier[0],
+				BaseURL:       fhirBaseURL,
 			}
 			if tt.args.requestFn != nil {
 				tt.args.requestFn(&request)

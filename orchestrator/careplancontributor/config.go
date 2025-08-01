@@ -73,7 +73,7 @@ func (c TaskFillerConfig) Validate() error {
 			return errors.New("questionnairesyncurls must be http, https or file URLs")
 		}
 	}
-	return nil
+	return c.QuestionnaireFHIR.Validate()
 }
 
 type FrontendConfig struct {

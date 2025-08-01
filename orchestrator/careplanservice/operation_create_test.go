@@ -284,7 +284,6 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 				authzPolicy:       policy,
 				fhirClientFactory: FHIRClientFactoryFor(fhirClient),
 				profile:           profile.Test(),
-				fhirURL:           fhirBaseURL,
 				validator:         tt.args.validator,
 			}
 			requestData := tt.args.resourceData
@@ -299,6 +298,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 				Principal:     auth.TestPrincipal1,
 				LocalIdentity: &auth.TestPrincipal2.Organization.Identifier[0],
 				Tenant:        tenants.Test().Sole(),
+				BaseURL:       fhirBaseURL,
 			}, tx)
 			if tt.wantErr != nil {
 				tt.wantErr(t, err)

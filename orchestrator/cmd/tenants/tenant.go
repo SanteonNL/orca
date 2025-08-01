@@ -23,6 +23,12 @@ func (c Config) Validate(cpsEnabled bool) error {
 			if props.CPS.FHIR.BaseURL == "" {
 				return fmt.Errorf("tenant %s: CPS FHIR URL is not configured", id)
 			}
+			if err := props.CPS.FHIR.Validate(); err != nil {
+				return fmt.Errorf("tenant %s: invalid CPS FHIR configuration: %w", id, err)
+			}
+		}
+		if err := props.Demo.FHIR.Validate(); err != nil {
+			return fmt.Errorf("tenant %s: invalid Demo FHIR configuration: %w", id, err)
 		}
 	}
 	return nil

@@ -23,7 +23,6 @@ type FHIRUpdateOperationHandler[T fhir.HasExtension] struct {
 	profile           profile.Provider
 	// createHandler is used for upserting
 	createHandler *FHIRCreateOperationHandler[T]
-	fhirURL       *url.URL
 }
 
 func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -107,7 +106,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var updatedResource T
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, h.fhirURL, &resourceBundleEntry, &txResult.Entry[idx], &updatedResource)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, request.BaseURL, &resourceBundleEntry, &txResult.Entry[idx], &updatedResource)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original resource that was sent.

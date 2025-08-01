@@ -460,12 +460,17 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 	carePlanServiceURL, _ := url.Parse(carePlanService.URL)
 	carePlanServiceURL.Path = "/cps/test"
 
-	service, _ := New(Config{}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.TaskEngine = tenants.TaskEngineProperties{
+			Enabled: true,
+		}
+	})
+	service, _ := New(Config{}, tenantCfg, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
 	service.RegisterHandlers(frontServerMux)
-	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+	ctx := tenants.WithTenant(context.Background(), tenantCfg.Sole())
 	httpClient, _ := prof.HttpClient(ctx, auth.TestPrincipal1.Organization.Identifier[0])
 
 	cpcBaseURL := frontServer.URL + basePath + "/test/fhir"
@@ -568,7 +573,12 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	prof := profile.TestProfile{
 		Principal: auth.TestPrincipal2,
 	}
-	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+	testCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.TaskEngine = tenants.TaskEngineProperties{
+			Enabled: true,
+		}
+	})
+	ctx := tenants.WithTenant(context.Background(), testCfg.Sole())
 	httpClient, _ := prof.HttpClient(ctx, auth.TestPrincipal2.Organization.Identifier[0])
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
@@ -583,7 +593,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 
 	service, _ := New(
 		Config{},
-		tenants.Test(), profile.TestProfile{
+		testCfg, profile.TestProfile{
 			Principal: auth.TestPrincipal2,
 		}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
 	service.workflows = taskengine.DefaultTestWorkflowProvider()

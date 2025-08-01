@@ -7,6 +7,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
@@ -63,6 +64,19 @@ type ClientConfig struct {
 	BaseURL string `koanf:"url"`
 	// Auth is the authentication configuration for the FHIR server.
 	Auth AuthConfig `koanf:"auth"`
+}
+
+func (c ClientConfig) ParseBaseURL() *url.URL {
+	return must.ParseURL(c.BaseURL)
+}
+
+func (c ClientConfig) Validate() error {
+	if c.BaseURL != "" {
+		if _, err := url.Parse(c.BaseURL); err != nil {
+			return fmt.Errorf("invalid FHIR base URL: %w", err)
+		}
+	}
+	return nil
 }
 
 type AuthConfigType string

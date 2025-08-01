@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/url"
 	"reflect"
@@ -127,7 +128,6 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 		fhirClientByTenant: map[string]fhirclient.Client{
 			tenant.ID: mockFHIRClient,
 		},
-		fhirURL:      fhirBaseUrl,
 		eventManager: events.NewManager(messaging.NewMemoryBroker()),
 	}
 
@@ -347,7 +347,8 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
 				}),
-				Tenant: tenant,
+				Tenant:  tenant,
+				BaseURL: must.ParseURL("https://example.com/fhir"),
 			}
 
 			tx := coolfhir.Transaction()
@@ -606,13 +607,11 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 
 			// Create the service with the mock FHIR client
 			tenant := tenants.Test().Sole()
-			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 			service := &Service{
 				fhirClientByTenant: map[string]fhirclient.Client{
 					tenant.ID: mockFHIRClient,
 				},
 				profile: profile.Test(),
-				fhirURL: fhirBaseUrl,
 			}
 
 			// Create a Task
@@ -627,7 +626,8 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
 				}),
-				Tenant: tenant,
+				Tenant:  tenant,
+				BaseURL: must.ParseURL("https://example.com/fhir"),
 			}
 
 			tx := coolfhir.Transaction()
