@@ -45,6 +45,8 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 	}
 	log.Ctx(ctx).Info().Msgf("Getting %s/%s (authz=%s)", resourceType, request.ResourceId, strings.Join(authzDecision.Reasons, ";"))
 
+	updateMetaSource(resource, request.BaseURL)
+
 	resourceRaw, err := json.Marshal(resource)
 	if err != nil {
 		return nil, err

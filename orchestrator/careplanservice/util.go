@@ -47,12 +47,12 @@ func validatePrincipalInCareTeam(principal auth.Principal, careTeam *fhir.CareTe
 	return nil
 }
 
-func updateMetaSource[T any](resource *T, fhirBaseURL *url.URL) {
+func updateMetaSource(resource any, fhirBaseURL *url.URL) {
 	resourceType := coolfhir.ResourceType(resource)
 	resourceID := coolfhir.ResourceID(resource)
 	if resourceID == nil {
 		return
 	}
 	source := fhirBaseURL.JoinPath(resourceType, *resourceID).String()
-	coolfhir.SetSource(&resource, to.Ptr(source))
+	coolfhir.SetSource(resource, to.Ptr(source))
 }

@@ -33,7 +33,7 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	// Set meta.source
 	for i, resource := range resources {
-		updateMetaSource[T](&resource, request.BaseURL)
+		updateMetaSource(resource, request.BaseURL)
 		resources[i] = resource
 		bundle.Entry[i].Resource, _ = json.Marshal(resource)
 	}
