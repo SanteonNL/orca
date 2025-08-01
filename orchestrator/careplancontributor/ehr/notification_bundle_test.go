@@ -18,8 +18,6 @@ import (
 
 func TestTaskNotificationBundleSet(t *testing.T) {
 	ctx := context.Background()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	patient1Raw, _ := json.Marshal(fhir.Patient{Id: to.Ptr("1")})
 	carePlan1Raw, _ := json.Marshal(fhir.CarePlan{
@@ -79,6 +77,7 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 	expectedSubtask1Raw, _ := json.Marshal(expectedSubtask1)
 
 	t.Run("return bundle set - success", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
 		mockFHIRClient := mock.NewMockClient(ctrl)
 		mockFHIRClient.EXPECT().Path(gomock.Any()).DoAndReturn(func(parts ...string) *url.URL {
 			return must.ParseURL("http://example.com/fhir/" + strings.Join(parts, "/"))
@@ -149,6 +148,7 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 		require.JSONEq(t, string(questionnaireResponse1Raw), string(result.Bundles[5].Entry[0].Resource))
 	})
 	t.Run("error fetching task - fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
 		mockFHIRClient := mock.NewMockClient(ctrl)
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).Return(errors.New("error"))
 
@@ -157,7 +157,11 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 		require.Nil(t, result)
 	})
 	t.Run("error fetching carePlan - fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
 		mockFHIRClient := mock.NewMockClient(ctrl)
+		mockFHIRClient.EXPECT().Path(gomock.Any()).DoAndReturn(func(parts ...string) *url.URL {
+			return must.ParseURL("http://example.com/fhir/" + strings.Join(parts, "/"))
+		}).MinTimes(1)
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -175,7 +179,11 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 		require.Nil(t, result)
 	})
 	t.Run("search does not find resource - fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
 		mockFHIRClient := mock.NewMockClient(ctrl)
+		mockFHIRClient.EXPECT().Path(gomock.Any()).DoAndReturn(func(parts ...string) *url.URL {
+			return must.ParseURL("http://example.com/fhir/" + strings.Join(parts, "/"))
+		}).MinTimes(1)
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -206,6 +214,7 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 		require.Nil(t, result)
 	})
 	t.Run("no subtask - fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
 		mockFHIRClient := mock.NewMockClient(ctrl)
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
@@ -221,7 +230,11 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 		require.Nil(t, result)
 	})
 	t.Run("no patient - fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
 		mockFHIRClient := mock.NewMockClient(ctrl)
+		mockFHIRClient.EXPECT().Path(gomock.Any()).DoAndReturn(func(parts ...string) *url.URL {
+			return must.ParseURL("http://example.com/fhir/" + strings.Join(parts, "/"))
+		}).MinTimes(1)
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -253,7 +266,11 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 		require.Nil(t, result)
 	})
 	t.Run("no service request - fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
 		mockFHIRClient := mock.NewMockClient(ctrl)
+		mockFHIRClient.EXPECT().Path(gomock.Any()).DoAndReturn(func(parts ...string) *url.URL {
+			return must.ParseURL("http://example.com/fhir/" + strings.Join(parts, "/"))
+		}).MinTimes(1)
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
@@ -294,7 +311,11 @@ func TestTaskNotificationBundleSet(t *testing.T) {
 		require.Nil(t, result)
 	})
 	t.Run("no careplan - fails", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
 		mockFHIRClient := mock.NewMockClient(ctrl)
+		mockFHIRClient.EXPECT().Path(gomock.Any()).DoAndReturn(func(parts ...string) *url.URL {
+			return must.ParseURL("http://example.com/fhir/" + strings.Join(parts, "/"))
+		}).MinTimes(1)
 		mockFHIRClient.EXPECT().SearchWithContext(ctx, "Task", gomock.Any(), gomock.Any()).DoAndReturn(func(_ context.Context, resource string, searchParams url.Values, data *fhir.Bundle, opts ...interface{}) error {
 			*data = fhir.Bundle{
 				Entry: []fhir.BundleEntry{
