@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
 
 func TestDutchNutsProfile_identifiersFromCredential(t *testing.T) {
@@ -84,7 +85,8 @@ func TestDutchNutsProfile_identifiersFromCredential(t *testing.T) {
 }
 
 func TestDutchNutsProfile_Identities(t *testing.T) {
-	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+	tenant := tenants.Test().Sole()
+	ctx := tenants.WithTenant(context.Background(), tenant)
 	identifier1 := fhir.Identifier{
 		System: to.Ptr(coolfhir.URANamingSystem),
 		Value:  to.Ptr("1234"),
@@ -157,8 +159,9 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
-			vcrClient:        vcrClient,
-			cachedIdentities: map[string][]fhir.Organization{},
+			vcrClient:             vcrClient,
+			cachedIdentities:      map[string][]fhir.Organization{},
+			identitiesRefreshedAt: map[string]time.Time{},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
 			JSON200: &[]vcr.VerifiableCredential{identifier1VC, identifier2UziCertVC},
@@ -175,8 +178,9 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
-			vcrClient:        vcrClient,
-			cachedIdentities: map[string][]fhir.Organization{},
+			vcrClient:             vcrClient,
+			cachedIdentities:      map[string][]fhir.Organization{},
+			identitiesRefreshedAt: map[string]time.Time{},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
 			JSON200: &[]vcr.VerifiableCredential{identifier1VC, nonUraVC},
@@ -192,8 +196,9 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
-			vcrClient:        vcrClient,
-			cachedIdentities: map[string][]fhir.Organization{},
+			vcrClient:             vcrClient,
+			cachedIdentities:      map[string][]fhir.Organization{},
+			identitiesRefreshedAt: map[string]time.Time{},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
 			JSON200: &[]vcr.VerifiableCredential{identifier1VC, identifier2VC},
@@ -240,7 +245,7 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		prof := &DutchNutsProfile{
 			vcrClient: vcrClient,
 			cachedIdentities: map[string][]fhir.Organization{
-				tenants.Test().Sole().ID: {
+				tenant.ID: {
 					{
 						Identifier: []fhir.Identifier{identifier1},
 					},
@@ -258,8 +263,9 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		vcrClient := vcrclient_mock.NewMockClientWithResponsesInterface(ctrl)
 		prof := &DutchNutsProfile{
-			vcrClient:        vcrClient,
-			cachedIdentities: map[string][]fhir.Organization{},
+			vcrClient:             vcrClient,
+			cachedIdentities:      map[string][]fhir.Organization{},
+			identitiesRefreshedAt: map[string]time.Time{},
 		}
 		vcrClient.EXPECT().GetCredentialsInWalletWithResponse(ctx, "sub").Return(&vcr.GetCredentialsInWalletResponse{
 			JSON200: &[]vcr.VerifiableCredential{identifier1VC, identifier2VC},
@@ -273,7 +279,7 @@ func TestDutchNutsProfile_Identities(t *testing.T) {
 		assert.Contains(t, identities, identity2)
 
 		// expire cache
-		prof.identitiesRefreshedAt = prof.identitiesRefreshedAt.Add(-identitiesCacheTTL)
+		prof.identitiesRefreshedAt[tenant.ID] = prof.identitiesRefreshedAt[tenant.ID].Add(-identitiesCacheTTL)
 
 		identities, err = prof.Identities(ctx)
 		require.NoError(t, err)

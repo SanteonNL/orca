@@ -44,7 +44,7 @@ var oauthRestfulSecurityServiceCoding = fhir.Coding{
 type DutchNutsProfile struct {
 	Config                Config
 	cachedIdentities      map[string][]fhir.Organization
-	identitiesRefreshedAt time.Time
+	identitiesRefreshedAt map[string]time.Time
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
 	clientCerts           []tls.Certificate
@@ -89,8 +89,9 @@ func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
 			entryCache: make(map[string]cacheEntry),
 			cacheMux:   sync.RWMutex{},
 		},
-		cachedIdentities: map[string][]fhir.Organization{},
-		clientCerts:      clientCerts,
+		cachedIdentities:      map[string][]fhir.Organization{},
+		identitiesRefreshedAt: map[string]time.Time{},
+		clientCerts:           clientCerts,
 	}, nil
 }
 
@@ -179,7 +180,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 	if err != nil {
 		return nil, err
 	}
-	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
+	if time.Since(d.identitiesRefreshedAt[tenant.ID]) > identitiesCacheTTL || len(d.cachedIdentities[tenant.ID]) == 0 {
 		identifiers, err := d.identities(ctx, tenant.Nuts.Subject)
 		if err != nil {
 			log.Ctx(ctx).Warn().Err(err).Msg("Failed to refresh local identities using Nuts node")
@@ -189,7 +190,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 			}
 		} else {
 			d.cachedIdentities[tenant.ID] = identifiers
-			d.identitiesRefreshedAt = time.Now()
+			d.identitiesRefreshedAt[tenant.ID] = time.Now()
 		}
 	}
 	return d.cachedIdentities[tenant.ID], nil
