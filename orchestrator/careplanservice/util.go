@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"net/http"
 	"net/url"
 	"strings"
@@ -44,4 +45,14 @@ func validatePrincipalInCareTeam(principal auth.Principal, careTeam *fhir.CareTe
 		}
 	}
 	return nil
+}
+
+func updateMetaSource(resource any, fhirBaseURL *url.URL) {
+	resourceType := coolfhir.ResourceType(resource)
+	resourceID := coolfhir.ResourceID(resource)
+	if resourceID == nil {
+		return
+	}
+	source := fhirBaseURL.JoinPath(resourceType, *resourceID).String()
+	coolfhir.SetSource(resource, to.Ptr(source))
 }
