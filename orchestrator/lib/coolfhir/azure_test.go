@@ -129,3 +129,18 @@ func Test_NewAuthRoundTripper(t *testing.T) {
 		require.Equal(t, fhirClientConfig.MaxResponseSize, 10485760)
 	})
 }
+
+func TestClientConfig_Validate(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		config := ClientConfig{
+			BaseURL: "https://example.com/fhir",
+		}
+		err := config.Validate()
+		require.NoError(t, err)
+	})
+	t.Run("no baseURL", func(t *testing.T) {
+		config := ClientConfig{}
+		err := config.Validate()
+		require.NoError(t, err)
+	})
+}

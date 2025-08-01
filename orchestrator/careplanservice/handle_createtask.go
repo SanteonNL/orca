@@ -333,7 +333,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		{
 			var createdTask fhir.Task
 			var err error
-			result, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
+			result, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, request.BaseURL, &taskBundleEntry, &txResult.Entry[taskEntryIdx], &createdTask)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -343,7 +343,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		// If CarePlan was updated/created, notify about CarePlan
 		if carePlanBundleEntry != nil {
 			var createdCarePlan fhir.CarePlan
-			_, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, s.fhirURL, carePlanBundleEntry, &txResult.Entry[carePlanBundleEntryIdx], &createdCarePlan)
+			_, err = coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, request.BaseURL, carePlanBundleEntry, &txResult.Entry[carePlanBundleEntryIdx], &createdCarePlan)
 			if err != nil {
 				return nil, nil, err
 			}

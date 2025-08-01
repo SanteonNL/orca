@@ -14,7 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -24,7 +23,6 @@ type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
 	fhirClientFactory FHIRClientFactory
 	authzPolicy       Policy[T]
 	profile           profile.Provider
-	fhirURL           *url.URL
 	validator         validation.Validator[T]
 }
 
@@ -112,7 +110,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	}
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var createdResource T
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, h.fhirURL, &tx.Entry[idx], &txResult.Entry[idx], &createdResource)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, request.BaseURL, &tx.Entry[idx], &txResult.Entry[idx], &createdResource)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to process %s creation result: %w", resourceType, err)
 		}

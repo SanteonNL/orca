@@ -65,7 +65,7 @@ func Test_Integration(t *testing.T) {
 		cpc2Notifications = nil
 	}
 
-	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+	ctx := tenants.WithTenant(context.Background(), service.tenants.Sole())
 	t.Run("custom search parameters", func(t *testing.T) {
 		t.Run("existence", func(t *testing.T) {
 			var capabilityStatement fhir.CapabilityStatement
