@@ -5,6 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
@@ -1011,4 +1016,170 @@ func TestService_notifySubscribers(t *testing.T) {
 		}
 		s.notifySubscribers(context.Background(), &fhir.ActivityDefinition{})
 	})
+}
+
+func TestService_Tracing(t *testing.T) {
+	// Setup in-memory tracer for testing
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+	otel.SetTracerProvider(tp)
+	defer tp.Shutdown(context.Background())
+
+	// Setup test service
+	fhirServerMux := http.NewServeMux()
+	mockCustomSearchParams(fhirServerMux)
+	fhirServerMux.HandleFunc("POST /fhir/", func(writer http.ResponseWriter, request *http.Request) {
+		// Mock FHIR transaction response
+		bundle := fhir.Bundle{
+			Type: fhir.BundleTypeTransactionResponse,
+			Entry: []fhir.BundleEntry{
+				{
+					Response: &fhir.BundleEntryResponse{
+						Status:   "201 Created",
+						Location: to.Ptr("Patient/123"),
+					},
+					Resource: json.RawMessage(`{"resourceType":"Patient","id":"123"}`),
+				},
+			},
+		}
+		coolfhir.SendResponse(writer, http.StatusOK, bundle)
+	})
+	fhirServer := httptest.NewServer(fhirServerMux)
+
+	messageBroker := messaging.NewMemoryBroker()
+	service, err := New(Config{
+		FHIR: coolfhir.ClientConfig{
+			BaseURL: fhirServer.URL + "/fhir",
+		},
+	}, profile.Test(), orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+	require.NoError(t, err)
+
+	frontServerMux := http.NewServeMux()
+	service.RegisterHandlers(frontServerMux)
+	frontServer := httptest.NewServer(frontServerMux)
+
+	httpClient := frontServer.Client()
+	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
+
+	t.Run("handleModification creates span with correct attributes", func(t *testing.T) {
+		// Clear previous spans
+		exporter.Reset()
+
+		// Make a POST request to create a Patient
+		patientData, _ := json.Marshal(fhir.Patient{
+			Name: []fhir.HumanName{
+				{
+					Family: to.Ptr("Doe"),
+					Given:  []string{"John"},
+				},
+			},
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr("http://example.com/fhir/identifier"),
+					Value:  to.Ptr("12345"),
+				},
+			},
+			Telecom: telecom,
+		})
+		httpResponse, err := httpClient.Post(frontServer.URL+"/cps/Patient", "application/json", strings.NewReader(string(patientData)))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusCreated, httpResponse.StatusCode)
+
+		// Verify span was created
+		spans := exporter.GetSpans()
+		// This span is created by the FHIR client, not by ORCA
+		assertTracingSpan(t, exporter, "fhir.post /fhir/", []attribute.KeyValue{}, codes.Unset)
+		assertTracingSpan(t, exporter, "commitTransaction", []attribute.KeyValue{
+			attribute.String("fhir.bundle.type", "transaction"),
+			attribute.Int("fhir.bundle.entry_count", 2),
+			attribute.Int("fhir.transaction.result_entries", 1),
+		}, codes.Ok)
+		assertTracingSpan(t, exporter, "handleModification", []attribute.KeyValue{
+			attribute.String("http.method", "POST"),
+			attribute.String("fhir.resource_type", "Patient"),
+			attribute.String("operation.name", "CarePlanService/CreatePatient"),
+		}, codes.Ok)
+
+		assertSpansBelongToSameTrace(t, spans)
+	})
+
+	t.Run("handleModification records error in span", func(t *testing.T) {
+		// Clear previous spans
+		exporter.Reset()
+
+		// Setup FHIR server to return an error
+		fhirServerMux.HandleFunc("POST /fhir/error", func(writer http.ResponseWriter, request *http.Request) {
+			coolfhir.WriteOperationOutcomeFromError(context.Background(),
+				coolfhir.BadRequest("test error"), "test", writer)
+		})
+
+		// Make a request that will cause an error (invalid JSON)
+		httpResponse, err := httpClient.Post(frontServer.URL+"/cps/Patient", "application/json", strings.NewReader("invalid json"))
+		require.NoError(t, err)
+		require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+
+		assertTracingSpan(t, exporter, "handleModification", []attribute.KeyValue{
+			attribute.String("http.method", "POST"),
+			attribute.String("fhir.resource_type", "Patient"),
+			attribute.String("operation.name", "CarePlanService/CreatePatient"),
+		}, codes.Error)
+	})
+}
+
+func assertTracingSpan(t *testing.T, exporter *tracetest.InMemoryExporter, expectedSpanName string, expectedAttributes []attribute.KeyValue, expectedStatusCode codes.Code) {
+	t.Helper()
+
+	spans := exporter.GetSpans()
+
+	var operationSpan *tracetest.SpanStub
+	for _, span := range spans {
+		if span.Name == expectedSpanName {
+			operationSpan = &span
+			break
+		}
+	}
+	require.NotNil(t, operationSpan, "Expected %s span", expectedSpanName)
+
+	attributes := operationSpan.Attributes
+	for _, expectedAttr := range expectedAttributes {
+		found := false
+		for _, actualAttr := range attributes {
+			if actualAttr.Key == expectedAttr.Key && actualAttr.Value.AsString() == expectedAttr.Value.AsString() {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "Expected attribute %s=%s not found in span attributes", expectedAttr.Key, expectedAttr.Value.AsString())
+	}
+	assert.Equal(t, expectedStatusCode, operationSpan.Status.Code)
+}
+
+func assertSpansBelongToSameTrace(t *testing.T, spans []tracetest.SpanStub) {
+	t.Helper()
+
+	if len(spans) == 0 {
+		t.Fatal("No spans provided to verify")
+		return
+	}
+
+	expectedTraceID := spans[0].SpanContext.TraceID()
+	if !expectedTraceID.IsValid() {
+		t.Fatal("First span has invalid trace ID")
+		return
+	}
+
+	for i, span := range spans {
+		spanTraceID := span.SpanContext.TraceID()
+		if !spanTraceID.IsValid() {
+			t.Errorf("Span %d has invalid trace ID", i)
+			continue
+		}
+
+		if spanTraceID.String() != expectedTraceID.String() {
+			t.Errorf("Span %d has different trace ID: expected %s, got %s",
+				i, expectedTraceID.String(), spanTraceID.String())
+		}
+	}
 }

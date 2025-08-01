@@ -6,6 +6,9 @@ import (
 	"fmt"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -47,6 +50,15 @@ func Test_Integration(t *testing.T) {
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
 	t.Log("This test creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
+
+	// Set up trace mocking
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+	otel.SetTracerProvider(tp)
+	defer tp.Shutdown(context.Background())
+
 	var cpc1Notifications []coolfhir.SubscriptionNotification
 	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
 		cpc1Notifications = append(cpc1Notifications, n)
@@ -62,6 +74,7 @@ func Test_Integration(t *testing.T) {
 		t.Log(msg)
 		cpc1Notifications = nil
 		cpc2Notifications = nil
+		exporter.Reset()
 	}
 
 	t.Run("custom search parameters", func(t *testing.T) {

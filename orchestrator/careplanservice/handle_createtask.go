@@ -11,6 +11,10 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -20,13 +24,29 @@ import (
 )
 
 func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		ctx,
+		"handleCreateTask",
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("fhir.resource_type", "Task"),
+			attribute.String("operation.name", "CreateTask"),
+		),
+	)
+	defer span.End()
+
 	log.Ctx(ctx).Info().Msg("Creating Task")
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to unmarshal task")
 		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
 	}
 	// Check we're only allowing secure external literal references
 	if err := validateLiteralReferences(ctx, s.profile, &task); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "literal reference validation failed")
 		return nil, err
 	}
 
@@ -34,24 +54,35 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	task.Id = nil
 
 	if !coolfhir.IsScpTask(&task) {
-		return nil, coolfhir.NewErrorWithCode("Task is not SCP task", http.StatusBadRequest)
+		err := coolfhir.NewErrorWithCode("Task is not SCP task", http.StatusBadRequest)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "task is not SCP task")
+		return nil, err
 	}
 
 	switch task.Status {
 	case fhir.TaskStatusRequested:
 	case fhir.TaskStatusReady:
 	default:
-		return nil, errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
+		err := errors.New(fmt.Sprintf("cannot create Task with status %s, must be %s or %s", task.Status, fhir.TaskStatusRequested.String(), fhir.TaskStatusReady.String()))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "invalid task status")
+		return nil, err
 	}
 
 	carePlan := fhir.CarePlan{}
 	err := coolfhir.ValidateTaskRequiredFields(task)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "task validation failed")
 		return nil, err
 	}
 
 	if !isPrincipalTaskRequester(&task, request.Principal) {
-		return nil, coolfhir.BadRequest("requester must be equal to Task.requester")
+		err := coolfhir.BadRequest("requester must be equal to Task.requester")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "principal is not task requester")
+		return nil, err
 	}
 
 	// Enrich Task.Requester and Task.Owner with info from CSD (if available), typically to add the organization name
@@ -77,14 +108,20 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
+		span.SetAttributes(attribute.String("fhir.careplan.creation_mode", "new"))
 
 		// In order to create a CarePlan, the requester must have the same URA number as the current node
 		ids, err := s.profile.Identities(ctx)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to get profile identities")
 			return nil, err
 		}
 		if !isRequesterLocalCareOrganization(ids, *request.Principal) {
-			return nil, errors.New("requester must be local care organization in order to create new CarePlan and CareTeam")
+			err := errors.New("requester must be local care organization in order to create new CarePlan and CareTeam")
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "requester is not local care organization")
+			return nil, err
 		}
 
 		// Create a new CarePlan (which will also create a new CareTeam) based on the Task reference
@@ -117,17 +154,25 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		// Validate Task.For: identifier (with system and value), and/or reference must be set
 		if task.For == nil || !coolfhir.ValidateReference(*task.For) {
-			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
+			err := coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "invalid task.for reference")
+			return nil, err
 		}
 		if task.For.Reference == nil {
 			headers := fhirclient.Headers{}
 			patients, _, err := handleSearchResource[fhir.Patient](ctx, s, "Patient", map[string][]string{"identifier": {fmt.Sprintf("%s|%s", *task.For.Identifier.System, *task.For.Identifier.Value)}}, &headers)
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "failed to search for patient")
 				return nil, err
 			}
 
 			if len(patients) == 0 {
-				return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing an existing patient", http.StatusNotFound)
+				err := coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing an existing patient", http.StatusNotFound)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "patient not found")
+				return nil, err
 			} else {
 				task.For.Reference = to.Ptr("Patient/" + *patients[0].Id)
 			}
@@ -135,11 +180,16 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		ok := careteamservice.ActivateMembership(&careTeam, task.Requester)
 		if !ok {
-			return nil, errors.New("failed to activate membership for new CareTeam")
+			err := errors.New("failed to activate membership for new CareTeam")
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to activate care team membership")
+			return nil, err
 		}
 
 		data, err := json.Marshal([]any{careTeam})
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to marshal care team")
 			return nil, coolfhir.NewErrorWithCode("failed to marshal CareTeam", http.StatusInternalServerError)
 		}
 
@@ -199,24 +249,35 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			if err := s.eventManager.Notify(ctx, CarePlanCreatedEvent{
 				CarePlan: carePlan,
 			}); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "failed to notify care plan created event")
 				return nil, err
 			}
 		}
 	} else {
 		// Adding a task to an existing CarePlan
+		span.SetAttributes(attribute.String("fhir.careplan.creation_mode", "existing"))
+
 		carePlanRef, err := basedOn(task)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "invalid task.basedOn")
 			return nil, fmt.Errorf("invalid Task.basedOn: %w", err)
 		}
 
 		var carePlan fhir.CarePlan
 
 		if err := s.fhirClient.ReadWithContext(ctx, *carePlanRef, &carePlan); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to read care plan")
 			return nil, fmt.Errorf("failed to read CarePlan: %w", err)
 		}
 
 		if task.For == nil {
-			return nil, coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
+			err := coolfhir.NewErrorWithCode("Task.For must be set with a local reference, or a logical identifier, referencing a patient", http.StatusBadRequest)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "task.for is required")
+			return nil, err
 		}
 
 		task.Extension = []fhir.Extension{
@@ -239,41 +300,67 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 
 		if !samePatient {
-			return nil, coolfhir.NewErrorWithCode("Task.for must reference the same patient as CarePlan.subject", http.StatusBadRequest)
+			err := coolfhir.NewErrorWithCode("Task.for must reference the same patient as CarePlan.subject", http.StatusBadRequest)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "task.for does not match careplan.subject")
+			return nil, err
 		}
 
 		// Different validation logic for an SCP subtask
 		if len(task.PartOf) > 0 {
+			span.SetAttributes(attribute.String("fhir.task.type", "subtask"))
+
 			if len(task.PartOf) != 1 {
-				return nil, coolfhir.NewErrorWithCode("SCP subtask must have exactly one parent task", http.StatusBadRequest)
+				err := coolfhir.NewErrorWithCode("SCP subtask must have exactly one parent task", http.StatusBadRequest)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "subtask must have exactly one parent")
+				return nil, err
 			}
 			// Get the parent task
 			var parentTask fhir.Task
 			err = s.fhirClient.ReadWithContext(ctx, *task.PartOf[0].Reference, &parentTask)
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "failed to read parent task")
 				return nil, err
 			}
 			// Verify the owner of the parent task is the same as the org creating the subtask
 			isOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(&parentTask, request.Principal.Organization.Identifier)
 			if !isOwner {
-				return nil, coolfhir.NewErrorWithCode("requester is not the owner of the parent task", http.StatusUnauthorized)
+				err := coolfhir.NewErrorWithCode("requester is not the owner of the parent task", http.StatusUnauthorized)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "requester is not parent task owner")
+				return nil, err
 			}
 
 			if !coolfhir.LogicalReferenceEquals(*parentTask.Owner, *task.Requester) {
-				return nil, coolfhir.NewErrorWithCode("requester is not the same as the parent task owner", http.StatusBadRequest)
+				err := coolfhir.NewErrorWithCode("requester is not the same as the parent task owner", http.StatusBadRequest)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "requester mismatch with parent task owner")
+				return nil, err
 			}
 			if !coolfhir.LogicalReferenceEquals(*parentTask.Requester, *task.Owner) {
-				return nil, coolfhir.NewErrorWithCode("owner is not the same as the parent task requester", http.StatusBadRequest)
+				err := coolfhir.NewErrorWithCode("owner is not the same as the parent task requester", http.StatusBadRequest)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "owner mismatch with parent task requester")
+				return nil, err
 			}
 		} else {
+			span.SetAttributes(attribute.String("fhir.task.type", "primary"))
+
 			careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "failed to parse care team from care plan")
 				return nil, fmt.Errorf("failed to parse CareTeam in CarePlan.Contained: %w", err)
 			}
 
 			participant := coolfhir.FindMatchingParticipantInCareTeam(careTeam, request.Principal.Organization.Identifier)
 			if participant == nil {
-				return nil, coolfhir.NewErrorWithCode("requester is not part of CareTeam", http.StatusUnauthorized)
+				err := coolfhir.NewErrorWithCode("requester is not part of CareTeam", http.StatusUnauthorized)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "requester not in care team")
+				return nil, err
 			}
 		}
 
@@ -306,6 +393,8 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 			updated, err := careteamservice.Update(ctx, s.fhirClient, *carePlan.Id, task, request.LocalIdentity, tx)
 			if err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, "failed to update care team")
 				return nil, fmt.Errorf("failed to update CareTeam: %w", err)
 			}
 
@@ -323,6 +412,9 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			carePlanBundleEntry = &tx.Entry[carePlanBundleEntryIdx]
 		}
 	}
+
+	span.SetStatus(codes.Ok, "")
+	span.SetAttributes(attribute.String("fhir.task.creation", "success"))
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var result *fhir.BundleEntry
