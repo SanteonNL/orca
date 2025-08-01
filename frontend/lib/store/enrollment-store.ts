@@ -16,7 +16,7 @@ interface StoreState {
     error?: string
     setSelectedCarePlan: (carePlan?: CarePlan) => void
     setTaskCondition: (condition?: Condition) => void
-    fetchAllResources: () => Promise<void>
+    fetchAllResources: (launchContext: LaunchContext, ehrClient: Client) => Promise<void>
 }
 
 // Define the Zustand store
@@ -37,20 +37,14 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
     setTaskCondition: (condition?: Condition) => {
         set({ taskCondition: condition });
     },
-    fetchAllResources: async () => {
+    fetchAllResources: async (launchContext: LaunchContext, ehrClient: Client) => {
         try {
             const { loading } = get()
 
             if (!loading) {
                 set({ loading: true, error: undefined })
-
-                const contextState = useContextStore.getState();
-                if (contextState.launchContext && contextState.ehrClient) {
-                    await fetchEhrResources(contextState.launchContext, contextState.ehrClient, get, set);
-                    set({ loading: false });
-                } else {
-                    set({ initialized: true, loading: false });
-                }
+                await fetchEhrResources(launchContext, ehrClient, get, set);
+                set({ initialized: true, loading: false });
             }
 
         } catch (error: any) {
@@ -97,16 +91,16 @@ const fetchEhrResources = async (launchContext: LaunchContext, ehrClient: Client
 };
 
 const useEnrollment = () => {
-    const {cpsClient, launchContext} = useContext()
+    const {ehrClient, launchContext} = useContext()
     const store = useEnrollmentStore();
     const initialized = useEnrollmentStore(state => state.initialized);
     const fetchAllResources = useEnrollmentStore(state => state.fetchAllResources);
 
     useEffect(() => {
-        if (!initialized) {
-            fetchAllResources();
+        if (!initialized && launchContext && ehrClient) {
+            fetchAllResources(launchContext, ehrClient);
         }
-    }, [fetchAllResources, initialized, cpsClient]);
+    }, [fetchAllResources, initialized, ehrClient, launchContext]);
 
     return store;
 };
