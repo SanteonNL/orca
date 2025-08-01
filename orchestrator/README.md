@@ -96,6 +96,10 @@ To register a client (application), set the following environment variables for 
 
 #### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
+You can enable the Task Engine by setting the following environment variables:
+
+- `ORCA_TENANT_<ID>_TASKENGINE_ENABLED`: Enables the Task Filler engine for the specified tenant (default: `false`).
+
 You have the following options:
 
 1. Read them from your FHIR API

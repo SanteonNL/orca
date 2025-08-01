@@ -31,7 +31,11 @@ import (
 
 func TestService_handleTaskFillerCreate(t *testing.T) {
 	defaultCtx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
-	defaultCtx = tenants.WithTenant(defaultCtx, tenants.Test().Sole())
+	defaultCtx = tenants.WithTenant(defaultCtx, tenants.Test(func(properties *tenants.Properties) {
+		properties.TaskEngine = tenants.TaskEngineProperties{
+			Enabled: true,
+		}
+	}).Sole())
 	var capturedTask fhir.Task
 	tests := []struct {
 		name                    string

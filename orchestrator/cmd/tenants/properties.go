@@ -6,16 +6,21 @@ import (
 )
 
 type Properties struct {
-	ID       string
-	Nuts     NutsProperties            `koanf:"nuts"`
-	ChipSoft ChipSoftProperties        `koanf:"chipsoft"`
-	Demo     DemoProperties            `koanf:"demo"`
-	CPS      CarePlanServiceProperties `koanf:"cps"`
+	ID         string
+	Nuts       NutsProperties            `koanf:"nuts"`
+	ChipSoft   ChipSoftProperties        `koanf:"chipsoft"`
+	Demo       DemoProperties            `koanf:"demo"`
+	CPS        CarePlanServiceProperties `koanf:"cps"`
+	TaskEngine TaskEngineProperties      `koanf:"taskengine"`
 }
 
 type NutsProperties struct {
 	// Subject is the subject identifier used by Nuts for this care organization, e.g.
 	Subject string `koanf:"subject"`
+}
+
+type TaskEngineProperties struct {
+	Enabled bool `koanf:"enabled"`
 }
 
 type ChipSoftProperties struct {
