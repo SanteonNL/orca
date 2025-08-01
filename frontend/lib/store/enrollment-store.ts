@@ -41,12 +41,9 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
         try {
             const {loading} = get()
 
-            console.log('enrollment-store.fetchAllResources #3: Fetching all resources for enrollment store', loading);
             if (!loading) {
-                console.log('enrollment-store.fetchAllResources #4: Setting loading state to true');
                 set({loading: true, error: undefined})
                 const resources = await fetchEhrResources(launchContext, ehrClient);
-                console.log('enrollment-store.fetchAllResources #5: Resources fetched successfully', resources);
                 set({
                     initialized: true, loading: false,
 
@@ -59,7 +56,6 @@ const useEnrollmentStore = create<StoreState>((set, get) => ({
             }
 
         } catch (error: any) {
-            console.error('enrollment-store.fetchAllResources: Error fetching resources', error);
             set({
                 error: `Something went wrong while fetching all resources: ${error?.message || error}`,
                 loading: false
@@ -118,9 +114,7 @@ const useEnrollment = () => {
     const fetchAllResources = useEnrollmentStore(state => state.fetchAllResources);
 
     useEffect(() => {
-        console.log('enrollment-store #1: useEffect triggered', initialized, launchContext, ehrClient);
         if (!initialized && launchContext && ehrClient) {
-            console.log('enrollment-store #2: Fetching all resources for enrollment store');
             fetchAllResources(launchContext, ehrClient);
         }
     }, [fetchAllResources, initialized, ehrClient, launchContext]);
