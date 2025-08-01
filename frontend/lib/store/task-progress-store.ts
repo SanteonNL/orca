@@ -138,10 +138,10 @@ const useTaskProgressStore = () => {
     }, [selectedTaskId, loading, initialized, fetchAllResources]);
 
     useEffect(() => {
-        // Only subscribe if we have a selectedTaskId and no active global subscription yet.
-        if (!selectedTaskId || globalEventSource) return
+        // Only subscribe if we have a selectedTaskId, context has been loaded and no active global subscription yet.
+        if (!selectedTaskId || globalEventSource || !contextState.launchContext?.tenantId) return
 
-        globalEventSource = new EventSource(`/orca/cpc/${contextState.launchContext?.tenantId}/subscribe/fhir/Task/${selectedTaskId}`);
+        globalEventSource = new EventSource(`/orca/cpc/${contextState.launchContext.tenantId}/subscribe/fhir/Task/${selectedTaskId}`);
 
         globalEventSource.onopen = () => {
             setEventSourceConnected(true);
