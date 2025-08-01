@@ -2,7 +2,7 @@ import {Bundle, Questionnaire, Task} from 'fhir/r4';
 import {useEffect} from 'react';
 import {create} from 'zustand';
 import {fetchAllBundlePages} from '../fhirUtils';
-import {useContextStore} from "@/lib/store/context-store";
+import useContext from "@/lib/store/context-store";
 import Client from "fhir-kit-client";
 
 // A module-level variable, to ensure only one SSE subscription is active (`use` hook for this store is used in multiple places).
@@ -23,7 +23,7 @@ interface StoreState {
     setTask: (task?: Task) => void
     nextStep: () => void
     setSubTasks: (subTasks: Task[]) => void
-    fetchAllResources: (selectedTaskId: string) => Promise<void>
+    fetchAllResources: (selectedTaskId: string, cpsClient: Client) => Promise<void>
     setEventSourceConnected: (connected: boolean) => void
 }
 
@@ -50,26 +50,20 @@ const taskProgressStore = create<StoreState>((set, get) => ({
     setSubTasks: (subTasks: Task[]) => {
         set({ subTasks })
     },
-    fetchAllResources: async (selectedTaskId: string) => {
+    fetchAllResources: async (selectedTaskId: string, cpsClient: Client) => {
         try {
             set({ loading: true, error: undefined })
-
-            const contextState = useContextStore.getState();
-            if (!contextState.cpsClient) {
-                set({ error: "CPS client is not initialized, ensure the context is loaded." });
-                return;
-            }
-
             const [task, subTasks] = await Promise.all([
-                await contextState.cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
-                await fetchSubTasks(contextState.cpsClient, selectedTaskId)
+                await cpsClient.read({ resourceType: 'Task', id: selectedTaskId }) as Task,
+                await fetchSubTasks(cpsClient, selectedTaskId)
             ])
             set({ task, subTasks })
-            const questionnaireMap = await fetchQuestionnaires(contextState.cpsClient, subTasks, set)
 
-            set({ taskToQuestionnaireMap: questionnaireMap });
-            set({ initialized: true, loading: false, })
-
+            const questionnaireMap = await fetchQuestionnaires(cpsClient, subTasks, set)
+            set({
+                taskToQuestionnaireMap: questionnaireMap,
+                initialized: true, loading: false
+            });
         } catch (error: any) {
             set({ error: `Something went wrong while fetching all resources: ${error?.message || error}`, loading: false })
         }
@@ -121,10 +115,9 @@ const fetchSubTasks = async (cpsClient: Client, taskId: string) => {
 }
 
 const useTaskProgressStore = () => {
-    const contextState = useContextStore.getState();
+    const {cpsClient, launchContext} = useContext()
 
     const store = taskProgressStore();
-
     const loading = taskProgressStore(state => state.loading);
     const initialized = taskProgressStore(state => state.initialized);
     const selectedTaskId = taskProgressStore(state => state.selectedTaskId);
@@ -132,16 +125,16 @@ const useTaskProgressStore = () => {
     const setEventSourceConnected = taskProgressStore(state => state.setEventSourceConnected);
 
     useEffect(() => {
-        if (!loading && !initialized && selectedTaskId) {
-            fetchAllResources(selectedTaskId)
+        if (!loading && !initialized && selectedTaskId && cpsClient) {
+            fetchAllResources(selectedTaskId, cpsClient)
         }
-    }, [selectedTaskId, loading, initialized, fetchAllResources]);
+    }, [selectedTaskId, loading, initialized, fetchAllResources, cpsClient]);
 
     useEffect(() => {
-        // Only subscribe if we have a selectedTaskId and no active global subscription yet.
-        if (!selectedTaskId || globalEventSource) return
+        // Only subscribe if we have a selectedTaskId, context has been loaded and no active global subscription yet.
+        if (!selectedTaskId || globalEventSource || !launchContext?.tenantId) return
 
-        globalEventSource = new EventSource(`/orca/cpc/${contextState.launchContext?.tenantId}/subscribe/fhir/Task/${selectedTaskId}`);
+        globalEventSource = new EventSource(`/orca/cpc/${launchContext.tenantId}/subscribe/fhir/Task/${selectedTaskId}`);
 
         globalEventSource.onopen = () => {
             setEventSourceConnected(true);
@@ -180,7 +173,7 @@ const useTaskProgressStore = () => {
             globalEventSource = null;
             setEventSourceConnected(false);
         };
-    }, [selectedTaskId, setEventSourceConnected, contextState]);
+    }, [selectedTaskId, setEventSourceConnected, launchContext]);
 
     return store;
 };
