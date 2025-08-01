@@ -25,6 +25,12 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
 	}
+
+	// Task is owned by CPS, don't allow changing or setting the source of the Task
+	if task.Meta != nil {
+		task.Meta.Source = nil
+	}
+
 	// Check we're only allowing secure external literal references
 	if err := validateLiteralReferences(ctx, s.profile, &task); err != nil {
 		return nil, err
