@@ -573,7 +573,12 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 	prof := profile.TestProfile{
 		Principal: auth.TestPrincipal2,
 	}
-	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+	testCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.TaskEngine = tenants.TaskEngineProperties{
+			Enabled: true,
+		}
+	})
+	ctx := tenants.WithTenant(context.Background(), testCfg.Sole())
 	httpClient, _ := prof.HttpClient(ctx, auth.TestPrincipal2.Organization.Identifier[0])
 	// Test that the service registers the /cpc URL that proxies to the backing FHIR server
 	// Setup: configure backing FHIR server to which the service proxies
@@ -588,7 +593,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 
 	service, _ := New(
 		Config{},
-		tenants.Test(), profile.TestProfile{
+		testCfg, profile.TestProfile{
 			Principal: auth.TestPrincipal2,
 		}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
