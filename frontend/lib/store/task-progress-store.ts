@@ -149,6 +149,7 @@ const useTaskProgressStore = () => {
 
         globalEventSource.onerror = (event) => {
             setEventSourceConnected(false);
+            debugger;
             const error = event instanceof Error ? event : new Error(JSON.stringify(event));
             console.error(`Error in global EventSource: ${error.message}`);
         };
