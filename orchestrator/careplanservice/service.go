@@ -1159,8 +1159,6 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 
 	span.SetAttributes(
 		attribute.Int("fhir.bundle.result_entries", len(resultBundle.Entry)),
-	)
-	span.SetAttributes(
 		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 	span.SetStatus(codes.Ok, "")
@@ -1216,9 +1214,9 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 		} else {
 			span.SetAttributes(
 				attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
+				attribute.String("notification.status", "success"),
 			)
 			span.SetStatus(codes.Ok, "")
-			span.SetAttributes(attribute.String("notification.status", "success"))
 		}
 	} else {
 		span.SetAttributes(attribute.String("notification.status", "skipped"))
