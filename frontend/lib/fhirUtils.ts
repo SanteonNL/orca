@@ -1,6 +1,6 @@
 import Client from 'fhir-kit-client';
 import {
-    Bundle, CarePlan, CareTeam,
+    Bundle, Coding,
     Condition,
     Identifier,
     Patient,
@@ -12,6 +12,7 @@ import {
     Task
 } from 'fhir/r4';
 
+
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
 
@@ -22,13 +23,13 @@ export const patientIdentifierSystem = () => {
 // This function creates a FHIR client to communicate with other (remote) SCP nodes' FHIR APIs.
 export const createScpClient = () => {
     const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`;
-    return new Client({ baseUrl });
+    return new Client({baseUrl});
 };
 
 // This function creates a FHIR client to communicate with the EHR's FHIR API.
 export const createEhrClient = () => {
     const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`;
-    return new Client({ baseUrl });
+    return new Client({baseUrl});
 };
 
 // This function creates a FHIR client to communicate with the ORCA instance's own CarePlanService.
@@ -63,7 +64,7 @@ export const fetchAllBundlePages = async <T extends Resource>(
             bundle: {
                 resourceType: 'Bundle',
                 type: 'searchset',
-                link: [{ relation: 'next', url: nextPageUrl }]
+                link: [{relation: 'next', url: nextPageUrl}]
             }
         });
         const bundle = result as FhirBundle<T>;
@@ -83,7 +84,7 @@ export const findInBundle = (resourceType: string, bundle?: Bundle) => {
 }
 
 const cleanPatient = (patient: Patient) => {
-    const cleanedPatient = { ...patient, id: undefined }
+    const cleanedPatient = {...patient, id: undefined}
     if (cleanedPatient.contact) {
         for (const contact of cleanedPatient.contact) {
             if (contact.organization?.reference) {
@@ -116,7 +117,7 @@ const cleanPatient = (patient: Patient) => {
 
 const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string, taskIdentifier?: string) => {
     // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
-    const cleanedServiceRequest = { ...serviceRequest, id: undefined };
+    const cleanedServiceRequest = {...serviceRequest, id: undefined};
 
     const patientIdentifier = getPatientIdentifier(patient);
     if (!patientIdentifier || serviceRequest.subject?.identifier?.system !== patientIdentifier.system || serviceRequest.subject?.identifier?.value !== patientIdentifier.value) {
@@ -294,4 +295,30 @@ export function identifierToToken(identifier?: Identifier) {
     }
 
     return `${identifier.system}|${identifier.value}`
+}
+
+
+export function codingToMessage(coding: Coding[]): MessageType {
+
+    if (coding.length === 0) return MessageType.Unknown;
+
+
+    if (coding.some(x => x.code === "E0001") && coding.some(x => x.code === "E0002")) return MessageType.NoEmailAndPhone;
+    if (coding.some(x => x.code === "E0001")) return MessageType.NoEmail;
+    if (coding.some(x => x.code === "E0002")) return MessageType.NoPhone;
+    if (coding.some(x => x.code === "E0003") && coding.some(x => x.code === "E0004")) return MessageType.InvalidEmailAndPhone;
+    if (coding.some(x => x.code === "E0003")) return MessageType.InvalidEmail;
+    if (coding.some(x => x.code === "E0004")) return MessageType.InvalidPhone;
+
+    return MessageType.Unknown;
+}
+
+export enum MessageType {
+    InvalidEmail = "Controleer het e-mailadres van de patiënt in het EPD en probeer het opnieuw. ",
+    InvalidPhone = "Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw. ",
+    NoEmail = "Er is geen e-mailadres van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het e-mailadres toe in het EPD en probeer het opnieuw.",
+    NoPhone = "Er is geen telefoonnummer van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het telefoonnummer toe in het EPD en probeer het opnieuw.",
+    NoEmailAndPhone = "Er zijn geen e-mailadres en telefoonnummer van de patiënt gevonden in het EPD. Deze gegevens zijn nodig voor de aanmelding. Voeg het e-mailadres en telefoonnummer toe in het EPD en probeer het opnieuw.",
+    InvalidEmailAndPhone = "Controleer het e-mailadres en telefoonnummer van de patiënt in het EPD en probeer het opnieuw.",
+    Unknown = "Er is een onbekende fout opgetreden. Probeer het later opnieuw of neem contact op met de beheerder."
 }

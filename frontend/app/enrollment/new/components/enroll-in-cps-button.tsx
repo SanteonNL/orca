@@ -2,7 +2,7 @@
 import useCpsClient from '@/hooks/use-cps-client'
 import {findInBundle, getPatientIdentifier, constructTaskBundle} from '@/lib/fhirUtils'
 import useEnrollment from '@/lib/store/enrollment-store'
-import {Bundle, Condition, OperationOutcome, OperationOutcomeIssue, PractitionerRole} from 'fhir/r4'
+import {Bundle, Coding, Condition, OperationOutcome, PractitionerRole} from 'fhir/r4'
 import React, {useEffect, useState} from 'react'
 import {toast} from "sonner"
 import {useRouter} from 'next/navigation'
@@ -37,7 +37,7 @@ export default function EnrollInCpsButton({className}: Props) {
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
     const [error, setError] = useState<string | null>()
-    const [validationErrors, setValidationErrors] = useState<OperationOutcomeIssue[]>()
+    const [validationErrors, setValidationErrors] = useState<Coding[]>()
 
     const router = useRouter()
     const cpsClient = useCpsClient()
@@ -102,8 +102,12 @@ export default function EnrollInCpsButton({className}: Props) {
             // Handle 400 errors specifically
             if (error.response?.status === 400) {
                 const operationOutcome: OperationOutcome = error.response?.data;
-                setValidationErrors(operationOutcome.issue || []);
-                throw new Error("Validation errors");
+                const operationOutcomeIssue = operationOutcome.issue?.find(issue => issue.code === 'invariant');
+                const validationErrors: Coding[] = operationOutcomeIssue?.details?.coding || [];
+                if (validationErrors.length > 0) {
+                    setValidationErrors(validationErrors);
+                    throw new Error("Validation errors");
+                }
             }
 
             throw new Error(`Failed to execute Task Bundle: ${error.message || "Unknown error"}`);
@@ -114,7 +118,7 @@ export default function EnrollInCpsButton({className}: Props) {
         <ThemeProvider theme={defaultTheme}>
             <div>
                 {validationErrors && (
-                    <ValidationErrors validationErrors={validationErrors} />
+                    <ValidationErrors validationErrors={validationErrors}/>
                 )}
             </div>
             <Button variant='contained' disabled={disabled} onClick={informCps}>
