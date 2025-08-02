@@ -299,7 +299,6 @@ export function identifierToToken(identifier?: Identifier) {
 
 
 export function codingToMessage(codings: Coding[]): String[] {
-    debugger
     if (!codings.length) return [MessageType.Unknown];
     const messages: String[] = [];
 
