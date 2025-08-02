@@ -316,9 +316,12 @@ export function codingToMessage(codings: Coding[]): String[] {
             case "E0004":
                 messages.push(MessageType.InvalidPhone);
                 break;
+            default:
+                messages.push(MessageType.Unknown + " (code: " + coding.code + ")");
+                break;
         }
     }
-    return messages.length ? messages : [MessageType.Unknown];
+    return messages;
 }
 
 export enum MessageType {
