@@ -3,7 +3,6 @@ package careplanservice
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -51,25 +50,9 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	}
 	log.Ctx(ctx).Info().Msgf("Creating %s (authz=%s)", resourceType, strings.Join(authzDecision.Reasons, ";"))
 	if h.validator != nil {
-		if errs := h.validator.Validate(resource); errs != nil {
-			var issues []fhir.OperationOutcomeIssue
-
-			for _, err := range errs {
-				issues = append(issues, fhir.OperationOutcomeIssue{
-					Severity:    fhir.IssueSeverityError,
-					Code:        fhir.IssueTypeInvalid,
-					Diagnostics: to.Ptr(err.Error()),
-				})
-			}
-			var err = &fhirclient.OperationOutcomeError{
-				OperationOutcome: fhir.OperationOutcome{
-					Issue: issues,
-				},
-				HttpStatusCode: http.StatusBadRequest,
-			}
-			var msg = errors.Join(errs...).Error()
-			log.Ctx(ctx).Info().Msgf("Validation failed for %s: %s", resourceType, msg)
-			return nil, err
+		result, err2, done := h.validate(ctx, resource, resourceType)
+		if done {
+			return result, err2
 		}
 	}
 	resourceBundleEntry := request.bundleEntryWithResource(resource)
@@ -115,4 +98,37 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 		return []*fhir.BundleEntry{result}, []any{createdResource}, nil
 	}, nil
+}
+
+func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T, resourceType string) (FHIRHandlerResult, error, bool) {
+	if errs := h.validator.Validate(resource); errs != nil {
+		var issues []fhir.OperationOutcomeIssue
+		var diagnostics = fmt.Sprintf("Validation failed for %s", resourceType)
+		var codings []fhir.Coding
+		for _, err := range errs {
+			var coding = fhir.Coding{
+				Code:   to.Ptr(err.Code),
+				System: to.Ptr("https://zorgbijjou.github.io/scp-homemonitoring/validation/"),
+			}
+			codings = append(codings, coding)
+		}
+
+		issues = append(issues, fhir.OperationOutcomeIssue{
+			Severity:    fhir.IssueSeverityError,
+			Code:        fhir.IssueTypeInvariant,
+			Diagnostics: &diagnostics,
+			Details: &fhir.CodeableConcept{
+				Coding: codings,
+			},
+		})
+
+		var err = &fhirclient.OperationOutcomeError{
+			OperationOutcome: fhir.OperationOutcome{
+				Issue: issues,
+			},
+			HttpStatusCode: http.StatusBadRequest,
+		}
+		return nil, err, true
+	}
+	return nil, nil, false
 }

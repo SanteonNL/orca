@@ -36,26 +36,19 @@ func TestPatientValidator_Validate(t *testing.T) {
 		{
 			name:        "rejects nil patient",
 			patient:     nil,
-			expectedErr: []string{"patient is required"},
+			expectedErr: []string{PatientRequired},
 		},
 		{
 			name:        "rejects patient with no telecom",
 			patient:     &fhir.Patient{},
-			expectedErr: []string{"patient telecom required"},
+			expectedErr: []string{EmailRequired, PhoneRequired},
 		},
 		{
 			name: "rejects patient with empty telecom",
 			patient: &fhir.Patient{
 				Telecom: []fhir.ContactPoint{},
 			},
-			expectedErr: []string{"patient telecom required"},
-		},
-		{
-			name: "rejects patient with nil telecom",
-			patient: &fhir.Patient{
-				Telecom: nil,
-			},
-			expectedErr: []string{"patient telecom required"},
+			expectedErr: []string{EmailRequired, PhoneRequired},
 		},
 		{
 			name: "rejects patient with only other contact point systems",
@@ -67,7 +60,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: []string{"patient must have both email and phone"},
+			expectedErr: []string{EmailRequired, PhoneRequired},
 		},
 		{
 			name: "rejects patient with invalid email but valid phone",
@@ -83,7 +76,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: []string{"email is invalid"},
+			expectedErr: []string{InvalidEmail},
 		},
 		{
 			name: "rejects patient with nil email value",
@@ -99,7 +92,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: []string{"email is required"},
+			expectedErr: []string{EmailRequired},
 		},
 		{
 			name: "rejects patient with empty email value",
@@ -115,7 +108,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: []string{"email is required"},
+			expectedErr: []string{EmailRequired},
 		},
 		{
 			name: "accepts patient with valid dutch mobile phone starting with +316",
@@ -163,7 +156,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: []string{"patient phone number should be a dutch mobile number"},
+			expectedErr: []string{InvalidPhone},
 		},
 		{
 			name: "rejects patient with dutch phone number too long",
@@ -179,7 +172,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: []string{"patient phone number should be a dutch mobile number"},
+			expectedErr: []string{InvalidPhone},
 		},
 		{
 			name: "rejects patient with dutch phone containing non-numeric characters",
@@ -195,10 +188,10 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: []string{"patient phone number should be a dutch mobile number"},
+			expectedErr: []string{InvalidPhone},
 		},
 		{
-			name: "Accepts patient with dutch phone containing spaces",
+			name: "accepts patient with dutch phone containing spaces",
 			patient: &fhir.Patient{
 				Telecom: []fhir.ContactPoint{
 					{
@@ -243,7 +236,79 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 				},
 			},
-			expectedErr: []string{"patient phone number should be a dutch mobile number"},
+			expectedErr: []string{InvalidPhone},
+		},
+		{
+			name: "accepts patient with valid dutch phone starting with 06",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("0612345678"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "rejects patient with nil phone value",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  nil,
+					},
+				},
+			},
+			expectedErr: []string{PhoneRequired},
+		},
+		{
+			name: "rejects patient with empty phone value",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr(""),
+					},
+				},
+			},
+			expectedErr: []string{PhoneRequired},
+		},
+		{
+			name: "rejects patient with only email",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+				},
+			},
+			expectedErr: []string{PhoneRequired},
+		},
+		{
+			name: "rejects patient with only phone",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+31612345678"),
+					},
+				},
+			},
+			expectedErr: []string{EmailRequired},
 		},
 	}
 

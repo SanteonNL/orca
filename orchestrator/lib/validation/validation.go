@@ -1,5 +1,5 @@
 package validation
 
 type Validator[T any] interface {
-	Validate(t T) []error
+	Validate(t T) []*Error
 }

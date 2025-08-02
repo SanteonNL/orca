@@ -264,7 +264,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 			},
 			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
 				expectedErr := new(fhirclient.OperationOutcomeError)
-				return assert.EqualError(t, err, "OperationOutcome, issues: [invalid error] assert.AnError general error for testing; [invalid error] assert.AnError general error for testing") &&
+				return assert.Contains(t, err.Error(), "OperationOutcome, issues: [invariant error] Validation failed for Task") &&
 					assert.ErrorAs(t, err, &expectedErr) &&
 					assert.Equal(t, http.StatusBadRequest, expectedErr.HttpStatusCode)
 			},
@@ -311,12 +311,12 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 
 type successValidator struct{}
 
-func (v *successValidator) Validate(t *fhir.Task) []error { return nil }
+func (v *successValidator) Validate(t *fhir.Task) []*validation.Error { return nil }
 
 type failureValidator struct{}
 
-func (v *failureValidator) Validate(t *fhir.Task) []error {
-	var errs []error
-	errs = append(errs, assert.AnError)
-	return append(errs, assert.AnError)
+func (v *failureValidator) Validate(t *fhir.Task) []*validation.Error {
+	var errs []*validation.Error
+	errs = append(errs, &validation.Error{Code: "E001"})
+	return append(errs, &validation.Error{Code: "E002"})
 }
