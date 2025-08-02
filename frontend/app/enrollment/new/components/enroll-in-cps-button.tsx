@@ -104,10 +104,8 @@ export default function EnrollInCpsButton({className}: Props) {
                 const operationOutcome: OperationOutcome = error.response?.data;
                 const operationOutcomeIssue = operationOutcome.issue?.find(issue => issue.code === 'invariant');
                 const validationErrors: Coding[] = operationOutcomeIssue?.details?.coding || [];
-                if (validationErrors.length > 0) {
-                    setValidationErrors(validationErrors);
-                    throw new Error("Validation errors");
-                }
+                setValidationErrors(validationErrors);
+                throw new Error("Validation errors");
             }
 
             throw new Error(`Failed to execute Task Bundle: ${error.message || "Unknown error"}`);

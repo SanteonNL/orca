@@ -189,15 +189,16 @@ describe("enroll in cps button test", () => {
         });
     });
 
-    it('displays combined validation error for both missing contact details', async () => {
+    it('displays unknown error message for empty validation errors', async () => {
         const validationError = {
             response: {
                 status: 400,
                 data: {
                     issue: [
                         {
-                            code: 'invariant', details: {
-                                coding: [{code: 'E0001'}, {code: 'E0002'}]
+                            code: 'invariant',
+                            details: {
+                                coding: []
                             }
                         }
                     ]
@@ -213,39 +214,11 @@ describe("enroll in cps button test", () => {
 
         await waitFor(() => {
             expect(screen.getByText('Er gaat iets mis')).toBeInTheDocument();
-            expect(screen.getByText(/Er zijn geen e-mailadres en telefoonnummer/)).toBeInTheDocument();
+            expect(screen.getByText(/Er is een onbekende fout opgetreden/)).toBeInTheDocument();
         });
     });
 
-    it('displays combined validation error for both invalid contact details', async () => {
-        const validationError = {
-            response: {
-                status: 400,
-                data: {
-                    issue: [
-                        {
-                            code: 'invariant', details: {
-                                coding: [{code: 'E0003'}, {code: 'E0004'}]
-                            }
-                        }
-                    ]
-                }
-            }
-        };
-        const mockTransaction = jest.fn().mockRejectedValue(validationError);
-        (useCpsClient as jest.Mock).mockReturnValue({transaction: mockTransaction});
-
-        render(<EnrollInCpsButton/>);
-
-        fireEvent.click(screen.getByRole('button'));
-
-        await waitFor(() => {
-            expect(screen.getByText('Er gaat iets mis')).toBeInTheDocument();
-            expect(screen.getByText(/Controleer het e-mailadres en telefoonnummer/)).toBeInTheDocument();
-        });
-    });
-
-    it('displays multiple validation error paragraphs for individual errors', async () => {
+    it('displays multiple validation error paragraphs for different error codes', async () => {
         const validationError = {
             response: {
                 status: 400,
@@ -272,6 +245,34 @@ describe("enroll in cps button test", () => {
             expect(paragraphs.length).toBeGreaterThan(1);
             expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
             expect(screen.getByText(/Controleer het e-mailadres/)).toBeInTheDocument();
+        });
+    });
+
+    it('displays unknown error message for unrecognized error codes', async () => {
+        const validationError = {
+            response: {
+                status: 400,
+                data: {
+                    issue: [
+                        {
+                            code: 'invariant', details: {
+                                coding: [{code: 'E9999'}]
+                            }
+                        }
+                    ]
+                }
+            }
+        };
+        const mockTransaction = jest.fn().mockRejectedValue(validationError);
+        (useCpsClient as jest.Mock).mockReturnValue({transaction: mockTransaction});
+
+        render(<EnrollInCpsButton/>);
+
+        fireEvent.click(screen.getByRole('button'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Er gaat iets mis')).toBeInTheDocument();
+            expect(screen.getByText(/Er is een onbekende fout opgetreden/)).toBeInTheDocument();
         });
     });
 

@@ -298,19 +298,28 @@ export function identifierToToken(identifier?: Identifier) {
 }
 
 
-export function codingToMessage(coding: Coding[]): String[] {
-
-    if (coding.length === 0) return [MessageType.Unknown];
+export function codingToMessage(codings: Coding[]): String[] {
+    debugger
+    if (!codings.length) return [MessageType.Unknown];
     const messages: String[] = [];
 
-    if (coding.some(x => x.code === "E0001") && coding.some(x => x.code === "E0002")) return [MessageType.NoEmailAndPhone];
-    if (coding.some(x => x.code === "E0003") && coding.some(x => x.code === "E0004")) return [MessageType.InvalidEmailAndPhone];
-    if (coding.some(x => x.code === "E0001")) messages.push( MessageType.NoEmail);
-    if (coding.some(x => x.code === "E0002")) messages.push( MessageType.NoPhone);
-    if (coding.some(x => x.code === "E0003")) messages.push( MessageType.InvalidEmail);
-    if (coding.some(x => x.code === "E0004")) messages.push( MessageType.InvalidPhone);
-
-    return messages.length > 0 ? messages : [MessageType.Unknown];
+    for (const coding of codings) {
+        switch (coding.code) {
+            case "E0001":
+                messages.push(MessageType.NoEmail);
+                break;
+            case "E0002":
+                messages.push(MessageType.NoPhone);
+                break;
+            case "E0003":
+                messages.push(MessageType.InvalidEmail);
+                break;
+            case "E0004":
+                messages.push(MessageType.InvalidPhone);
+                break;
+        }
+    }
+    return messages.length ? messages : [MessageType.Unknown];
 }
 
 export enum MessageType {
@@ -318,7 +327,5 @@ export enum MessageType {
     InvalidPhone = "Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw. ",
     NoEmail = "Er is geen e-mailadres van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het e-mailadres toe in het EPD en probeer het opnieuw.",
     NoPhone = "Er is geen telefoonnummer van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het telefoonnummer toe in het EPD en probeer het opnieuw.",
-    NoEmailAndPhone = "Er zijn geen e-mailadres en telefoonnummer van de patiënt gevonden in het EPD. Deze gegevens zijn nodig voor de aanmelding. Voeg het e-mailadres en telefoonnummer toe in het EPD en probeer het opnieuw.",
-    InvalidEmailAndPhone = "Controleer het e-mailadres en telefoonnummer van de patiënt in het EPD en probeer het opnieuw.",
     Unknown = "Er is een onbekende fout opgetreden. Probeer het later opnieuw of neem contact op met de beheerder."
 }
