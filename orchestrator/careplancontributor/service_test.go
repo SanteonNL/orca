@@ -888,7 +888,7 @@ func TestService_HandleSubscribeToTask(t *testing.T) {
 	require.NoError(t, err)
 
 	sseService := sse.New()
-	sseService.ServeHTTP = func(tenant string, topic string, writer http.ResponseWriter, request *http.Request) {
+	sseService.ServeHTTP = func(topic string, writer http.ResponseWriter, request *http.Request) {
 		log.Ctx(request.Context()).Info().Msgf("Unit-Test: Transform request to SSE stream for topic: %s", topic)
 	}
 

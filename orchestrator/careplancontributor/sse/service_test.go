@@ -59,8 +59,6 @@ func TestServeHTTP_Publishes(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	tenant := "testTenant"
-
 	// create a fake request with our cancellable context.
 	req := httptest.NewRequest("GET", "/subscribe/test", nil)
 	req = req.WithContext(ctx)
@@ -70,7 +68,7 @@ func TestServeHTTP_Publishes(t *testing.T) {
 	// Run ServeHTTP in a goroutine.
 	done := make(chan struct{})
 	go func() {
-		s.ServeHTTP(tenant, "test", frw, req)
+		s.ServeHTTP("test", frw, req)
 		close(done)
 	}()
 
@@ -86,7 +84,7 @@ func TestServeHTTP_Publishes(t *testing.T) {
 
 	// Publish a message.
 	msg := "hello world"
-	s.Publish(ctx, tenant, "test", msg)
+	s.Publish(ctx, "test", msg)
 
 	// Wait for a flush to occur (i.e. message has been written).
 	select {
@@ -126,15 +124,14 @@ func TestPublish_ChannelFull(t *testing.T) {
 
 	// Create a dummy client channel with a small buffer.
 	ch := make(chan string, 1)
-	tenant := "testTenant"
 	// Register the client under topic "full".
-	s.registerClient(tenant, "full", ch)
+	s.registerClient("full", ch)
 
 	// Fill the channel.
-	s.Publish(ctx, tenant, "full", "first")
+	s.Publish(ctx, "full", "first")
 	// At this point, the channel is full (buffer size is 1).
 	// Publish a message which should be dropped.
-	s.Publish(ctx, tenant, "full", "dropped")
+	s.Publish(ctx, "full", "dropped")
 
 	// Read from channel: should only receive the first message.
 	select {
@@ -155,14 +152,13 @@ func TestPublish_ChannelFull(t *testing.T) {
 	}
 
 	// Clean up.
-	s.unregisterClient(tenant, "full", ch)
+	s.unregisterClient("full", ch)
 }
 
 // TestRegisterAndUnregisterClient tests that registerClient and unregisterClient add and remove clients appropriately.
 func TestRegisterAndUnregisterClient(t *testing.T) {
 	s := New()
 	topic := "testTopic"
-	tenant := "testTenant"
 	ch := make(chan string, 10)
 
 	// Initially, topic should not exist.
@@ -173,10 +169,10 @@ func TestRegisterAndUnregisterClient(t *testing.T) {
 	s.mu.RUnlock()
 
 	// Register client.
-	s.registerClient(tenant, topic, ch)
+	s.registerClient(topic, ch)
 
 	s.mu.RLock()
-	clients, exists := s.clients[tenant][topic]
+	clients, exists := s.clients[topic]
 	s.mu.RUnlock()
 	if !exists {
 		t.Fatalf("expected topic %q to exist after registration", topic)
@@ -186,10 +182,10 @@ func TestRegisterAndUnregisterClient(t *testing.T) {
 	}
 
 	// Unregister client.
-	s.unregisterClient(tenant, topic, ch)
+	s.unregisterClient(topic, ch)
 
 	s.mu.RLock()
-	clients, exists = s.clients[tenant][topic]
+	clients, exists = s.clients[topic]
 	s.mu.RUnlock()
 	// Channel should be removed.
 	if exists {
@@ -209,11 +205,10 @@ func TestRegisterAndUnregisterClient(t *testing.T) {
 func TestUnregisterClient_RemovesTopicWhenEmpty(t *testing.T) {
 	s := New()
 	topic := "removeTopic"
-	tenant := "removeTenant"
 	ch := make(chan string, 10)
 
-	s.registerClient(tenant, topic, ch)
-	s.unregisterClient(tenant, topic, ch)
+	s.registerClient(topic, ch)
+	s.unregisterClient(topic, ch)
 
 	s.mu.RLock()
 	_, exists := s.clients[topic]
@@ -228,18 +223,17 @@ func TestUnregisterClient_RemovesTopicWhenEmpty(t *testing.T) {
 func TestUnregisterClient_MultipleClients(t *testing.T) {
 	s := New()
 	topic := "multiTopic"
-	tenant := "multiTenant"
 	ch1 := make(chan string, 10)
 	ch2 := make(chan string, 10)
 
-	s.registerClient(tenant, topic, ch1)
-	s.registerClient(tenant, topic, ch2)
+	s.registerClient(topic, ch1)
+	s.registerClient(topic, ch2)
 
 	// Unregister one client; the topic should still exist.
-	s.unregisterClient(tenant, topic, ch1)
+	s.unregisterClient(topic, ch1)
 
 	s.mu.RLock()
-	clients, exists := s.clients[tenant][topic]
+	clients, exists := s.clients[topic]
 	if !exists {
 		t.Fatalf("expected topic %q to exist", topic)
 	}
@@ -249,7 +243,7 @@ func TestUnregisterClient_MultipleClients(t *testing.T) {
 	s.mu.RUnlock()
 
 	// Unregister the remaining client; the topic should be removed.
-	s.unregisterClient(tenant, topic, ch2)
+	s.unregisterClient(topic, ch2)
 
 	s.mu.RLock()
 	_, exists = s.clients[topic]

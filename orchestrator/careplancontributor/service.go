@@ -464,7 +464,7 @@ func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http
 	}
 
 	// Subscribed task contains the taskIdentifier from the session, so we can subscribe to the task
-	s.sseService.ServeHTTP(tenant.ID, fmt.Sprintf("Task/%s", id), writer, request)
+	s.sseService.ServeHTTP(fmt.Sprintf("Task/%s", id), writer, request)
 }
 
 // handleProxyExternalRequestToEHR handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
@@ -749,15 +749,10 @@ func (s Service) publishTaskToSse(ctx context.Context, task *fhir.Task) error {
 		}
 	}
 
-	tenant, err := tenants.FromContext(ctx)
-	if err != nil {
-		return err
-	}
-
 	if parentTaskReference != "" {
-		s.sseService.Publish(ctx, tenant.ID, parentTaskReference, string(data))
+		s.sseService.Publish(ctx, parentTaskReference, string(data))
 	} else {
-		s.sseService.Publish(ctx, tenant.ID, fmt.Sprintf("Task/%s", *task.Id), string(data))
+		s.sseService.Publish(ctx, fmt.Sprintf("Task/%s", *task.Id), string(data))
 	}
 
 	return nil

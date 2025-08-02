@@ -15,20 +15,20 @@ import (
 // messages to all clients subscribed to a topic.
 type Service struct {
 	mu        sync.RWMutex
-	clients   map[string]map[string]map[chan string]struct{} // tenants -> topic -> clients
-	ServeHTTP func(tenant string, topic string, writer http.ResponseWriter, request *http.Request)
+	clients   map[string]map[chan string]struct{} // topic -> clients
+	ServeHTTP func(topic string, writer http.ResponseWriter, request *http.Request)
 }
 
 func New() *Service {
 	service := &Service{
-		clients: make(map[string]map[string]map[chan string]struct{}),
+		clients: make(map[string]map[chan string]struct{}),
 	}
 
 	service.ServeHTTP = service.defaultServeHTTP
 	return service
 }
 
-func (s *Service) defaultServeHTTP(tenant string, topic string, writer http.ResponseWriter, request *http.Request) {
+func (s *Service) defaultServeHTTP(topic string, writer http.ResponseWriter, request *http.Request) {
 	// Set headers for server-sent events (SSE)
 	writer.Header().Set("Content-Type", "text/event-stream")
 	writer.Header().Set("Cache-Control", "no-cache")
@@ -44,8 +44,8 @@ func (s *Service) defaultServeHTTP(tenant string, topic string, writer http.Resp
 
 	// Create a channel for the client and register it
 	msgCh := make(chan string, 10)
-	s.registerClient(tenant, topic, msgCh)
-	defer s.unregisterClient(tenant, topic, msgCh)
+	s.registerClient(topic, msgCh)
+	defer s.unregisterClient(topic, msgCh)
 
 	// A comment/ping as per SSE spec - marks the start of the stream
 	fmt.Fprintf(writer, ": ping\n\n")
@@ -66,29 +66,21 @@ func (s *Service) defaultServeHTTP(tenant string, topic string, writer http.Resp
 	}
 }
 
-func (s *Service) registerClient(tenant string, topic string, ch chan string) {
+func (s *Service) registerClient(topic string, ch chan string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if _, exists := s.clients[tenant]; !exists {
-		s.clients[tenant] = make(map[string]map[chan string]struct{})
+	if _, exists := s.clients[topic]; !exists {
+		s.clients[topic] = make(map[chan string]struct{})
 	}
-	if _, exists := s.clients[tenant][topic]; !exists {
-		s.clients[tenant][topic] = make(map[chan string]struct{})
-	}
-	s.clients[tenant][topic][ch] = struct{}{}
+	s.clients[topic][ch] = struct{}{}
 }
 
-func (s *Service) unregisterClient(tenant string, topic string, ch chan string) {
+func (s *Service) unregisterClient(topic string, ch chan string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	topics := s.clients[tenant]
-	if topics == nil {
-		log.Ctx(context.Background()).Warn().Msgf("No clients registered for tenant %s on topic %s", tenant, topic)
-		return
-	}
-	if clients, exists := topics[topic]; exists {
+	if clients, exists := s.clients[topic]; exists {
 		delete(clients, ch)
 		close(ch)
 		if len(clients) == 0 {
@@ -97,16 +89,11 @@ func (s *Service) unregisterClient(tenant string, topic string, ch chan string) 
 	}
 }
 
-func (s *Service) Publish(ctx context.Context, tenant string, topic string, msg string) {
+func (s *Service) Publish(ctx context.Context, topic string, msg string) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	topics := s.clients[tenant]
-	if topics == nil {
-		log.Ctx(ctx).Warn().Msgf("No clients registered for tenant %s on topic %s", tenant, topic)
-		return
-	}
-	for ch := range topics[topic] {
+	for ch := range s.clients[topic] {
 		select {
 		case ch <- msg:
 		default:
