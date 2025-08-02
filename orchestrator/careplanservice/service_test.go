@@ -237,7 +237,14 @@ func TestService_ValidationErrorHandling(t *testing.T) {
 	require.NotNil(t, target)
 	require.NotEmpty(t, target.Issue)
 	require.Equal(t, InvalidPhone, *target.Issue[0].Details.Coding[0].Code)
-	require.Equal(t, InvalidEmail, *target.Issue[0].Details.Coding[1].Code)
+	var codes []string
+	for _, coding := range target.Issue[0].Details.Coding {
+		if coding.Code != nil {
+			codes = append(codes, *coding.Code)
+		}
+	}
+	assert.Contains(t, codes, InvalidPhone)
+	assert.Contains(t, codes, InvalidEmail)
 }
 
 func TestService_Handle(t *testing.T) {
