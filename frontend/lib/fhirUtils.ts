@@ -298,19 +298,19 @@ export function identifierToToken(identifier?: Identifier) {
 }
 
 
-export function codingToMessage(coding: Coding[]): MessageType {
+export function codingToMessage(coding: Coding[]): String[] {
 
-    if (coding.length === 0) return MessageType.Unknown;
+    if (coding.length === 0) return [MessageType.Unknown];
+    const messages: String[] = [];
 
+    if (coding.some(x => x.code === "E0001") && coding.some(x => x.code === "E0002")) return [MessageType.NoEmailAndPhone];
+    if (coding.some(x => x.code === "E0003") && coding.some(x => x.code === "E0004")) return [MessageType.InvalidEmailAndPhone];
+    if (coding.some(x => x.code === "E0001")) messages.push( MessageType.NoEmail);
+    if (coding.some(x => x.code === "E0002")) messages.push( MessageType.NoPhone);
+    if (coding.some(x => x.code === "E0003")) messages.push( MessageType.InvalidEmail);
+    if (coding.some(x => x.code === "E0004")) messages.push( MessageType.InvalidPhone);
 
-    if (coding.some(x => x.code === "E0001") && coding.some(x => x.code === "E0002")) return MessageType.NoEmailAndPhone;
-    if (coding.some(x => x.code === "E0001")) return MessageType.NoEmail;
-    if (coding.some(x => x.code === "E0002")) return MessageType.NoPhone;
-    if (coding.some(x => x.code === "E0003") && coding.some(x => x.code === "E0004")) return MessageType.InvalidEmailAndPhone;
-    if (coding.some(x => x.code === "E0003")) return MessageType.InvalidEmail;
-    if (coding.some(x => x.code === "E0004")) return MessageType.InvalidPhone;
-
-    return MessageType.Unknown;
+    return messages.length > 0 ? messages : [MessageType.Unknown];
 }
 
 export enum MessageType {
