@@ -1,5 +1,5 @@
-import { Coding } from 'fhir/r4'
-import { codingToMessage} from "@/lib/fhirUtils";
+import {Coding} from 'fhir/r4'
+import {codingToMessage} from "@/lib/fhirUtils";
 import {CircleAlert} from "lucide-react";
 
 
@@ -7,7 +7,7 @@ interface ValidationErrorsProps {
     validationErrors: Coding[]
 }
 
-export default function ValidationErrors({ validationErrors }: ValidationErrorsProps) {
+export default function ValidationErrors({validationErrors}: ValidationErrorsProps) {
     const messages = codingToMessage(validationErrors);
 
     return (
@@ -15,7 +15,7 @@ export default function ValidationErrors({ validationErrors }: ValidationErrorsP
             <div className="flex items-start gap-3">
                 <div className="flex-shrink-0">
                     <div className="w-6 h-6 flex items-center justify-center">
-                        <CircleAlert color="red" />
+                        <CircleAlert color="red"/>
                     </div>
                 </div>
                 <div className="flex-grow">

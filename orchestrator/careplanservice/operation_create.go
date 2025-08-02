@@ -24,8 +24,7 @@ type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
 	authzPolicy Policy[T]
 	profile     profile.Provider
 	fhirURL     *url.URL
-
-	validator validation.Validator[T]
+	validator   validation.Validator[T]
 }
 
 func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
