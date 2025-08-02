@@ -1189,3 +1189,1031 @@ func ResourceID(resource interface{}) *string {
 	}
 }
 
+func SetSource(resource interface{}, source *string) {
+	switch resource.(type) {
+	case *fhir.Account:
+		meta := resource.(*fhir.Account).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Account).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ActivityDefinition:
+		meta := resource.(*fhir.ActivityDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ActivityDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.AdverseEvent:
+		meta := resource.(*fhir.AdverseEvent).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.AdverseEvent).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.AllergyIntolerance:
+		meta := resource.(*fhir.AllergyIntolerance).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.AllergyIntolerance).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Appointment:
+		meta := resource.(*fhir.Appointment).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Appointment).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.AppointmentResponse:
+		meta := resource.(*fhir.AppointmentResponse).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.AppointmentResponse).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.AuditEvent:
+		meta := resource.(*fhir.AuditEvent).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.AuditEvent).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Basic:
+		meta := resource.(*fhir.Basic).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Basic).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Binary:
+		meta := resource.(*fhir.Binary).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Binary).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.BiologicallyDerivedProduct:
+		meta := resource.(*fhir.BiologicallyDerivedProduct).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.BiologicallyDerivedProduct).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.BodyStructure:
+		meta := resource.(*fhir.BodyStructure).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.BodyStructure).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Bundle:
+		meta := resource.(*fhir.Bundle).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Bundle).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.CapabilityStatement:
+		meta := resource.(*fhir.CapabilityStatement).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.CapabilityStatement).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.CarePlan:
+		meta := resource.(*fhir.CarePlan).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.CarePlan).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.CareTeam:
+		meta := resource.(*fhir.CareTeam).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.CareTeam).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.CatalogEntry:
+		meta := resource.(*fhir.CatalogEntry).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.CatalogEntry).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ChargeItem:
+		meta := resource.(*fhir.ChargeItem).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ChargeItem).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ChargeItemDefinition:
+		meta := resource.(*fhir.ChargeItemDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ChargeItemDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Claim:
+		meta := resource.(*fhir.Claim).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Claim).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ClaimResponse:
+		meta := resource.(*fhir.ClaimResponse).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ClaimResponse).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ClinicalImpression:
+		meta := resource.(*fhir.ClinicalImpression).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ClinicalImpression).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.CodeSystem:
+		meta := resource.(*fhir.CodeSystem).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.CodeSystem).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Communication:
+		meta := resource.(*fhir.Communication).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Communication).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.CommunicationRequest:
+		meta := resource.(*fhir.CommunicationRequest).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.CommunicationRequest).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.CompartmentDefinition:
+		meta := resource.(*fhir.CompartmentDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.CompartmentDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Composition:
+		meta := resource.(*fhir.Composition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Composition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ConceptMap:
+		meta := resource.(*fhir.ConceptMap).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ConceptMap).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Condition:
+		meta := resource.(*fhir.Condition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Condition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Consent:
+		meta := resource.(*fhir.Consent).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Consent).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Contract:
+		meta := resource.(*fhir.Contract).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Contract).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Coverage:
+		meta := resource.(*fhir.Coverage).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Coverage).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.CoverageEligibilityRequest:
+		meta := resource.(*fhir.CoverageEligibilityRequest).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.CoverageEligibilityRequest).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.CoverageEligibilityResponse:
+		meta := resource.(*fhir.CoverageEligibilityResponse).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.CoverageEligibilityResponse).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.DetectedIssue:
+		meta := resource.(*fhir.DetectedIssue).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.DetectedIssue).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Device:
+		meta := resource.(*fhir.Device).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Device).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.DeviceDefinition:
+		meta := resource.(*fhir.DeviceDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.DeviceDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.DeviceMetric:
+		meta := resource.(*fhir.DeviceMetric).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.DeviceMetric).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.DeviceRequest:
+		meta := resource.(*fhir.DeviceRequest).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.DeviceRequest).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.DeviceUseStatement:
+		meta := resource.(*fhir.DeviceUseStatement).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.DeviceUseStatement).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.DiagnosticReport:
+		meta := resource.(*fhir.DiagnosticReport).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.DiagnosticReport).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.DocumentManifest:
+		meta := resource.(*fhir.DocumentManifest).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.DocumentManifest).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.DocumentReference:
+		meta := resource.(*fhir.DocumentReference).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.DocumentReference).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.EffectEvidenceSynthesis:
+		meta := resource.(*fhir.EffectEvidenceSynthesis).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.EffectEvidenceSynthesis).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Encounter:
+		meta := resource.(*fhir.Encounter).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Encounter).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Endpoint:
+		meta := resource.(*fhir.Endpoint).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Endpoint).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.EnrollmentRequest:
+		meta := resource.(*fhir.EnrollmentRequest).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.EnrollmentRequest).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.EnrollmentResponse:
+		meta := resource.(*fhir.EnrollmentResponse).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.EnrollmentResponse).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.EpisodeOfCare:
+		meta := resource.(*fhir.EpisodeOfCare).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.EpisodeOfCare).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.EventDefinition:
+		meta := resource.(*fhir.EventDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.EventDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Evidence:
+		meta := resource.(*fhir.Evidence).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Evidence).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.EvidenceVariable:
+		meta := resource.(*fhir.EvidenceVariable).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.EvidenceVariable).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ExampleScenario:
+		meta := resource.(*fhir.ExampleScenario).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ExampleScenario).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ExplanationOfBenefit:
+		meta := resource.(*fhir.ExplanationOfBenefit).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ExplanationOfBenefit).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.FamilyMemberHistory:
+		meta := resource.(*fhir.FamilyMemberHistory).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.FamilyMemberHistory).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Flag:
+		meta := resource.(*fhir.Flag).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Flag).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Goal:
+		meta := resource.(*fhir.Goal).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Goal).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.GraphDefinition:
+		meta := resource.(*fhir.GraphDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.GraphDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Group:
+		meta := resource.(*fhir.Group).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Group).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.GuidanceResponse:
+		meta := resource.(*fhir.GuidanceResponse).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.GuidanceResponse).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.HealthcareService:
+		meta := resource.(*fhir.HealthcareService).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.HealthcareService).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ImagingStudy:
+		meta := resource.(*fhir.ImagingStudy).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ImagingStudy).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Immunization:
+		meta := resource.(*fhir.Immunization).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Immunization).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ImmunizationEvaluation:
+		meta := resource.(*fhir.ImmunizationEvaluation).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ImmunizationEvaluation).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ImmunizationRecommendation:
+		meta := resource.(*fhir.ImmunizationRecommendation).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ImmunizationRecommendation).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ImplementationGuide:
+		meta := resource.(*fhir.ImplementationGuide).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ImplementationGuide).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.InsurancePlan:
+		meta := resource.(*fhir.InsurancePlan).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.InsurancePlan).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Invoice:
+		meta := resource.(*fhir.Invoice).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Invoice).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Library:
+		meta := resource.(*fhir.Library).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Library).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Linkage:
+		meta := resource.(*fhir.Linkage).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Linkage).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.List:
+		meta := resource.(*fhir.List).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.List).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Location:
+		meta := resource.(*fhir.Location).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Location).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Measure:
+		meta := resource.(*fhir.Measure).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Measure).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MeasureReport:
+		meta := resource.(*fhir.MeasureReport).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MeasureReport).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Media:
+		meta := resource.(*fhir.Media).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Media).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Medication:
+		meta := resource.(*fhir.Medication).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Medication).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicationAdministration:
+		meta := resource.(*fhir.MedicationAdministration).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicationAdministration).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicationDispense:
+		meta := resource.(*fhir.MedicationDispense).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicationDispense).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicationKnowledge:
+		meta := resource.(*fhir.MedicationKnowledge).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicationKnowledge).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicationRequest:
+		meta := resource.(*fhir.MedicationRequest).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicationRequest).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicationStatement:
+		meta := resource.(*fhir.MedicationStatement).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicationStatement).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProduct:
+		meta := resource.(*fhir.MedicinalProduct).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProduct).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProductAuthorization:
+		meta := resource.(*fhir.MedicinalProductAuthorization).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProductAuthorization).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProductContraindication:
+		meta := resource.(*fhir.MedicinalProductContraindication).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProductContraindication).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProductIndication:
+		meta := resource.(*fhir.MedicinalProductIndication).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProductIndication).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProductIngredient:
+		meta := resource.(*fhir.MedicinalProductIngredient).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProductIngredient).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProductInteraction:
+		meta := resource.(*fhir.MedicinalProductInteraction).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProductInteraction).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProductManufactured:
+		meta := resource.(*fhir.MedicinalProductManufactured).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProductManufactured).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProductPackaged:
+		meta := resource.(*fhir.MedicinalProductPackaged).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProductPackaged).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProductPharmaceutical:
+		meta := resource.(*fhir.MedicinalProductPharmaceutical).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProductPharmaceutical).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MedicinalProductUndesirableEffect:
+		meta := resource.(*fhir.MedicinalProductUndesirableEffect).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MedicinalProductUndesirableEffect).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MessageDefinition:
+		meta := resource.(*fhir.MessageDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MessageDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MessageHeader:
+		meta := resource.(*fhir.MessageHeader).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MessageHeader).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.MolecularSequence:
+		meta := resource.(*fhir.MolecularSequence).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.MolecularSequence).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.NamingSystem:
+		meta := resource.(*fhir.NamingSystem).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.NamingSystem).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.NutritionOrder:
+		meta := resource.(*fhir.NutritionOrder).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.NutritionOrder).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Observation:
+		meta := resource.(*fhir.Observation).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Observation).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ObservationDefinition:
+		meta := resource.(*fhir.ObservationDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ObservationDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.OperationDefinition:
+		meta := resource.(*fhir.OperationDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.OperationDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.OperationOutcome:
+		meta := resource.(*fhir.OperationOutcome).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.OperationOutcome).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Organization:
+		meta := resource.(*fhir.Organization).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Organization).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.OrganizationAffiliation:
+		meta := resource.(*fhir.OrganizationAffiliation).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.OrganizationAffiliation).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Parameters:
+		meta := resource.(*fhir.Parameters).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Parameters).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Patient:
+		meta := resource.(*fhir.Patient).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Patient).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.PaymentNotice:
+		meta := resource.(*fhir.PaymentNotice).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.PaymentNotice).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.PaymentReconciliation:
+		meta := resource.(*fhir.PaymentReconciliation).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.PaymentReconciliation).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Person:
+		meta := resource.(*fhir.Person).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Person).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.PlanDefinition:
+		meta := resource.(*fhir.PlanDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.PlanDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Practitioner:
+		meta := resource.(*fhir.Practitioner).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Practitioner).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.PractitionerRole:
+		meta := resource.(*fhir.PractitionerRole).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.PractitionerRole).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Procedure:
+		meta := resource.(*fhir.Procedure).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Procedure).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Provenance:
+		meta := resource.(*fhir.Provenance).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Provenance).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Questionnaire:
+		meta := resource.(*fhir.Questionnaire).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Questionnaire).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.QuestionnaireResponse:
+		meta := resource.(*fhir.QuestionnaireResponse).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.QuestionnaireResponse).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.RelatedPerson:
+		meta := resource.(*fhir.RelatedPerson).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.RelatedPerson).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.RequestGroup:
+		meta := resource.(*fhir.RequestGroup).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.RequestGroup).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ResearchDefinition:
+		meta := resource.(*fhir.ResearchDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ResearchDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ResearchElementDefinition:
+		meta := resource.(*fhir.ResearchElementDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ResearchElementDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ResearchStudy:
+		meta := resource.(*fhir.ResearchStudy).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ResearchStudy).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ResearchSubject:
+		meta := resource.(*fhir.ResearchSubject).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ResearchSubject).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.RiskAssessment:
+		meta := resource.(*fhir.RiskAssessment).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.RiskAssessment).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.RiskEvidenceSynthesis:
+		meta := resource.(*fhir.RiskEvidenceSynthesis).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.RiskEvidenceSynthesis).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Schedule:
+		meta := resource.(*fhir.Schedule).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Schedule).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SearchParameter:
+		meta := resource.(*fhir.SearchParameter).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SearchParameter).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ServiceRequest:
+		meta := resource.(*fhir.ServiceRequest).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ServiceRequest).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Slot:
+		meta := resource.(*fhir.Slot).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Slot).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Specimen:
+		meta := resource.(*fhir.Specimen).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Specimen).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SpecimenDefinition:
+		meta := resource.(*fhir.SpecimenDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SpecimenDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.StructureDefinition:
+		meta := resource.(*fhir.StructureDefinition).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.StructureDefinition).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.StructureMap:
+		meta := resource.(*fhir.StructureMap).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.StructureMap).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Subscription:
+		meta := resource.(*fhir.Subscription).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Subscription).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Substance:
+		meta := resource.(*fhir.Substance).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Substance).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SubstanceNucleicAcid:
+		meta := resource.(*fhir.SubstanceNucleicAcid).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SubstanceNucleicAcid).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SubstancePolymer:
+		meta := resource.(*fhir.SubstancePolymer).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SubstancePolymer).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SubstanceProtein:
+		meta := resource.(*fhir.SubstanceProtein).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SubstanceProtein).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SubstanceReferenceInformation:
+		meta := resource.(*fhir.SubstanceReferenceInformation).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SubstanceReferenceInformation).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SubstanceSourceMaterial:
+		meta := resource.(*fhir.SubstanceSourceMaterial).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SubstanceSourceMaterial).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SubstanceSpecification:
+		meta := resource.(*fhir.SubstanceSpecification).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SubstanceSpecification).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SupplyDelivery:
+		meta := resource.(*fhir.SupplyDelivery).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SupplyDelivery).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.SupplyRequest:
+		meta := resource.(*fhir.SupplyRequest).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.SupplyRequest).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.Task:
+		meta := resource.(*fhir.Task).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.Task).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.TerminologyCapabilities:
+		meta := resource.(*fhir.TerminologyCapabilities).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.TerminologyCapabilities).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.TestReport:
+		meta := resource.(*fhir.TestReport).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.TestReport).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.TestScript:
+		meta := resource.(*fhir.TestScript).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.TestScript).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.ValueSet:
+		meta := resource.(*fhir.ValueSet).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.ValueSet).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.VerificationResult:
+		meta := resource.(*fhir.VerificationResult).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.VerificationResult).Meta = meta
+		}
+		meta.Source = source
+	case *fhir.VisionPrescription:
+		meta := resource.(*fhir.VisionPrescription).Meta
+		if meta == nil {
+			meta = &fhir.Meta{}
+			resource.(*fhir.VisionPrescription).Meta = meta
+		}
+		meta.Source = source
+	default:
+		panic("SetSource called with non-FHIR resource, or not a pointer: " + fmt.Sprintf("%T", resource))
+	}
+}

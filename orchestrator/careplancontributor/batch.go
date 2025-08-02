@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -14,18 +15,24 @@ import (
 )
 
 func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
-	if s.ehrFhirProxy == nil {
-		return nil, coolfhir.BadRequest("EHR API is not supported")
-	}
-	log.Ctx(httpRequest.Context()).Debug().Msg("Handling external FHIR API request")
-	_, err := s.authorizeScpMember(httpRequest)
+	tenant, err := tenants.FromContext(httpRequest.Context())
 	if err != nil {
 		return nil, err
 	}
-	return s.doHandleBatch(httpRequest, requestBundle)
+	fhirClient := s.ehrFHIRClientByTenant[tenant.ID]
+	if fhirClient == nil {
+		return nil, coolfhir.BadRequest("EHR API is not supported")
+	}
+
+	log.Ctx(httpRequest.Context()).Debug().Msg("Handling external FHIR API request")
+	_, err = s.authorizeScpMember(httpRequest)
+	if err != nil {
+		return nil, err
+	}
+	return s.doHandleBatch(httpRequest, requestBundle, fhirClient)
 }
 
-func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
+func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bundle, fhirClient fhirclient.Client) (*fhir.Bundle, error) {
 	responseBundle := coolfhir.BatchResponse()
 	for _, requestEntry := range requestBundle.Entry {
 		if requestEntry.Request == nil || requestEntry.Request.Method != fhir.HTTPVerbGET {
@@ -52,10 +59,10 @@ func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bu
 		var err error
 		if !strings.Contains(requestEntry.Request.Url, "/") {
 			// It's a search operation
-			err = s.ehrFhirClient.SearchWithContext(httpRequest.Context(), requestURL.Path, requestURL.Query(), &responseData, requestOpts...)
+			err = fhirClient.SearchWithContext(httpRequest.Context(), requestURL.Path, requestURL.Query(), &responseData, requestOpts...)
 		} else {
 			// It's a read operation
-			err = s.ehrFhirClient.ReadWithContext(httpRequest.Context(), requestURL.Path, &responseData, requestOpts...)
+			err = fhirClient.ReadWithContext(httpRequest.Context(), requestURL.Path, &responseData, requestOpts...)
 		}
 		if err != nil {
 			var opOutcomeErr fhirclient.OperationOutcomeError

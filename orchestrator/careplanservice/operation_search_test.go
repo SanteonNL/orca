@@ -2,8 +2,10 @@ package careplanservice
 
 import (
 	"context"
+	"encoding/json"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
@@ -13,6 +15,7 @@ import (
 
 func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 	ctx := context.Background()
+	baseURL := must.ParseURL("https://example.com/fhir")
 	t.Run("no results", func(t *testing.T) {
 		fhirClient := &test.StubFHIRClient{}
 		request := FHIRHandlerRequest{
@@ -21,8 +24,8 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRSearchOperationHandler[fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: AnyonePolicy[fhir.Task]{},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       AnyonePolicy[fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -47,11 +50,12 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 			QueryParams:   map[string][]string{"_id": {"123"}},
 			Principal:     auth.TestPrincipal2,
 			LocalIdentity: &auth.TestPrincipal1.Organization.Identifier[0],
+			BaseURL:       baseURL,
 		}
 		tx := coolfhir.Transaction()
-		result, err := FHIRSearchOperationHandler[fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: AnyonePolicy[fhir.Task]{},
+		result, err := FHIRSearchOperationHandler[*fhir.Task]{
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       AnyonePolicy[*fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)
@@ -59,6 +63,15 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Len(t, searchResults, 1)
 		assert.Contains(t, string(searchResults[0].Resource), "123")
+
+		t.Run("check meta.source", func(t *testing.T) {
+			var task fhir.Task
+			err = json.Unmarshal(searchResults[0].Resource, &task)
+			assert.NoError(t, err)
+			assert.NotNil(t, task.Meta)
+			assert.Equal(t, "https://example.com/fhir/Task/123", *task.Meta.Source)
+		})
+
 		assert.Empty(t, notifications)
 		assert.Len(t, tx.Entry, 1)
 		taskRef := fhir.Reference{
@@ -84,8 +97,8 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRSearchOperationHandler[fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: TestPolicy[fhir.Task]{},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       TestPolicy[fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		searchResults, notifications, err := result(nil)
@@ -110,8 +123,8 @@ func TestFHIRSearchOperationHandler_Handle(t *testing.T) {
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRSearchOperationHandler[fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: TestPolicy[fhir.Task]{Error: assert.AnError},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       TestPolicy[fhir.Task]{Error: assert.AnError},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		searchResults, notifications, err := result(nil)

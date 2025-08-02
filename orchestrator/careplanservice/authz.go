@@ -4,7 +4,6 @@ package careplanservice
 import (
 	"context"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -106,7 +105,7 @@ var _ Policy[any] = &RelatedResourcePolicy[any, any]{}
 // RelatedResourcePolicy is a policy that allows access if the user has access to the related resource(s).
 // For instance, if the user has access to a ServiceRequest, if the user has access to the related Task.
 type RelatedResourcePolicy[T any, R any] struct {
-	fhirClient            fhirclient.Client
+	fhirClientFactory     FHIRClientFactory
 	relatedResourcePolicy Policy[R]
 	// relatedResourceSearchParams is a function that returns the search parameters for the related resource.
 	// If the resource lacks a reference to the related resource, this function should return nil for searchParams.
@@ -123,8 +122,8 @@ func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, 
 		}, nil
 	}
 	searchHandler := FHIRSearchOperationHandler[R]{
-		fhirClient:  r.fhirClient,
-		authzPolicy: r.relatedResourcePolicy,
+		fhirClientFactory: r.fhirClientFactory,
+		authzPolicy:       r.relatedResourcePolicy,
 	}
 	const maxIterations = 100
 	for i := 0; i < maxIterations; i++ {

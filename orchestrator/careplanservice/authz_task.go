@@ -2,17 +2,16 @@ package careplanservice
 
 import (
 	"context"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
 )
 
-func ReadTaskAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.Task] {
+func ReadTaskAuthzPolicy(fhirClientFactory FHIRClientFactory) Policy[*fhir.Task] {
 	return AnyMatchPolicy[*fhir.Task]{
 		Policies: []Policy[*fhir.Task]{
 			TaskOwnerOrRequesterPolicy[fhir.Task]{},
 			RelatedResourcePolicy[*fhir.Task, *fhir.CarePlan]{
-				fhirClient:            fhirClient,
+				fhirClientFactory:     fhirClientFactory,
 				relatedResourcePolicy: CareTeamMemberPolicy[fhir.CarePlan]{},
 				relatedResourceSearchParams: func(ctx context.Context, resource *fhir.Task) (string, url.Values) {
 					var ids []string

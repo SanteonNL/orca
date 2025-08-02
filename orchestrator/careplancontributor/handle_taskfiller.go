@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/slices"
@@ -39,7 +40,16 @@ func (t TaskRejection) Error() string {
 }
 
 func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) error {
-	log.Ctx(ctx).Info().Msgf("Running handleTaskNotification for Task %s", *task.Id)
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return err
+	}
+	if !tenant.TaskEngine.Enabled {
+		log.Ctx(ctx).Debug().Msgf("TaskEngine is disabled for this tenant - skipping Task notification handling (task=Task/%s)", *task.Id)
+		return nil
+	}
+
+	log.Ctx(ctx).Info().Msgf("Running TaskEngine for notification (task=Task/%s)", *task.Id)
 
 	if !coolfhir.IsScpTask(task) {
 		log.Ctx(ctx).Info().Msg("Task is not an SCP Task - skipping")

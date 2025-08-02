@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,14 +16,13 @@ import (
 
 // handleSearchResource is a generic function to search for a resource of a given type and return the results
 // it returns a processed list of the required resource type, the full bundle and an error
-func handleSearchResource[T any](ctx context.Context, s *Service, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
+func handleSearchResource[T any](ctx context.Context, fhirClient fhirclient.Client, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
 	form := url.Values{}
 	for k, v := range queryParams {
 		form.Add(k, strings.Join(v, ","))
 	}
-
 	var bundle fhir.Bundle
-	err := s.fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
+	err := fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
 		return nil, &fhir.Bundle{}, err
 	}
@@ -45,4 +45,14 @@ func validatePrincipalInCareTeam(principal auth.Principal, careTeam *fhir.CareTe
 		}
 	}
 	return nil
+}
+
+func updateMetaSource(resource any, fhirBaseURL *url.URL) {
+	resourceType := coolfhir.ResourceType(resource)
+	resourceID := coolfhir.ResourceID(resource)
+	if resourceID == nil {
+		return
+	}
+	source := fhirBaseURL.JoinPath(resourceType, *resourceID).String()
+	coolfhir.SetSource(resource, to.Ptr(source))
 }

@@ -68,7 +68,7 @@ echo "    Hospital DID: $HOSPITAL_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "hospital" "${HOSPITAL_DID}" "4567" "Demo Hospital" "Amsterdam"
 echo "  Registering on Nuts Discovery Service"
-curl -s -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirBaseURL\": \"${HOSPITAL_URL}/cpc/fhir\", \"fhirNotificationURL\": \"${HOSPITAL_URL}/cpc/fhir\"}}" http://nutsnode:8081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
+curl -s -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirBaseURL\": \"${HOSPITAL_URL}/cpc/hospital/fhir\", \"fhirNotificationURL\": \"${HOSPITAL_URL}/cpc/hospital/fhir\"}}" http://nutsnode:8081/internal/discovery/v1/dev:HomeMonitoring2024/hospital
 
 echo "Creating stack for Clinic..."
 export CLINIC_URL=http://clinic_orchestrator:8080
@@ -78,5 +78,5 @@ echo "    Clinic DID: $CLINIC_DID"
 echo "  Self-issuing an NutsUraCredential"
 issueUraCredential "clinic" "${CLINIC_DID}" "1234" "Demo Clinic" "Utrecht"
 echo "  Registering on Nuts Discovery Service"
-curl -s -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirBaseURL\": \"${CLINIC_URL}/cpc/fhir\", \"fhirNotificationURL\": \"${CLINIC_URL}/cpc/fhir\"}}" http://nutsnode:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
+curl -s -X POST -H "Content-Type: application/json" -d "{\"registrationParameters\":{\"fhirBaseURL\": \"${CLINIC_URL}/cpc/clinic/fhir\", \"fhirNotificationURL\": \"${CLINIC_URL}/cpc/clinic/fhir\"}}" http://nutsnode:8081/internal/discovery/v1/dev:HomeMonitoring2024/clinic
 

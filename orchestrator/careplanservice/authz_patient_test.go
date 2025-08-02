@@ -67,7 +67,7 @@ func TestPatientAuthzPolicy(t *testing.T) {
 		})
 	})
 	t.Run("read", func(t *testing.T) {
-		policy := ReadPatientAuthzPolicy(fhirClient)
+		policy := ReadPatientAuthzPolicy(FHIRClientFactoryFor(fhirClient))
 		testPolicies(t, []AuthzPolicyTest[*fhir.Patient]{
 			{
 				name:      "allow (in CareTeam)",

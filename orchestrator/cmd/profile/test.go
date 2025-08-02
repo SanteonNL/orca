@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/csd"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
-	"net/url"
 	"strings"
 )
 
@@ -32,7 +32,12 @@ type TestProfile struct {
 	CSD                    csd.Directory
 }
 
-func (t TestProfile) CapabilityStatement(cp *fhir.CapabilityStatement) {
+func (t TestProfile) CapabilityStatement(ctx context.Context, cp *fhir.CapabilityStatement) error {
+	// Get tenant to mimic the behavior of a real profile
+	if _, err := tenants.FromContext(ctx); err != nil {
+		return err
+	}
+
 	cp.Rest[0].Security = &fhir.CapabilityStatementRestSecurity{
 		Service: []fhir.CodeableConcept{
 			{
@@ -45,9 +50,14 @@ func (t TestProfile) CapabilityStatement(cp *fhir.CapabilityStatement) {
 			},
 		},
 	}
+	return nil
 }
 
-func (t TestProfile) Identities(_ context.Context) ([]fhir.Organization, error) {
+func (t TestProfile) Identities(ctx context.Context) ([]fhir.Organization, error) {
+	// Get tenant to mimic the behavior of a real profile
+	if _, err := tenants.FromContext(ctx); err != nil {
+		return nil, err
+	}
 	return []fhir.Organization{t.Principal.Organization}, nil
 }
 
@@ -55,8 +65,13 @@ func (t TestProfile) CsdDirectory() csd.Directory {
 	return t.CSD
 }
 
-func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request) {
+func (t TestProfile) Authenticator(fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request) {
 	return func(writer http.ResponseWriter, request *http.Request) {
+		// Get tenant to mimic the behavior of a real profile
+		if _, err := tenants.FromContext(request.Context()); err != nil {
+			panic(err)
+		}
+
 		authHeader := request.Header.Get("Authorization")
 		if authHeader == "" {
 			writer.WriteHeader(http.StatusUnauthorized)
@@ -88,7 +103,12 @@ func (t TestProfile) Authenticator(_ *url.URL, fn func(writer http.ResponseWrite
 	}
 }
 
-func (t TestProfile) HttpClient(_ context.Context, _ fhir.Identifier) (*http.Client, error) {
+func (t TestProfile) HttpClient(ctx context.Context, _ fhir.Identifier) (*http.Client, error) {
+	// Get tenant to mimic the behavior of a real profile
+	if _, err := tenants.FromContext(ctx); err != nil {
+		return nil, err
+	}
+
 	p := t.Principal
 	if p != nil {
 		p = auth.TestPrincipal1

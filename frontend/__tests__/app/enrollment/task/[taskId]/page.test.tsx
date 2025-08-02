@@ -9,6 +9,15 @@ import * as applaunch from '@/app/applaunch';
 
 jest.mock('@/lib/store/task-progress-store');
 jest.mock('@/lib/store/enrollment-store');
+const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
+const mockScpClient = {}
+jest.mock('@/lib/store/context-store', () => ({
+    useContextStore: jest.fn(() => ({
+        launchContext: {taskIdentifier: 'task-id-123'},
+        cpsClient: mockCpsClient,
+        scpClient: mockScpClient
+    }))
+}))
 jest.mock('next/navigation');
 jest.mock('@/lib/fhirRender');
 jest.mock('@/app/applaunch');
@@ -210,7 +219,7 @@ describe("taskid page tests", () => {
         expect(screen.getByText('Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
     });
 
-    it('displays launch buttons when task is accepted and apps available', async () => {
+    it('displays launch buttons when task is in-progress and apps available', async () => {
         const mockApps = [
             {Name: 'App 1', URL: 'http://app1.example.com'},
             {Name: 'App 2', URL: 'http://app2.example.com'}

@@ -2,7 +2,6 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import '@testing-library/jest-dom'
 import QuestionnaireRenderer from '@/app/enrollment/components/questionnaire-renderer'
 import useEnrollmentStore from '@/lib/store/enrollment-store'
-import useCpsClient from '@/hooks/use-cps-client'
 import * as fhirUtils from '@/lib/fhirUtils'
 import * as populateUtils from '../../../../app/utils/populate'
 import {useQuestionnaireResponseStore} from "@aehrc/smart-forms-renderer";
@@ -75,7 +74,14 @@ jest.mock('@aehrc/smart-forms-renderer', () => ({
 
 jest.mock('sonner', () => ({toast: {error: jest.fn(), success: jest.fn(),}}))
 jest.mock('@/lib/store/enrollment-store')
-jest.mock('@/hooks/use-cps-client')
+
+const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
+jest.mock('@/lib/store/context-store', () => ({
+    useContextStore: jest.fn(() => ({
+        launchContext: {taskIdentifier: 'task-id-123'},
+        cpsClient: mockCpsClient
+    }))
+}))
 jest.mock('@/lib/fhirUtils')
 jest.mock('../../../../app/utils/populate')
 jest.mock('@tanstack/react-query', () => ({
@@ -92,7 +98,6 @@ beforeEach(() => {
     jest.restoreAllMocks();
     mockResponseIsValid.mockReturnValue(true);
     (useEnrollmentStore as jest.Mock).mockReturnValue({patient: mockPatient, practitioner: mockPractitioner});
-    (useCpsClient as jest.Mock).mockReturnValue({transaction: jest.fn().mockResolvedValue({})});
     (fhirUtils.findQuestionnaireResponse as jest.Mock).mockResolvedValue(mockQuestionnaireResponse);
     (populateUtils.populateQuestionnaire as jest.Mock).mockResolvedValue({populateResult: {populated: {id: 'populated'}}});
 })
@@ -110,8 +115,7 @@ describe("QuestionnaireRenderer", () => {
         expect(button).not.toBeNull()
         fireEvent.click(button!)
         await waitFor(() => {
-            const cpsClient = useCpsClient()
-            expect(cpsClient?.transaction).toHaveBeenCalled()
+            expect(mockCpsClient.transaction).toHaveBeenCalled()
         })
     })
 //

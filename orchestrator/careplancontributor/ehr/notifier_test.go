@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
@@ -19,7 +20,7 @@ import (
 )
 
 func TestNotifier_NotifyTaskAccepted(t *testing.T) {
-	ctx := context.Background()
+	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
 	taskId := uuid.NewString()
 	subtaskId := uuid.NewString()
 	patientId := uuid.NewString()
@@ -135,8 +136,9 @@ func TestNotifier_NotifyTaskAccepted(t *testing.T) {
 				capturedBundleJSON = string(message.Body)
 				return nil
 			}))
+			tenantCfg := tenants.Test()
 
-			notifier, _ := NewNotifier(events.NewManager(messageBroker), messageBroker, bundleTopic, "", func(_ context.Context, _ *url.URL) (fhirclient.Client, *http.Client, error) {
+			notifier, _ := NewNotifier(events.NewManager(messageBroker), messageBroker, tenantCfg, bundleTopic, "", func(_ context.Context, _ *url.URL) (fhirclient.Client, *http.Client, error) {
 				return fhirClient, nil, nil
 			})
 

@@ -5,8 +5,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -29,12 +31,14 @@ func init() {
 	}
 }
 
-func New(sessionManager *user.SessionManager[session.Data], config Config, frontendLandingUrl *url.URL, profile profile.Provider) *Service {
+func New(sessionManager *user.SessionManager[session.Data], config Config, tenants tenants.Config, orcaPublicURL *url.URL, frontendLandingUrl *url.URL, profile profile.Provider) *Service {
 	return &Service{
 		sessionManager:     sessionManager,
 		config:             config,
+		orcaPublicURL:      orcaPublicURL,
 		frontendLandingUrl: frontendLandingUrl,
 		profile:            profile,
+		tenants:            tenants,
 		ehrFHIRClientFactory: func(baseURL *url.URL, httpClient *http.Client) fhirclient.Client {
 			return fhirclient.New(baseURL, httpClient, nil)
 		},
@@ -44,14 +48,11 @@ func New(sessionManager *user.SessionManager[session.Data], config Config, front
 type Service struct {
 	sessionManager       *user.SessionManager[session.Data]
 	config               Config
-	baseURL              string
+	tenants              tenants.Config
+	orcaPublicURL        *url.URL
 	frontendLandingUrl   *url.URL
 	ehrFHIRClientFactory func(*url.URL, *http.Client) fhirclient.Client
 	profile              profile.Provider
-}
-
-func (s *Service) cpsFhirClient() fhirclient.Client {
-	return globals.CarePlanServiceFhirClient
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -60,14 +61,24 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	log.Ctx(request.Context()).Debug().Msg("Handling demo app launch")
-	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss")
+	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "tenant")
 	if !ok {
+		return
+	}
+	tenant, err := s.tenants.Get(values["tenant"])
+	if err != nil {
+		http.Error(response, "App launch failed: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if tenant.Demo.FHIR.BaseURL == "" {
+		http.Error(response, "App launch failed: FHIR base URL is not configured for tenant "+tenant.ID, http.StatusBadRequest)
 		return
 	}
 	sessionData := session.Data{
 		FHIRLauncher: fhirLauncherKey,
+		TenantID:     tenant.ID,
 		LauncherProperties: map[string]string{
-			"iss": values["iss"],
+			"iss": tenant.Demo.FHIR.BaseURL,
 		},
 	}
 	sessionData.Set(values["serviceRequest"], nil)
@@ -83,7 +94,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		s.sessionManager.Destroy(response, request)
 	}
 
-	ehrFHIRClientProps := clients.Factories[fhirLauncherKey](values)
+	ehrFHIRClientProps := clients.Factories[fhirLauncherKey](sessionData.LauncherProperties)
 	ehrFHIRClient := s.ehrFHIRClientFactory(ehrFHIRClientProps.BaseURL, &http.Client{Transport: ehrFHIRClientProps.Client})
 
 	var practitioner fhir.Practitioner
@@ -102,7 +113,9 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	}
 	sessionData.Set("Patient/"+*patient.Id, patient)
 
-	organizations, err := s.profile.Identities(request.Context())
+	ctx := tenants.WithTenant(request.Context(), *tenant)
+
+	organizations, err := s.profile.Identities(ctx)
 	if err != nil {
 		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to get active organization")
 		http.Error(response, "Failed to get active organization: "+err.Error(), http.StatusInternalServerError)
@@ -123,7 +136,12 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 			http.Error(response, "Failed to parse task identifier: "+err.Error(), http.StatusBadRequest)
 			return
 		}
-		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), *taskIdentifier)
+		fhirClient, err := globals.CreateCPSFHIRClient(ctx)
+		if err != nil {
+			http.Error(response, "Failed to create FHIR client for existing Task check: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), fhirClient, *taskIdentifier)
 		if err != nil {
 			log.Ctx(request.Context()).Error().Err(err).Msg("Existing CPS Task check failed for task with identifier: " + coolfhir.ToString(taskIdentifier))
 			http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
@@ -140,4 +158,27 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	// Redirect to landing page
 	log.Ctx(request.Context()).Debug().Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
 	http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
+}
+
+func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {
+	proxies := make(map[string]coolfhir.HttpProxy)
+	fhirClients := make(map[string]fhirclient.Client)
+
+	for _, tenant := range s.tenants {
+		if tenant.Demo.FHIR.BaseURL == "" {
+			continue
+		}
+		fhirBaseURL := must.ParseURL(tenant.Demo.FHIR.BaseURL)
+		transport, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.Demo.FHIR, coolfhir.Config())
+		if err != nil {
+			log.Error().Err(err).Msgf("Failed to create FHIR client for tenant '%s' with base URL '%s'", tenant.ID, fhirBaseURL.String())
+			continue
+		}
+		tenantBasePath := "/cpc/" + tenant.ID + "/fhir"
+		proxy := coolfhir.NewProxy("App->EHR", fhirBaseURL, tenantBasePath, s.orcaPublicURL.JoinPath(tenantBasePath), transport, false, false)
+		proxies[tenant.ID] = proxy
+		fhirClients[tenant.ID] = fhirClient
+	}
+
+	return proxies, fhirClients
 }

@@ -2,6 +2,7 @@ package careplanservice
 
 import (
 	"context"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -35,7 +36,8 @@ func testPolicy[T any](t *testing.T, tt AuthzPolicyTest[T]) {
 		if tt.skipReason != "" {
 			t.Skip(tt.skipReason)
 		}
-		hasAccess, err := tt.policy.HasAccess(context.Background(), tt.resource, *tt.principal)
+		ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
+		hasAccess, err := tt.policy.HasAccess(ctx, tt.resource, *tt.principal)
 		assert.Equal(t, tt.wantAllow, hasAccess.Allowed)
 		if tt.wantErr != nil {
 			assert.EqualError(t, err, tt.wantErr.Error())
@@ -86,7 +88,7 @@ func TestRelatedResourcePolicy_HasAccess(t *testing.T) {
 		relatedPolicy.EXPECT().HasAccess(gomock.Any(), carePlan3, gomock.Any()).Return(&PolicyDecision{Allowed: true}, nil)
 
 		result, err := RelatedResourcePolicy[fhir.Patient, fhir.CarePlan]{
-			fhirClient:            fhirClient,
+			fhirClientFactory:     FHIRClientFactoryFor(fhirClient),
 			relatedResourcePolicy: relatedPolicy,
 			relatedResourceSearchParams: func(_ context.Context, _ fhir.Patient) (resourceType string, searchParams url.Values) {
 				return "CarePlan", url.Values{

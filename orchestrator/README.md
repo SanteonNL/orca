@@ -1,5 +1,11 @@
 ## Configuration
-Use the following environment variables to configure the orchestrator:
+This section describes how to configure the service.
+
+### Multi-tenancy
+ORCA is multi-tenant, which means it can handle multiple care organizations (tenants) in a single instance.
+Each tenant can have its own CarePlanService FHIR store and app launch settings.
+
+Note: the tenant ID is converted to lower case, even if it's in upper case in the environment variables.
 
 ### General configuration
 - `ORCA_PUBLIC_BASEURL` (required): base URL of the public endpoints.
@@ -10,28 +16,40 @@ Use the following environment variables to configure the orchestrator:
    - Zorgplatform app launch: patient BSN `999911120` is changed to `999999151` (to cope with a bug in its test data).
 
 #### Required configuration for Nuts
+- `ORCA_TENANT_<ID>_NUTS_SUBJECT`: Nuts subject of the tenant, as it was created in/by the Nuts node.
 - `ORCA_NUTS_PUBLIC_URL`: public URL of the Nuts, used for informing OAuth2 clients of the URL of the OAuth2 Authorization Server, e.g. `http://example.com/nuts`.
 - `ORCA_NUTS_API_URL`: address of the Nuts node API to use, e.g. `http://nutsnode:8081`.
-- `ORCA_NUTS_SUBJECT`: Nuts subject of the local party, as it was created in/by the Nuts node.
 - `ORCA_NUTS_DISCOVERYSERVICE`: ID of the Nuts Discovery Service that is used for CSD lookups (finding (local) care organizations and looking up their endpoints).
 - `ORCA_NUTS_AZUREKV_URL`: URL of the Azure Key Vault that holds the client certificate for outbound HTTP requests.
 - `ORCA_NUTS_AZUREKV_CLIENTCERTNAME`: Name of the certificate(s) for outbound HTTP requests. You can use a comma-separated list of names to use multiple certificates.
 - `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 
+### Care Plan Service configuration
+- `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
+- `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL`: URL to which the CPS sends webhooks when a CarePlan is created. It sends the CarePlan resource as HTTP POST request with content type `application/json`.
+- `ORCA_TENANT_<ID>_CPS_FHIR_URL`: Base URL of the FHIR API the CPS uses for storage, for the specified tenant.
+- `ORCA_TENANT_<ID>_CPS_FHIR_AUTH_TYPE`: Authentication type for this tenant's CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
+- `ORCA_TENANT_<ID>_CPS_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with this tenant's CPS FHIR store. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
+
 ### Care Plan Contributor configuration
 - `ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN`: Secures the EHR-facing endpoints with a static HTTP Bearer token. Only intended for development and testing purposes, since they're unpractical to change often.
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_URL`: Base URL of the FHIR API the CPC uses for storage. When `ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED` is enabled, data is retrieved from this FHIR API.
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_AUTH_TYPE`: Authentication type for the CPC FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_FHIRPROXYURL`: Enable FHIR proxy for demo purposes on `/demo/fhirproxy`, which proxies requests to this URL.
 - `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
-### OIDC Configuration
+#### Zorgplatform integration
+- `ORCA_ZORGPLATFORM_ENABLED`: Enable Zorgplatform integration (default: `false`).
+- `ORCA_TENANT_<ID>_CHIPSOFT_ORGID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
+
+### Demo configuration
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the "demo" EHR integration, as alternative to production-grade integrations like SMART on FHIR or Zorgplatform (default: `false`).
+- `ORCA_TENANT_<ID>_DEMO_FHIR_URL`: Base URL of the FHIR API of the "demo" EHR, for the specified tenant.
+- `ORCA_TENANT_<ID>_DEMO_FHIR_AUTH_TYPE`: Authentication type for this tenant's demo FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
+- `ORCA_TENANT_<ID>_DEMO_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with this tenant's demo FHIR store. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
+
+#### OIDC Configuration
 ORCA supports OpenID Connect (OIDC) for both acting as a Relying Party (validating JWT tokens) and as an OpenID Connect Provider (issuing ID tokens for authenticated users).
 
-#### Relying Party Configuration (JWT Token Validation)
+##### Relying Party Configuration (JWT Token Validation)
 API calls can be authenticated using a JWT bearer token, which is validated by the Relying Party.
 A received token is validated against a trusted OpenID Connect provider, and the user information is extracted from the token.
 The trusted OpenID Connect provider must be configured, it will be compared against the claim `iss` in the JWT.
@@ -51,7 +69,7 @@ Example:
 - `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_EXAMPLE_ISSUERURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/v2.0/`
 - `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_EXAMPLE_DISCOVERYURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/B2C_1_local_login/v2.0/.well-known/openid_configuration`
 
-#### OpenID Connect Provider Configuration
+##### OpenID Connect Provider Configuration
 ORCA can act as OpenID Connect Provider for users that have an existing session (initiated through app launch).
 This allows the launch of OIDC-enabled applications that can't directly authenticate using the EHR.
 It supports the following scopes:
@@ -78,6 +96,10 @@ To register a client (application), set the following environment variables for 
 
 #### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
+You can enable the Task Engine by setting the following environment variables:
+
+- `ORCA_TENANT_<ID>_TASKENGINE_ENABLED`: Enables the Task Filler engine for the specified tenant (default: `false`).
+
 You have the following options:
 
 1. Read them from your FHIR API
@@ -117,13 +139,6 @@ If you have web applications that you want other care organizations to discovery
 
 These configured applications are discovered by searching for FHIR Endpoints on the CPC's FHIR Endpoint.
 Note: this endpoint only supports searching using HTTP GET, without query parameters.
-
-### Care Plan Service configuration
-- `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
-- `ORCA_CAREPLANSERVICE_FHIR_URL`: Base URL of the FHIR API the CPS uses for storage.
-- `ORCA_CAREPLANSERVICE_FHIR_AUTH_TYPE`: Authentication type for the CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
-- `ORCA_CAREPLANSERVICE_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
-- `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL`: URL to which the CPS sends webhooks when a CarePlan is created. It sends the CarePlan resource as HTTP POST request with content type `application/json`.
 
 ### Messaging configuration
 Application event handling and FHIR Subscription notification sending uses a message broker.

@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/url"
 	"reflect"
@@ -119,11 +121,13 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 	mockFHIRClient := mock.NewMockClient(ctrl)
 
 	// Create the service with the mock FHIR client
+	tenant := tenants.Test().Sole()
 	fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
 	service := &Service{
-		profile:      profile.Test(),
-		fhirClient:   mockFHIRClient,
-		fhirURL:      fhirBaseUrl,
+		profile: profile.Test(),
+		fhirClientByTenant: map[string]fhirclient.Client{
+			tenant.ID: mockFHIRClient,
+		},
 		eventManager: events.NewManager(messaging.NewMemoryBroker()),
 	}
 
@@ -343,11 +347,14 @@ func Test_handleCreateTask_NoExistingCarePlan(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
 				}),
+				Tenant:  tenant,
+				BaseURL: must.ParseURL("https://example.com/fhir"),
 			}
 
 			tx := coolfhir.Transaction()
 
-			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+			ctx := tenants.WithTenant(context.Background(), tenant)
+			ctx = auth.WithPrincipal(ctx, *auth.TestPrincipal1)
 			if tt.principal != nil {
 				fhirRequest.Principal = tt.principal
 			}
@@ -599,15 +606,17 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 			mockFHIRClient := mock.NewMockClient(ctrl)
 
 			// Create the service with the mock FHIR client
-			fhirBaseUrl, _ := url.Parse("http://example.com/fhir")
+			tenant := tenants.Test().Sole()
 			service := &Service{
-				fhirClient: mockFHIRClient,
-				profile:    profile.Test(),
-				fhirURL:    fhirBaseUrl,
+				fhirClientByTenant: map[string]fhirclient.Client{
+					tenant.ID: mockFHIRClient,
+				},
+				profile: profile.Test(),
 			}
 
 			// Create a Task
 			taskBytes, _ := json.Marshal(tt.taskToCreate)
+
 			fhirRequest := FHIRHandlerRequest{
 				ResourcePath: "Task",
 				ResourceData: taskBytes,
@@ -617,6 +626,8 @@ func Test_handleCreateTask_ExistingCarePlan(t *testing.T) {
 					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/ura"),
 					Value:  to.Ptr("1"),
 				}),
+				Tenant:  tenant,
+				BaseURL: must.ParseURL("https://example.com/fhir"),
 			}
 
 			tx := coolfhir.Transaction()
