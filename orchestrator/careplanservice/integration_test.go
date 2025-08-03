@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
@@ -64,10 +65,12 @@ func Test_Integration(t *testing.T) {
 		cpc2Notifications = nil
 	}
 
+	ctx := tenants.WithTenant(context.Background(), service.tenants.Sole())
 	t.Run("custom search parameters", func(t *testing.T) {
 		t.Run("existence", func(t *testing.T) {
 			var capabilityStatement fhir.CapabilityStatement
-			err := service.fhirClient.Read("metadata", &capabilityStatement)
+			fhirClient, _ := service.createFHIRClient(ctx)
+			err := fhirClient.Read("metadata", &capabilityStatement)
 			require.NoError(t, err)
 			for _, rest := range capabilityStatement.Rest {
 				for _, resource := range rest.Resource {
@@ -82,7 +85,7 @@ func Test_Integration(t *testing.T) {
 			require.Fail(t, "Search parameter CarePlan-subject-identifier not found")
 		})
 		t.Run("search parameters already exist", func(t *testing.T) {
-			err := service.ensureCustomSearchParametersExists(context.Background())
+			err := service.ensureCustomSearchParametersExists(ctx)
 			require.NoError(t, err)
 		})
 	})
@@ -237,7 +240,7 @@ func Test_Integration(t *testing.T) {
 
 		// Search again, there still should be just 1 Task
 		var taskBundle fhir.Bundle
-		err = service.fhirClient.SearchWithContext(context.Background(), "Task", url.Values{"intent": {"order"}}, &taskBundle)
+		err = carePlanContributor1.SearchWithContext(ctx, "Task", url.Values{"intent": {"order"}}, &taskBundle)
 		require.NoError(t, err)
 		require.Len(t, taskBundle.Entry, 1, "expected 1 Task in the FHIR server")
 	})
@@ -779,13 +782,9 @@ func Test_HandleSearchResource(t *testing.T) {
 
 	// Setup test environment
 	fhirBaseURL := test.SetupHAPI(t)
-	activeProfile := profile.Test()
 	config := DefaultConfig()
 	config.Enabled = true
-	config.FHIR.BaseURL = fhirBaseURL.String()
-	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(config, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
-	require.NoError(t, err)
+	fhirClient := fhirclient.New(fhirBaseURL, &http.Client{}, nil)
 
 	ctx := context.Background()
 	log.Ctx(ctx).Debug().Msg("Testing handleSearchResource function with real FHIR server")
@@ -822,7 +821,7 @@ func Test_HandleSearchResource(t *testing.T) {
 
 	createdPatients := make([]fhir.Patient, len(patients))
 	for i, patient := range patients {
-		err = service.fhirClient.Create(patient, &createdPatients[i])
+		err := fhirClient.Create(patient, &createdPatients[i])
 		require.NoError(t, err)
 		require.NotNil(t, createdPatients[i].Id)
 		log.Ctx(ctx).Debug().Msgf("Created test patient with ID: %s", *createdPatients[i].Id)
@@ -854,7 +853,7 @@ func Test_HandleSearchResource(t *testing.T) {
 
 	createdCarePlans := make([]fhir.CarePlan, len(carePlans))
 	for i, carePlan := range carePlans {
-		err = service.fhirClient.Create(carePlan, &createdCarePlans[i])
+		err := fhirClient.Create(carePlan, &createdCarePlans[i])
 		require.NoError(t, err)
 		require.NotNil(t, createdCarePlans[i].Id)
 		log.Ctx(ctx).Debug().Msgf("Created test care plan with ID: %s", *createdCarePlans[i].Id)
@@ -863,7 +862,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	t.Run("search patients with multiple IDs", func(t *testing.T) {
 		queryParams := url.Values{"_id": []string{*createdPatients[0].Id, *createdPatients[1].Id}}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -877,7 +876,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	t.Run("search patients with gender parameter", func(t *testing.T) {
 		queryParams := url.Values{"gender": []string{fhir.AdministrativeGenderMale.Code()}}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -894,7 +893,7 @@ func Test_HandleSearchResource(t *testing.T) {
 			"gender": []string{fhir.AdministrativeGenderMale.Code()},
 		}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -908,7 +907,7 @@ func Test_HandleSearchResource(t *testing.T) {
 			"gender": []string{fhir.AdministrativeGenderFemale.Code()},
 		}
 
-		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -920,7 +919,7 @@ func Test_HandleSearchResource(t *testing.T) {
 			"gender": []string{fhir.AdministrativeGenderFemale.Code()},
 		}
 
-		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -934,7 +933,7 @@ func Test_HandleSearchResource(t *testing.T) {
 			"gender": []string{fhir.AdministrativeGenderMale.Code(), fhir.AdministrativeGenderFemale.Code()},
 		}
 
-		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -944,7 +943,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	t.Run("search careplans with multiple parameters", func(t *testing.T) {
 		queryParams := url.Values{"subject": []string{*createdPatients[0].Id, *createdPatients[1].Id}}
 
-		carePlans, bundle, err := handleSearchResource[fhir.CarePlan](ctx, service, "CarePlan", queryParams, &fhirclient.Headers{})
+		carePlans, bundle, err := handleSearchResource[fhir.CarePlan](ctx, fhirClient, "CarePlan", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -964,7 +963,7 @@ func Test_HandleSearchResource(t *testing.T) {
 
 		customHeaders := &fhirclient.Headers{}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, customHeaders)
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, customHeaders)
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -975,7 +974,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	t.Run("search with non-existent ID", func(t *testing.T) {
 		queryParams := url.Values{"_id": []string{"non-existent-id"}}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -999,16 +998,23 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	}
 	config := DefaultConfig()
 	config.Enabled = true
-	config.FHIR.BaseURL = fhirBaseURL.String()
+
 	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(config, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.CPS = tenants.CarePlanServiceProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirBaseURL.String(),
+			},
+		}
+	})
+	service, err := New(config, tenantCfg, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
 	httpService := httptest.NewServer(serverMux)
 	service.RegisterHandlers(serverMux)
 
-	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
+	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps/" + tenantCfg.Sole().ID)
 
 	transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
 	transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")

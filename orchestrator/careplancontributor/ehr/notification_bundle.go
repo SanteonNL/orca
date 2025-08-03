@@ -2,9 +2,11 @@ package ehr
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -38,6 +40,17 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	taskBundle, tasks, err := fetchTasks(ctx, cpsClient, taskId)
 	if err != nil {
 		return nil, err
+	}
+	for i, bundleEntry := range taskBundle.Entry {
+		if err := json.Unmarshal(bundleEntry.Resource, &tasks[i]); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal Task from bundle entry[#%d]: %w", i, err)
+		}
+		if tasks[i].Meta == nil {
+			tasks[i].Meta = &fhir.Meta{}
+		}
+		tasks[i].Meta.Source = to.Ptr(cpsClient.Path("Task", *tasks[i].Id).String())
+		bundleEntry.Resource, _ = json.Marshal(tasks[i])
+		taskBundle.Entry[i] = bundleEntry
 	}
 
 	carePlanBundle, carePlan, err := fetchCarePlan(ctx, cpsClient, tasks)

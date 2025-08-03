@@ -56,8 +56,8 @@ func (i internalDispatchHTTPRoundTripper) RoundTrip(request *http.Request) (*htt
 		i.requestVisitor(request)
 	}
 	i.handler.ServeHTTP(responseWriter, request)
-	log.Ctx(ctx).Info().Msgf("InternalDispatch HTTP Respone.status: %d", responseWriter.status)
-	log.Ctx(ctx).Info().Msgf("InternalDispatch HTTP Respone.headers: %v", responseWriter.headers)
+	log.Ctx(ctx).Debug().Msgf("InternalDispatch HTTP Respone.status: %d", responseWriter.status)
+	log.Ctx(ctx).Debug().Msgf("InternalDispatch HTTP Respone.headers: %v", responseWriter.headers)
 	return &http.Response{
 		StatusCode: responseWriter.status,
 		Header:     responseWriter.headers,

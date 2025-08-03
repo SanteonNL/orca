@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
@@ -15,6 +16,7 @@ import (
 func TestService_handleBatch(t *testing.T) {
 	httpRequest, _ := http.NewRequest(http.MethodGet, "/", nil)
 	httpRequest.Header.Add("X-Scp-Context", "valid")
+	tenant := tenants.Test().Sole()
 	t.Run("upstream server returns error", func(t *testing.T) {
 		fhirClient := test.StubFHIRClient{}
 		fhirClient.Error = fhirclient.OperationOutcomeError{
@@ -27,9 +29,7 @@ func TestService_handleBatch(t *testing.T) {
 			},
 			HttpStatusCode: 500,
 		}
-		s := &Service{
-			ehrFhirClient: &fhirClient,
-		}
+		s := &Service{}
 		requestBundle := fhir.Bundle{
 			Entry: []fhir.BundleEntry{
 				{
@@ -40,7 +40,7 @@ func TestService_handleBatch(t *testing.T) {
 				},
 			},
 		}
-		actual, err := s.doHandleBatch(httpRequest, requestBundle)
+		actual, err := s.doHandleBatch(httpRequest, requestBundle, &fhirClient)
 
 		require.NoError(t, err)
 		require.Len(t, actual.Entry, 1)
@@ -54,7 +54,9 @@ func TestService_handleBatch(t *testing.T) {
 	})
 	t.Run("non-GET request", func(t *testing.T) {
 		s := &Service{
-			ehrFhirClient: &test.StubFHIRClient{},
+			ehrFHIRClientByTenant: map[string]fhirclient.Client{
+				tenant.ID: &test.StubFHIRClient{},
+			},
 		}
 		requestBundle := fhir.Bundle{
 			Entry: []fhir.BundleEntry{
@@ -65,7 +67,7 @@ func TestService_handleBatch(t *testing.T) {
 				},
 			},
 		}
-		actual, err := s.doHandleBatch(httpRequest, requestBundle)
+		actual, err := s.doHandleBatch(httpRequest, requestBundle, nil)
 
 		require.NoError(t, err)
 		require.Len(t, actual.Entry, 1)
@@ -78,16 +80,15 @@ func TestService_handleBatch(t *testing.T) {
 		require.Equal(t, fhir.IssueSeverityError, outcome.Issue[0].Severity)
 		require.Equal(t, "Only GET requests are supported in batch processing", *outcome.Issue[0].Details.Text)
 	})
-	t.Run("successful GET request", func(t *testing.T) {
-		s := &Service{
-			ehrFhirClient: &test.StubFHIRClient{
-				Resources: []any{
-					fhir.Task{
-						Id: to.Ptr("123"),
-					},
-				},
+	fhirClient := &test.StubFHIRClient{
+		Resources: []any{
+			fhir.Task{
+				Id: to.Ptr("123"),
 			},
-		}
+		},
+	}
+	t.Run("successful GET request", func(t *testing.T) {
+		s := &Service{}
 		requestBundle := fhir.Bundle{
 			Entry: []fhir.BundleEntry{
 				{
@@ -98,7 +99,7 @@ func TestService_handleBatch(t *testing.T) {
 				},
 			},
 		}
-		actual, err := s.doHandleBatch(httpRequest, requestBundle)
+		actual, err := s.doHandleBatch(httpRequest, requestBundle, fhirClient)
 
 		require.NoError(t, err)
 		require.Len(t, actual.Entry, 1)
@@ -110,15 +111,7 @@ func TestService_handleBatch(t *testing.T) {
 		require.Equal(t, "123", *task.Id)
 	})
 	t.Run("with query parameters", func(t *testing.T) {
-		s := &Service{
-			ehrFhirClient: &test.StubFHIRClient{
-				Resources: []any{
-					fhir.Task{
-						Id: to.Ptr("123"),
-					},
-				},
-			},
-		}
+		s := &Service{}
 		requestBundle := fhir.Bundle{
 			Entry: []fhir.BundleEntry{
 				{
@@ -129,7 +122,7 @@ func TestService_handleBatch(t *testing.T) {
 				},
 			},
 		}
-		actual, err := s.doHandleBatch(httpRequest, requestBundle)
+		actual, err := s.doHandleBatch(httpRequest, requestBundle, fhirClient)
 
 		require.NoError(t, err)
 		require.Len(t, actual.Entry, 1)
@@ -142,9 +135,7 @@ func TestService_handleBatch(t *testing.T) {
 	t.Run("'network error' during request", func(t *testing.T) {
 		fhirClient := test.StubFHIRClient{}
 		fhirClient.Error = errors.New("network error")
-		s := &Service{
-			ehrFhirClient: &fhirClient,
-		}
+		s := &Service{}
 		requestBundle := fhir.Bundle{
 			Entry: []fhir.BundleEntry{
 				{
@@ -155,7 +146,7 @@ func TestService_handleBatch(t *testing.T) {
 				},
 			},
 		}
-		actual, err := s.doHandleBatch(httpRequest, requestBundle)
+		actual, err := s.doHandleBatch(httpRequest, requestBundle, &fhirClient)
 
 		require.NoError(t, err)
 		require.Len(t, actual.Entry, 1)

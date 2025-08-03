@@ -3,6 +3,9 @@
 import {Bundle, Organization} from "fhir/r4"
 
 export const getEnrollmentUrl = async (patientId: string, serviceRequestId: string) => {
+    if (!process.env.TENANT_ID) {
+        throw new Error('TENANT_ID is not defined');
+    }
 
     const practitioners = await fetch(`${process.env.FHIR_BASE_URL}/Practitioner`)
     if (!practitioners.ok) {
@@ -17,7 +20,7 @@ export const getEnrollmentUrl = async (patientId: string, serviceRequestId: stri
             patient: patientId,
             serviceRequest: `ServiceRequest/${serviceRequestId}`,
             practitioner: `Practitioner/${respBundle.entry[0].resource?.id}`, //TODO: Rework to get reference from ServiceRequest.requester - currently an Organization, but should be a PractitionerRole
-            iss: `${process.env.FHIR_BASE_URL}`,
+            tenant: `${process.env.TENANT_ID}`,
             taskIdentifier: `http://demo-launch/fhir/NamingSystem/task-identifier|${serviceRequestId}`
         }).toString()
     }

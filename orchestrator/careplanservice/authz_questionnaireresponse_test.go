@@ -60,7 +60,7 @@ func TestQuestionnaireResponseAuthzPolicy(t *testing.T) {
 		})
 	})
 	t.Run("read", func(t *testing.T) {
-		policy := ReadQuestionnaireResponseAuthzPolicy(fhirClient)
+		policy := ReadQuestionnaireResponseAuthzPolicy(FHIRClientFactoryFor(fhirClient))
 		testPolicies(t, []AuthzPolicyTest[*fhir.QuestionnaireResponse]{
 			{
 				name:      "allow (is creator)",

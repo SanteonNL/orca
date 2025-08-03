@@ -14,7 +14,6 @@ func TestConfig_Validate(t *testing.T) {
 	t.Run("public URL not configured", func(t *testing.T) {
 		c := Config{
 			Nuts: nuts.Config{
-				OwnSubject:       "foo",
 				DiscoveryService: "test",
 				API: nuts.APIConfig{
 					URL: "http://example.com",

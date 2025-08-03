@@ -2,13 +2,14 @@ import {render, screen, fireEvent, waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import EnrollInCpsButton from '@/app/enrollment/new/components/enroll-in-cps-button';
 import useEnrollment from '@/lib/store/enrollment-store';
-import useCpsClient from '@/hooks/use-cps-client';
+import useContext from '@/lib/store/context-store';
 import * as fhirUtils from '@/lib/fhirUtils';
 import {useRouter} from 'next/navigation';
 import {toast} from 'sonner';
 
 jest.mock('@/lib/store/enrollment-store');
-jest.mock('@/hooks/use-cps-client');
+jest.mock('@/lib/store/context-store');
+jest.mock('@/lib/fhirUtils');
 jest.mock('next/navigation');
 jest.mock('sonner');
 
@@ -39,9 +40,11 @@ beforeEach(() => {
         practitionerRole: mockPractitionerRole,
         serviceRequest: mockServiceRequest,
         loading: false,
-        launchContext: {taskIdentifier: 'task-id-123'}
     });
-    (useCpsClient as jest.Mock).mockReturnValue({transaction: jest.fn().mockResolvedValue(mockTaskBundle)});
+    (useContext as jest.Mock).mockReturnValue({
+        launchContext: {taskIdentifier: 'task-id-123'},
+        cpsClient: {transaction: jest.fn().mockResolvedValue(mockTaskBundle)}
+    });
     (fhirUtils.getPatientIdentifier as jest.Mock).mockReturnValue(mockPatient.identifier[0]);
     (fhirUtils.constructTaskBundle as jest.Mock).mockReturnValue(mockTaskBundle);
     (fhirUtils.findInBundle as jest.Mock).mockReturnValue(mockTask);
@@ -103,7 +106,10 @@ describe("enroll in cps button test", () => {
 
 
     it('handles missing cpsClient error', async () => {
-        (useCpsClient as jest.Mock).mockReturnValue(null);
+        (useContext as jest.Mock).mockReturnValue({
+            launchContext: {taskIdentifier: 'task-id-123'},
+            cpsClient: null
+        });
 
         render(<EnrollInCpsButton/>);
 
@@ -149,7 +155,8 @@ describe("enroll in cps button test", () => {
 
     it('handles cps transaction error', async () => {
         const mockTransaction = jest.fn().mockRejectedValue(new Error('Transaction failed'));
-        (useCpsClient as jest.Mock).mockReturnValue({transaction: mockTransaction});
+
+        (useContext as jest.Mock).mockReturnValue({cpsClient: {transaction: mockTransaction}});
 
         render(<EnrollInCpsButton/>);
 
@@ -176,7 +183,10 @@ describe("enroll in cps button test", () => {
             }
         };
         const mockTransaction = jest.fn().mockRejectedValue(validationError);
-        (useCpsClient as jest.Mock).mockReturnValue({transaction: mockTransaction});
+        (useContext as jest.Mock).mockReturnValue({
+            cpsClient: {transaction: mockTransaction},
+            launchContext: {taskIdentifier: 'task-id-123'},
+        });
 
         render(<EnrollInCpsButton/>);
 
@@ -206,7 +216,10 @@ describe("enroll in cps button test", () => {
             }
         };
         const mockTransaction = jest.fn().mockRejectedValue(validationError);
-        (useCpsClient as jest.Mock).mockReturnValue({transaction: mockTransaction});
+        (useContext as jest.Mock).mockReturnValue({
+            cpsClient: {transaction: mockTransaction},
+            launchContext: {taskIdentifier: 'task-id-123'},
+        });
 
         render(<EnrollInCpsButton/>);
 
@@ -234,7 +247,10 @@ describe("enroll in cps button test", () => {
             }
         };
         const mockTransaction = jest.fn().mockRejectedValue(validationError);
-        (useCpsClient as jest.Mock).mockReturnValue({transaction: mockTransaction});
+        (useContext as jest.Mock).mockReturnValue({
+            cpsClient: {transaction: mockTransaction},
+            launchContext: {taskIdentifier: 'task-id-123'},
+        });
 
         const { container } = render(<EnrollInCpsButton/>);
 
@@ -264,7 +280,10 @@ describe("enroll in cps button test", () => {
             }
         };
         const mockTransaction = jest.fn().mockRejectedValue(validationError);
-        (useCpsClient as jest.Mock).mockReturnValue({transaction: mockTransaction});
+        (useContext as jest.Mock).mockReturnValue({
+            cpsClient: {transaction: mockTransaction},
+            launchContext: {taskIdentifier: 'task-id-123'},
+        });
 
         render(<EnrollInCpsButton/>);
 

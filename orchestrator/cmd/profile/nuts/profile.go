@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -42,14 +43,14 @@ var oauthRestfulSecurityServiceCoding = fhir.Coding{
 // - Care Services Discovery: Nuts Discovery Service
 type DutchNutsProfile struct {
 	Config                Config
-	cachedIdentities      []fhir.Organization
-	identitiesRefreshedAt time.Time
+	cachedIdentities      map[string][]fhir.Organization
+	identitiesRefreshedAt map[string]time.Time
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
 	clientCerts           []tls.Certificate
 }
 
-func New(config Config) (*DutchNutsProfile, error) {
+func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
 	var clientCerts []tls.Certificate
 	if len(config.AzureKeyVault.ClientCertName) > 0 {
 		if config.AzureKeyVault.CredentialType == "" {
@@ -88,7 +89,9 @@ func New(config Config) (*DutchNutsProfile, error) {
 			entryCache: make(map[string]cacheEntry),
 			cacheMux:   sync.RWMutex{},
 		},
-		clientCerts: clientCerts,
+		cachedIdentities:      map[string][]fhir.Organization{},
+		identitiesRefreshedAt: map[string]time.Time{},
+		clientCerts:           clientCerts,
 	}, nil
 }
 
@@ -153,11 +156,15 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		underlyingTransport = http.DefaultTransport.(*http.Transport).Clone()
 		underlyingTransport.TLSClientConfig = globals.DefaultTLSConfig
 	}
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
 	client := &http.Client{
 		Transport: &oauth2.Transport{
 			UnderlyingTransport: underlyingTransport,
 			TokenSource: nuts.OAuth2TokenSource{
-				NutsSubject: d.Config.OwnSubject,
+				NutsSubject: tenant.Nuts.Subject,
 				NutsAPIURL:  d.Config.API.URL,
 			},
 			Scope:          careplancontributor.CarePlanServiceOAuth2Scope,
@@ -169,8 +176,12 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 
 // Identities consults the Nuts node to retrieve the local identities of the SCP node, given the credentials in the subject's wallet.
 func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization, error) {
-	if time.Since(d.identitiesRefreshedAt) > identitiesCacheTTL || len(d.cachedIdentities) == 0 {
-		identifiers, err := d.identities(ctx)
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if time.Since(d.identitiesRefreshedAt[tenant.ID]) > identitiesCacheTTL || len(d.cachedIdentities[tenant.ID]) == 0 {
+		identifiers, err := d.identities(ctx, tenant.Nuts.Subject)
 		if err != nil {
 			log.Ctx(ctx).Warn().Err(err).Msg("Failed to refresh local identities using Nuts node")
 			if d.cachedIdentities == nil {
@@ -178,11 +189,11 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 				return nil, fmt.Errorf("failed to load local identities: %w", err)
 			}
 		} else {
-			d.cachedIdentities = identifiers
-			d.identitiesRefreshedAt = time.Now()
+			d.cachedIdentities[tenant.ID] = identifiers
+			d.identitiesRefreshedAt[tenant.ID] = time.Now()
 		}
 	}
-	return d.cachedIdentities, nil
+	return d.cachedIdentities[tenant.ID], nil
 }
 
 func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseURL string) (*fhir.CapabilityStatement, error) {
@@ -205,8 +216,8 @@ func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseU
 	return &cp, nil
 }
 
-func (d DutchNutsProfile) identities(ctx context.Context) ([]fhir.Organization, error) {
-	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, d.Config.OwnSubject)
+func (d DutchNutsProfile) identities(ctx context.Context, subject string) ([]fhir.Organization, error) {
+	response, err := d.vcrClient.GetCredentialsInWalletWithResponse(ctx, subject)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list credentials: %w", err)
 	}
@@ -282,7 +293,11 @@ func (d DutchNutsProfile) identifiersFromCredential(cred vcr.VerifiableCredentia
 	return results, nil
 }
 
-func (d DutchNutsProfile) CapabilityStatement(cp *fhir.CapabilityStatement) {
+func (d DutchNutsProfile) CapabilityStatement(ctx context.Context, cp *fhir.CapabilityStatement) error {
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return err
+	}
 	for i, rest := range cp.Rest {
 		if rest.Security == nil {
 			rest.Security = &fhir.CapabilityStatementRestSecurity{}
@@ -292,10 +307,11 @@ func (d DutchNutsProfile) CapabilityStatement(cp *fhir.CapabilityStatement) {
 			Extension: []fhir.Extension{
 				{
 					Url:         nutsAuthorizationServerExtensionURL,
-					ValueString: to.Ptr(d.Config.Public.Parse().JoinPath("oauth2", d.Config.OwnSubject).String()),
+					ValueString: to.Ptr(d.Config.Public.Parse().JoinPath("oauth2", tenant.Nuts.Subject).String()),
 				},
 			},
 		})
 		cp.Rest[i] = rest
 	}
+	return nil
 }
