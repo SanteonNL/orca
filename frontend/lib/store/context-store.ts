@@ -35,20 +35,23 @@ export const useContextStore = create<StoreState>((set, get) => ({
             const launchContext = get().launchContext;
             if (!launchContext) {
                 set({ error: `Launch context is not available.` });
+            } else {
+                set({
+                    cpsClient: createCpsClient(launchContext!.tenantId),
+                    ehrClient: createEhrClient(launchContext!.tenantId),
+                    scpClient: createScpClient(launchContext!.tenantId)
+                });
             }
-            set({ cpsClient: createCpsClient(launchContext!.tenantId) });
-            set({ ehrClient: createEhrClient(launchContext!.tenantId) });
-            set({ scpClient: createScpClient(launchContext!.tenantId) });
         } catch (error: any) {
             set({ error: `Something went wrong while fetching the context: ${error?.message || error}`})
         }
     },
 }));
 
-const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>), replace?: false | undefined) => void) => {
+const fetchLaunchContext = async (set: (partial: StoreState | Partial<StoreState> | ((state: StoreState) => StoreState | Partial<StoreState>)) => void) => {
     let launchContext: LaunchContext;
     const launchContextRes = await fetch(`/orca/cpc/context`);
-    if (!launchContextRes.ok) throw new Error(`Failed to fetch patient: ${launchContextRes.statusText}`);
+    if (!launchContextRes.ok) throw new Error(`Failed to fetch context: ${launchContextRes.statusText}`);
     launchContext = await launchContextRes.json();
     set({ launchContext });
     return launchContext;

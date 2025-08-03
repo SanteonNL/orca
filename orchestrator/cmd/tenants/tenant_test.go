@@ -1,6 +1,7 @@
 package tenants
 
 import (
+	"context"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -70,4 +71,24 @@ func Test_isIDValid(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestFromContext(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		ctx := WithTenant(context.Background(), Properties{
+			ID: "test-tenant",
+			Nuts: NutsProperties{
+				Subject: "test-subject",
+			},
+		})
+		props, err := FromContext(ctx)
+		require.NoError(t, err)
+		require.Equal(t, "test-tenant", props.ID)
+		require.Equal(t, "test-subject", props.Nuts.Subject)
+	})
+	t.Run("no tenant in context", func(t *testing.T) {
+		ctx := context.Background()
+		_, err := FromContext(ctx)
+		require.ErrorIs(t, err, ErrNoTenant)
+	})
 }
