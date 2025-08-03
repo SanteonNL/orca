@@ -13,6 +13,14 @@ jest.mock('@/lib/fhirUtils');
 jest.mock('next/navigation');
 jest.mock('sonner');
 
+// Partial mock of fhirUtils to preserve codingToMessage
+jest.mock('@/lib/fhirUtils', () => ({
+    ...jest.requireActual('@/lib/fhirUtils'),
+    getPatientIdentifier: jest.fn(),
+    constructTaskBundle: jest.fn(),
+    findInBundle: jest.fn(),
+}));
+
 const mockPatient = {
     id: 'patient-1',
     identifier: [{system: 'http://fhir.nl/fhir/NamingSystem/bsn', value: '123456789'}]
@@ -165,8 +173,11 @@ describe("enroll in cps button test", () => {
                 status: 400,
                 data: {
                     issue: [
-                        {diagnostics: 'Patient identifier is required'},
-                        {diagnostics: 'Invalid condition code'}
+                        {
+                            code: 'invariant', details: {
+                                coding: [{code: 'E0001'}, {code: 'E0004'}]
+                            }
+                        }
                     ]
                 }
             }
@@ -182,20 +193,24 @@ describe("enroll in cps button test", () => {
         fireEvent.click(screen.getByRole('button'));
 
         await waitFor(() => {
-            expect(screen.getByText('Validation Errors:')).toBeInTheDocument();
-            expect(screen.getByText('Patient identifier is required')).toBeInTheDocument();
-            expect(screen.getByText('Invalid condition code')).toBeInTheDocument();
+            expect(screen.getByText('Er gaat iets mis')).toBeInTheDocument();
+            expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
+            expect(screen.getByText(/Controleer het telefoonnummer/)).toBeInTheDocument();
         });
     });
 
-    it('displays unknown error message when validation errors have no diagnostics', async () => {
+    it('displays unknown error message for empty validation errors', async () => {
         const validationError = {
             response: {
                 status: 400,
                 data: {
                     issue: [
-                        {code: 'required'},
-                        {code: 'invalid'}
+                        {
+                            code: 'invariant',
+                            details: {
+                                coding: []
+                            }
+                        }
                     ]
                 }
             }
@@ -211,7 +226,72 @@ describe("enroll in cps button test", () => {
         fireEvent.click(screen.getByRole('button'));
 
         await waitFor(() => {
-            expect(screen.getByText('An unknown error occurred')).toBeInTheDocument();
+            expect(screen.getByText('Er gaat iets mis')).toBeInTheDocument();
+            expect(screen.getByText(/Er is een onbekende fout opgetreden/)).toBeInTheDocument();
+        });
+    });
+
+    it('displays multiple validation error paragraphs for different error codes', async () => {
+        const validationError = {
+            response: {
+                status: 400,
+                data: {
+                    issue: [
+                        {
+                            code: 'invariant', details: {
+                                coding: [{code: 'E0001'}, {code: 'E0003'}]
+                            }
+                        }
+                    ]
+                }
+            }
+        };
+        const mockTransaction = jest.fn().mockRejectedValue(validationError);
+        (useContext as jest.Mock).mockReturnValue({
+            cpsClient: {transaction: mockTransaction},
+            launchContext: {taskIdentifier: 'task-id-123'},
+        });
+
+        const { container } = render(<EnrollInCpsButton/>);
+
+        fireEvent.click(screen.getByRole('button'));
+
+        await waitFor(() => {
+            const paragraphs = container.querySelectorAll('p');
+            expect(paragraphs.length).toBeGreaterThan(1);
+            expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
+            expect(screen.getByText(/Controleer het e-mailadres/)).toBeInTheDocument();
+        });
+    });
+
+    it('displays unknown error message for unrecognized error codes', async () => {
+        const validationError = {
+            response: {
+                status: 400,
+                data: {
+                    issue: [
+                        {
+                            code: 'invariant', details: {
+                                coding: [{code: 'E9999'}]
+                            }
+                        }
+                    ]
+                }
+            }
+        };
+        const mockTransaction = jest.fn().mockRejectedValue(validationError);
+        (useContext as jest.Mock).mockReturnValue({
+            cpsClient: {transaction: mockTransaction},
+            launchContext: {taskIdentifier: 'task-id-123'},
+        });
+
+        render(<EnrollInCpsButton/>);
+
+        fireEvent.click(screen.getByRole('button'));
+
+        await waitFor(() => {
+            expect(screen.getByText('Er gaat iets mis')).toBeInTheDocument();
+            expect(screen.getByText(/Er is een onbekende fout opgetreden/)).toBeInTheDocument();
         });
     });
 

@@ -131,7 +131,6 @@ func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, task
 			return errors.Errorf("failed to send task to endpoint, status code: %d", httpResponse.StatusCode)
 		}
 	} else {
-		log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to message broker with messages %s", set.task, jsonData)
 		msg := &messaging.Message{
 			Body:          jsonData,
 			ContentType:   "application/json",
