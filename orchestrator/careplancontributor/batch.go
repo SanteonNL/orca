@@ -8,21 +8,61 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		httpRequest.Context(),
+		"handleBatch",
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("http.method", httpRequest.Method),
+			attribute.String("http.url", httpRequest.URL.String()),
+			attribute.String("operation.name", "CarePlanContributor/HandleBatch"),
+			attribute.String("fhir.bundle.type", requestBundle.Type.String()),
+			attribute.Int("fhir.bundle.entry_count", len(requestBundle.Entry)),
+		),
+	)
+	defer span.End()
+
+	start := time.Now()
+
 	if s.ehrFhirProxy == nil {
-		return nil, coolfhir.BadRequest("EHR API is not supported")
-	}
-	log.Ctx(httpRequest.Context()).Debug().Msg("Handling external FHIR API request")
-	_, err := s.authorizeScpMember(httpRequest)
-	if err != nil {
+		err := coolfhir.BadRequest("EHR API is not supported")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
-	return s.doHandleBatch(httpRequest, requestBundle)
+	log.Ctx(ctx).Debug().Msg("Handling external FHIR API request")
+
+	_, err := s.authorizeScpMember(httpRequest.WithContext(ctx))
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	result, err := s.doHandleBatch(httpRequest.WithContext(ctx), requestBundle)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	span.SetAttributes(
+		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
+	)
+	span.SetStatus(codes.Ok, "")
+	return result, nil
 }
 
 func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {

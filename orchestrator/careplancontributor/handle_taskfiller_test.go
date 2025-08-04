@@ -25,6 +25,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/mock/gomock"
 )
 
@@ -310,6 +313,51 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	// Run test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Set up trace mocking
+			exporter := tracetest.NewInMemoryExporter()
+			tp := trace.NewTracerProvider(
+				trace.WithSyncer(exporter),
+			)
+			otel.SetTracerProvider(tp)
+			defer tp.Shutdown(context.Background())
+
+			// Helper function to assert spans are created
+			assertSpansCreated := func(t *testing.T, expectTiming bool) {
+				// Force any pending spans to be exported
+				tp.ForceFlush(context.Background())
+
+				spans := exporter.GetSpans()
+				require.NotEmpty(t, spans, "Expected spans to be created for task filling operations")
+
+				// Look for key span operations
+				spanNames := make([]string, len(spans))
+				for i, span := range spans {
+					spanNames[i] = span.Name
+				}
+
+				// Verify at least the main handleTaskNotification span is present
+				require.Contains(t, spanNames, "handleTaskNotification", "Expected handleTaskNotification span")
+
+				if !expectTiming {
+					return
+				}
+
+				// Ensure timing attributes are present in at least one span
+				timingFound := false
+				for _, span := range spans {
+					for _, attribute := range span.Attributes {
+						if attribute.Key == "operation.duration_ms" {
+							timingFound = true
+							break
+						}
+					}
+					if timingFound {
+						break
+					}
+				}
+				require.True(t, timingFound, "Expected operation.duration_ms attribute in spans")
+			}
+
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			fhirBaseURL := must.ParseURL("https://example.com/fhir")
@@ -376,7 +424,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			if tt.expectSubmission {
 				expectedSubmissions = 1
 			}
-			notifierMock.EXPECT().NotifyTaskAccepted(ctx, fhirBaseURL.String(), gomock.Any()).Times(expectedSubmissions)
+			notifierMock.EXPECT().NotifyTaskAccepted(gomock.Any(), fhirBaseURL.String(), gomock.Any()).Times(expectedSubmissions)
 			var capturedTx fhir.Bundle
 			if tt.numBundlesPosted > 0 {
 				mockFHIRClient.EXPECT().
@@ -412,11 +460,47 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 
 			log.Info().Msgf("Running test case: %s", tt.name)
 			err := service.handleTaskNotification(ctx, mockFHIRClient, &notifiedTask)
+
+			// Force flush before any assertions to ensure spans are exported
+			tp.ForceFlush(context.Background())
+
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
+				// Even when there are errors, spans should still be created for tracing errors
+				assertSpansCreated(t, false)
 			} else {
 				require.NoError(t, err)
+				// For successful operations that perform meaningful work, check for timing attributes
+				// Some operations may exit early (like non-SCP tasks or non-owner tasks) and won't have timing
+				expectTiming := tt.numBundlesPosted > 0 || tt.expectSubmission
+				assertSpansCreated(t, expectTiming)
 			}
+
+			// Verify spans contain expected attributes for different scenarios
+			spans := exporter.GetSpans()
+			if len(spans) > 0 {
+				// Find the main handleTaskNotification span
+				var mainSpan *tracetest.SpanStub
+				for _, span := range spans {
+					if span.Name == "handleTaskNotification" {
+						mainSpan = &span
+						break
+					}
+				}
+
+				if mainSpan != nil {
+					// Verify task ID is recorded in the main span
+					taskIDFound := false
+					for _, attr := range mainSpan.Attributes {
+						if attr.Key == "fhir.task_id" && attr.Value.AsString() == *notifiedTask.Id {
+							taskIDFound = true
+							break
+						}
+					}
+					require.True(t, taskIDFound, "Expected task ID in span attributes")
+				}
+			}
+
 			for _, bundleEntry := range capturedTx.Entry {
 				require.NotEmpty(t, bundleEntry.Request.Url)
 			}
