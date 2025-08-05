@@ -2,9 +2,7 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"net/http"
 	"net/url"
 	"os"
 	"strconv"
@@ -16,48 +14,6 @@ import (
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
-
-// setupJaeger sets up a Jaeger v2 container to collect OpenTelemetry traces
-func setupJaeger(t *testing.T, dockerNetworkName string) *url.URL {
-	println("Starting Jaeger v2 for OpenTelemetry traces...")
-	ctx := context.Background()
-	req := testcontainers.ContainerRequest{
-		Image:        "jaegertracing/jaeger:2.0.0", // Updated to Jaeger v2
-		Name:         "jaeger",
-		ExposedPorts: []string{"16686/tcp", "4317/tcp", "4318/tcp"}, // Removed deprecated ports
-		Networks:     []string{dockerNetworkName},
-		Env: map[string]string{
-			// Jaeger v2 uses different environment variable names
-			"JAEGER_HTTP_SERVER_HOST_PORT":  ":16686",
-			"COLLECTOR_OTLP_GRPC_HOST_PORT": ":4317",
-			"COLLECTOR_OTLP_HTTP_HOST_PORT": ":4318",
-		},
-		WaitingFor: wait.ForHTTP("/").WithPort("16686/tcp"),
-		LogConsumerCfg: &testcontainers.LogConsumerConfig{
-			Consumers: []testcontainers.LogConsumer{&testcontainers.StdoutLogConsumer{}},
-		},
-	}
-	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
-		ContainerRequest: req,
-		Started:          true,
-	})
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = container.Terminate(ctx)
-	})
-
-	// Get the exposed port for Jaeger UI
-	mappedPort, err := container.MappedPort(ctx, "16686")
-	require.NoError(t, err)
-
-	jaegerUIURL := &url.URL{
-		Scheme: "http",
-		Host:   "localhost:" + mappedPort.Port(),
-	}
-
-	println("Jaeger UI available at:", jaegerUIURL.String())
-	return jaegerUIURL
-}
 
 func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, fhirStoreURL string, questionnaireFhirStoreUrl string) *url.URL {
 	image := os.Getenv("ORCHESTRATOR_IMAGE")
@@ -74,9 +30,6 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 		ExposedPorts:    []string{"8080/tcp"},
 		Networks:        []string{dockerNetworkName},
 		AlwaysPullImage: pullImage,
-		LogConsumerCfg: &testcontainers.LogConsumerConfig{
-			Consumers: []testcontainers.LogConsumer{NewFilteredLogConsumer(containerName)},
-		},
 		Env: map[string]string{
 			"ORCA_LOGLEVEL":                     "debug",
 			"ORCA_PUBLIC_URL":                   "http://" + containerName + ":8080",
@@ -99,7 +52,13 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_OPENTELEMETRY_SERVICE_NAME":           "orca-orchestrator-" + nutsSubject,
 			"ORCA_OPENTELEMETRY_SERVICE_VERSION":        "e2e-test",
 			"ORCA_OPENTELEMETRY_EXPORTER_TYPE":          "otlp",
-			"ORCA_OPENTELEMETRY_EXPORTER_OTLP_ENDPOINT": "http://jaeger:4318",
+			"ORCA_OPENTELEMETRY_EXPORTER_OTLP_ENDPOINT": "otel-collector:4318",
+			"ORCA_OPENTELEMETRY_EXPORTER_OTLP_INSECURE": "true",
+
+			// Explicitly set standard OTEL env vars to prevent conflicts
+			"OTEL_EXPORTER_OTLP_ENDPOINT":        "",
+			"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
+			"OTEL_EXPORTER_OTLP_INSECURE":        "",
 		},
 		Files: []testcontainers.ContainerFile{
 			// Questionnaire and HealthcareService bundles required by Task Filler Engine
@@ -135,194 +94,136 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 	return r
 }
 
-// extractJaegerTraces exports all traces from Jaeger and saves them to a file
-func extractJaegerTraces(t *testing.T, jaegerUIURL *url.URL) {
-	t.Log("📊 Extracting traces from Jaeger before shutdown...")
+// setupOTELCollector sets up an OpenTelemetry Collector container to collect traces
+func setupOTELCollector(t *testing.T, dockerNetworkName string) {
+	println("Starting OTEL Collector for trace collection...")
+	ctx := context.Background()
 
-	// Wait a moment for traces to be fully processed
+	// Create OTEL Collector configuration - simplified to avoid file system issues
+	collectorConfig := `
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+
+exporters:
+  debug:
+    verbosity: detailed
+    sampling_initial: 2
+    sampling_thereafter: 50
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]
+`
+
+	// Create log consumer to capture traces
+	logConsumer := NewOTELCollectorLogConsumer()
+
+	req := testcontainers.ContainerRequest{
+		Image:        "otel/opentelemetry-collector:latest",
+		Name:         "otel-collector",
+		ExposedPorts: []string{"4317/tcp", "4318/tcp"},
+		Networks:     []string{dockerNetworkName},
+		Files: []testcontainers.ContainerFile{
+			{
+				Reader:            strings.NewReader(collectorConfig),
+				ContainerFilePath: "/etc/otel-collector-config.yaml",
+				FileMode:          0644,
+			},
+		},
+		Cmd: []string{"--config=/etc/otel-collector-config.yaml"},
+		WaitingFor: wait.ForAll(
+			wait.ForListeningPort("4317/tcp").WithStartupTimeout(30*time.Second),
+			wait.ForListeningPort("4318/tcp").WithStartupTimeout(30*time.Second),
+		),
+		LogConsumerCfg: &testcontainers.LogConsumerConfig{
+			Consumers: []testcontainers.LogConsumer{logConsumer},
+		},
+	}
+
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: req,
+		Started:          true,
+	})
+	require.NoError(t, err)
+
+	t.Cleanup(func() {
+		// Extract traces before container shutdown
+		extractOTELCollectorTraces(t, logConsumer)
+		_ = container.Terminate(ctx)
+	})
+
+	println("OTEL Collector started and ready to receive traces")
+}
+
+// extractOTELCollectorTraces saves the captured traces to a file
+func extractOTELCollectorTraces(t *testing.T, logConsumer *OTELCollectorLogConsumer) {
+	t.Log("Extracting traces from OTEL Collector")
+
+	// Wait a moment for final traces to be processed
 	time.Sleep(2 * time.Second)
 
-	// Get list of services
-	servicesURL := jaegerUIURL.JoinPath("/api/services")
-	resp, err := http.Get(servicesURL.String())
-	if err != nil {
-		t.Logf("❌ Failed to get services from Jaeger: %v", err)
-		return
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		t.Logf("❌ Jaeger services API returned status %d", resp.StatusCode)
-		return
-	}
-
-	var servicesResp struct {
-		Data []string `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&servicesResp); err != nil {
-		t.Logf("❌ Failed to decode services response: %v", err)
-		return
-	}
-
-	t.Logf("🔍 Found %d services in Jaeger", len(servicesResp.Data))
-
-	// Extract traces for each service
-	allTraces := make(map[string]interface{})
-	for _, service := range servicesResp.Data {
-		traces := extractTracesForService(t, jaegerUIURL, service)
-		if len(traces) > 0 {
-			allTraces[service] = traces
-			t.Logf("✅ Extracted %d traces for service: %s", len(traces), service)
-		}
-	}
-
-	if len(allTraces) == 0 {
-		t.Log("⚠️  No traces found in Jaeger")
-		return
-	}
-
 	// Save traces to file
-	tracesFile := "jaeger_traces.json"
-	file, err := os.Create(tracesFile)
+	tracesFile := "otel_traces.txt"
+	err := logConsumer.SaveTraces(tracesFile)
 	if err != nil {
-		t.Logf("❌ Failed to create traces file: %v", err)
+		t.Logf("Failed to save traces: %v", err)
 		return
+	}
+
+	t.Logf("Traces exported to: %s", tracesFile)
+}
+
+// NewOTELCollectorLogConsumer creates a log consumer that captures and saves OTEL traces
+func NewOTELCollectorLogConsumer() *OTELCollectorLogConsumer {
+	return &OTELCollectorLogConsumer{
+		traces: make([]string, 0),
+	}
+}
+
+type OTELCollectorLogConsumer struct {
+	traces []string
+}
+
+func (o *OTELCollectorLogConsumer) Accept(l testcontainers.Log) {
+	logLine := string(l.Content)
+	logLine = strings.TrimSpace(logLine)
+
+	if logLine == "" {
+		return
+	}
+
+	o.traces = append(o.traces, logLine)
+}
+
+func (o *OTELCollectorLogConsumer) SaveTraces(filename string) error {
+	if len(o.traces) == 0 {
+		return fmt.Errorf("no traces captured")
+	}
+
+	file, err := os.Create(filename)
+	if err != nil {
+		return err
 	}
 	defer file.Close()
 
-	encoder := json.NewEncoder(file)
-	encoder.SetIndent("", "  ")
-	if err := encoder.Encode(allTraces); err != nil {
-		t.Logf("❌ Failed to write traces to file: %v", err)
-		return
-	}
-
-	t.Logf("💾 Traces exported to: %s", tracesFile)
-
-	// Also print a summary to console
-	printTraceSummary(t, allTraces)
-}
-
-func extractTracesForService(t *testing.T, jaegerUIURL *url.URL, service string) []interface{} {
-	// Look back 1 hour to catch all traces from the test
-	endTime := time.Now().UnixMicro()
-	startTime := time.Now().Add(-1 * time.Hour).UnixMicro()
-
-	tracesURL := jaegerUIURL.JoinPath("/api/traces")
-	req, err := http.NewRequest("GET", tracesURL.String(), nil)
-	if err != nil {
-		return nil
-	}
-
-	q := req.URL.Query()
-	q.Set("service", service)
-	q.Set("start", fmt.Sprintf("%d", startTime))
-	q.Set("end", fmt.Sprintf("%d", endTime))
-	q.Set("limit", "100") // Increase limit to catch more traces
-	req.URL.RawQuery = q.Encode()
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil
-	}
-
-	var tracesResp struct {
-		Data []interface{} `json:"data"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&tracesResp); err != nil {
-		return nil
-	}
-
-	return tracesResp.Data
-}
-
-func printTraceSummary(t *testing.T, allTraces map[string]interface{}) {
-	t.Log("🎯 TRACE SUMMARY:")
-	t.Log("================")
-
-	for service, traces := range allTraces {
-		if traceList, ok := traces.([]interface{}); ok {
-			t.Logf("📋 Service: %s (%d traces)", service, len(traceList))
-
-			// Print first few trace operations for preview
-			for i, trace := range traceList {
-				if i >= 3 { // Limit to first 3 traces per service
-					t.Logf("    ... and %d more traces", len(traceList)-3)
-					break
-				}
-
-				if traceMap, ok := trace.(map[string]interface{}); ok {
-					if spans, ok := traceMap["spans"].([]interface{}); ok && len(spans) > 0 {
-						if span, ok := spans[0].(map[string]interface{}); ok {
-							if operationName, ok := span["operationName"].(string); ok {
-								t.Logf("    🔸 %s", operationName)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-	t.Log("================")
-}
-
-// createLogFilter helps identify OTEL vs other logs
-type LogFilter struct {
-	OTELPatterns []string
-	ServiceNames []string
-}
-
-func NewLogFilter() *LogFilter {
-	return &LogFilter{
-		OTELPatterns: []string{
-			// OpenTelemetry specific
-			"otel", "opentelemetry", "otlp",
-			// Tracing terms
-			"tracing", "span", "trace", "tracer",
-			// Jaeger specific
-			"jaeger", "jaeger-client",
-			// ORCA OTEL config
-			"ORCA_OPENTELEMETRY",
-			// Common span/trace operations
-			"span.start", "span.end", "span.finish",
-			"trace.start", "trace.end",
-			// Instrumentation
-			"instrumentation", "telemetry",
-			// Exporters
-			"exporter", "collector",
-			// Sampling
-			"sampler", "sampling",
-		},
-		ServiceNames: []string{
-			"orca-orchestrator-clinic",
-			"orca-orchestrator-hospital",
-		},
-	}
-}
-
-func (lf *LogFilter) IsOTELLog(logLine string) bool {
-	logLower := strings.ToLower(logLine)
-
-	// Check for OTEL patterns
-	for _, pattern := range lf.OTELPatterns {
-		if strings.Contains(logLower, strings.ToLower(pattern)) {
-			return true
+	// Write traces as simple text file
+	for _, trace := range o.traces {
+		_, err := file.WriteString(trace + "\n")
+		if err != nil {
+			return err
 		}
 	}
 
-	// Check for service names in tracing context
-	for _, service := range lf.ServiceNames {
-		if strings.Contains(logLower, strings.ToLower(service)) {
-			return true
-		}
-	}
-
-	return false
+	return nil
 }

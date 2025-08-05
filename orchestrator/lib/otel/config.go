@@ -39,6 +39,8 @@ type OTLPConfig struct {
 	Headers map[string]string `koanf:"headers"`
 	// Timeout for OTLP requests
 	Timeout time.Duration `koanf:"timeout"`
+	// Insecure controls whether to use HTTP instead of HTTPS
+	Insecure bool `koanf:"insecure"`
 }
 
 // DefaultConfig returns a default OTEL configuration
@@ -114,6 +116,9 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	var exporter trace.SpanExporter
 	switch config.Exporter.Type {
 	case "otlp":
+		// Debug logging to understand what's happening
+		fmt.Printf("🐛 OTLP Config - Endpoint: %s, Insecure: %t\n", config.Exporter.OTLP.Endpoint, config.Exporter.OTLP.Insecure)
+
 		opts := []otlptracehttp.Option{
 			otlptracehttp.WithEndpoint(config.Exporter.OTLP.Endpoint),
 			otlptracehttp.WithTimeout(config.Exporter.OTLP.Timeout),
@@ -123,6 +128,22 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 		if len(config.Exporter.OTLP.Headers) > 0 {
 			opts = append(opts, otlptracehttp.WithHeaders(config.Exporter.OTLP.Headers))
 		}
+
+		// Use HTTP or HTTPS based on Insecure flag
+		if config.Exporter.OTLP.Insecure {
+			fmt.Printf("🐛 Adding WithInsecure() option\n")
+			opts = append(opts, otlptracehttp.WithInsecure())
+		}
+
+		// Add retry configuration to handle temporary connection issues
+		opts = append(opts, otlptracehttp.WithRetry(otlptracehttp.RetryConfig{
+			Enabled:         true,
+			InitialInterval: 1 * time.Second,
+			MaxInterval:     5 * time.Second,
+			MaxElapsedTime:  30 * time.Second,
+		}))
+
+		fmt.Printf("🐛 Creating OTLP exporter with endpoint: %s\n", config.Exporter.OTLP.Endpoint)
 
 		exporter, err = otlptracehttp.New(ctx, opts...)
 		if err != nil {
