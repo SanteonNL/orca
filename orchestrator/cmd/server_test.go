@@ -124,7 +124,6 @@ func freeTCPPort() (port int) {
 func TestStart_OpenTelemetry(t *testing.T) {
 	baseCfg := DefaultConfig()
 	baseCfg.Nuts.API.URL = "http://example.com"
-	baseCfg.Nuts.OwnSubject = "subject"
 	baseCfg.Nuts.Public.URL = "http://example.com"
 	baseCfg.Nuts.DiscoveryService = "http://example.com"
 
@@ -325,7 +324,6 @@ func TestOpenTelemetryServerIntegration(t *testing.T) {
 	t.Run("server startup with opentelemetry enabled", func(t *testing.T) {
 		cfg := DefaultConfig()
 		cfg.Nuts.API.URL = "http://example.com"
-		cfg.Nuts.OwnSubject = "subject"
 		cfg.Nuts.Public.URL = "http://example.com"
 		cfg.Nuts.DiscoveryService = "http://example.com"
 		cfg.Public.Address = ":" + strconv.Itoa(freeTCPPort())
