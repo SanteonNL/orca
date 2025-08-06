@@ -86,7 +86,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 	)
 	defer span.End()
 
-	err := n.eventManager.Notify(ctx, TaskAcceptedEvent{
+	err = n.eventManager.Notify(ctx, TaskAcceptedEvent{
 		TenantID:    tenant.ID,
 		FHIRBaseURL: fhirBaseURL,
 		Task:        *task,

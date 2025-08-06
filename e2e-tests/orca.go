@@ -51,7 +51,7 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 
 			// OpenTelemetry Configuration
 			"ORCA_OPENTELEMETRY_ENABLED":                "true",
-			"ORCA_OPENTELEMETRY_SERVICE_NAME":           "orca-orchestrator-" + nutsSubject,
+			"ORCA_OPENTELEMETRY_SERVICE_NAME":           "orca-orchestrator-e2e-test",
 			"ORCA_OPENTELEMETRY_SERVICE_VERSION":        "e2e-test",
 			"ORCA_OPENTELEMETRY_EXPORTER_TYPE":          "otlp",
 			"ORCA_OPENTELEMETRY_EXPORTER_OTLP_ENDPOINT": "otel-collector:4318",

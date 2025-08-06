@@ -479,13 +479,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 	if err != nil {
 		return err
 	}
-	ehrProxy := s.ehrFHIRProxyByTenant[tenant.ID]
-	if ehrProxy == nil {
-		err := coolfhir.BadRequest("EHR API is not supported")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
-	}
+
 	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		request.Context(),
@@ -498,6 +492,14 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		),
 	)
 	defer span.End()
+
+	ehrProxy := s.ehrFHIRProxyByTenant[tenant.ID]
+	if ehrProxy == nil {
+		err := coolfhir.BadRequest("EHR API is not supported")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return err
+	}
 
 	start := time.Now()
 	log.Ctx(ctx).Debug().Msg("Handling external FHIR API request")
