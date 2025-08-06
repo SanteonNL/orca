@@ -1,7 +1,7 @@
 package careplanservice
 
 import (
-	"errors"
+	"github.com/SanteonNL/orca/orchestrator/lib/validation"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/mail"
@@ -12,24 +12,18 @@ import (
 type PatientValidator struct {
 }
 
-func (v *PatientValidator) Validate(patient *fhir.Patient) []error {
-	var errs []error
+func (v *PatientValidator) Validate(patient *fhir.Patient) []*validation.Error {
+	var errs []*validation.Error
 	hasEmail, hasPhone := false, false
 
 	if patient == nil {
-		errs = append(errs, errors.New("patient is required"))
-		return errs
-	}
-
-	log.Info().Msgf("Validating Patient: %+v", *patient)
-
-	if patient.Telecom == nil || len(patient.Telecom) == 0 {
-		errs = append(errs, errors.New("patient telecom required"))
+		errs = append(errs, &validation.Error{
+			Code: PatientRequired,
+		})
 		return errs
 	}
 
 	for _, point := range patient.Telecom {
-
 		if point.System != nil {
 			switch *point.System {
 			case fhir.ContactPointSystemEmail:
@@ -48,54 +42,53 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []error {
 		}
 	}
 
-	if !hasEmail && !hasPhone {
-		errs = append(errs, errors.New("patient must have both email and phone"))
-	} else if !hasEmail {
-		errs = append(errs, errors.New("patient must have email"))
-	} else if !hasPhone {
-		errs = append(errs, errors.New("patient must have phone"))
+	if !hasEmail {
+		errs = append(errs, &validation.Error{Code: EmailRequired})
+	}
+	if !hasPhone {
+		errs = append(errs, &validation.Error{Code: PhoneRequired})
 	}
 
 	if len(errs) > 0 {
-		log.Error().Msgf("Validation errors: %v", errs)
+		log.Debug().Msgf("Validation errors: %v", errs)
 		return errs
 	}
 	return nil
 }
 
-func validateEmail(email *string) error {
+func validateEmail(email *string) *validation.Error {
 
 	if email == nil || *email == "" {
-		return errors.New("email is required")
+		return &validation.Error{Code: EmailRequired}
 	}
 
 	_, err := mail.ParseAddress(*email)
 	if err != nil {
-		return errors.New("email is invalid")
+		return &validation.Error{Code: InvalidEmail}
 	}
 	return nil
 }
 
-func validatePhone(phone *string) error {
+func validatePhone(phone *string) *validation.Error {
 	if phone == nil || *phone == "" {
-		return errors.New("phone number is required")
+		return &validation.Error{Code: PhoneRequired}
 	}
 
-	return isDutchPhoneNumber(phone)
-}
+	normalised := regexp.MustCompile("[^0-9+]").ReplaceAllString(*phone, "")
 
-func isDutchPhoneNumber(phone *string) error {
-	var normalised = regexp.MustCompile("[^0-9+]").ReplaceAllString(*phone, "")
-	const phoneLength = 10
-	const internationalPhoneLength = 12
-
-	if len(normalised) == phoneLength && strings.HasPrefix(normalised, "06") {
+	// Dutch mobile: 06xxxxxxxx (10 digits) or +316xxxxxxxx (12 digits)
+	if (len(normalised) == 10 && strings.HasPrefix(normalised, "06")) ||
+		(len(normalised) == 12 && strings.HasPrefix(normalised, "+316")) {
 		return nil
 	}
 
-	if len(normalised) == internationalPhoneLength && strings.HasPrefix(normalised, "+316") {
-		return nil
-	}
-	return errors.New("patient phone number should be a dutch mobile number")
-
+	return &validation.Error{Code: InvalidPhone}
 }
+
+const (
+	EmailRequired   = "E0001"
+	PhoneRequired   = "E0002"
+	InvalidEmail    = "E0003"
+	InvalidPhone    = "E0004"
+	PatientRequired = "E9999"
+)

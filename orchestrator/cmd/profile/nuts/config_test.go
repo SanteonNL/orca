@@ -14,7 +14,6 @@ func TestConfig_Validate(t *testing.T) {
 			Public: PublicConfig{
 				URL: "http://nutsnode:8080",
 			},
-			OwnSubject: "sub",
 		}
 		err := c.Validate()
 		require.EqualError(t, err, "invalid/empty Discovery Service ID")
@@ -25,7 +24,6 @@ func TestConfig_Validate(t *testing.T) {
 				URL: "http://nutsnode:8081",
 			},
 			DiscoveryService: "discovery",
-			OwnSubject:       "sub",
 		}
 		err := c.Validate()
 		require.EqualError(t, err, "invalid/empty Nuts public URL")
@@ -36,21 +34,9 @@ func TestConfig_Validate(t *testing.T) {
 				URL: "http://nutsnode:8080",
 			},
 			DiscoveryService: "discovery",
-			OwnSubject:       "sub",
 		}
 		err := c.Validate()
 		require.EqualError(t, err, "invalid Nuts API URL")
-	})
-	t.Run("subject not set", func(t *testing.T) {
-		c := Config{
-			API: APIConfig{
-				URL: "http://nutsnode:8081",
-			},
-			Public:           PublicConfig{URL: "http://nutsnode:8080"},
-			DiscoveryService: "discovery",
-		}
-		err := c.Validate()
-		require.EqualError(t, err, "invalid/empty Nuts subject")
 	})
 	t.Run("ok", func(t *testing.T) {
 		c := Config{
@@ -59,7 +45,6 @@ func TestConfig_Validate(t *testing.T) {
 			},
 			Public:           PublicConfig{URL: "http://nutsnode:8080"},
 			DiscoveryService: "discovery",
-			OwnSubject:       "sub",
 		}
 		err := c.Validate()
 		require.NoError(t, err)

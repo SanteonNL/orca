@@ -4,7 +4,9 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/http/httptest"
@@ -40,24 +42,34 @@ func TestService_handle(t *testing.T) {
 			},
 		},
 	}
-	globals.CarePlanServiceFhirClient = &test.StubFHIRClient{
+
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.Demo = tenants.DemoProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: "https://example.com/fhir",
+			},
+		}
+	})
+	tenant := tenantCfg.Sole()
+	globals.RegisterCPSFHIRClient(tenant.ID, &test.StubFHIRClient{
 		Resources: []interface{}{
 			existingTask,
 		},
-	}
+	})
 
 	t.Run("root base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
-			sessionManager: sessionManager, baseURL: "/",
+			sessionManager: sessionManager, orcaPublicURL: must.ParseURL("/"),
 			frontendLandingUrl: must.ParseURL("/cpc/"),
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+			tenants: tenantCfg,
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=ServiceRequest/b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=ServiceRequest/b&practitioner=Practitioner/c&tenant="+tenant.ID+"&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -74,15 +86,16 @@ func TestService_handle(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager:     sessionManager,
-			baseURL:            "/orca",
+			orcaPublicURL:      must.ParseURL("/orca"),
 			frontendLandingUrl: must.ParseURL("/frontend/landing"),
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+			tenants: tenantCfg,
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|10", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&tenant="+tenant.ID+"&taskIdentifier=unit-test-system|10", nil)
 
 		service.handle(response, request)
 
@@ -93,15 +106,16 @@ func TestService_handle(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager:     sessionManager,
-			baseURL:            "/orca",
+			orcaPublicURL:      must.ParseURL("/orca"),
 			frontendLandingUrl: must.ParseURL("/cpc/"),
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+			tenants: tenantCfg,
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&tenant="+tenant.ID+"&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 		require.Equal(t, 1, sessionManager.SessionCount())
@@ -120,15 +134,16 @@ func TestService_handle(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager:     sessionManager,
-			baseURL:            "/orca",
+			orcaPublicURL:      must.ParseURL("/orca"),
 			frontendLandingUrl: must.ParseURL("/frontend/enrollment"),
 			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
 				return ehrFHIRClient
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+			tenants: tenantCfg,
 		}
 		response := httptest.NewRecorder()
-		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&iss=https://example.com/fhir&taskIdentifier=unit-test-system|20", nil)
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=Patient/a&serviceRequest=b&practitioner=Practitioner/c&tenant="+tenant.ID+"&taskIdentifier=unit-test-system|20", nil)
 
 		service.handle(response, request)
 

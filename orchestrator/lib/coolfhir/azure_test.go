@@ -349,3 +349,18 @@ func TestNewAuthRoundTripper_TransportType(t *testing.T) {
 	// The transport should be wrapped by otelhttp
 	assert.Contains(t, transportType, "otelhttp", "Transport should be wrapped by otelhttp")
 }
+
+func TestClientConfig_Validate(t *testing.T) {
+	t.Run("valid", func(t *testing.T) {
+		config := ClientConfig{
+			BaseURL: "https://example.com/fhir",
+		}
+		err := config.Validate()
+		require.NoError(t, err)
+	})
+	t.Run("no baseURL", func(t *testing.T) {
+		config := ClientConfig{}
+		err := config.Validate()
+		require.NoError(t, err)
+	})
+}

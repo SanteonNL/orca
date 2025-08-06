@@ -1,6 +1,6 @@
 import Client from 'fhir-kit-client';
 import {
-    Bundle, CarePlan, CareTeam,
+    Bundle, Coding,
     Condition,
     Identifier,
     Patient,
@@ -12,6 +12,7 @@ import {
     Task
 } from 'fhir/r4';
 
+
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
 
@@ -20,20 +21,20 @@ export const patientIdentifierSystem = () => {
 }
 
 // This function creates a FHIR client to communicate with other (remote) SCP nodes' FHIR APIs.
-export const createScpClient = () => {
-    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`;
-    return new Client({ baseUrl });
+export const createScpClient = (tenantId: string) => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/${tenantId}/external/fhir`;
+    return new Client({baseUrl});
 };
 
 // This function creates a FHIR client to communicate with the EHR's FHIR API.
-export const createEhrClient = () => {
-    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`;
-    return new Client({ baseUrl });
+export const createEhrClient = (tenantId: string) => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/${tenantId}/ehr/fhir`;
+    return new Client({baseUrl});
 };
 
 // This function creates a FHIR client to communicate with the ORCA instance's own CarePlanService.
-export const createCpsClient = () => {
-    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/external/fhir`;
+export const createCpsClient = (tenantId: string) => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/${tenantId}/external/fhir`;
     return new Client({
         baseUrl: baseUrl,
         customHeaders: {
@@ -63,7 +64,7 @@ export const fetchAllBundlePages = async <T extends Resource>(
             bundle: {
                 resourceType: 'Bundle',
                 type: 'searchset',
-                link: [{ relation: 'next', url: nextPageUrl }]
+                link: [{relation: 'next', url: nextPageUrl}]
             }
         });
         const bundle = result as FhirBundle<T>;
@@ -83,7 +84,7 @@ export const findInBundle = (resourceType: string, bundle?: Bundle) => {
 }
 
 const cleanPatient = (patient: Patient) => {
-    const cleanedPatient = { ...patient, id: undefined }
+    const cleanedPatient = {...patient, id: undefined}
     if (cleanedPatient.contact) {
         for (const contact of cleanedPatient.contact) {
             if (contact.organization?.reference) {
@@ -116,7 +117,7 @@ const cleanPatient = (patient: Patient) => {
 
 const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string, taskIdentifier?: string) => {
     // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
-    const cleanedServiceRequest = { ...serviceRequest, id: undefined };
+    const cleanedServiceRequest = {...serviceRequest, id: undefined};
 
     const patientIdentifier = getPatientIdentifier(patient);
     if (!patientIdentifier || serviceRequest.subject?.identifier?.system !== patientIdentifier.system || serviceRequest.subject?.identifier?.value !== patientIdentifier.value) {
@@ -263,7 +264,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     return bundle as Bundle & { type: "transaction" }
 }
 
-export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Questionnaire) => {
+export const findQuestionnaireResponse = async (cpsClient: FhirClient, task?: Task, questionnaire?: Questionnaire) => {
     if (!task || !task.output || !questionnaire) return
 
     const questionnaireResponse = task.output.find((output) => {
@@ -274,8 +275,6 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
 
     const questionnaireResponseId = questionnaireResponse.valueReference?.reference
     if (!questionnaireResponseId) return
-
-    const cpsClient = createCpsClient()
     return await cpsClient.read({
         resourceType: "QuestionnaireResponse",
         id: questionnaireResponseId.split("/")[1]
@@ -294,4 +293,39 @@ export function identifierToToken(identifier?: Identifier) {
     }
 
     return `${identifier.system}|${identifier.value}`
+}
+
+
+export function codingToMessage(codings: Coding[]): String[] {
+    if (!codings.length) return [MessageType.Unknown];
+    const messages: String[] = [];
+
+    for (const coding of codings) {
+        switch (coding.code) {
+            case "E0001":
+                messages.push(MessageType.NoEmail);
+                break;
+            case "E0002":
+                messages.push(MessageType.NoPhone);
+                break;
+            case "E0003":
+                messages.push(MessageType.InvalidEmail);
+                break;
+            case "E0004":
+                messages.push(MessageType.InvalidPhone);
+                break;
+            default:
+                messages.push(MessageType.Unknown + " (code: " + coding.code + ")");
+                break;
+        }
+    }
+    return messages;
+}
+
+export enum MessageType {
+    InvalidEmail = "Controleer het e-mailadres van de patiënt in het EPD en probeer het opnieuw. ",
+    InvalidPhone = "Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw. ",
+    NoEmail = "Er is geen e-mailadres van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het e-mailadres toe in het EPD en probeer het opnieuw.",
+    NoPhone = "Er is geen telefoonnummer van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het telefoonnummer toe in het EPD en probeer het opnieuw.",
+    Unknown = "Er is een onbekende fout opgetreden. Probeer het later opnieuw of neem contact op met de beheerder."
 }

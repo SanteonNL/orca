@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"net/url"
 	"time"
@@ -28,11 +29,12 @@ type Manager interface {
 	Notify(ctx context.Context, resource interface{}) error
 }
 
-func NewManager(fhirBaseURL *url.URL, channels ChannelFactory, messageBroker messaging.Broker) (*RetryableManager, error) {
+func NewManager(cpsBaseURLFunc func(tenants.Properties) *url.URL, tenants tenants.Config, channels ChannelFactory, messageBroker messaging.Broker) (*RetryableManager, error) {
 	mgr := &RetryableManager{
-		FhirBaseURL:   fhirBaseURL,
-		Channels:      channels,
-		MessageBroker: messageBroker,
+		cpsBaseURLFunc: cpsBaseURLFunc,
+		tenants:        tenants,
+		channels:       channels,
+		messageBroker:  messageBroker,
 	}
 	if err := messageBroker.ReceiveFromQueue(SendNotificationQueue, mgr.receiveMessage); err != nil {
 		return nil, err
@@ -48,17 +50,23 @@ var _ Manager = RetryableManager{}
 // - CareTeam: it notifies all participants
 // TODO: It does not yet store the subscription notifications in the FHIR store, which is required to support monotonically increasing event numbers.
 type RetryableManager struct {
-	FhirBaseURL   *url.URL
-	Channels      ChannelFactory
-	MessageBroker messaging.Broker
+	cpsBaseURLFunc func(tenants.Properties) *url.URL
+	tenants        tenants.Config
+	channels       ChannelFactory
+	messageBroker  messaging.Broker
 }
 
 type NotificationEvent struct {
 	Subscriber fhir.Identifier `json:"subscriber"`
 	Focus      fhir.Reference  `json:"focus"`
+	TenantID   string          `json:"tenant_id"`
 }
 
 func (r RetryableManager) Notify(ctx context.Context, resource interface{}) error {
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return err
+	}
 	var focus fhir.Reference
 	var subscribers []fhir.Identifier
 	switch coolfhir.ResourceType(resource) {
@@ -120,8 +128,9 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 		data, _ := json.Marshal(NotificationEvent{
 			Subscriber: subscriber,
 			Focus:      focus,
+			TenantID:   tenant.ID,
 		})
-		if err := r.MessageBroker.SendMessage(ctx, SendNotificationQueue, &messaging.Message{
+		if err := r.messageBroker.SendMessage(ctx, SendNotificationQueue, &messaging.Message{
 			Body:        data,
 			ContentType: "application/json",
 		}); err != nil {
@@ -142,7 +151,14 @@ func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.
 		return fmt.Errorf("failed to unmarshal message into %T: %w", evt, err)
 	}
 
-	channel, err := r.Channels.Create(ctx, evt.Subscriber)
+	// Enrich context with the correct tenant
+	tenant, err := r.tenants.Get(evt.TenantID)
+	if err != nil {
+		return fmt.Errorf("get tenant %s: %w", evt.TenantID, err)
+	}
+	ctx = tenants.WithTenant(ctx, *tenant)
+
+	channel, err := r.channels.Create(ctx, evt.Subscriber)
 	if err != nil {
 		return fmt.Errorf("notification-channel for subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err)
 	}
@@ -152,7 +168,8 @@ func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.
 	}
 	// TODO: Read event number from store
 	// TODO: Do we need an audit event for subscription notifications?
-	notification := coolfhir.CreateSubscriptionNotification(r.FhirBaseURL, timeFunc(), subscription, 0, evt.Focus)
+	cpsBaseURL := r.cpsBaseURLFunc(*tenant)
+	notification := coolfhir.CreateSubscriptionNotification(cpsBaseURL, timeFunc(), subscription, 0, evt.Focus)
 	if err = channel.Notify(ctx, notification); err != nil {
 		return fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err)
 	}

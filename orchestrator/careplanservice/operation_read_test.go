@@ -5,6 +5,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
@@ -24,8 +25,8 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRReadOperationHandler[*fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: AnyonePolicy[*fhir.Task]{},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       AnyonePolicy[*fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.Error(t, err)
 		var outcome fhirclient.OperationOutcomeError
@@ -50,8 +51,8 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRReadOperationHandler[*fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: TestPolicy[*fhir.Task]{},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       TestPolicy[*fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.Error(t, err)
 		errorWithCode := new(coolfhir.ErrorWithCode)
@@ -78,11 +79,12 @@ func TestFHIRReadOperationHandler_Handle(t *testing.T) {
 				Value:  to.Ptr("1"),
 			},
 			FhirHeaders: new(fhirclient.Headers),
+			BaseURL:     must.ParseURL("http://example.com/fhir"),
 		}
 		tx := coolfhir.Transaction()
 		result, err := FHIRReadOperationHandler[*fhir.Task]{
-			fhirClient:  fhirClient,
-			authzPolicy: AnyonePolicy[*fhir.Task]{},
+			fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+			authzPolicy:       AnyonePolicy[*fhir.Task]{},
 		}.Handle(ctx, request, tx)
 		assert.NoError(t, err)
 		assert.NotNil(t, result)

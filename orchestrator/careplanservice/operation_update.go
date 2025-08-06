@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -24,12 +23,11 @@ import (
 var _ FHIROperation = &FHIRUpdateOperationHandler[fhir.HasExtension]{}
 
 type FHIRUpdateOperationHandler[T fhir.HasExtension] struct {
-	authzPolicy Policy[T]
-	fhirClient  fhirclient.Client
-	profile     profile.Provider
+	authzPolicy       Policy[T]
+	fhirClientFactory FHIRClientFactory
+	profile           profile.Provider
 	// createHandler is used for upserting
 	createHandler *FHIRCreateOperationHandler[T]
-	fhirURL       *url.URL
 }
 
 func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -97,8 +95,12 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		searchParams = request.RequestUrl.Query()
 	}
 
+	fhirClient, err := h.fhirClientFactory(ctx)
+	if err != nil {
+		return nil, err
+	}
 	if len(searchParams) > 0 {
-		err := h.fhirClient.SearchWithContext(ctx, resourceType, searchParams, &searchBundle)
+		err := fhirClient.SearchWithContext(ctx, resourceType, searchParams, &searchBundle)
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "failed to search for existing resource")
@@ -121,7 +123,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	// Extract the existing resource from the bundle
 	var existingResource T
-	err := json.Unmarshal(searchBundle.Entry[0].Resource, &existingResource)
+	err = json.Unmarshal(searchBundle.Entry[0].Resource, &existingResource)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to unmarshal existing resource")
@@ -177,7 +179,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var updatedResource T
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, h.fhirClient, h.fhirURL, &resourceBundleEntry, &txResult.Entry[idx], &updatedResource)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, request.BaseURL, &resourceBundleEntry, &txResult.Entry[idx], &updatedResource)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original resource that was sent.

@@ -1,9 +1,10 @@
 'use client'
+
 import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient } from '@aehrc/smart-forms-renderer';
 import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
 import { useEffect, useState } from 'react';
+
 import { toast } from 'sonner';
-import useCpsClient from '@/hooks/use-cps-client';
 import { findQuestionnaireResponse, getPatientIdentifier } from '@/lib/fhirUtils';
 import { Spinner } from '@/components/spinner';
 import { v4 } from 'uuid';
@@ -12,6 +13,7 @@ import useEnrollmentStore from '@/lib/store/enrollment-store';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Button, createTheme, Shadows, ThemeProvider } from '@mui/material';
 import Loading from '../loading';
+import {useContextStore} from "@/lib/store/context-store";
 
 interface QuestionnaireRendererPageProps {
   questionnaire: Questionnaire;
@@ -25,6 +27,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
   const responseIsValid = useQuestionnaireResponseStore.use.responseIsValid();
 
+  const { launchContext, cpsClient } = useContextStore();
   const { patient, practitioner } = useEnrollmentStore()
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prePopulated, setPrePopulated] = useState(false);
@@ -32,15 +35,12 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
   const [, setPrevQuestionnaireResponse] = useState<QuestionnaireResponse>()
 
-  const cpsClient = useCpsClient()
-
   useEffect(() => {
-
     const fetchQuestionnaireResponse = async () => {
 
-      if (!inputTask || !questionnaire) return
+      if (!inputTask || !questionnaire || !launchContext || !cpsClient) return
 
-      const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire) as QuestionnaireResponse
+      const questionnaireResponse = await findQuestionnaireResponse(cpsClient, inputTask, questionnaire) as QuestionnaireResponse
 
       if (questionnaireResponse) {
         setPrevQuestionnaireResponse(questionnaireResponse)
@@ -55,7 +55,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       setInitialized(true)
     }
 
-  }, [initialized, inputTask, questionnaire])
+  }, [initialized, inputTask, questionnaire, launchContext, cpsClient])
 
   const submitQuestionnaireResponse = async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
 
@@ -65,11 +65,15 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       toast.error("Cannot set QuestionnaireResponse, no Task provided")
       return
     }
+    if (!launchContext || !cpsClient) {
+      toast.error("No launch context found")
+      return
+    }
 
     setIsSubmitting(true)
 
     const outputTask = { ...inputTask }
-    const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire)
+    const questionnaireResponse = await findQuestionnaireResponse(cpsClient, inputTask, questionnaire)
 
     const newId = v4()
     const responseExists = !!questionnaireResponse?.id
@@ -125,7 +129,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       ]
     };
 
-    await cpsClient?.transaction({
+    await cpsClient!.transaction({
       body: bundle
     });
   }

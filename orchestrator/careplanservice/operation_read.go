@@ -22,8 +22,8 @@ import (
 var _ FHIROperation = &FHIRReadOperationHandler[fhir.HasExtension]{}
 
 type FHIRReadOperationHandler[T fhir.HasExtension] struct {
-	fhirClient  fhirclient.Client
-	authzPolicy Policy[T]
+	fhirClientFactory FHIRClientFactory
+	authzPolicy       Policy[T]
 }
 
 func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -46,7 +46,11 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 	)
 
 	var resource T
-	err := h.fhirClient.ReadWithContext(ctx, resourceType+"/"+request.ResourceId, &resource, fhirclient.ResponseHeaders(request.FhirHeaders))
+	fhirClient, err := h.fhirClientFactory(ctx)
+	if err != nil {
+		return nil, err
+	}
+	err = fhirClient.ReadWithContext(ctx, resourceType+"/"+request.ResourceId, &resource, fhirclient.ResponseHeaders(request.FhirHeaders))
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to read resource from FHIR server")
@@ -79,6 +83,8 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 	)
 
 	log.Ctx(ctx).Info().Msgf("Getting %s/%s (authz=%s)", resourceType, request.ResourceId, strings.Join(authzDecision.Reasons, ";"))
+
+	updateMetaSource(resource, request.BaseURL)
 
 	resourceRaw, err := json.Marshal(resource)
 	if err != nil {

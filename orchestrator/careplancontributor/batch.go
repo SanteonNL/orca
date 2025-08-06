@@ -3,6 +3,7 @@ package careplancontributor
 import (
 	"errors"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -19,6 +20,14 @@ import (
 )
 
 func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
+	tenant, err := tenants.FromContext(httpRequest.Context())
+	if err != nil {
+		return nil, err
+	}
+	fhirClient := s.ehrFHIRClientByTenant[tenant.ID]
+	if fhirClient == nil {
+		return nil, coolfhir.BadRequest("EHR API is not supported")
+	}
 	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
@@ -36,22 +45,16 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 
 	start := time.Now()
 
-	if s.ehrFhirProxy == nil {
-		err := coolfhir.BadRequest("EHR API is not supported")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
-	}
 	log.Ctx(ctx).Debug().Msg("Handling external FHIR API request")
 
-	_, err := s.authorizeScpMember(httpRequest.WithContext(ctx))
+	_, err = s.authorizeScpMember(httpRequest.WithContext(ctx))
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
-	result, err := s.doHandleBatch(httpRequest.WithContext(ctx), requestBundle)
+	result, err := s.doHandleBatch(httpRequest.WithContext(ctx), requestBundle, fhirClient)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -65,7 +68,7 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 	return result, nil
 }
 
-func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
+func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bundle, fhirClient fhirclient.Client) (*fhir.Bundle, error) {
 	responseBundle := coolfhir.BatchResponse()
 	for _, requestEntry := range requestBundle.Entry {
 		if requestEntry.Request == nil || requestEntry.Request.Method != fhir.HTTPVerbGET {
@@ -92,10 +95,10 @@ func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bu
 		var err error
 		if !strings.Contains(requestEntry.Request.Url, "/") {
 			// It's a search operation
-			err = s.ehrFhirClient.SearchWithContext(httpRequest.Context(), requestURL.Path, requestURL.Query(), &responseData, requestOpts...)
+			err = fhirClient.SearchWithContext(httpRequest.Context(), requestURL.Path, requestURL.Query(), &responseData, requestOpts...)
 		} else {
 			// It's a read operation
-			err = s.ehrFhirClient.ReadWithContext(httpRequest.Context(), requestURL.Path, &responseData, requestOpts...)
+			err = fhirClient.ReadWithContext(httpRequest.Context(), requestURL.Path, &responseData, requestOpts...)
 		}
 		if err != nil {
 			var opOutcomeErr fhirclient.OperationOutcomeError

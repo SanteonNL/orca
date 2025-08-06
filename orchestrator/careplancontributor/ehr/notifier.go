@@ -6,7 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -24,6 +25,7 @@ var _ events.Type = &TaskAcceptedEvent{}
 type TaskAcceptedEvent struct {
 	FHIRBaseURL string    `json:"fhirBaseURL"`
 	Task        fhir.Task `json:"task"`
+	TenantID    string    `json:"tenantId"`
 }
 
 func (t TaskAcceptedEvent) Entity() messaging.Entity {
@@ -44,17 +46,19 @@ type Notifier interface {
 
 // notifier is a type that uses a ServiceBusClient to send messages to a message broker.
 type notifier struct {
+	tenants           tenants.Config
 	eventManager      events.Manager
 	broker            messaging.Broker
 	fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
 }
 
 // NewNotifier creates and returns a Notifier implementation using the provided ServiceBusClient for message handling.
-func NewNotifier(eventManager events.Manager, messageBroker messaging.Broker, receiverTopicOrQueue messaging.Entity, taskAcceptedBundleEndpoint string, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
+func NewNotifier(eventManager events.Manager, messageBroker messaging.Broker, tenants tenants.Config, receiverTopicOrQueue messaging.Entity, taskAcceptedBundleEndpoint string, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
 	n := &notifier{
 		eventManager:      eventManager,
 		broker:            messageBroker,
 		fhirClientFactory: fhirClientFactory,
+		tenants:           tenants,
 	}
 	if err := n.start(receiverTopicOrQueue, taskAcceptedBundleEndpoint); err != nil {
 		return nil, err
@@ -64,6 +68,10 @@ func NewNotifier(eventManager events.Manager, messageBroker messaging.Broker, re
 
 // NotifyTaskAccepted sends notification data comprehensively related to a specific FHIR Task to a message broker.
 func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, task *fhir.Task) error {
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return err
+	}
 	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
@@ -79,6 +87,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 	defer span.End()
 
 	err := n.eventManager.Notify(ctx, TaskAcceptedEvent{
+		TenantID:    tenant.ID,
 		FHIRBaseURL: fhirBaseURL,
 		Task:        *task,
 	})
@@ -108,6 +117,14 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity, taskAcceptedBund
 		defer span.End()
 
 		event := rawEvent.(*TaskAcceptedEvent)
+
+		// Lookup tenant
+		tenant, err := n.tenants.Get(event.TenantID)
+		if err != nil {
+			return errors.Wrapf(err, "failed to get from task accepted event (tenant-id=%s)", event.TenantID)
+		}
+		ctx = tenants.WithTenant(ctx, *tenant)
+
 		span.SetAttributes(
 			attribute.String("fhir.base_url", event.FHIRBaseURL),
 			attribute.String("fhir.task_id", *event.Task.Id),
@@ -135,7 +152,9 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity, taskAcceptedBund
 			return errors.Wrap(err, "failed to create task notification bundle")
 		}
 		log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
-
+		//TODO: If this fails, we should create a subtask to let the hospital know that the enrollment failed and the datahub returns a
+		// questionnaire URL to fill in the missing data
+		// cpsClient.CreateWithContext(ctx, "Task", )
 		err = sendBundle(ctx, receiverTopicOrQueue, taskAcceptedBundleEndpoint, *bundles, n.broker)
 		if err != nil {
 			span.RecordError(err)
@@ -212,6 +231,7 @@ func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, task
 			ContentType:   "application/json",
 			CorrelationID: &set.Id,
 		}
+		// TODO: Remove this and send the message directly with an API call to DataHub
 		err = messageBroker.SendMessage(ctx, receiverTopicOrQueue, msg)
 		if err != nil {
 			span.RecordError(err)

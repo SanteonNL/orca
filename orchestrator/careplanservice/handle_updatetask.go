@@ -43,6 +43,12 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		return nil, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err))
 	}
 
+	// Task is owned by CPS, don't allow changing or setting the source of the Task
+	if task.Meta != nil {
+		task.Meta.Source = nil
+	}
+
+
 	// Add task status to span attributes for better observability
 	if task.Status.String() != "" {
 		span.SetAttributes(attribute.String("fhir.task.status", task.Status.String()))
@@ -65,6 +71,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 
 	var taskExisting fhir.Task
 	exists := true
+	fhirClient := s.fhirClientByTenant[request.Tenant.ID]
 	if request.ResourceId == "" {
 		// No ID, should be query parameters leading to the Task to update
 		span.SetAttributes(attribute.String("fhir.task.lookup_method", "query"))
@@ -80,7 +87,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 			opts = append(opts, fhirclient.QueryParam(k, v[0]))
 		}
 		var resultBundle fhir.Bundle
-		if err = s.fhirClient.Read("Task", &resultBundle, opts...); err != nil {
+		if err = fhirClient.Read("Task", &resultBundle, opts...); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "failed to search for task")
 			return nil, fmt.Errorf("failed to search for Task to update: %w", err)
@@ -118,7 +125,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 			span.SetStatus(codes.Error, "id mismatch")
 			return nil, err
 		}
-		err = s.fhirClient.Read("Task/"+request.ResourceId, &taskExisting)
+		err = fhirClient.Read("Task/"+request.ResourceId, &taskExisting)
 		// TODO: If the resource was identified by a concrete ID, and was intended as upsert (create-if-not-exists), this doesn't work yet.
 	}
 	if err != nil {
@@ -224,7 +231,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}))
 
 	// Update care team
-	_, err = careteamservice.Update(ctx, s.fhirClient, carePlanId, task, request.LocalIdentity, tx)
+	_, err = careteamservice.Update(ctx, fhirClient, carePlanId, task, request.LocalIdentity, tx)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to update care team")
@@ -236,7 +243,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		var updatedTask fhir.Task
-		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, s.fhirClient, s.fhirURL, &taskBundleEntry, &txResult.Entry[idx], &updatedTask)
+		result, err := coolfhir.NormalizeTransactionBundleResponseEntry(ctx, fhirClient, request.BaseURL, &taskBundleEntry, &txResult.Entry[idx], &updatedTask)
 		if errors.Is(err, coolfhir.ErrEntryNotFound) {
 			// Bundle execution succeeded, but could not read result entry.
 			// Just respond with the original Task that was sent.

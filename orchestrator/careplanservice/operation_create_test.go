@@ -4,6 +4,7 @@ import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
@@ -264,7 +265,7 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 			},
 			wantErr: func(t assert.TestingT, err error, i ...interface{}) bool {
 				expectedErr := new(fhirclient.OperationOutcomeError)
-				return assert.EqualError(t, err, "OperationOutcome, issues: [invalid error] assert.AnError general error for testing; [invalid error] assert.AnError general error for testing") &&
+				return assert.Contains(t, err.Error(), "OperationOutcome, issues: [invariant error] Validation failed for Task") &&
 					assert.ErrorAs(t, err, &expectedErr) &&
 					assert.Equal(t, http.StatusBadRequest, expectedErr.HttpStatusCode)
 			},
@@ -280,11 +281,10 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 			}
 
 			handler := &FHIRCreateOperationHandler[*fhir.Task]{
-				authzPolicy: policy,
-				fhirClient:  fhirClient,
-				profile:     profile.Test(),
-				fhirURL:     fhirBaseURL,
-				validator:   tt.args.validator,
+				authzPolicy:       policy,
+				fhirClientFactory: FHIRClientFactoryFor(fhirClient),
+				profile:           profile.Test(),
+				validator:         tt.args.validator,
 			}
 			requestData := tt.args.resourceData
 			if requestData == nil {
@@ -297,6 +297,8 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 				ResourcePath:  "Task",
 				Principal:     auth.TestPrincipal1,
 				LocalIdentity: &auth.TestPrincipal2.Organization.Identifier[0],
+				Tenant:        tenants.Test().Sole(),
+				BaseURL:       fhirBaseURL,
 			}, tx)
 			if tt.wantErr != nil {
 				tt.wantErr(t, err)
@@ -311,12 +313,12 @@ func TestFHIRCreateOperationHandler_Handle(t *testing.T) {
 
 type successValidator struct{}
 
-func (v *successValidator) Validate(t *fhir.Task) []error { return nil }
+func (v *successValidator) Validate(t *fhir.Task) []*validation.Error { return nil }
 
 type failureValidator struct{}
 
-func (v *failureValidator) Validate(t *fhir.Task) []error {
-	var errs []error
-	errs = append(errs, assert.AnError)
-	return append(errs, assert.AnError)
+func (v *failureValidator) Validate(t *fhir.Task) []*validation.Error {
+	var errs []*validation.Error
+	errs = append(errs, &validation.Error{Code: "E001"})
+	return append(errs, &validation.Error{Code: "E002"})
 }

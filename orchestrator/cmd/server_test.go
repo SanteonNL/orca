@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/stretchr/testify/assert"
@@ -19,7 +20,11 @@ import (
 func TestStart(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.Nuts.API.URL = "http://example.com"
-	cfg.Nuts.OwnSubject = "subject"
+	cfg.Tenants = tenants.Test(func(properties *tenants.Properties) {
+		properties.ChipSoft = tenants.ChipSoftProperties{
+			OrganizationID: "",
+		}
+	})
 	cfg.Nuts.Public.URL = "http://example.com"
 	cfg.Nuts.DiscoveryService = "http://example.com"
 

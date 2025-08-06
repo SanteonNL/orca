@@ -15,7 +15,7 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, nutsSubject string, cpsEnabled bool, fhirStoreURL string, questionnaireFhirStoreUrl string) *url.URL {
+func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName string, tenant string, cpsEnabled bool, fhirStoreURL string, questionnaireFhirStoreUrl string) *url.URL {
 	image := os.Getenv("ORCHESTRATOR_IMAGE")
 	pullImage := false
 	if image == "" {
@@ -31,20 +31,22 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 		Networks:        []string{dockerNetworkName},
 		AlwaysPullImage: pullImage,
 		Env: map[string]string{
-			"ORCA_LOGLEVEL":                     "debug",
-			"ORCA_PUBLIC_URL":                   "http://" + containerName + ":8080",
-			"ORCA_NUTS_API_URL":                 "http://nutsnode:8081",
-			"ORCA_NUTS_PUBLIC_URL":              "http://nutsnode:8080",
-			"ORCA_NUTS_SUBJECT":                 nutsSubject,
-			"ORCA_NUTS_DISCOVERYSERVICE":        "dev:HomeMonitoring2024",
-			"ORCA_CAREPLANSERVICE_ENABLED":      strconv.FormatBool(cpsEnabled),
-			"ORCA_CAREPLANSERVICE_FHIR_URL":     fhirStoreURL,
-			"ORCA_CAREPLANCONTRIBUTOR_FHIR_URL": fhirStoreURL,
+			"ORCA_LOGLEVEL":                                 "debug",
+			"ORCA_PUBLIC_URL":                               "http://" + containerName + ":8080",
+			"ORCA_NUTS_API_URL":                             "http://nutsnode:8081",
+			"ORCA_NUTS_PUBLIC_URL":                          "http://nutsnode:8080",
+			"ORCA_TENANT_" + tenant + "_NUTS_SUBJECT":       tenant,
+			"ORCA_TENANT_" + tenant + "_CPS_FHIR_URL":       fhirStoreURL,
+			"ORCA_TENANT_" + tenant + "_DEMO_FHIR_URL":      fhirStoreURL,
+			"ORCA_TENANT_" + tenant + "_TASKENGINE_ENABLED": "true",
+			"ORCA_NUTS_DISCOVERYSERVICE":                    "dev:HomeMonitoring2024",
+			"ORCA_CAREPLANSERVICE_ENABLED":                  strconv.FormatBool(cpsEnabled),
 			// HAPI FHIR can only store Questionnaires in the default partition.
 			"ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIREFHIR_URL": questionnaireFhirStoreUrl,
 			"ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS": "file:///config/fhir/healthcareservices.json,file:///config/fhir/questionnaires.json",
 			"ORCA_CAREPLANCONTRIBUTOR_ENABLED":                          "true",
 			"ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN":                "valid",
+			"ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED":           "true",
 			"ORCA_STRICTMODE": "false",
 
 			// OpenTelemetry Configuration

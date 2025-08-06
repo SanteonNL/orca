@@ -65,7 +65,7 @@ func TestReadTaskAuthzPolicy(t *testing.T) {
 	}
 
 	t.Run("read", func(t *testing.T) {
-		policy := ReadTaskAuthzPolicy(fhirClient)
+		policy := ReadTaskAuthzPolicy(FHIRClientFactoryFor(fhirClient))
 		testPolicies(t, []AuthzPolicyTest[*fhir.Task]{
 			{
 				name:      "allow (principal is Task requester)",
