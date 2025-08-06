@@ -118,7 +118,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.False(t, config.Enabled, "Default config should have OTEL disabled")
 	assert.Equal(t, "orca-orchestrator", config.ServiceName)
 	assert.Equal(t, "1.0.0", config.ServiceVersion)
-	assert.Equal(t, "stdout", config.Exporter.Type)
+	assert.Equal(t, "otlp", config.Exporter.Type)
 	assert.Equal(t, "http://localhost:4318", config.Exporter.OTLP.Endpoint)
 	assert.Equal(t, 10*time.Second, config.Exporter.OTLP.Timeout)
 
