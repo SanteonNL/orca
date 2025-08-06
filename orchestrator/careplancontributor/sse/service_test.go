@@ -125,7 +125,7 @@ func TestPublish_ChannelFull(t *testing.T) {
 	// Create a dummy client channel with a small buffer.
 	ch := make(chan string, 1)
 	// Register the client under topic "full".
-	s.registerClient("full", ch)
+	s.registerClient(ctx, "full", ch)
 
 	// Fill the channel.
 	s.Publish(ctx, "full", "first")
@@ -152,12 +152,14 @@ func TestPublish_ChannelFull(t *testing.T) {
 	}
 
 	// Clean up.
-	s.unregisterClient("full", ch)
+	s.unregisterClient(ctx, "full", ch)
 }
 
 // TestRegisterAndUnregisterClient tests that registerClient and unregisterClient add and remove clients appropriately.
 func TestRegisterAndUnregisterClient(t *testing.T) {
 	s := New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	topic := "testTopic"
 	ch := make(chan string, 10)
 
@@ -169,7 +171,7 @@ func TestRegisterAndUnregisterClient(t *testing.T) {
 	s.mu.RUnlock()
 
 	// Register client.
-	s.registerClient(topic, ch)
+	s.registerClient(ctx, topic, ch)
 
 	s.mu.RLock()
 	clients, exists := s.clients[topic]
@@ -182,7 +184,7 @@ func TestRegisterAndUnregisterClient(t *testing.T) {
 	}
 
 	// Unregister client.
-	s.unregisterClient(topic, ch)
+	s.unregisterClient(ctx, topic, ch)
 
 	s.mu.RLock()
 	clients, exists = s.clients[topic]
@@ -204,11 +206,14 @@ func TestRegisterAndUnregisterClient(t *testing.T) {
 // the topic is removed from the clients map.
 func TestUnregisterClient_RemovesTopicWhenEmpty(t *testing.T) {
 	s := New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	topic := "removeTopic"
 	ch := make(chan string, 10)
 
-	s.registerClient(topic, ch)
-	s.unregisterClient(topic, ch)
+	s.registerClient(ctx, topic, ch)
+	s.unregisterClient(ctx, topic, ch)
 
 	s.mu.RLock()
 	_, exists := s.clients[topic]
@@ -222,15 +227,18 @@ func TestUnregisterClient_RemovesTopicWhenEmpty(t *testing.T) {
 // and that the topic is removed only after the last client is unregistered.
 func TestUnregisterClient_MultipleClients(t *testing.T) {
 	s := New()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	topic := "multiTopic"
 	ch1 := make(chan string, 10)
 	ch2 := make(chan string, 10)
 
-	s.registerClient(topic, ch1)
-	s.registerClient(topic, ch2)
+	s.registerClient(ctx, topic, ch1)
+	s.registerClient(ctx, topic, ch2)
 
 	// Unregister one client; the topic should still exist.
-	s.unregisterClient(topic, ch1)
+	s.unregisterClient(ctx, topic, ch1)
 
 	s.mu.RLock()
 	clients, exists := s.clients[topic]
@@ -243,7 +251,7 @@ func TestUnregisterClient_MultipleClients(t *testing.T) {
 	s.mu.RUnlock()
 
 	// Unregister the remaining client; the topic should be removed.
-	s.unregisterClient(topic, ch2)
+	s.unregisterClient(ctx, topic, ch2)
 
 	s.mu.RLock()
 	_, exists = s.clients[topic]
