@@ -35,7 +35,7 @@ export default function TaskProgressHook({taskId, cpsClient, pollingInterval}: T
     queryFnRef.current = queryFn;
 
     const hasDataChanged = (newData: TaskProgress, oldData: TaskProgress): boolean => {
-        if(newData.task.status !== oldData.task.status) {
+        if (newData.task.status !== oldData.task.status) {
             return true; // Task status has changed, we need to refetch
         }
         return newData.subTasks.length !== oldData.subTasks.length;
