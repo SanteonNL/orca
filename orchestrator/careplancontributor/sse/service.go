@@ -229,20 +229,3 @@ func (s *Service) Publish(ctx context.Context, topic string, msg string) {
 		))
 	}
 }
-
-// Tracing example
-func (s *Service) exampleTrace(ctx context.Context, topic string) {
-	tracer := otel.Tracer(tracerName)
-	ctx, span := tracer.Start(ctx, "exampleTrace",
-		trace.WithAttributes(attribute.String("topic", topic)),
-	)
-	defer func() {
-		span.SetStatus(codes.Ok, "")
-		span.End()
-	}()
-
-	// ... do some work ...
-
-	// Add an event to the span
-	span.AddEvent("eventName", trace.WithAttributes(attribute.String("key", "value")))
-}

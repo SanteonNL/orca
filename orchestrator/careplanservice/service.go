@@ -1342,7 +1342,7 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 			// Azure FHIR: if the SearchParameter exists but isn't in the CapabilityStatement, it needs to be re-indexed.
 			// See https://learn.microsoft.com/en-us/azure/healthcare-apis/azure-api-for-fhir/how-to-do-custom-search
 			if !searchParameterExists(capabilityStatement, param.SearchParam.Url) {
-				log.Ctx(ctx).Info().Msgf("SearchParameter/%s needs re-indexing", param.SearchParamId)
+				log.Ctx(ctx).Info().Msgf("SearchParameter/%s needs to be re-indexed", param.SearchParamId)
 				reindexURLs = append(reindexURLs, param.SearchParam.Url)
 			}
 			log.Ctx(ctx).Info().Msgf("SearchParameter/%s already exists, skipping creation", param.SearchParamId)
@@ -1358,7 +1358,7 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 	}
 
 	if len(reindexURLs) == 0 {
-		log.Ctx(ctx).Info().Msg("No SearchParameters need re-indexing")
+		log.Ctx(ctx).Info().Msg("No SearchParameters need to be re-indexed")
 		return nil
 	}
 
