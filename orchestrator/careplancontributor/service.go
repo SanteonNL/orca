@@ -393,10 +393,27 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 
 // handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		request.Context(),
+		"handleProxyAppRequestToEHR",
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("http.method", request.Method),
+			attribute.String("http.url", request.URL.String()),
+			attribute.String("operation.name", "CarePlanContributor/ProxyAppRequestToEHR"),
+		),
+	)
+	defer span.End()
+
+	start := time.Now()
+
 	clientFactory := clients.Factories[sessionData.FHIRLauncher](sessionData.LauncherProperties)
-	proxyBasePath, err := s.tenantBasePath(request.Context())
+	proxyBasePath, err := s.tenantBasePath(ctx)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 	proxyBasePath += "/ehr/fhir"
@@ -409,31 +426,62 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	if resource := sessionData.GetByPath(resourcePath); resource != nil && resource.Resource != nil {
 		coolfhir.SendResponse(writer, http.StatusOK, *resource.Resource)
 	} else {
-		proxy.ServeHTTP(writer, request)
+		proxy.ServeHTTP(writer, request.WithContext(ctx))
 	}
+
+	span.SetAttributes(
+		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
+		attribute.String("fhir.resource_path", resourcePath),
+	)
+	span.SetStatus(codes.Ok, "")
 }
 
 func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		request.Context(),
+		"handleSubscribeToTask",
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("http.method", request.Method),
+			attribute.String("http.url", request.URL.String()),
+			attribute.String("operation.name", "CarePlanContributor/SubscribeToTask"),
+		),
+	)
+	defer span.End()
+
+	start := time.Now()
+
 	if sessionData.TaskIdentifier == nil {
-		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No taskIdentifier found in session"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		err := coolfhir.BadRequest("No taskIdentifier found in session")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 
 	sessionTaskIdentifier, err := coolfhir.TokenToIdentifier(*sessionData.TaskIdentifier)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("Invalid taskIdentifier in session: %v", err), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, coolfhir.BadRequest("Invalid taskIdentifier in session: %v", err), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 
 	if !s.cpsEnabled {
-		coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("No local CarePlanService configured - cannot verify Task identifiers"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		err := coolfhir.BadRequest("No local CarePlanService configured - cannot verify Task identifiers")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 
 	//Ensure the sessions taskIdentifier matches the requested task
-	tenant, err := tenants.FromContext(request.Context())
+	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 	cpsBaseURL := tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL)
@@ -441,9 +489,11 @@ func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http
 
 	id := request.PathValue("id")
 	var task fhir.Task
-	err = cpsClient.ReadWithContext(request.Context(), fmt.Sprintf("Task/%s", id), &task)
+	err = cpsClient.ReadWithContext(ctx, fmt.Sprintf("Task/%s", id), &task)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
 
@@ -459,14 +509,22 @@ func (s Service) handleSubscribeToTask(writer http.ResponseWriter, request *http
 	}
 
 	if !found {
+		err := coolfhir.BadRequest("Task identifier does not match the taskIdentifier in the session")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		coolfhir.WriteOperationOutcomeFromError(
-			request.Context(),
-			coolfhir.BadRequest("Task identifier does not match the taskIdentifier in the session"),
+			ctx,
+			err,
 			fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path),
 			writer,
 		)
 		return
 	}
+
+	span.SetAttributes(
+		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
+	)
+	span.SetStatus(codes.Ok, "")
 
 	// Subscribed task contains the taskIdentifier from the session, so we can subscribe to the task
 	s.sseService.ServeHTTP(fmt.Sprintf("Task/%s", id), writer, request)

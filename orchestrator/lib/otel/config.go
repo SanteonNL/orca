@@ -50,8 +50,9 @@ func DefaultConfig() Config {
 		ServiceName:    "orca-orchestrator",
 		ServiceVersion: "1.0.0",
 		Exporter: ExporterConfig{
-			Type: "stdout",
+			Type: "otlp",
 			OTLP: OTLPConfig{
+				Insecure: true, // We are exporting to a local collector, so we don't need TLS
 				Endpoint: "http://localhost:4318",
 				Timeout:  10 * time.Second,
 			},

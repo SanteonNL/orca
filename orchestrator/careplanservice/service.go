@@ -605,39 +605,35 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 			switch resourceType {
 			case "ServiceRequest":
 				handler = FHIRCreateOperationHandler[*fhir.ServiceRequest]{
-					authzPolicy: CreateServiceRequestAuthzPolicy(s.profile),
+					authzPolicy:       CreateServiceRequestAuthzPolicy(s.profile),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
-
+					profile:           s.profile,
 				}.Handle
 			case "Patient":
 				handler = FHIRCreateOperationHandler[*fhir.Patient]{
-					authzPolicy: CreatePatientAuthzPolicy(s.profile),
+					authzPolicy:       CreatePatientAuthzPolicy(s.profile),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
+					profile:           s.profile,
 
-					validator:   &PatientValidator{},
+					validator: &PatientValidator{},
 				}.Handle
 			case "Questionnaire":
 				handler = FHIRCreateOperationHandler[*fhir.Questionnaire]{
-					authzPolicy: CreateQuestionnaireAuthzPolicy(),
+					authzPolicy:       CreateQuestionnaireAuthzPolicy(),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
-
+					profile:           s.profile,
 				}.Handle
 			case "QuestionnaireResponse":
 				handler = FHIRCreateOperationHandler[*fhir.QuestionnaireResponse]{
-					authzPolicy: CreateQuestionnaireResponseAuthzPolicy(s.profile),
+					authzPolicy:       CreateQuestionnaireResponseAuthzPolicy(s.profile),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
-
+					profile:           s.profile,
 				}.Handle
 			case "Condition":
 				handler = FHIRCreateOperationHandler[*fhir.Condition]{
-					authzPolicy: CreateConditionAuthzPolicy(s.profile),
+					authzPolicy:       CreateConditionAuthzPolicy(s.profile),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
-
+					profile:           s.profile,
 				}.Handle
 			default:
 				handler = func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -686,62 +682,57 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 			handler = s.handleUpdateTask
 		case "ServiceRequest":
 			handler = FHIRUpdateOperationHandler[*fhir.ServiceRequest]{
-				authzPolicy: UpdateServiceRequestAuthzPolicy(),
+				authzPolicy:       UpdateServiceRequestAuthzPolicy(),
 				fhirClientFactory: s.createFHIRClient,
-				profile:     s.profile,
+				profile:           s.profile,
 				createHandler: &FHIRCreateOperationHandler[*fhir.ServiceRequest]{
-					authzPolicy: CreateServiceRequestAuthzPolicy(s.profile),
+					authzPolicy:       CreateServiceRequestAuthzPolicy(s.profile),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
-
+					profile:           s.profile,
 				},
-
 			}.Handle
 		case "Patient":
 			handler = FHIRUpdateOperationHandler[*fhir.Patient]{
-				authzPolicy: UpdatePatientAuthzPolicy(),
+				authzPolicy:       UpdatePatientAuthzPolicy(),
 				fhirClientFactory: s.createFHIRClient,
-				profile:     s.profile,
+				profile:           s.profile,
 				createHandler: &FHIRCreateOperationHandler[*fhir.Patient]{
-					authzPolicy: CreatePatientAuthzPolicy(s.profile),
+					authzPolicy:       CreatePatientAuthzPolicy(s.profile),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
-					},
+					profile:           s.profile,
+				},
 			}.Handle
 		case "Questionnaire":
 			handler = FHIRUpdateOperationHandler[*fhir.Questionnaire]{
-				authzPolicy: UpdateQuestionnaireAuthzPolicy(),
+				authzPolicy:       UpdateQuestionnaireAuthzPolicy(),
 				fhirClientFactory: s.createFHIRClient,
-				profile:     s.profile,
+				profile:           s.profile,
 				createHandler: &FHIRCreateOperationHandler[*fhir.Questionnaire]{
-					authzPolicy: CreateQuestionnaireAuthzPolicy(),
+					authzPolicy:       CreateQuestionnaireAuthzPolicy(),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
-
+					profile:           s.profile,
 				},
-
 			}.Handle
 		case "QuestionnaireResponse":
 			handler = FHIRUpdateOperationHandler[*fhir.QuestionnaireResponse]{
-				authzPolicy: UpdateQuestionnaireResponseAuthzPolicy(),
+				authzPolicy:       UpdateQuestionnaireResponseAuthzPolicy(),
 				fhirClientFactory: s.createFHIRClient,
-				profile:     s.profile,
+				profile:           s.profile,
 				createHandler: &FHIRCreateOperationHandler[*fhir.QuestionnaireResponse]{
-					authzPolicy: CreateQuestionnaireResponseAuthzPolicy(s.profile),
+					authzPolicy:       CreateQuestionnaireResponseAuthzPolicy(s.profile),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
-					},
+					profile:           s.profile,
+				},
 			}.Handle
 		case "Condition":
 			handler = FHIRUpdateOperationHandler[*fhir.Condition]{
-				authzPolicy: UpdateConditionAuthzPolicy(),
+				authzPolicy:       UpdateConditionAuthzPolicy(),
 				fhirClientFactory: s.createFHIRClient,
-				profile:     s.profile,
+				profile:           s.profile,
 				createHandler: &FHIRCreateOperationHandler[*fhir.Condition]{
-					authzPolicy: CreateConditionAuthzPolicy(s.profile),
+					authzPolicy:       CreateConditionAuthzPolicy(s.profile),
 					fhirClientFactory: s.createFHIRClient,
-					profile:     s.profile,
-
+					profile:           s.profile,
 				},
 			}.Handle
 		default:
@@ -788,37 +779,37 @@ func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHand
 		switch resourceType {
 		case "Patient":
 			handleFunc = FHIRReadOperationHandler[*fhir.Patient]{
-				authzPolicy: ReadPatientAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadPatientAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "Condition":
 			handleFunc = FHIRReadOperationHandler[*fhir.Condition]{
-				authzPolicy: ReadConditionAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadConditionAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "CarePlan":
 			handleFunc = FHIRReadOperationHandler[*fhir.CarePlan]{
-				authzPolicy: ReadCarePlanAuthzPolicy(),
+				authzPolicy:       ReadCarePlanAuthzPolicy(),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "Task":
 			handleFunc = FHIRReadOperationHandler[*fhir.Task]{
-				authzPolicy: ReadTaskAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadTaskAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "ServiceRequest":
 			handleFunc = FHIRReadOperationHandler[*fhir.ServiceRequest]{
-				authzPolicy: ReadServiceRequestAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadServiceRequestAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "Questionnaire":
 			handleFunc = FHIRReadOperationHandler[*fhir.Questionnaire]{
-				authzPolicy: ReadQuestionnaireAuthzPolicy(),
+				authzPolicy:       ReadQuestionnaireAuthzPolicy(),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "QuestionnaireResponse":
 			handleFunc = FHIRReadOperationHandler[*fhir.QuestionnaireResponse]{
-				authzPolicy: ReadQuestionnaireResponseAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadQuestionnaireResponseAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		default:
@@ -896,37 +887,37 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 		switch resourceType {
 		case "Patient":
 			handleFunc = FHIRSearchOperationHandler[*fhir.Patient]{
-				authzPolicy: ReadPatientAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadPatientAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "Condition":
 			handleFunc = FHIRSearchOperationHandler[*fhir.Condition]{
-				authzPolicy: ReadConditionAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadConditionAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "CarePlan":
 			handleFunc = FHIRSearchOperationHandler[*fhir.CarePlan]{
-				authzPolicy: ReadCarePlanAuthzPolicy(),
+				authzPolicy:       ReadCarePlanAuthzPolicy(),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "Task":
 			handleFunc = FHIRSearchOperationHandler[*fhir.Task]{
-				authzPolicy: ReadTaskAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadTaskAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "ServiceRequest":
 			handleFunc = FHIRSearchOperationHandler[*fhir.ServiceRequest]{
-				authzPolicy: ReadServiceRequestAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadServiceRequestAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "Questionnaire":
 			handleFunc = FHIRSearchOperationHandler[*fhir.Questionnaire]{
-				authzPolicy: ReadQuestionnaireAuthzPolicy(),
+				authzPolicy:       ReadQuestionnaireAuthzPolicy(),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		case "QuestionnaireResponse":
 			handleFunc = FHIRSearchOperationHandler[*fhir.QuestionnaireResponse]{
-				authzPolicy: ReadQuestionnaireResponseAuthzPolicy(s.createFHIRClient),
+				authzPolicy:       ReadQuestionnaireResponseAuthzPolicy(s.createFHIRClient),
 				fhirClientFactory: s.createFHIRClient,
 			}.Handle
 		default:
@@ -1204,6 +1195,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	span.SetAttributes(
 		attribute.Int("fhir.bundle.result_entries", len(resultBundle.Entry)),
 		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
+		attribute.String("tenant.id", tenant.ID),
 	)
 	span.SetStatus(codes.Ok, "")
 	s.pipelineByTenant[tenant.ID].DoAndWrite(httpResponse, resultBundle, http.StatusOK)

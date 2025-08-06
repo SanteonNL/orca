@@ -163,7 +163,25 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 }
 
 func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T, resourceType string) (FHIRHandlerResult, error, bool) {
+	start := time.Now()
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		ctx,
+		"FHIRCreateOperationHandler.validate",
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("fhir.resource_type", resourceType),
+			attribute.String("operation.name", "ValidateResource"),
+		),
+	)
+	defer span.End()
+
 	if errs := h.validator.Validate(resource); errs != nil {
+		span.SetAttributes(
+			attribute.Int("fhir.validation.error_count", len(errs)),
+			attribute.String("fhir.validation.result", "failed"),
+		)
+
 		var issues []fhir.OperationOutcomeIssue
 		var diagnostics = fmt.Sprintf("Validation failed for %s", resourceType)
 		var codings []fhir.Coding
@@ -190,7 +208,17 @@ func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T,
 			},
 			HttpStatusCode: http.StatusBadRequest,
 		}
+
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "validation failed")
+		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, err, true
 	}
+
+	span.SetAttributes(
+		attribute.String("fhir.validation.result", "passed"),
+		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
+	)
+	span.SetStatus(codes.Ok, "")
 	return nil, nil, false
 }

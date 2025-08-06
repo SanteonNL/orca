@@ -103,6 +103,8 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 
 	identities, err := s.profile.Identities(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 	localIdentifiers := coolfhir.OrganizationIdentifiers(identities)
