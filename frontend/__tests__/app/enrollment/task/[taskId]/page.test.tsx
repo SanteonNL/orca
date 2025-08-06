@@ -33,11 +33,6 @@ jest.mock('@/app/enrollment/components/questionnaire-renderer', () => {
     MockQuestionnaireRenderer.displayName = 'MockQuestionnaireRenderer';
     return MockQuestionnaireRenderer;
 });
-jest.mock('@/app/enrollment/components/sse-connection-status', () => {
-    const MockSseConnectionStatus = () => <div data-testid="sse-status">SSE Status</div>;
-    MockSseConnectionStatus.displayName = 'MockSseConnectionStatus';
-    return MockSseConnectionStatus;
-});
 
 const mockTask = {
     id: 'task-1',
@@ -75,7 +70,8 @@ beforeEach(() => {
         initialized: true,
         setSelectedTaskId: jest.fn(),
         subTasks: [],
-        taskToQuestionnaireMap: {}
+        taskToQuestionnaireMap: {},
+        fetchAllResources: jest.fn()
     });
     (useEnrollmentStore as jest.Mock).mockReturnValue({
         patient: mockPatient,
@@ -93,7 +89,8 @@ describe("taskid page tests", () => {
             initialized: false,
             setSelectedTaskId: jest.fn(),
             subTasks: [],
-            taskToQuestionnaireMap: {}
+            taskToQuestionnaireMap: {},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
@@ -107,7 +104,8 @@ describe("taskid page tests", () => {
             initialized: false,
             setSelectedTaskId: jest.fn(),
             subTasks: [],
-            taskToQuestionnaireMap: {}
+            taskToQuestionnaireMap: {},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
@@ -122,7 +120,8 @@ describe("taskid page tests", () => {
             initialized: true,
             setSelectedTaskId: jest.fn(),
             subTasks: [],
-            taskToQuestionnaireMap: {}
+            taskToQuestionnaireMap: {},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
@@ -138,7 +137,8 @@ describe("taskid page tests", () => {
             initialized: true,
             setSelectedTaskId: mockSetSelectedTaskId,
             subTasks: [],
-            taskToQuestionnaireMap: {}
+            taskToQuestionnaireMap: {},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
@@ -155,7 +155,8 @@ describe("taskid page tests", () => {
             initialized: true,
             setSelectedTaskId: mockSetSelectedTaskId,
             subTasks: [],
-            taskToQuestionnaireMap: {}
+            taskToQuestionnaireMap: {},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
@@ -172,7 +173,8 @@ describe("taskid page tests", () => {
             initialized: true,
             setSelectedTaskId: jest.fn(),
             subTasks: [mockSubTask],
-            taskToQuestionnaireMap: {'subtask-1': mockQuestionnaire}
+            taskToQuestionnaireMap: {'subtask-1': mockQuestionnaire},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
@@ -204,7 +206,8 @@ describe("taskid page tests", () => {
             initialized: true,
             setSelectedTaskId: jest.fn(),
             subTasks: [],
-            taskToQuestionnaireMap: {}
+            taskToQuestionnaireMap: {},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
@@ -234,7 +237,7 @@ describe("taskid page tests", () => {
             setSelectedTaskId: jest.fn(),
             subTasks: [],
             taskToQuestionnaireMap: {},
-            autoLaunchExternalApps: false
+            fetchAllResources: jest.fn()
         });
 
         // Mock enrollment store with proper data
@@ -316,7 +319,8 @@ describe("taskid page tests", () => {
             initialized: true,
             setSelectedTaskId: jest.fn(),
             subTasks: [],
-            taskToQuestionnaireMap: {}
+            taskToQuestionnaireMap: {},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
@@ -335,7 +339,8 @@ describe("taskid page tests", () => {
             initialized: true,
             setSelectedTaskId: jest.fn(),
             subTasks: [],
-            taskToQuestionnaireMap: {}
+            taskToQuestionnaireMap: {},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
@@ -351,13 +356,6 @@ describe("taskid page tests", () => {
         expect(screen.queryByText('Statusreden:')).not.toBeInTheDocument();
     });
 
-    it('renders sse connection status component', async () => {
-        await act(async () => {
-            render(<EnrollmentTaskPage/>);
-        });
-        expect(screen.getByTestId('sse-status')).toBeInTheDocument();
-    });
-
     it('does not render launch buttons when auto launch is disabled and task is not accepted', async () => {
         const taskInProgress = {...mockTask, status: 'in-progress'};
         (useTaskProgressStore as jest.Mock).mockReturnValue({
@@ -366,11 +364,30 @@ describe("taskid page tests", () => {
             initialized: true,
             setSelectedTaskId: jest.fn(),
             subTasks: [],
-            taskToQuestionnaireMap: {}
+            taskToQuestionnaireMap: {},
+            fetchAllResources: jest.fn()
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    })
+    });
+
+    it('calls fetchAllResources when task status is not accepted', async () => {
+        const mockFetchAllResources = jest.fn();
+        const taskInProgress = {...mockTask, status: 'in-progress'};
+        (useTaskProgressStore as jest.Mock).mockReturnValue({
+            task: taskInProgress,
+            loading: false,
+            initialized: true,
+            setSelectedTaskId: jest.fn(),
+            subTasks: [],
+            taskToQuestionnaireMap: {},
+            fetchAllResources: mockFetchAllResources
+        });
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+        expect(mockFetchAllResources).toHaveBeenCalledWith('task-1', mockCpsClient);
+    });
 });
