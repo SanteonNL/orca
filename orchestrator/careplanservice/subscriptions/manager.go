@@ -155,7 +155,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			}
 		}
 	default:
-		err := fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
+		err := fmt.Errorf("subscription manager does not support notifying for resource type: %s", coolfhir.ResourceType(resource))
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "unsupported resource type")
 		return err
