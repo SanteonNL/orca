@@ -51,7 +51,10 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to unmarshal resource")
 		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
-		return nil, fmt.Errorf("invalid %s: %w", resourceType, coolfhir.BadRequestError(err))
+		return nil, &coolfhir.ErrorWithCode{
+			Message:    fmt.Sprintf("invalid %s: %v", resourceType, err),
+			StatusCode: http.StatusBadRequest,
+		}
 	}
 
 	resourceID := coolfhir.ResourceID(resource)
