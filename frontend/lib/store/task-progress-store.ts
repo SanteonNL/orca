@@ -23,7 +23,6 @@ interface StoreState {
     nextStep: () => void
     setSubTasks: (subTasks: Task[]) => void
     fetchAllResources: (selectedTaskId: string, cpsClient: Client) => Promise<void>
-    // setEventSourceConnected: (connected: boolean) => void
 }
 
 const taskProgressStore = create<StoreState>((set, get) => ({
