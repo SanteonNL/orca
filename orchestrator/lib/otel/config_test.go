@@ -115,7 +115,7 @@ func TestConfig_Validate(t *testing.T) {
 func TestDefaultConfig(t *testing.T) {
 	config := DefaultConfig()
 
-	assert.False(t, config.Enabled, "Default config should have OTEL disabled")
+	assert.True(t, config.Enabled, "Default config should have OTEL enabled")
 	assert.Equal(t, "orca-orchestrator", config.ServiceName)
 	assert.Equal(t, "1.0.0", config.ServiceVersion)
 	assert.Equal(t, "otlp", config.Exporter.Type)
