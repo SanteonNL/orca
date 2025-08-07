@@ -46,7 +46,7 @@ type OTLPConfig struct {
 // DefaultConfig returns a default OTEL configuration
 func DefaultConfig() Config {
 	return Config{
-		Enabled:        false,
+		Enabled:        true,
 		ServiceName:    "orca-orchestrator",
 		ServiceVersion: "1.0.0",
 		Exporter: ExporterConfig{
