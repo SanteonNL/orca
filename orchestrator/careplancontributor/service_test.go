@@ -15,7 +15,6 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/sse"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -823,110 +822,6 @@ func TestService_handleGetContext(t *testing.T) {
 		"tenantId": "test"
 	}`, httpResponse.Body.String())
 	})
-}
-
-func TestService_HandleSubscribeToTask(t *testing.T) {
-	validToken := "http://fhir.nl/fhir/NamingSystem/task-workflow-identifier|12345"
-
-	tests := []struct {
-		name            string
-		sessionData     session.Data
-		client          mock.MockClient
-		enableLocalCPS  bool
-		expectedStatus  int
-		expectedContent string
-	}{
-		{
-			name:            "No taskIdentifier in session",
-			sessionData:     session.Data{},
-			enableLocalCPS:  true,
-			expectedStatus:  http.StatusBadRequest,
-			expectedContent: "No taskIdentifier found in session",
-		},
-		{
-			name: "Invalid taskIdentifier in session",
-			sessionData: session.Data{
-				TaskIdentifier: to.Ptr("invalid-token"),
-			},
-			enableLocalCPS:  true,
-			expectedStatus:  http.StatusBadRequest,
-			expectedContent: "Invalid taskIdentifier in session",
-		},
-		{
-			name: "No local CarePlanService configured",
-			sessionData: session.Data{
-				TaskIdentifier: &validToken,
-			},
-			enableLocalCPS:  false,
-			expectedStatus:  http.StatusBadRequest,
-			expectedContent: "No local CarePlanService configured",
-		},
-		{
-			name: "Task identifier does not match session",
-			sessionData: session.Data{
-				TaskIdentifier: to.Ptr("https://some.other.domain/fhir/NamingSystem/task-workflow-identifier|12345"),
-			},
-			enableLocalCPS:  true,
-			expectedStatus:  http.StatusBadRequest,
-			expectedContent: "Task identifier does not match the taskIdentifier in the session",
-		},
-		{
-			name: "Success subscription",
-			sessionData: session.Data{
-				TaskIdentifier: to.Ptr(validToken),
-			},
-			enableLocalCPS:  true,
-			expectedStatus:  http.StatusOK,
-			expectedContent: "",
-		},
-	}
-
-	rawJson, _ := os.ReadFile("./testdata/task-3.json")
-
-	var task fhir.Task
-	err := json.Unmarshal(rawJson, &task)
-	require.NoError(t, err)
-
-	sseService := sse.New()
-	sseService.ServeHTTP = func(topic string, writer http.ResponseWriter, request *http.Request) {
-		log.Ctx(request.Context()).Info().Msgf("Unit-Test: Transform request to SSE stream for topic: %s", topic)
-	}
-
-	fhirServerMux := http.NewServeMux()
-	svc := &Service{
-		sseService: sseService, profile: profile.TestProfile{Principal: auth.TestPrincipal1},
-		orcaPublicURL: must.ParseURL("http://example.com"),
-		httpHandler:   fhirServerMux,
-	}
-	fhirServerMux.HandleFunc("GET /cps/test/Task/"+*task.Id, func(writer http.ResponseWriter, request *http.Request) {
-		writer.Header().Set("Content-Type", "application/fhir+json")
-		writer.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(writer).Encode(task)
-	})
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			session := &tt.sessionData
-
-			ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
-			req := httptest.NewRequestWithContext(ctx, "GET", "/cpc/subscribe/fhir/Task/3", nil)
-			req.SetPathValue("id", "3")
-
-			resp := httptest.NewRecorder()
-
-			svc.cpsEnabled = tt.enableLocalCPS
-
-			// Call method under test.
-			svc.handleSubscribeToTask(resp, req, session)
-
-			res := resp.Result()
-			defer res.Body.Close()
-			bodyBytes, _ := io.ReadAll(res.Body)
-			bodyStr := string(bodyBytes)
-			assert.Equal(t, tt.expectedStatus, res.StatusCode, "Unexpected status code")
-			assert.Contains(t, bodyStr, tt.expectedContent, "Unexpected error message or response text, got: "+bodyStr)
-		})
-	}
 }
 
 func TestService_ExternalFHIRProxy(t *testing.T) {

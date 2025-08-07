@@ -5,8 +5,7 @@ import {fetchAllBundlePages} from '../fhirUtils';
 import useContext from "@/lib/store/context-store";
 import Client from "fhir-kit-client";
 
-// A module-level variable, to ensure only one SSE subscription is active (`use` hook for this store is used in multiple places).
-let globalEventSource: EventSource | null = null;
+
 interface StoreState {
     initialized: boolean
     loading: boolean
@@ -24,7 +23,6 @@ interface StoreState {
     nextStep: () => void
     setSubTasks: (subTasks: Task[]) => void
     fetchAllResources: (selectedTaskId: string, cpsClient: Client) => Promise<void>
-    setEventSourceConnected: (connected: boolean) => void
 }
 
 const taskProgressStore = create<StoreState>((set, get) => ({
@@ -67,9 +65,6 @@ const taskProgressStore = create<StoreState>((set, get) => ({
         } catch (error: any) {
             set({ error: `Something went wrong while fetching all resources: ${error?.message || error}`, loading: false })
         }
-    },
-    setEventSourceConnected: (connected: boolean) => {
-        set({ eventSourceConnected: connected })
     }
 }));
 
@@ -104,7 +99,6 @@ const fetchSubTasks = async (cpsClient: Client, taskId: string) => {
             options: { postSearch: true }
         }) as Bundle<Task>;
         const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle);
-
         if (Array.isArray(subTasks) && subTasks.length > 0) {
             return subTasks;
         }
@@ -122,58 +116,12 @@ const useTaskProgressStore = () => {
     const initialized = taskProgressStore(state => state.initialized);
     const selectedTaskId = taskProgressStore(state => state.selectedTaskId);
     const fetchAllResources = taskProgressStore(state => state.fetchAllResources);
-    const setEventSourceConnected = taskProgressStore(state => state.setEventSourceConnected);
 
     useEffect(() => {
         if (!loading && !initialized && selectedTaskId && cpsClient) {
             fetchAllResources(selectedTaskId, cpsClient)
         }
     }, [selectedTaskId, loading, initialized, fetchAllResources, cpsClient]);
-
-    useEffect(() => {
-        // Only subscribe if we have a selectedTaskId, context has been loaded and no active global subscription yet.
-        if (!selectedTaskId || globalEventSource || !launchContext?.tenantId) return
-
-        globalEventSource = new EventSource(`/orca/cpc/${launchContext.tenantId}/subscribe/fhir/Task/${selectedTaskId}`);
-
-        globalEventSource.onopen = () => {
-            setEventSourceConnected(true);
-        }
-
-        globalEventSource.onerror = (error) => {
-            setEventSourceConnected(false);
-            console.error(`Error in global EventSource: ${JSON.stringify(error)}`);
-        };
-
-        globalEventSource.onmessage = (event) => {
-            const task = JSON.parse(event.data) as Task;
-            // Detect if it's the primary Task or a subtask.
-            if (task.id === selectedTaskId) {
-                taskProgressStore.setState({ task });
-            } else if (task.partOf?.some(ref => ref.reference === `Task/${selectedTaskId}`)) {
-                taskProgressStore.setState((state) => {
-                    const currentSubTasks = state.subTasks || [];
-                    const index = currentSubTasks.findIndex(subTask => subTask.id === task.id);
-                    if (index === -1) {
-                        // If the subtask is new, add it to the array.
-                        return { subTasks: [...currentSubTasks, task] };
-                    } else {
-                        // If the subtask exists, update it.
-                        const updatedSubTasks = [...currentSubTasks];
-                        updatedSubTasks[index] = task;
-                        return { subTasks: updatedSubTasks };
-                    }
-                });
-            }
-        };
-
-        // Clean up the global subscription when the component unmounts.
-        return () => {
-            globalEventSource?.close();
-            globalEventSource = null;
-            setEventSourceConnected(false);
-        };
-    }, [selectedTaskId, setEventSourceConnected, launchContext]);
 
     return store;
 };
