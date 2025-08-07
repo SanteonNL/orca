@@ -119,7 +119,7 @@ func TestDefaultConfig(t *testing.T) {
 	assert.Equal(t, "orca-orchestrator", config.ServiceName)
 	assert.Equal(t, "1.0.0", config.ServiceVersion)
 	assert.Equal(t, "otlp", config.Exporter.Type)
-	assert.Equal(t, "http://localhost:4318", config.Exporter.OTLP.Endpoint)
+	assert.Equal(t, "localhost:4318", config.Exporter.OTLP.Endpoint)
 	assert.Equal(t, 10*time.Second, config.Exporter.OTLP.Timeout)
 
 	// Default config should be valid

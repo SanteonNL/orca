@@ -33,7 +33,7 @@ type ExporterConfig struct {
 }
 
 type OTLPConfig struct {
-	// Endpoint for the OTLP exporter (e.g., "http://localhost:4318")
+	// Endpoint for the OTLP exporter (e.g., "localhost:4318" for insecure, "https://endpoint.com" for secure)
 	Endpoint string `koanf:"endpoint"`
 	// Headers to send with OTLP requests
 	Headers map[string]string `koanf:"headers"`
@@ -52,8 +52,8 @@ func DefaultConfig() Config {
 		Exporter: ExporterConfig{
 			Type: "otlp",
 			OTLP: OTLPConfig{
-				Insecure: true, // We are exporting to a local collector, so we don't need TLS
-				Endpoint: "http://localhost:4318",
+				Insecure: true,             // We are exporting to a local collector, so we don't need TLS
+				Endpoint: "localhost:4318", // Remove http:// scheme when using WithInsecure()
 				Timeout:  10 * time.Second,
 			},
 		},
