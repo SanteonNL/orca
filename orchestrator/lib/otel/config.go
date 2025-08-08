@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -35,25 +35,25 @@ type ExporterConfig struct {
 }
 
 type OTLPConfig struct {
-	// Endpoint for the OTLP exporter (e.g., "localhost:4318" for insecure, "https://endpoint.com" for secure)
+	// Endpoint for the OTLP exporter (e.g., "localhost:4317" for gRPC insecure, "https://endpoint.com" for secure)
 	Endpoint string `koanf:"endpoint"`
 	// Headers to send with OTLP requests
 	Headers map[string]string `koanf:"headers"`
 	// Timeout for OTLP requests
 	Timeout time.Duration `koanf:"timeout"`
-	// Insecure controls whether to use HTTP instead of HTTPS
+	// Insecure controls whether to use insecure gRPC connection
 	Insecure bool `koanf:"insecure"`
 }
 
 // DefaultConfig returns a default OTEL configuration
 func DefaultConfig() Config {
 	// Default values
-	endpoint := "localhost:4318"
+	endpoint := "localhost:4317"
 	insecure := true
 
 	// Check for standard OpenTelemetry environment variable
 	if envEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); envEndpoint != "" {
-		// Remove scheme prefix if present to work with the HTTP exporter
+		// Remove scheme prefix if present to work with the gRPC exporter
 		endpoint = strings.TrimPrefix(strings.TrimPrefix(envEndpoint, "http://"), "https://")
 		// If the original endpoint had https://, we should use secure connection
 		insecure = !strings.HasPrefix(envEndpoint, "https://")
@@ -138,30 +138,22 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	var exporter trace.SpanExporter
 	switch config.Exporter.Type {
 	case "otlp":
-		opts := []otlptracehttp.Option{
-			otlptracehttp.WithEndpoint(config.Exporter.OTLP.Endpoint),
-			otlptracehttp.WithTimeout(config.Exporter.OTLP.Timeout),
+		opts := []otlptracegrpc.Option{
+			otlptracegrpc.WithEndpoint(config.Exporter.OTLP.Endpoint),
+			otlptracegrpc.WithTimeout(config.Exporter.OTLP.Timeout),
 		}
 
 		// Add headers if configured
 		if len(config.Exporter.OTLP.Headers) > 0 {
-			opts = append(opts, otlptracehttp.WithHeaders(config.Exporter.OTLP.Headers))
+			opts = append(opts, otlptracegrpc.WithHeaders(config.Exporter.OTLP.Headers))
 		}
 
-		// Use HTTP or HTTPS based on Insecure flag
+		// Use insecure gRPC connection if configured
 		if config.Exporter.OTLP.Insecure {
-			opts = append(opts, otlptracehttp.WithInsecure())
+			opts = append(opts, otlptracegrpc.WithInsecure())
 		}
 
-		// Add retry configuration to handle temporary connection issues
-		opts = append(opts, otlptracehttp.WithRetry(otlptracehttp.RetryConfig{
-			Enabled:         true,
-			InitialInterval: 1 * time.Second,
-			MaxInterval:     5 * time.Second,
-			MaxElapsedTime:  30 * time.Second,
-		}))
-
-		exporter, err = otlptracehttp.New(ctx, opts...)
+		exporter, err = otlptracegrpc.New(ctx, opts...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create OTLP exporter: %w", err)
 		}
