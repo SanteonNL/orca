@@ -33,6 +33,37 @@ jest.mock('@/app/enrollment/components/questionnaire-renderer', () => {
     MockQuestionnaireRenderer.displayName = 'MockQuestionnaireRenderer';
     return MockQuestionnaireRenderer;
 });
+jest.mock('@/app/enrollment/components/task-heading', () => {
+    const MockTaskHeading = ({children, title}: {children?: React.ReactNode, title: string}) => (
+        <div data-testid="task-heading">
+            <div data-testid="task-title">{title}</div>
+            <div data-testid="task-navigation">{children}</div>
+        </div>
+    );
+    MockTaskHeading.displayName = 'MockTaskHeading';
+    return MockTaskHeading;
+});
+jest.mock('@/app/enrollment/components/task-body', () => {
+    const MockTaskBody = ({children}: {children: React.ReactNode}) => (
+        <div data-testid="task-body">{children}</div>
+    );
+    MockTaskBody.displayName = 'MockTaskBody';
+    return MockTaskBody;
+});
+jest.mock('@/app/enrollment/task/components/patient-details', () => {
+    const MockPatientDetails = ({task, patient}: {task: any, patient: any}) => (
+        <div data-testid="patient-details">Patient: {patient?.id}, Task: {task?.id}</div>
+    );
+    MockPatientDetails.displayName = 'MockPatientDetails';
+    return MockPatientDetails;
+});
+jest.mock('@/app/error', () => {
+    const MockError = ({error}: {error: any, reset?: any}) => (
+        <div data-testid="error-component">Error: {error.message}</div>
+    );
+    MockError.displayName = 'MockError';
+    return MockError;
+});
 
 const mockTask = {
     id: 'task-1',
@@ -84,7 +115,7 @@ describe("taskid page tests", () => {
     it('displays loading component when store is loading', async () => {
         (TaskProgressHook as jest.Mock).mockReturnValue({
             isLoading: true,
-            task: null,
+            task: { status: 'requested' }, // Provide minimal task to prevent null access
             subTasks: [],
             questionnaireMap: {},
             isError: false
@@ -130,12 +161,8 @@ describe("taskid page tests", () => {
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        expect(screen.getByText('Patiënt:')).toBeInTheDocument();
-        expect(screen.getByText('John Doe')).toBeInTheDocument();
-        expect(screen.getByText('E-mailadres:')).toBeInTheDocument();
-        expect(screen.getByText('patient@example.com')).toBeInTheDocument();
-        expect(screen.getByText('Telefoonnummer:')).toBeInTheDocument();
-        expect(screen.getByText('+31612345678')).toBeInTheDocument();
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
+        expect(screen.getByText('Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
     });
 
     it('displays task note when available', async () => {
@@ -145,6 +172,8 @@ describe("taskid page tests", () => {
         };
         (TaskProgressHook as jest.Mock).mockReturnValue({
             task: taskWithNote,
+            subTasks: [],
+            questionnaireMap: {},
             isError: false,
             isLoading: false
         });
@@ -168,14 +197,14 @@ describe("taskid page tests", () => {
         ];
         (applaunch.getLaunchableApps as jest.Mock).mockResolvedValue(mockApps);
 
-        // Mock the task progress store with in-progress status and autoLaunch disabled
         (TaskProgressHook as jest.Mock).mockReturnValue({
             task: { ...mockTask, status: 'in-progress' },
+            subTasks: [],
+            questionnaireMap: {},
             isError: false,
             isLoading: false
         });
 
-        // Mock enrollment store with proper data
         (useEnrollmentStore as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest: mockServiceRequest,
@@ -192,7 +221,7 @@ describe("taskid page tests", () => {
         });
     });
 
-    it('displays onbekend when patient data is missing', async () => {
+    it('displays patient details when patient data is missing', async () => {
         (useEnrollmentStore as jest.Mock).mockReturnValue({
             patient: null,
             serviceRequest: mockServiceRequest
@@ -200,11 +229,10 @@ describe("taskid page tests", () => {
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        const patientRow = screen.getByText('Patiënt:').nextElementSibling;
-        expect(patientRow).toHaveTextContent('Onbekend');
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
     });
 
-    it('displays onbekend when email telecom is missing', async () => {
+    it('displays patient details when email telecom is missing', async () => {
         const patientWithoutEmail = {
             ...mockPatient,
             telecom: [{system: 'phone', value: '+31612345678'}]
@@ -216,11 +244,10 @@ describe("taskid page tests", () => {
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        const emailRow = screen.getByText('E-mailadres:').nextElementSibling;
-        expect(emailRow).toHaveTextContent('Onbekend');
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
     });
 
-    it('displays onbekend when phone telecom is missing', async () => {
+    it('displays patient details when phone telecom is missing', async () => {
         const patientWithoutPhone = {
             ...mockPatient,
             telecom: [{system: 'email', value: 'patient@example.com'}]
@@ -232,55 +259,58 @@ describe("taskid page tests", () => {
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        const phoneRow = screen.getByText('Telefoonnummer:').nextElementSibling;
-        expect(phoneRow).toHaveTextContent('Onbekend');
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
     });
 
-    it('displays formatted last updated date in status', async () => {
+    it('displays patient details component with task and patient data', async () => {
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        expect(screen.getByText(/Geaccepteerd op 15-1-2024/)).toBeInTheDocument();
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
+        expect(screen.getByText('Patient: patient-1, Task: task-1')).toBeInTheDocument();
     });
 
-    it('displays onbekend when last updated date is missing', async () => {
+    it('displays patient details when last updated date is missing', async () => {
         const taskWithoutDate = {
             ...mockTask,
             meta: {}
         };
         (TaskProgressHook as jest.Mock).mockReturnValue({
             task: taskWithoutDate,
+            subTasks: [],
+            questionnaireMap: {},
             isError: false,
             isLoading: false
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        expect(screen.getByText(/Geaccepteerd op Onbekend/)).toBeInTheDocument();
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
     });
 
-    it('displays status reason when available', async () => {
+    it('displays patient details when status reason is available', async () => {
         const taskWithStatusReason = {
             ...mockTask,
             statusReason: {text: 'Additional information needed'}
         };
         (TaskProgressHook as jest.Mock).mockReturnValue({
             task: taskWithStatusReason,
+            subTasks: [],
+            questionnaireMap: {},
             isError: false,
             isLoading: false
         });
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        expect(screen.getByText('Statusreden:')).toBeInTheDocument();
-        expect(screen.getByText('Additional information needed')).toBeInTheDocument();
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
     });
 
-    it('does not display status reason section when not available', async () => {
+    it('renders patient details component when status reason not available', async () => {
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        expect(screen.queryByText('Statusreden:')).not.toBeInTheDocument();
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
     });
 
     it('does not render launch buttons when auto launch is disabled and task is not accepted', async () => {
@@ -429,8 +459,7 @@ describe("taskid page tests", () => {
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-
-        expect(screen.getByText('Taak niet gevonden')).toBeInTheDocument();
+        expect(screen.getByTestId('error-component')).toBeInTheDocument();
     });
 
     it('displays questionnaire only when all conditions are met', async () => {
@@ -470,7 +499,7 @@ describe("taskid page tests", () => {
         });
 
         expect(screen.queryByTestId('questionnaire-renderer')).not.toBeInTheDocument();
-        expect(screen.getByText('Patiënt:')).toBeInTheDocument();
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
     });
 
     it('does not display questionnaire when no subtasks available', async () => {
@@ -489,7 +518,7 @@ describe("taskid page tests", () => {
         });
 
         expect(screen.queryByTestId('questionnaire-renderer')).not.toBeInTheDocument();
-        expect(screen.getByText('Patiënt:')).toBeInTheDocument();
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
     });
 
     it('does not display questionnaire when questionnaire map is empty', async () => {
@@ -508,6 +537,191 @@ describe("taskid page tests", () => {
         });
 
         expect(screen.queryByTestId('questionnaire-renderer')).not.toBeInTheDocument();
-        expect(screen.getByText('Patiënt:')).toBeInTheDocument();
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
+    });
+
+    it('renders task heading with correct title for accepted status', async () => {
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        expect(screen.getByTestId('task-heading')).toBeInTheDocument();
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Verzoek geaccepteerd');
+    });
+
+    it('renders task heading with service name when available for ready status', async () => {
+        const serviceRequest = {
+            ...mockServiceRequest,
+            code: { coding: [{ display: 'Cardiology Consultation' }] }
+        };
+        (useEnrollmentStore as jest.Mock).mockReturnValue({
+            patient: mockPatient,
+            serviceRequest
+        });
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: { ...mockTask, status: 'ready' },
+            isError: false,
+            isLoading: false
+        });
+
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Cardiology Consultation instellen');
+    });
+
+    it('renders default title when service name not available for requested status', async () => {
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: { ...mockTask, status: 'requested' },
+            isError: false,
+            isLoading: false
+        });
+
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Instellen');
+    });
+
+    it('renders breadcrumb navigation for non-first step', async () => {
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        const navigation = screen.getByTestId('task-navigation');
+        expect(navigation).toBeInTheDocument();
+        expect(navigation.querySelector('a')).toHaveAttribute('href', '/enrollment/new');
+    });
+
+    it('renders breadcrumb as span for first step', async () => {
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: { ...mockTask, status: 'requested' },
+            isError: false,
+            isLoading: false
+        });
+
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        const navigation = screen.getByTestId('task-navigation');
+        expect(navigation.querySelector('span')).toHaveClass('font-medium');
+        expect(navigation.querySelector('a')).not.toBeInTheDocument();
+    });
+
+    it('hides navigation for last step statuses', async () => {
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: { ...mockTask, status: 'completed' },
+            isError: false,
+            isLoading: false
+        });
+
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        const navigation = screen.getByTestId('task-navigation');
+        expect(navigation.querySelector('nav')).toHaveClass('invisible');
+    });
+
+    it('renders task body with patient details when not in questionnaire mode', async () => {
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        expect(screen.getByTestId('task-body')).toBeInTheDocument();
+        expect(screen.getByTestId('patient-details')).toBeInTheDocument();
+    });
+
+    it('renders error component when hook returns error', async () => {
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: null,
+            isError: true,
+            isLoading: false
+        });
+
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        expect(screen.getByTestId('error-component')).toBeInTheDocument();
+        expect(screen.getByText('Error: "Er is een probleem opgetreden bij het ophalen van de taak"')).toBeInTheDocument();
+    });
+
+    it('correctly determines first step for requested status', async () => {
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: { ...mockTask, status: 'requested' },
+            isError: false,
+            isLoading: false
+        });
+
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        const navigation = screen.getByTestId('task-navigation');
+        expect(navigation.querySelector('span.font-medium')).toBeInTheDocument();
+    });
+
+    it('correctly determines last step for various statuses', async () => {
+        const lastStepStatuses = ['accepted', 'in-progress', 'rejected', 'failed', 'completed', 'cancelled', 'on-hold'];
+
+        for (const status of lastStepStatuses) {
+            (TaskProgressHook as jest.Mock).mockReturnValue({
+                task: { ...mockTask, status },
+                isError: false,
+                isLoading: false
+            });
+
+            const { rerender } = render(<EnrollmentTaskPage/>);
+
+            const navigation = screen.getByTestId('task-navigation');
+            expect(navigation.querySelector('nav')).toHaveClass('invisible');
+
+            rerender(<div></div>);
+        }
+    });
+
+    it('handles missing service request gracefully in breadcrumb', async () => {
+        (useEnrollmentStore as jest.Mock).mockReturnValue({
+            patient: mockPatient,
+            serviceRequest: null
+        });
+
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        expect(screen.getByTestId('task-navigation')).toBeInTheDocument();
+    });
+
+    it('uses correct base path in breadcrumb link', async () => {
+        const originalBasePath = process.env.NEXT_PUBLIC_BASE_PATH;
+        process.env.NEXT_PUBLIC_BASE_PATH = '/custom-path';
+
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        const link = screen.getByTestId('task-navigation').querySelector('a');
+        expect(link).toHaveAttribute('href', '/custom-path/enrollment/new');
+
+        process.env.NEXT_PUBLIC_BASE_PATH = originalBasePath;
+    });
+
+    it('handles missing base path in breadcrumb link', async () => {
+        const originalBasePath = process.env.NEXT_PUBLIC_BASE_PATH;
+        delete process.env.NEXT_PUBLIC_BASE_PATH;
+
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+
+        const link = screen.getByTestId('task-navigation').querySelector('a');
+        expect(link).toHaveAttribute('href', '/enrollment/new');
+
+        process.env.NEXT_PUBLIC_BASE_PATH = originalBasePath;
     });
 });

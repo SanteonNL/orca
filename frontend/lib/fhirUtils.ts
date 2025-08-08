@@ -295,6 +295,68 @@ export function identifierToToken(identifier?: Identifier) {
     return `${identifier.system}|${identifier.value}`
 }
 
+export type TaskProgress = {
+    task: Task;
+    questionnaireMap: Record<string, Questionnaire>;
+    subTasks: Task[]
+}
+
+export const fetchTaskById = async (cpsClient: Client, taskId: string) => {
+    return await cpsClient.read({resourceType: 'Task', id: taskId}) as Task;
+}
+
+export const fetchAllResources = async (taskId: string, cpsClient: Client): Promise<TaskProgress> => {
+    const [task, subTasks] = await Promise.all([
+        await fetchTaskById(cpsClient, taskId),
+        await fetchSubTasks(cpsClient, taskId)
+    ])
+
+    const questionnaireMap = await fetchQuestionnaires(cpsClient, subTasks);
+    return {task, questionnaireMap, subTasks};
+}
+
+
+export const fetchQuestionnaires = async (cpsClient: Client, subTasks: Task[]) => {
+    const questionnaireMap: Record<string, Questionnaire> = {};
+    await Promise.all(subTasks.map(async (task: Task) => {
+        if (task.input && task.input.length > 0) {
+            const input = task.input.find(input => input.valueReference?.reference?.startsWith("Questionnaire"));
+            if (input && task.id && input.valueReference?.reference) {
+                const questionnaireId = input.valueReference.reference;
+                try {
+                    questionnaireMap[task.id] = await cpsClient.read({
+                        resourceType: "Questionnaire",
+                        id: questionnaireId.split("/")[1]
+                    }) as Questionnaire;
+                } catch (error) {
+                    throw new Error(`Failed to fetch questionnaire: ${error}`);
+                }
+            }
+        }
+    }));
+    return questionnaireMap
+}
+
+
+export const fetchSubTasks = async (cpsClient: Client, taskId: string) => {
+    try {
+        const subTaskBundle = await cpsClient.search({
+            resourceType: 'Task',
+            searchParams: {"part-of": `Task/${taskId}`},
+            headers: {"Cache-Control": "no-cache"},
+            // @ts-ignore
+            options: {postSearch: true}
+        }) as Bundle<Task>;
+        const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle);
+        if (Array.isArray(subTasks) && subTasks.length > 0) {
+            return subTasks;
+        }
+    } catch (error) {
+        throw new Error(`Failed to fetch sub-tasks: ${error}`);
+    }
+    return [];
+}
+
 
 export function codingToMessage(codings: Coding[]): String[] {
     if (!codings.length) return [MessageType.Unknown];
