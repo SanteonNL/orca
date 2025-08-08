@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 	"go.opentelemetry.io/otel/propagation"
@@ -23,6 +24,8 @@ type Config struct {
 	ServiceName string `koanf:"service_name"`
 	// ServiceVersion is the version of the service
 	ServiceVersion string `koanf:"service_version"`
+	// ResourceAttributes additional resource attributes
+	ResourceAttributes map[string]string `koanf:"resource_attributes"`
 	// Exporter configuration
 	Exporter ExporterConfig `koanf:"exporter"`
 }
@@ -30,6 +33,8 @@ type Config struct {
 type ExporterConfig struct {
 	// Type of exporter: "otlp", "stdout", or "none"
 	Type string `koanf:"type"`
+	// Protocol for OTLP exporter: "grpc" or "http"
+	Protocol string `koanf:"protocol"`
 	// OTLP exporter configuration (when type is "otlp")
 	OTLP OTLPConfig `koanf:"otlp"`
 }
@@ -37,6 +42,10 @@ type ExporterConfig struct {
 type OTLPConfig struct {
 	// Endpoint for the OTLP exporter (e.g., "localhost:4317" for gRPC insecure, "https://endpoint.com" for secure)
 	Endpoint string `koanf:"endpoint"`
+	// MetricEndpoint for OTLP metrics (optional override)
+	MetricEndpoint string `koanf:"metric_endpoint"`
+	// LoggingEndpoint for OTLP logging (optional override)
+	LoggingEndpoint string `koanf:"logging_endpoint"`
 	// Headers to send with OTLP requests
 	Headers map[string]string `koanf:"headers"`
 	// Timeout for OTLP requests
@@ -49,33 +58,73 @@ type OTLPConfig struct {
 func DefaultConfig() Config {
 	// Default values
 	endpoint := "localhost:4317"
+	protocol := "grpc"
 	insecure := true
+	serviceName := "orca-orchestrator"
+	var metricEndpoint, loggingEndpoint string
+	resourceAttributes := make(map[string]string)
 
-	// Check for standard OpenTelemetry environment variable
+	// Read OTEL_SERVICE_NAME
+	if envServiceName := os.Getenv("OTEL_SERVICE_NAME"); envServiceName != "" {
+		serviceName = envServiceName
+	}
+
+	// Read OTEL_EXPORTER_OTLP_PROTOCOL
+	if envProtocol := os.Getenv("OTEL_EXPORTER_OTLP_PROTOCOL"); envProtocol != "" {
+		protocol = envProtocol
+	}
+
+	// Read OTEL_EXPORTER_OTLP_ENDPOINT
 	if envEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); envEndpoint != "" {
-		// Remove scheme prefix if present to work with the gRPC exporter
-		endpoint = strings.TrimPrefix(strings.TrimPrefix(envEndpoint, "http://"), "https://")
+		endpoint = envEndpoint
 		// If the original endpoint had https://, we should use secure connection
 		insecure = !strings.HasPrefix(envEndpoint, "https://")
 
-		// Remove trailing slash if present
-		endpoint = strings.TrimSuffix(endpoint, "/")
+		// For gRPC, remove scheme prefix
+		if protocol == "grpc" {
+			endpoint = strings.TrimPrefix(strings.TrimPrefix(endpoint, "http://"), "https://")
+			// Remove trailing slash if present
+			endpoint = strings.TrimSuffix(endpoint, "/")
+		}
 	}
 
-	// Log the effective endpoint and insecure setting
+	// Read Azure Container App specific endpoints
+	if envMetricEndpoint := os.Getenv("CONTAINERAPP_OTEL_METRIC_GRPC_ENDPOINT"); envMetricEndpoint != "" {
+		metricEndpoint = envMetricEndpoint
+	}
+
+	if envLoggingEndpoint := os.Getenv("CONTAINERAPP_OTEL_LOGGING_GRPC_ENDPOINT"); envLoggingEndpoint != "" {
+		loggingEndpoint = envLoggingEndpoint
+	}
+
+	// Parse OTEL_RESOURCE_ATTRIBUTES
+	if envResourceAttrs := os.Getenv("OTEL_RESOURCE_ATTRIBUTES"); envResourceAttrs != "" {
+		pairs := strings.Split(envResourceAttrs, ",")
+		for _, pair := range pairs {
+			if kv := strings.SplitN(strings.TrimSpace(pair), "=", 2); len(kv) == 2 {
+				resourceAttributes[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+			}
+		}
+	}
+
+	// Log the effective configuration
 	// TODO: remove after debugging
-	fmt.Printf("Using OTLP endpoint: %s (insecure: %t)\n", endpoint, insecure)
+	fmt.Printf("Using OTLP endpoint: %s (protocol: %s, insecure: %t)\n", endpoint, protocol, insecure)
 
 	return Config{
-		Enabled:        true,
-		ServiceName:    "orca-orchestrator",
-		ServiceVersion: "1.0.0",
+		Enabled:            true,
+		ServiceName:        serviceName,
+		ServiceVersion:     "1.0.0",
+		ResourceAttributes: resourceAttributes,
 		Exporter: ExporterConfig{
-			Type: "otlp",
+			Type:     "otlp",
+			Protocol: protocol,
 			OTLP: OTLPConfig{
-				Insecure: insecure,
-				Endpoint: endpoint,
-				Timeout:  10 * time.Second,
+				Insecure:        insecure,
+				Endpoint:        endpoint,
+				MetricEndpoint:  metricEndpoint,
+				LoggingEndpoint: loggingEndpoint,
+				Timeout:         10 * time.Second,
 			},
 		},
 	}
@@ -123,13 +172,25 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 		}, nil
 	}
 
-	// Create resource with service information
-	res, err := resource.New(ctx,
+	// Create resource attributes slice
+	resourceOpts := []resource.Option{
 		resource.WithAttributes(
 			semconv.ServiceNameKey.String(config.ServiceName),
 			semconv.ServiceVersionKey.String(config.ServiceVersion),
 		),
-	)
+	}
+
+	// Add additional resource attributes from environment
+	if len(config.ResourceAttributes) > 0 {
+		var attrs []attribute.KeyValue
+		for key, value := range config.ResourceAttributes {
+			attrs = append(attrs, attribute.String(key, value))
+		}
+		resourceOpts = append(resourceOpts, resource.WithAttributes(attrs...))
+	}
+
+	// Create resource with service information
+	res, err := resource.New(ctx, resourceOpts...)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
@@ -138,25 +199,33 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	var exporter trace.SpanExporter
 	switch config.Exporter.Type {
 	case "otlp":
-		opts := []otlptracegrpc.Option{
-			otlptracegrpc.WithEndpoint(config.Exporter.OTLP.Endpoint),
-			otlptracegrpc.WithTimeout(config.Exporter.OTLP.Timeout),
+		// Choose exporter based on protocol
+		switch config.Exporter.Protocol {
+		case "grpc":
+			opts := []otlptracegrpc.Option{
+				otlptracegrpc.WithEndpoint(config.Exporter.OTLP.Endpoint),
+				otlptracegrpc.WithTimeout(config.Exporter.OTLP.Timeout),
+			}
+
+			// Add headers if configured
+			if len(config.Exporter.OTLP.Headers) > 0 {
+				opts = append(opts, otlptracegrpc.WithHeaders(config.Exporter.OTLP.Headers))
+			}
+
+			// Use insecure gRPC connection if configured
+			if config.Exporter.OTLP.Insecure {
+				opts = append(opts, otlptracegrpc.WithInsecure())
+			}
+
+			exporter, err = otlptracegrpc.New(ctx, opts...)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create OTLP gRPC exporter: %w", err)
+			}
+
+		default:
+			return nil, fmt.Errorf("unsupported OTLP protocol: %s (supported: grpc)", config.Exporter.Protocol)
 		}
 
-		// Add headers if configured
-		if len(config.Exporter.OTLP.Headers) > 0 {
-			opts = append(opts, otlptracegrpc.WithHeaders(config.Exporter.OTLP.Headers))
-		}
-
-		// Use insecure gRPC connection if configured
-		if config.Exporter.OTLP.Insecure {
-			opts = append(opts, otlptracegrpc.WithInsecure())
-		}
-
-		exporter, err = otlptracegrpc.New(ctx, opts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create OTLP exporter: %w", err)
-		}
 	case "stdout":
 		exporter, err = stdouttrace.New(stdouttrace.WithPrettyPrint())
 		if err != nil {
