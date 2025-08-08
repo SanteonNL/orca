@@ -10,6 +10,8 @@ import (
 	"go.opentelemetry.io/otel/sdk/resource"
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"os"
+	"strings"
 	"time"
 )
 
@@ -45,6 +47,25 @@ type OTLPConfig struct {
 
 // DefaultConfig returns a default OTEL configuration
 func DefaultConfig() Config {
+	// Default values
+	endpoint := "localhost:4318"
+	insecure := true
+
+	// Check for standard OpenTelemetry environment variable
+	if envEndpoint := os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"); envEndpoint != "" {
+		// Remove scheme prefix if present to work with the HTTP exporter
+		endpoint = strings.TrimPrefix(strings.TrimPrefix(envEndpoint, "http://"), "https://")
+		// If the original endpoint had https://, we should use secure connection
+		insecure = !strings.HasPrefix(envEndpoint, "https://")
+
+		// Remove trailing slash if present
+		endpoint = strings.TrimSuffix(endpoint, "/")
+	}
+
+	// Log the effective endpoint and insecure setting
+	// TODO: remove after debugging
+	fmt.Printf("Using OTLP endpoint: %s (insecure: %t)\n", endpoint, insecure)
+
 	return Config{
 		Enabled:        true,
 		ServiceName:    "orca-orchestrator",
@@ -52,8 +73,8 @@ func DefaultConfig() Config {
 		Exporter: ExporterConfig{
 			Type: "otlp",
 			OTLP: OTLPConfig{
-				Insecure: true,             // We are exporting to a local collector, so we don't need TLS
-				Endpoint: "localhost:4318", // Remove http:// scheme when using WithInsecure()
+				Insecure: insecure,
+				Endpoint: endpoint,
 				Timeout:  10 * time.Second,
 			},
 		},
