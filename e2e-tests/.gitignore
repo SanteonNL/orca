@@ -1,2 +1,4 @@
 .env
 .run
+*.json
+*.txt

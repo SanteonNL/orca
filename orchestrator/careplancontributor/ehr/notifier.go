@@ -12,6 +12,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"net/url"
 )
@@ -68,17 +72,50 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 	if err != nil {
 		return err
 	}
-	return n.eventManager.Notify(ctx, TaskAcceptedEvent{
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		ctx,
+		"NotifyTaskAccepted",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String("operation.name", "EHR/NotifyTaskAccepted"),
+			attribute.String("fhir.base_url", fhirBaseURL),
+			attribute.String("fhir.task_id", *task.Id),
+			attribute.String("fhir.task_status", task.Status.Code()),
+		),
+	)
+	defer span.End()
+
+	err = n.eventManager.Notify(ctx, TaskAcceptedEvent{
 		TenantID:    tenant.ID,
 		FHIRBaseURL: fhirBaseURL,
 		Task:        *task,
 	})
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to notify task accepted event")
+		return err
+	}
+
+	return nil
 }
 
 func (n *notifier) start(receiverTopicOrQueue messaging.Entity, taskAcceptedBundleEndpoint string) error {
 	// TODO: add sync call here to the API of DataHub for enrolling a patient
 	// IF the call fails here we want to create a subtask to let the hospital know that the enrollment failed
 	return n.eventManager.Subscribe(TaskAcceptedEvent{}, func(ctx context.Context, rawEvent events.Type) error {
+		tracer := otel.Tracer(tracerName)
+		ctx, span := tracer.Start(
+			ctx,
+			"handleTaskAcceptedEvent",
+			trace.WithSpanKind(trace.SpanKindConsumer),
+			trace.WithAttributes(
+				attribute.String("operation.name", "EHR/handleTaskAcceptedEvent"),
+				attribute.String("event.type", "TaskAcceptedEvent"),
+			),
+		)
+		defer span.End()
+
 		event := rawEvent.(*TaskAcceptedEvent)
 
 		// Lookup tenant
@@ -88,25 +125,49 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity, taskAcceptedBund
 		}
 		ctx = tenants.WithTenant(ctx, *tenant)
 
+		span.SetAttributes(
+			attribute.String("fhir.base_url", event.FHIRBaseURL),
+			attribute.String("fhir.task_id", *event.Task.Id),
+			attribute.String("fhir.task_status", event.Task.Status.Code()),
+		)
+
 		fhirBaseURL, err := url.Parse(event.FHIRBaseURL)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to parse FHIR base URL")
 			return err
 		}
 
 		cpsClient, _, err := n.fhirClientFactory(ctx, fhirBaseURL)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to create FHIR client")
 			return errors.Wrap(err, "failed to create FHIR client for invoking CarePlanService")
 		}
 
 		bundles, err := TaskNotificationBundleSet(ctx, cpsClient, *event.Task.Id)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to create task notification bundle")
 			return errors.Wrap(err, "failed to create task notification bundle")
 		}
 		log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
 		//TODO: If this fails, we should create a subtask to let the hospital know that the enrollment failed and the datahub returns a
 		// questionnaire URL to fill in the missing data
 		// cpsClient.CreateWithContext(ctx, "Task", )
-		return sendBundle(ctx, receiverTopicOrQueue, taskAcceptedBundleEndpoint, *bundles, n.broker)
+		err = sendBundle(ctx, receiverTopicOrQueue, taskAcceptedBundleEndpoint, *bundles, n.broker)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to send bundle")
+			return err
+		}
+
+		span.SetAttributes(
+			attribute.String("bundle_set.id", bundles.Id),
+			attribute.Int("bundles.count", len(bundles.Bundles)),
+		)
+
+		return nil
 	})
 }
 
@@ -114,15 +175,44 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity, taskAcceptedBund
 // It logs the process and errors during submission while wrapping and returning them.
 // Returns an error if serialization or message submission fails.
 func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, taskAcceptedBundleEndpoint string, set BundleSet, messageBroker messaging.Broker) error {
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		ctx,
+		"sendBundle",
+		trace.WithSpanKind(trace.SpanKindProducer),
+		trace.WithAttributes(
+			attribute.String("operation.name", "EHR/sendBundle"),
+			attribute.String("bundle_set.id", set.Id),
+			attribute.String("bundle_set.task", set.task),
+			attribute.Int("bundles.count", len(set.Bundles)),
+			attribute.String("messaging.entity", receiverTopicOrQueue.Name),
+		),
+	)
+	defer span.End()
+
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to serialize bundle set")
 		return err
 	}
+
+	span.SetAttributes(
+		attribute.Int("payload.size_bytes", len(jsonData)),
+	)
+
 	// TODO: Remove support for receiverTopicOrQueue, and then this if-guard
 	if taskAcceptedBundleEndpoint != "" {
-		log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
+		span.SetAttributes(
+			attribute.String("transport.type", "http"),
+			attribute.String("http.url", taskAcceptedBundleEndpoint),
+		)
+
+		log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to HTTP endpoint (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
 		httpResponse, err := http.Post(taskAcceptedBundleEndpoint, "application/json", bytes.NewBuffer(jsonData))
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to send HTTP request")
 			log.Ctx(ctx).Warn().Err(err).Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
 			return errors.Wrap(err, "failed to send task to endpoint")
 		}
@@ -131,6 +221,11 @@ func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, task
 			return errors.Errorf("failed to send task to endpoint, status code: %d", httpResponse.StatusCode)
 		}
 	} else {
+		span.SetAttributes(
+			attribute.String("transport.type", "message_broker"),
+		)
+
+		log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to message broker with messages %s", set.task, jsonData)
 		msg := &messaging.Message{
 			Body:          jsonData,
 			ContentType:   "application/json",
@@ -139,6 +234,8 @@ func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, task
 		// TODO: Remove this and send the message directly with an API call to DataHub
 		err = messageBroker.SendMessage(ctx, receiverTopicOrQueue, msg)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "failed to send message to broker")
 			log.Ctx(ctx).Warn().Msgf("Sending set for task (ref=%s) to message broker failed, error: %s", set.task, err.Error())
 			return errors.Wrap(err, "failed to send task to message broker")
 		}

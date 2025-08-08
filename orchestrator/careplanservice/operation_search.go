@@ -11,9 +11,14 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"net/url"
 	"strconv"
 	"strings"
+	"time"
 )
 
 var _ FHIROperation = &FHIRSearchOperationHandler[any]{}
@@ -24,10 +29,39 @@ type FHIRSearchOperationHandler[T any] struct {
 }
 
 func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	start := time.Now()
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		ctx,
+		"FHIRSearchOperationHandler.Handle",
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("operation.name", "SearchResource"),
+		),
+	)
+	defer span.End()
+
 	resourceType := getResourceType(request.ResourcePath)
+	span.SetAttributes(
+		attribute.String("fhir.resource_type", resourceType),
+		attribute.Int("fhir.search.param_count", len(request.QueryParams)),
+	)
+
+	// Add search parameters as span attributes for better observability
+	searchParams := make([]string, 0, len(request.QueryParams))
+	for param, values := range request.QueryParams {
+		searchParams = append(searchParams, param+"="+strings.Join(values, ","))
+	}
+	if len(searchParams) > 0 {
+		span.SetAttributes(attribute.StringSlice("fhir.search.parameters", searchParams))
+	}
+
 	log.Ctx(ctx).Info().Msgf("Searching for %s", resourceType)
 	resources, bundle, policyDecisions, err := h.searchAndFilter(ctx, request.QueryParams, request.Principal, resourceType)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "search and filter failed")
+		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, err
 	}
 
@@ -37,6 +71,11 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		resources[i] = resource
 		bundle.Entry[i].Resource, _ = json.Marshal(resource)
 	}
+
+	span.SetAttributes(
+		attribute.Int("fhir.search.results_found", len(resources)),
+		attribute.Int("fhir.search.authorized_results", len(policyDecisions)),
+	)
 
 	results := []*fhir.BundleEntry{}
 	for i, entry := range bundle.Entry {
@@ -79,6 +118,12 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		tx.Create(auditEvent)
 	}
 
+	span.SetStatus(codes.Ok, "")
+	span.SetAttributes(
+		attribute.String("fhir.resource.search", "success"),
+		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
+	)
+
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
 		// Simply return the already prepared results
 		return results, []any{}, nil
@@ -86,18 +131,35 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 }
 
 func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, queryParams url.Values, principal *auth.Principal, resourceType string) ([]T, *fhir.Bundle, []PolicyDecision, error) {
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		ctx,
+		"FHIRSearchOperationHandler.searchAndFilter",
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String("fhir.resource_type", resourceType),
+		),
+	)
+	defer span.End()
+
 	resources, bundle, err := searchResources[T](ctx, h.fhirClientFactory, resourceType, queryParams, new(fhirclient.Headers))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to search resources")
 		return nil, nil, nil, err
 	}
+
+	span.SetAttributes(attribute.Int("fhir.search.raw_results", len(resources)))
 
 	// Filter authorized resources
 	j := 0
 	var allowedPolicyDecisions []PolicyDecision
+	authzErrors := 0
 	for i, resource := range resources {
 		resourceID := *coolfhir.ResourceID(resource)
 		authzDecision, err := h.authzPolicy.HasAccess(ctx, resource, *principal)
 		if err != nil {
+			authzErrors++
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking authz policy for %s/%s", resourceType, resourceID)
 			continue
 		}
@@ -110,10 +172,28 @@ func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, quer
 	}
 	resources = resources[:j]
 	bundle.Entry = bundle.Entry[:j]
+
+	span.SetAttributes(
+		attribute.Int("fhir.search.filtered_results", len(resources)),
+		attribute.Int("fhir.authorization.errors", authzErrors),
+		attribute.Int("fhir.authorization.denied_count", len(bundle.Entry)-len(resources)+authzErrors),
+	)
+
+	span.SetStatus(codes.Ok, "")
 	return resources, bundle, allowedPolicyDecisions, nil
 }
 
 func searchResources[T any](ctx context.Context, fhirClientFactory FHIRClientFactory, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
+	tracer := otel.Tracer(tracerName)
+	ctx, span := tracer.Start(
+		ctx,
+		"searchResources",
+		trace.WithSpanKind(trace.SpanKindClient),
+		trace.WithAttributes(
+			attribute.String("fhir.resource_type", resourceType),
+		),
+	)
+	defer span.End()
 	form := url.Values{}
 	for k, v := range queryParams {
 		form.Add(k, strings.Join(v, ","))
@@ -123,6 +203,8 @@ func searchResources[T any](ctx context.Context, fhirClientFactory FHIRClientFac
 	if form.Has("_count") {
 		count, err := strconv.Atoi(form.Get("_count"))
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "invalid _count parameter")
 			return nil, &fhir.Bundle{}, fmt.Errorf("invalid _count value: %w", err)
 		}
 		searchLimit = count
@@ -135,6 +217,8 @@ func searchResources[T any](ctx context.Context, fhirClientFactory FHIRClientFac
 		form.Add("_count", strconv.Itoa(searchLimit))
 	}
 
+	span.SetAttributes(attribute.Int("fhir.search.limit", searchLimit))
+
 	var bundle fhir.Bundle
 	fhirClient, err := fhirClientFactory(ctx)
 	if err != nil {
@@ -142,14 +226,21 @@ func searchResources[T any](ctx context.Context, fhirClientFactory FHIRClientFac
 	}
 	err = fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "FHIR search request failed")
 		return nil, &fhir.Bundle{}, err
 	}
 
 	var resources []T
 	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType(resourceType), &resources)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to extract resources from bundle")
 		return nil, &fhir.Bundle{}, err
 	}
+
+	span.SetAttributes(attribute.Int("fhir.search.bundle_results", len(resources)))
+	span.SetStatus(codes.Ok, "")
 
 	return resources, &bundle, nil
 }
