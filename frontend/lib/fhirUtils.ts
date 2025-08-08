@@ -301,7 +301,7 @@ export type TaskProgress = {
     subTasks: Task[]
 }
 
-export const fetchTaskById= async (cpsClient: Client, taskId: string)=> {
+export const fetchTaskById = async (cpsClient: Client, taskId: string) => {
     return await cpsClient.read({resourceType: 'Task', id: taskId}) as Task;
 }
 
