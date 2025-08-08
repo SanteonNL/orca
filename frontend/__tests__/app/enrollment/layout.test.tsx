@@ -1,129 +1,101 @@
-import { render, screen } from '@testing-library/react';
-import '@testing-library/jest-dom';
-import EnrollmentLayout from '@/app/enrollment/layout';
-import { usePathname } from 'next/navigation';
-import useEnrollmentStore from '@/lib/store/enrollment-store';
-import useTaskProgressStore from '@/lib/store/task-progress-store';
-
-jest.mock('next/navigation');
-jest.mock('@/lib/store/enrollment-store');
-jest.mock('@/lib/store/task-progress-store');
-
-const mockChildren = <div data-testid="children">Test Children</div>;
-
-const mockServiceRequest = {
-  code: {
-    coding: [{ display: 'cardiologie consult' }]
-  }
-};
-
-const mockTask = {
-  status: 'requested'
-};
-
-beforeEach(() => {
-  jest.clearAllMocks();
-  (usePathname as jest.Mock).mockReturnValue('/enrollment/new');
-  (useEnrollmentStore as jest.Mock).mockReturnValue({ serviceRequest: mockServiceRequest });
-  (useTaskProgressStore as jest.Mock).mockReturnValue({ task: mockTask });
-});
+import '@testing-library/jest-dom'
+import { render, screen } from '@testing-library/react'
+import EnrollmentLayout from '@/app/enrollment/layout'
 
 describe('EnrollmentLayout', () => {
-  it('renders children content', () => {
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    expect(screen.getByTestId('children')).toBeInTheDocument();
-  });
+  it('renders children content within the layout', () => {
+    const testContent = 'Test enrollment content'
 
-  it('renders horizontal divider line', () => {
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const divider = document.querySelector('.h-px.bg-gray-200.mb-10');
-    expect(divider).toBeInTheDocument();
-  });
+    render(
+      <EnrollmentLayout>
+        <div>{testContent}</div>
+      </EnrollmentLayout>
+    )
 
-  it('hides navigation when on overview page', () => {
-    (usePathname as jest.Mock).mockReturnValue('/enrollment/list');
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const nav = screen.getByRole('navigation');
-    expect(nav).toBeInTheDocument();
-    expect(nav).not.toHaveClass('invisible');
-  });
+    expect(screen.getByText(testContent)).toBeInTheDocument()
+  })
 
-  it('shows navigation with breadcrumb and service when not on overview', () => {
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const nav = screen.getByRole('navigation');
-    expect(nav).toBeInTheDocument();
-    expect(screen.getByText('Verzoek controleren')).toBeInTheDocument();
-    expect(screen.getByText('cardiologie consult')).toBeInTheDocument();
-  });
+  it('applies correct wrapper classes', () => {
+    render(
+      <EnrollmentLayout>
+        <div data-testid="child-content">Child content</div>
+      </EnrollmentLayout>
+    )
 
-  it('applies muted text color to service on first step', () => {
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const service = screen.getByText('cardiologie consult');
-    expect(service).toHaveClass('text-muted-foreground');
-  });
+    const wrapper = screen.getByTestId('child-content').parentElement
+    expect(wrapper).toHaveClass('w-full', 'h-full')
+  })
 
-  it('does not apply muted text color to service on non-first step', () => {
-    (useTaskProgressStore as jest.Mock).mockReturnValue({ task: { status: 'accepted' } });
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const service = screen.getByText('cardiologie consult');
-    expect(service).not.toHaveClass('text-muted-foreground');
-  });
+  it('renders multiple children correctly', () => {
+    render(
+      <EnrollmentLayout>
+        <div>First child</div>
+        <div>Second child</div>
+        <span>Third child</span>
+      </EnrollmentLayout>
+    )
 
-  it('hides navigation when on last step', () => {
-    (useTaskProgressStore as jest.Mock).mockReturnValue({ task: { status: 'accepted' } });
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const nav = screen.getByRole('navigation');
-    expect(nav).toHaveClass('invisible');
-  });
+    expect(screen.getByText('First child')).toBeInTheDocument()
+    expect(screen.getByText('Second child')).toBeInTheDocument()
+    expect(screen.getByText('Third child')).toBeInTheDocument()
+  })
 
-  it('shows navigation when not on last step', () => {
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const nav = screen.getByRole('navigation');
-    expect(nav).not.toHaveClass('invisible');
-  });
+  it('renders with empty children', () => {
+    render(<EnrollmentLayout>{null}</EnrollmentLayout>)
 
-  it('displays status-based title for different task statuses', () => {
-    (useTaskProgressStore as jest.Mock).mockReturnValue({ task: { status: 'accepted' } });
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    expect(screen.getByText('Verzoek geaccepteerd')).toBeInTheDocument();
-  });
+    const wrapper = document.querySelector('.w-full.h-full')
+    expect(wrapper).toBeInTheDocument()
+    expect(wrapper).toBeEmptyDOMElement()
+  })
 
-  it('displays service-based title when task status is requested', () => {
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    expect(screen.getByText('cardiologie consult instellen')).toBeInTheDocument();
-  });
+  it('maintains proper DOM structure with nested components', () => {
+    render(
+      <EnrollmentLayout>
+        <div data-testid="parent">
+          <div data-testid="nested-child">Nested content</div>
+        </div>
+      </EnrollmentLayout>
+    )
 
-  it('displays fallback title when no service is available', () => {
-    (useEnrollmentStore as jest.Mock).mockReturnValue({ serviceRequest: null });
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    expect(screen.getByText('Instellen')).toBeInTheDocument();
-  });
+    const parent = screen.getByTestId('parent')
+    const nestedChild = screen.getByTestId('nested-child')
 
-  it('displays overview title when on overview page', () => {
-    (usePathname as jest.Mock).mockReturnValue('/enrollment/list');
-    (useTaskProgressStore as jest.Mock).mockReturnValue({ task: null });
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    expect(screen.getAllByText('Verzoek controleren').length).toBeGreaterThan(0);
-  });
+    expect(parent).toBeInTheDocument()
+    expect(nestedChild).toBeInTheDocument()
+    expect(parent).toContainElement(nestedChild)
+  })
 
+  it('preserves React fragments as children', () => {
+    render(
+      <EnrollmentLayout>
+        <>
+          <div>Fragment child 1</div>
+          <div>Fragment child 2</div>
+        </>
+      </EnrollmentLayout>
+    )
 
-  it('applies first letter uppercase styling to service text', () => {
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const service = screen.getByText('cardiologie consult');
-    expect(service).toHaveClass('first-letter:uppercase');
-  });
+    expect(screen.getByText('Fragment child 1')).toBeInTheDocument()
+    expect(screen.getByText('Fragment child 2')).toBeInTheDocument()
+  })
 
-  it('shows breadcrumb as link when not on first step', () => {
-    (useTaskProgressStore as jest.Mock).mockReturnValue({ task: { status: 'accepted' } });
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const breadcrumbLink = screen.getByRole('link', { name: 'Verzoek controleren' });
-    expect(breadcrumbLink).toHaveClass('text-primary', 'font-medium');
-  });
+  it('renders with complex component children', () => {
+    const ComplexChild = () => (
+      <div>
+        <h1>Header</h1>
+        <p>Paragraph content</p>
+        <button>Action button</button>
+      </div>
+    )
 
-  it('shows breadcrumb as span when on first step', () => {
-    render(<EnrollmentLayout>{mockChildren}</EnrollmentLayout>);
-    const breadcrumbSpan = screen.getByText('Verzoek controleren');
-    expect(breadcrumbSpan.tagName.toLowerCase()).toBe('span');
-    expect(breadcrumbSpan).toHaveClass('font-medium');
-  });
-});
+    render(
+      <EnrollmentLayout>
+        <ComplexChild />
+      </EnrollmentLayout>
+    )
+
+    expect(screen.getByRole('heading', { level: 1 })).toBeInTheDocument()
+    expect(screen.getByText('Paragraph content')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Action button' })).toBeInTheDocument()
+  })
+})
