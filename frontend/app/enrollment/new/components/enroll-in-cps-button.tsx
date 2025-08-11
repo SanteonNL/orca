@@ -1,6 +1,6 @@
 "use client"
 import {findInBundle, getPatientIdentifier, constructTaskBundle} from '@/lib/fhirUtils'
-import useEnrollment from '@/lib/store/enrollment-store'
+import useEnrollment from '@/app/hooks/enrollment-hook'
 import {Bundle, Coding, Condition, OperationOutcome, PractitionerRole} from 'fhir/r4'
 import React, {useEffect, useState} from 'react'
 import {toast} from "sonner"
@@ -31,7 +31,7 @@ export default function EnrollInCpsButton({className}: Props) {
         taskCondition,
         practitionerRole,
         serviceRequest,
-        loading,
+        isLoading,
     } = useEnrollment()
     const {
         launchContext,
@@ -45,8 +45,8 @@ export default function EnrollInCpsButton({className}: Props) {
     const router = useRouter()
 
     useEffect(() => {
-        setDisabled(submitted || !taskCondition || loading)
-    }, [taskCondition, selectedCarePlan, submitted, loading])
+        setDisabled(submitted || !taskCondition || isLoading)
+    }, [taskCondition, selectedCarePlan, submitted, isLoading])
 
     const informCps = async () => {
         setSubmitted(true)

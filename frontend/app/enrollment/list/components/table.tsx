@@ -1,12 +1,12 @@
 "use client"
 import React, {useEffect, useState} from 'react'
-import useEnrollmentStore from '@/lib/store/enrollment-store'
+import useEnrollment from '@/app/hooks/enrollment-hook'
 import type {Task, Patient} from "fhir/r4";
 import {getPatientIdentifier} from "@/lib/fhirUtils";
 import useContext from "@/lib/store/context-store";
 
 export default function TaskOverviewTable() {
-    const { patient } = useEnrollmentStore()
+    const { patient } = useEnrollment()
     const { cpsClient } = useContext()
     const [tasks, setTasks] = useState([] as Task[]);
 
