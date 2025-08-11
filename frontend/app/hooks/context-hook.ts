@@ -1,4 +1,4 @@
-import React from "react";
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createCpsClient, createEhrClient, createScpClient } from "@/lib/fhirUtils";
 import Client from "fhir-kit-client";
