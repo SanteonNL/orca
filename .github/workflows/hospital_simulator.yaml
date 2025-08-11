@@ -25,7 +25,7 @@ jobs:
       # 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       # This step sets the IMAGE_NAME and lowercases the Github username (organizationname) and reponame. This avoids errors (could not find image) in the artifact attestation step 
       - name: set IMAGE_NAME (and lowercase GITHUB_REPOSITORY)
