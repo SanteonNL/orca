@@ -2,11 +2,11 @@ import {act, render, screen} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TaskOverviewTable from '@/app/enrollment/list/components/table';
 import useEnrollment from '@/app/hooks/enrollment-hook';
-import useContext from '@/lib/store/context-store';
+import useContext from '@/app/hooks/context-hook';
 import * as fhirUtils from '@/lib/fhirUtils';
 
 jest.mock('@/app/hooks/enrollment-hook');
-jest.mock('@/lib/store/context-store');
+jest.mock('@/app/hooks/context-hook');
 jest.mock('@/lib/fhirUtils');
 
 const mockPatient = {

@@ -13,7 +13,7 @@ import useEnrollment from '@/app/hooks/enrollment-hook';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Button, createTheme, Shadows, ThemeProvider } from '@mui/material';
 import Loading from '../loading';
-import {useContextStore} from "@/lib/store/context-store";
+import useContext from "@/app/hooks/context-hook";
 
 interface QuestionnaireRendererPageProps {
   questionnaire: Questionnaire;
@@ -27,7 +27,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
   const responseIsValid = useQuestionnaireResponseStore.use.responseIsValid();
 
-  const { launchContext, cpsClient } = useContextStore();
+  const { launchContext, cpsClient } = useContext();
   const { patient, practitioner } = useEnrollment()
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prePopulated, setPrePopulated] = useState(false);

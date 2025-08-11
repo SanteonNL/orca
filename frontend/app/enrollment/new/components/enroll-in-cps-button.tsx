@@ -10,7 +10,7 @@ import {Spinner} from '@/components/spinner'
 import {Button, ThemeProvider} from '@mui/material'
 import {defaultTheme} from "@/app/theme"
 import ValidationErrors from './validation-errors'
-import useContext from "@/lib/store/context-store"
+import useContext from "@/app/hooks/context-hook"
 
 interface Props {
     className?: string

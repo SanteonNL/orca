@@ -2,13 +2,13 @@ import {render, screen, fireEvent, waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import EnrollInCpsButton from '@/app/enrollment/new/components/enroll-in-cps-button';
 import useEnrollment from '@/app/hooks/enrollment-hook';
-import useContext from '@/lib/store/context-store';
+import useContext from '@/app/hooks/context-hook';
 import * as fhirUtils from '@/lib/fhirUtils';
 import {useRouter} from 'next/navigation';
 import {toast} from 'sonner';
 
 jest.mock('@/app/hooks/enrollment-hook');
-jest.mock('@/lib/store/context-store');
+jest.mock('@/app/hooks/context-hook');
 jest.mock('@/lib/fhirUtils');
 jest.mock('next/navigation');
 jest.mock('sonner');

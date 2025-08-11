@@ -76,11 +76,12 @@ jest.mock('sonner', () => ({toast: {error: jest.fn(), success: jest.fn(),}}))
 jest.mock('@/app/hooks/enrollment-hook')
 
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
-jest.mock('@/lib/store/context-store', () => ({
-    useContextStore: jest.fn(() => ({
-        launchContext: {taskIdentifier: 'task-id-123'},
-        cpsClient: mockCpsClient
-    }))
+jest.mock('@/app/hooks/context-hook', () => () => ({
+    launchContext: {taskIdentifier: 'task-id-123'},
+    cpsClient: mockCpsClient,
+    isLoading: false,
+    isError: false,
+    error: null
 }))
 jest.mock('@/lib/fhirUtils')
 jest.mock('../../../../app/utils/populate')
@@ -91,6 +92,12 @@ jest.mock('@tanstack/react-query', () => ({
         mount: jest.fn(),
         unmount: jest.fn(),
     })),
+    useQuery: jest.fn(() => ({
+        data: { launchContext: {taskIdentifier: 'task-id-123'} },
+        isLoading: false,
+        isError: false,
+        error: null
+    }))
 }))
 
 

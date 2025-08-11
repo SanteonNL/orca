@@ -11,16 +11,26 @@ jest.mock('@/app/hooks/task-progress-hook');
 jest.mock('@/app/hooks/enrollment-hook');
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
 const mockScpClient = {}
-jest.mock('@/lib/store/context-store', () => ({
-    useContextStore: jest.fn(() => ({
-        launchContext: {taskIdentifier: 'task-id-123'},
-        cpsClient: mockCpsClient,
-        scpClient: mockScpClient
-    }))
+jest.mock('@/app/hooks/context-hook', () => () => ({
+    launchContext: {taskIdentifier: 'task-id-123'},
+    cpsClient: mockCpsClient,
+    scpClient: mockScpClient,
+    isLoading: false,
+    isError: false,
+    error: null
 }))
 jest.mock('next/navigation');
 jest.mock('@/lib/fhirRender');
 jest.mock('@/app/applaunch');
+jest.mock('@tanstack/react-query', () => ({
+    ...jest.requireActual('@tanstack/react-query'),
+    useQuery: jest.fn(() => ({
+        data: { launchContext: {taskIdentifier: 'task-id-123'} },
+        isLoading: false,
+        isError: false,
+        error: null
+    }))
+}));
 jest.mock('@/app/enrollment/loading', () => {
     const MockLoading = () => <div data-testid="loading">Loading...</div>;
     MockLoading.displayName = 'MockLoading';
@@ -355,12 +365,8 @@ describe("taskid page tests", () => {
     });
 
     it('handles missing cpsClient gracefully', async () => {
-        jest.mock('@/lib/store/context-store', () => ({
-            useContextStore: jest.fn(() => ({
-                scpClient: mockScpClient,
-                cpsClient: null
-            }))
-        }));
+        // This test is handled by the global mock already
+        // No need for inline mocking since useContext hook is already mocked
 
         (TaskProgressHook as jest.Mock).mockReturnValue({
             task: null,

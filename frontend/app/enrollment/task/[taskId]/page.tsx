@@ -8,7 +8,7 @@ import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
 import {Questionnaire} from "fhir/r4";
 import {Button, ThemeProvider} from "@mui/material";
 import {defaultTheme} from "@/app/theme";
-import {useContextStore} from "@/lib/store/context-store";
+import useContext from "@/app/hooks/context-hook";
 import PatientDetails from "@/app/enrollment/task/components/patient-details";
 import TaskProgressHook from "@/app/hooks/task-progress-hook";
 import TaskHeading from "@/app/enrollment/components/task-heading";
@@ -18,7 +18,7 @@ import Error from "@/app/error";
 
 export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
-    const {scpClient, cpsClient} = useContextStore()
+    const {scpClient, cpsClient} = useContext()
 
     const {
         task,

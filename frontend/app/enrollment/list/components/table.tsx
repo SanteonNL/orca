@@ -3,7 +3,7 @@ import React, {useEffect, useState} from 'react'
 import useEnrollment from '@/app/hooks/enrollment-hook'
 import type {Task, Patient} from "fhir/r4";
 import {getPatientIdentifier} from "@/lib/fhirUtils";
-import useContext from "@/lib/store/context-store";
+import useContext from "@/app/hooks/context-hook";
 
 export default function TaskOverviewTable() {
     const { patient } = useEnrollment()
