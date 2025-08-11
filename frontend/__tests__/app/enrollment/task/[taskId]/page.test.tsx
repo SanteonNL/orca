@@ -1,14 +1,14 @@
 import {render, screen, act, waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import EnrollmentTaskPage from '@/app/enrollment/task/[taskId]/page';
-import useEnrollmentStore from '@/lib/store/enrollment-store';
+import useEnrollment from '@/app/hooks/enrollment-hook';
 import {useParams} from 'next/navigation';
 import * as fhirRender from '@/lib/fhirRender';
 import * as applaunch from '@/app/applaunch';
 import TaskProgressHook from '@/app/hooks/task-progress-hook';
 
 jest.mock('@/app/hooks/task-progress-hook');
-jest.mock('@/lib/store/enrollment-store');
+jest.mock('@/app/hooks/enrollment-hook');
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
 const mockScpClient = {}
 jest.mock('@/lib/store/context-store', () => ({
@@ -102,7 +102,7 @@ beforeEach(() => {
         isError: false,
         isLoading: false
     });
-    (useEnrollmentStore as jest.Mock).mockReturnValue({
+    (useEnrollment as jest.Mock).mockReturnValue({
         patient: mockPatient,
         serviceRequest: mockServiceRequest
     });
@@ -205,7 +205,7 @@ describe("taskid page tests", () => {
             isLoading: false
         });
 
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest: mockServiceRequest,
             organization: mockOrganization
@@ -222,7 +222,7 @@ describe("taskid page tests", () => {
     });
 
     it('displays patient details when patient data is missing', async () => {
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: null,
             serviceRequest: mockServiceRequest
         });
@@ -237,7 +237,7 @@ describe("taskid page tests", () => {
             ...mockPatient,
             telecom: [{system: 'phone', value: '+31612345678'}]
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: patientWithoutEmail,
             serviceRequest: mockServiceRequest
         });
@@ -252,7 +252,7 @@ describe("taskid page tests", () => {
             ...mockPatient,
             telecom: [{system: 'email', value: 'patient@example.com'}]
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: patientWithoutPhone,
             serviceRequest: mockServiceRequest
         });
@@ -554,7 +554,7 @@ describe("taskid page tests", () => {
             ...mockServiceRequest,
             code: { coding: [{ display: 'Cardiology Consultation' }] }
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest
         });
@@ -685,7 +685,7 @@ describe("taskid page tests", () => {
     });
 
     it('handles missing service request gracefully in breadcrumb', async () => {
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest: null
         });

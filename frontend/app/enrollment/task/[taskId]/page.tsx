@@ -3,7 +3,7 @@ import React, {useEffect, useState} from 'react'
 import {useParams} from 'next/navigation'
 import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
-import useEnrollmentStore from "@/lib/store/enrollment-store";
+import useEnrollment from "@/app/hooks/enrollment-hook";
 import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
 import {Questionnaire} from "fhir/r4";
 import {Button, ThemeProvider} from "@mui/material";
@@ -31,7 +31,7 @@ export default function EnrollmentTaskPage() {
         cpsClient: cpsClient!,
         pollingInterval: 1000
     })
-    const {patient, serviceRequest} = useEnrollmentStore()
+    const {patient, serviceRequest} = useEnrollment()
 
     const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);

@@ -1,10 +1,10 @@
 import {render, screen} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import EnrollmentDetails from '@/app/enrollment/new/components/enrollment-details';
-import useEnrollmentStore from '@/lib/store/enrollment-store';
+import useEnrollment from '@/app/hooks/enrollment-hook';
 import * as fhirRender from '@/lib/fhirRender';
 
-jest.mock('@/lib/store/enrollment-store');
+jest.mock('@/app/hooks/enrollment-hook');
 jest.mock('@/lib/fhirRender');
 
 const mockPatient = {
@@ -34,18 +34,18 @@ const mockTaskCondition = {
 
 beforeEach(() => {
     jest.clearAllMocks();
-    (useEnrollmentStore as jest.Mock).mockReturnValue({
+    (useEnrollment as jest.Mock).mockReturnValue({
         patient: mockPatient,
         serviceRequest: mockServiceRequest,
         taskCondition: mockTaskCondition,
-        loading: false
+        isLoading: false
     });
     (fhirRender.patientName as jest.Mock).mockReturnValue('John Doe');
     (fhirRender.organizationName as jest.Mock).mockReturnValue('Test Hospital');
 });
 describe("EnrollmentDetails component", () => {
     it('displays spinner when loading is true', () => {
-        (useEnrollmentStore as jest.Mock).mockReturnValue({loading: true});
+        (useEnrollment as jest.Mock).mockReturnValue({isLoading: true});
         render(<EnrollmentDetails/>);
         expect(document.querySelector('.text-primary')).toBeInTheDocument();
     });
@@ -56,11 +56,11 @@ describe("EnrollmentDetails component", () => {
     });
 
     it('displays onbekend when patient is null', () => {
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: null,
             serviceRequest: mockServiceRequest,
             taskCondition: mockTaskCondition,
-            loading: false
+            isLoading: false
         });
         render(<EnrollmentDetails/>);
         const patientRow = screen.getByText('Patiënt:').nextElementSibling;
@@ -77,11 +77,11 @@ describe("EnrollmentDetails component", () => {
             ...mockPatient,
             telecom: [{system: 'phone', value: '+31612345678'}]
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: patientWithoutEmail,
             serviceRequest: mockServiceRequest,
             taskCondition: mockTaskCondition,
-            loading: false
+            isLoading: false
         });
         render(<EnrollmentDetails/>);
         const emailRow = screen.getByText('E-mailadres:').nextElementSibling;
@@ -98,11 +98,11 @@ describe("EnrollmentDetails component", () => {
             ...mockPatient,
             telecom: [{system: 'email', value: 'john.doe@example.com'}]
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: patientWithoutPhone,
             serviceRequest: mockServiceRequest,
             taskCondition: mockTaskCondition,
-            loading: false
+            isLoading: false
         });
         render(<EnrollmentDetails/>);
         const phoneRow = screen.getByText('Telefoonnummer:').nextElementSibling;
@@ -111,11 +111,11 @@ describe("EnrollmentDetails component", () => {
 
     it('displays onbekend when patient has no telecom array', () => {
         const patientWithoutTelecom = {...mockPatient, telecom: undefined};
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: patientWithoutTelecom,
             serviceRequest: mockServiceRequest,
             taskCondition: mockTaskCondition,
-            loading: false
+            isLoading: false
         });
         render(<EnrollmentDetails/>);
         const emailRow = screen.getByText('E-mailadres:').nextElementSibling;
@@ -132,11 +132,11 @@ describe("EnrollmentDetails component", () => {
 
     it('displays onbekend when service request code is missing', () => {
         const serviceRequestWithoutCode = {...mockServiceRequest, code: undefined};
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest: serviceRequestWithoutCode,
             taskCondition: mockTaskCondition,
-            loading: false
+            isLoading: false
         });
         render(<EnrollmentDetails/>);
         const requestRow = screen.getByText('Verzoek:').nextElementSibling;
@@ -148,11 +148,11 @@ describe("EnrollmentDetails component", () => {
             ...mockServiceRequest,
             code: { coding: [] }
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest: serviceRequestWithEmptyCoding,
             taskCondition: mockTaskCondition,
-            loading: false
+            isLoading: false
         });
         render(<EnrollmentDetails/>);
         const requestRow = screen.getByText('Verzoek:').nextElementSibling;
@@ -169,11 +169,11 @@ describe("EnrollmentDetails component", () => {
             ...mockTaskCondition,
             code: {coding: [{display: 'heart failure'}]}
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest: mockServiceRequest,
             taskCondition: conditionWithoutText,
-            loading: false
+            isLoading: false
         });
         render(<EnrollmentDetails/>);
         expect(screen.getByText('heart failure')).toBeInTheDocument();
@@ -181,11 +181,11 @@ describe("EnrollmentDetails component", () => {
 
     it('displays onbekend when condition has no code', () => {
         const conditionWithoutCode = {...mockTaskCondition, code: undefined};
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest: mockServiceRequest,
             taskCondition: conditionWithoutCode,
-            loading: false
+            isLoading: false
         });
         render(<EnrollmentDetails/>);
         const diagnosisRow = screen.getByText('Diagnose:').nextElementSibling;
