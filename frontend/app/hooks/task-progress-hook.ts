@@ -26,7 +26,7 @@ export default function TaskProgressHook({taskId, cpsClient, pollingInterval}: T
         enabled: !!taskId && !!cpsClient,
         refetchInterval: (query) => {
             const taskData = query.state.data as TaskProgress | undefined;
-            const shouldPoll = taskData?.task.status && 
+            const shouldPoll = !!taskData?.task && !!taskData.task.status && 
                 !['completed', 'failed', 'cancelled', 'rejected', 'accepted'].includes(taskData.task.status);
             
             return shouldPoll && pollingInterval > 0 ? pollingInterval : false;
