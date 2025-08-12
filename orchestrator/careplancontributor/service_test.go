@@ -287,7 +287,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 
 			service, _ := New(
 				Config{HealthDataViewEndpointEnabled: healthDataViewEndpointEnabled},
-				tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker,
+				tenants.Test(), profile.Test(), orcaPublicURL, sessionManager,
 				events.NewManager(messageBroker), true, nil)
 			service.ehrFHIRProxyByTenant = map[string]coolfhir.HttpProxy{
 				tenant.ID: coolfhir.NewProxy(
@@ -464,7 +464,7 @@ func TestService_HandleNotification_Invalid(t *testing.T) {
 			Enabled: true,
 		}
 	})
-	service, _ := New(Config{}, tenantCfg, profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
+	service, _ := New(Config{}, tenantCfg, profile.Test(), orcaPublicURL, sessionManager, events.NewManager(messageBroker), true, nil)
 
 	frontServerMux := http.NewServeMux()
 	frontServer := httptest.NewServer(frontServerMux)
@@ -594,7 +594,7 @@ func TestService_HandleNotification_Valid(t *testing.T) {
 		Config{},
 		testCfg, profile.TestProfile{
 			Principal: auth.TestPrincipal2,
-		}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
+		}, orcaPublicURL, sessionManager, events.NewManager(messageBroker), true, nil)
 	service.workflows = taskengine.DefaultTestWorkflowProvider()
 
 	var capturedFhirBaseUrl string
@@ -680,7 +680,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
+	service, err := New(Config{}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, events.NewManager(messageBroker), true, nil)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -748,7 +748,7 @@ func TestService_HandleSearchEndpoints(t *testing.T) {
 				},
 			},
 		},
-	}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), false, nil)
+	}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, events.NewManager(messageBroker), false, nil)
 	require.NoError(t, err)
 
 	// Setup: configure the service to proxy to the backing FHIR server

@@ -88,7 +88,6 @@ func Start(ctx context.Context, config Config) error {
 			activeProfile,
 			orcaBaseURL,
 			sessionManager,
-			messageBroker,
 			eventManager,
 			config.CarePlanService.Enabled, httpHandler)
 		if err != nil {
