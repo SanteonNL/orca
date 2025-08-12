@@ -30,21 +30,6 @@ export default function TaskProgressHook({taskId, cpsClient, pollingInterval}: T
                 !['completed', 'failed', 'cancelled', 'rejected', 'accepted'].includes(taskData.task.status);
             
             return shouldPoll && pollingInterval > 0 ? pollingInterval : false;
-        },
-        structuralSharing: (oldData, newData) => {
-            if (!oldData || !newData) return newData;
-            
-            // Type assertion to help TypeScript understand the structure
-            const oldProgress = oldData as TaskProgress;
-            const newProgress = newData as TaskProgress;
-            
-            // Only update if task status or subtasks count changed
-            if (oldProgress.task.status !== newProgress.task.status || 
-                oldProgress.subTasks.length !== newProgress.subTasks.length) {
-                return newData;
-            }
-            
-            return oldData;
         }
     });
 

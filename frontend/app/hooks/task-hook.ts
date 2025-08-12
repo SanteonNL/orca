@@ -18,6 +18,7 @@ export default function TaskHook({cpsClient, taskId}: TaskHookArgs ): TaskHookRe
     const {data, isError, isLoading} = useQuery({
         queryKey: ['task', taskId],
         queryFn: () => fetchTaskById(cpsClient, taskId),
+        refetchInterval: 2000, // Poll every 2 seconds
         enabled: !!taskId && !!cpsClient,
     });
     
