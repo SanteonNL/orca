@@ -112,7 +112,10 @@ func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcce
 			log.Ctx(ctx).Warn().Err(err).Msg("Task enrollment failed due to bad request")
 			task := event.Task
 			task.Status = fhir.TaskStatusRejected
-			err = cpsClient.UpdateWithContext(ctx, "Task/"+*event.Task.Id, task, &task)
+			task.StatusReason = &fhir.CodeableConcept{
+				Text: badRequest.Reason,
+			}
+			err = cpsClient.UpdateWithContext(context.Background(), "Task/"+*event.Task.Id, task, &task)
 			if err != nil {
 				return errors.Wrap(err, "failed to update task status")
 			}
