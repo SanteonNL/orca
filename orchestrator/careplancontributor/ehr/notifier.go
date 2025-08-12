@@ -42,19 +42,21 @@ type Notifier interface {
 
 // notifier is a type that uses a ServiceBusClient to send messages to a message broker.
 type notifier struct {
-	tenants           tenants.Config
-	eventManager      events.Manager
-	fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
+	tenants                    tenants.Config
+	eventManager               events.Manager
+	fhirClientFactory          func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)
+	taskAcceptedBundleEndpoint string
 }
 
 // NewNotifier creates and returns a Notifier implementation using the provided ServiceBusClient for message handling.
 func NewNotifier(eventManager events.Manager, tenants tenants.Config, taskAcceptedBundleEndpoint string, fhirClientFactory func(ctx context.Context, fhirBaseURL *url.URL) (fhirclient.Client, *http.Client, error)) (Notifier, error) {
 	n := &notifier{
-		eventManager:      eventManager,
-		fhirClientFactory: fhirClientFactory,
-		tenants:           tenants,
+		eventManager:               eventManager,
+		fhirClientFactory:          fhirClientFactory,
+		tenants:                    tenants,
+		taskAcceptedBundleEndpoint: taskAcceptedBundleEndpoint,
 	}
-	if err := n.start(taskAcceptedBundleEndpoint); err != nil {
+	if err := n.start(); err != nil {
 		return nil, err
 	}
 	return n, nil
@@ -66,59 +68,65 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 	if err != nil {
 		return err
 	}
-	return n.eventManager.Notify(ctx, TaskAcceptedEvent{
+
+	// Process the task notification synchronously to propagate errors
+	event := TaskAcceptedEvent{
 		TenantID:    tenant.ID,
 		FHIRBaseURL: fhirBaseURL,
 		Task:        *task,
-	})
+	}
+
+	return n.processTaskAcceptedEvent(ctx, &event)
 }
 
-func (n *notifier) start(taskAcceptedBundleEndpoint string) error {
-	// TODO: add sync call here to the API of DataHub for enrolling a patient
-	// IF the call fails here we want to create a subtask to let the hospital know that the enrollment failed
+// processTaskAcceptedEvent handles the actual task processing synchronously
+func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcceptedEvent) error {
+	// Lookup tenant
+	tenant, err := n.tenants.Get(event.TenantID)
+	if err != nil {
+		return errors.Wrapf(err, "failed to get from task accepted event (tenant-id=%s)", event.TenantID)
+	}
+	ctx = tenants.WithTenant(ctx, *tenant)
+
+	fhirBaseURL, err := url.Parse(event.FHIRBaseURL)
+	if err != nil {
+		return err
+	}
+
+	cpsClient, _, err := n.fhirClientFactory(ctx, fhirBaseURL)
+	if err != nil {
+		return errors.Wrap(err, "failed to create FHIR client for invoking CarePlanService")
+	}
+
+	bundles, err := TaskNotificationBundleSet(ctx, cpsClient, *event.Task.Id)
+	if err != nil {
+		return errors.Wrap(err, "failed to create task notification bundle")
+	}
+	log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
+
+	err = sendBundle(ctx, n.taskAcceptedBundleEndpoint, *bundles)
+	if err != nil {
+		var badRequest *BadRequest
+		if errors.As(err, &badRequest) {
+			// Handle BadRequest error specifically
+			log.Ctx(ctx).Warn().Err(err).Msg("Task enrollment failed due to bad request")
+			task := event.Task
+			task.Status = fhir.TaskStatusRejected
+			err = cpsClient.UpdateWithContext(ctx, "Task/"+*event.Task.Id, task, &task)
+			if err != nil {
+				return errors.Wrap(err, "failed to update task status")
+			}
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func (n *notifier) start() error {
 	return n.eventManager.Subscribe(TaskAcceptedEvent{}, func(ctx context.Context, rawEvent events.Type) error {
 		event := rawEvent.(*TaskAcceptedEvent)
-
-		// Lookup tenant
-		tenant, err := n.tenants.Get(event.TenantID)
-		if err != nil {
-			return errors.Wrapf(err, "failed to get from task accepted event (tenant-id=%s)", event.TenantID)
-		}
-		ctx = tenants.WithTenant(ctx, *tenant)
-
-		fhirBaseURL, err := url.Parse(event.FHIRBaseURL)
-		if err != nil {
-			return err
-		}
-
-		cpsClient, _, err := n.fhirClientFactory(ctx, fhirBaseURL)
-		if err != nil {
-			return errors.Wrap(err, "failed to create FHIR client for invoking CarePlanService")
-		}
-
-		bundles, err := TaskNotificationBundleSet(ctx, cpsClient, *event.Task.Id)
-		if err != nil {
-			return errors.Wrap(err, "failed to create task notification bundle")
-		}
-		log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
-
-		err = sendBundle(ctx, taskAcceptedBundleEndpoint, *bundles)
-		if err != nil {
-			var badRequest *BadRequest
-			if errors.As(err, &badRequest) {
-				// Handle BadRequest error specifically
-				log.Ctx(ctx).Warn().Err(err).Msg("Task enrollment failed due to bad request")
-				task := event.Task
-				task.Status = fhir.TaskStatusRejected
-				err = cpsClient.UpdateWithContext(ctx, "Task", event.Task.Id, task)
-				if err != nil {
-					return errors.Wrap(err, "failed to update task status")
-				}
-				return nil
-			}
-			return err
-		}
-		return nil
+		return n.processTaskAcceptedEvent(ctx, event)
 	})
 }
 
