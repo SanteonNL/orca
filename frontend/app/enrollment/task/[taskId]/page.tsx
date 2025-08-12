@@ -3,12 +3,12 @@ import React, {useEffect, useState} from 'react'
 import {useParams} from 'next/navigation'
 import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
-import useEnrollmentStore from "@/lib/store/enrollment-store";
+import useEnrollment from "@/app/hooks/enrollment-hook";
 import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
 import {Questionnaire} from "fhir/r4";
 import {Button, ThemeProvider} from "@mui/material";
 import {defaultTheme} from "@/app/theme";
-import {useContextStore} from "@/lib/store/context-store";
+import useContext from "@/app/hooks/context-hook";
 import PatientDetails from "@/app/enrollment/task/components/patient-details";
 import TaskProgressHook from "@/app/hooks/task-progress-hook";
 import TaskHeading from "@/app/enrollment/components/task-heading";
@@ -18,7 +18,7 @@ import Error from "@/app/error";
 
 export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
-    const {scpClient, cpsClient} = useContextStore()
+    const {scpClient, cpsClient} = useContext()
 
     const {
         task,
@@ -31,7 +31,7 @@ export default function EnrollmentTaskPage() {
         cpsClient: cpsClient!,
         pollingInterval: 1000
     })
-    const {patient, serviceRequest} = useEnrollmentStore()
+    const {patient, serviceRequest} = useEnrollment()
 
     const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
