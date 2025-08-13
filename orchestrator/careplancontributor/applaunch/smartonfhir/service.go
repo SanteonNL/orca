@@ -29,6 +29,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +37,7 @@ import (
 )
 
 const fhirLauncherKey = "smartonfhir"
-const clientAssertionExpiry = time.Minute
+const clientAssertionExpiry = 3 * time.Minute
 const clockSkew = 5 * time.Second
 
 func init() {
@@ -307,6 +308,8 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 
 	scopes := []string{"openid", "fhirUser", "launch"}
 	redirectURI := s.orcaBaseURL.JoinPath("smart-app-launch", "callback", issuer.key)
+	log.Ctx(ctx).Info().Msgf("Initiating SMART on FHIR flow (issuer-url=%s, client-id=%s, redirect-uri=%s, scopes=[%s])",
+		issuer.issuerURL(), issuer.clientID, redirectURI.String(), strings.Join(scopes, ","))
 	provider, err := rp.NewRelyingPartyOIDC(ctx, issuer.issuerURL(), issuer.clientID, "client_secret_todo", redirectURI.String(), scopes, options...)
 	if err != nil {
 		return nil, fmt.Errorf("provider: %w", err)
