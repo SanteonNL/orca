@@ -118,7 +118,7 @@ func TestNotifier_NotifyTaskAccepted(t *testing.T) {
 				return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					// Verify the request method and content type
 					require.Equal(t, "POST", r.Method)
-					require.Equal(t, "application/json", r.Header.Get("Content-Type"))
+					require.Equal(t, "application/fhir+json", r.Header.Get("Content-Type"))
 
 					// Verify the request body contains BundleSet
 					body, err := io.ReadAll(r.Body)
