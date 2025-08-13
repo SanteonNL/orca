@@ -363,6 +363,7 @@ func (s *Service) createClientAssertionForAudience(clientID string, audience str
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize JWT client assertion: %w", err)
 	}
+	log.Info().Msgf("Created JWT client assertion: %s", result)
 	return result, nil
 }
 
