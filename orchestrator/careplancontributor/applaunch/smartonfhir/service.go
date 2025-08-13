@@ -36,7 +36,7 @@ import (
 )
 
 const fhirLauncherKey = "smartonfhir"
-const clientAssertionExpiry = 5 * time.Minute
+const clientAssertionExpiry = time.Minute
 const clockSkew = 5 * time.Second
 
 func init() {
