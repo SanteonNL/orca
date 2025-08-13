@@ -40,7 +40,7 @@ func New(sessionManager *user.SessionManager[session.Data], config Config, tenan
 		profile:            profile,
 		tenants:            tenants,
 		ehrFHIRClientFactory: func(baseURL *url.URL, httpClient *http.Client) fhirclient.Client {
-			return fhirclient.New(baseURL, httpClient, nil)
+			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 		},
 	}
 }

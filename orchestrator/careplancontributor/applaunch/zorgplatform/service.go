@@ -255,10 +255,10 @@ func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]
 				Next: roundTripper,
 			},
 		}
-		fhirClientCfg := fhirclient.DefaultConfig()
+		fhirClientCfg := coolfhir.Config()
 		fhirClientCfg.UsePostSearch = false // Zorgplatform only supports GET-based searches
 
-		fhirClients[tenant.ID] = fhirclient.New(targetFhirBaseUrl, httpClient, &fhirClientCfg)
+		fhirClients[tenant.ID] = fhirclient.New(targetFhirBaseUrl, httpClient, fhirClientCfg)
 		proxies[tenant.ID] = proxy
 	}
 	return proxies, fhirClients

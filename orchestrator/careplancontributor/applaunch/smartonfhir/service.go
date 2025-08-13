@@ -378,7 +378,7 @@ func createHTTPClient(ctx context.Context, accessToken string) *http.Client {
 func createFHIRClient(ctx context.Context, baseURL *url.URL, accessToken string) fhirclient.Client {
 	// Create a FHIR client with the provided base URL and access token
 	httpClient := createHTTPClient(ctx, accessToken)
-	return fhirclient.New(baseURL, httpClient, nil)
+	return fhirclient.New(baseURL, httpClient, coolfhir.Config())
 }
 
 func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode bool) (*jose.SigningKey, *jose.JSONWebKeySet, error) {
