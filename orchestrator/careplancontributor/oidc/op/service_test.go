@@ -133,7 +133,5 @@ func TestService_IntegrationTest(t *testing.T) {
 func TestAuthMethodPostIsClientSecretPost(t *testing.T) {
 	got := string(oidc.AuthMethodPost)
 	want := "client_secret_post"
-	if got != want {
-		t.Fatalf("expected oidc.AuthMethodPost to map to %q, got %q", want, got)
-	}
+	assert.Equal(t, want, got)
 }
