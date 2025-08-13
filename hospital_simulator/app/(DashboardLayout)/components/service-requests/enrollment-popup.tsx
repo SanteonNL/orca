@@ -5,7 +5,7 @@ import React from 'react';
 
 interface Props {
     patientId: string,
-    serviceRequestId: string,
+    serviceRequestId?: string,
     title?: string
     width?: number
     height?: number
