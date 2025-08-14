@@ -15,6 +15,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/cryptosigner"
@@ -29,6 +30,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -36,7 +38,7 @@ import (
 )
 
 const fhirLauncherKey = "smartonfhir"
-const clientAssertionExpiry = 5 * time.Minute
+const clientAssertionExpiry = 3 * time.Minute
 const clockSkew = 5 * time.Second
 
 func init() {
@@ -239,26 +241,37 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 }
 
 func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens *oidc.Tokens[*oidc.IDTokenClaims]) (*fhir.Patient, *fhir.Practitioner, error) {
-	fhirClient := createFHIRClient(ctx, must.ParseURL(issuer.issuerLaunchURL), tokens.AccessToken)
-	var patient fhir.Patient
-	patientID, hasPatientID := tokens.Extra("patient").(string)
-	if !hasPatientID || patientID == "" {
-		return nil, nil, errors.New("patient ID not found in ID token claims")
-	}
-	if err := fhirClient.Read("Patient/"+patientID, &patient); err != nil {
-		return nil, nil, fmt.Errorf("failed to read patient resource: %w", err)
-	}
-	fhirUser, ok := tokens.IDTokenClaims.Claims["fhirUser"].(string)
-	if !ok {
-		return nil, nil, errors.New("fhirUser claim (practitioner) not found in id_token claims")
-	}
-	// fhirUser claim can contain either a relative URL (SMART on FHIR Sandbox Launcher), or an absolute URL (Epic Sandbox).
-	// We assume, it's always a FHIR Practitioner resource.
-	var practitioner fhir.Practitioner
-	if err := fhirClient.Read(fhirUser, &practitioner); err != nil {
-		return nil, nil, fmt.Errorf("failed to read practitioner resource: %w", err)
-	}
-	return &patient, &practitioner, nil
+	return &fhir.Patient{
+			Id: to.Ptr(uuid.NewString()),
+			Identifier: []fhir.Identifier{
+				{
+					System: to.Ptr(coolfhir.BSNNamingSystem),
+					Value:  to.Ptr("123456789"),
+				},
+			},
+		}, &fhir.Practitioner{
+			Id: to.Ptr(uuid.NewString()),
+		}, nil
+	//fhirClient := createFHIRClient(ctx, must.ParseURL(issuer.issuerLaunchURL), tokens.AccessToken)
+	//var patient fhir.Patient
+	//patientID, hasPatientID := tokens.Extra("patient").(string)
+	//if !hasPatientID || patientID == "" {
+	//	return nil, nil, errors.New("patient ID not found in ID token claims")
+	//}
+	//if err := fhirClient.Read("Patient/"+patientID, &patient); err != nil {
+	//	return nil, nil, fmt.Errorf("failed to read patient resource: %w", err)
+	//}
+	//fhirUser, ok := tokens.IDTokenClaims.Claims["fhirUser"].(string)
+	//if !ok {
+	//	return nil, nil, errors.New("fhirUser claim (practitioner) not found in id_token claims")
+	//}
+	//// fhirUser claim can contain either a relative URL (SMART on FHIR Sandbox Launcher), or an absolute URL (Epic Sandbox).
+	//// We assume, it's always a FHIR Practitioner resource.
+	//var practitioner fhir.Practitioner
+	//if err := fhirClient.Read(fhirUser, &practitioner); err != nil {
+	//	return nil, nil, fmt.Errorf("failed to read practitioner resource: %w", err)
+	//}
+	//return &patient, &practitioner, nil
 }
 
 func (s *Service) getIssuerByKey(request *http.Request, issuerKey string) (rp.RelyingParty, error) {
@@ -307,6 +320,8 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 
 	scopes := []string{"openid", "fhirUser", "launch"}
 	redirectURI := s.orcaBaseURL.JoinPath("smart-app-launch", "callback", issuer.key)
+	log.Ctx(ctx).Info().Msgf("Initiating SMART on FHIR flow (issuer-url=%s, client-id=%s, redirect-uri=%s, scopes=[%s])",
+		issuer.issuerURL(), issuer.clientID, redirectURI.String(), strings.Join(scopes, ","))
 	provider, err := rp.NewRelyingPartyOIDC(ctx, issuer.issuerURL(), issuer.clientID, "client_secret_todo", redirectURI.String(), scopes, options...)
 	if err != nil {
 		return nil, fmt.Errorf("provider: %w", err)
@@ -363,6 +378,7 @@ func (s *Service) createClientAssertionForAudience(clientID string, audience str
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize JWT client assertion: %w", err)
 	}
+	log.Info().Msgf("Created JWT client assertion: %s", result)
 	return result, nil
 }
 
