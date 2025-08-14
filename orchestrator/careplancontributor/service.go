@@ -138,12 +138,12 @@ func New(
 	}
 
 	result.createFHIRClientForURL = result.defaultCreateFHIRClientForURL
-	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
+	if config.TaskFiller.TaskAcceptedBundleEndpoint != "" {
 		result.notifier, err = ehr.NewNotifier(eventManager, tenants, config.TaskFiller.TaskAcceptedBundleEndpoint, result.createFHIRClientForURL)
 		if err != nil {
 			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
 		}
-		log.Ctx(ctx).Info().Msgf("TaskEngine: created EHR notifier for topic %s", config.TaskFiller.TaskAcceptedBundleTopic)
+		log.Ctx(ctx).Info().Msgf("TaskEngine: created EHR notifier for endpoint %s", config.TaskFiller.TaskAcceptedBundleEndpoint)
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 
