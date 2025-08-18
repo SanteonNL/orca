@@ -21,7 +21,12 @@ const mockServiceRequest = {
     code: {
         coding: [{display: 'cardiologie consult'}]
     },
-    performer: [{reference: 'Organization/org-1'}]
+    performer: [
+        {
+            reference: 'Organization/org-1',
+            display: 'Test Hospital',
+        }
+    ]
 };
 
 const mockTaskCondition = {
@@ -42,6 +47,7 @@ beforeEach(() => {
     });
     (fhirRender.patientName as jest.Mock).mockReturnValue('John Doe');
     (fhirRender.organizationName as jest.Mock).mockReturnValue('Test Hospital');
+    (fhirRender.organizationNameShort as jest.Mock).mockReturnValue('Test Hospital');
 });
 describe("EnrollmentDetails component", () => {
     it('displays spinner when loading is true', () => {
@@ -130,6 +136,8 @@ describe("EnrollmentDetails component", () => {
         expect(screen.getByText('cardiologie consult')).toHaveClass('first-letter:uppercase');
     });
 
+
+
     it('displays onbekend when service request code is missing', () => {
         const serviceRequestWithoutCode = {...mockServiceRequest, code: undefined};
         (useEnrollment as jest.Mock).mockReturnValue({
@@ -213,4 +221,28 @@ describe("EnrollmentDetails component", () => {
         expect(screen.getByText('Diagnose:')).toHaveClass('font-medium');
         expect(screen.getByText('Uitvoerende organisatie:')).toHaveClass('font-medium');
     })
+
+    it('displays the correct instruction text with serviceRequest display and performer', () => {
+        (useEnrollment as jest.Mock).mockReturnValue({
+            patient: mockPatient,
+            serviceRequest: mockServiceRequest,
+            taskCondition: mockTaskCondition,
+            isLoading: false
+        });
+        render(<EnrollmentDetails/>);
+        // The organizationNameShort is likely used in the instruction text, so we need to match the expected output
+        const expectedText = `Je gaat deze patient aanmelden voor cardiologie consult van Test Hospital.`;
+        expect(screen.getByText(expectedText)).toBeInTheDocument();
+    });
+
+    it('displays the fallback instruction text when serviceRequest display or performer is missing', () => {
+        (useEnrollment as jest.Mock).mockReturnValue({
+            patient: mockPatient,
+            serviceRequest: undefined,
+            taskCondition: mockTaskCondition,
+            isLoading: false
+        });
+        render(<EnrollmentDetails/>);
+        expect(screen.getByText('Je gaat deze patient aanmelden.')).toBeInTheDocument();
+    });
 });
