@@ -18,7 +18,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 )
 
 var _ FHIROperation = &FHIRSearchOperationHandler[any]{}
@@ -29,7 +28,6 @@ type FHIRSearchOperationHandler[T any] struct {
 }
 
 func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	start := time.Now()
 	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
@@ -61,7 +59,6 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "search and filter failed")
-		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, err
 	}
 
@@ -121,7 +118,6 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	span.SetStatus(codes.Ok, "")
 	span.SetAttributes(
 		attribute.String("fhir.resource.search", "success"),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {

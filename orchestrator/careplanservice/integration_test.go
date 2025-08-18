@@ -78,27 +78,9 @@ func Test_Integration(t *testing.T) {
 		exporter.Reset()
 	}
 
-	assertSpansCreated := func(t *testing.T, expectTiming bool) {
+	assertSpansCreated := func(t *testing.T) {
 		spans := exporter.GetSpans()
 		require.NotEmpty(t, spans, "Expected spans to be created")
-
-		if !expectTiming {
-			return
-		}
-		// Ensure a timing attribute for the trace
-		timingFound := false
-		for _, span := range spans {
-			for _, attribute := range span.Attributes {
-				if attribute.Key == "operation.duration_ms" {
-					timingFound = true
-					break
-				}
-			}
-			if timingFound {
-				break
-			}
-		}
-		require.True(t, timingFound, "Expected operation.duration_ms attribute in spans")
 	}
 
 	ctx := tenants.WithTenant(context.Background(), service.tenants.Sole())
@@ -194,7 +176,7 @@ func Test_Integration(t *testing.T) {
 		require.Empty(t, cpc1Notifications)
 		require.Empty(t, cpc2Notifications)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - No BasedOn, requester is not care organization so creation fails")
@@ -219,7 +201,7 @@ func Test_Integration(t *testing.T) {
 		err := carePlanContributor2.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - No BasedOn, no Task.For so primaryTask creation fails")
@@ -244,7 +226,7 @@ func Test_Integration(t *testing.T) {
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Task is created through upsert (PUT on non-existing resource)")
@@ -272,7 +254,7 @@ func Test_Integration(t *testing.T) {
 		// Resolve created CarePlan through Task.basedOn
 		require.NoError(t, carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan))
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 	}
 
 	t.Run("Conditional Create: Task is not created if it already exists (managed resource)", func(t *testing.T) {
@@ -288,7 +270,7 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, taskBundle.Entry, 1, "expected 1 Task in the FHIR server")
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	})
 
 	subTest(t, "Create Subtask")
@@ -327,7 +309,7 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 1)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 
 		subTest(t, "Completing Subtask")
 		{
@@ -335,7 +317,7 @@ func Test_Integration(t *testing.T) {
 			err := carePlanContributor1.Update("Task/"+*subTask.Id, subTask, &subTask)
 			require.NoError(t, err)
 
-			assertSpansCreated(t, true)
+			assertSpansCreated(t)
 		}
 
 		// Here, the Task Filler checks the subtask questionnaire response (if there were any), and then accepts or rejects the Task
@@ -352,7 +334,7 @@ func Test_Integration(t *testing.T) {
 				assert.Nil(t, careTeam.Participant[1].Period.End)
 			})
 
-			assertSpansCreated(t, true)
+			assertSpansCreated(t)
 		}
 	}
 
@@ -381,7 +363,7 @@ func Test_Integration(t *testing.T) {
 		err = carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 
 		t.Run("Check CarePlan properties", func(t *testing.T) {
 			require.Equal(t, fhir.CarePlanIntentOrder, carePlan.Intent)
@@ -417,7 +399,7 @@ func Test_Integration(t *testing.T) {
 		require.Len(t, searchResult.Entry, 1, "Expected 1 CarePlan")
 		require.NoError(t, coolfhir.ResourceInBundle(&searchResult, coolfhir.EntryIsOfType("CarePlan"), new(fhir.CarePlan)))
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Read CarePlan - Not in participants")
@@ -451,7 +433,7 @@ func Test_Integration(t *testing.T) {
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
 		assertCareTeam(t, carePlanContributor1, *carePlan.Id, participant1)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 	}
 	subTest(t, "Read Task - Non-creating referenced party")
 	{
@@ -461,7 +443,7 @@ func Test_Integration(t *testing.T) {
 		require.NotNil(t, fetchedTask.Id)
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 	}
 	subTest(t, "Read Task - Not in participants")
 	{
@@ -469,7 +451,7 @@ func Test_Integration(t *testing.T) {
 		err := invalidCarePlanContributor.Read("Task/"+*primaryTask.Id, &fetchedTask)
 		require.Error(t, err)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 	subTest(t, "Read Task - Does not exist")
 	{
@@ -477,7 +459,7 @@ func Test_Integration(t *testing.T) {
 		err := carePlanContributor1.Read("Task/999", &fetchedTask)
 		require.Error(t, err)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 	previousTask := primaryTask
 
@@ -501,7 +483,7 @@ func Test_Integration(t *testing.T) {
 		require.Empty(t, cpc1Notifications)
 		require.Empty(t, cpc2Notifications)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Invalid status Draft")
@@ -525,7 +507,7 @@ func Test_Integration(t *testing.T) {
 		require.Empty(t, cpc1Notifications)
 		require.Empty(t, cpc2Notifications)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Task.For does not match CarePlan.subject - Fails")
@@ -558,7 +540,7 @@ func Test_Integration(t *testing.T) {
 		require.ErrorAs(t, err, &operationOutcome)
 		require.Contains(t, *operationOutcome.Issue[0].Diagnostics, "Task.for must reference the same patient as CarePlan.subject")
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Task.For is nil - Fails")
@@ -585,7 +567,7 @@ func Test_Integration(t *testing.T) {
 		require.ErrorAs(t, err, &operationOutcome)
 		require.Contains(t, *operationOutcome.Issue[0].Diagnostics, "Task.For must be set with a local reference, or a logical identifier, referencing a patient")
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Existing CarePlan")
@@ -612,7 +594,7 @@ func Test_Integration(t *testing.T) {
 		err = carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan)
 		require.NoError(t, err)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, primaryTask.Id)
@@ -647,7 +629,7 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		primaryTask = updatedTask
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -671,7 +653,7 @@ func Test_Integration(t *testing.T) {
 		err := carePlanContributor1.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.Error(t, err)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Invalid state transition - Accepted -> In-progress, Requester")
@@ -681,7 +663,7 @@ func Test_Integration(t *testing.T) {
 		err := carePlanContributor1.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.Error(t, err)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Valid state transition - Accepted -> In-progress, Owner")
@@ -692,7 +674,7 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		primaryTask = updatedTask
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -717,7 +699,7 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		primaryTask = updatedTask
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -765,7 +747,7 @@ func Test_Integration(t *testing.T) {
 		err = carePlanContributor2.Read(*newTask.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, primaryTask.Id)

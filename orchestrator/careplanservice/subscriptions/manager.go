@@ -69,7 +69,6 @@ type NotificationEvent struct {
 }
 
 func (r RetryableManager) Notify(ctx context.Context, resource interface{}) error {
-	start := time.Now()
 	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
@@ -189,7 +188,6 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 	span.SetAttributes(
 		attribute.Int("notification.success_count", successCount),
 		attribute.Int("notification.error_count", len(errs)),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 
 	if len(errs) > 0 {
@@ -204,7 +202,6 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 }
 
 func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.Message) error {
-	start := time.Now()
 	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
@@ -273,7 +270,6 @@ func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.
 
 	span.SetAttributes(
 		attribute.String("notification.status", "delivered"),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 	span.SetStatus(codes.Ok, "")
 	return nil

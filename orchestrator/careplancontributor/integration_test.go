@@ -4,10 +4,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -53,27 +53,9 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 	cpsDataHolder := fhirclient.New(cpsBaseURL, &http.Client{Transport: dataHolderTransport}, nil)
 
 	// Helper function to assert spans are created
-	assertSpansCreated := func(t *testing.T, expectTiming bool) {
+	assertSpansCreated := func(t *testing.T) {
 		spans := exporter.GetSpans()
 		require.NotEmpty(t, spans, "Expected spans to be created")
-
-		if !expectTiming {
-			return
-		}
-		// Ensure a timing attribute for the trace
-		timingFound := false
-		for _, span := range spans {
-			for _, attribute := range span.Attributes {
-				if attribute.Key == "operation.duration_ms" {
-					timingFound = true
-					break
-				}
-			}
-			if timingFound {
-				break
-			}
-		}
-		require.True(t, timingFound, "Expected operation.duration_ms attribute in spans")
 	}
 
 	// Helper function to reset spans between tests
@@ -108,7 +90,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		err := cpsDataHolder.Create(patient, &patient)
 		require.NoError(t, err)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 	}
 
 	var carePlan fhir.CarePlan
@@ -138,7 +120,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		err = cpsDataHolder.Read(*task.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, task.Id)
@@ -157,7 +139,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 			require.NoError(t, err)
 			require.Len(t, fetchedBundle.Entry, 1)
 
-			assertSpansCreated(t, true)
+			assertSpansCreated(t)
 		})
 	}
 
@@ -172,7 +154,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.Error(t, err)
 
-		assertSpansCreated(t, false)
+		assertSpansCreated(t)
 	}
 
 	t.Log("Accepting Task")
@@ -185,7 +167,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.NoError(t, err)
 		task = updatedTask
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -201,7 +183,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.Equal(t, updatedTask.For.Identifier.Value, fetchedPatient.Identifier[0].Value)
 		require.Equal(t, *updatedTask.For.Reference, "Patient/"+*fetchedPatient.Id)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 	}
 
 	t.Log("Read data from EHR after Task is accepted")
@@ -214,7 +196,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.NoError(t, err)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 		resetSpans()
 
 		// Search
@@ -223,7 +205,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, fetchedBundle.Entry, 1)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 	}
 
 	t.Log("Batch request to EHR after Task is accepted")
@@ -248,7 +230,7 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.NotNil(t, responseBundle.Entry[0].Response)
 		require.Equal(t, "200 OK", responseBundle.Entry[0].Response.Status)
 
-		assertSpansCreated(t, true)
+		assertSpansCreated(t)
 	}
 	t.Log("Reading task after accepted - header references non-existent careplan - Fails")
 	{

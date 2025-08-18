@@ -5,10 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"strings"
-	"time"
-
 	"github.com/SanteonNL/orca/orchestrator/lib/slices"
+	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
@@ -67,8 +65,6 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	log.Ctx(ctx).Info().Msgf("Running handleTaskNotification for Task %s", *task.Id)
 
@@ -151,9 +147,6 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		}
 	}
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
@@ -173,8 +166,6 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	if task.Status != fhir.TaskStatusCompleted {
 		log.Ctx(ctx).Debug().Msg("Task.status is not completed - skipping")
@@ -213,9 +204,6 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 		return err
 	}
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
@@ -233,8 +221,6 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	log.Ctx(ctx).Debug().Msgf("Started function acceptPrimaryTask() for Task (task=%s)", *primaryTask.Id)
 	if primaryTask.Status != fhir.TaskStatusRequested && primaryTask.Status != fhir.TaskStatusReceived {
@@ -278,9 +264,6 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 
 	log.Ctx(ctx).Debug().Msgf("Successfully accepted Task (ref=%s)", ref)
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
@@ -336,8 +319,6 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	// Look up primary Task: workflow selection works on primary Task.reasonCode/reasonReference
 	isPrimaryTask := *task.Id == *primaryTask.Id
@@ -480,9 +461,6 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 
 	log.Ctx(ctx).Info().Msg("Successfully created a subtask")
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
@@ -503,8 +481,6 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	// Determine service code from Task.focus
 	var serviceRequest fhir.ServiceRequest
@@ -594,9 +570,6 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 		return nil, err
 	}
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 	return matchedWorkflows[0], nil
 }

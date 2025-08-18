@@ -17,7 +17,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 )
 
 var _ FHIROperation = &FHIRUpdateOperationHandler[fhir.HasExtension]{}
@@ -31,7 +30,6 @@ type FHIRUpdateOperationHandler[T fhir.HasExtension] struct {
 }
 
 func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	start := time.Now()
 	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
@@ -50,7 +48,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to unmarshal resource")
-		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, coolfhir.BadRequest("invalid %s: %s", resourceType, err)
 	}
 
@@ -63,7 +60,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if err := validateLiteralReferences(ctx, h.profile, &resource); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "literal reference validation failed")
-		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, err
 	}
 
@@ -81,7 +77,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			err := coolfhir.BadRequest("resource ID mismatch: %s != %s", *coolfhir.ResourceID(resource), request.ResourceId)
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "resource ID mismatch")
-			span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 			return nil, err
 		}
 		searchParams = url.Values{
@@ -104,7 +99,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		if err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "failed to search for existing resource")
-			span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 			return nil, fmt.Errorf("failed to search for %s: %w", resourceType, err)
 		}
 	}
@@ -127,7 +121,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to unmarshal existing resource")
-		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, fmt.Errorf("failed to unmarshal existing %s: %w", resourceType, err)
 	}
 
@@ -142,7 +135,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "authorization denied")
 		}
-		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant is not authorized to update %s", resourceType),
 			StatusCode: http.StatusForbidden,
@@ -174,7 +166,6 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	span.SetStatus(codes.Ok, "")
 	span.SetAttributes(
 		attribute.String("fhir.resource.update", "success"),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {

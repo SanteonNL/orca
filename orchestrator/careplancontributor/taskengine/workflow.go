@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -63,8 +62,6 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 	)
 	defer span.End()
 
-	start := time.Now()
-
 	if serviceCode.System == nil || serviceCode.Code == nil || conditionCode.System == nil || conditionCode.Code == nil {
 		err := errors.New("serviceCode and conditionCode must have a system and code")
 		span.RecordError(err)
@@ -107,7 +104,6 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 		attribute.Int("questionnaire.count", len(questionnaireBundle.Entry)),
 		attribute.String("questionnaire.url", *questionnaireBundle.Entry[0].FullUrl),
 		attribute.Int("workflow.steps", len(workflow.Steps)),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 	span.SetStatus(codes.Ok, "")
 	return workflow, nil
@@ -129,8 +125,6 @@ func (f FhirApiWorkflowProvider) searchHealthcareService(ctx context.Context, se
 	)
 	defer span.End()
 
-	start := time.Now()
-
 	queryParams := []fhirclient.Option{
 		fhirclient.QueryParam("service-category", *serviceCode.System+"|"+*serviceCode.Code),
 		fhirclient.QueryParam("service-type", *conditionCode.System+"|"+*conditionCode.Code),
@@ -144,7 +138,6 @@ func (f FhirApiWorkflowProvider) searchHealthcareService(ctx context.Context, se
 
 	span.SetAttributes(
 		attribute.Int("healthcare_service.count", len(results.Entry)),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 
 	if len(results.Entry) == 0 {
@@ -193,8 +186,6 @@ func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl strin
 	)
 	defer span.End()
 
-	start := time.Now()
-
 	var bundle fhir.Bundle
 	parsedBundleUrl, err := url.Parse(bundleUrl)
 	if err != nil {
@@ -234,7 +225,6 @@ func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl strin
 		attribute.Int("healthcare_services.loaded", len(healthcareServices)),
 		attribute.Int("questionnaires.total", len(e.questionnaires)),
 		attribute.Int("healthcare_services.total", len(e.healthcareServices)),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 	span.SetStatus(codes.Ok, "")
 	return nil
@@ -256,8 +246,6 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	// Mimicks Questionnaire and HealthcareService search like it's done in FhirApiWorkflowProvider, but just in-memory filtering.
 	supported := false
@@ -306,7 +294,6 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 				attribute.String("questionnaire.id", stringValue(questionnaire.Id)),
 				attribute.String("questionnaire.url", "Questionnaire/"+stringValue(questionnaire.Id)),
 				attribute.Int("workflow.steps", len(workflow.Steps)),
-				attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 			)
 			span.SetStatus(codes.Ok, "")
 			return workflow, nil
@@ -315,7 +302,6 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 
 	span.SetAttributes(
 		attribute.Int("questionnaires.total", len(e.questionnaires)),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 	span.SetStatus(codes.Error, "No matching questionnaire found")
 	return nil, ErrWorkflowNotFound
@@ -335,15 +321,12 @@ func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl stri
 	)
 	defer span.End()
 
-	start := time.Now()
-
 	for i, questionnaire := range e.questionnaires {
 		if "Questionnaire/"+*questionnaire.Id == questionnaireUrl {
 			span.SetAttributes(
 				attribute.String("questionnaire.id", stringValue(questionnaire.Id)),
 				attribute.Int("questionnaires.searched", i+1),
 				attribute.Int("questionnaires.total", len(e.questionnaires)),
-				attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 			)
 			span.SetStatus(codes.Ok, "")
 			return &questionnaire, nil
@@ -353,7 +336,6 @@ func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl stri
 	span.SetAttributes(
 		attribute.Int("questionnaires.searched", len(e.questionnaires)),
 		attribute.Int("questionnaires.total", len(e.questionnaires)),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 	span.SetStatus(codes.Error, "Questionnaire not found")
 	return nil, errors.New("questionnaire not found")

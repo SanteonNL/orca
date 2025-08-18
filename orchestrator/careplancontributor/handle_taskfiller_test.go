@@ -329,7 +329,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			defer tp.Shutdown(context.Background())
 
 			// Helper function to assert spans are created
-			assertSpansCreated := func(t *testing.T, expectTiming bool) {
+			assertSpansCreated := func(t *testing.T) {
 				// Force any pending spans to be exported
 				tp.ForceFlush(context.Background())
 
@@ -344,25 +344,6 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 
 				// Verify at least the main handleTaskNotification span is present
 				require.Contains(t, spanNames, "handleTaskNotification", "Expected handleTaskNotification span")
-
-				if !expectTiming {
-					return
-				}
-
-				// Ensure timing attributes are present in at least one span
-				timingFound := false
-				for _, span := range spans {
-					for _, attribute := range span.Attributes {
-						if attribute.Key == "operation.duration_ms" {
-							timingFound = true
-							break
-						}
-					}
-					if timingFound {
-						break
-					}
-				}
-				require.True(t, timingFound, "Expected operation.duration_ms attribute in spans")
 			}
 
 			ctrl := gomock.NewController(t)
@@ -473,15 +454,10 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
-				// Even when there are errors, spans should still be created for tracing errors
-				assertSpansCreated(t, false)
 			} else {
 				require.NoError(t, err)
-				// For successful operations that perform meaningful work, check for timing attributes
-				// Some operations may exit early (like non-SCP tasks or non-owner tasks) and won't have timing
-				expectTiming := tt.numBundlesPosted > 0 || tt.expectSubmission
-				assertSpansCreated(t, expectTiming)
 			}
+			assertSpansCreated(t)
 
 			// Verify spans contain expected attributes for different scenarios
 			spans := exporter.GetSpans()

@@ -401,8 +401,6 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	)
 	defer span.End()
 
-	start := time.Now()
-
 	clientFactory := clients.Factories[sessionData.FHIRLauncher](sessionData.LauncherProperties)
 	proxyBasePath, err := s.tenantBasePath(ctx)
 	if err != nil {
@@ -425,7 +423,6 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	}
 
 	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 		attribute.String("fhir.resource_path", resourcePath),
 	)
 	span.SetStatus(codes.Ok, "")
@@ -460,7 +457,6 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		return err
 	}
 
-	start := time.Now()
 	log.Ctx(ctx).Debug().Msg("Handling external FHIR API request")
 	_, err = s.authorizeScpMember(request.WithContext(ctx))
 	if err != nil {
@@ -471,9 +467,6 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 
 	ehrProxy.ServeHTTP(writer, request.WithContext(ctx))
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
@@ -630,8 +623,6 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	)
 	defer span.End()
 
-	start := time.Now()
-
 	sender, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		span.RecordError(err)
@@ -761,9 +752,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		log.Ctx(ctx).Debug().Msgf("No handler for notification of type %s, ignoring", *focusReference.Type)
 	}
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
+	span.SetAttributes()
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
@@ -805,8 +794,6 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	var httpClient *http.Client
 	var fhirBaseURL *url.URL
@@ -907,7 +894,6 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 
 	span.SetAttributes(
 		attribute.String("fhir.base_url", fhirBaseURL.String()),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 	span.SetStatus(codes.Ok, "")
 	return fhirBaseURL, httpClient, nil

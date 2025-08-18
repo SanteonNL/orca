@@ -18,7 +18,6 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"strings"
-	"time"
 )
 
 var _ FHIROperation = &FHIRCreateOperationHandler[fhir.HasExtension]{}
@@ -31,7 +30,6 @@ type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
 }
 
 func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	start := time.Now()
 	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
@@ -50,7 +48,6 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "failed to unmarshal resource")
-		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("invalid %s: %v", resourceType, err),
 			StatusCode: http.StatusBadRequest,
@@ -66,7 +63,6 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if err := validateLiteralReferences(ctx, h.profile, &resource); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "literal reference validation failed")
-		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, err
 	}
 
@@ -81,7 +77,6 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 			span.RecordError(err)
 			span.SetStatus(codes.Error, "authorization denied")
 		}
-		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant is not authorized to create %s", resourceType),
 			StatusCode: http.StatusForbidden,
@@ -151,7 +146,6 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	span.SetStatus(codes.Ok, "")
 	span.SetAttributes(
 		attribute.String("fhir.resource.creation", "success"),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 
 	return func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error) {
@@ -166,7 +160,6 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 }
 
 func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T, resourceType string) (FHIRHandlerResult, error, bool) {
-	start := time.Now()
 	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
@@ -214,13 +207,11 @@ func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T,
 
 		span.RecordError(err)
 		span.SetStatus(codes.Error, "validation failed")
-		span.SetAttributes(attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()))
 		return nil, err, true
 	}
 
 	span.SetAttributes(
 		attribute.String("fhir.validation.result", "passed"),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 	)
 	span.SetStatus(codes.Ok, "")
 	return nil, nil, false

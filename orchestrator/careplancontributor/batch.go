@@ -16,7 +16,6 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 )
 
 func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
@@ -43,8 +42,6 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 	)
 	defer span.End()
 
-	start := time.Now()
-
 	log.Ctx(ctx).Debug().Msg("Handling external FHIR API request")
 
 	_, err = s.authorizeScpMember(httpRequest.WithContext(ctx))
@@ -61,9 +58,6 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 		return nil, err
 	}
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 	return result, nil
 }

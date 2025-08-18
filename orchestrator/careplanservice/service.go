@@ -436,8 +436,6 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 	)
 	defer span.End()
 
-	start := time.Now()
-
 	tx := coolfhir.Transaction()
 	var bodyBytes []byte
 	if httpRequest.Body != nil {
@@ -495,9 +493,6 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 
 	s.writeTransactionResponse(httpResponse, txResult, ctx)
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 }
 
@@ -515,8 +510,6 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	fhirHeaders := new(fhirclient.Headers)
 
@@ -573,9 +566,6 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 
 	s.writeTransactionResponse(httpResponse, txResult, ctx)
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 }
 
@@ -594,8 +584,6 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 			),
 		)
 		defer span.End()
-
-		start := time.Now()
 
 		var handler func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
@@ -649,9 +637,6 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 			return nil, err
 		}
 
-		span.SetAttributes(
-			attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-		)
 		span.SetStatus(codes.Ok, "")
 		return result, nil
 	}
@@ -672,8 +657,6 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 			),
 		)
 		defer span.End()
-
-		start := time.Now()
 
 		var handler func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
@@ -748,9 +731,6 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 			return nil, err
 		}
 
-		span.SetAttributes(
-			attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-		)
 		span.SetStatus(codes.Ok, "")
 		return result, nil
 	}
@@ -771,8 +751,6 @@ func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHand
 			),
 		)
 		defer span.End()
-
-		start := time.Now()
 
 		var handleFunc func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
@@ -823,9 +801,6 @@ func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHand
 			return nil, err
 		}
 
-		span.SetAttributes(
-			attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-		)
 		span.SetStatus(codes.Ok, "")
 		return result, nil
 	}
@@ -880,8 +855,6 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 		)
 		defer span.End()
 
-		start := time.Now()
-
 		var handleFunc func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
 		switch resourceType {
@@ -931,9 +904,6 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 			return nil, err
 		}
 
-		span.SetAttributes(
-			attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-		)
 		span.SetStatus(codes.Ok, "")
 		return result, nil
 	}
@@ -952,8 +922,6 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	if err := s.validateSearchRequest(httpRequest); err != nil {
 		span.RecordError(err)
@@ -1043,9 +1011,6 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 		return
 	}
 
-	span.SetAttributes(
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
-	)
 	span.SetStatus(codes.Ok, "")
 	s.writeSearchResponse(httpResponse, txResult, ctx)
 }
@@ -1062,8 +1027,6 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		),
 	)
 	defer span.End()
-
-	start := time.Now()
 
 	// Create Bundle
 	var bundle fhir.Bundle
@@ -1194,7 +1157,6 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	tenant, _ = tenants.FromContext(httpRequest.Context())
 	span.SetAttributes(
 		attribute.Int("fhir.bundle.result_entries", len(resultBundle.Entry)),
-		attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 		attribute.String("tenant.id", tenant.ID),
 	)
 	span.SetStatus(codes.Ok, "")
@@ -1236,8 +1198,6 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 	)
 	defer span.End()
 
-	start := time.Now()
-
 	if shouldNotify(resource) {
 		notifyCtx, cancel := context.WithTimeout(ctx, subscriberNotificationTimeout)
 		defer cancel()
@@ -1249,7 +1209,6 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 			log.Ctx(ctx).Error().Err(err).Msgf("Failed to notify subscribers for %T", resource)
 		} else {
 			span.SetAttributes(
-				attribute.Int64("operation.duration_ms", time.Since(start).Milliseconds()),
 				attribute.String("notification.status", "success"),
 			)
 			span.SetStatus(codes.Ok, "")
