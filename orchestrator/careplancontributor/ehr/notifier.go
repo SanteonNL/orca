@@ -115,7 +115,7 @@ func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcce
 			task.StatusReason = &fhir.CodeableConcept{
 				Text: badRequest.Reason,
 			}
-			err = cpsClient.UpdateWithContext(context.Background(), "Task/"+*event.Task.Id, task, &task)
+			err = cpsClient.UpdateWithContext(ctx, "Task/"+*event.Task.Id, task, &task)
 			if err != nil {
 				return errors.Wrap(err, "failed to update task status")
 			}
@@ -141,10 +141,10 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 	if err != nil {
 		return err
 	}
-	log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
+	log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to HTTP endpoint (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
 	httpResponse, err := http.Post(taskAcceptedBundleEndpoint, "application/fhir+json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		log.Ctx(ctx).Warn().Err(err).Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
+		log.Ctx(ctx).Warn().Err(err).Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s) e", set.task, taskAcceptedBundleEndpoint)
 		return errors.Wrap(err, "failed to send task to endpoint")
 	}
 	defer httpResponse.Body.Close()
