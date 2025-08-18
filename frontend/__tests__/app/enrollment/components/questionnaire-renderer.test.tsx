@@ -1,7 +1,7 @@
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react'
 import '@testing-library/jest-dom'
 import QuestionnaireRenderer from '@/app/enrollment/components/questionnaire-renderer'
-import useEnrollmentStore from '@/lib/store/enrollment-store'
+import useEnrollment from '@/app/hooks/enrollment-hook'
 import * as fhirUtils from '@/lib/fhirUtils'
 import * as populateUtils from '../../../../app/utils/populate'
 import {useQuestionnaireResponseStore} from "@aehrc/smart-forms-renderer";
@@ -73,14 +73,15 @@ jest.mock('@aehrc/smart-forms-renderer', () => ({
 }))
 
 jest.mock('sonner', () => ({toast: {error: jest.fn(), success: jest.fn(),}}))
-jest.mock('@/lib/store/enrollment-store')
+jest.mock('@/app/hooks/enrollment-hook')
 
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
-jest.mock('@/lib/store/context-store', () => ({
-    useContextStore: jest.fn(() => ({
-        launchContext: {taskIdentifier: 'task-id-123'},
-        cpsClient: mockCpsClient
-    }))
+jest.mock('@/app/hooks/context-hook', () => () => ({
+    launchContext: {taskIdentifier: 'task-id-123'},
+    cpsClient: mockCpsClient,
+    isLoading: false,
+    isError: false,
+    error: null
 }))
 jest.mock('@/lib/fhirUtils')
 jest.mock('../../../../app/utils/populate')
@@ -91,13 +92,19 @@ jest.mock('@tanstack/react-query', () => ({
         mount: jest.fn(),
         unmount: jest.fn(),
     })),
+    useQuery: jest.fn(() => ({
+        data: { launchContext: {taskIdentifier: 'task-id-123'} },
+        isLoading: false,
+        isError: false,
+        error: null
+    }))
 }))
 
 
 beforeEach(() => {
     jest.restoreAllMocks();
     mockResponseIsValid.mockReturnValue(true);
-    (useEnrollmentStore as jest.Mock).mockReturnValue({patient: mockPatient, practitioner: mockPractitioner});
+    (useEnrollment as jest.Mock).mockReturnValue({patient: mockPatient, practitioner: mockPractitioner});
     (fhirUtils.findQuestionnaireResponse as jest.Mock).mockResolvedValue(mockQuestionnaireResponse);
     (populateUtils.populateQuestionnaire as jest.Mock).mockResolvedValue({populateResult: {populated: {id: 'populated'}}});
 })
@@ -155,7 +162,7 @@ describe("QuestionnaireRenderer", () => {
     })
 
     it('does not prepopulate if patient or practitioner is missing', async () => {
-        (useEnrollmentStore as jest.Mock).mockReturnValue({patient: null, practitioner: null})
+        (useEnrollment as jest.Mock).mockReturnValue({patient: null, practitioner: null})
         await act(async () => {
             render(<QuestionnaireRenderer questionnaire={mockQuestionnaire} inputTask={mockTask}/>)
         });

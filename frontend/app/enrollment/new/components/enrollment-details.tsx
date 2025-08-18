@@ -1,14 +1,14 @@
 "use client"
 import React from 'react'
-import useEnrollmentStore from '@/lib/store/enrollment-store'
+import useEnrollment from '@/app/hooks/enrollment-hook'
 import { Spinner } from '@/components/spinner'
 import {patientName, organizationName} from "@/lib/fhirRender";
 
 export default function EnrollmentDetails() {
 
-    const { serviceRequest, taskCondition, patient, loading } = useEnrollmentStore()
+    const { serviceRequest, taskCondition, patient, isLoading } = useEnrollment()
 
-    if (loading) return <Spinner className="h-12 w-12 text-primary" />
+    if (isLoading) return <Spinner className="h-12 w-12 text-primary" />
 
     return (
         (

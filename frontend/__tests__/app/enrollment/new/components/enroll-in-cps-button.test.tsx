@@ -1,14 +1,14 @@
 import {render, screen, fireEvent, waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import EnrollInCpsButton from '@/app/enrollment/new/components/enroll-in-cps-button';
-import useEnrollment from '@/lib/store/enrollment-store';
-import useContext from '@/lib/store/context-store';
+import useEnrollment from '@/app/hooks/enrollment-hook';
+import useContext from '@/app/hooks/context-hook';
 import * as fhirUtils from '@/lib/fhirUtils';
 import {useRouter} from 'next/navigation';
 import {toast} from 'sonner';
 
-jest.mock('@/lib/store/enrollment-store');
-jest.mock('@/lib/store/context-store');
+jest.mock('@/app/hooks/enrollment-hook');
+jest.mock('@/app/hooks/context-hook');
 jest.mock('@/lib/fhirUtils');
 jest.mock('next/navigation');
 jest.mock('sonner');
@@ -39,7 +39,7 @@ beforeEach(() => {
         taskCondition: mockTaskCondition,
         practitionerRole: mockPractitionerRole,
         serviceRequest: mockServiceRequest,
-        loading: false,
+        isLoading: false,
     });
     (useContext as jest.Mock).mockReturnValue({
         launchContext: {taskIdentifier: 'task-id-123'},
@@ -67,7 +67,7 @@ describe("enroll in cps button test", () => {
         (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             taskCondition: null,
-            loading: false
+            isLoading: false
         });
         render(<EnrollInCpsButton/>);
         expect(screen.getByRole('button')).toBeDisabled();
@@ -77,7 +77,7 @@ describe("enroll in cps button test", () => {
         (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             taskCondition: mockTaskCondition,
-            loading: true
+            isLoading: true
         });
         render(<EnrollInCpsButton/>);
         expect(screen.getByRole('button')).toBeDisabled();
@@ -126,7 +126,7 @@ describe("enroll in cps button test", () => {
             taskCondition: mockTaskCondition,
             practitionerRole: mockPractitionerRole,
             serviceRequest: mockServiceRequest,
-            loading: false
+            isLoading: false
         });
 
         render(<EnrollInCpsButton/>);
