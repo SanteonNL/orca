@@ -172,7 +172,7 @@ describe("taskid page tests", () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByTestId('patient-details')).toBeInTheDocument();
-        expect(screen.getByText('Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
+        expect(screen.getByText('De aanmelding is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
     });
 
     it('displays task note when available', async () => {
@@ -197,7 +197,7 @@ describe("taskid page tests", () => {
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        expect(screen.getByText('Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
+        expect(screen.getByText('De aanmelding is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
     });
 
     it('displays launch buttons when task is in-progress and apps available', async () => {
