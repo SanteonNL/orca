@@ -25,9 +25,6 @@ go.work
 *.iml
 .DS_Store
 
-*.bicepparam
-!*empty.bicepparam
-
 # VS Code files
 .vscode
 

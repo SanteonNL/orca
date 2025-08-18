@@ -103,7 +103,7 @@ func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl strin
 	if err != nil {
 		return err
 	}
-	client := fhirclient.New(parsedBundleUrl, http.DefaultClient, nil)
+	client := fhirclient.New(parsedBundleUrl, http.DefaultClient, coolfhir.Config())
 	if err := client.ReadWithContext(ctx, "", &bundle, fhirclient.AtUrl(parsedBundleUrl)); err != nil {
 		return err
 	}
