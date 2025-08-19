@@ -258,42 +258,35 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
 	}))
 	// Creating a resource
-	createPath := "POST " + basePathWithTenant + "/{type}"
-	mux.HandleFunc(createPath, lib_otel.HandlerWithTracing(tracer, createPath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/{type}", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Create Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	}))))
 	// Searching for a resource via POST
-	searchPath := "POST " + basePathWithTenant + "/{type}/_search"
-	mux.HandleFunc(searchPath, lib_otel.HandlerWithTracing(tracer, searchPath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/{type}/_search", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Search Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleSearchRequest(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
 	}))))
 	// Handle bundle
-	bundlePathWithSlash := "POST " + basePathWithTenant + "/"
-	mux.HandleFunc(bundlePathWithSlash, lib_otel.HandlerWithTracing(tracer, bundlePathWithSlash, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Create Bundle", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		s.handleBundle(request, httpResponse)
 	}))))
-	bundlePath := "POST " + basePathWithTenant
-	mux.HandleFunc(bundlePath, lib_otel.HandlerWithTracing(tracer, bundlePath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant, lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Create Bundle", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		s.handleBundle(request, httpResponse)
 	}))))
 	// Updating a resource by ID
-	updateByIdPath := "PUT " + basePathWithTenant + "/{type}/{id}"
-	mux.HandleFunc(updateByIdPath, lib_otel.HandlerWithTracing(tracer, updateByIdPath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}/{id}", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Update Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleModification(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 	}))))
 	// Updating a resource by selecting it based on query params
-	updatePath := "PUT " + basePathWithTenant + "/{type}"
-	mux.HandleFunc(updatePath, lib_otel.HandlerWithTracing(tracer, updatePath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Update Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
 	}))))
 	// Handle reading a specific resource instance
-	readPath := "GET " + basePathWithTenant + "/{type}/{id}"
-	mux.HandleFunc(readPath, lib_otel.HandlerWithTracing(tracer, readPath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePathWithTenant+"/{type}/{id}", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Read Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
