@@ -45,6 +45,39 @@ type FHIROperation interface {
 	Handle(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 }
 
+func TracedHandlerWrapper(operationName string, handler func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error),
+) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
+		tracer := otel.Tracer("orchestrator")
+		ctx, span := tracer.Start(
+			ctx,
+			operationName,
+			trace.WithSpanKind(trace.SpanKindServer),
+			trace.WithAttributes(
+				attribute.String("fhir.resource_type", getResourceType(request.ResourcePath)),
+				attribute.String("fhir.resource_id", request.ResourceId),
+				attribute.String("http.method", request.HttpMethod),
+				attribute.String("operation.name", operationName),
+			),
+		)
+		defer span.End()
+
+		if request.Tenant.ID != "" {
+			span.SetAttributes(attribute.String("tenant.id", request.Tenant.ID))
+		}
+
+		result, err := handler(ctx, request, tx)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			return nil, err
+		}
+
+		span.SetStatus(codes.Ok, "")
+		return result, nil
+	}
+}
+
 func FHIRBaseURL(tenantID string, orcaBaseURL *url.URL) *url.URL {
 	return orcaBaseURL.JoinPath("cps", tenantID)
 }
@@ -343,7 +376,7 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 	if handler == nil {
 		return nil, fmt.Errorf("unsupported operation %s %s", request.HttpMethod, request.ResourcePath)
 	}
-	return handler(ctx, request, tx)
+	return TracedHandlerWrapper("handleTransactionEntry", handler)(ctx, request, tx)
 }
 
 func (s *Service) handleUnmanagedOperation(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -584,17 +617,6 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 	resourceType := getResourceType(resourcePath)
 
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-		tracer := otel.Tracer(tracerName)
-		ctx, span := tracer.Start(
-			ctx,
-			"handleCreate",
-			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.String("fhir.resource_type", resourceType),
-				attribute.String("operation.name", "Create"+resourceType),
-			),
-		)
-		defer span.End()
 
 		var handler func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
@@ -640,16 +662,7 @@ func (s *Service) handleCreate(resourcePath string) func(context.Context, FHIRHa
 				}
 			}
 		}
-
-		result, err := handler(ctx, request, tx)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return nil, err
-		}
-
-		span.SetStatus(codes.Ok, "")
-		return result, nil
+		return TracedHandlerWrapper("handleCreate"+resourceType, handler)(ctx, request, tx)
 	}
 }
 
@@ -657,17 +670,6 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 	resourceType := getResourceType(resourcePath)
 
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-		tracer := otel.Tracer(tracerName)
-		ctx, span := tracer.Start(
-			ctx,
-			"handleUpdate",
-			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.String("fhir.resource_type", resourceType),
-				attribute.String("operation.name", "Update"+resourceType),
-			),
-		)
-		defer span.End()
 
 		var handler func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
@@ -735,15 +737,7 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 			}
 		}
 
-		result, err := handler(ctx, request, tx)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return nil, err
-		}
-
-		span.SetStatus(codes.Ok, "")
-		return result, nil
+		return TracedHandlerWrapper("handleUpdate"+resourceType, handler)(ctx, request, tx)
 	}
 }
 
@@ -751,17 +745,6 @@ func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHand
 	resourceType := getResourceType(resourcePath)
 
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-		tracer := otel.Tracer(tracerName)
-		ctx, span := tracer.Start(
-			ctx,
-			"handleRead",
-			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.String("fhir.resource_type", resourceType),
-				attribute.String("operation.name", "Read"+resourceType),
-			),
-		)
-		defer span.End()
 
 		var handleFunc func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
@@ -805,15 +788,7 @@ func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHand
 			handleFunc = s.handleUnmanagedOperation
 		}
 
-		result, err := handleFunc(ctx, request, tx)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return nil, err
-		}
-
-		span.SetStatus(codes.Ok, "")
-		return result, nil
+		return TracedHandlerWrapper("handleRead"+resourceType, handleFunc)(ctx, request, tx)
 	}
 }
 
@@ -854,17 +829,6 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 	resourceType := getResourceType(resourcePath)
 
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-		tracer := otel.Tracer(tracerName)
-		ctx, span := tracer.Start(
-			ctx,
-			"handleSearch",
-			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.String("fhir.resource_type", resourceType),
-				attribute.String("operation.name", "Search"+resourceType),
-			),
-		)
-		defer span.End()
 
 		var handleFunc func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 
@@ -908,15 +872,7 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 			handleFunc = s.handleUnmanagedOperation
 		}
 
-		result, err := handleFunc(ctx, request, tx)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return nil, err
-		}
-
-		span.SetStatus(codes.Ok, "")
-		return result, nil
+		return TracedHandlerWrapper("handleSearch"+resourceType, handleFunc)(ctx, request, tx)
 	}
 }
 
@@ -1000,7 +956,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 	handler := s.handleSearch(resourceType)
 
 	// Call the handler
-	result, err := handler(ctx, fhirRequest, tx)
+	result, err := TracedHandlerWrapper("handleSearch"+resourceType, handler)(ctx, fhirRequest, tx)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
