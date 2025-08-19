@@ -552,7 +552,7 @@ describe("taskid page tests", () => {
         });
 
         expect(screen.getByTestId('task-heading')).toBeInTheDocument();
-        expect(screen.getByTestId('task-title')).toHaveTextContent('Verzoek geaccepteerd');
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding gelukt!');
     });
 
     it('renders task heading with service name when available for ready status', async () => {
@@ -729,5 +729,34 @@ describe("taskid page tests", () => {
         expect(link).toHaveAttribute('href', '/enrollment/new');
 
         process.env.NEXT_PUBLIC_BASE_PATH = originalBasePath;
+    });
+
+    it('renders task heading with correct title for accepted status with serviceRequest coding and task owner', async () => {
+        const serviceRequest = {
+            ...mockServiceRequest,
+            code: { coding: [{ display: 'Cardiology Consultation' }] }
+        };
+        const taskWithOwner = {
+            ...mockTask,
+            status: 'accepted',
+            owner: { reference: 'Organization/org-1' }
+        };
+        (useEnrollment as jest.Mock).mockReturnValue({
+            patient: mockPatient,
+            serviceRequest
+        });
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: taskWithOwner,
+            subTasks: [],
+            questionnaireMap: {},
+            isError: false,
+            isLoading: false
+        });
+        (fhirRender.organizationNameShort as jest.Mock).mockReturnValue('Test Hospital');
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+        expect(screen.getByTestId('task-heading')).toBeInTheDocument();
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding voor cardiology consultation Test Hospital is gelukt!');
     });
 });

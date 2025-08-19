@@ -81,7 +81,9 @@ export default function EnrollmentTaskPage() {
         "ready": service ? `${service} instellen` : "Instellen",
         "requested": service ? `${service} instellen` : "Instellen",
         "received": service ? `${service} instellen` : "Instellen",
-        "accepted": "Verzoek geaccepteerd",
+        "accepted": (serviceRequest?.code?.coding?.at(0)?.display && task?.owner)
+            ? "Aanmelding voor " + serviceRequest.code.coding[0].display?.toLowerCase() + " " + organizationNameShort(task.owner) + " is gelukt!"
+            : "Aanmelding gelukt!",
         "in-progress": "Verzoek in behandeling",
         "on-hold": "Uitvoering gepauzeerd",
         "completed": "Uitvoering afgerond",
