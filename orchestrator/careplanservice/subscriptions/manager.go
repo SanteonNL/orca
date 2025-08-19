@@ -27,7 +27,7 @@ var SendNotificationQueue = messaging.Entity{
 	Prefix: true,
 }
 
-const tracerName = "careplanservice.subscriptions"
+var tracer = otel.Tracer("careplanservice.subscriptions")
 
 var timeFunc = time.Now
 
@@ -69,7 +69,6 @@ type NotificationEvent struct {
 }
 
 func (r RetryableManager) Notify(ctx context.Context, resource interface{}) error {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"RetryableManager.Notify",
@@ -202,7 +201,6 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 }
 
 func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.Message) error {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"RetryableManager.receiveMessage",

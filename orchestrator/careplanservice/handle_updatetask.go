@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -22,7 +21,6 @@ import (
 )
 
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"handleUpdateTask",
@@ -47,7 +45,6 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	if task.Meta != nil {
 		task.Meta.Source = nil
 	}
-
 
 	// Add task status to span attributes for better observability
 	if task.Status.String() != "" {

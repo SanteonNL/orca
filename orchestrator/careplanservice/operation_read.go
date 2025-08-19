@@ -10,7 +10,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -26,7 +25,6 @@ type FHIRReadOperationHandler[T fhir.HasExtension] struct {
 }
 
 func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"FHIRReadOperationHandler.Handle",

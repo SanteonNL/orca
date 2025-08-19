@@ -84,7 +84,8 @@ func FHIRBaseURL(tenantID string, orcaBaseURL *url.URL) *url.URL {
 
 const basePathWithTenant = basePath + "/{tenant}"
 const basePath = "/cps"
-const tracerName = "careplanservice"
+
+var tracer = otel.Tracer("careplanservice")
 
 // subscriberNotificationTimeout is the timeout for notifying subscribers of changes in FHIR resources.
 // We might want to make this configurable at some point.
@@ -92,7 +93,6 @@ var subscriberNotificationTimeout = 10 * time.Second
 
 func New(config Config, tenantCfg tenants.Config, profile profile.Provider, orcaPublicURL *url.URL, messageBroker messaging.Broker, eventManager events.Manager) (*Service, error) {
 	fhirClientConfig := coolfhir.Config()
-	tracer := otel.Tracer(tracerName)
 
 	// Initialize connections to per-tenant CPS FHIR servers.
 	transportByTenant := make(map[string]http.RoundTripper)
@@ -234,7 +234,6 @@ func (r FHIRHandlerRequest) bundleEntry() fhir.BundleEntry {
 type FHIRHandlerResult func(txResult *fhir.Bundle) ([]*fhir.BundleEntry, []any, error)
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	tracer := otel.Tracer(tracerName)
 	// Binding to actual routing
 	// Metadata
 	mux.HandleFunc("GET "+basePathWithTenant+"/metadata", s.tenants.HttpHandler(func(httpResponse http.ResponseWriter, request *http.Request) {
@@ -296,7 +295,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
 // It returns the result Bundle that should be returned to the client, or an error if the transaction failed.
 func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.Request, tx *coolfhir.BundleBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		request.Context(),
 		"commitTransaction",
@@ -460,7 +458,6 @@ func (s *Service) writeSearchResponse(httpResponse http.ResponseWriter, txResult
 }
 
 func (s *Service) handleModification(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
 		"handleModification",
@@ -534,7 +531,6 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 }
 
 func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceId string, resourceType string, operationName string) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
 		"handleGet",
@@ -870,7 +866,6 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 }
 
 func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
 		"handleSearchRequest",
@@ -976,7 +971,6 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 }
 
 func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.ResponseWriter) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
 		"handleBundle",
@@ -1149,7 +1143,6 @@ func (s Service) readRequest(httpRequest *http.Request, target interface{}) erro
 }
 
 func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(ctx, "notify_subscribers",
 		trace.WithAttributes(
 			attribute.String("notification.resource_type", coolfhir.ResourceType(resource)),

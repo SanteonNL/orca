@@ -46,7 +46,8 @@ import (
 
 const basePathWithTenant = basePath + "/{tenant}"
 const basePath = "/cpc"
-const tracerName = "careplancontributor"
+
+var tracer = otel.Tracer("careplancontributor")
 
 func FHIRBaseURL(tenantID string, orcaBaseURL *url.URL) *url.URL {
 	return orcaBaseURL.JoinPath(basePath, tenantID, "fhir")
@@ -183,7 +184,6 @@ type Service struct {
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	tracer := otel.Tracer(tracerName)
 	if s.oidcProvider != nil {
 		mux.HandleFunc(basePath+"/login", lib_otel.HandlerWithTracing(tracer, "CarePlanContributor/Login", s.withSession(s.oidcProvider.HandleLogin)))
 		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
@@ -337,7 +337,6 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[session.Data], strictMode bool) error {
 	frontendUrl, _ := url.Parse(s.config.FrontendConfig.URL)
-	tracer := otel.Tracer(tracerName)
 
 	if s.config.AppLaunch.SmartOnFhir.Enabled {
 		service, err := smartonfhir.New(s.config.AppLaunch.SmartOnFhir, sessionManager, s.orcaPublicURL, frontendUrl, strictMode)
@@ -391,7 +390,6 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 
 // handleProxyAppRequestToEHR handles a request from the CPC application (e.g. Frontend), forwarding it to the local EHR's FHIR API.
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		request.Context(),
 		"handleProxyAppRequestToEHR",
@@ -439,7 +437,6 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		return err
 	}
 
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		request.Context(),
 		"handleProxyExternalRequestToEHR",
@@ -615,7 +612,6 @@ func (s Service) withUserAuth(next func(response http.ResponseWriter, request *h
 }
 
 func (s Service) handleNotification(ctx context.Context, resource any) error {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"handleNotification",
@@ -787,7 +783,6 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 	if err != nil {
 		return nil, nil, err
 	}
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"createFHIRClientForExternalRequest",

@@ -12,7 +12,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -72,7 +71,6 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 	if err != nil {
 		return err
 	}
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"NotifyTaskAccepted",
@@ -104,7 +102,6 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity, taskAcceptedBund
 	// TODO: add sync call here to the API of DataHub for enrolling a patient
 	// IF the call fails here we want to create a subtask to let the hospital know that the enrollment failed
 	return n.eventManager.Subscribe(TaskAcceptedEvent{}, func(ctx context.Context, rawEvent events.Type) error {
-		tracer := otel.Tracer(tracerName)
 		ctx, span := tracer.Start(
 			ctx,
 			"handleTaskAcceptedEvent",
@@ -175,7 +172,6 @@ func (n *notifier) start(receiverTopicOrQueue messaging.Entity, taskAcceptedBund
 // It logs the process and errors during submission while wrapping and returning them.
 // Returns an error if serialization or message submission fails.
 func sendBundle(ctx context.Context, receiverTopicOrQueue messaging.Entity, taskAcceptedBundleEndpoint string, set BundleSet, messageBroker messaging.Broker) error {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"sendBundle",

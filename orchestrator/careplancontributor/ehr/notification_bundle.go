@@ -20,7 +20,7 @@ import (
 	"strings"
 )
 
-const tracerName = "careplancontributor"
+var tracer = otel.Tracer("careplancontributor.ehr")
 
 // BundleSet represents a collection of FHIR bundles associated with a specific task, identified by an ID.
 type BundleSet struct {
@@ -35,7 +35,6 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 }
 
 func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*BundleSet, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"TaskNotificationBundleSet",
@@ -125,7 +124,6 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 }
 
 func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*fhir.Bundle, []fhir.Task, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"fetchTasks",
@@ -171,7 +169,6 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 }
 
 func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, *fhir.CarePlan, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"fetchCarePlan",
@@ -218,7 +215,6 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 }
 
 func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"fetchPatient",
@@ -238,7 +234,6 @@ func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fh
 }
 
 func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"fetchServiceRequest",
@@ -272,7 +267,6 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 }
 
 func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"fetchQuestionnaires",
@@ -297,7 +291,6 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 }
 
 func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"fetchQuestionnaireResponses",
@@ -326,7 +319,6 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 // The function supports including CareTeam resources for CarePlan references when constructing the query parameters.
 // Returns a pointer to a slice of FHIR Bundles and an error, if any occurred during FHIR client interactions.
 func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"fetchRefs",
@@ -372,7 +364,6 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 
 // fetchRef performs the same operations as fetchRefs, but only for a single resource
 func fetchRef(ctx context.Context, cpsClient fhirclient.Client, ref string) (*fhir.Bundle, error) {
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		ctx,
 		"fetchRef",

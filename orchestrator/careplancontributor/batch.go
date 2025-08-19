@@ -9,7 +9,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -27,7 +26,6 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 	if fhirClient == nil {
 		return nil, coolfhir.BadRequest("EHR API is not supported")
 	}
-	tracer := otel.Tracer(tracerName)
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
 		"handleBatch",

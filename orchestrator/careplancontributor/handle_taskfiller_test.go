@@ -40,6 +40,35 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		}
 	}).Sole())
 	var capturedTask fhir.Task
+
+	// Set up trace mocking
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+	otel.SetTracerProvider(tp)
+	defer tp.Shutdown(context.Background())
+
+	// Helper function to assert spans are created
+	assertSpansCreated := func(t *testing.T) {
+		// Force any pending spans to be exported
+		tp.ForceFlush(context.Background())
+
+		spans := exporter.GetSpans()
+		require.NotEmpty(t, spans, "Expected spans to be created for task filling operations")
+
+		// Look for key span operations
+		spanNames := make([]string, len(spans))
+		for i, span := range spans {
+			spanNames[i] = span.Name
+		}
+
+		// Verify at least the main handleTaskNotification span is present
+		require.Contains(t, spanNames, "handleTaskNotification", "Expected handleTaskNotification span")
+
+		exporter.Reset()
+	}
+
 	tests := []struct {
 		name                    string
 		ctx                     context.Context
@@ -320,32 +349,6 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	// Run test cases
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Set up trace mocking
-			exporter := tracetest.NewInMemoryExporter()
-			tp := trace.NewTracerProvider(
-				trace.WithSyncer(exporter),
-			)
-			otel.SetTracerProvider(tp)
-			defer tp.Shutdown(context.Background())
-
-			// Helper function to assert spans are created
-			assertSpansCreated := func(t *testing.T) {
-				// Force any pending spans to be exported
-				tp.ForceFlush(context.Background())
-
-				spans := exporter.GetSpans()
-				require.NotEmpty(t, spans, "Expected spans to be created for task filling operations")
-
-				// Look for key span operations
-				spanNames := make([]string, len(spans))
-				for i, span := range spans {
-					spanNames[i] = span.Name
-				}
-
-				// Verify at least the main handleTaskNotification span is present
-				require.Contains(t, spanNames, "handleTaskNotification", "Expected handleTaskNotification span")
-			}
-
 			ctrl := gomock.NewController(t)
 			mockFHIRClient := mock.NewMockClient(ctrl)
 			fhirBaseURL := must.ParseURL("https://example.com/fhir")
