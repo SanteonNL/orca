@@ -118,7 +118,7 @@ describe("QuestionnaireRenderer", () => {
 
     it('renders and submits questionnaire response successfully', async () => {
         render(<QuestionnaireRenderer questionnaire={mockQuestionnaire} inputTask={mockTask}/>)
-        const button = await screen.findByRole('button', {name: /verzoek versturen/i})
+        const button = await screen.findByRole('button', {name: /aanmelding versturen/i})
         expect(button).not.toBeNull()
         fireEvent.click(button!)
         await waitFor(() => {
@@ -133,7 +133,7 @@ describe("QuestionnaireRenderer", () => {
         });
 
 
-        const button = screen.getByRole('button', {name: /verzoek versturen/i})
+        const button = screen.getByRole('button', {name: /aanmelding versturen/i})
         expect(button).toBeDisabled()
     })
 
@@ -143,7 +143,7 @@ describe("QuestionnaireRenderer", () => {
             render(<QuestionnaireRenderer questionnaire={mockQuestionnaire} inputTask={undefined as any}/>)
         });
 
-        const button = screen.getByRole('button', {name: /verzoek versturen/i})
+        const button = screen.getByRole('button', {name: /aanmelding versturen/i})
         fireEvent.click(button)
         await waitFor(() => {
             expect(toast.error).toHaveBeenCalled()
