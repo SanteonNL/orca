@@ -34,6 +34,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
@@ -221,39 +222,46 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
 	}))
 	// Creating a resource
-	mux.HandleFunc("POST "+basePathWithTenant+"/{type}", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	createPath := "POST " + basePathWithTenant + "/{type}"
+	mux.HandleFunc(createPath, lib_otel.HandlerWithTracing(tracerName, createPath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
-	})))
+	}))))
 	// Searching for a resource via POST
-	mux.HandleFunc("POST "+basePathWithTenant+"/{type}/_search", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	searchPath := "POST " + basePathWithTenant + "/{type}/_search"
+	mux.HandleFunc(searchPath, lib_otel.HandlerWithTracing(tracerName, searchPath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleSearchRequest(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
-	})))
+	}))))
 	// Handle bundle
-	mux.HandleFunc("POST "+basePathWithTenant+"/", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	bundlePathWithSlash := "POST " + basePathWithTenant + "/"
+	mux.HandleFunc(bundlePathWithSlash, lib_otel.HandlerWithTracing(tracerName, bundlePathWithSlash, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		s.handleBundle(request, httpResponse)
-	})))
-	mux.HandleFunc("POST "+basePathWithTenant, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	}))))
+	bundlePath := "POST " + basePathWithTenant
+	mux.HandleFunc(bundlePath, lib_otel.HandlerWithTracing(tracerName, bundlePath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		s.handleBundle(request, httpResponse)
-	})))
+	}))))
 	// Updating a resource by ID
-	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	updateByIdPath := "PUT " + basePathWithTenant + "/{type}/{id}"
+	mux.HandleFunc(updateByIdPath, lib_otel.HandlerWithTracing(tracerName, updateByIdPath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleModification(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
-	})))
+	}))))
 	// Updating a resource by selecting it based on query params
-	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	updatePath := "PUT " + basePathWithTenant + "/{type}"
+	mux.HandleFunc(updatePath, lib_otel.HandlerWithTracing(tracerName, updatePath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
-	})))
+	}))))
 	// Handle reading a specific resource instance
-	mux.HandleFunc("GET "+basePathWithTenant+"/{type}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	readPath := "GET " + basePathWithTenant + "/{type}/{id}"
+	mux.HandleFunc(readPath, lib_otel.HandlerWithTracing(tracerName, readPath, s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
-	})))
+	}))))
 }
 
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.

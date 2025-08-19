@@ -49,18 +49,15 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED":           "true",
 			"ORCA_STRICTMODE": "false",
 
-			// OpenTelemetry Configuration
-			"ORCA_OPENTELEMETRY_ENABLED":                "true",
-			"ORCA_OPENTELEMETRY_SERVICE_NAME":           "orca-orchestrator-e2e-test",
-			"ORCA_OPENTELEMETRY_SERVICE_VERSION":        "e2e-test",
-			"ORCA_OPENTELEMETRY_EXPORTER_TYPE":          "otlp",
-			"ORCA_OPENTELEMETRY_EXPORTER_OTLP_ENDPOINT": "otel-collector:4318",
-			"ORCA_OPENTELEMETRY_EXPORTER_OTLP_INSECURE": "true",
+			// OpenTelemetry Configuration - Use standard OTEL environment variables
+			"ORCA_OPENTELEMETRY_ENABLED": "true",
 
-			// Explicitly set standard OTEL env vars to prevent conflicts
-			"OTEL_EXPORTER_OTLP_ENDPOINT":        "",
-			"OTEL_EXPORTER_OTLP_TRACES_ENDPOINT": "",
-			"OTEL_EXPORTER_OTLP_INSECURE":        "",
+			// Standard OpenTelemetry environment variables that will be picked up by DefaultConfig()
+			"OTEL_SERVICE_NAME":           "orca-orchestrator-" + containerName,
+			"OTEL_EXPORTER_OTLP_ENDPOINT": "http://otel-collector:4317",
+			"OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+			"OTEL_EXPORTER_OTLP_INSECURE": "true",
+			"OTEL_RESOURCE_ATTRIBUTES":    "service.version=e2e-test,deployment.environment=test",
 		},
 		Files: []testcontainers.ContainerFile{
 			// Questionnaire and HealthcareService bundles required by Task Filler Engine
