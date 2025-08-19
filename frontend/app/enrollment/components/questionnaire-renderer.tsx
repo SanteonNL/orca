@@ -202,7 +202,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         <div className='flex gap-3 mt-5'>
           <Button type="button" variant='contained' disabled={isSubmitting || !responseIsValid} onClick={submitQuestionnaireResponse}>
             {isSubmitting && <Spinner className='h-6 mr-2 text-inherit' />}
-            Verzoek versturen
+            Aanmelding versturen
           </Button>
         </div>
       </ThemeProvider>
