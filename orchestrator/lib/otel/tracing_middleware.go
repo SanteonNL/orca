@@ -10,9 +10,8 @@ import (
 	"net/http"
 )
 
-func HandlerWithTracing(tracerName string, operationName string, handler http.HandlerFunc) http.HandlerFunc {
+func HandlerWithTracing(tracer trace.Tracer, operationName string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		tracer := otel.Tracer(tracerName)
 		ctx, span := tracer.Start(
 			r.Context(),
 			operationName,

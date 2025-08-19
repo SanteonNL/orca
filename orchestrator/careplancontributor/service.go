@@ -183,8 +183,9 @@ type Service struct {
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
+	tracer := otel.Tracer(tracerName)
 	if s.oidcProvider != nil {
-		mux.HandleFunc(basePath+"/login", lib_otel.HandlerWithTracing(tracerName, basePath+"/login", s.withSession(s.oidcProvider.HandleLogin)))
+		mux.HandleFunc(basePath+"/login", lib_otel.HandlerWithTracing(tracer, basePath+"/login", s.withSession(s.oidcProvider.HandleLogin)))
 		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
 	}
 
@@ -207,14 +208,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		return nil, coolfhir.BadRequest("bundle type not supported: %s", bundle.Type.String())
 	}
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir", lib_otel.HandlerWithTracing(tracerName, "POST "+basePathWithTenant+"/fhir", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir", lib_otel.HandlerWithTracing(tracer, "POST "+basePathWithTenant+"/fhir", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
 			coolfhir.SendResponse(writer, http.StatusOK, bundle)
 		}
 	}))))
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/", lib_otel.HandlerWithTracing(tracerName, "POST "+basePathWithTenant+"/fhir/", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/", lib_otel.HandlerWithTracing(tracer, "POST "+basePathWithTenant+"/fhir/", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
@@ -225,7 +226,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	// This is a special endpoint, used by other SCP-nodes to discovery applications.
 	//
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/Endpoint", lib_otel.HandlerWithTracing(tracerName, "GET "+basePathWithTenant+"/fhir/Endpoint", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/Endpoint", lib_otel.HandlerWithTracing(tracer, "GET "+basePathWithTenant+"/fhir/Endpoint", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if len(request.URL.Query()) > 0 {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("search parameters are not supported on this endpoint"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		}
@@ -287,9 +288,9 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", lib_otel.HandlerWithTracing(tracerName, "GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{resourceType}/_search", lib_otel.HandlerWithTracing(tracerName, "POST "+basePathWithTenant+"/fhir/{resourceType}/_search", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}", lib_otel.HandlerWithTracing(tracerName, "GET "+basePathWithTenant+"/fhir/{resourceType}", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", lib_otel.HandlerWithTracing(tracer, "GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{resourceType}/_search", lib_otel.HandlerWithTracing(tracer, "POST "+basePathWithTenant+"/fhir/{resourceType}/_search", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}", lib_otel.HandlerWithTracing(tracer, "GET "+basePathWithTenant+"/fhir/{resourceType}", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
@@ -297,7 +298,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// This endpoint is used by the EHR and ORCA Frontend to query the FHIR API of a remote SCP-node.
 	// The remote SCP-node to query can be specified using the following HTTP headers:
 	// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL
-	mux.HandleFunc(basePathWithTenant+"/external/fhir/{rest...}", lib_otel.HandlerWithTracing(tracerName, basePathWithTenant+"/external/fhir/{rest...}", s.tenants.HttpHandler(s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePathWithTenant+"/external/fhir/{rest...}", lib_otel.HandlerWithTracing(tracer, basePathWithTenant+"/external/fhir/{rest...}", s.tenants.HttpHandler(s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Extract relevant data from the bearer JWT
 		fhirBaseURL, httpClient, err := s.createFHIRClientForExternalRequest(request.Context(), request)
 		if err != nil {
@@ -310,14 +311,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 		proxyBasePath += "/external/fhir/"
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), httpClient.Transport, true, true)
+		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), coolfhir.NewTracedHTTPTransport(httpClient.Transport, tracer), true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	}))))
-	mux.HandleFunc("GET "+basePath+"/context", lib_otel.HandlerWithTracing(tracerName, "GET "+basePath+"/context", s.withSession(s.handleGetContext)))
-	mux.HandleFunc(basePathWithTenant+"/ehr/fhir/{rest...}", lib_otel.HandlerWithTracing(tracerName, basePathWithTenant+"/ehr/fhir/{rest...}", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR))))
+	mux.HandleFunc("GET "+basePath+"/context", lib_otel.HandlerWithTracing(tracer, "GET "+basePath+"/context", s.withSession(s.handleGetContext)))
+	mux.HandleFunc(basePathWithTenant+"/ehr/fhir/{rest...}", lib_otel.HandlerWithTracing(tracer, basePathWithTenant+"/ehr/fhir/{rest...}", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR))))
 
 	// Logout endpoint
-	mux.HandleFunc("/logout", lib_otel.HandlerWithTracing(tracerName, "/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
+	mux.HandleFunc("/logout", lib_otel.HandlerWithTracing(tracer, "/logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
 		s.SessionManager.Destroy(writer, request)
 		// If there is a 'Referer' value in the header, redirect to that URL
 		if referer := request.Header.Get("Referer"); referer != "" {
@@ -336,6 +337,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[session.Data], strictMode bool) error {
 	frontendUrl, _ := url.Parse(s.config.FrontendConfig.URL)
+	tracer := otel.Tracer(tracerName)
 
 	if s.config.AppLaunch.SmartOnFhir.Enabled {
 		service, err := smartonfhir.New(s.config.AppLaunch.SmartOnFhir, sessionManager, s.orcaPublicURL, frontendUrl, strictMode)
@@ -367,7 +369,7 @@ func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[sess
 			if _, exists := s.ehrFHIRClientByTenant[tenantID]; exists {
 				return fmt.Errorf("EHR FHIR client for tenant %s already exists", tenantID)
 			}
-			s.ehrFHIRClientByTenant[tenantID] = coolfhir.NewTracedFHIRClient(fhirClient, tracerName)
+			s.ehrFHIRClientByTenant[tenantID] = coolfhir.NewTracedFHIRClient(fhirClient, tracer)
 		}
 	}
 	return nil

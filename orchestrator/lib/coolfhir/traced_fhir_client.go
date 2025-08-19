@@ -3,7 +3,6 @@ package coolfhir
 import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -15,10 +14,10 @@ type TracedFHIRClient struct {
 	tracer trace.Tracer
 }
 
-func NewTracedFHIRClient(client fhirclient.Client, tracerName string) *TracedFHIRClient {
+func NewTracedFHIRClient(client fhirclient.Client, tracer trace.Tracer) *TracedFHIRClient {
 	return &TracedFHIRClient{
 		client: client,
-		tracer: otel.Tracer(tracerName),
+		tracer: tracer,
 	}
 }
 

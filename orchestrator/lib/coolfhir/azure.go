@@ -133,6 +133,7 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 				return fmt.Sprintf("fhir.%s %s", strings.ToLower(r.Method), r.URL.Path)
 			}),
 			otelhttp.WithSpanOptions(
+				trace.WithSpanKind(trace.SpanKindClient),
 				trace.WithAttributes(
 					attribute.String("fhir.base_url", fhirURL.String()),
 					attribute.String("fhir.auth_type", string(config.Auth.Type)),
@@ -156,6 +157,7 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 				return fmt.Sprintf("fhir.%s %s", strings.ToLower(r.Method), r.URL.Path)
 			}),
 			otelhttp.WithSpanOptions(
+				trace.WithSpanKind(trace.SpanKindClient),
 				trace.WithAttributes(
 					attribute.String("fhir.base_url", fhirURL.String()),
 					attribute.String("fhir.auth_type", string(config.Auth.Type)),
