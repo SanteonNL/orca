@@ -367,7 +367,7 @@ func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[sess
 			if _, exists := s.ehrFHIRClientByTenant[tenantID]; exists {
 				return fmt.Errorf("EHR FHIR client for tenant %s already exists", tenantID)
 			}
-			s.ehrFHIRClientByTenant[tenantID] = fhirClient
+			s.ehrFHIRClientByTenant[tenantID] = coolfhir.NewTracedFHIRClient(fhirClient, tracerName)
 		}
 	}
 	return nil

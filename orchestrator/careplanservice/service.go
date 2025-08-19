@@ -69,7 +69,7 @@ func New(config Config, tenantCfg tenants.Config, profile profile.Provider, orca
 			return nil, err
 		}
 		transportByTenant[tenant.ID] = transport
-		fhirClientByTenant[tenant.ID] = fhirClient
+		fhirClientByTenant[tenant.ID] = coolfhir.NewTracedFHIRClient(fhirClient, tracerName)
 		globals.RegisterCPSFHIRClient(tenant.ID, fhirClient)
 	}
 
