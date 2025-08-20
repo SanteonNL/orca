@@ -312,7 +312,7 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 	var txResult fhir.Bundle
 	if err := fhirClient.CreateWithContext(ctx, tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		span.RecordError(err)
-		span.SetStatus(codes.Error, "FHIR transaction failed")
+		span.SetStatus(codes.Error, "failed to execute FHIR transaction")
 		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 		txResultJson, _ := json.Marshal(tx.Bundle())
 		log.Ctx(ctx).Error().Err(err).
@@ -337,7 +337,7 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		currResult, currNotificationResources, err := resultHandler(&txResult)
 		if err != nil {
 			span.RecordError(err)
-			span.SetStatus(codes.Error, fmt.Sprintf("result handler failed for entry %d", entryIdx))
+			span.SetStatus(codes.Error, fmt.Sprintf("result handler for entry %d failed", entryIdx))
 			return nil, fmt.Errorf("bundle execution succeeded, but couldn't resolve bundle.entry[%d] results: %w", entryIdx, err)
 		}
 		for _, entry := range currResult {
@@ -481,18 +481,24 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 		}
 	}
 
-	tenant, err := tenants.FromContext(httpRequest.Context())
+	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
-	localIdentity, err := s.getLocalIdentity(httpRequest.Context())
+	localIdentity, err := s.getLocalIdentity(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
@@ -546,9 +552,11 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 
 	fhirHeaders := new(fhirclient.Headers)
 
-	tenant, err := tenants.FromContext(httpRequest.Context())
+	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	principal, err := auth.PrincipalFromContext(ctx)
@@ -558,7 +566,7 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
-	localIdentity, err := s.getLocalIdentity(httpRequest.Context())
+	localIdentity, err := s.getLocalIdentity(ctx)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -885,9 +893,11 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 		return
 	}
 
-	tenant, err := tenants.FromContext(httpRequest.Context())
+	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	principal, err := auth.PrincipalFromContext(ctx)
@@ -919,7 +929,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 	// Set up the transaction and handler request
 	tx := coolfhir.Transaction()
 
-	localIdentity, err := s.getLocalIdentity(httpRequest.Context())
+	localIdentity, err := s.getLocalIdentity(ctx)
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -953,9 +963,11 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 	}
 
 	// Execute the transaction
-	fhirClient, err := s.createFHIRClient(httpRequest.Context())
+	fhirClient, err := s.createFHIRClient(ctx)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, operationName, httpResponse)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	txResult, err := s.commitTransaction(fhirClient, httpRequest.WithContext(ctx), tx, []FHIRHandlerResult{result})
@@ -1016,19 +1028,25 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		}
 	}
 
-	tenant, err := tenants.FromContext(httpRequest.Context())
+	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 		return
 	}
-	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 		return
 	}
-	localIdentity, err := s.getLocalIdentity(httpRequest.Context())
+	localIdentity, err := s.getLocalIdentity(ctx)
 	if err != nil {
-		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, op, httpResponse)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 		return
 	}
 
@@ -1093,8 +1111,8 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 			if !errors.As(err, &operationOutcomeErr) {
 				userError = coolfhir.BadRequest("bundle.entry[%d]: %w", entryIdx, err)
 			}
-			span.RecordError(userError)
-			span.SetStatus(codes.Error, userError.Error())
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			coolfhir.WriteOperationOutcomeFromError(ctx, userError, op, httpResponse)
 			return
 		}
@@ -1108,12 +1126,12 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, "Bundle", httpResponse)
 		return
 	}
-	tenant, _ = tenants.FromContext(httpRequest.Context())
 	span.SetAttributes(
 		attribute.Int("fhir.bundle.result_entries", len(resultBundle.Entry)),
 		attribute.String("tenant.id", tenant.ID),
 	)
 	span.SetStatus(codes.Ok, "")
+	tenant, _ = tenants.FromContext(ctx)
 	s.pipelineByTenant[tenant.ID].DoAndWrite(httpResponse, resultBundle, http.StatusOK)
 }
 

@@ -432,11 +432,6 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 // handleProxyExternalRequestToEHR handles a request from an external SCP-node (e.g. CarePlanContributor), forwarding it to the local EHR's FHIR API.
 // This is typically used by remote parties to retrieve patient data from the local EHR.
 func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, request *http.Request) error {
-	tenant, err := tenants.FromContext(request.Context())
-	if err != nil {
-		return err
-	}
-
 	ctx, span := tracer.Start(
 		request.Context(),
 		"handleProxyExternalRequestToEHR",
@@ -448,6 +443,11 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		),
 	)
 	defer span.End()
+
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return err
+	}
 
 	ehrProxy := s.ehrFHIRProxyByTenant[tenant.ID]
 	if ehrProxy == nil {
