@@ -287,6 +287,9 @@ func isValidTransition(from fhir.TaskStatus, to fhir.TaskStatus, isOwner bool, i
 		if from == fhir.TaskStatusAccepted && to == fhir.TaskStatusInProgress {
 			return true
 		}
+		if from == fhir.TaskStatusAccepted && to == fhir.TaskStatusRejected {
+			return true
+		}
 		if from == fhir.TaskStatusInProgress && to == fhir.TaskStatusCompleted {
 			return true
 		}
@@ -317,6 +320,7 @@ func isValidTransition(from fhir.TaskStatus, to fhir.TaskStatus, isOwner bool, i
 		if from == fhir.TaskStatusOnHold && to == fhir.TaskStatusInProgress {
 			return true
 		}
+
 	}
 	return false
 }

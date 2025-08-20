@@ -5,7 +5,7 @@ import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollment from "@/app/hooks/enrollment-hook";
 import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
-import {Questionnaire} from "fhir/r4";
+import {Questionnaire, Task} from "fhir/r4";
 import {Button, ThemeProvider} from "@mui/material";
 import {defaultTheme} from "@/app/theme";
 import useContext from "@/app/hooks/context-hook";
@@ -15,6 +15,7 @@ import TaskHeading from "@/app/enrollment/components/task-heading";
 import {ChevronRight} from "lucide-react";
 import TaskBody from "@/app/enrollment/components/task-body";
 import Error from "@/app/error";
+import {organizationNameShort} from "@/lib/fhirRender";
 
 export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
@@ -27,7 +28,7 @@ export default function EnrollmentTaskPage() {
         isError,
         isLoading
     } = TaskProgressHook({
-        taskId:  Array.isArray(taskId) ? taskId[0] : taskId!,
+        taskId: Array.isArray(taskId) ? taskId[0] : taskId!,
         cpsClient: cpsClient!,
         pollingInterval: 1000
     })
@@ -72,15 +73,17 @@ export default function EnrollmentTaskPage() {
     const isFirstStep = task.status === "requested"
     const isLastStep = lastStepTaskStates.includes(task.status)
     const breadcrumb = isFirstStep
-        ? <span className='font-medium'>Verzoek controleren</span>
-        : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Verzoek
-            controleren</a>
+        ? <span className='font-medium'>Controleer patiëntgegevens</span>
+        : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Controleer
+            patiëntgegevens</a>
     const service = serviceRequest?.code?.coding?.[0].display
     const statusTitles = {
         "ready": service ? `${service} instellen` : "Instellen",
         "requested": service ? `${service} instellen` : "Instellen",
         "received": service ? `${service} instellen` : "Instellen",
-        "accepted": "Verzoek geaccepteerd",
+        "accepted": (serviceRequest?.code?.coding?.at(0)?.display && task?.owner)
+            ? "Aanmelding voor " + serviceRequest.code.coding[0].display?.toLowerCase() + " " + organizationNameShort(task.owner) + " is gelukt!"
+            : "Aanmelding gelukt!",
         "in-progress": "Verzoek in behandeling",
         "on-hold": "Uitvoering gepauzeerd",
         "completed": "Uitvoering afgerond",
@@ -91,10 +94,6 @@ export default function EnrollmentTaskPage() {
         "entered-in-error": "Verzoek gemarkeerd als foutief",
     }
     const title = statusTitles[task.status]
-
-
-
-
 
 
     // Auto-launch external app when the following conditions are met:
@@ -109,72 +108,86 @@ export default function EnrollmentTaskPage() {
         launchApp(launchableApps[0].URL)();
     }
 
+    const textBottom = executionTextBottom(task.status);
     return (
         <>
             <TaskHeading title={title}>
                 <nav className={`flex items-center space-x-2 text-sm ${isLastStep ? 'invisible' : 'inherit'}`}>
                     {breadcrumb}
                     <ChevronRight className="h-4 w-4"/>
-                    <span
-                        className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{service}</span>
+                    <span className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{service} instellen</span>
                 </nav>
             </TaskHeading>
             <TaskBody>
-                {task.status === "received" && currentQuestionnaire && subTasks?.[0] ? (
+                {task.status === "received" && currentQuestionnaire && subTasks?.[0] ? <>
                     <QuestionnaireRenderer
                         questionnaire={currentQuestionnaire}
                         inputTask={subTasks[0]}
                     />
-                ) : (
-                <div className='w-full flex flex-col auto-cols-max gap-y-10'>
-                    <div className="w-[568px] font-[500]">
+                </> : (
+                    <div className='w-full flex flex-col auto-cols-max gap-y-10'>
+                        <div className="w-[568px] font-[500]">
+                            {
+                                // Either show Task.note, or a default message based on task status
+                                task.note && task.note.length > 0 ? task.note.map(note => note.text).join("\n") :
+                                    executionTextTop(service, task) ?? ''
+                            }
+                        </div>
+                        <PatientDetails task={task} patient={patient}/>
                         {
-                            // Either show Task.note, or a default message based on task status
-                            task.note && task.note.length > 0 ? task.note.map(note => note.text).join("\n") :
-                                executionText(task.status) ? executionText(task.status) : ''
+                            textBottom ? <div className="w-[568px] font-[500]">{textBottom}</div> : <></>
+                        }
+                        {task.status === "in-progress" && !autoLaunchExternalApps && launchableApps && launchableApps.length > 0 &&
+                            <div className="w-[568px]">
+                                <ThemeProvider theme={defaultTheme}>
+                                    {launchableApps.map((app, index) => (
+                                        <Button
+                                            key={index}
+                                            variant="contained"
+                                            className="mb-2"
+                                            onClick={launchApp(app.URL)}
+                                        >{app.Name}</Button>
+                                    ))}
+                                </ThemeProvider>
+                            </div>
                         }
                     </div>
-                    <PatientDetails task={task} patient={patient}/>
-
-                    {task.status === "in-progress" && !autoLaunchExternalApps && launchableApps && launchableApps.length > 0 &&
-                        <div className="w-[568px]">
-                            <ThemeProvider theme={defaultTheme}>
-                                {launchableApps.map((app, index) => (
-                                    <Button
-                                        key={index}
-                                        variant="contained"
-                                        className="mb-2"
-                                        onClick={launchApp(app.URL)}
-                                    >{app.Name}</Button>
-                                ))}
-                            </ThemeProvider>
-                        </div>
-                    }
-                </div>
                 )}
             </TaskBody>
         </>
     )
 }
 
-function executionText(taskStatus: string) {
+function executionTextTop(serviceDisplay: string | undefined, task: Task) {
+    switch (task.status) {
+        case "requested":
+        case "received":
+            return `Je gaat deze patient aanmelden ${serviceDisplay ? `voor ${serviceDisplay}` : ''} ${task.owner ? ` van ${organizationNameShort(task.owner)}` : ''}.`
+        case "accepted":
+            return "De aanmelding is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart."
+        case "in-progress":
+            return "De aanmelding is door de uitvoerende partij geaccepteerd, en uitvoering is gestart."
+        case "cancelled":
+            return "De aanmelding is afgebroken."
+        case "rejected":
+            return "De aanmelding is door de uitvoerende partij afgewezen."
+        case "failed":
+            return "De aanmelding is mislukt."
+        case "completed":
+            return "De aanmelding is door de uitvoerende partij afgerond."
+        case "on-hold":
+            return "De aanmelding is door de uitvoerende partij gepauzeerd."
+        default:
+            return null
+    }
+}
+
+function executionTextBottom(taskStatus: string) {
     switch (taskStatus) {
         case "requested":
-            return "Het verzoek is door de uitvoerende organisatie ontvangen, maar nog niet beoordeeld."
-        case "accepted":
-            return "Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart."
-        case "in-progress":
-            return "Het verzoek is door de uitvoerende partij geaccepteerd, en uitvoering is gestart."
-        case "cancelled":
-            return "Het verzoek is afgebroken."
-        case "rejected":
-            return "Het verzoek is door de uitvoerende partij afgewezen."
-        case "failed":
-            return "Het verzoek is mislukt."
-        case "completed":
-            return "Het verzoek is door de uitvoerende partij afgerond."
-        case "on-hold":
-            return "Het verzoek is door de uitvoerende partij gepauzeerd."
+            // fallthrough
+        case "received":
+            return "Indien de gegevens van de patiënt niet kloppen, pas het dan aan in het EPD."
         default:
             return null
     }

@@ -367,7 +367,6 @@ func (s *Service) createClientAssertionForAudience(clientID string, audience str
 }
 
 func createHTTPClient(ctx context.Context, accessToken string) *http.Client {
-	// TODO: create http.Client that adds the access token to the Authorization header
 	// TODO: take expiry into account?
 	return oauth2.NewClient(ctx, oauth2.StaticTokenSource(&oauth2.Token{
 		AccessToken: accessToken,

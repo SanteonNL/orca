@@ -26,15 +26,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
@@ -80,7 +78,6 @@ func New(
 	profile profile.Provider,
 	orcaPublicURL *url.URL,
 	sessionManager *user.SessionManager[session.Data],
-	messageBroker messaging.Broker,
 	eventManager events.Manager,
 	cpsEnabled bool,
 	httpHandler http.Handler) (*Service, error) {
@@ -148,12 +145,12 @@ func New(
 	}
 
 	result.createFHIRClientForURL = result.defaultCreateFHIRClientForURL
-	if config.TaskFiller.TaskAcceptedBundleTopic != "" {
-		result.notifier, err = ehr.NewNotifier(eventManager, messageBroker, tenants, messaging.Entity{Name: config.TaskFiller.TaskAcceptedBundleTopic}, config.TaskFiller.TaskAcceptedBundleEndpoint, result.createFHIRClientForURL)
+	if config.TaskFiller.TaskAcceptedBundleEndpoint != "" {
+		result.notifier, err = ehr.NewNotifier(eventManager, tenants, config.TaskFiller.TaskAcceptedBundleEndpoint, result.createFHIRClientForURL)
 		if err != nil {
 			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
 		}
-		log.Ctx(ctx).Info().Msgf("TaskEngine: created EHR notifier for topic %s", config.TaskFiller.TaskAcceptedBundleTopic)
+		log.Ctx(ctx).Info().Msgf("TaskEngine: created EHR notifier for endpoint %s", config.TaskFiller.TaskAcceptedBundleEndpoint)
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 

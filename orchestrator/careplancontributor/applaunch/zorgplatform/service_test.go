@@ -12,8 +12,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"hash"
 	"net/http"
 	"net/http/httptest"
@@ -22,6 +20,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/globals"
@@ -235,6 +236,13 @@ func TestService(t *testing.T) {
 					assert.Contains(t, serviceRequest.Identifier, fhir.Identifier{
 						System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
 						Value:  to.Ptr("b526e773-e1a6-4533-bd00-1360c97e745f"),
+					})
+				})
+				t.Run("check ServiceRequest coding display is Thuismonitoring", func(t *testing.T) {
+					assert.Contains(t, serviceRequest.Code.Coding, fhir.Coding{
+						System:  to.Ptr("http://snomed.info/sct"),
+						Code:    to.Ptr("719858009"),
+						Display: to.Ptr("Thuismonitoring"),
 					})
 				})
 			})

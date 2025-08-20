@@ -11,7 +11,7 @@ interface PatientDetailsProps {
 function statusLabel(taskStatus: string): string {
   switch (taskStatus) {
     case "accepted":
-      return "Geaccepteerd"
+      return "Aangemeld"
     case "completed":
       return "Afgerond"
     case "cancelled":
