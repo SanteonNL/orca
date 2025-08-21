@@ -39,17 +39,7 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	span.SetAttributes(
 		attribute.String("fhir.resource_type", resourceType),
 		attribute.String("operation.name", "Search"),
-		attribute.Int("fhir.search.param_count", len(request.QueryParams)),
 	)
-
-	// Add search parameters as span attributes for better observability
-	searchParams := make([]string, 0, len(request.QueryParams))
-	for param, values := range request.QueryParams {
-		searchParams = append(searchParams, param+"="+strings.Join(values, ","))
-	}
-	if len(searchParams) > 0 {
-		span.SetAttributes(attribute.StringSlice("fhir.search.parameters", searchParams))
-	}
 
 	log.Ctx(ctx).Info().Msgf("Searching for %s", resourceType)
 	resources, bundle, policyDecisions, err := h.searchAndFilter(ctx, request.QueryParams, request.Principal, resourceType)
