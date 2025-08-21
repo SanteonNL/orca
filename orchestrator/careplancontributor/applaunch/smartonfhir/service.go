@@ -82,6 +82,7 @@ type trustedIssuer struct {
 	key             string
 	clientID        string
 	realIssuerURL   string
+	tenantID        string
 }
 
 func (t trustedIssuer) issuerURL() string {
@@ -103,6 +104,7 @@ func New(config Config, tenants tenants.Config, sessionManager *user.SessionMana
 			issuerLaunchURL: curr.URL,
 			clientID:        curr.ClientID,
 			realIssuerURL:   curr.OAuth2URL,
+			tenantID:        curr.Tenant,
 		}
 		issuersByURL[curr.URL] = issuer
 		issuersByKey[key] = issuer
@@ -279,9 +281,14 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, patien
 		// If the patient ID is not prefixed with "Patient/", we assume it's just the ID and prefix it.
 		patientID = "Patient/" + patientID
 	}
-	// TODO: Select tenant from SMART on FHIR issuers
-	tenant := s.tenants.Sole()
-	ctx = tenants.WithTenant(ctx, tenant)
+
+	// Select tenant
+	tenant, err := s.tenants.Get(issuer.tenantID)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to get tenant %s: %w", issuer.tenantID, err)
+	}
+	ctx = tenants.WithTenant(ctx, *tenant)
+
 	cpsFHIRClient, err := globals.CreateCPSFHIRClient(ctx)
 	if err != nil {
 		return nil, nil, err

@@ -17,19 +17,39 @@ import (
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func TestService(t *testing.T) {
+	const fhirPatientID = "1234"
+
 	httpMux := http.NewServeMux()
 	httpServer := httptest.NewServer(httpMux)
 	sessionManager := user.NewSessionManager[session.Data](time.Minute)
+	cpsClient := &test.StubFHIRClient{
+		Resources: []any{
+			fhir.Patient{
+				Id: to.Ptr(fhirPatientID),
+				Name: []fhir.HumanName{
+					{
+						Family: to.Ptr("Doe"),
+						Given:  []string{"John"},
+					},
+				},
+			},
+		},
+	}
+	globals.RegisterCPSFHIRClient(tenants.Test().Sole().ID, cpsClient)
 
 	// Set up client
 	const clientID = "test-client-id"
@@ -71,24 +91,6 @@ func TestService(t *testing.T) {
 			},
 		})
 	})
-	const fhirPatientID = "1234"
-	httpMux.HandleFunc("/fhir/Patient/"+fhirPatientID, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/fhir+json")
-		_, _ = w.Write([]byte(`{
-			"resourceType": "Patient",
-			"id": "` + fhirPatientID + `",
-			"name": [{"family": "Doe", "given": ["John"]}]
-		}`))
-	})
-	const fhirPractitionerID = "7890"
-	httpMux.HandleFunc("/fhir/Practitioner/"+fhirPractitionerID, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/fhir+json")
-		_, _ = w.Write([]byte(`{
-			"resourceType": "Practitioner",
-			"id": "` + fhirPractitionerID + `",
-			"name": [{"family": "Smith", "given": ["Jane"]}]
-		}`))
-	})
 
 	var capturedScope []string
 	var capturedAudience []string
@@ -117,7 +119,7 @@ func TestService(t *testing.T) {
 				ID:        uuid.NewString(),
 			}).
 			Claims(map[string]any{
-				"fhirUser": "Practitioner/" + fhirPractitionerID,
+				"fhirUser": "Practitioner/1",
 			}).
 			Serialize()
 		require.NoError(t, err)
@@ -136,7 +138,11 @@ func TestService(t *testing.T) {
 	service, err := New(Config{
 		Enabled: true,
 		Issuer: map[string]IssuerConfig{
-			"test": {URL: issuerURL, ClientID: clientID},
+			"test": {
+				URL:      issuerURL,
+				ClientID: clientID,
+				Tenant:   tenants.Test().Sole().ID,
+			},
 		},
 		AzureKeyVault: AzureKeyVaultConfig{},
 	}, tenants.Test(), sessionManager, must.ParseURL(httpServer.URL), must.ParseURL(httpServer.URL).JoinPath("frontend"), false)
@@ -158,8 +164,6 @@ func TestService(t *testing.T) {
 		require.Equal(t, "sig", keySet.Keys[0].Use)
 	})
 
-	t.Skip()
-	// globals.RegisterCPSFHIRClient(tenants.Test().Sole().ID, &test.StubFHIRClient{})
 	t.Run("app launch", func(t *testing.T) {
 		t.Run("with launch parameter", func(t *testing.T) {
 			defer func() {
