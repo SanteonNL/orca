@@ -252,6 +252,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			s.SendError(request.Context(), issuer.key, errors.New("patient ID not found in ID token claims"), httpResponse, http.StatusBadRequest)
 			return
 		}
+		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with patient ID: %s", patientID)
 		patient, practitioner, err := s.loadContext(httpRequest.Context(), issuer, patientID)
 		if err != nil {
 			s.SendError(request.Context(), issuer.key, fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
