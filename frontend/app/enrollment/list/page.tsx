@@ -7,7 +7,7 @@ import TaskBody from "@/app/enrollment/components/task-body";
 export default function ListTasks() {
   return (
       <>
-          <TaskHeading title={"Overzicht"}>
+          <TaskHeading title={"Taakoverzicht"}>
           </TaskHeading>
           <TaskBody>
               <Card className="border-0 shadow-none px-0">

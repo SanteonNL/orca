@@ -6,6 +6,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+	"slices"
+	"strings"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
@@ -15,11 +21,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"net/http"
-	"net/url"
-	"slices"
-	"strings"
-	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
@@ -332,7 +333,7 @@ func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[sess
 	frontendUrl, _ := url.Parse(s.config.FrontendConfig.URL)
 
 	if s.config.AppLaunch.SmartOnFhir.Enabled {
-		service, err := smartonfhir.New(s.config.AppLaunch.SmartOnFhir, sessionManager, s.orcaPublicURL, frontendUrl, strictMode)
+		service, err := smartonfhir.New(s.config.AppLaunch.SmartOnFhir, s.tenants, sessionManager, s.orcaPublicURL, frontendUrl, strictMode)
 		if err != nil {
 			return fmt.Errorf("failed to create SMART on FHIR AppLaunch service: %w", err)
 		}
