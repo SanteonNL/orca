@@ -7,8 +7,8 @@ export interface LaunchContext {
     patient: string
     practitioner: string
     practitionerRole: string
-    serviceRequest: string
     tenantId: string
+    serviceRequest?: string
     task?: string
     taskIdentifier?: string
 }

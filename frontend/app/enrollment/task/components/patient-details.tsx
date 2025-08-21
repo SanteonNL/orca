@@ -2,35 +2,11 @@ import React, {useEffect} from 'react';
 import { Task, Patient } from 'fhir/r4';
 import { patientName, organizationName } from '@/lib/fhirRender';
 import StatusElement from './status-element';
+import {taskStatusLabel} from "@/app/utils/mapping";
 
 interface PatientDetailsProps {
   task: Task;
   patient: Patient | undefined;
-}
-
-function statusLabel(taskStatus: string): string {
-  switch (taskStatus) {
-    case "accepted":
-      return "Aangemeld"
-    case "completed":
-      return "Afgerond"
-    case "cancelled":
-      return "Geannuleerd"
-    case "failed":
-      return "Mislukt"
-    case "in-progress":
-      return "In behandeling"
-    case "on-hold":
-      return "Gepauzeerd"
-    case "requested":
-      return "Verstuurd"
-    case "received":
-      return "Ontvangen"
-    case "rejected":
-      return "Afgewezen"
-    default:
-      return taskStatus
-  }
 }
 
 export default function PatientDetails({ task, patient }: PatientDetailsProps) {
@@ -43,7 +19,7 @@ export default function PatientDetails({ task, patient }: PatientDetailsProps) {
       <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"} />
       <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)} />
       <StatusElement label="Status"
-        value={statusLabel(task.status) + " op " + (task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend")} />
+        value={taskStatusLabel(task.status) + " op " + (task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend")} />
       {task.statusReason
         ? <StatusElement label="Statusreden"
             value={task.statusReason.text ?? task.statusReason.coding?.at(0)?.code ?? "Onbekend"} />
