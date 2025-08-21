@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"net/http"
 	"strings"
 
@@ -29,7 +30,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("fhir.resource_type", "Task"),
+			attribute.String(lib_otel.FHIRResourceType, "Task"),
 		),
 	)
 	defer span.End()
@@ -313,7 +314,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		// Different validation logic for an SCP subtask
 		if len(task.PartOf) > 0 {
-			span.SetAttributes(attribute.String("fhir.task.type", "subtask"))
+			span.SetAttributes(attribute.String(lib_otel.FHIRTaskType, "subtask"))
 
 			if len(task.PartOf) != 1 {
 				err := coolfhir.NewErrorWithCode("SCP subtask must have exactly one parent task", http.StatusBadRequest)
@@ -351,7 +352,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, err
 			}
 		} else {
-			span.SetAttributes(attribute.String("fhir.task.type", "primary"))
+			span.SetAttributes(attribute.String(lib_otel.FHIRTaskType, "primary"))
 
 			careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
 			if err != nil {

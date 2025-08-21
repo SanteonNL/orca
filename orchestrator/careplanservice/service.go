@@ -56,15 +56,15 @@ func TracedHandlerWrapper(operationName string, handler func(context.Context, FH
 			operationName,
 			trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(
-				attribute.String("fhir.resource_type", getResourceType(request.ResourcePath)),
-				attribute.String("fhir.resource_id", request.ResourceId),
-				attribute.String("http.method", request.HttpMethod),
+				attribute.String(lib_otel.FHIRResourceType, getResourceType(request.ResourcePath)),
+				attribute.String(lib_otel.FHIRResourceID, request.ResourceId),
+				attribute.String(lib_otel.HTTPMethod, request.HttpMethod),
 			),
 		)
 		defer span.End()
 
 		if request.Tenant.ID != "" {
-			span.SetAttributes(attribute.String("tenant.id", request.Tenant.ID))
+			span.SetAttributes(attribute.String(lib_otel.TenantID, request.Tenant.ID))
 		}
 
 		result, err := handler(ctx, request, tx)
@@ -299,8 +299,8 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String("fhir.bundle.type", tx.Bundle().Type.String()),
-			attribute.Int("fhir.bundle.entry_count", len(tx.Bundle().Entry)),
+			attribute.String(lib_otel.FHIRBundleType, tx.Bundle().Type.String()),
+			attribute.Int(lib_otel.FHIRBundleEntryCount, len(tx.Bundle().Entry)),
 		),
 	)
 	defer span.End()
@@ -352,8 +352,8 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 
 	span.SetStatus(codes.Ok, "")
 	span.SetAttributes(
-		attribute.Int("fhir.transaction.result_entries", len(resultBundle.Entry)),
-		attribute.Int("fhir.notification.resources", len(notificationResources)),
+		attribute.Int(lib_otel.FHIRTransactionResultEntries, len(resultBundle.Entry)),
+		attribute.Int(lib_otel.NotificationResources, len(notificationResources)),
 	)
 
 	return &resultBundle, nil
@@ -462,8 +462,8 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("http.method", httpRequest.Method),
-			attribute.String("fhir.resource_type", getResourceType(resourcePath)),
+			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
+			attribute.String(lib_otel.FHIRResourceType, resourcePath),
 		),
 	)
 	defer span.End()
@@ -540,9 +540,9 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("http.method", httpRequest.Method),
-			attribute.String("fhir.resource_type", resourceType),
-			attribute.String("fhir.resource_id", resourceId),
+			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
+			attribute.String(lib_otel.FHIRResourceType, resourceType),
+			attribute.String(lib_otel.FHIRResourceID, resourceId),
 		),
 	)
 	defer span.End()
@@ -876,8 +876,8 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("http.method", httpRequest.Method),
-			attribute.String("fhir.resource_type", resourceType),
+			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
+			attribute.String(lib_otel.FHIRResourceType, resourceType),
 		),
 	)
 	defer span.End()
@@ -920,7 +920,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 	}
 	queryParams := httpRequest.PostForm
 
-	span.SetAttributes(attribute.Int("fhir.search.param_count", len(queryParams)))
+	span.SetAttributes(attribute.Int(lib_otel.FHIRSearchParamCount, len(queryParams)))
 
 	// Set up the transaction and handler request
 	tx := coolfhir.Transaction()
@@ -984,7 +984,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("http.method", httpRequest.Method),
+			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
 		),
 	)
 	defer span.End()
@@ -1001,8 +1001,8 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 
 	// Add bundle metadata to span
 	span.SetAttributes(
-		attribute.String("fhir.bundle.type", bundle.Type.String()),
-		attribute.Int("fhir.bundle.entry_count", len(bundle.Entry)),
+		attribute.String(lib_otel.FHIRBundleType, bundle.Type.String()),
+		attribute.Int(lib_otel.FHIRBundleEntryCount, len(bundle.Entry)),
 	)
 
 	if bundle.Type != fhir.BundleTypeTransaction {
@@ -1122,8 +1122,8 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		return
 	}
 	span.SetAttributes(
-		attribute.Int("fhir.bundle.result_entries", len(resultBundle.Entry)),
-		attribute.String("tenant.id", tenant.ID),
+		attribute.Int(lib_otel.FHIRBundleResultEntries, len(resultBundle.Entry)),
+		attribute.String(lib_otel.TenantID, tenant.ID),
 	)
 	span.SetStatus(codes.Ok, "")
 	tenant, _ = tenants.FromContext(ctx)
@@ -1159,8 +1159,8 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 	ctx, span := tracer.Start(ctx,
 		debug.GetCallerName(),
 		trace.WithAttributes(
-			attribute.String("notification.resource_type", coolfhir.ResourceType(resource)),
-			attribute.Bool("notification.should_notify", shouldNotify(resource)),
+			attribute.String(lib_otel.NotificationResourceType, coolfhir.ResourceType(resource)),
+			attribute.Bool(lib_otel.NotificationShouldNotify, shouldNotify(resource)),
 		),
 	)
 	defer span.End()
@@ -1172,16 +1172,16 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 		if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
-			span.SetAttributes(attribute.String("notification.status", "failed"))
+			span.SetAttributes(attribute.String(lib_otel.NotificationStatus, "failed"))
 			log.Ctx(ctx).Error().Err(err).Msgf("Failed to notify subscribers for %T", resource)
 		} else {
 			span.SetAttributes(
-				attribute.String("notification.status", "success"),
+				attribute.String(lib_otel.NotificationStatus, "success"),
 			)
 			span.SetStatus(codes.Ok, "")
 		}
 	} else {
-		span.SetAttributes(attribute.String("notification.status", "skipped"))
+		span.SetAttributes(attribute.String(lib_otel.NotificationStatus, "skipped"))
 		span.SetStatus(codes.Ok, "skipped - resource type not eligible for notification")
 	}
 }

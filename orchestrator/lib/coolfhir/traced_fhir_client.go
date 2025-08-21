@@ -4,6 +4,7 @@ import (
 	"context"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -28,7 +29,7 @@ func (t *TracedFHIRClient) CreateWithContext(ctx context.Context, resource inter
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "create"),
-			attribute.String("fhir.resource_type", ResourceType(resource)),
+			attribute.String(lib_otel.FHIRResourceType, ResourceType(resource)),
 		),
 	)
 	defer span.End()
@@ -78,7 +79,7 @@ func (t *TracedFHIRClient) UpdateWithContext(ctx context.Context, path string, r
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "update"),
-			attribute.String("fhir.resource_type", ResourceType(resource)),
+			attribute.String(lib_otel.FHIRResourceType, ResourceType(resource)),
 		),
 	)
 	defer span.End()
@@ -128,7 +129,7 @@ func (t *TracedFHIRClient) SearchWithContext(ctx context.Context, resourceType s
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "search"),
-			attribute.String("fhir.resource_type", resourceType),
+			attribute.String(lib_otel.FHIRResourceType, resourceType),
 			attribute.Int("fhir.search.param_count", len(params)),
 		),
 	)

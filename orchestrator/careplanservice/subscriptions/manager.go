@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -103,7 +104,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			Type:      to.Ptr("Task"),
 		}
 
-		span.SetAttributes(attribute.String("fhir.resource_id", *task.Id))
+		span.SetAttributes(attribute.String(lib_otel.FHIRResourceID, *task.Id))
 
 		if task.Owner != nil {
 			if coolfhir.IsLogicalIdentifier(task.Owner.Identifier) {
@@ -123,7 +124,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			Type:      to.Ptr("CareTeam"),
 		}
 
-		span.SetAttributes(attribute.String("fhir.resource_id", *careTeam.Id))
+		span.SetAttributes(attribute.String(lib_otel.FHIRResourceID, *careTeam.Id))
 
 		for _, participant := range careTeam.Participant {
 			if coolfhir.IsLogicalIdentifier(participant.Member.Identifier) {
@@ -137,7 +138,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			Type:      to.Ptr("CarePlan"),
 		}
 
-		span.SetAttributes(attribute.String("fhir.resource_id", *carePlan.Id))
+		span.SetAttributes(attribute.String(lib_otel.FHIRResourceID, *carePlan.Id))
 
 		careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 		if err != nil {

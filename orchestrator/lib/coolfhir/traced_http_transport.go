@@ -3,6 +3,7 @@ package coolfhir
 import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -31,8 +32,8 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String("http.method", req.Method),
-			attribute.String("http.url", req.URL.String()),
+			attribute.String(lib_otel.HTTPMethod, req.Method),
+			attribute.String(lib_otel.HTTPURL, req.URL.String()),
 			attribute.String("http.scheme", req.URL.Scheme),
 			attribute.String("http.host", req.URL.Host),
 			attribute.String("http.target", req.URL.Path),

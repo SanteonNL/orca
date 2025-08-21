@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 	"strings"
 
@@ -58,8 +59,8 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("fhir.task_id", to.Value(task.Id)),
-			attribute.String("fhir.task_status", task.Status.Code()),
+			attribute.String(lib_otel.FHIRTaskID, to.Value(task.Id)),
+			attribute.String(lib_otel.FHIRTaskStatus, task.Status.Code()),
 		),
 	)
 	defer span.End()
@@ -156,8 +157,8 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("fhir.task_id", to.Value(task.Id)),
-			attribute.String("fhir.task_status", task.Status.Code()),
+			attribute.String(lib_otel.FHIRTaskID, to.Value(task.Id)),
+			attribute.String(lib_otel.FHIRTaskStatus, task.Status.Code()),
 			attribute.String("fhir.primary_task_ref", primaryTaskRef),
 		),
 	)
@@ -210,8 +211,8 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("fhir.task_id", to.Value(primaryTask.Id)),
-			attribute.String("fhir.task_status", primaryTask.Status.Code()),
+			attribute.String(lib_otel.FHIRTaskID, to.Value(primaryTask.Id)),
+			attribute.String(lib_otel.FHIRTaskStatus, primaryTask.Status.Code()),
 		),
 	)
 	defer span.End()
@@ -306,7 +307,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("fhir.task_id", to.Value(task.Id)),
+			attribute.String(lib_otel.FHIRTaskID, to.Value(task.Id)),
 			attribute.String("fhir.primary_task_id", to.Value(primaryTask.Id)),
 		),
 	)
@@ -466,7 +467,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("fhir.task_id", to.Value(task.Id)),
+			attribute.String(lib_otel.FHIRTaskID, to.Value(task.Id)),
 			attribute.String("fhir.task_focus_reference", to.Value(task.Focus.Reference)),
 		),
 	)

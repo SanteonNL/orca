@@ -393,8 +393,8 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("http.method", request.Method),
-			attribute.String("http.url", request.URL.String()),
+			attribute.String(lib_otel.HTTPMethod, request.Method),
+			attribute.String(lib_otel.HTTPURL, request.URL.String()),
 		),
 	)
 	defer span.End()
@@ -434,8 +434,8 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("http.method", request.Method),
-			attribute.String("http.url", request.URL.String()),
+			attribute.String(lib_otel.HTTPMethod, request.Method),
+			attribute.String(lib_otel.HTTPURL, request.URL.String()),
 		),
 	)
 	defer span.End()
@@ -671,7 +671,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 
 	// Add resource metadata to span
 	span.SetAttributes(
-		attribute.String("fhir.resource_type", *focusReference.Type),
+		attribute.String(lib_otel.FHIRResourceType, *focusReference.Type),
 		attribute.String("fhir.resource_reference", *focusReference.Reference),
 	)
 
@@ -812,7 +812,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 				}
 				httpClient = s.httpClientForLocalCPS(tenant)
 				fhirBaseURL = localCPSURL
-				span.SetAttributes(attribute.String("fhir.client_type", "local-cps"))
+				span.SetAttributes(attribute.String(lib_otel.FHIRClientType, "local-cps"))
 			} else {
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
 				if err != nil {
@@ -828,7 +828,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 					span.SetStatus(codes.Error, err.Error())
 					return nil, nil, err
 				}
-				span.SetAttributes(attribute.String("fhir.client_type", "external"))
+				span.SetAttributes(attribute.String(lib_otel.FHIRClientType, "external"))
 			}
 			break
 		case scpEntityIdentifierHeaderKey:
@@ -868,7 +868,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 				return nil, nil, err
 			}
 			span.SetAttributes(
-				attribute.String("fhir.client_type", "identifier-based"),
+				attribute.String(lib_otel.FHIRClientType, "identifier-based"),
 				attribute.String("fhir.identifier_system", to.Value(identifier.System)),
 			)
 			break
@@ -882,7 +882,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 	}
 
 	span.SetAttributes(
-		attribute.String("fhir.base_url", fhirBaseURL.String()),
+		attribute.String(lib_otel.FHIRBaseURL, fhirBaseURL.String()),
 	)
 	span.SetStatus(codes.Ok, "")
 	return fhirBaseURL, httpClient, nil

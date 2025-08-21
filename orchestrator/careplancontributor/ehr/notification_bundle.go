@@ -7,6 +7,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -41,7 +42,7 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("fhir.task_id", taskId),
+			attribute.String(lib_otel.FHIRTaskID, taskId),
 		),
 	)
 	defer span.End()
@@ -116,8 +117,8 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	bundles.addBundle(*questionnaireResponseBundles...)
 
 	span.SetAttributes(
-		attribute.Int("bundles.count", len(bundles.Bundles)),
-		attribute.String("bundle_set.id", bundles.Id),
+		attribute.Int(lib_otel.FHIRBundlesCount, len(bundles.Bundles)),
+		attribute.String(lib_otel.FHIRBundleSetId, bundles.Id),
 	)
 
 	return &bundles, nil
@@ -129,7 +130,7 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("fhir.task_id", taskId),
+			attribute.String(lib_otel.FHIRTaskID, taskId),
 		),
 	)
 	defer span.End()
@@ -160,8 +161,8 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 	}
 
 	span.SetAttributes(
-		attribute.Int("tasks.count", len(tasks)),
-		attribute.Int("bundle.entries", len(taskBundle.Entry)),
+		attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+		attribute.Int(lib_otel.FHIRBundleEntryCount, len(taskBundle.Entry)),
 	)
 
 	return &taskBundle, tasks, nil
@@ -173,7 +174,7 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.Int("tasks.count", len(tasks)),
+			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
 		),
 	)
 	defer span.End()
@@ -234,7 +235,7 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.Int("tasks.count", len(tasks)),
+			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
 		),
 	)
 	defer span.End()
@@ -266,7 +267,7 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.Int("tasks.count", len(tasks)),
+			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
 		),
 	)
 	defer span.End()
@@ -289,7 +290,7 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.Int("tasks.count", len(tasks)),
+			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
 		),
 	)
 	defer span.End()
@@ -316,7 +317,7 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.Int("refs.count", len(refs)),
+			attribute.Int("count", len(refs)),
 		),
 	)
 	defer span.End()
@@ -360,7 +361,7 @@ func fetchRef(ctx context.Context, cpsClient fhirclient.Client, ref string) (*fh
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("fhir.reference", ref),
+			attribute.String(lib_otel.FHIRResourceReference, ref),
 		),
 	)
 	defer span.End()
