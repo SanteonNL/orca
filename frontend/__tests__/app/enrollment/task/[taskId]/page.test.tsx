@@ -552,7 +552,7 @@ describe("taskid page tests", () => {
         });
 
         expect(screen.getByTestId('task-heading')).toBeInTheDocument();
-        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding gelukt!');
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding gelukt');
     });
 
     it('renders task heading with service name when available for ready status', async () => {
