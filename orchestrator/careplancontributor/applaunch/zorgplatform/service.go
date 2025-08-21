@@ -255,10 +255,10 @@ func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]
 				Next: roundTripper,
 			},
 		}
-		fhirClientCfg := fhirclient.DefaultConfig()
+		fhirClientCfg := coolfhir.Config()
 		fhirClientCfg.UsePostSearch = false // Zorgplatform only supports GET-based searches
 
-		fhirClients[tenant.ID] = fhirclient.New(targetFhirBaseUrl, httpClient, &fhirClientCfg)
+		fhirClients[tenant.ID] = fhirclient.New(targetFhirBaseUrl, httpClient, fhirClientCfg)
 		proxies[tenant.ID] = proxy
 	}
 	return proxies, fhirClients
@@ -359,10 +359,6 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	}
 	ctx := tenants.WithTenant(request.Context(), *tenant)
 
-	//TODO: launchContext.Practitioner needs to be converted to Patient ref (after the HCP ProfessionalService access tokens can be requested)
-	// Cache FHIR resources that don't exist in the EHR in the session,
-	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
-
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
 	accessToken, err := s.secureTokenService.RequestAccessToken(ctx, launchContext, hcpTokenType)
 	if err != nil {
@@ -415,13 +411,6 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 		return nil, fmt.Errorf("invalid CarePlan reference (url=%s): %w", carePlanReference, err)
 	}
 	log.Ctx(ctx).Debug().Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
-
-	// TODO: group requests, something like:
-	// ?_include=CarePlan:activity-reference&_include:iterate=Task:focus
-	// query.Add("_include", "CarePlan:activity-reference")
-	// //TODO: This is a tmp solution, but if it's not that temporary, not all FHIR servers support chaining
-	// query.Add("_include:iterate", "Task:focus") //chain the Task.focus from the joined CarePlan.activity-references
-	// urlRef.RawQuery = query.Encode()
 
 	fhirClient, err := s.cpsFhirClient(ctx)
 	if err != nil {
@@ -544,20 +533,6 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 		return nil, fmt.Errorf("unable to find Patient resource in Bundle: %w", err)
 	}
 
-	// var conditionBundle fhir.Bundle
-	//TODO: We assume this is in context as the HCP token is workflow-specific. Double-check with Zorgplatform
-	// var conditions []map[string]interface{}
-	// if err = fhirClient.ReadWithContext(ctx, "Condition", &conditionBundle, fhirclient.QueryParam("subject", "Patient/"+*patient.Id)); err != nil {
-	// 	return nil, fmt.Errorf("unable to fetch Conditions bundle: %w", err)
-	// }
-	// if err := coolfhir.ResourcesInBundle(&conditionBundle, coolfhir.EntryIsOfType("Condition"), &conditions); err != nil {
-	// 	return nil, fmt.Errorf("unable to find Condition resources in Bundle: %w", err)
-	// }
-
-	// if *conditionBundle.Total < 1 {
-	// 	return nil, fmt.Errorf("expected at least one Condition, got %d", conditionBundle.Total)
-	// }
-
 	var reasonReference fhir.Reference
 
 	reason := fhir.Condition{
@@ -618,7 +593,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 				{
 					System:  to.Ptr("http://snomed.info/sct"),
 					Code:    to.Ptr("719858009"),
-					Display: to.Ptr("monitoren via telegeneeskunde"),
+					Display: to.Ptr("Thuismonitoring"),
 				},
 			},
 		},
@@ -647,8 +622,9 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 		LauncherProperties: map[string]string{
 			"accessToken": accessToken,
 		},
-		//LaunchContext: launchContext, // Can be used to fetch a new access token after expiration
 	}
+	// Cache FHIR resources that don't exist in the EHR in the session,
+	// so it doesn't collide with the EHR resources. Also prefix it with a magic string to make it clear it's special.
 	sessionData.Set("Patient/"+*patient.Id, patient)
 	sessionData.Set("ServiceRequest/magic-"+uuid.NewString(), *serviceRequest)
 	sessionData.Set("Practitioner/magic-"+uuid.NewString(), launchContext.Practitioner)

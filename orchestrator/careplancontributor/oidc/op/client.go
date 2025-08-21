@@ -34,8 +34,7 @@ func (c Client) ApplicationType() op.ApplicationType {
 }
 
 func (c Client) AuthMethod() oidc.AuthMethod {
-	// TODO: change to client_secret (Basic/Post) or private_key_jwt
-	return oidc.AuthMethodNone
+	return oidc.AuthMethodPost
 }
 
 func (c Client) ResponseTypes() []oidc.ResponseType {

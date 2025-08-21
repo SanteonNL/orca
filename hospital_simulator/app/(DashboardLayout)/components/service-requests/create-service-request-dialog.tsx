@@ -285,7 +285,7 @@ function createServiceRequestBundle(requestDetails: ServiceRequestDetails,
                         "coding": [{
                             "system": "http://snomed.info/sct",
                             "code": "719858009",
-                            "display": "Telehealth monitoring (regime/therapy)"
+                            "display": "Thuismonitoring"
                         }],
                     },
                     "reasonReference": [

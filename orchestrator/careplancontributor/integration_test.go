@@ -281,7 +281,7 @@ func Test_Integration_JWTValidationAndExternalEndpoint(t *testing.T) {
 
 	tenantCfg := tenants.Test()
 	tenant := tenantCfg.Sole()
-	cpc, err := New(cpcConfig, tenantCfg, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
+	cpc, err := New(cpcConfig, tenantCfg, profile.TestProfile{}, orcaPublicURL, sessionManager, events.NewManager(messageBroker), true, nil)
 	require.NoError(t, err)
 
 	cpc.tokenClient = mockTokenClient.Client
@@ -542,7 +542,7 @@ func setupIntegrationTest(t *testing.T, notificationEndpoint *url.URL) *httptest
 	cpcConfig.AppLaunch.Demo.Enabled = true
 	cpcConfig.HealthDataViewEndpointEnabled = true
 
-	cpc, err := New(cpcConfig, tenantCfg, profile.TestProfile{}, orcaPublicURL, sessionManager, messageBroker, events.NewManager(messageBroker), true, nil)
+	cpc, err := New(cpcConfig, tenantCfg, profile.TestProfile{}, orcaPublicURL, sessionManager, events.NewManager(messageBroker), true, nil)
 	require.NoError(t, err)
 
 	cpc.RegisterHandlers(serverMux)

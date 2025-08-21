@@ -257,7 +257,7 @@ func NewProxy(name string, upstreamBaseUrl *url.URL, proxyBasePath string, rewri
 		},
 	}
 	return &FHIRClientProxy{
-		client:          fhirclient.New(upstreamBaseUrl, httpClient, nil),
+		client:          fhirclient.New(upstreamBaseUrl, httpClient, Config()),
 		proxyBasePath:   proxyBasePath,
 		proxyBaseUrl:    rewriteUrl,
 		upstreamBaseUrl: upstreamBaseUrl,

@@ -349,11 +349,29 @@ func (s StubFHIRClient) Update(path string, resource any, result any, opts ...fh
 	panic("implement me")
 }
 
-func (s StubFHIRClient) UpdateWithContext(ctx context.Context, path string, resource any, result any, opts ...fhirclient.Option) error {
+func (s *StubFHIRClient) UpdateWithContext(ctx context.Context, path string, resource any, result any, opts ...fhirclient.Option) error {
 	if s.Error != nil {
 		return s.Error
 	}
-	panic("implement me")
+	// Find and update the resource in our Resources slice
+	// Handle paths like "Task/taskId" by extracting the resource type and ID
+	if strings.HasPrefix(path, "Task/") {
+		if updatedTask, ok := resource.(fhir.Task); ok && updatedTask.Id != nil {
+			for i, existingResource := range s.Resources {
+				if existingTask, ok := existingResource.(fhir.Task); ok {
+					if existingTask.Id != nil && *existingTask.Id == *updatedTask.Id {
+						s.Resources[i] = updatedTask
+						// Copy the updated task to the result if it's provided
+						if resultPtr, ok := result.(*fhir.Task); ok {
+							*resultPtr = updatedTask
+						}
+						return nil
+					}
+				}
+			}
+		}
+	}
+	return nil
 }
 
 func (s StubFHIRClient) Delete(path string, opts ...fhirclient.Option) error {
