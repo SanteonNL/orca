@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"net/http"
 	"strings"
 
@@ -25,11 +26,10 @@ import (
 func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"handleCreateTask",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("fhir.resource_type", "Task"),
-			attribute.String("operation.name", "CreateTask"),
 		),
 	)
 	defer span.End()

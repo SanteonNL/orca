@@ -7,6 +7,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/lib/validation"
 	"github.com/google/uuid"
@@ -31,16 +32,16 @@ type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
 func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"FHIRCreateOperationHandler.Handle",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(
-			attribute.String("operation.name", "CreateResource"),
-		),
 	)
 	defer span.End()
 
 	resourceType := getResourceType(request.ResourcePath)
-	span.SetAttributes(attribute.String("fhir.resource_type", resourceType))
+	span.SetAttributes(
+		attribute.String("fhir.resource_type", resourceType),
+		attribute.String("operation.name", "Create"),
+	)
 
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
@@ -160,11 +161,10 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T, resourceType string) (FHIRHandlerResult, error, bool) {
 	ctx, span := tracer.Start(
 		ctx,
-		"FHIRCreateOperationHandler.validate",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("fhir.resource_type", resourceType),
-			attribute.String("operation.name", "ValidateResource"),
 		),
 	)
 	defer span.End()

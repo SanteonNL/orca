@@ -15,6 +15,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -389,12 +390,11 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
 	ctx, span := tracer.Start(
 		request.Context(),
-		"handleProxyAppRequestToEHR",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("http.method", request.Method),
 			attribute.String("http.url", request.URL.String()),
-			attribute.String("operation.name", "CarePlanContributor/ProxyAppRequestToEHR"),
 		),
 	)
 	defer span.End()
@@ -431,12 +431,11 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, request *http.Request) error {
 	ctx, span := tracer.Start(
 		request.Context(),
-		"handleProxyExternalRequestToEHR",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("http.method", request.Method),
 			attribute.String("http.url", request.URL.String()),
-			attribute.String("operation.name", "CarePlanContributor/ProxyExternalRequestToEHR"),
 		),
 	)
 	defer span.End()
@@ -611,11 +610,9 @@ func (s Service) withUserAuth(next func(response http.ResponseWriter, request *h
 func (s Service) handleNotification(ctx context.Context, resource any) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"handleNotification",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(
-			attribute.String("operation.name", "CarePlanContributor/HandleNotification"),
-		),
+		trace.WithAttributes(),
 	)
 	defer span.End()
 
@@ -782,11 +779,8 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 	}
 	ctx, span := tracer.Start(
 		ctx,
-		"createFHIRClientForExternalRequest",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
-		trace.WithAttributes(
-			attribute.String("operation.name", "CarePlanContributor/CreateFHIRClientForExternalRequest"),
-		),
 	)
 	defer span.End()
 

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -71,11 +72,10 @@ type NotificationEvent struct {
 func (r RetryableManager) Notify(ctx context.Context, resource interface{}) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"RetryableManager.Notify",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("notification.resource_type", coolfhir.ResourceType(resource)),
-			attribute.String("operation.name", "NotifySubscribers"),
 		),
 	)
 	defer span.End()
@@ -203,12 +203,11 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.Message) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"RetryableManager.receiveMessage",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("messaging.operation", "receive"),
 			attribute.String("messaging.destination.name", SendNotificationQueue.Name),
-			attribute.String("operation.name", "ProcessNotification"),
 		),
 	)
 	defer span.End()

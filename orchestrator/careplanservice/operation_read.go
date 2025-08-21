@@ -7,6 +7,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -27,11 +28,8 @@ type FHIRReadOperationHandler[T fhir.HasExtension] struct {
 func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"FHIRReadOperationHandler.Handle",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(
-			attribute.String("operation.name", "ReadResource"),
-		),
 	)
 	defer span.End()
 
@@ -39,6 +37,7 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 	span.SetAttributes(
 		attribute.String("fhir.resource_type", resourceType),
 		attribute.String("fhir.resource_id", request.ResourceId),
+		attribute.String("operation.name", "Read"),
 	)
 
 	var resource T

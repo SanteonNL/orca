@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -31,16 +32,16 @@ type FHIRUpdateOperationHandler[T fhir.HasExtension] struct {
 func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"FHIRUpdateOperationHandler.Handle",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(
-			attribute.String("operation.name", "UpdateResource"),
-		),
 	)
 	defer span.End()
 
 	resourceType := getResourceType(request.ResourcePath)
-	span.SetAttributes(attribute.String("fhir.resource_type", resourceType))
+	span.SetAttributes(
+		attribute.String("fhir.resource_type", resourceType),
+		attribute.String("operation.name", "Update"),
+	)
 
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {

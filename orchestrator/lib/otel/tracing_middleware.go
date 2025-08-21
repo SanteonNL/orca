@@ -1,7 +1,6 @@
 package otel
 
 import (
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 	"go.opentelemetry.io/otel/trace"
@@ -18,7 +17,6 @@ func HandlerWithTracing(tracer trace.Tracer, operationName string, handler http.
 				semconv.HTTPMethodKey.String(r.Method),
 				semconv.HTTPURLKey.String(r.URL.String()),
 				semconv.HostNameKey.String(r.Host),
-				attribute.String("tenant.id", getTenantFromRequest(r)),
 			),
 		)
 		defer span.End()
@@ -43,11 +41,4 @@ type responseWriter struct {
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
 	rw.ResponseWriter.WriteHeader(code)
-}
-
-func getTenantFromRequest(r *http.Request) string {
-	if tenant := r.PathValue("tenant"); tenant != "" {
-		return tenant
-	}
-	return "unknown"
 }

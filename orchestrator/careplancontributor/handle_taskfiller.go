@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 	"strings"
 
@@ -54,10 +55,9 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 	log.Ctx(ctx).Info().Msgf("Running TaskEngine for notification (task=Task/%s)", *task.Id)
 	ctx, span := tracer.Start(
 		ctx,
-		"handleTaskNotification",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("operation.name", "CarePlanContributor/HandleTaskNotification"),
 			attribute.String("fhir.task_id", to.Value(task.Id)),
 			attribute.String("fhir.task_status", task.Status.Code()),
 		),
@@ -153,10 +153,9 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, primaryTaskRef string, identities []fhir.Identifier) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"handleSubtaskNotification",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("operation.name", "CarePlanContributor/HandleSubtaskNotification"),
 			attribute.String("fhir.task_id", to.Value(task.Id)),
 			attribute.String("fhir.task_status", task.Status.Code()),
 			attribute.String("fhir.primary_task_ref", primaryTaskRef),
@@ -208,10 +207,9 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, primaryTask *fhir.Task) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"acceptPrimaryTask",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("operation.name", "CarePlanContributor/AcceptPrimaryTask"),
 			attribute.String("fhir.task_id", to.Value(primaryTask.Id)),
 			attribute.String("fhir.task_status", primaryTask.Status.Code()),
 		),
@@ -305,10 +303,9 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, primaryTask *fhir.Task, localOrgIdentifiers []fhir.Identifier) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"createSubTaskOrAcceptPrimaryTask",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("operation.name", "CarePlanContributor/CreateSubTaskOrAcceptPrimaryTask"),
 			attribute.String("fhir.task_id", to.Value(task.Id)),
 			attribute.String("fhir.primary_task_id", to.Value(primaryTask.Id)),
 		),
@@ -466,10 +463,9 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) (*taskengine.Workflow, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"selectWorkflow",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("operation.name", "CarePlanContributor/SelectWorkflow"),
 			attribute.String("fhir.task_id", to.Value(task.Id)),
 			attribute.String("fhir.task_focus_reference", to.Value(task.Focus.Reference)),
 		),

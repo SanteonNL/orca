@@ -5,6 +5,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
@@ -28,12 +29,11 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 	}
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
-		"handleBatch",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("http.method", httpRequest.Method),
 			attribute.String("http.url", httpRequest.URL.String()),
-			attribute.String("operation.name", "CarePlanContributor/HandleBatch"),
 			attribute.String("fhir.bundle.type", requestBundle.Type.String()),
 			attribute.Int("fhir.bundle.entry_count", len(requestBundle.Entry)),
 		),

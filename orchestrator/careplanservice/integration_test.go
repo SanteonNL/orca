@@ -53,12 +53,17 @@ func Test_Integration(t *testing.T) {
 	t.Log("This test creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
 
 	// Set up trace mocking
+	originalTP := otel.GetTracerProvider()
 	exporter := tracetest.NewInMemoryExporter()
 	tp := trace.NewTracerProvider(
 		trace.WithSyncer(exporter),
 	)
+
 	otel.SetTracerProvider(tp)
-	defer tp.Shutdown(context.Background())
+	t.Cleanup(func() {
+		tp.Shutdown(context.Background())
+		otel.SetTracerProvider(originalTP)
+	})
 
 	var cpc1Notifications []coolfhir.SubscriptionNotification
 	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
