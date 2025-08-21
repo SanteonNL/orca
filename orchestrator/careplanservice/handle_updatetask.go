@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -23,11 +24,10 @@ import (
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"handleUpdateTask",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("fhir.resource_type", "Task"),
-			attribute.String("operation.name", "UpdateTask"),
 		),
 	)
 	defer span.End()

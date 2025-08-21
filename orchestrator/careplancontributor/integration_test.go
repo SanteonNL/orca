@@ -31,13 +31,17 @@ import (
 )
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
+	originalTP := otel.GetTracerProvider()
 	// Set up trace mocking
 	exporter := tracetest.NewInMemoryExporter()
 	tp := trace.NewTracerProvider(
 		trace.WithSyncer(exporter),
 	)
 	otel.SetTracerProvider(tp)
-	defer tp.Shutdown(context.Background())
+	t.Cleanup(func() {
+		tp.Shutdown(context.Background())
+		otel.SetTracerProvider(originalTP)
+	})
 
 	notificationEndpoint := setupNotificationEndpoint(t)
 	httpService := setupIntegrationTest(t, notificationEndpoint)

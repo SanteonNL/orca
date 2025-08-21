@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"net/http"
 	"net/url"
 	"strings"
@@ -19,13 +21,7 @@ import (
 
 var ErrWorkflowNotFound = errors.New("workflow not found")
 
-// stringValue safely extracts string value from pointer, returning empty string if nil
-func stringValue(s *string) string {
-	if s == nil {
-		return ""
-	}
-	return *s
-}
+var tracer = otel.Tracer("careplancontributor")
 
 // WorkflowProvider provides workflows (a set of questionnaires required for accepting a Task) to the Task Filler.
 type WorkflowProvider interface {
@@ -47,17 +43,15 @@ type FhirApiWorkflowProvider struct {
 //   - Service code must be present in HealthcareService.category
 //   - Condition code must be present in the HealthcareService.type
 func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) (*Workflow, error) {
-	tracer := otel.Tracer("careplancontributor")
 	ctx, span := tracer.Start(
 		ctx,
-		"FhirApiWorkflowProvider.Provide",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String("operation.name", "WorkflowProvider/Provide"),
-			attribute.String("service.system", stringValue(serviceCode.System)),
-			attribute.String("service.code", stringValue(serviceCode.Code)),
-			attribute.String("condition.system", stringValue(conditionCode.System)),
-			attribute.String("condition.code", stringValue(conditionCode.Code)),
+			attribute.String("service.system", to.EmptyString(serviceCode.System)),
+			attribute.String("service.code", to.EmptyString(serviceCode.Code)),
+			attribute.String("condition.system", to.EmptyString(conditionCode.System)),
+			attribute.String("condition.code", to.EmptyString(conditionCode.Code)),
 		),
 	)
 	defer span.End()
@@ -110,17 +104,15 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 }
 
 func (f FhirApiWorkflowProvider) searchHealthcareService(ctx context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) error {
-	tracer := otel.Tracer("careplancontributor")
 	ctx, span := tracer.Start(
 		ctx,
-		"FhirApiWorkflowProvider.searchHealthcareService",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String("operation.name", "WorkflowProvider/SearchHealthcareService"),
-			attribute.String("service.system", stringValue(serviceCode.System)),
-			attribute.String("service.code", stringValue(serviceCode.Code)),
-			attribute.String("condition.system", stringValue(conditionCode.System)),
-			attribute.String("condition.code", stringValue(conditionCode.Code)),
+			attribute.String("service.system", to.EmptyString(serviceCode.System)),
+			attribute.String("service.code", to.EmptyString(serviceCode.Code)),
+			attribute.String("condition.system", to.EmptyString(conditionCode.System)),
+			attribute.String("condition.code", to.EmptyString(conditionCode.Code)),
 		),
 	)
 	defer span.End()
@@ -174,13 +166,11 @@ type MemoryWorkflowProvider struct {
 // LoadBundle fetches the FHIR Bundle from the given URL and adds the contained Questionnaires and HealthcareServices to the provider.
 // They can then be used to provide workflows.
 func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl string) error {
-	tracer := otel.Tracer("careplancontributor")
 	ctx, span := tracer.Start(
 		ctx,
-		"MemoryWorkflowProvider.LoadBundle",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String("operation.name", "WorkflowProvider/LoadBundle"),
 			attribute.String("bundle.url", bundleUrl),
 		),
 	)
@@ -231,17 +221,15 @@ func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl strin
 }
 
 func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) (*Workflow, error) {
-	tracer := otel.Tracer("careplancontributor")
 	ctx, span := tracer.Start(
 		ctx,
-		"MemoryWorkflowProvider.Provide",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("operation.name", "WorkflowProvider/Provide"),
-			attribute.String("service.system", stringValue(serviceCode.System)),
-			attribute.String("service.code", stringValue(serviceCode.Code)),
-			attribute.String("condition.system", stringValue(conditionCode.System)),
-			attribute.String("condition.code", stringValue(conditionCode.Code)),
+			attribute.String("service.system", to.EmptyString(serviceCode.System)),
+			attribute.String("service.code", to.EmptyString(serviceCode.Code)),
+			attribute.String("condition.system", to.EmptyString(conditionCode.System)),
+			attribute.String("condition.code", to.EmptyString(conditionCode.Code)),
 			attribute.String("provider.type", "memory"),
 		),
 	)
@@ -291,8 +279,8 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 
 			span.SetAttributes(
 				attribute.Int("questionnaires.total", len(e.questionnaires)),
-				attribute.String("questionnaire.id", stringValue(questionnaire.Id)),
-				attribute.String("questionnaire.url", "Questionnaire/"+stringValue(questionnaire.Id)),
+				attribute.String("questionnaire.id", to.EmptyString(questionnaire.Id)),
+				attribute.String("questionnaire.url", "Questionnaire/"+to.EmptyString(questionnaire.Id)),
 				attribute.Int("workflow.steps", len(workflow.Steps)),
 			)
 			span.SetStatus(codes.Ok, "")
@@ -308,13 +296,11 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 }
 
 func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl string) (*fhir.Questionnaire, error) {
-	tracer := otel.Tracer("careplancontributor")
 	ctx, span := tracer.Start(
 		ctx,
-		"MemoryWorkflowProvider.Load",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("operation.name", "WorkflowProvider/Load"),
 			attribute.String("questionnaire.url", questionnaireUrl),
 			attribute.String("provider.type", "memory"),
 		),
@@ -324,7 +310,7 @@ func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl stri
 	for i, questionnaire := range e.questionnaires {
 		if "Questionnaire/"+*questionnaire.Id == questionnaireUrl {
 			span.SetAttributes(
-				attribute.String("questionnaire.id", stringValue(questionnaire.Id)),
+				attribute.String("questionnaire.id", to.EmptyString(questionnaire.Id)),
 				attribute.Int("questionnaires.searched", i+1),
 				attribute.Int("questionnaires.total", len(e.questionnaires)),
 			)

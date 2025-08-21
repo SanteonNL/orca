@@ -42,12 +42,16 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	var capturedTask fhir.Task
 
 	// Set up trace mocking
+	originalTP := otel.GetTracerProvider()
 	exporter := tracetest.NewInMemoryExporter()
 	tp := trace.NewTracerProvider(
 		trace.WithSyncer(exporter),
 	)
 	otel.SetTracerProvider(tp)
-	defer tp.Shutdown(context.Background())
+	t.Cleanup(func() {
+		tp.Shutdown(context.Background())
+		otel.SetTracerProvider(originalTP)
+	})
 
 	// Helper function to assert spans are created
 	assertSpansCreated := func(t *testing.T) {

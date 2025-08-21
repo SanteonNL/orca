@@ -49,7 +49,7 @@ func Start(ctx context.Context, config Config) error {
 		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
 			log.Error().Err(err).Msg("Failed to shutdown OpenTelemetry")
 		} else {
-			log.Info().Msg("OpenTelemetry shutdown successfully")
+			log.Debug().Msg("OpenTelemetry shutdown successfully")
 		}
 	}()
 

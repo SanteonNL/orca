@@ -8,6 +8,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -69,10 +70,9 @@ func NewNotifier(eventManager events.Manager, tenants tenants.Config, taskAccept
 func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, task *fhir.Task) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"NotifyTaskAccepted",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/NotifyTaskAccepted"),
 			attribute.String("fhir.base_url", fhirBaseURL),
 			attribute.String("fhir.task_id", *task.Id),
 			attribute.String("fhir.task_status", task.Status.Code()),
@@ -102,10 +102,9 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcceptedEvent) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"processTaskAcceptedEvent",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/processTaskAcceptedEvent"),
 			attribute.String("fhir.base_url", event.FHIRBaseURL),
 			attribute.String("fhir.task_id", *event.Task.Id),
 			attribute.String("fhir.task_status", event.Task.Status.Code()),
@@ -186,10 +185,9 @@ func (n *notifier) start() error {
 func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set BundleSet) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"sendBundle",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/sendBundle"),
 			attribute.String("bundle_set.id", set.Id),
 			attribute.String("bundle_set.task", set.task),
 			attribute.Int("bundles.count", len(set.Bundles)),

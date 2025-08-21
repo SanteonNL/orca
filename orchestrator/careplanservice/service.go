@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -45,10 +46,11 @@ type FHIROperation interface {
 	Handle(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 }
 
+var tracer = otel.Tracer("careplanservice")
+
 func TracedHandlerWrapper(operationName string, handler func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error),
 ) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	return func(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-		tracer := otel.Tracer("orchestrator")
 		ctx, span := tracer.Start(
 			ctx,
 			operationName,
@@ -57,7 +59,6 @@ func TracedHandlerWrapper(operationName string, handler func(context.Context, FH
 				attribute.String("fhir.resource_type", getResourceType(request.ResourcePath)),
 				attribute.String("fhir.resource_id", request.ResourceId),
 				attribute.String("http.method", request.HttpMethod),
-				attribute.String("operation.name", operationName),
 			),
 		)
 		defer span.End()
@@ -84,8 +85,6 @@ func FHIRBaseURL(tenantID string, orcaBaseURL *url.URL) *url.URL {
 
 const basePathWithTenant = basePath + "/{tenant}"
 const basePath = "/cps"
-
-var tracer = otel.Tracer("careplanservice")
 
 // subscriberNotificationTimeout is the timeout for notifying subscribers of changes in FHIR resources.
 // We might want to make this configurable at some point.
@@ -297,7 +296,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.Request, tx *coolfhir.BundleBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		request.Context(),
-		"commitTransaction",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.bundle.type", tx.Bundle().Type.String()),
@@ -367,7 +366,7 @@ func (s *Service) handleTransactionEntry(ctx context.Context, request FHIRHandle
 	if handler == nil {
 		return nil, fmt.Errorf("unsupported operation %s %s", request.HttpMethod, request.ResourcePath)
 	}
-	return TracedHandlerWrapper("handleTransactionEntry", handler)(ctx, request, tx)
+	return TracedHandlerWrapper(debug.GetCallerName(), handler)(ctx, request, tx)
 }
 
 func (s *Service) handleUnmanagedOperation(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -460,12 +459,11 @@ func (s *Service) writeSearchResponse(httpResponse http.ResponseWriter, txResult
 func (s *Service) handleModification(httpRequest *http.Request, httpResponse http.ResponseWriter, resourcePath string, operationName string) {
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
-		"handleModification",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("http.method", httpRequest.Method),
 			attribute.String("fhir.resource_type", getResourceType(resourcePath)),
-			attribute.String("operation.name", operationName),
 		),
 	)
 	defer span.End()
@@ -539,13 +537,12 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceId string, resourceType string, operationName string) {
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
-		"handleGet",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("http.method", httpRequest.Method),
 			attribute.String("fhir.resource_type", resourceType),
 			attribute.String("fhir.resource_id", resourceId),
-			attribute.String("operation.name", operationName),
 		),
 	)
 	defer span.End()
@@ -876,12 +873,11 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse http.ResponseWriter, resourceType, operationName string) {
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
-		"handleSearchRequest",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("http.method", httpRequest.Method),
 			attribute.String("fhir.resource_type", resourceType),
-			attribute.String("operation.name", operationName),
 		),
 	)
 	defer span.End()
@@ -985,11 +981,10 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.ResponseWriter) {
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
-		"handleBundle",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("http.method", httpRequest.Method),
-			attribute.String("operation.name", "CarePlanService/CreateBundle"),
 		),
 	)
 	defer span.End()
@@ -1161,7 +1156,8 @@ func (s Service) readRequest(httpRequest *http.Request, target interface{}) erro
 }
 
 func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
-	ctx, span := tracer.Start(ctx, "notify_subscribers",
+	ctx, span := tracer.Start(ctx,
+		debug.GetCallerName(),
 		trace.WithAttributes(
 			attribute.String("notification.resource_type", coolfhir.ResourceType(resource)),
 			attribute.Bool("notification.should_notify", shouldNotify(resource)),

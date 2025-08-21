@@ -6,6 +6,7 @@ import (
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -37,10 +38,9 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*BundleSet, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"TaskNotificationBundleSet",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/TaskNotificationBundleSet"),
 			attribute.String("fhir.task_id", taskId),
 		),
 	)
@@ -126,10 +126,9 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*fhir.Bundle, []fhir.Task, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"fetchTasks",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/fetchTasks"),
 			attribute.String("fhir.task_id", taskId),
 		),
 	)
@@ -171,10 +170,9 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, *fhir.CarePlan, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"fetchCarePlan",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/fetchCarePlan"),
 			attribute.Int("tasks.count", len(tasks)),
 		),
 	)
@@ -217,11 +215,8 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"fetchPatient",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
-		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/fetchPatient"),
-		),
 	)
 	defer span.End()
 
@@ -236,10 +231,9 @@ func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fh
 func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"fetchServiceRequest",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/fetchServiceRequest"),
 			attribute.Int("tasks.count", len(tasks)),
 		),
 	)
@@ -269,10 +263,9 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"fetchQuestionnaires",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/fetchQuestionnaires"),
 			attribute.Int("tasks.count", len(tasks)),
 		),
 	)
@@ -293,10 +286,9 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"fetchQuestionnaireResponses",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/fetchQuestionnaireResponses"),
 			attribute.Int("tasks.count", len(tasks)),
 		),
 	)
@@ -321,10 +313,9 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"fetchRefs",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/fetchRefs"),
 			attribute.Int("refs.count", len(refs)),
 		),
 	)
@@ -366,10 +357,9 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 func fetchRef(ctx context.Context, cpsClient fhirclient.Client, ref string) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"fetchRef",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String("operation.name", "EHR/fetchRef"),
 			attribute.String("fhir.reference", ref),
 		),
 	)

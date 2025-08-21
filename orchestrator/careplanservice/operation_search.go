@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -29,17 +30,15 @@ type FHIRSearchOperationHandler[T any] struct {
 func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"FHIRSearchOperationHandler.Handle",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(
-			attribute.String("operation.name", "SearchResource"),
-		),
 	)
 	defer span.End()
 
 	resourceType := getResourceType(request.ResourcePath)
 	span.SetAttributes(
 		attribute.String("fhir.resource_type", resourceType),
+		attribute.String("operation.name", "Search"),
 		attribute.Int("fhir.search.param_count", len(request.QueryParams)),
 	)
 
@@ -127,7 +126,7 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, queryParams url.Values, principal *auth.Principal, resourceType string) ([]T, *fhir.Bundle, []PolicyDecision, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"FHIRSearchOperationHandler.searchAndFilter",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.String("fhir.resource_type", resourceType),
@@ -179,7 +178,7 @@ func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, quer
 func searchResources[T any](ctx context.Context, fhirClientFactory FHIRClientFactory, resourceType string, queryParams url.Values, headers *fhirclient.Headers) ([]T, *fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		"searchResources",
+		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.resource_type", resourceType),

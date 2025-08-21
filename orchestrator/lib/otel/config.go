@@ -107,10 +107,6 @@ func DefaultConfig() Config {
 		}
 	}
 
-	// Log the effective configuration
-	// TODO: remove after debugging
-	fmt.Printf("Using OTLP endpoint: %s (protocol: %s, insecure: %t)\n", endpoint, protocol, insecure)
-
 	return Config{
 		Enabled:            true,
 		ServiceName:        serviceName,
