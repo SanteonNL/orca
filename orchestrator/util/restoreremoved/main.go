@@ -43,15 +43,13 @@ func main() {
 		resource := make(map[string]any)
 		var responseStatus int
 		if err := fhirClient.Read(resourceRef, &resource, fhirclient.ResponseStatusCode(&responseStatus)); err != nil {
-			if responseStatus == http.StatusGone {
-				// This is a resource we need to restore
-			} else {
+			if responseStatus != http.StatusGone {
 				panic("Failed to read resource " + resourceRef + ": " + err.Error())
 			}
 		} else {
 			if responseStatus != http.StatusGone {
 				// No need to resource this resource
-				println("Resource " + resourceRef + " is not deleted, skipping.")
+				println("Resource", resourceRef, "is not deleted, skipping.")
 				continue
 			}
 		}
@@ -61,7 +59,7 @@ func main() {
 			panic(err)
 		}
 		if historyBundle.Type != fhir.BundleTypeHistory {
-			panic("Expected a history bundle, got: " + string(historyBundle.Type))
+			panic("Expected a history bundle, got: " + historyBundle.Type.String())
 		}
 		// Find the latest non-DELETED version
 		var latestVersion *fhir.BundleEntry
@@ -88,12 +86,12 @@ func main() {
 		if latestVersion == nil {
 			panic("No non-DELETED version found for resource: " + resourceRef)
 		}
-		println("Rolling back resource "+resourceRef+" to version ", latestVersionId)
+		println("Rolling back resource", resourceRef, "to version", latestVersionId)
 
 		if err := fhirClient.Update(resourceRef, latestVersion.Resource, &resource); err != nil {
 			panic("Failed to update resource " + resourceRef + ": " + err.Error())
 		} else {
-			println("Rolled back resource " + resourceRef + " to version " + strconv.Itoa(latestVersionId))
+			println("Rolled back resource", resourceRef, "to version", latestVersionId)
 		}
 
 		processed++
