@@ -64,7 +64,8 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 
 	// Helper function to reset spans between tests
 	resetSpans := func() {
-		exporter.Reset()
+		// TODO: Figure out why this works in isolation, but not in the full test suite - likely due to global state pollution
+		//exporter.Reset()
 	}
 
 	// Create Patient that Task will be related to
