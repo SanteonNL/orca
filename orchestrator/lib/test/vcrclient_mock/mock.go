@@ -203,7 +203,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) LoadVCWithBodyWithRespon
 }
 
 // LoadVCWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) LoadVCWithResponse(ctx context.Context, subjectID string, body vcr.VerifiableCredential, reqEditors ...vcr.RequestEditorFn) (*vcr.LoadVCResponse, error) {
+func (m *MockClientWithResponsesInterface) LoadVCWithResponse(ctx context.Context, subjectID string, body vcr.LoadVCJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.LoadVCResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, subjectID, body}
 	for _, a := range reqEditors {
@@ -403,7 +403,7 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) UntrustIssuerWithBodyWit
 }
 
 // UntrustIssuerWithResponse mocks base method.
-func (m *MockClientWithResponsesInterface) UntrustIssuerWithResponse(ctx context.Context, body vcr.TrustIssuerJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.UntrustIssuerResponse, error) {
+func (m *MockClientWithResponsesInterface) UntrustIssuerWithResponse(ctx context.Context, body vcr.UntrustIssuerJSONRequestBody, reqEditors ...vcr.RequestEditorFn) (*vcr.UntrustIssuerResponse, error) {
 	m.ctrl.T.Helper()
 	varargs := []any{ctx, body}
 	for _, a := range reqEditors {
