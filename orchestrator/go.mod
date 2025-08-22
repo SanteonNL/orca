@@ -4,7 +4,7 @@ go 1.24
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.18.2
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.10.1
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.11.0
 	github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.9.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.4.0
 	github.com/SanteonNL/go-fhir-client v0.5.0
@@ -88,7 +88,7 @@ require (
 	github.com/go-viper/mapstructure/v2 v2.3.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang-jwt/jwt/v5 v5.2.2 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.0 // indirect
 	github.com/invopop/yaml v0.3.1 // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
