@@ -2217,4 +2217,3 @@ func SetSource(resource interface{}, source *string) {
 		panic("SetSource called with non-FHIR resource, or not a pointer: " + fmt.Sprintf("%T", resource))
 	}
 }
-

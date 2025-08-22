@@ -26,6 +26,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/mock/gomock"
 )
 
@@ -37,6 +40,39 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		}
 	}).Sole())
 	var capturedTask fhir.Task
+
+	// Set up trace mocking
+	originalTP := otel.GetTracerProvider()
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		tp.Shutdown(context.Background())
+		otel.SetTracerProvider(originalTP)
+	})
+
+	// Helper function to assert spans are created
+	assertSpansCreated := func(t *testing.T) {
+		// Force any pending spans to be exported
+		tp.ForceFlush(context.Background())
+
+		spans := exporter.GetSpans()
+		require.NotEmpty(t, spans, "Expected spans to be created for task filling operations")
+
+		// Look for key span operations
+		spanNames := make([]string, len(spans))
+		for i, span := range spans {
+			spanNames[i] = span.Name
+		}
+
+		// Verify at least the main handleTaskNotification span is present
+		require.Contains(t, spanNames, "handleTaskNotification", "Expected handleTaskNotification span")
+
+		exporter.Reset()
+	}
+
 	tests := []struct {
 		name                    string
 		ctx                     context.Context
@@ -383,7 +419,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			if tt.expectSubmission {
 				expectedSubmissions = 1
 			}
-			notifierMock.EXPECT().NotifyTaskAccepted(ctx, fhirBaseURL.String(), gomock.Any()).Times(expectedSubmissions)
+			notifierMock.EXPECT().NotifyTaskAccepted(gomock.Any(), fhirBaseURL.String(), gomock.Any()).Times(expectedSubmissions)
 			var capturedTx fhir.Bundle
 			if tt.numBundlesPosted > 0 {
 				mockFHIRClient.EXPECT().
@@ -419,11 +455,42 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 
 			log.Info().Msgf("Running test case: %s", tt.name)
 			err := service.handleTaskNotification(ctx, mockFHIRClient, &notifiedTask)
+
+			// Force flush before any assertions to ensure spans are exported
+			tp.ForceFlush(context.Background())
+
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
 			} else {
 				require.NoError(t, err)
 			}
+			assertSpansCreated(t)
+
+			// Verify spans contain expected attributes for different scenarios
+			spans := exporter.GetSpans()
+			if len(spans) > 0 {
+				// Find the main handleTaskNotification span
+				var mainSpan *tracetest.SpanStub
+				for _, span := range spans {
+					if span.Name == "handleTaskNotification" {
+						mainSpan = &span
+						break
+					}
+				}
+
+				if mainSpan != nil {
+					// Verify task ID is recorded in the main span
+					taskIDFound := false
+					for _, attr := range mainSpan.Attributes {
+						if attr.Key == "fhir.task_id" && attr.Value.AsString() == *notifiedTask.Id {
+							taskIDFound = true
+							break
+						}
+					}
+					require.True(t, taskIDFound, "Expected task ID in span attributes")
+				}
+			}
+
 			for _, bundleEntry := range capturedTx.Entry {
 				require.NotEmpty(t, bundleEntry.Request.Url)
 			}

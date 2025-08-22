@@ -6,15 +6,23 @@ import (
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
 )
+
+var tracer = otel.Tracer("careplancontributor.ehr")
 
 // BundleSet represents a collection of FHIR bundles associated with a specific task, identified by an ID.
 type BundleSet struct {
@@ -29,6 +37,16 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 }
 
 func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*BundleSet, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String(lib_otel.FHIRTaskID, taskId),
+		),
+	)
+	defer span.End()
+
 	ref := "Task/" + taskId
 	log.Ctx(ctx).Debug().Msgf("NotifyTaskAccepted Task (ref=%s) to message broker", ref)
 	id := uuid.NewString()
@@ -39,6 +57,8 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 
 	taskBundle, tasks, err := fetchTasks(ctx, cpsClient, taskId)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to fetch tasks")
 		return nil, err
 	}
 	for i, bundleEntry := range taskBundle.Entry {
@@ -55,26 +75,36 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 
 	carePlanBundle, carePlan, err := fetchCarePlan(ctx, cpsClient, tasks)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to fetch care plan")
 		return nil, err
 	}
 
 	patientBundle, err := fetchPatient(ctx, cpsClient, carePlan)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to fetch patient")
 		return nil, err
 	}
 
 	serviceRequestBundle, err := fetchServiceRequest(ctx, cpsClient, tasks)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to fetch service request")
 		return nil, err
 	}
 
 	questionnaireBundles, err := fetchQuestionnaires(ctx, cpsClient, tasks)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to fetch questionnaires")
 		return nil, err
 	}
 
 	questionnaireResponseBundles, err := fetchQuestionnaireResponses(ctx, cpsClient, tasks)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to fetch questionnaire responses")
 		return nil, err
 	}
 
@@ -86,10 +116,25 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	bundles.addBundle(*questionnaireBundles...)
 	bundles.addBundle(*questionnaireResponseBundles...)
 
+	span.SetAttributes(
+		attribute.Int(lib_otel.FHIRBundlesCount, len(bundles.Bundles)),
+		attribute.String(lib_otel.FHIRBundleSetId, bundles.Id),
+	)
+
 	return &bundles, nil
 }
 
 func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*fhir.Bundle, []fhir.Task, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String(lib_otel.FHIRTaskID, taskId),
+		),
+	)
+	defer span.End()
+
 	var taskBundle fhir.Bundle
 
 	values := url.Values{}
@@ -97,21 +142,43 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 	values.Set("_revinclude", "Task:part-of")
 	err := cpsClient.SearchWithContext(ctx, "Task", values, &taskBundle)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to search tasks")
 		return nil, nil, err
 	}
 	if len(taskBundle.Entry) < 2 {
-		return nil, nil, fmt.Errorf("expected at least 2 Tasks (1 primary, 1 subtask), got %d", len(taskBundle.Entry))
+		err := fmt.Errorf("expected at least 2 Tasks (1 primary, 1 subtask), got %d", len(taskBundle.Entry))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "insufficient tasks found")
+		return nil, nil, err
 	}
 	var tasks []fhir.Task
 	err = coolfhir.ResourcesInBundle(&taskBundle, coolfhir.EntryIsOfType("Task"), &tasks)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, "failed to extract tasks from bundle")
 		return nil, nil, err
 	}
+
+	span.SetAttributes(
+		attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+		attribute.Int(lib_otel.FHIRBundleEntryCount, len(taskBundle.Entry)),
+	)
 
 	return &taskBundle, tasks, nil
 }
 
 func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, *fhir.CarePlan, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+		),
+	)
+	defer span.End()
+
 	var carePlanRefs []string
 	for _, task := range tasks {
 		if task.Focus != nil {
@@ -147,6 +214,13 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 }
 
 func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindInternal),
+	)
+	defer span.End()
+
 	patientRef := *carePlan.Subject.Reference
 	patientBundle, err := fetchRef(ctx, cpsClient, patientRef)
 	if err != nil {
@@ -156,6 +230,16 @@ func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fh
 }
 
 func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+		),
+	)
+	defer span.End()
+
 	var serviceRequestRefs []string
 	for _, task := range tasks {
 		if task.Focus != nil {
@@ -178,6 +262,16 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 }
 
 func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+		),
+	)
+	defer span.End()
+
 	var questionnaireRefs []string
 	for _, task := range tasks {
 		questionnaireRefs = append(questionnaireRefs, fetchTaskInputs(task)...)
@@ -191,6 +285,16 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 }
 
 func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+		),
+	)
+	defer span.End()
+
 	var questionnaireResponseRefs []string
 	for _, task := range tasks {
 		questionnaireResponseRefs = append(questionnaireResponseRefs, fetchTaskOutputs(task)...)
@@ -208,6 +312,16 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 // The function supports including CareTeam resources for CarePlan references when constructing the query parameters.
 // Returns a pointer to a slice of FHIR Bundles and an error, if any occurred during FHIR client interactions.
 func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.Int("count", len(refs)),
+		),
+	)
+	defer span.End()
+
 	var bundles []fhir.Bundle
 	var refTypeMap = make(map[string][]string)
 	for _, ref := range refs {
@@ -242,6 +356,16 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 
 // fetchRef performs the same operations as fetchRefs, but only for a single resource
 func fetchRef(ctx context.Context, cpsClient fhirclient.Client, ref string) (*fhir.Bundle, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindInternal),
+		trace.WithAttributes(
+			attribute.String(lib_otel.FHIRResourceReference, ref),
+		),
+	)
+	defer span.End()
+
 	var refTypeMap = make(map[string][]string)
 	splits := strings.Split(ref, "/")
 	if len(splits) < 1 {

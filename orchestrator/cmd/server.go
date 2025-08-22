@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
@@ -29,6 +30,28 @@ func Start(ctx context.Context, config Config) error {
 	if config.Validate() != nil {
 		return fmt.Errorf("invalid configuration: %w", config.Validate())
 	}
+
+	// Initialize OpenTelemetry
+	log.Info().Bool("enabled", config.OpenTelemetry.Enabled).
+		Str("service_name", config.OpenTelemetry.ServiceName).
+		Str("exporter_type", config.OpenTelemetry.Exporter.Type).
+		Msg("Initializing OpenTelemetry")
+
+	tracerProvider, err := otel.Initialize(ctx, config.OpenTelemetry)
+	if err != nil {
+		return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
+	}
+
+	// Ensure proper cleanup of OpenTelemetry on shutdown
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+			log.Error().Err(err).Msg("Failed to shutdown OpenTelemetry")
+		} else {
+			log.Debug().Msg("OpenTelemetry shutdown successfully")
+		}
+	}()
 
 	globals.StrictMode = config.StrictMode
 	if !globals.StrictMode {

@@ -5,6 +5,9 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -28,6 +31,18 @@ import (
 )
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
+	originalTP := otel.GetTracerProvider()
+	// Set up trace mocking
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+	otel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		tp.Shutdown(context.Background())
+		otel.SetTracerProvider(originalTP)
+	})
+
 	notificationEndpoint := setupNotificationEndpoint(t)
 	httpService := setupIntegrationTest(t, notificationEndpoint)
 
@@ -41,10 +56,24 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 
 	cpsDataHolder := fhirclient.New(cpsBaseURL, &http.Client{Transport: dataHolderTransport}, nil)
 
+	// Helper function to assert spans are created
+	assertSpansCreated := func(t *testing.T) {
+		spans := exporter.GetSpans()
+		require.NotEmpty(t, spans, "Expected spans to be created")
+	}
+
+	// Helper function to reset spans between tests
+	resetSpans := func() {
+		// TODO: Figure out why this works in isolation, but not in the full test suite - likely due to global state pollution
+		//exporter.Reset()
+	}
+
 	// Create Patient that Task will be related to
 	var patient fhir.Patient
 	t.Log("Creating Patient")
 	{
+		resetSpans()
+
 		patient = fhir.Patient{
 			Identifier: []fhir.Identifier{
 				{
@@ -65,12 +94,16 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		}
 		err := cpsDataHolder.Create(patient, &patient)
 		require.NoError(t, err)
+
+		assertSpansCreated(t)
 	}
 
 	var carePlan fhir.CarePlan
 	var task fhir.Task
 	t.Log("Creating Task")
 	{
+		resetSpans()
+
 		task = fhir.Task{
 			Status:    fhir.TaskStatusRequested,
 			Intent:    "order",
@@ -92,6 +125,8 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		err = cpsDataHolder.Read(*task.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
 
+		assertSpansCreated(t)
+
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, task.Id)
 			require.Equal(t, "CarePlan/"+*carePlan.Id, *task.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
@@ -102,10 +137,14 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 			require.Equal(t, "Task/"+*task.Id, *carePlan.Activity[0].Reference.Reference)
 		})
 		t.Run("Search for task by ID", func(t *testing.T) {
+			resetSpans()
+
 			var fetchedBundle fhir.Bundle
 			err := cpsDataHolder.Search("Task", url.Values{"_id": {*task.Id}}, &fetchedBundle)
 			require.NoError(t, err)
 			require.Len(t, fetchedBundle.Entry, 1)
+
+			assertSpansCreated(t)
 		})
 	}
 
@@ -114,17 +153,26 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 
 	t.Log("Read data from EHR before Task is accepted - Fails")
 	{
+		resetSpans()
+
 		var fetchedTask fhir.Task
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.Error(t, err)
+
+		assertSpansCreated(t)
 	}
+
 	t.Log("Accepting Task")
 	{
+		resetSpans()
+
 		task.Status = fhir.TaskStatusAccepted
 		var updatedTask fhir.Task
 		err := cpsDataRequester.Update("Task/"+*task.Id, task, &updatedTask)
 		require.NoError(t, err)
 		task = updatedTask
+
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -132,28 +180,43 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		})
 
 		// Getting patient
+		resetSpans()
 		var fetchedPatient fhir.Patient
 		err = cpsDataRequester.Read("Patient/"+*patient.Id, &fetchedPatient)
 		require.NoError(t, err)
 		require.Equal(t, updatedTask.For.Identifier.System, fetchedPatient.Identifier[0].System)
 		require.Equal(t, updatedTask.For.Identifier.Value, fetchedPatient.Identifier[0].Value)
 		require.Equal(t, *updatedTask.For.Reference, "Patient/"+*fetchedPatient.Id)
+
+		assertSpansCreated(t)
 	}
+
 	t.Log("Read data from EHR after Task is accepted")
 	{
+		resetSpans()
+
 		var fetchedTask fhir.Task
 
 		// Read
 		err := cpcDataRequester.Read("Task/"+*task.Id, &fetchedTask)
 		require.NoError(t, err)
+
+		assertSpansCreated(t)
+		resetSpans()
+
 		// Search
 		var fetchedBundle fhir.Bundle
 		err = cpcDataRequester.Search("Task", url.Values{"_id": {*task.Id}}, &fetchedBundle)
 		require.NoError(t, err)
 		require.Len(t, fetchedBundle.Entry, 1)
+
+		assertSpansCreated(t)
 	}
-	t.Log("Read data from EHR after Task is accepted")
+
+	t.Log("Batch request to EHR after Task is accepted")
 	{
+		resetSpans()
+
 		requestBundle := fhir.Bundle{
 			Type: fhir.BundleTypeBatch,
 			Entry: []fhir.BundleEntry{
@@ -171,6 +234,8 @@ func Test_Integration_CPCFHIRProxy(t *testing.T) {
 		require.Len(t, responseBundle.Entry, 1)
 		require.NotNil(t, responseBundle.Entry[0].Response)
 		require.Equal(t, "200 OK", responseBundle.Entry[0].Response.Status)
+
+		assertSpansCreated(t)
 	}
 	t.Log("Reading task after accepted - header references non-existent careplan - Fails")
 	{

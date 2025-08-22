@@ -5,10 +5,15 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"strconv"
 	"strings"
@@ -23,13 +28,37 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 	if fhirClient == nil {
 		return nil, coolfhir.BadRequest("EHR API is not supported")
 	}
+	ctx, span := tracer.Start(
+		httpRequest.Context(),
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
+			attribute.String(lib_otel.HTTPURL, httpRequest.URL.String()),
+			attribute.String(lib_otel.FHIRBundleType, requestBundle.Type.String()),
+			attribute.Int(lib_otel.FHIRBundleEntryCount, len(requestBundle.Entry)),
+		),
+	)
+	defer span.End()
 
-	log.Ctx(httpRequest.Context()).Debug().Msg("Handling external FHIR API request")
-	_, err = s.authorizeScpMember(httpRequest)
+	log.Ctx(ctx).Debug().Msg("Handling external FHIR API request")
+
+	_, err = s.authorizeScpMember(httpRequest.WithContext(ctx))
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
-	return s.doHandleBatch(httpRequest, requestBundle, fhirClient)
+
+	result, err := s.doHandleBatch(httpRequest.WithContext(ctx), requestBundle, fhirClient)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	span.SetStatus(codes.Ok, "")
+	return result, nil
 }
 
 func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bundle, fhirClient fhirclient.Client) (*fhir.Bundle, error) {
