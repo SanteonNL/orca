@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"io"
 	"net/http"
 	"net/url"
@@ -14,6 +13,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/webhook"
 	"github.com/SanteonNL/orca/orchestrator/events"
@@ -561,7 +562,7 @@ func (s *Service) handleUpdate(resourcePath string) func(context.Context, FHIRHa
 		}.Handle
 	case "Patient":
 		return FHIRUpdateOperationHandler[*fhir.Patient]{
-			authzPolicy:       UpdatePatientAuthzPolicy(),
+			authzPolicy:       AnyonePolicy[*fhir.Patient]{}, //UpdatePatientAuthzPolicy(),
 			fhirClientFactory: s.createFHIRClient,
 			profile:           s.profile,
 			createHandler: &FHIRCreateOperationHandler[*fhir.Patient]{
@@ -616,7 +617,7 @@ func (s *Service) handleRead(resourcePath string) func(context.Context, FHIRHand
 	switch resourceType {
 	case "Patient":
 		handleFunc = FHIRReadOperationHandler[*fhir.Patient]{
-			authzPolicy:       ReadPatientAuthzPolicy(s.createFHIRClient),
+			authzPolicy:       AnyonePolicy[*fhir.Patient]{}, //ReadPatientAuthzPolicy(s.createFHIRClient),
 			fhirClientFactory: s.createFHIRClient,
 		}.Handle
 	case "Condition":
@@ -694,7 +695,7 @@ func (s *Service) handleSearch(resourcePath string) func(context.Context, FHIRHa
 	switch resourceType {
 	case "Patient":
 		handleFunc = FHIRSearchOperationHandler[*fhir.Patient]{
-			authzPolicy:       ReadPatientAuthzPolicy(s.createFHIRClient),
+			authzPolicy:       AnyonePolicy[*fhir.Patient]{}, //ReadPatientAuthzPolicy(s.createFHIRClient),
 			fhirClientFactory: s.createFHIRClient,
 		}.Handle
 	case "Condition":
