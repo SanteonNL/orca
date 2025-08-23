@@ -209,7 +209,7 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 }
 
 func (s *Service) handleAppLaunchBackdoor(httpResponse http.ResponseWriter, httpRequest *http.Request) {
-	patient, practitioner, err := s.loadContext(httpRequest.Context(), &trustedIssuer{tenantID: "saz"}, httpRequest.URL.Query().Get("patient"))
+	patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), &trustedIssuer{tenantID: "saz"}, httpRequest.URL.Query().Get("patient"))
 	if err != nil {
 		s.SendError(httpRequest.Context(), "backdoor", fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
 		return
@@ -220,6 +220,7 @@ func (s *Service) handleAppLaunchBackdoor(httpResponse http.ResponseWriter, http
 			"access_token": "done",
 			"iss":          "backdoor://",
 		},
+		TenantID: tenant.ID,
 	}
 	sessionData.Set("Patient/"+*patient.Id, *patient)
 	sessionData.Set("Practitioner/"+*practitioner.Id, *practitioner)
@@ -255,7 +256,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			return
 		}
 		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with patient ID: %s", patientID)
-		patient, practitioner, err := s.loadContext(httpRequest.Context(), issuer, patientID)
+		patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), issuer, patientID)
 		if err != nil {
 			s.SendError(request.Context(), issuer.key, fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
 			return
@@ -266,6 +267,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 				"access_token": tokens.AccessToken,
 				"iss":          issuer.issuerURL(),
 			},
+			TenantID: tenant.ID,
 		}
 		sessionData.Set("Patient/"+*patient.Id, *patient)
 		sessionData.Set("Practitioner/"+*practitioner.Id, *practitioner)
@@ -276,7 +278,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 	}, issuer.client, codeExchangeOpts...)(response, request)
 }
 
-func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, patientID string) (*fhir.Patient, *fhir.Practitioner, error) {
+func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, patientID string) (*fhir.Patient, *fhir.Practitioner, *tenants.Properties, error) {
 	if !strings.HasPrefix(patientID, "Patient/") {
 		// If the patient ID is not prefixed with "Patient/", we assume it's just the ID and prefix it.
 		patientID = "Patient/" + patientID
@@ -285,13 +287,13 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, patien
 	// Select tenant
 	tenant, err := s.tenants.Get(issuer.tenantID)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to get tenant %s: %w", issuer.tenantID, err)
+		return nil, nil, nil, fmt.Errorf("failed to get tenant %s: %w", issuer.tenantID, err)
 	}
 	ctx = tenants.WithTenant(ctx, *tenant)
 
 	cpsFHIRClient, err := globals.CreateCPSFHIRClient(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// Currently, the SMART on FHIR launch can't be used with a ServiceRequest to request new Tasks,
 	// but only to inspect existing Tasks.
@@ -299,7 +301,7 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, patien
 	// This should probably change in the future, since this relies on patient IDs copied from the EHR to CPS (which should rely on its own IDs instead).
 	var patient fhir.Patient
 	if err := cpsFHIRClient.Read(patientID, &patient); err != nil {
-		return nil, nil, fmt.Errorf("failed to read patient resource: %w", err)
+		return nil, nil, nil, fmt.Errorf("failed to read patient resource: %w", err)
 	}
 	// TODO: Make this the right Practitioner
 	practitionerID := uuid.NewString()
@@ -317,7 +319,7 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, patien
 				Given:  []string{"TODO"},
 			},
 		},
-	}, nil
+	}, tenant, nil
 	//fhirClient := createFHIRClient(ctx, must.ParseURL(issuer.issuerLaunchURL), tokens.AccessToken)
 	//var patient fhir.Patient
 	//patientID, hasPatientID := tokens.Extra("patient").(string)
