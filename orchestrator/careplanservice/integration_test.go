@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	events "github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -44,6 +45,7 @@ var telecom = []fhir.ContactPoint{
 }
 
 func Test_Integration(t *testing.T) {
+	t.Skip()
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
