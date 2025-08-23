@@ -209,7 +209,7 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 }
 
 func (s *Service) handleAppLaunchBackdoor(httpResponse http.ResponseWriter, httpRequest *http.Request) {
-	patient, practitioner, err := s.loadContext(httpRequest.Context(), nil, httpRequest.URL.Query().Get("patient"))
+	patient, practitioner, err := s.loadContext(httpRequest.Context(), &trustedIssuer{tenantID: "saz"}, httpRequest.URL.Query().Get("patient"))
 	if err != nil {
 		s.SendError(httpRequest.Context(), "backdoor", fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
 		return
