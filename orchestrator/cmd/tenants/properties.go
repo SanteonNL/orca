@@ -1,17 +1,19 @@
 package tenants
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"net/url"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 )
 
 type Properties struct {
-	ID         string
-	Nuts       NutsProperties            `koanf:"nuts"`
-	ChipSoft   ChipSoftProperties        `koanf:"chipsoft"`
-	Demo       DemoProperties            `koanf:"demo"`
-	CPS        CarePlanServiceProperties `koanf:"cps"`
-	TaskEngine TaskEngineProperties      `koanf:"taskengine"`
+	ID           string
+	Nuts         NutsProperties            `koanf:"nuts"`
+	ChipSoft     ChipSoftProperties        `koanf:"chipsoft"`
+	Demo         DemoProperties            `koanf:"demo"`
+	CPS          CarePlanServiceProperties `koanf:"cps"`
+	TaskEngine   TaskEngineProperties      `koanf:"taskengine"`
+	EnableImport bool                      `koanf:"enableimport"`
 }
 
 type NutsProperties struct {

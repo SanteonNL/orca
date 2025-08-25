@@ -202,6 +202,23 @@ If you're Azure Service Bus, depending on the features you've enabled, you'll ne
 - Queue `orca.hl7.fhir.careplan-created` (if `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL` is set).
 - Queue `orca.subscriptionmgr.notification` (if `ORCA_CAREPLANSERVICE_ENABLED` is `true`).
 
+### Data Import
+
+The CarePlanContributor and CarePlanService support importing existing data into ORCA as SharedCarePlanning resources through their `$import` operations.
+
+The CPC's `/cpc/<tenant>/fhir/$import` operation takes the following POST form parameters:
+- `patient_identifier`: Patient identifier as FHIR token
+- `servicerequest_code`: Code of the ServiceRequest
+- `condition_code`: Code of the Condition as FHIR token
+- `condition_display`: Display of the Condition
+- `chipsoft_zorgplatform_workflowid`: ChipSoft Zorgplatform Workflow ID, required to read the patient.
+- `start`: Start date of the enrollment period, in `xs:dateTime` format.
+
+The CPS's `/cps/<tenant>/$import` operation takes a FHIR transaction bundle and executes it on the CPS's FHIR store.
+It circumvents any validation or authorization checks, so it can only contain POST requests to create resources.
+
+To enable the `$import` operations for a tenant, set `ORCA_TENANT_<ID>_ENABLEIMPORT` to `true`.
+
 ### App Launch options
 
 #### Demo
