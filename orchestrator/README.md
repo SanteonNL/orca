@@ -206,16 +206,19 @@ If you're Azure Service Bus, depending on the features you've enabled, you'll ne
 
 The CarePlanContributor and CarePlanService support importing existing data into ORCA as SharedCarePlanning resources through their `$import` operations.
 
-The CPC's `/cpc/<tenant>/fhir/$import` operation takes the following POST form parameters:
+The CPC's `/cpc/<tenant>/fhir/$import` operation creates an in-progress SCP Task, owned by the invoker and requested by the tenant.
+It takes the following POST form parameters:
 - `patient_identifier`: Patient identifier as FHIR token
 - `servicerequest_code`: Code of the ServiceRequest
+- `servicerequest_display`: Code of the ServiceRequest
 - `condition_code`: Code of the Condition as FHIR token
 - `condition_display`: Display of the Condition
-- `chipsoft_zorgplatform_workflowid`: ChipSoft Zorgplatform Workflow ID, required to read the patient.
+- `chipsoft_zorgplatform_workflowid`: ChipSoft Zorgplatform Workflow ID as FHIR token, required to read the patient.
 - `start`: Start date of the enrollment period, in `xs:dateTime` format.
 
 The CPS's `/cps/<tenant>/$import` operation takes a FHIR transaction bundle and executes it on the CPS's FHIR store.
 It circumvents any validation or authorization checks, so it can only contain POST requests to create resources.
+Only the local tenant can invoke this operation (the CPC import operation invokes this operation to actually create the resources).
 
 To enable the `$import` operations for a tenant, set `ORCA_TENANT_<ID>_ENABLEIMPORT` to `true`.
 

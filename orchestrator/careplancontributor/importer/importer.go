@@ -12,9 +12,9 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
-func Import(ctx context.Context, ehrFHIRClient fhirclient.Client, cpsFHIRClient fhirclient.Client,
+func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	taskRequesterOrg fhir.Organization, taskPerformerOrg fhir.Organization, patientIdentifier fhir.Identifier,
-	externalIdentifier fhir.Identifier, conditionCode fhir.Coding, startDate time.Time) (*fhir.Bundle, error) {
+	externalIdentifier fhir.Identifier, serviceRequestCode fhir.Coding, conditionCode fhir.Coding, startDate time.Time) (*fhir.Bundle, error) {
 	requesterOrgRef := &fhir.Reference{
 		Type:       to.Ptr("Organization"),
 		Identifier: &taskRequesterOrg.Identifier[0],
@@ -94,13 +94,7 @@ func Import(ctx context.Context, ehrFHIRClient fhirclient.Client, cpsFHIRClient 
 	serviceRequest := fhir.ServiceRequest{
 		Id: to.Ptr("urn:uuid:servicerequest"),
 		Code: &fhir.CodeableConcept{
-			Coding: []fhir.Coding{
-				{
-					System:  to.Ptr("http://snomed.info/sct"),
-					Code:    to.Ptr("719858009"),
-					Display: to.Ptr("monitoren via telegeneeskunde"),
-				},
-			},
+			Coding: []fhir.Coding{serviceRequestCode},
 		},
 		Identifier: []fhir.Identifier{externalIdentifier},
 		Intent:     fhir.RequestIntentProposal,
@@ -129,7 +123,7 @@ func Import(ctx context.Context, ehrFHIRClient fhirclient.Client, cpsFHIRClient 
 		},
 		Focus: &fhir.Reference{
 			Type:      to.Ptr("ServiceRequest"),
-			Display:   to.Ptr("monitoren via telegeneeskunde"),
+			Display:   serviceRequestCode.Display,
 			Reference: to.Ptr("urn:uuid:servicerequest"),
 		},
 		For:        &patientRef,
@@ -152,7 +146,7 @@ func Import(ctx context.Context, ehrFHIRClient fhirclient.Client, cpsFHIRClient 
 
 	// Perform
 	var result fhir.Bundle
-	if err := cpsFHIRClient.CreateWithContext(ctx, tx.Bundle(), &result, fhirclient.AtPath("/")); err != nil {
+	if err := cpsFHIRClient.CreateWithContext(ctx, tx.Bundle(), &result, fhirclient.AtPath("/$import")); err != nil {
 		return nil, err
 	}
 	return &result, nil

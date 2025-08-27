@@ -4,33 +4,34 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/external"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
-
-	"github.com/rs/zerolog/log"
-
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/external"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/taskengine"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/go-test/deep"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
+
+	"github.com/rs/zerolog/log"
 
 	"io"
 	"net/http"
@@ -939,6 +940,105 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 		responseData, err := io.ReadAll(httpResponse.Body)
 		require.NoError(t, err)
 		assert.Contains(t, string(responseData), "can't determine the external SCP-node to query from the HTTP request headers")
+	})
+}
+
+func TestService_Import(t *testing.T) {
+	tenant := tenants.Test().Sole()
+	mux := http.NewServeMux()
+	var capturedBundle fhir.Bundle
+	mux.HandleFunc("/cps/"+tenant.ID+"/$import", func(w http.ResponseWriter, r *http.Request) {
+		capturedBundleJSON, _ := io.ReadAll(r.Body)
+		println(string(capturedBundleJSON))
+		_ = json.Unmarshal(capturedBundleJSON, &capturedBundle)
+		coolfhir.SendResponse(w, http.StatusOK, fhir.Bundle{})
+	})
+	httpServer := httptest.NewServer(mux)
+	ehrFHIRClient := &test.StubFHIRClient{
+		Resources: []any{
+			fhir.Patient{
+				Id: to.Ptr("1"),
+				Identifier: []fhir.Identifier{
+					{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("123456789"),
+					},
+				},
+			},
+		},
+	}
+
+	service := &Service{
+		profile: profile.TestProfile{
+			Principal: auth.TestPrincipal1,
+		},
+		tenants: map[string]tenants.Properties{
+			tenant.ID:      tenant,
+			"other_tenant": {},
+		},
+		httpHandler:   mux,
+		cpsEnabled:    true,
+		orcaPublicURL: must.ParseURL(httpServer.URL),
+		config:        Config{StaticBearerToken: "secret"},
+		ehrFHIRClientByTenant: map[string]fhirclient.Client{
+			tenant.ID: ehrFHIRClient,
+		},
+	}
+	service.RegisterHandlers(mux)
+	httpClient := http.Client{
+		Transport: auth.AuthenticatedTestRoundTripper(http.DefaultTransport, auth.TestPrincipal2, ""),
+	}
+
+	t.Run("ok", func(t *testing.T) {
+		t.Log("In this test, test org 2 imports data into org 1's CPS")
+		cpsFHIRClient := &test.StubFHIRClient{}
+		globals.RegisterCPSFHIRClient(tenant.ID, cpsFHIRClient)
+
+		start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+		httpResponse, err := httpClient.PostForm(httpServer.URL+"/cpc/test/fhir/$import", url.Values{
+			"patient_identifier":               []string{"123456789"},
+			"servicerequest_code":              []string{"http://example.com/servicerequest|sr1"},
+			"servicerequest_display":           []string{"ServiceRequestDisplay"},
+			"condition_code":                   []string{"http://example.com/condition|c1"},
+			"condition_display":                []string{"ConditionDisplay"},
+			"chipsoft_zorgplatform_workflowid": []string{"http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id|workflow-123"},
+			"start":                            []string{start.Format(time.RFC3339)},
+		})
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+
+		// Assert sent bundle
+		t.Run("assert sent bundle", func(t *testing.T) {
+			expectedBundleJSON, err := os.ReadFile("importer/test/expected-bundle.json")
+			require.NoError(t, err)
+			var expectedBundle fhir.Bundle
+			require.NoError(t, json.Unmarshal(expectedBundleJSON, &expectedBundle))
+			for _, capturedEntry := range capturedBundle.Entry {
+				resourceType := capturedEntry.Request.Url
+				var capturedResource map[string]any
+				require.NoError(t, json.Unmarshal(capturedEntry.Resource, &capturedResource))
+
+				// Find resourceType in expectedBundle, unmarshal, compare
+				var expectedResources []map[string]any
+				err := coolfhir.ResourcesInBundle(&expectedBundle, coolfhir.EntryIsOfType(resourceType), &expectedResources)
+				require.NoError(t, err, "resource %s not found in expected bundle", resourceType)
+
+				diffs := deep.Equal(expectedResources[0], capturedResource)
+				for _, diff := range diffs {
+					println("Diff for", resourceType, ":", diff)
+				}
+				assert.Empty(t, diffs, "resource %s does not match expected", resourceType)
+			}
+		})
+	})
+	t.Run("$import operation not enabled for this tenant", func(t *testing.T) {
+		httpResponse, err := httpClient.PostForm(httpServer.URL+"/cpc/other_tenant/fhir/$import", url.Values{
+			"patient_identifier": []string{"123456789"},
+		})
+		require.NoError(t, err)
+		responseData, _ := io.ReadAll(httpResponse.Body)
+		assert.Contains(t, string(responseData), "not enabled")
+		require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
 	})
 }
 

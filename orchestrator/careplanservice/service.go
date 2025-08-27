@@ -1511,6 +1511,23 @@ func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) 
 	if httpRequest.Header.Get("Content-Type") != "application/fhir+json" {
 		return nil, coolfhir.BadRequest("Content-Type must be 'application/fhir+json'")
 	}
+	if !tenant.EnableImport {
+		return nil, coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden)
+	}
+
+	// Authz: invoker MUST equal the tenant
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		return nil, err
+	}
+	ids, err := s.profile.Identities(httpRequest.Context())
+	if err != nil {
+		return nil, err
+	}
+	if !isRequesterLocalCareOrganization(ids, principal) {
+		return nil, errors.New("requester must be local care organization to use $import")
+	}
+
 	var transaction fhir.Bundle
 	if err := s.readRequest(httpRequest, &transaction); err != nil {
 		return nil, coolfhir.BadRequest("invalid Bundle: %w", err)

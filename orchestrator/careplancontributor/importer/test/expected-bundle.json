@@ -1,0 +1,248 @@
+{
+  "resourceType": "Bundle",
+  "bundleType": "Transaction",
+  "entry": [
+    {
+      "resource": {
+        "activity": [
+          {
+            "reference": {
+              "reference": "urn:uuid:task",
+              "type": "Task"
+            }
+          }
+        ],
+        "author": {
+          "display": "Test Organization 1",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "1"
+          },
+          "type": "Organization"
+        },
+        "careTeam": [
+          {
+            "reference": "#cps-careteam",
+            "type": "CareTeam"
+          }
+        ],
+        "category": [
+          {
+            "coding": [
+              {
+                "code": "135411000146103",
+                "display": "Multidisciplinary care regime",
+                "system": "http://snomed.info/sct"
+              }
+            ]
+          }
+        ],
+        "contained": [
+          {
+            "id": "cps-careteam",
+            "participant": [
+              {
+                "member": {
+                  "display": "Test Organization 1",
+                  "identifier": {
+                    "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                    "value": "1"
+                  },
+                  "type": "Organization"
+                },
+                "period": {
+                  "start": "2024-01-01T12:00:00Z"
+                }
+              },
+              {
+                "member": {
+                  "display": "Test Organization 2",
+                  "identifier": {
+                    "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                    "value": "2"
+                  },
+                  "type": "Organization"
+                },
+                "period": {
+                  "start": "2024-01-01T12:00:00Z"
+                }
+              }
+            ],
+            "resourceType": "CareTeam"
+          }
+        ],
+        "extension": [
+          {
+            "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+            "valueReference": {
+              "identifier": {
+                "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                "value": "1"
+              },
+              "type": "Organization"
+            }
+          }
+        ],
+        "id": "urn:uuid:careplan",
+        "intent": "order",
+        "resourceType": "CarePlan",
+        "status": "active",
+        "subject": {
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+            "value": "123456789"
+          },
+          "reference": "urn:uuid:patient",
+          "type": "Patient"
+        }
+      }
+    },
+    {
+      "resource": {
+        "basedOn": [
+          {
+            "reference": "urn:uuid:careplan",
+            "type": "CarePlan"
+          }
+        ],
+        "extension": [
+          {
+            "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+            "valueReference": {
+              "identifier": {
+                "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                "value": "1"
+              },
+              "type": "Organization"
+            }
+          }
+        ],
+        "focus": {
+          "display": "ServiceRequestDisplay",
+          "reference": "urn:uuid:servicerequest",
+          "type": "ServiceRequest"
+        },
+        "for": {
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+            "value": "123456789"
+          },
+          "reference": "urn:uuid:patient",
+          "type": "Patient"
+        },
+        "id": "urn:uuid:task",
+        "identifier": [
+          {
+            "system": "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id",
+            "value": "workflow-123"
+          }
+        ],
+        "intent": "order",
+        "meta": {
+          "profile": [
+            "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
+          ]
+        },
+        "owner": {
+          "display": "Test Organization 2",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "2"
+          },
+          "type": "Organization"
+        },
+        "reasonCode": {
+          "coding": [
+            {
+              "code": "c1",
+              "display": "ConditionDisplay",
+              "system": "http://example.com/condition"
+            }
+          ]
+        },
+        "requester": {
+          "display": "Test Organization 1",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "1"
+          },
+          "type": "Organization"
+        },
+        "resourceType": "Task",
+        "status": "in-progress"
+      }
+    },
+    {
+      "resource": {
+        "code": {
+          "coding": [
+            {
+              "code": "sr1",
+              "display": "ServiceRequestDisplay",
+              "system": "http://example.com/servicerequest"
+            }
+          ]
+        },
+        "extension": [
+          {
+            "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+            "valueReference": {
+              "identifier": {
+                "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                "value": "1"
+              },
+              "type": "Organization"
+            }
+          }
+        ],
+        "id": "urn:uuid:servicerequest",
+        "identifier": [
+          {
+            "system": "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id",
+            "value": "workflow-123"
+          }
+        ],
+        "intent": "proposal",
+        "performer": [
+          {
+            "display": "Test Organization 2",
+            "identifier": {
+              "system": "http://fhir.nl/fhir/NamingSystem/ura",
+              "value": "2"
+            },
+            "type": "Organization"
+          }
+        ],
+        "requester": {
+          "display": "Test Organization 1",
+          "type": "Organization",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "1"
+          }
+        },
+        "resourceType": "ServiceRequest",
+        "status": "active",
+        "reasonCode": [
+          {
+            "coding": [
+              {
+                "code": "c1",
+                "display": "ConditionDisplay",
+                "system": "http://example.com/condition"
+              }
+            ]
+          }
+        ],
+        "subject": {
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+            "value": "123456789"
+          },
+          "reference": "urn:uuid:patient",
+          "type": "Patient"
+        }
+      }
+    }
+  ]
+}
