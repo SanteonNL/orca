@@ -36,7 +36,6 @@ export default function EnrollmentTaskPage() {
     const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
 
-    const autoLaunchExternalApps = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
     useEffect(() => {
         const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
         if (!primaryTaskPerformer || !scpClient) {
@@ -46,10 +45,10 @@ export default function EnrollmentTaskPage() {
             .then((apps) => {
                 setLaunchableApps(apps)
             })
-        if (task?.status === "in-progress" && launchableApps && launchableApps.length === 1 && autoLaunchExternalApps) {
+        if (task?.status === "in-progress" && launchableApps && launchableApps.length === 1) {
             launchApp(launchableApps[0].URL)();
         }
-    }, [serviceRequest, setLaunchableApps, scpClient, task?.status, launchableApps, autoLaunchExternalApps])
+    }, [serviceRequest, setLaunchableApps, scpClient, task?.status, launchableApps])
 
     useEffect(() => {
         if (!questionnaireMap) {

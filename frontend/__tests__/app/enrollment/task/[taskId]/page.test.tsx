@@ -347,8 +347,6 @@ describe("taskid page tests", () => {
 
     it('auto launches external app when conditions are met', async () => {
         const mockApps = [{Name: 'External App', URL: 'http://external.example.com'}];
-        const originalEnv = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = 'true';
         const mockOpen = jest.fn();
         Object.defineProperty(window, 'open', { value: mockOpen, writable: true });
 
@@ -367,7 +365,6 @@ describe("taskid page tests", () => {
             expect(mockOpen).toHaveBeenCalledWith('http://external.example.com', '_self');
         });
 
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = originalEnv;
     });
 
     it('does not auto launch when multiple apps are available', async () => {
@@ -375,8 +372,6 @@ describe("taskid page tests", () => {
             {Name: 'App 1', URL: 'http://app1.example.com'},
             {Name: 'App 2', URL: 'http://app2.example.com'}
         ];
-        const originalEnv = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = 'true';
         const mockOpen = jest.fn();
         Object.defineProperty(window, 'open', { value: mockOpen, writable: true });
 
@@ -392,14 +387,10 @@ describe("taskid page tests", () => {
         });
 
         expect(mockOpen).not.toHaveBeenCalled();
-
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = originalEnv;
     });
 
     it('does not auto launch when task is not in progress', async () => {
         const mockApps = [{Name: 'External App', URL: 'http://external.example.com'}];
-        const originalEnv = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = 'true';
         const mockOpen = jest.fn();
         Object.defineProperty(window, 'open', { value: mockOpen, writable: true });
 
@@ -416,7 +407,6 @@ describe("taskid page tests", () => {
 
         expect(mockOpen).not.toHaveBeenCalled();
 
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = originalEnv;
     });
 
     it('handles hook error state', async () => {
