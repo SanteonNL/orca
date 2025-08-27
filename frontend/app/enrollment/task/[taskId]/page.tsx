@@ -46,12 +46,12 @@ export default function EnrollmentTaskPage() {
             .then((apps) => {
                 setLaunchableApps(apps)
             })
-        if (task.status === "in-progress" && launchableApps && launchableApps.length === 1 && autoLaunchExternalApps) {
+        if (task?.status === "in-progress" && launchableApps && launchableApps.length === 1 && autoLaunchExternalApps) {
             launchApp(launchableApps[0].URL)();
         }
 
 
-    }, [serviceRequest, setLaunchableApps, scpClient, task.status, launchableApps, autoLaunchExternalApps])
+    }, [serviceRequest, setLaunchableApps, scpClient, task?.status, launchableApps, autoLaunchExternalApps])
 
     useEffect(() => {
         if (!questionnaireMap) {
