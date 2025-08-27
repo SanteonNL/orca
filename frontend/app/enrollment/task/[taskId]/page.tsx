@@ -6,8 +6,6 @@ import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollment from "@/app/hooks/enrollment-hook";
 import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
 import {Questionnaire, Task} from "fhir/r4";
-import {Button, ThemeProvider} from "@mui/material";
-import {defaultTheme} from "@/app/theme";
 import useContext from "@/app/hooks/context-hook";
 import PatientDetails from "@/app/enrollment/task/components/patient-details";
 import TaskProgressHook from "@/app/hooks/task-progress-hook";
@@ -47,7 +45,10 @@ export default function EnrollmentTaskPage() {
             .then((apps) => {
                 setLaunchableApps(apps)
             })
-    }, [serviceRequest, setLaunchableApps, scpClient])
+        if (task?.status === "in-progress" && launchableApps && launchableApps.length === 1) {
+            launchApp(launchableApps[0].URL)();
+        }
+    }, [serviceRequest, setLaunchableApps, scpClient, task?.status, launchableApps])
 
     useEffect(() => {
         if (!questionnaireMap) {
@@ -84,12 +85,8 @@ export default function EnrollmentTaskPage() {
     // - Task.status is "in-progress"
     // - There is exactly one launchable app
     // - Auto-launch is enabled
-    const autoLaunchExternalApps = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
     const launchApp = (URL: string) => () => {
         window.open(URL, "_self");
-    }
-    if (task.status === "in-progress" && launchableApps && launchableApps.length === 1 && autoLaunchExternalApps) {
-        launchApp(launchableApps[0].URL)();
     }
 
     const textBottom = executionTextBottom(task.status);
@@ -120,20 +117,6 @@ export default function EnrollmentTaskPage() {
                         <PatientDetails task={task} patient={patient}/>
                         {
                             textBottom ? <div className="w-[568px] font-[500]">{textBottom}</div> : <></>
-                        }
-                        {task.status === "in-progress" && !autoLaunchExternalApps && launchableApps && launchableApps.length > 0 &&
-                            <div className="w-[568px]">
-                                <ThemeProvider theme={defaultTheme}>
-                                    {launchableApps.map((app, index) => (
-                                        <Button
-                                            key={index}
-                                            variant="contained"
-                                            className="mb-2"
-                                            onClick={launchApp(app.URL)}
-                                        >{app.Name}</Button>
-                                    ))}
-                                </ThemeProvider>
-                            </div>
                         }
                     </div>
                 )}
