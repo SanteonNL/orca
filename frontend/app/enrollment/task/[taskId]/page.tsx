@@ -49,8 +49,6 @@ export default function EnrollmentTaskPage() {
         if (task?.status === "in-progress" && launchableApps && launchableApps.length === 1 && autoLaunchExternalApps) {
             launchApp(launchableApps[0].URL)();
         }
-
-
     }, [serviceRequest, setLaunchableApps, scpClient, task?.status, launchableApps, autoLaunchExternalApps])
 
     useEffect(() => {
