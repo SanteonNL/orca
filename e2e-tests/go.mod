@@ -5,7 +5,7 @@ go 1.24
 require (
 	github.com/SanteonNL/go-fhir-client v0.5.0
 	github.com/nuts-foundation/go-nuts-client v0.2.0
-	github.com/stretchr/testify v1.11.0
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.38.0
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20241004123003-6f30810f220e
 )
