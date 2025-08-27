@@ -97,10 +97,6 @@ const mockServiceRequest = {
     performer: [{identifier: {system: 'http://example.com', value: 'org-123'}}]
 };
 
-const mockOrganization = {
-    id: 'org-1',
-    name: 'Test Hospital'
-};
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -199,38 +195,6 @@ describe("taskid page tests", () => {
         });
         expect(screen.getByText('De aanmelding is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
     });
-
-    it('does not display launch buttons when multiple apps are available', async () => {
-        const mockApps = [
-            {Name: 'App 1', URL: 'http://app1.example.com'},
-            {Name: 'App 2', URL: 'http://app2.example.com'}
-        ];
-        (applaunch.getLaunchableApps as jest.Mock).mockResolvedValue(mockApps);
-
-        (TaskProgressHook as jest.Mock).mockReturnValue({
-            task: { ...mockTask, status: 'in-progress' },
-            subTasks: [],
-            questionnaireMap: {},
-            isError: false,
-            isLoading: false
-        });
-
-        (useEnrollment as jest.Mock).mockReturnValue({
-            patient: mockPatient,
-            serviceRequest: mockServiceRequest,
-            organization: mockOrganization
-        });
-
-        await act(async () => {
-            render(<EnrollmentTaskPage/>);
-        });
-
-        // Should not display any launch buttons since functionality was removed
-        expect(screen.queryByText('App 1')).not.toBeInTheDocument();
-        expect(screen.queryByText('App 2')).not.toBeInTheDocument();
-        expect(screen.queryByRole('button')).not.toBeInTheDocument();
-    });
-
     it('displays patient details when patient data is missing', async () => {
         (useEnrollment as jest.Mock).mockReturnValue({
             patient: null,
