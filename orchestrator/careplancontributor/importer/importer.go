@@ -13,7 +13,7 @@ import (
 )
 
 func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
-	taskRequesterOrg fhir.Organization, taskPerformerOrg fhir.Organization, patientIdentifier fhir.Identifier,
+	taskRequesterOrg fhir.Organization, taskPerformerOrg fhir.Organization, patientIdentifier fhir.Identifier, patient fhir.Patient,
 	externalIdentifier fhir.Identifier, serviceRequestCode fhir.Coding, conditionCode fhir.Coding, startDate time.Time) (*fhir.Bundle, error) {
 	requesterOrgRef := &fhir.Reference{
 		Type:       to.Ptr("Organization"),
@@ -143,6 +143,12 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	}
 	careplanservice.SetCreatorExtensionOnResource(&task, requesterOrgRef.Identifier)
 	tx = tx.Create(task)
+	//
+	// Patient
+	//
+	patient.Id = to.Ptr("urn:uuid:patient")
+	careplanservice.SetCreatorExtensionOnResource(&patient, requesterOrgRef.Identifier)
+	tx = tx.Create(patient)
 
 	// Perform
 	var result fhir.Bundle

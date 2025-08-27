@@ -1052,7 +1052,7 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	}
 
 	cpsFHIRClient := fhirclient.New(tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL), s.httpClientForLocalCPS(tenant), coolfhir.Config())
-	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, patientIdentifier, *chipsoftZorgplatformWorkflowIdentifier, serviceRequestCode, conditionCode, startDate)
+	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, patientIdentifier, patient, *chipsoftZorgplatformWorkflowIdentifier, serviceRequestCode, conditionCode, startDate)
 	if err != nil {
 		return nil, fmt.Errorf("import failed: %w", err)
 	}
