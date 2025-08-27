@@ -215,7 +215,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			coolfhir.SendResponse(writer, http.StatusOK, bundle)
 		}
 	}))))
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/", lib_otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{$}", lib_otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
