@@ -11,6 +11,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
+	importer "github.com/SanteonNL/orca/orchestrator/careplancontributor/importer"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
@@ -289,6 +290,24 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", lib_otel.HandlerWithTracing(tracer, "ProxyFHIRRead", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
 	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{resourceType}/_search", lib_otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
 	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}", lib_otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
+	// Custom operations
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/$import", lib_otel.HandlerWithTracing(tracer, "CarePlanContributor/FHIR Import", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+		tenant, err := tenants.FromContext(request.Context())
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Import", httpResponse)
+			return
+		}
+		if !tenant.EnableImport {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden), "CarePlanService/Import", httpResponse)
+			return
+		}
+		result, err := s.handleImport(request)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Import", httpResponse)
+			return
+		}
+		coolfhir.SendResponse(httpResponse, http.StatusOK, result, nil)
+	}))))
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
@@ -947,6 +966,18 @@ func (s Service) tenantBasePath(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return basePath + "/" + tenant.ID, nil
+}
+
+func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
+	tenant, err := tenants.FromContext(httpRequest.Context())
+	if err != nil {
+		return nil, err
+	}
+
+	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
+	// TODO: Read Patient resource according to BgZ
+
+	cpsFHIRClient := s.httpClientForLocalCPS(tenant)
 }
 
 func createFHIRClient(fhirBaseURL *url.URL, httpClient *http.Client) fhirclient.Client {

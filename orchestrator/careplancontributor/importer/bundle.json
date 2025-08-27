@@ -1,0 +1,232 @@
+{
+  "resourceType": "Bundle",
+  "bundleType": "Transaction",
+  "entry": [
+    {
+      "activity": [
+        {
+          "reference": {
+            "reference": "urn:uuid:task",
+            "type": "Task"
+          }
+        }
+      ],
+      "author": {
+        "display": "Canisius Wilhelmina Ziekenhuis",
+        "identifier": {
+          "system": "http://fhir.nl/fhir/NamingSystem/ura",
+          "value": "00020291"
+        },
+        "type": "Organization"
+      },
+      "careTeam": [
+        {
+          "reference": "#cps-careteam",
+          "type": "CareTeam"
+        }
+      ],
+      "category": [
+        {
+          "coding": [
+            {
+              "code": "135411000146103",
+              "display": "Multidisciplinary care regime",
+              "system": "http://snomed.info/sct"
+            }
+          ]
+        }
+      ],
+      "contained": [
+        {
+          "id": "cps-careteam",
+          "participant": [
+            {
+              "member": {
+                "display": "Canisius Wilhelmina Ziekenhuis",
+                "identifier": {
+                  "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                  "value": "00020291"
+                },
+                "type": "Organization"
+              },
+              "period": {
+                "start": "{{datetime_start}}"
+              }
+            },
+            {
+              "member": {
+                "display": "Zorg bij jou B.V.",
+                "identifier": {
+                  "system": "http://fhir.nl/fhir/NamingSystem/ura",
+                  "value": "00086446"
+                },
+                "type": "Organization"
+              },
+              "period": {
+                "start": "{{datetime_start}}"
+              }
+            }
+          ],
+          "resourceType": "CareTeam"
+        }
+      ],
+      "extension": [
+        {
+          "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+          "valueReference": {
+            "identifier": {
+              "system": "http://fhir.nl/fhir/NamingSystem/ura",
+              "value": "00020291"
+            },
+            "type": "Organization"
+          }
+        }
+      ],
+      "id": "urn:uuid:careplan",
+      "intent": "order",
+      "resourceType": "CarePlan",
+      "status": "active",
+      "subject": {
+        "identifier": {
+          "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+          "value": "{{patient_bsn}}"
+        },
+        "type": "Patient"
+      }
+    },
+    {
+      "basedOn": [
+        {
+          "reference": "urn:uuid:careplan",
+          "type": "CarePlan"
+        }
+      ],
+      "extension": [
+        {
+          "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+          "valueReference": {
+            "identifier": {
+              "system": "http://fhir.nl/fhir/NamingSystem/ura",
+              "value": "00020291"
+            },
+            "type": "Organization"
+          }
+        }
+      ],
+      "focus": {
+        "display": "monitoren via telegeneeskunde",
+        "reference": "urn:uuid:servicerequest",
+        "type": "ServiceRequest"
+      },
+      "for": {
+        "identifier": {
+          "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+          "value": "{{patient_bsn}}"
+        },
+        "type": "Patient"
+      },
+      "id": "urn:uuid:task",
+      "identifier": [
+        {
+          "system": "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id",
+          "value": "{{chipsoft_workflowid}}"
+        }
+      ],
+      "intent": "order",
+      "meta": {
+        "profile": [
+          "http://santeonnl.github.io/shared-care-planning/StructureDefinition/SCPTask"
+        ]
+      },
+      "owner": {
+        "display": "Zorg bij jou B.V.",
+        "identifier": {
+          "system": "http://fhir.nl/fhir/NamingSystem/ura",
+          "value": "00086446"
+        },
+        "type": "Organization"
+      },
+      "reasonCode": {
+        "coding": [
+          {
+            "code": "195967001",
+            "display": "astma",
+            "system": "http://snomed.info/sct"
+          }
+        ]
+      },
+      "requester": {
+        "display": "Canisius Wilhelmina Ziekenhuis",
+        "identifier": {
+          "system": "http://fhir.nl/fhir/NamingSystem/ura",
+          "value": "00020291"
+        },
+        "type": "Organization"
+      },
+      "resourceType": "Task",
+      "status": "in-progress"
+    },
+    {
+      "code": {
+        "coding": [
+          {
+            "code": "719858009",
+            "display": "monitoren via telegeneeskunde",
+            "system": "http://snomed.info/sct"
+          }
+        ]
+      },
+      "extension": [
+        {
+          "url": "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator",
+          "valueReference": {
+            "identifier": {
+              "system": "http://fhir.nl/fhir/NamingSystem/ura",
+              "value": "00020291"
+            },
+            "type": "Organization"
+          }
+        }
+      ],
+      "id": "urn:uuid:servicerequest",
+      "identifier": [
+        {
+          "system": "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id",
+          "value": "{{chipsoft_workflowid}}"
+        }
+      ],
+      "intent": "proposal",
+      "performer": [
+        {
+          "display": "Zorg bij jou B.V.",
+          "identifier": {
+            "system": "http://fhir.nl/fhir/NamingSystem/ura",
+            "value": "00086446"
+          },
+          "type": "Organization"
+        }
+      ],
+      "reasonReference": [
+        {
+          "display": "astma",
+          "type": "Condition"
+        }
+      ],
+      "requester": {
+        "identifier": {
+          "system": "http://fhir.nl/fhir/NamingSystem/ura",
+          "value": "00020291"
+        }
+      },
+      "resourceType": "ServiceRequest",
+      "status": "active",
+      "subject": {
+        "identifier": {
+          "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+          "value": "{{patient_bsn}}"
+        },
+        "type": "Patient"
+      }
+    }
+  ]
+}

@@ -72,7 +72,7 @@ var hcpTokenType = TokenType{
 
 var _ SecureTokenService = &Service{}
 
-// RequestAccessToken generates the SAML assertion, signs it, sends the SOAP request to the Zorgplatform STS and teturns the SAML access token
+// RequestAccessToken generates the SAML assertion, signs it, sends the SOAP request to the Zorgplatform STS and returns the SAML access token
 func (s *Service) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
 	// Create the SAML assertion
 	assertion, err := s.createSAMLAssertion(&launchContext, tokenType)
