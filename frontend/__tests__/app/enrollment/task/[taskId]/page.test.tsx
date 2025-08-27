@@ -200,7 +200,7 @@ describe("taskid page tests", () => {
         expect(screen.getByText('De aanmelding is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
     });
 
-    it('displays launch buttons when task is in-progress and apps available', async () => {
+    it('does not display launch buttons when multiple apps are available', async () => {
         const mockApps = [
             {Name: 'App 1', URL: 'http://app1.example.com'},
             {Name: 'App 2', URL: 'http://app2.example.com'}
@@ -225,10 +225,10 @@ describe("taskid page tests", () => {
             render(<EnrollmentTaskPage/>);
         });
 
-        await waitFor(() => {
-            expect(screen.getByText('App 1')).toBeInTheDocument();
-            expect(screen.getByText('App 2')).toBeInTheDocument();
-        });
+        // Should not display any launch buttons since functionality was removed
+        expect(screen.queryByText('App 1')).not.toBeInTheDocument();
+        expect(screen.queryByText('App 2')).not.toBeInTheDocument();
+        expect(screen.queryByRole('button')).not.toBeInTheDocument();
     });
 
     it('displays patient details when patient data is missing', async () => {
