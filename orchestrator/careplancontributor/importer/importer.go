@@ -146,6 +146,7 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	//
 	// Patient
 	//
+	cleanPatient(&patient)
 	patient.Id = to.Ptr("urn:uuid:patient")
 	careplanservice.SetCreatorExtensionOnResource(&patient, requesterOrgRef.Identifier)
 	tx = tx.Create(patient)
@@ -156,4 +157,22 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 		return nil, err
 	}
 	return &result, nil
+}
+
+// cleanPatient removes references that we don't store, just like frontend/lib/fhirUtils.ts:cleanPatient()
+func cleanPatient(patient *fhir.Patient) {
+	if patient.ManagingOrganization != nil {
+		patient.ManagingOrganization.Reference = nil
+	}
+	if patient.GeneralPractitioner != nil {
+		for i := range patient.GeneralPractitioner {
+			patient.GeneralPractitioner[i].Reference = nil
+		}
+	}
+	if patient.Contact != nil {
+		for i := range patient.Contact {
+			patient.Contact[i].Organization = nil
+		}
+	}
+	patient.Link = nil
 }
