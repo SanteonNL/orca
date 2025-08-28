@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"slices"
@@ -974,49 +975,28 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	}
 	ctx := httpRequest.Context()
 
-	// Parse parameters:
-	// - patient_identifier
-	// - servicerequest_code
-	// - servicerequest_display
-	// - condition_code
-	// - condition_display
-	// - chipsoft_zorgplatform_workflowid
-	// - start (in xs:dateTime format)
-	if err := httpRequest.ParseForm(); err != nil {
-		return nil, fmt.Errorf("failed to parse form: %w", err)
+	type inputObject struct {
+		Patient        fhir.Identifier `json:"patient"`
+		ServiceRequest fhir.Coding     `json:"servicerequest"`
+		Condition      fhir.Coding     `json:"condition"`
+		WorkflowID     fhir.Identifier `json:"chipsoft_zorgplatform_workflowid"`
+		Start          time.Time       `json:"start"`
 	}
-	patientIdentifierValue := httpRequest.Form.Get("patient_identifier")
-	if patientIdentifierValue == "" {
-		return nil, fmt.Errorf("patient_identifier is required")
-	}
-	serviceRequestCodeIdentifier, err := coolfhir.TokenToIdentifier(httpRequest.Form.Get("servicerequest_code"))
+	requestBody, err := io.ReadAll(httpRequest.Body)
 	if err != nil {
-		return nil, fmt.Errorf("invalid servicerequest_code: %w", err)
+		return nil, fmt.Errorf("failed to read request body: %w", err)
 	}
-	serviceRequestCodeDisplay := httpRequest.Form.Get("servicerequest_display")
-	if serviceRequestCodeDisplay == "" {
-		return nil, fmt.Errorf("invalid servicerequest_display: %w", err)
-	}
-	conditionCodeIdentifier, err := coolfhir.TokenToIdentifier(httpRequest.Form.Get("condition_code"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid condition_code: %w", err)
-	}
-	conditionDisplay := httpRequest.Form.Get("condition_display")
-	chipsoftZorgplatformWorkflowIdentifier, err := coolfhir.TokenToIdentifier(httpRequest.Form.Get("chipsoft_zorgplatform_workflowid"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid chipsoft_zorgplatform_workflowid: %w", err)
-	}
-	startDate, err := time.Parse(time.RFC3339, httpRequest.Form.Get("start"))
-	if err != nil {
-		return nil, fmt.Errorf("invalid start: %w", err)
+	var input inputObject
+	if err := json.Unmarshal(requestBody, &input); err != nil {
+		return nil, fmt.Errorf("failed to parse request body as JSON: %w", err)
 	}
 
 	// Read patient
 	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
 	var patientAndPractitionerBundle fhir.Bundle
 	reqHeadersOpts := fhirclient.RequestHeaders(map[string][]string{
-		"X-Scp-PatientID":  {patientIdentifierValue},
-		"X-Scp-WorkflowID": {*chipsoftZorgplatformWorkflowIdentifier.Value},
+		"X-Scp-PatientID":  {*input.Patient.Value},
+		"X-Scp-WorkflowID": {*input.WorkflowID.Value},
 	})
 	// Fetch patient from EHR according to BgZ (the general-practitioner is not needed, but added for conformance).
 	if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"_include": []string{"Patient:general-practitioner"}}, &patientAndPractitionerBundle, reqHeadersOpts); err != nil {
@@ -1036,23 +1016,8 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	}
 	taskRequester := taskRequesterCandidates[0]
 
-	patientIdentifier := fhir.Identifier{
-		System: to.Ptr(coolfhir.BSNNamingSystem),
-		Value:  to.Ptr(patientIdentifierValue),
-	}
-	conditionCode := fhir.Coding{
-		System:  conditionCodeIdentifier.System,
-		Code:    conditionCodeIdentifier.Value,
-		Display: to.Ptr(conditionDisplay),
-	}
-	serviceRequestCode := fhir.Coding{
-		System:  serviceRequestCodeIdentifier.System,
-		Code:    serviceRequestCodeIdentifier.Value,
-		Display: to.Ptr(serviceRequestCodeDisplay),
-	}
-
 	cpsFHIRClient := fhirclient.New(tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL), s.httpClientForLocalCPS(tenant), coolfhir.Config())
-	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, patientIdentifier, patient, *chipsoftZorgplatformWorkflowIdentifier, serviceRequestCode, conditionCode, startDate)
+	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, input.Patient, patient, input.WorkflowID, input.ServiceRequest, input.Condition, input.Start)
 	if err != nil {
 		return nil, fmt.Errorf("import failed: %w", err)
 	}
