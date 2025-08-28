@@ -207,14 +207,56 @@ If you're Azure Service Bus, depending on the features you've enabled, you'll ne
 The CarePlanContributor and CarePlanService support importing existing data into ORCA as SharedCarePlanning resources through their `$import` operations.
 
 The CPC's `/cpc/<tenant>/fhir/$import` operation creates an in-progress SCP Task, owned by the invoker and requested by the tenant.
-It takes the following POST form parameters:
-- `patient_identifier`: Patient identifier as FHIR token
-- `servicerequest_code`: Code of the ServiceRequest
-- `servicerequest_display`: Code of the ServiceRequest
-- `condition_code`: Code of the Condition as FHIR token
-- `condition_display`: Display of the Condition
+It takes the following JSON post body parameters:
+- `patient`: Patient identifier as FHIR identifier.
+- `servicerequest`: ServiceRequest code as FHIR Coding.
+- `condition`: Condition code as FHIR Coding.
 - `chipsoft_zorgplatform_workflowid`: ChipSoft Zorgplatform Workflow ID as FHIR token, required to read the patient.
 - `start`: Start date of the enrollment period, in `xs:dateTime` format.
+
+Example:
+
+```json
+{
+  "resourceType": "Parameters",
+  "parameter": [
+    {
+      "name": "patient",
+      "valueIdentifier": {
+        "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+        "value": "123456789"
+      }
+    },
+    {
+      "name": "servicerequest",
+      "valueCoding": {
+        "system": "http://example.com/servicerequest",
+        "code": "sr1",
+        "display": "ServiceRequestDisplay"
+      }
+    },
+    {
+      "name": "condition",
+      "valueCoding": {
+        "system": "http://example.com/condition",
+        "code": "c1",
+        "display": "ConditionDisplay"
+      }
+    },
+    {
+      "name": "chipsoft_zorgplatform_workflowid",
+      "valueIdentifier": {
+        "system": "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id",
+        "value": "workflow-123"
+      }
+    },
+    {
+      "name": "start",
+      "valueDateTime": "2024-01-01T12:00:00Z"
+    }
+  ]
+}
+```
 
 The CPS's `/cps/<tenant>/$import` operation takes a FHIR transaction bundle and executes it on the CPS's FHIR store.
 It circumvents any validation or authorization checks, so it can only contain POST requests to create resources.

@@ -996,28 +996,50 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	}
 	ctx := httpRequest.Context()
 
-	type inputObject struct {
-		Patient        fhir.Identifier `json:"patient"`
-		ServiceRequest fhir.Coding     `json:"servicerequest"`
-		Condition      fhir.Coding     `json:"condition"`
-		WorkflowID     fhir.Identifier `json:"chipsoft_zorgplatform_workflowid"`
-		Start          time.Time       `json:"start"`
-	}
+	//
+	// Parse input parameters
+	//
 	requestBody, err := io.ReadAll(httpRequest.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read request body: %w", err)
 	}
-	var input inputObject
-	if err := json.Unmarshal(requestBody, &input); err != nil {
-		return nil, fmt.Errorf("failed to parse request body as JSON: %w", err)
+	var params fhir.Parameters
+	if err := json.Unmarshal(requestBody, &params); err != nil {
+		return nil, fmt.Errorf("failed to parse request body as FHIR Parameters: %w", err)
 	}
+	patientIdentifier, err := getIdentifierParameter(params, "patient")
+	if err != nil {
+		return nil, err
+	}
+	workflowID, err := getIdentifierParameter(params, "chipsoft_zorgplatform_workflowid")
+	if err != nil {
+		return nil, err
+	}
+	serviceRequest, err := getCodingParameter(params, "servicerequest")
+	if err != nil {
+		return nil, err
+	}
+	condition, err := getCodingParameter(params, "condition")
+	if err != nil {
+		return nil, err
+	}
+	startDate, err := getParameter[time.Time](params, "start", func(parameter fhir.ParametersParameter) *time.Time {
+		if parameter.ValueDateTime == nil {
+			return nil
+		}
+		result, err := time.Parse(time.RFC3339, *parameter.ValueDateTime)
+		if err != nil {
+			return nil
+		}
+		return &result
+	})
 
 	// Read patient
 	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
 	var patientAndPractitionerBundle fhir.Bundle
 	reqHeadersOpts := fhirclient.RequestHeaders(map[string][]string{
-		"X-Scp-PatientID":  {*input.Patient.Value},
-		"X-Scp-WorkflowID": {*input.WorkflowID.Value},
+		"X-Scp-PatientID":  {*patientIdentifier.Value},
+		"X-Scp-WorkflowID": {*workflowID.Value},
 	})
 	// Fetch patient from EHR according to BgZ (the general-practitioner is not needed, but added for conformance).
 	if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"_include": []string{"Patient:general-practitioner"}}, &patientAndPractitionerBundle, reqHeadersOpts); err != nil {
@@ -1038,11 +1060,36 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	taskRequester := taskRequesterCandidates[0]
 
 	cpsFHIRClient := fhirclient.New(tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL), s.httpClientForLocalCPS(tenant), coolfhir.Config())
-	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, input.Patient, patient, input.WorkflowID, input.ServiceRequest, input.Condition, input.Start)
+	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, *patientIdentifier, patient, *workflowID, *serviceRequest, *condition, *startDate)
 	if err != nil {
 		return nil, fmt.Errorf("import failed: %w", err)
 	}
 	return result, nil
+}
+
+func getIdentifierParameter(params fhir.Parameters, name string) (*fhir.Identifier, error) {
+	return getParameter[fhir.Identifier](params, name, func(parameter fhir.ParametersParameter) *fhir.Identifier {
+		return parameter.ValueIdentifier
+	})
+}
+
+func getCodingParameter(params fhir.Parameters, name string) (*fhir.Coding, error) {
+	return getParameter[fhir.Coding](params, name, func(parameter fhir.ParametersParameter) *fhir.Coding {
+		return parameter.ValueCoding
+	})
+}
+
+func getParameter[T any](params fhir.Parameters, name string, getter func(fhir.ParametersParameter) *T) (*T, error) {
+	for _, param := range params.Parameter {
+		if name == param.Name {
+			value := getter(param)
+			if value == nil {
+				return nil, fmt.Errorf("parameter %s has no or an invalid value (expected %T)", name, *new(T))
+			}
+			return value, nil
+		}
+	}
+	return nil, fmt.Errorf("missing parameter %s", name)
 }
 
 func createFHIRClient(fhirBaseURL *url.URL, httpClient *http.Client) fhirclient.Client {

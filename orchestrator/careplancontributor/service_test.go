@@ -1016,29 +1016,48 @@ func TestService_Import(t *testing.T) {
 		globals.RegisterCPSFHIRClient(tenant.ID, cpsFHIRClient)
 
 		start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
-		requestBody := map[string]any{
-			"patient": fhir.Identifier{
-				System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-				Value:  to.Ptr("123456789"),
+		requestBody := fhir.Parameters{
+			Parameter: []fhir.ParametersParameter{
+				{
+					Name: "patient",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("123456789"),
+					},
+				},
+				{
+					Name: "servicerequest",
+					ValueCoding: &fhir.Coding{
+						System:  to.Ptr("http://example.com/servicerequest"),
+						Code:    to.Ptr("sr1"),
+						Display: to.Ptr("ServiceRequestDisplay"),
+					},
+				},
+				{
+					Name: "condition",
+					ValueCoding: &fhir.Coding{
+						System:  to.Ptr("http://example.com/condition"),
+						Code:    to.Ptr("c1"),
+						Display: to.Ptr("ConditionDisplay"),
+					},
+				},
+				{
+					Name: "chipsoft_zorgplatform_workflowid",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
+						Value:  to.Ptr("workflow-123"),
+					},
+				},
+				{
+					Name:          "start",
+					ValueDateTime: to.Ptr(start.Format(time.RFC3339)),
+				},
 			},
-			"servicerequest": fhir.Coding{
-				System:  to.Ptr("http://example.com/servicerequest"),
-				Code:    to.Ptr("sr1"),
-				Display: to.Ptr("ServiceRequestDisplay"),
-			},
-			"condition": fhir.Coding{
-				System:  to.Ptr("http://example.com/condition"),
-				Code:    to.Ptr("c1"),
-				Display: to.Ptr("ConditionDisplay"),
-			},
-			"chipsoft_zorgplatform_workflowid": fhir.Identifier{
-				System: to.Ptr("http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
-				Value:  to.Ptr("workflow-123"),
-			},
-			"start": start.Format(time.RFC3339),
 		}
-		httpRequest, _ := http.NewRequest("POST", httpServer.URL+"/cpc/test/fhir/$import", bytes.NewReader(must.MarshalJSON(requestBody)))
-		httpRequest.Header.Set("Content-Type", "application/json")
+		requestBodyJSON := must.MarshalJSON(requestBody)
+		println(string(requestBodyJSON))
+		httpRequest, _ := http.NewRequest("POST", httpServer.URL+"/cpc/test/fhir/$import", bytes.NewReader(requestBodyJSON))
+		httpRequest.Header.Set("Content-Type", "application/fhir+json")
 		httpResponse, err := httpClient.Do(httpRequest)
 		require.NoError(t, err)
 		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
