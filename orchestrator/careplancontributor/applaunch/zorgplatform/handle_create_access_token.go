@@ -187,6 +187,10 @@ func (s *Service) createSAMLAssertion(launchContext *LaunchContext, tokenType To
 
 // signAssertion signs the SAML assertion
 func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error) {
+	return SignAssertion(assertion, s.signingCertificateKey, s.signingCertificate)
+}
+
+func SignAssertion(assertion *etree.Element, signer crypto.Signer, certificatesRaw [][]byte) (*etree.Element, error) {
 	// Step 1: Compute the Canonical Form of the Assertion Without the <Signature> Element
 
 	// Make a deep copy of the assertion to avoid modifying the original during canonicalization
@@ -213,7 +217,7 @@ func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error
 	}
 
 	// Step 4: Compute the Signature Value
-	signatureBytes, err := s.signCanonicalizedSignedInfo(canonicalSignedInfo)
+	signatureBytes, err := signCanonicalizedSignedInfo(canonicalSignedInfo, signer)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +232,7 @@ func (s *Service) signAssertion(assertion *etree.Element) (*etree.Element, error
 	keyInfo := signatureElement.CreateElement("KeyInfo")
 	x509Data := keyInfo.CreateElement("X509Data")
 	x509Certificate := x509Data.CreateElement("X509Certificate")
-	x509Certificate.SetText(s.getSigningCertificateBase64())
+	x509Certificate.SetText(getCertificateBase64(certificatesRaw))
 
 	// Step 6: Insert the <Signature> Element into the Assertion
 	// Insert immediately after the <Issuer> element
@@ -272,11 +276,11 @@ func buildSignedInfo(assertionID, digestValue string) *etree.Element {
 }
 
 // Helper function to sign the canonicalized SignedInfo
-func (s *Service) signCanonicalizedSignedInfo(canonicalSignedInfo []byte) ([]byte, error) {
+func signCanonicalizedSignedInfo(canonicalSignedInfo []byte, signer crypto.Signer) ([]byte, error) {
 	// Compute the signature
 	hash := sha256.Sum256(canonicalSignedInfo)
 
-	signature, err := s.signingCertificateKey.Sign(rand.Reader, hash[:], crypto.SHA256)
+	signature, err := signer.Sign(rand.Reader, hash[:], crypto.SHA256)
 	if err != nil {
 		return nil, err
 	}
@@ -284,8 +288,8 @@ func (s *Service) signCanonicalizedSignedInfo(canonicalSignedInfo []byte) ([]byt
 }
 
 // Helper function to get the base64-encoded certificate
-func (s *Service) getSigningCertificateBase64() string {
-	combinedCertBytes := bytes.Join(s.signingCertificate, nil)
+func getCertificateBase64(certificatesRaw [][]byte) string {
+	combinedCertBytes := bytes.Join(certificatesRaw, nil)
 	return base64.StdEncoding.EncodeToString(combinedCertBytes) //Only providing the Leaf works as well, safer?
 }
 
