@@ -944,6 +944,26 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 	})
 }
 
+func TestService_Metadata(t *testing.T) {
+	tenant := tenants.Test().Sole()
+	mux := http.NewServeMux()
+	httpServer := httptest.NewServer(mux)
+	service := &Service{
+		profile: profile.Test(),
+		tenants: tenants.Test(),
+	}
+	service.RegisterHandlers(mux)
+
+	httpResponse, err := http.Get(httpServer.URL + "/cpc/" + tenant.ID + "/fhir/metadata")
+	require.NoError(t, err)
+	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	responseData, err := io.ReadAll(httpResponse.Body)
+	require.NoError(t, err)
+	var capabilityStatement fhir.CapabilityStatement
+	require.NoError(t, json.Unmarshal(responseData, &capabilityStatement))
+	assert.Contains(t, string(responseData), "SMART-on-FHIR") // set by profile
+}
+
 func TestService_Import(t *testing.T) {
 	tenant := tenants.Test().Sole()
 	mux := http.NewServeMux()

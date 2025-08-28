@@ -190,6 +190,27 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
 	}
 
+	// Metadata
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/metadata", s.tenants.HttpHandler(func(httpResponse http.ResponseWriter, request *http.Request) {
+		md := fhir.CapabilityStatement{
+			FhirVersion: fhir.FHIRVersion4_0_1,
+			Date:        time.Now().Format(time.RFC3339),
+			Status:      fhir.PublicationStatusActive,
+			Kind:        fhir.CapabilityStatementKindInstance,
+			Format:      []string{"json"},
+			Rest: []fhir.CapabilityStatementRest{
+				{
+					Mode: fhir.RestfulCapabilityModeServer,
+				},
+			},
+		}
+		if err := s.profile.CapabilityStatement(request.Context(), &md); err != nil {
+			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to generate CapabilityStatement")
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Metadata", httpResponse)
+			return
+		}
+		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
+	}))
 	//
 	// The section below defines endpoints specified by Shared Care Planning.
 	// These are secured through the profile (e.g. Nuts access tokens)
