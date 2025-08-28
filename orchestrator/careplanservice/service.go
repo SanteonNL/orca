@@ -1504,7 +1504,17 @@ func (s *Service) createFHIRClient(ctx context.Context) (fhirclient.Client, erro
 }
 
 func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
-	tenant, err := tenants.FromContext(httpRequest.Context())
+	ctx, span := tracer.Start(
+		httpRequest.Context(),
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
+		),
+	)
+	defer span.End()
+
+	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1516,11 +1526,11 @@ func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) 
 	}
 
 	// Authz: invoker MUST equal the tenant
-	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
-	ids, err := s.profile.Identities(httpRequest.Context())
+	ids, err := s.profile.Identities(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -1539,7 +1549,7 @@ func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) 
 		}
 	}
 	var transactionResult fhir.Bundle
-	if err = s.fhirClientByTenant[tenant.ID].CreateWithContext(httpRequest.Context(), transaction, &transactionResult); err != nil {
+	if err = s.fhirClientByTenant[tenant.ID].CreateWithContext(ctx, transaction, &transactionResult, fhirclient.AtPath("/")); err != nil {
 		return nil, fmt.Errorf("failed to import Bundle: %w", err)
 	}
 	return &transactionResult, nil
