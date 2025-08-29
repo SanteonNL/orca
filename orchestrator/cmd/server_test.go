@@ -4,7 +4,7 @@ import (
 	"context"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/observability"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	otelapi "go.opentelemetry.io/otel"
@@ -274,17 +274,17 @@ func TestStart_OpenTelemetry(t *testing.T) {
 
 func TestOpenTelemetryInitialization(t *testing.T) {
 	t.Run("successful initialization and cleanup", func(t *testing.T) {
-		config := otel.Config{
+		config := observability.Config{
 			Enabled:        true,
 			ServiceName:    "test-service",
 			ServiceVersion: "1.0.0",
-			Exporter: otel.ExporterConfig{
+			Exporter: observability.ExporterConfig{
 				Type: "stdout",
 			},
 		}
 
 		ctx := context.Background()
-		provider, err := otel.Initialize(ctx, config)
+		provider, err := observability.Initialize(ctx, config)
 		require.NoError(t, err)
 		require.NotNil(t, provider)
 
@@ -304,16 +304,16 @@ func TestOpenTelemetryInitialization(t *testing.T) {
 	})
 
 	t.Run("initialization failure", func(t *testing.T) {
-		config := otel.Config{
+		config := observability.Config{
 			Enabled:     true,
 			ServiceName: "test-service",
-			Exporter: otel.ExporterConfig{
+			Exporter: observability.ExporterConfig{
 				Type: "invalid-type",
 			},
 		}
 
 		ctx := context.Background()
-		provider, err := otel.Initialize(ctx, config)
+		provider, err := observability.Initialize(ctx, config)
 		assert.Error(t, err)
 		assert.Nil(t, provider)
 		assert.Contains(t, err.Error(), "unsupported exporter type")

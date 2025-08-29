@@ -8,7 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/observability"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -40,8 +40,8 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	resourceType := getResourceType(request.ResourcePath)
 	span.SetAttributes(
-		attribute.String(lib_otel.FHIRResourceType, resourceType),
-		attribute.String(lib_otel.OperationName, "Update"),
+		attribute.String(observability.FHIRResourceType, resourceType),
+		attribute.String(observability.OperationName, "Update"),
 	)
 
 	var resource T
@@ -53,7 +53,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	resourceID := coolfhir.ResourceID(resource)
 	if resourceID != nil {
-		span.SetAttributes(attribute.String(lib_otel.FHIRResourceID, *resourceID))
+		span.SetAttributes(attribute.String(observability.FHIRResourceID, *resourceID))
 	}
 
 	// Check we're only allowing secure external literal references

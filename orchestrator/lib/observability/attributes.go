@@ -1,4 +1,4 @@
-package otel
+package observability
 
 // TraceAttributes contains standardized attribute keys for OpenTelemetry tracing
 type TraceAttributes struct{}

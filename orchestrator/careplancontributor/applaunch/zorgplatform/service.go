@@ -18,7 +18,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/observability"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -292,8 +292,8 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
-			attribute.String(lib_otel.HTTPURL, httpRequest.URL.String()),
+			attribute.String(observability.HTTPMethod, httpRequest.Method),
+			attribute.String(observability.HTTPURL, httpRequest.URL.String()),
 		),
 	)
 	defer span.End()
@@ -391,8 +391,8 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, request.Method),
-			attribute.String(lib_otel.HTTPURL, request.URL.String()),
+			attribute.String(observability.HTTPMethod, request.Method),
+			attribute.String(observability.HTTPURL, request.URL.String()),
 		),
 	)
 	defer span.End()

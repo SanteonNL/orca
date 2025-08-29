@@ -7,7 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/observability"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -33,10 +33,10 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
-			attribute.String(lib_otel.HTTPURL, httpRequest.URL.String()),
-			attribute.String(lib_otel.FHIRBundleType, requestBundle.Type.String()),
-			attribute.Int(lib_otel.FHIRBundleEntryCount, len(requestBundle.Entry)),
+			attribute.String(observability.HTTPMethod, httpRequest.Method),
+			attribute.String(observability.HTTPURL, httpRequest.URL.String()),
+			attribute.String(observability.FHIRBundleType, requestBundle.Type.String()),
+			attribute.Int(observability.FHIRBundleEntryCount, len(requestBundle.Entry)),
 		),
 	)
 	defer span.End()

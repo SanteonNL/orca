@@ -1,4 +1,4 @@
-package otel
+package observability
 
 import (
 	"go.opentelemetry.io/otel/codes"

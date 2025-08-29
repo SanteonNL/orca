@@ -3,8 +3,8 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/observability"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/rs/zerolog"
 
@@ -32,7 +32,7 @@ type Config struct {
 	LogLevel        zerolog.Level          `koanf:"loglevel"`
 	StrictMode      bool                   `koanf:"strictmode"`
 	// OpenTelemetry holds the configuration for observability
-	OpenTelemetry otel.Config `koanf:"opentelemetry"`
+	OpenTelemetry observability.Config `koanf:"opentelemetry"`
 }
 
 func (c Config) Validate() error {
@@ -131,6 +131,6 @@ func DefaultConfig() Config {
 		},
 		CarePlanContributor: careplancontributor.DefaultConfig(),
 		CarePlanService:     careplanservice.DefaultConfig(),
-		OpenTelemetry:       otel.DefaultConfig(),
+		OpenTelemetry:       observability.DefaultConfig(),
 	}
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/observability"
 	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
@@ -37,7 +37,7 @@ func Start(ctx context.Context, config Config) error {
 		Str("exporter_type", config.OpenTelemetry.Exporter.Type).
 		Msg("Initializing OpenTelemetry")
 
-	tracerProvider, err := otel.Initialize(ctx, config.OpenTelemetry)
+	tracerProvider, err := observability.Initialize(ctx, config.OpenTelemetry)
 	if err != nil {
 		return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/observability"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/lib/validation"
 	"github.com/google/uuid"
@@ -40,8 +40,8 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	resourceType := getResourceType(request.ResourcePath)
 	span.SetAttributes(
-		attribute.String(lib_otel.FHIRResourceType, resourceType),
-		attribute.String(lib_otel.OperationName, "Create"),
+		attribute.String(observability.FHIRResourceType, resourceType),
+		attribute.String(observability.OperationName, "Create"),
 	)
 
 	var resource T
@@ -56,7 +56,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	resourceID := coolfhir.ResourceID(resource)
 	if resourceID != nil {
-		span.SetAttributes(attribute.String(lib_otel.FHIRResourceID, *resourceID))
+		span.SetAttributes(attribute.String(observability.FHIRResourceID, *resourceID))
 	}
 
 	// Check we're only allowing secure external literal references
@@ -85,8 +85,8 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	// Add authorization decision details to span
 	span.SetAttributes(
-		attribute.Bool(lib_otel.AuthZAllowed, authzDecision.Allowed),
-		attribute.StringSlice(lib_otel.AuthZReasons, authzDecision.Reasons),
+		attribute.Bool(observability.AuthZAllowed, authzDecision.Allowed),
+		attribute.StringSlice(observability.AuthZReasons, authzDecision.Reasons),
 	)
 
 	log.Ctx(ctx).Info().Msgf("Creating %s (authz=%s)", resourceType, strings.Join(authzDecision.Reasons, ";"))
@@ -96,7 +96,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		if done {
 			return result, err2
 		}
-		span.SetAttributes(attribute.String(lib_otel.ValidationResult, "passed"))
+		span.SetAttributes(attribute.String(observability.ValidationResult, "passed"))
 	} else {
 		span.SetAttributes(attribute.Bool("validation.enabled", false))
 	}
@@ -165,7 +165,7 @@ func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T,
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRResourceType, resourceType),
+			attribute.String(observability.FHIRResourceType, resourceType),
 		),
 	)
 	defer span.End()
@@ -173,7 +173,7 @@ func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T,
 	if errs := h.validator.Validate(resource); errs != nil {
 		span.SetAttributes(
 			attribute.Int("validation.error_count", len(errs)),
-			attribute.String(lib_otel.ValidationResult, "failed"),
+			attribute.String(observability.ValidationResult, "failed"),
 		)
 
 		var issues []fhir.OperationOutcomeIssue
@@ -209,7 +209,7 @@ func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T,
 	}
 
 	span.SetAttributes(
-		attribute.String(lib_otel.ValidationResult, "passed"),
+		attribute.String(observability.ValidationResult, "passed"),
 	)
 	span.SetStatus(codes.Ok, "")
 	return nil, nil, false
