@@ -6,11 +6,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"slices"
+	"strings"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
+	importer "github.com/SanteonNL/orca/orchestrator/careplancontributor/importer"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
@@ -21,11 +29,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"net/url"
-	"slices"
-	"strings"
-	"time"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -187,6 +190,27 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
 	}
 
+	// Metadata
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/metadata", s.tenants.HttpHandler(func(httpResponse http.ResponseWriter, request *http.Request) {
+		md := fhir.CapabilityStatement{
+			FhirVersion: fhir.FHIRVersion4_0_1,
+			Date:        time.Now().Format(time.RFC3339),
+			Status:      fhir.PublicationStatusActive,
+			Kind:        fhir.CapabilityStatementKindInstance,
+			Format:      []string{"json"},
+			Rest: []fhir.CapabilityStatementRest{
+				{
+					Mode: fhir.RestfulCapabilityModeServer,
+				},
+			},
+		}
+		if err := s.profile.CapabilityStatement(request.Context(), &md); err != nil {
+			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to generate CapabilityStatement")
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Metadata", httpResponse)
+			return
+		}
+		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
+	}))
 	//
 	// The section below defines endpoints specified by Shared Care Planning.
 	// These are secured through the profile (e.g. Nuts access tokens)
@@ -213,7 +237,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			coolfhir.SendResponse(writer, http.StatusOK, bundle)
 		}
 	}))))
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/", lib_otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{$}", lib_otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
@@ -289,6 +313,15 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", lib_otel.HandlerWithTracing(tracer, "ProxyFHIRRead", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
 	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{resourceType}/_search", lib_otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
 	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}", lib_otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
+	// Custom operations
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/$import", lib_otel.HandlerWithTracing(tracer, "CarePlanContributor/FHIR Import", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+		result, err := s.handleImport(request)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Import", httpResponse)
+			return
+		}
+		coolfhir.SendResponse(httpResponse, http.StatusOK, result, nil)
+	}))))
 	//
 	// The section below defines endpoints used for integrating the local EHR with ORCA.
 	// They are NOT specified by SCP. Authorization is specific to the local EHR.
@@ -947,6 +980,157 @@ func (s Service) tenantBasePath(ctx context.Context) (string, error) {
 		return "", err
 	}
 	return basePath + "/" + tenant.ID, nil
+}
+
+func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
+	ctx, span := tracer.Start(
+		httpRequest.Context(),
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+	)
+	defer span.End()
+
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	if !tenant.EnableImport {
+		err := coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	principal, err := auth.PrincipalFromContext(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	//
+	// Parse input parameters
+	//
+	requestBody, err := io.ReadAll(httpRequest.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read request body: %w", err)
+	}
+	var params fhir.Parameters
+	if err := json.Unmarshal(requestBody, &params); err != nil {
+		return nil, fmt.Errorf("failed to parse request body as FHIR Parameters: %w", err)
+	}
+	patientIdentifier, err := getIdentifierParameter(params, "patient")
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	workflowID, err := getIdentifierParameter(params, "chipsoft_zorgplatform_workflowid")
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	serviceRequest, err := getCodingParameter(params, "servicerequest")
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	condition, err := getCodingParameter(params, "condition")
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	startDate, err := getParameter[time.Time](params, "start", func(parameter fhir.ParametersParameter) *time.Time {
+		if parameter.ValueDateTime == nil {
+			return nil
+		}
+		result, err := time.Parse(time.RFC3339, *parameter.ValueDateTime)
+		if err != nil {
+			return nil
+		}
+		return &result
+	})
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	// Read patient
+	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
+	var patientAndPractitionerBundle fhir.Bundle
+	reqHeadersOpts := fhirclient.RequestHeaders(map[string][]string{
+		"X-Scp-PatientID":  {*patientIdentifier.Value},
+		"X-Scp-WorkflowID": {*workflowID.Value},
+	})
+	// Fetch patient from EHR according to BgZ (the general-practitioner is not needed, but added for conformance).
+	if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"_include": []string{"Patient:general-practitioner"}}, &patientAndPractitionerBundle, reqHeadersOpts); err != nil {
+		err := fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	var patient fhir.Patient
+	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
+		err := fmt.Errorf("unable to find Patient resource in Bundle: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	taskRequesterCandidates, err := s.profile.Identities(ctx)
+	if err != nil {
+		err := fmt.Errorf("unable to determine Task.requester: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	if len(taskRequesterCandidates) != 1 {
+		err := fmt.Errorf("unable to determine Task.requester: found %d candidates", len(taskRequesterCandidates))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	taskRequester := taskRequesterCandidates[0]
+
+	cpsFHIRClient := fhirclient.New(tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL), s.httpClientForLocalCPS(tenant), coolfhir.Config())
+	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, *patientIdentifier, patient, *workflowID, *serviceRequest, *condition, *startDate)
+	if err != nil {
+		err := fmt.Errorf("import failed: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	return result, nil
+}
+
+func getIdentifierParameter(params fhir.Parameters, name string) (*fhir.Identifier, error) {
+	return getParameter[fhir.Identifier](params, name, func(parameter fhir.ParametersParameter) *fhir.Identifier {
+		return parameter.ValueIdentifier
+	})
+}
+
+func getCodingParameter(params fhir.Parameters, name string) (*fhir.Coding, error) {
+	return getParameter[fhir.Coding](params, name, func(parameter fhir.ParametersParameter) *fhir.Coding {
+		return parameter.ValueCoding
+	})
+}
+
+func getParameter[T any](params fhir.Parameters, name string, getter func(fhir.ParametersParameter) *T) (*T, error) {
+	for _, param := range params.Parameter {
+		if name == param.Name {
+			value := getter(param)
+			if value == nil {
+				return nil, fmt.Errorf("parameter %s has no or an invalid value (expected %T)", name, *new(T))
+			}
+			return value, nil
+		}
+	}
+	return nil, fmt.Errorf("missing parameter %s", name)
 }
 
 func createFHIRClient(fhirBaseURL *url.URL, httpClient *http.Client) fhirclient.Client {

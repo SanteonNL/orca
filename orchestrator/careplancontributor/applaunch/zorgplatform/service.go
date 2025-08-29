@@ -9,6 +9,12 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
@@ -17,11 +23,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"net/url"
-	"os"
-	"strings"
-	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/globals"
 
@@ -280,6 +281,11 @@ type stsAccessTokenRoundTripper struct {
 	accessTokenCache   *ttlcache.Cache[string, string]
 }
 
+// RoundTrip performs an HTTP request to Zorgplatform while enriching the request with a SAML access token.
+// The HTTP request needs to provide information on how to create the token, which can either be:
+//   - the X-Scp-Context header, that references an SCP CarePlan
+//   - the X-Scp-WorkflowID and X-Scp-PatientID headers, that directly provides the workflowId and patient identifier.
+//     Both are simple values, not FHIR tokens (e.g. 123345678).
 func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http.Response, error) {
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
@@ -299,38 +305,59 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 
 	//TODO: Check if we can update the CarePlan.basedOn to point to the service request
 	carePlanReference := httpRequest.Header.Get("X-Scp-Context")
-	if carePlanReference == "" {
-		err := fmt.Errorf("missing X-Scp-Context header")
-		log.Ctx(ctx).Error().Msg("Missing X-Scp-Context header")
+	workflowId := httpRequest.Header.Get("X-Scp-WorkflowID")
+	patientID := httpRequest.Header.Get("X-Scp-PatientID")
+	var cacheKey string
+	if carePlanReference != "" {
+		span.SetAttributes(attribute.String("careplan.reference", carePlanReference))
+		cacheKey = carePlanReference
+	} else if workflowId != "" && patientID != "" {
+		cacheKey = workflowId + "|" + patientID
+	} else {
+		err := fmt.Errorf("missing headers, options are: X-Scp-Context header, or X-Scp-WorkflowID both X-Scp-PatientID headers")
+		log.Ctx(ctx).Warn().Err(err).Msg("Missing context headers")
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
-	// We don't want to propagate the X-Scp-Context header to Zorgplatform, as it's specific to the Shared Care Planning domain.
-	newHttpRequest.Header.Del("X-Scp-Context")
-	span.SetAttributes(attribute.String("careplan.reference", carePlanReference))
 
-	log.Ctx(ctx).Debug().Msgf("Found SCP context: %s", carePlanReference)
+	// We don't want to propagate the X-Scp headers to Zorgplatform, as it's specific to the Shared Care Planning domain.
+	newHttpRequest.Header.Del("X-Scp-Context")
+	newHttpRequest.Header.Del("X-Scp-WorkflowID")
+	newHttpRequest.Header.Del("X-Scp-PatientID")
+
 	// First see if cached
 	var accessToken string
-	if cacheEntry := s.accessTokenCache.Get(carePlanReference); cacheEntry != nil {
+	if cacheEntry := s.accessTokenCache.Get(cacheKey); cacheEntry != nil {
 		accessToken = cacheEntry.Value()
 		span.SetAttributes(attribute.Bool("access_token.cached", true))
 	} else {
 		span.SetAttributes(attribute.Bool("access_token.cached", false))
-		log.Ctx(ctx).Debug().Msgf("(cache miss) Getting Zorgplatform access token for CarePlan reference: %s", carePlanReference)
-		workflowCtx, err := s.getWorkflowContext(ctx, carePlanReference)
+		var workflowCtx *workflowContext
+		var err error
+		if carePlanReference != "" {
+			// Use X-Scp-Context header
+			log.Ctx(ctx).Debug().Msgf("(cache miss) Getting Zorgplatform access token (careplan=%s)", carePlanReference)
+			workflowCtx, err = s.getWorkflowContext(ctx, carePlanReference)
+		} else {
+			// Use X-Scp-WorkflowID and X-Scp-PatientID headers
+			log.Ctx(ctx).Debug().Msgf("(cache miss) Getting Zorgplatform access token (workflowId=%s, patientId=%s)", workflowId, patientID)
+			workflowCtx = &workflowContext{
+				workflowId: workflowId,
+				patientBsn: patientID,
+			}
+		}
 		if err != nil {
-			log.Ctx(ctx).Error().Msgf("Unable to get workflowId for CarePlan reference: %v", err)
+			log.Ctx(ctx).Error().Msgf("Unable to get workflow context: %v", err)
 			span.RecordError(err)
-			span.SetStatus(codes.Error, "unable to get workflowId for CarePlan reference")
-			return nil, fmt.Errorf("unable to get workflowId for CarePlan reference: %w", err)
+			span.SetStatus(codes.Error, "unable to get workflow context")
+			return nil, fmt.Errorf("unable to get workflow context: %w", err)
 		}
 
 		//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
 		if !globals.StrictMode {
-			log.Ctx(ctx).Warn().Msg("Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
 			if workflowCtx.patientBsn == "999911120" {
+				log.Ctx(ctx).Warn().Msg("Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
 				workflowCtx.patientBsn = "999999151"
 			}
 		}
@@ -349,7 +376,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 			return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
 		}
 		log.Ctx(ctx).Debug().Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
-		s.accessTokenCache.Set(carePlanReference, accessToken, ttlcache.DefaultTTL)
+		s.accessTokenCache.Set(cacheKey, accessToken, ttlcache.DefaultTTL)
 	}
 
 	newHttpRequest.Header.Add("Accept", "application/fhir+json")

@@ -9,6 +9,7 @@ func Test(mod ...func(*Properties)) Config {
 		Nuts: NutsProperties{
 			Subject: "sub",
 		},
+		EnableImport: true,
 	}
 	for _, m := range mod {
 		m(&props)

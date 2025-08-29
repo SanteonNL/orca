@@ -6,12 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net/http"
 	"net/url"
@@ -19,6 +13,13 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/webhook"
 	"github.com/SanteonNL/orca/orchestrator/events"
@@ -288,6 +289,24 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
+	}))))
+	// Custom operations
+	mux.HandleFunc("POST "+basePathWithTenant+"/$import", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Import", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+		tenant, err := tenants.FromContext(request.Context())
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanService/Import", httpResponse)
+			return
+		}
+		if !tenant.EnableImport {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden), "CarePlanService/Import", httpResponse)
+			return
+		}
+		result, err := s.handleImport(request)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanService/Import", httpResponse)
+			return
+		}
+		s.pipelineByTenant[tenant.ID].DoAndWrite(httpResponse, &result, http.StatusOK)
 	}))))
 }
 
@@ -1482,6 +1501,79 @@ func (s *Service) createFHIRClient(ctx context.Context) (fhirclient.Client, erro
 		return nil, fmt.Errorf("FHIR client for tenant %s not found", tenant.ID)
 	}
 	return fhirClient, nil
+}
+
+func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
+	ctx, span := tracer.Start(
+		httpRequest.Context(),
+		debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+	)
+	defer span.End()
+
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	if httpRequest.Header.Get("Content-Type") != "application/fhir+json" {
+		err := coolfhir.BadRequest("Content-Type must be 'application/fhir+json'")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	if !tenant.EnableImport {
+		err := coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	// Authz: invoker MUST equal the tenant
+	principal, err := auth.PrincipalFromContext(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	ids, err := s.profile.Identities(ctx)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	if !isRequesterLocalCareOrganization(ids, principal) {
+		err := errors.New("requester must be local care organization to use $import")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+
+	var transaction fhir.Bundle
+	if err := s.readRequest(httpRequest, &transaction); err != nil {
+		err := coolfhir.BadRequest("invalid Bundle: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	// Validate import TX: only allow POST operations
+	for _, txEntry := range transaction.Entry {
+		if txEntry.Request == nil || txEntry.Request.Method != fhir.HTTPVerbPOST {
+			err := coolfhir.BadRequest("only POST operations are supported in import Bundle")
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			return nil, err
+		}
+	}
+	var transactionResult fhir.Bundle
+	if err = s.fhirClientByTenant[tenant.ID].CreateWithContext(ctx, transaction, &transactionResult, fhirclient.AtPath("/")); err != nil {
+		err := fmt.Errorf("failed to import Bundle: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
+	}
+	return &transactionResult, nil
 }
 
 func shouldNotify(resource any) bool {

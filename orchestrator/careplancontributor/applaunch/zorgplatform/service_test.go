@@ -412,12 +412,14 @@ func publicKeyToJWK(key rsa.PublicKey, id string, version string) *azkeys.JSONWe
 var _ SecureTokenService = &stubSecureTokenService{}
 
 type stubSecureTokenService struct {
-	invocations int
-	accessToken string
+	invocations            int
+	accessToken            string
+	capturedLaunchContexts []LaunchContext
 }
 
 func (s *stubSecureTokenService) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
 	s.invocations++
+	s.capturedLaunchContexts = append(s.capturedLaunchContexts, launchContext)
 	if s.accessToken == "" {
 		return "stub-at", nil
 	}
@@ -516,7 +518,7 @@ func Test_getConditionCodeFromWorkflowTask(t *testing.T) {
 func TestSTSAccessTokenRoundTripper(t *testing.T) {
 	tests := []struct {
 		name              string
-		carePlanReference string
+		headers           http.Header
 		expectedError     error
 		expectedCacheHits int
 		carePlan          *fhir.CarePlan
@@ -525,25 +527,32 @@ func TestSTSAccessTokenRoundTripper(t *testing.T) {
 		patient           *fhir.Patient
 	}{
 		{
-			name:              "ok",
-			carePlanReference: "http://example.com/CarePlan/123",
+			name:    "ok - with X-Scp-Context",
+			headers: map[string][]string{"X-Scp-Context": {"http://example.com/CarePlan/123"}},
+		},
+		{
+			name: "ok - with X-Scp-WorkflowID and X-Scp-PatientID",
+			headers: map[string][]string{
+				"X-Scp-WorkflowID": {"415FD2C0-E88D-4C89-B9D6-8FBE31E2D1C9"},
+				"X-Scp-PatientID":  {"123456789"},
+			},
 		},
 		{
 			name:              "access token cache hit",
-			carePlanReference: "http://example.com/CarePlan/123",
+			headers:           map[string][]string{"X-Scp-Context": {"http://example.com/CarePlan/123"}},
 			expectedCacheHits: 3,
 		},
 		{
-			name:          "missing X-SCP-Context header",
-			expectedError: errors.New("missing X-Scp-Context header"),
+			name:          "missing context headers",
+			expectedError: errors.New("missing headers, options are: X-Scp-Context header, or X-Scp-WorkflowID both X-Scp-PatientID headers"),
 		},
 		{
 			name: "ServiceRequest doesn't have Zorgplatform Workflow ID",
 			serviceRequest: &fhir.ServiceRequest{
 				Id: to.Ptr("123"),
 			},
-			carePlanReference: "http://example.com/CarePlan/123",
-			expectedError:     errors.New("unable to get workflowId for CarePlan reference: expected ServiceRequest to have 1 identifier with system http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
+			headers:       map[string][]string{"X-Scp-Context": {"http://example.com/CarePlan/123"}},
+			expectedError: errors.New("unable to get workflow context: expected ServiceRequest to have 1 identifier with system http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id"),
 		},
 	}
 
@@ -607,12 +616,13 @@ func TestSTSAccessTokenRoundTripper(t *testing.T) {
 			httpServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				coolfhir.SendResponse(w, http.StatusOK, fhir.Bundle{})
 			}))
+			tokenService := &stubSecureTokenService{}
 			rt := stsAccessTokenRoundTripper{
 				transport: httpServer.Client().Transport,
 				cpsFhirClient: func(ctx context.Context) (fhirclient.Client, error) {
 					return cpsFHIRClient, nil
 				},
-				secureTokenService: &stubSecureTokenService{},
+				secureTokenService: tokenService,
 				accessTokenCache: ttlcache.New[string, string](
 					ttlcache.WithTTL[string, string](accessTokenCacheTTL),
 				),
@@ -622,13 +632,19 @@ func TestSTSAccessTokenRoundTripper(t *testing.T) {
 			for i := 0; i < tt.expectedCacheHits+1; i++ {
 				httpRequest := httptest.NewRequestWithContext(ctx, "POST", httpServer.URL, nil)
 				httpRequest.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-				httpRequest.Header.Set("X-SCP-Context", tt.carePlanReference)
+				for name, values := range tt.headers {
+					httpRequest.Header.Set(name, values[0])
+				}
 				httpResponse, err := rt.RoundTrip(httpRequest)
 				if tt.expectedError != nil {
 					require.EqualError(t, err, tt.expectedError.Error())
 				} else {
 					require.NoError(t, err)
 					require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+
+					require.Len(t, tokenService.capturedLaunchContexts, 1)
+					require.Equal(t, "123456789", tokenService.capturedLaunchContexts[0].Bsn)
+					require.Equal(t, "415FD2C0-E88D-4C89-B9D6-8FBE31E2D1C9", tokenService.capturedLaunchContexts[0].WorkflowId)
 				}
 			}
 			assert.Equal(t, tt.expectedCacheHits, int(rt.accessTokenCache.Metrics().Hits))

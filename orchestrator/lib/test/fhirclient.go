@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -167,7 +168,7 @@ func (s *StubFHIRClient) SearchWithContext(ctx context.Context, resourceType str
 						}
 					}
 				}
-				return false
+				return true
 			})
 		case "_revinclude":
 			filterCandidates(func(candidate BaseResource) bool {
