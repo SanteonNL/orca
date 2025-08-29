@@ -26,7 +26,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/mock/gomock"
@@ -42,15 +42,15 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 	var capturedTask fhir.Task
 
 	// Set up trace mocking
-	originalTP := otel.GetTracerProvider()
+	originalTP := baseotel.GetTracerProvider()
 	exporter := tracetest.NewInMemoryExporter()
 	tp := trace.NewTracerProvider(
 		trace.WithSyncer(exporter),
 	)
-	otel.SetTracerProvider(tp)
+	baseotel.SetTracerProvider(tp)
 	t.Cleanup(func() {
 		tp.Shutdown(context.Background())
-		otel.SetTracerProvider(originalTP)
+		baseotel.SetTracerProvider(originalTP)
 	})
 
 	// Helper function to assert spans are created

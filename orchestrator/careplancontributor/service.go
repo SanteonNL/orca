@@ -24,8 +24,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
-	"go.opentelemetry.io/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -49,7 +49,7 @@ import (
 const basePathWithTenant = basePath + "/{tenant}"
 const basePath = "/cpc"
 
-var tracer = otel.Tracer("careplancontributor")
+var tracer = baseotel.Tracer("careplancontributor")
 
 func FHIRBaseURL(tenantID string, orcaBaseURL *url.URL) *url.URL {
 	return orcaBaseURL.JoinPath(basePath, tenantID, "fhir")
@@ -186,7 +186,7 @@ type Service struct {
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	if s.oidcProvider != nil {
-		mux.HandleFunc(basePath+"/login", lib_otel.HandlerWithTracing(tracer, "Login", s.withSession(s.oidcProvider.HandleLogin)))
+		mux.HandleFunc(basePath+"/login", otel.HandlerWithTracing(tracer, "Login", s.withSession(s.oidcProvider.HandleLogin)))
 		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
 	}
 
@@ -230,14 +230,14 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		}
 		return nil, coolfhir.BadRequest("bundle type not supported: %s", bundle.Type.String())
 	}
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir", lib_otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir", otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
 			coolfhir.SendResponse(writer, http.StatusOK, bundle)
 		}
 	}))))
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{$}", lib_otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{$}", otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if bundle, err := handleBundle(request); err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
 		} else {
@@ -248,7 +248,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	//
 	// This is a special endpoint, used by other SCP-nodes to discovery applications.
 	//
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/Endpoint", lib_otel.HandlerWithTracing(tracer, "DiscoverEndpoints", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/Endpoint", otel.HandlerWithTracing(tracer, "DiscoverEndpoints", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
 		if len(request.URL.Query()) > 0 {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("search parameters are not supported on this endpoint"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		}
@@ -310,11 +310,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			return
 		}
 	})
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", lib_otel.HandlerWithTracing(tracer, "ProxyFHIRRead", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{resourceType}/_search", lib_otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}", lib_otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", otel.HandlerWithTracing(tracer, "ProxyFHIRRead", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{resourceType}/_search", otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
+	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}", otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
 	// Custom operations
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/$import", lib_otel.HandlerWithTracing(tracer, "CarePlanContributor/FHIR Import", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/$import", otel.HandlerWithTracing(tracer, "CarePlanContributor/FHIR Import", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		result, err := s.handleImport(request)
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Import", httpResponse)
@@ -329,7 +329,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	// This endpoint is used by the EHR and ORCA Frontend to query the FHIR API of a remote SCP-node.
 	// The remote SCP-node to query can be specified using the following HTTP headers:
 	// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL
-	mux.HandleFunc(basePathWithTenant+"/external/fhir/{rest...}", lib_otel.HandlerWithTracing(tracer, "ProxyExternalFHIR", s.tenants.HttpHandler(s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc(basePathWithTenant+"/external/fhir/{rest...}", otel.HandlerWithTracing(tracer, "ProxyExternalFHIR", s.tenants.HttpHandler(s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
 		// TODO: Extract relevant data from the bearer JWT
 		fhirBaseURL, httpClient, err := s.createFHIRClientForExternalRequest(request.Context(), request)
 		if err != nil {
@@ -345,11 +345,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), coolfhir.NewTracedHTTPTransport(httpClient.Transport, tracer), true, true)
 		fhirProxy.ServeHTTP(writer, request)
 	}))))
-	mux.HandleFunc("GET "+basePath+"/context", lib_otel.HandlerWithTracing(tracer, "GetContext", s.withSession(s.handleGetContext)))
-	mux.HandleFunc(basePathWithTenant+"/ehr/fhir/{rest...}", lib_otel.HandlerWithTracing(tracer, "ProxyAppToEHR", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR))))
+	mux.HandleFunc("GET "+basePath+"/context", otel.HandlerWithTracing(tracer, "GetContext", s.withSession(s.handleGetContext)))
+	mux.HandleFunc(basePathWithTenant+"/ehr/fhir/{rest...}", otel.HandlerWithTracing(tracer, "ProxyAppToEHR", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR))))
 
 	// Logout endpoint
-	mux.HandleFunc("/logout", lib_otel.HandlerWithTracing(tracer, "Logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
+	mux.HandleFunc("/logout", otel.HandlerWithTracing(tracer, "Logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
 		s.SessionManager.Destroy(writer, request)
 		// If there is a 'Referer' value in the header, redirect to that URL
 		if referer := request.Header.Get("Referer"); referer != "" {
@@ -426,8 +426,8 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, request.Method),
-			attribute.String(lib_otel.HTTPURL, request.URL.String()),
+			attribute.String(otel.HTTPMethod, request.Method),
+			attribute.String(otel.HTTPURL, request.URL.String()),
 		),
 	)
 	defer span.End()
@@ -467,8 +467,8 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, request.Method),
-			attribute.String(lib_otel.HTTPURL, request.URL.String()),
+			attribute.String(otel.HTTPMethod, request.Method),
+			attribute.String(otel.HTTPURL, request.URL.String()),
 		),
 	)
 	defer span.End()
@@ -704,7 +704,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 
 	// Add resource metadata to span
 	span.SetAttributes(
-		attribute.String(lib_otel.FHIRResourceType, *focusReference.Type),
+		attribute.String(otel.FHIRResourceType, *focusReference.Type),
 		attribute.String("fhir.resource_reference", *focusReference.Reference),
 	)
 
@@ -845,7 +845,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 				}
 				httpClient = s.httpClientForLocalCPS(tenant)
 				fhirBaseURL = localCPSURL
-				span.SetAttributes(attribute.String(lib_otel.FHIRClientType, "local-cps"))
+				span.SetAttributes(attribute.String(otel.FHIRClientType, "local-cps"))
 			} else {
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
 				if err != nil {
@@ -861,7 +861,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 					span.SetStatus(codes.Error, err.Error())
 					return nil, nil, err
 				}
-				span.SetAttributes(attribute.String(lib_otel.FHIRClientType, "external"))
+				span.SetAttributes(attribute.String(otel.FHIRClientType, "external"))
 			}
 			break
 		case scpEntityIdentifierHeaderKey:
@@ -901,7 +901,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 				return nil, nil, err
 			}
 			span.SetAttributes(
-				attribute.String(lib_otel.FHIRClientType, "identifier-based"),
+				attribute.String(otel.FHIRClientType, "identifier-based"),
 				attribute.String("fhir.identifier_system", to.Value(identifier.System)),
 			)
 			break
@@ -915,7 +915,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 	}
 
 	span.SetAttributes(
-		attribute.String(lib_otel.FHIRBaseURL, fhirBaseURL.String()),
+		attribute.String(otel.FHIRBaseURL, fhirBaseURL.String()),
 	)
 	span.SetStatus(codes.Ok, "")
 	return fhirBaseURL, httpClient, nil

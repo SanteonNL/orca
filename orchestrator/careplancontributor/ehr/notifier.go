@@ -9,7 +9,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
@@ -74,9 +74,9 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRBaseURL, fhirBaseURL),
-			attribute.String(lib_otel.FHIRTaskID, *task.Id),
-			attribute.String(lib_otel.FHIRTaskStatus, task.Status.Code()),
+			attribute.String(otel.FHIRBaseURL, fhirBaseURL),
+			attribute.String(otel.FHIRTaskID, *task.Id),
+			attribute.String(otel.FHIRTaskStatus, task.Status.Code()),
 		),
 	)
 	defer span.End()
@@ -106,9 +106,9 @@ func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcce
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRBaseURL, event.FHIRBaseURL),
-			attribute.String(lib_otel.FHIRTaskID, *event.Task.Id),
-			attribute.String(lib_otel.FHIRTaskStatus, event.Task.Status.Code()),
+			attribute.String(otel.FHIRBaseURL, event.FHIRBaseURL),
+			attribute.String(otel.FHIRTaskID, *event.Task.Id),
+			attribute.String(otel.FHIRTaskStatus, event.Task.Status.Code()),
 		),
 	)
 	defer span.End()
@@ -189,9 +189,9 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRBundleSetId, set.Id),
+			attribute.String(otel.FHIRBundleSetId, set.Id),
 			attribute.String("bundle_set.task", set.task),
-			attribute.Int(lib_otel.FHIRBundlesCount, len(set.Bundles)),
+			attribute.Int(otel.FHIRBundlesCount, len(set.Bundles)),
 		),
 	)
 	defer span.End()

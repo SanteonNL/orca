@@ -8,7 +8,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -36,9 +36,9 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 
 	resourceType := getResourceType(request.ResourcePath)
 	span.SetAttributes(
-		attribute.String(lib_otel.FHIRResourceType, resourceType),
-		attribute.String(lib_otel.FHIRResourceID, request.ResourceId),
-		attribute.String(lib_otel.OperationName, "Read"),
+		attribute.String(otel.FHIRResourceType, resourceType),
+		attribute.String(otel.FHIRResourceID, request.ResourceId),
+		attribute.String(otel.OperationName, "Read"),
 	)
 
 	var resource T

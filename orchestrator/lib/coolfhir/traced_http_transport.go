@@ -3,8 +3,8 @@ package coolfhir
 import (
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
-	"go.opentelemetry.io/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
@@ -32,8 +32,8 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, req.Method),
-			attribute.String(lib_otel.HTTPURL, req.URL.String()),
+			attribute.String(otel.HTTPMethod, req.Method),
+			attribute.String(otel.HTTPURL, req.URL.String()),
 			attribute.String("http.scheme", req.URL.Scheme),
 			attribute.String("http.host", req.URL.Host),
 			attribute.String("http.target", req.URL.Path),
@@ -43,7 +43,7 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	defer span.End()
 
 	// Inject trace context into HTTP headers
-	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+	baseotel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 	// Execute the request with traced context
 	req = req.WithContext(ctx)

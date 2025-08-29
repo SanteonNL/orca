@@ -6,7 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -28,7 +28,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRResourceType, "Task"),
+			attribute.String(otel.FHIRResourceType, "Task"),
 		),
 	)
 	defer span.End()
@@ -114,7 +114,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		// Direct ID lookup
 		span.SetAttributes(
 			attribute.String("fhir.task.lookup_method", "id"),
-			attribute.String(lib_otel.FHIRTaskID, request.ResourceId),
+			attribute.String(otel.FHIRTaskID, request.ResourceId),
 		)
 
 		if (task.Id != nil && request.ResourceId != "") && request.ResourceId != *task.Id {

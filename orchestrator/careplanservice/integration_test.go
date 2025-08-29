@@ -7,7 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
-	"go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"io"
@@ -53,16 +53,16 @@ func Test_Integration(t *testing.T) {
 	t.Log("This test creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
 
 	// Set up trace mocking
-	originalTP := otel.GetTracerProvider()
+	originalTP := baseotel.GetTracerProvider()
 	exporter := tracetest.NewInMemoryExporter()
 	tp := trace.NewTracerProvider(
 		trace.WithSyncer(exporter),
 	)
 
-	otel.SetTracerProvider(tp)
+	baseotel.SetTracerProvider(tp)
 	t.Cleanup(func() {
 		tp.Shutdown(context.Background())
-		otel.SetTracerProvider(originalTP)
+		baseotel.SetTracerProvider(originalTP)
 	})
 
 	var cpc1Notifications []coolfhir.SubscriptionNotification

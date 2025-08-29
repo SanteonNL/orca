@@ -8,7 +8,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
@@ -136,7 +136,7 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 			otelhttp.WithSpanOptions(
 				trace.WithSpanKind(trace.SpanKindClient),
 				trace.WithAttributes(
-					attribute.String(lib_otel.FHIRBaseURL, fhirURL.String()),
+					attribute.String(otel.FHIRBaseURL, fhirURL.String()),
 					attribute.String("fhir.auth_type", string(config.Auth.Type)),
 					attribute.String("service.component", "fhir-client"),
 				),
@@ -160,7 +160,7 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 			otelhttp.WithSpanOptions(
 				trace.WithSpanKind(trace.SpanKindClient),
 				trace.WithAttributes(
-					attribute.String(lib_otel.FHIRBaseURL, fhirURL.String()),
+					attribute.String(otel.FHIRBaseURL, fhirURL.String()),
 					attribute.String("fhir.auth_type", string(config.Auth.Type)),
 					attribute.String("service.component", "fhir-client"),
 				),

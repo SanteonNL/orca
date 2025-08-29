@@ -16,7 +16,7 @@ import (
 
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	"go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -36,7 +36,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
@@ -47,7 +47,7 @@ type FHIROperation interface {
 	Handle(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error)
 }
 
-var tracer = otel.Tracer("careplanservice")
+var tracer = baseotel.Tracer("careplanservice")
 
 func TracedHandlerWrapper(operationName string, handler func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error),
 ) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -57,15 +57,15 @@ func TracedHandlerWrapper(operationName string, handler func(context.Context, FH
 			operationName,
 			trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(
-				attribute.String(lib_otel.FHIRResourceType, getResourceType(request.ResourcePath)),
-				attribute.String(lib_otel.FHIRResourceID, request.ResourceId),
-				attribute.String(lib_otel.HTTPMethod, request.HttpMethod),
+				attribute.String(otel.FHIRResourceType, getResourceType(request.ResourcePath)),
+				attribute.String(otel.FHIRResourceID, request.ResourceId),
+				attribute.String(otel.HTTPMethod, request.HttpMethod),
 			),
 		)
 		defer span.End()
 
 		if request.Tenant.ID != "" {
-			span.SetAttributes(attribute.String(lib_otel.TenantID, request.Tenant.ID))
+			span.SetAttributes(attribute.String(otel.TenantID, request.Tenant.ID))
 		}
 
 		result, err := handler(ctx, request, tx)
@@ -257,41 +257,41 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
 	}))
 	// Creating a resource
-	mux.HandleFunc("POST "+basePathWithTenant+"/{type}", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Create Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/{type}", otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Create Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 	}))))
 	// Searching for a resource via POST
-	mux.HandleFunc("POST "+basePathWithTenant+"/{type}/_search", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Search Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/{type}/_search", otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Search Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleSearchRequest(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
 	}))))
 	// Handle bundle
-	mux.HandleFunc("POST "+basePathWithTenant+"/", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Create Bundle", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/", otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Create Bundle", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		s.handleBundle(request, httpResponse)
 	}))))
-	mux.HandleFunc("POST "+basePathWithTenant, lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Create Bundle", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant, otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Create Bundle", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		s.handleBundle(request, httpResponse)
 	}))))
 	// Updating a resource by ID
-	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}/{id}", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Update Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}/{id}", otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Update Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleModification(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 	}))))
 	// Updating a resource by selecting it based on query params
-	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Update Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("PUT "+basePathWithTenant+"/{type}", otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Update Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		s.handleModification(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
 	}))))
 	// Handle reading a specific resource instance
-	mux.HandleFunc("GET "+basePathWithTenant+"/{type}/{id}", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Read Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("GET "+basePathWithTenant+"/{type}/{id}", otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Read Resource", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		resourceType := request.PathValue("type")
 		resourceId := request.PathValue("id")
 		s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
 	}))))
 	// Custom operations
-	mux.HandleFunc("POST "+basePathWithTenant+"/$import", lib_otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Import", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
+	mux.HandleFunc("POST "+basePathWithTenant+"/$import", otel.HandlerWithTracing(tracer, "CarePlanService/FHIR Import", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
 		tenant, err := tenants.FromContext(request.Context())
 		if err != nil {
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanService/Import", httpResponse)
@@ -318,8 +318,8 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRBundleType, tx.Bundle().Type.String()),
-			attribute.Int(lib_otel.FHIRBundleEntryCount, len(tx.Bundle().Entry)),
+			attribute.String(otel.FHIRBundleType, tx.Bundle().Type.String()),
+			attribute.Int(otel.FHIRBundleEntryCount, len(tx.Bundle().Entry)),
 		),
 	)
 	defer span.End()
@@ -371,8 +371,8 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 
 	span.SetStatus(codes.Ok, "")
 	span.SetAttributes(
-		attribute.Int(lib_otel.FHIRTransactionResultEntries, len(resultBundle.Entry)),
-		attribute.Int(lib_otel.NotificationResources, len(notificationResources)),
+		attribute.Int(otel.FHIRTransactionResultEntries, len(resultBundle.Entry)),
+		attribute.Int(otel.NotificationResources, len(notificationResources)),
 	)
 
 	return &resultBundle, nil
@@ -481,8 +481,8 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
-			attribute.String(lib_otel.FHIRResourceType, resourcePath),
+			attribute.String(otel.HTTPMethod, httpRequest.Method),
+			attribute.String(otel.FHIRResourceType, resourcePath),
 		),
 	)
 	defer span.End()
@@ -559,9 +559,9 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
-			attribute.String(lib_otel.FHIRResourceType, resourceType),
-			attribute.String(lib_otel.FHIRResourceID, resourceId),
+			attribute.String(otel.HTTPMethod, httpRequest.Method),
+			attribute.String(otel.FHIRResourceType, resourceType),
+			attribute.String(otel.FHIRResourceID, resourceId),
 		),
 	)
 	defer span.End()
@@ -895,8 +895,8 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
-			attribute.String(lib_otel.FHIRResourceType, resourceType),
+			attribute.String(otel.HTTPMethod, httpRequest.Method),
+			attribute.String(otel.FHIRResourceType, resourceType),
 		),
 	)
 	defer span.End()
@@ -939,7 +939,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 	}
 	queryParams := httpRequest.PostForm
 
-	span.SetAttributes(attribute.Int(lib_otel.FHIRSearchParamCount, len(queryParams)))
+	span.SetAttributes(attribute.Int(otel.FHIRSearchParamCount, len(queryParams)))
 
 	// Set up the transaction and handler request
 	tx := coolfhir.Transaction()
@@ -1003,7 +1003,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
+			attribute.String(otel.HTTPMethod, httpRequest.Method),
 		),
 	)
 	defer span.End()
@@ -1020,8 +1020,8 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 
 	// Add bundle metadata to span
 	span.SetAttributes(
-		attribute.String(lib_otel.FHIRBundleType, bundle.Type.String()),
-		attribute.Int(lib_otel.FHIRBundleEntryCount, len(bundle.Entry)),
+		attribute.String(otel.FHIRBundleType, bundle.Type.String()),
+		attribute.Int(otel.FHIRBundleEntryCount, len(bundle.Entry)),
 	)
 
 	if bundle.Type != fhir.BundleTypeTransaction {
@@ -1141,8 +1141,8 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 		return
 	}
 	span.SetAttributes(
-		attribute.Int(lib_otel.FHIRBundleResultEntries, len(resultBundle.Entry)),
-		attribute.String(lib_otel.TenantID, tenant.ID),
+		attribute.Int(otel.FHIRBundleResultEntries, len(resultBundle.Entry)),
+		attribute.String(otel.TenantID, tenant.ID),
 	)
 	span.SetStatus(codes.Ok, "")
 	tenant, _ = tenants.FromContext(ctx)
@@ -1178,8 +1178,8 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 	ctx, span := tracer.Start(ctx,
 		debug.GetCallerName(),
 		trace.WithAttributes(
-			attribute.String(lib_otel.NotificationResourceType, coolfhir.ResourceType(resource)),
-			attribute.Bool(lib_otel.NotificationShouldNotify, shouldNotify(resource)),
+			attribute.String(otel.NotificationResourceType, coolfhir.ResourceType(resource)),
+			attribute.Bool(otel.NotificationShouldNotify, shouldNotify(resource)),
 		),
 	)
 	defer span.End()
@@ -1191,16 +1191,16 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 		if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
-			span.SetAttributes(attribute.String(lib_otel.NotificationStatus, "failed"))
+			span.SetAttributes(attribute.String(otel.NotificationStatus, "failed"))
 			log.Ctx(ctx).Error().Err(err).Msgf("Failed to notify subscribers for %T", resource)
 		} else {
 			span.SetAttributes(
-				attribute.String(lib_otel.NotificationStatus, "success"),
+				attribute.String(otel.NotificationStatus, "success"),
 			)
 			span.SetStatus(codes.Ok, "")
 		}
 	} else {
-		span.SetAttributes(attribute.String(lib_otel.NotificationStatus, "skipped"))
+		span.SetAttributes(attribute.String(otel.NotificationStatus, "skipped"))
 		span.SetStatus(codes.Ok, "skipped - resource type not eligible for notification")
 	}
 }
