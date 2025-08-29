@@ -1508,49 +1508,70 @@ func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) 
 		httpRequest.Context(),
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
-		),
 	)
 	defer span.End()
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	if httpRequest.Header.Get("Content-Type") != "application/fhir+json" {
-		return nil, coolfhir.BadRequest("Content-Type must be 'application/fhir+json'")
+		err := coolfhir.BadRequest("Content-Type must be 'application/fhir+json'")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
 	}
 	if !tenant.EnableImport {
-		return nil, coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden)
+		err := coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
 	}
 
 	// Authz: invoker MUST equal the tenant
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	ids, err := s.profile.Identities(ctx)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 	if !isRequesterLocalCareOrganization(ids, principal) {
-		return nil, errors.New("requester must be local care organization to use $import")
+		err := errors.New("requester must be local care organization to use $import")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
 	}
 
 	var transaction fhir.Bundle
 	if err := s.readRequest(httpRequest, &transaction); err != nil {
-		return nil, coolfhir.BadRequest("invalid Bundle: %w", err)
+		err := coolfhir.BadRequest("invalid Bundle: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
 	}
 	// Validate import TX: only allow POST operations
 	for _, txEntry := range transaction.Entry {
 		if txEntry.Request == nil || txEntry.Request.Method != fhir.HTTPVerbPOST {
-			return nil, coolfhir.BadRequest("only POST operations are supported in import Bundle")
+			err := coolfhir.BadRequest("only POST operations are supported in import Bundle")
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			return nil, err
 		}
 	}
 	var transactionResult fhir.Bundle
 	if err = s.fhirClientByTenant[tenant.ID].CreateWithContext(ctx, transaction, &transactionResult, fhirclient.AtPath("/")); err != nil {
-		return nil, fmt.Errorf("failed to import Bundle: %w", err)
+		err := fmt.Errorf("failed to import Bundle: %w", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		return nil, err
 	}
 	return &transactionResult, nil
 }
