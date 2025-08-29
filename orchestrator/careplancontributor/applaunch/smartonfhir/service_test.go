@@ -4,7 +4,8 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
-	"crypto/rsa"
+	"crypto/x509"
+	"encoding/hex"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -238,7 +239,16 @@ func (l loggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 }
 
 func Test_loadJWTSigningKeyFromAzureKeyVault(t *testing.T) {
-	privateKey, _ := rsa.GenerateKey(rand.Reader, 1024)
+	const privateKeyHex = "3082025b02010002818100e4b916c35e9d5495eab5018eb6b2841f8a85fe12cc88dbf18118c300889e6011bd136b6812efa60f199ad27480140625a8e9f4eaef674f4a170fcd9cb591f25baec64874f140050910837f52265ff6204c23371b40180533fd38cfe1231ba21366ae0db311756a5c02586a3eb4e56cc6b7d0b0c6ccca01bf3aa97d2f16d4b3d3020301000102818055c42e0bfeaba26f40feb4e1ce126cc6e30bd1b53ceb49066b715c9613a4c7c37f120c218f903bc5c7c52d8bb0075232c6ff4beed8ecf56783f45216a46360ec58b44ba66cbc8da646e49cece72eb24051b40caf1cb4a13c6bee5fec202b69cf5152fb24af16373e9b406de7122cb8993797827847c88795b4719262bc46da71024100f93a72539d094d7d602416fa969714e27a3fe7b08b848c13f7890bcd76557b3b30db16fc51b7be1f1f165ba9145766066db5907e00062c5760dbef4cc3a136e9024100eaf0038fe1aaea64abda521b4989376c027d7ffd72662379a8d7578be07296076b4ab961ab93103e6748ab9342fd9b2f556bf8f648904be3205837c89bd5575b0240654b07e44bd2d817b8d7722f6ebd00d3fb73b5aadf4983d529aa1d8de8265deb74b3d6e7be1ebbbad25bb7ed444331483396b39f424b4002536f9016d6fbd2e102401d21516fbfad6f8eb7f84401fa263766ff100c94a260a3b96c03f768f29582a0bcdef109793aace2efef84c6a7a1c66222175731426211e6c195eea4c31dbacd02403caead7210df2df81bf8d05231d4480d1cf4731ed2dd13a5a7e76c6fd85af80b2f282dcf0756f16641cf98f59e09196bf61d93b3835caa519185131259a1d06d"
+	// Use a stable private key for deterministic tests. It was generated with:
+	//privateKey, _ := rsa.GenerateKey(rand.Reader, 1024)
+	//pkBytes := x509.MarshalPKCS1PrivateKey(privateKey)
+	//println(hex.EncodeToString(pkBytes))
+	privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+	require.NoError(t, err)
+	privateKey, err := x509.ParsePKCS1PrivateKey(privateKeyBytes)
+	require.NoError(t, err)
+
 	keyVault := azkeyvault.NewTestServer()
 	azkeyvault.AzureHttpRequestDoer = keyVault.TestHttpServer.Client()
 	keyVault.AddKey("test-key-id", privateKey)
@@ -256,6 +266,6 @@ func Test_loadJWTSigningKeyFromAzureKeyVault(t *testing.T) {
 	require.Len(t, jwkKeySet.Keys, 1, "Expected one key in JWK set")
 	require.Equal(t, "RS256", jwkKeySet.Keys[0].Algorithm, "Expected key algorithm to be RS256")
 	require.Equal(t, "sig", jwkKeySet.Keys[0].Use, "Expected key use to be 'sig'")
-	require.Equal(t, "0", jwkKeySet.Keys[0].KeyID, "Expected key ID to be '0'")
+	require.Equal(t, "59adb1f2af5539daa47e7053ba82f80685e81c5324a19f6ac27b55f58a7d92ed", jwkKeySet.Keys[0].KeyID, "Expected key ID to be '0'")
 	require.NotNil(t, jwkKeySet.Keys[0].Key)
 }

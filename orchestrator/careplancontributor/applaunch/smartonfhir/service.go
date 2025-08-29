@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -392,14 +391,8 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 		return nil, nil, fmt.Errorf("failed to get key (name: %s): %w", config.SigningKeyName, err)
 	}
 
-	// Take last part of key as key ID, e.g.:
-	// https://someinstance.vault.azure.net/keys/smartonfhir-jwt-signing-key/ee137e8e02cb420f9809aa18e9fb071d
-	// In this case, ee137e8e02cb420f9809aa18e9fb071d would be the key ID
-	keyIDParts := strings.Split(key.KeyID(), "/")
-	if len(keyIDParts) == 0 {
-		return nil, nil, fmt.Errorf("invalid key ID from Azure Key Vault: %s", key.KeyID())
-	}
-	keyID := keyIDParts[len(keyIDParts)-1]
+	// Use thumbprint as key ID, to avoid leaking Azure network information through the key ID
+	keyID := hex.EncodeToString(key.PublicKeyThumbprintS256())
 
 	return &jose.SigningKey{
 			Algorithm: jose.SignatureAlgorithm(key.SigningAlgorithm()),

@@ -38,11 +38,16 @@ type Suite struct {
 }
 
 type keyPair struct {
-	keyName    string
-	keyVersion string
-	asJwk      jwk.Key
-	publicKey  crypto.PublicKey
-	client     KeysClient
+	keyName                 string
+	keyVersion              string
+	asJwk                   jwk.Key
+	publicKey               crypto.PublicKey
+	client                  KeysClient
+	publicKeyThumbprintS256 []byte
+}
+
+func (s Suite) PublicKeyThumbprintS256() []byte {
+	return s.publicKeyThumbprintS256
 }
 
 func (s Suite) SigningKey() crypto.Signer {
@@ -97,17 +102,24 @@ func GetKey(client KeysClient, keyName string) (*Suite, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse public key from Azure KeyVault: %w", err)
 	}
+
+	thumbprintS256, err := publicKeyJWK.Thumbprint(crypto.SHA256)
+	if err != nil {
+		return nil, err
+	}
+
 	var publicKey crypto.PublicKey
 	if err = publicKeyJWK.Raw(&publicKey); err != nil {
 		return nil, fmt.Errorf("unable to parse public key from Azure KeyVault: %w", err)
 	}
 	return &Suite{
 		keyPair{
-			keyName:    key.KID.Name(),
-			keyVersion: key.KID.Version(),
-			asJwk:      parsedKey,
-			publicKey:  publicKey,
-			client:     client,
+			keyName:                 key.KID.Name(),
+			keyVersion:              key.KID.Version(),
+			asJwk:                   parsedKey,
+			publicKey:               publicKey,
+			publicKeyThumbprintS256: thumbprintS256,
+			client:                  client,
 		},
 	}, nil
 }
