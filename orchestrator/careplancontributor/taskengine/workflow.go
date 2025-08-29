@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"net/http"
 	"net/url"
@@ -58,15 +59,11 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 
 	if serviceCode.System == nil || serviceCode.Code == nil || conditionCode.System == nil || conditionCode.Code == nil {
 		err := errors.New("serviceCode and conditionCode must have a system and code")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	if err := f.searchHealthcareService(ctx, serviceCode, conditionCode); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	var questionnaireBundle fhir.Bundle
@@ -74,16 +71,12 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 		fhirclient.QueryParam("context-type-value", *serviceCode.System+"|"+*serviceCode.Code),
 		fhirclient.QueryParam("context-type-value", *conditionCode.System+"|"+*conditionCode.Code),
 	); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	// TODO: Might want to support multiple questionnaires in future
 	if len(questionnaireBundle.Entry) != 1 {
 		err := errors.Join(ErrWorkflowNotFound, fmt.Errorf("expected 1 questionnaire, got %d", len(questionnaireBundle.Entry)))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	workflow := &Workflow{
@@ -123,9 +116,7 @@ func (f FhirApiWorkflowProvider) searchHealthcareService(ctx context.Context, se
 	}
 	var results fhir.Bundle
 	if err := f.Client.ReadWithContext(ctx, "HealthcareService", &results, queryParams...); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 
 	span.SetAttributes(
@@ -133,14 +124,11 @@ func (f FhirApiWorkflowProvider) searchHealthcareService(ctx context.Context, se
 	)
 
 	if len(results.Entry) == 0 {
-		span.SetStatus(codes.Error, "No healthcare services found")
-		return ErrWorkflowNotFound
+		return otel.Error(span, ErrWorkflowNotFound, "no healthcare services found")
 	}
 	if len(results.Entry) > 2 {
 		err := errors.Join(ErrWorkflowNotFound, errors.New("multiple workflows found"))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 
 	span.SetStatus(codes.Ok, "")
@@ -179,33 +167,25 @@ func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl strin
 	var bundle fhir.Bundle
 	parsedBundleUrl, err := url.Parse(bundleUrl)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 
 	client := fhirclient.New(parsedBundleUrl, http.DefaultClient, coolfhir.Config())
 	if err := client.ReadWithContext(ctx, "", &bundle, fhirclient.AtUrl(parsedBundleUrl)); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 
 	var questionnaires []fhir.Questionnaire
 	if err := coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("Questionnaire"), &questionnaires); err != nil {
 		err = fmt.Errorf("could not extract questionnaires from bundle: %w", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 	e.questionnaires = append(e.questionnaires, questionnaires...)
 
 	var healthcareServices []fhir.HealthcareService
 	if err := coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType("HealthcareService"), &healthcareServices); err != nil {
 		err = fmt.Errorf("could not extract healthcare services from bundle: %w", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 	e.healthcareServices = append(e.healthcareServices, healthcareServices...)
 
@@ -250,8 +230,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 	)
 
 	if !supported {
-		span.SetStatus(codes.Error, "Workflow not supported by any healthcare service")
-		return nil, ErrWorkflowNotFound
+		return nil, otel.Error(span, ErrWorkflowNotFound, "Workflow not supported by any healthcare service")
 	}
 
 	for _, questionnaire := range e.questionnaires {
@@ -291,8 +270,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 	span.SetAttributes(
 		attribute.Int("questionnaires.total", len(e.questionnaires)),
 	)
-	span.SetStatus(codes.Error, "No matching questionnaire found")
-	return nil, ErrWorkflowNotFound
+	return nil, otel.Error(span, ErrWorkflowNotFound, "No matching questionnaire found")
 }
 
 func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl string) (*fhir.Questionnaire, error) {
@@ -323,8 +301,7 @@ func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl stri
 		attribute.Int("questionnaires.searched", len(e.questionnaires)),
 		attribute.Int("questionnaires.total", len(e.questionnaires)),
 	)
-	span.SetStatus(codes.Error, "Questionnaire not found")
-	return nil, errors.New("questionnaire not found")
+	return nil, otel.Error(span, errors.New("questionnaire not found"))
 }
 
 func (e *MemoryWorkflowProvider) QuestionnaireLoader() QuestionnaireLoader {

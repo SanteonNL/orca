@@ -70,9 +70,7 @@ func TracedHandlerWrapper(operationName string, handler func(context.Context, FH
 
 		result, err := handler(ctx, request, tx)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return nil, err
+			return nil, otel.Error(span, err)
 		}
 
 		span.SetStatus(codes.Ok, "")
@@ -329,8 +327,7 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 	}
 	var txResult fhir.Bundle
 	if err := fhirClient.CreateWithContext(ctx, tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to execute FHIR transaction")
+		otel.Error(span, err, "failed to execute FHIR transaction")
 		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 		txResultJson, _ := json.Marshal(tx.Bundle())
 		log.Ctx(ctx).Error().Err(err).
@@ -354,9 +351,7 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 	for entryIdx, resultHandler := range resultHandlers {
 		currResult, currNotificationResources, err := resultHandler(&txResult)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, fmt.Sprintf("result handler for entry %d failed", entryIdx))
-			return nil, fmt.Errorf("bundle execution succeeded, but couldn't resolve bundle.entry[%d] results: %w", entryIdx, err)
+			return nil, otel.Error(span, fmt.Errorf("bundle execution succeeded, but couldn't resolve bundle.entry[%d] results: %w", entryIdx, err))
 		}
 		for _, entry := range currResult {
 			resultBundle.Entry = append(resultBundle.Entry, *entry)
@@ -500,22 +495,19 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	localIdentity, err := s.getLocalIdentity(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
@@ -535,15 +527,13 @@ func (s *Service) handleModification(httpRequest *http.Request, httpResponse htt
 	}
 	result, err := s.handleTransactionEntry(ctx, fhirRequest, tx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	txResult, err := s.commitTransaction(s.fhirClientByTenant[tenant.ID], httpRequest.WithContext(ctx), tx, []FHIRHandlerResult{result})
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
@@ -570,23 +560,20 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	localIdentity, err := s.getLocalIdentity(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
+		otel.Error(span, err)
+		coolfhir.WriteOperationOutcomeFromError(ctx, otel.Error(span, err), operationName, httpResponse)
 		return
 	}
 
@@ -607,16 +594,14 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 
 	result, err := s.handleTransactionEntry(ctx, fhirRequest, tx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 
 	txResult, err := s.commitTransaction(s.fhirClientByTenant[tenant.ID], httpRequest.WithContext(ctx), tx, []FHIRHandlerResult{result})
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
@@ -902,23 +887,20 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 	defer span.End()
 
 	if err := s.validateSearchRequest(httpRequest); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
@@ -932,8 +914,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 
 	// Parse URL-encoded parameters from the request body
 	if err := httpRequest.ParseForm(); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
@@ -946,8 +927,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 
 	localIdentity, err := s.getLocalIdentity(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
@@ -971,8 +951,7 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 	// Call the handler
 	result, err := TracedHandlerWrapper("handleSearch"+resourceType, handler)(ctx, fhirRequest, tx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
@@ -980,15 +959,13 @@ func (s *Service) handleSearchRequest(httpRequest *http.Request, httpResponse ht
 	// Execute the transaction
 	fhirClient, err := s.createFHIRClient(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 	txResult, err := s.commitTransaction(fhirClient, httpRequest.WithContext(ctx), tx, []FHIRHandlerResult{result})
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
@@ -1012,8 +989,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	var bundle fhir.Bundle
 	op := "CarePlanService/CreateBundle"
 	if err := s.readRequest(httpRequest, &bundle); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, coolfhir.BadRequest("invalid Bundle: %w", err), op, httpResponse)
 		return
 	}
@@ -1025,18 +1001,14 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	)
 
 	if bundle.Type != fhir.BundleTypeTransaction {
-		err := coolfhir.BadRequest("only bundleType 'Transaction' is supported")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		err := otel.Error(span, coolfhir.BadRequest("only bundleType 'Transaction' is supported"))
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 		return
 	}
 	// Validate: Only allow POST/PUT operations in Bundle
 	for _, entry := range bundle.Entry {
 		if entry.Request == nil || (entry.Request.Method != fhir.HTTPVerbPOST && entry.Request.Method != fhir.HTTPVerbPUT && entry.Request.Method != fhir.HTTPVerbDELETE) {
-			err := coolfhir.BadRequest("only write operations are supported in Bundle")
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			err := otel.Error(span, coolfhir.BadRequest("only write operations are supported in Bundle"))
 			coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 			return
 		}
@@ -1044,22 +1016,19 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 		return
 	}
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 		return
 	}
 	localIdentity, err := s.getLocalIdentity(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 		return
 	}
@@ -1071,32 +1040,25 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	for entryIdx, entry := range bundle.Entry {
 		// Bundle.entry.request.url must be a relative URL with at most one slash (so Task or Task/1, but not http://example.com/Task or Task/foo/bar)
 		if entry.Request.Url == "" {
-			err := coolfhir.BadRequest("bundle.entry[%d].request.url (entry #) is required", entryIdx)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			err := otel.Error(span, coolfhir.BadRequest("bundle.entry[%d].request.url (entry #) is required", entryIdx))
 			coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 			return
 		}
 		requestUrl, err := url.Parse(entry.Request.Url)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			otel.Error(span, err)
 			coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 			return
 		}
 		if requestUrl.IsAbs() {
-			err := coolfhir.BadRequest("bundle.entry[%d].request.url (entry #) must be a relative URL", entryIdx)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			err := otel.Error(span, coolfhir.BadRequest("bundle.entry[%d].request.url (entry #) must be a relative URL", entryIdx))
 			coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 			return
 		}
 		resourcePath := requestUrl.Path
 		resourcePathParts := strings.Split(resourcePath, "/")
 		if entry.Request == nil || len(resourcePathParts) > 2 {
-			err := coolfhir.BadRequest("bundle.entry[%d].request.url (entry #) has too many paths", entryIdx)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			err := otel.Error(span, coolfhir.BadRequest("bundle.entry[%d].request.url (entry #) has too many paths", entryIdx))
 			coolfhir.WriteOperationOutcomeFromError(ctx, err, op, httpResponse)
 			return
 		}
@@ -1125,8 +1087,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 			if !errors.As(err, &operationOutcomeErr) {
 				userError = coolfhir.BadRequest("bundle.entry[%d]: %w", entryIdx, err)
 			}
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			otel.Error(span, userError)
 			coolfhir.WriteOperationOutcomeFromError(ctx, userError, op, httpResponse)
 			return
 		}
@@ -1135,8 +1096,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 	// Execute the transaction and collect the responses
 	resultBundle, err := s.commitTransaction(s.fhirClientByTenant[tenant.ID], httpRequest.WithContext(ctx), tx, resultHandlers)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, "Bundle", httpResponse)
 		return
 	}
@@ -1189,8 +1149,7 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 		defer cancel()
 
 		if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			otel.Error(span, err)
 			span.SetAttributes(attribute.String(otel.NotificationStatus, "failed"))
 			log.Ctx(ctx).Error().Err(err).Msgf("Failed to notify subscribers for %T", resource)
 		} else {
@@ -1513,65 +1472,41 @@ func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) 
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	if httpRequest.Header.Get("Content-Type") != "application/fhir+json" {
-		err := coolfhir.BadRequest("Content-Type must be 'application/fhir+json'")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, coolfhir.BadRequest("Content-Type must be 'application/fhir+json'"))
 	}
 	if !tenant.EnableImport {
-		err := coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden))
 	}
 
 	// Authz: invoker MUST equal the tenant
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	ids, err := s.profile.Identities(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	if !isRequesterLocalCareOrganization(ids, principal) {
-		err := errors.New("requester must be local care organization to use $import")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, errors.New("requester must be local care organization to use $import"))
 	}
 
 	var transaction fhir.Bundle
 	if err := s.readRequest(httpRequest, &transaction); err != nil {
-		err := coolfhir.BadRequest("invalid Bundle: %w", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, coolfhir.BadRequest("invalid Bundle: %w", err))
 	}
 	// Validate import TX: only allow POST operations
 	for _, txEntry := range transaction.Entry {
 		if txEntry.Request == nil || txEntry.Request.Method != fhir.HTTPVerbPOST {
-			err := coolfhir.BadRequest("only POST operations are supported in import Bundle")
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return nil, err
+			return nil, otel.Error(span, coolfhir.BadRequest("only POST operations are supported in import Bundle"))
 		}
 	}
 	var transactionResult fhir.Bundle
 	if err = s.fhirClientByTenant[tenant.ID].CreateWithContext(ctx, transaction, &transactionResult, fhirclient.AtPath("/")); err != nil {
-		err := fmt.Errorf("failed to import Bundle: %w", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("failed to import Bundle: %w", err))
 	}
 	return &transactionResult, nil
 }

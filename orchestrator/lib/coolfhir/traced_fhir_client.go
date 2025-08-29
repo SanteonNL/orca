@@ -36,8 +36,7 @@ func (t *TracedFHIRClient) CreateWithContext(ctx context.Context, resource inter
 
 	err := t.client.CreateWithContext(ctx, resource, result, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
@@ -61,8 +60,7 @@ func (t *TracedFHIRClient) ReadWithContext(ctx context.Context, path string, res
 
 	err := t.client.ReadWithContext(ctx, path, result, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
@@ -86,8 +84,7 @@ func (t *TracedFHIRClient) UpdateWithContext(ctx context.Context, path string, r
 
 	err := t.client.UpdateWithContext(ctx, path, resource, result, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
@@ -111,8 +108,7 @@ func (t *TracedFHIRClient) DeleteWithContext(ctx context.Context, path string, o
 
 	err := t.client.DeleteWithContext(ctx, path, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
@@ -137,8 +133,7 @@ func (t *TracedFHIRClient) SearchWithContext(ctx context.Context, resourceType s
 
 	err := t.client.SearchWithContext(ctx, resourceType, params, result, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}

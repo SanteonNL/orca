@@ -45,16 +45,12 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 
 	_, err = s.authorizeScpMember(httpRequest.WithContext(ctx))
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	result, err := s.doHandleBatch(httpRequest.WithContext(ctx), requestBundle, fhirClient)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	span.SetStatus(codes.Ok, "")
