@@ -9,6 +9,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"os"
+	"sync"
+	"time"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
@@ -25,12 +32,6 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"golang.org/x/oauth2"
-	"log/slog"
-	"net/http"
-	"net/url"
-	"os"
-	"sync"
-	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -389,6 +390,14 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get key (name: %s): %w", config.SigningKeyName, err)
 	}
+
+	// Use thumbprint as key ID, to avoid leaking Azure network information through the key ID
+	keyID := hex.EncodeToString(key.PublicKeyThumbprintS256())
+
+	// Log this for analysis: key ID can't be related back to a specific Azure Key Vault version (because it's a thumbprint),
+	// so we log it to be able to trace back which key was used in case of issues.
+	log.Info().Msgf("Loaded SMART on FHIR JWT signing key from Azure Key Vault (key=%s/%s, JWK keyID (thumbprint)=%s)", key.KeyName(), key.KeyVersion(), keyID)
+
 	return &jose.SigningKey{
 			Algorithm: jose.SignatureAlgorithm(key.SigningAlgorithm()),
 			Key:       cryptosigner.Opaque(key),
@@ -396,7 +405,7 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 			Keys: []jose.JSONWebKey{
 				{
 					Key:       key.Public(),
-					KeyID:     key.KeyID(),
+					KeyID:     keyID,
 					Use:       "sig",
 					Algorithm: key.SigningAlgorithm(),
 				},

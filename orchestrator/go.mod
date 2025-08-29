@@ -9,7 +9,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.4.0
 	github.com/SanteonNL/go-fhir-client v0.5.0
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.1.0
-	github.com/beevik/etree v1.5.1
+	github.com/beevik/etree v1.6.0
 	github.com/braineet/saml v0.4.15
 	github.com/go-jose/go-jose/v4 v4.1.2
 	github.com/go-test/deep v1.0.8
@@ -19,7 +19,7 @@ require (
 	github.com/knadh/koanf/v2 v2.2.2
 	github.com/nuts-foundation/go-nuts-client v0.2.0
 	github.com/rs/zerolog v1.34.0
-	github.com/stretchr/testify v1.10.0
+	github.com/stretchr/testify v1.11.1
 	github.com/testcontainers/testcontainers-go v0.38.0
 	github.com/zitadel/oidc/v3 v3.44.0
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250508174153-3ca2640a22ea
