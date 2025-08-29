@@ -5,7 +5,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	"go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"net/http"
@@ -31,16 +31,16 @@ import (
 )
 
 func Test_Integration_CPCFHIRProxy(t *testing.T) {
-	originalTP := otel.GetTracerProvider()
+	originalTP := baseotel.GetTracerProvider()
 	// Set up trace mocking
 	exporter := tracetest.NewInMemoryExporter()
 	tp := trace.NewTracerProvider(
 		trace.WithSyncer(exporter),
 	)
-	otel.SetTracerProvider(tp)
+	baseotel.SetTracerProvider(tp)
 	t.Cleanup(func() {
 		tp.Shutdown(context.Background())
-		otel.SetTracerProvider(originalTP)
+		baseotel.SetTracerProvider(originalTP)
 	})
 
 	notificationEndpoint := setupNotificationEndpoint(t)

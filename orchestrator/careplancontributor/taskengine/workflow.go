@@ -13,7 +13,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -21,7 +21,7 @@ import (
 
 var ErrWorkflowNotFound = errors.New("workflow not found")
 
-var tracer = otel.Tracer("careplancontributor")
+var tracer = baseotel.Tracer("careplancontributor")
 
 // WorkflowProvider provides workflows (a set of questionnaires required for accepting a Task) to the Task Filler.
 type WorkflowProvider interface {

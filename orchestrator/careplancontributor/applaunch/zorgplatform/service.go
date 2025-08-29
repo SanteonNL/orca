@@ -18,8 +18,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
-	"go.opentelemetry.io/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -50,7 +50,7 @@ const zorgplatformWorkflowIdSystem = "http://sts.zorgplatform.online/ws/claims/2
 const accessTokenCacheTTL = time.Minute * 5
 
 var sleep = time.Sleep
-var tracer = otel.Tracer("zorgplatform")
+var tracer = baseotel.Tracer("zorgplatform")
 
 type workflowContext struct {
 	workflowId string
@@ -292,8 +292,8 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, httpRequest.Method),
-			attribute.String(lib_otel.HTTPURL, httpRequest.URL.String()),
+			attribute.String(otel.HTTPMethod, httpRequest.Method),
+			attribute.String(otel.HTTPURL, httpRequest.URL.String()),
 		),
 	)
 	defer span.End()
@@ -391,8 +391,8 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String(lib_otel.HTTPMethod, request.Method),
-			attribute.String(lib_otel.HTTPURL, request.URL.String()),
+			attribute.String(otel.HTTPMethod, request.Method),
+			attribute.String(otel.HTTPURL, request.URL.String()),
 		),
 	)
 	defer span.End()

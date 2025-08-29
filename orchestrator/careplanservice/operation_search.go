@@ -9,7 +9,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -38,8 +38,8 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	resourceType := getResourceType(request.ResourcePath)
 	span.SetAttributes(
-		attribute.String(lib_otel.FHIRResourceType, resourceType),
-		attribute.String(lib_otel.OperationName, "Search"),
+		attribute.String(otel.FHIRResourceType, resourceType),
+		attribute.String(otel.OperationName, "Search"),
 	)
 
 	log.Ctx(ctx).Info().Msgf("Searching for %s", resourceType)
@@ -117,7 +117,7 @@ func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, quer
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRResourceType, resourceType),
+			attribute.String(otel.FHIRResourceType, resourceType),
 		),
 	)
 	defer span.End()
@@ -169,7 +169,7 @@ func searchResources[T any](ctx context.Context, fhirClientFactory FHIRClientFac
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRResourceType, resourceType),
+			attribute.String(otel.FHIRResourceType, resourceType),
 		),
 	)
 	defer span.End()

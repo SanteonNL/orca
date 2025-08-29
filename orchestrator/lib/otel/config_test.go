@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
 )
 
@@ -142,7 +142,7 @@ func TestInitialize_Disabled(t *testing.T) {
 	require.NotNil(t, provider)
 
 	// Verify that the global tracer provider is set
-	globalProvider := otel.GetTracerProvider()
+	globalProvider := baseotel.GetTracerProvider()
 	assert.NotNil(t, globalProvider)
 
 	// Test shutdown
@@ -167,7 +167,7 @@ func TestInitialize_StdoutExporter(t *testing.T) {
 	require.NotNil(t, provider)
 
 	// Verify that the global tracer provider is set and is not a no-op
-	globalProvider := otel.GetTracerProvider()
+	globalProvider := baseotel.GetTracerProvider()
 	assert.NotNil(t, globalProvider)
 
 	// Verify we can create a tracer
@@ -201,7 +201,7 @@ func TestInitialize_NoneExporter(t *testing.T) {
 	require.NotNil(t, provider)
 
 	// Verify that the global tracer provider is set
-	globalProvider := otel.GetTracerProvider()
+	globalProvider := baseotel.GetTracerProvider()
 	assert.NotNil(t, globalProvider)
 
 	// Verify we can create a tracer

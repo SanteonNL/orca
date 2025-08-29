@@ -7,7 +7,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	otelapi "go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"net"
 	"net/http"
 	"os"
@@ -145,7 +145,7 @@ func TestStart_OpenTelemetry(t *testing.T) {
 		assertServerStarted(t, cfg.Public.Address)
 
 		// Verify OpenTelemetry is initialized (even when disabled, we should have a provider)
-		globalProvider := otelapi.GetTracerProvider()
+		globalProvider := baseotel.GetTracerProvider()
 		assert.NotNil(t, globalProvider)
 
 		// Create a tracer to verify it works
@@ -185,7 +185,7 @@ func TestStart_OpenTelemetry(t *testing.T) {
 		assertServerStarted(t, cfg.Public.Address)
 
 		// Verify OpenTelemetry is properly initialized
-		globalProvider := otelapi.GetTracerProvider()
+		globalProvider := baseotel.GetTracerProvider()
 		assert.NotNil(t, globalProvider)
 
 		// Verify we can create spans
@@ -227,7 +227,7 @@ func TestStart_OpenTelemetry(t *testing.T) {
 		assertServerStarted(t, cfg.Public.Address)
 
 		// Verify OpenTelemetry is properly initialized
-		globalProvider := otelapi.GetTracerProvider()
+		globalProvider := baseotel.GetTracerProvider()
 		assert.NotNil(t, globalProvider)
 
 		// Verify we can create spans (they just won't be exported)
@@ -289,7 +289,7 @@ func TestOpenTelemetryInitialization(t *testing.T) {
 		require.NotNil(t, provider)
 
 		// Verify global provider is set
-		globalProvider := otelapi.GetTracerProvider()
+		globalProvider := baseotel.GetTracerProvider()
 		assert.NotNil(t, globalProvider)
 
 		// Test creating a span (basic functionality test)
@@ -355,7 +355,7 @@ func TestOpenTelemetryServerIntegration(t *testing.T) {
 		assertServerStarted(t, cfg.Public.Address)
 
 		// Verify OpenTelemetry global state
-		globalProvider := otelapi.GetTracerProvider()
+		globalProvider := baseotel.GetTracerProvider()
 		assert.NotNil(t, globalProvider)
 
 		// Verify we can create and use tracers
