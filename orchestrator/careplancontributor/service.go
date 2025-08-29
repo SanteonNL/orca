@@ -435,8 +435,7 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 	clientFactory := clients.Factories[sessionData.FHIRLauncher](sessionData.LauncherProperties)
 	proxyBasePath, err := s.tenantBasePath(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		coolfhir.WriteOperationOutcomeFromError(ctx, err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
 		return
 	}
@@ -480,18 +479,13 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 
 	ehrProxy := s.ehrFHIRProxyByTenant[tenant.ID]
 	if ehrProxy == nil {
-		err := coolfhir.BadRequest("EHR API is not supported")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, coolfhir.BadRequest("EHR API is not supported"))
 	}
 
 	log.Ctx(ctx).Debug().Msg("Handling external FHIR API request")
 	_, err = s.authorizeScpMember(request.WithContext(ctx))
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 
 	ehrProxy.ServeHTTP(writer, request.WithContext(ctx))
@@ -651,55 +645,39 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 
 	sender, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 
 	notification, ok := resource.(*coolfhir.SubscriptionNotification)
 	if !ok {
-		err := &coolfhir.ErrorWithCode{
+		return otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    "failed to cast resource to notification",
 			StatusCode: http.StatusBadRequest,
-		}
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		})
 	}
 	if notification == nil {
-		err := &coolfhir.ErrorWithCode{
+		return otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    "notification is nil",
 			StatusCode: http.StatusInternalServerError,
-		}
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		})
 	}
 
 	focusReference, err := notification.GetFocus()
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 	if focusReference == nil {
-		err := &coolfhir.ErrorWithCode{
+		return otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    "Notification focus not found",
 			StatusCode: http.StatusUnprocessableEntity,
-		}
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		})
 	}
 
 	if focusReference.Type == nil {
-		err := &coolfhir.ErrorWithCode{
+		return otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    "Notification focus type is nil",
 			StatusCode: http.StatusUnprocessableEntity,
-		}
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		})
 	}
 
 	// Add resource metadata to span
@@ -711,46 +689,34 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 	log.Ctx(ctx).Info().Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
 
 	if focusReference.Reference == nil {
-		err := &coolfhir.ErrorWithCode{
+		return otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    "Notification focus reference is nil",
 			StatusCode: http.StatusUnprocessableEntity,
-		}
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		})
 	}
 	resourceUrl := *focusReference.Reference
 	if !strings.HasPrefix(strings.ToLower(resourceUrl), "http:") && !strings.HasPrefix(strings.ToLower(resourceUrl), "https:") {
-		err := &coolfhir.ErrorWithCode{
+		return otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    "Notification focus.reference is not an absolute URL",
 			StatusCode: http.StatusUnprocessableEntity,
-		}
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		})
 	}
 	// TODO: for now, we assume the resource URL is always in the form of <FHIR base url>/<resource type>/<resource id>
 	//       Then, we can deduce the FHIR base URL from the resource URL
 	fhirBaseURL, _, err := coolfhir.ParseExternalLiteralReference(resourceUrl, *focusReference.Type)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 	fhirClient, _, err := s.createFHIRClientForIdentifier(ctx, fhirBaseURL, sender.Organization.Identifier[0])
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 	switch *focusReference.Type {
 	case "Task":
 		var task fhir.Task
 		err = fhirClient.Read(*focusReference.Reference, &task)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return err
+			return otel.Error(span, err)
 		}
 		//insert the meta.source - can be used to determine the X-Scp-Context
 		if task.Meta == nil {
@@ -770,9 +736,7 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 				log.Ctx(ctx).Err(err).Msgf("Failed to reject task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
 			}
 		} else if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return err
+			return otel.Error(span, err)
 		}
 	default:
 		log.Ctx(ctx).Debug().Msgf("No handler for notification of type %s, ignoring", *focusReference.Type)
@@ -838,10 +802,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 				// Targeted FHIR API is local CPS, either through 'local-cps' or because the target URL matches the local CPS URL
 				if !s.cpsEnabled && headerValue == "local-cps" {
 					// invalid usage
-					err := fmt.Errorf("%s: no local CarePlanService", header)
-					span.RecordError(err)
-					span.SetStatus(codes.Error, err.Error())
-					return nil, nil, err
+					return nil, nil, otel.Error(span, fmt.Errorf("%s: no local CarePlanService", header))
 				}
 				httpClient = s.httpClientForLocalCPS(tenant)
 				fhirBaseURL = localCPSURL
@@ -849,17 +810,11 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 			} else {
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
 				if err != nil {
-					err := fmt.Errorf("%s: %w", header, err)
-					span.RecordError(err)
-					span.SetStatus(codes.Error, err.Error())
-					return nil, nil, err
+					return nil, nil, otel.Error(span, fmt.Errorf("%s: %w", header, err))
 				}
 				_, httpClient, err = s.createFHIRClientForURL(ctx, fhirBaseURL)
 				if err != nil {
-					err := fmt.Errorf("%s: failed to create HTTP client: %w", header, err)
-					span.RecordError(err)
-					span.SetStatus(codes.Error, err.Error())
-					return nil, nil, err
+					return nil, nil, otel.Error(span, fmt.Errorf("%s: failed to create HTTP client: %w", header, err))
 				}
 				span.SetAttributes(attribute.String(otel.FHIRClientType, "external"))
 			}
@@ -868,37 +823,22 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 			// The header value is in the form of <system>|<value>
 			identifier, err := coolfhir.TokenToIdentifier(headerValue)
 			if err != nil {
-				err := fmt.Errorf("%s: invalid identifier (value=%s): %w", header, headerValue, err)
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return nil, nil, err
+				return nil, nil, otel.Error(span, fmt.Errorf("%s: invalid identifier (value=%s): %w", header, headerValue, err))
 			}
 			endpoints, err := s.profile.CsdDirectory().LookupEndpoint(ctx, identifier, profile.FHIRBaseURLEndpointName)
 			if err != nil {
-				err := fmt.Errorf("%s: failed to lookup FHIR base URL (identifier=%s): %w", header, headerValue, err)
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return nil, nil, err
+				return nil, nil, otel.Error(span, fmt.Errorf("%s: failed to lookup FHIR base URL (identifier=%s): %w", header, headerValue, err))
 			}
 			if len(endpoints) != 1 {
-				err := fmt.Errorf("%s: expected one FHIR base URL, got %d (identifier=%s)", header, len(endpoints), headerValue)
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return nil, nil, err
+				return nil, nil, otel.Error(span, fmt.Errorf("%s: expected one FHIR base URL, got %d (identifier=%s)", header, len(endpoints), headerValue))
 			}
 			fhirBaseURL, err = s.parseFHIRBaseURL(endpoints[0].Address)
 			if err != nil {
-				err := fmt.Errorf("%s: registered FHIR base URL is invalid (identifier=%s): %w", header, headerValue, err)
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return nil, nil, err
+				return nil, nil, otel.Error(span, fmt.Errorf("%s: registered FHIR base URL is invalid (identifier=%s): %w", header, headerValue, err))
 			}
 			_, httpClient, err = s.createFHIRClientForIdentifier(ctx, fhirBaseURL, *identifier)
 			if err != nil {
-				err := fmt.Errorf("%s: failed to create HTTP client (identifier=%s): %w", header, headerValue, err)
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return nil, nil, err
+				return nil, nil, otel.Error(span, fmt.Errorf("%s: failed to create HTTP client (identifier=%s): %w", header, headerValue, err))
 			}
 			span.SetAttributes(
 				attribute.String(otel.FHIRClientType, "identifier-based"),
@@ -908,10 +848,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 		}
 	}
 	if httpClient == nil || fhirBaseURL == nil {
-		err := coolfhir.BadRequest("can't determine the external SCP-node to query from the HTTP request headers")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, nil, err
+		return nil, nil, otel.Error(span, coolfhir.BadRequest("can't determine the external SCP-node to query from the HTTP request headers"))
 	}
 
 	span.SetAttributes(
@@ -992,21 +929,14 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	if !tenant.EnableImport {
-		err := coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, coolfhir.NewErrorWithCode("import is not enabled for this tenant", http.StatusForbidden))
 	}
 	principal, err := auth.PrincipalFromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	//
@@ -1022,27 +952,19 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	}
 	patientIdentifier, err := getIdentifierParameter(params, "patient")
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	workflowID, err := getIdentifierParameter(params, "chipsoft_zorgplatform_workflowid")
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	serviceRequest, err := getCodingParameter(params, "servicerequest")
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	condition, err := getCodingParameter(params, "condition")
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	startDate, err := getParameter[time.Time](params, "start", func(parameter fhir.ParametersParameter) *time.Time {
 		if parameter.ValueDateTime == nil {
@@ -1055,9 +977,7 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 		return &result
 	})
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	// Read patient
@@ -1069,41 +989,26 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	})
 	// Fetch patient from EHR according to BgZ (the general-practitioner is not needed, but added for conformance).
 	if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"_include": []string{"Patient:general-practitioner"}}, &patientAndPractitionerBundle, reqHeadersOpts); err != nil {
-		err := fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
 	}
 	var patient fhir.Patient
 	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
-		err := fmt.Errorf("unable to find Patient resource in Bundle: %w", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("unable to find Patient resource in Bundle: %w", err))
 	}
 
 	taskRequesterCandidates, err := s.profile.Identities(ctx)
 	if err != nil {
-		err := fmt.Errorf("unable to determine Task.requester: %w", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("unable to determine Task.requester: %w", err))
 	}
 	if len(taskRequesterCandidates) != 1 {
-		err := fmt.Errorf("unable to determine Task.requester: found %d candidates", len(taskRequesterCandidates))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("unable to determine Task.requester: found %d candidates", len(taskRequesterCandidates)))
 	}
 	taskRequester := taskRequesterCandidates[0]
 
 	cpsFHIRClient := fhirclient.New(tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL), s.httpClientForLocalCPS(tenant), coolfhir.Config())
 	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, *patientIdentifier, patient, *workflowID, *serviceRequest, *condition, *startDate)
 	if err != nil {
-		err := fmt.Errorf("import failed: %w", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("import failed: %w", err))
 	}
 	return result, nil
 }

@@ -46,12 +46,10 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to unmarshal resource")
-		return nil, &coolfhir.ErrorWithCode{
+		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("invalid %s: %v", resourceType, err),
 			StatusCode: http.StatusBadRequest,
-		}
+		})
 	}
 
 	resourceID := coolfhir.ResourceID(resource)
@@ -61,26 +59,19 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	// Check we're only allowing secure external literal references
 	if err := validateLiteralReferences(ctx, h.profile, &resource); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "literal reference validation failed")
-		return nil, err
+		return nil, otel.Error(span, err, "literal reference validation failed")
 	}
 
 	authzDecision, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
 	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "authorization check failed")
+			otel.Error(span, err, "authorization check failed")
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal is authorized to create %s", resourceType)
-		} else {
-			err := fmt.Errorf("participant is not authorized to create %s", resourceType)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "authorization denied")
 		}
-		return nil, &coolfhir.ErrorWithCode{
+		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant is not authorized to create %s", resourceType),
 			StatusCode: http.StatusForbidden,
-		}
+		})
 	}
 
 	// Add authorization decision details to span
@@ -203,9 +194,7 @@ func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T,
 			HttpStatusCode: http.StatusBadRequest,
 		}
 
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "validation failed")
-		return nil, err, true
+		return nil, otel.Error(span, err, "validation failed"), true
 	}
 
 	span.SetAttributes(

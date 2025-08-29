@@ -80,9 +80,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 			Reason:       "Task is not valid",
 			ReasonDetail: err,
 		}
-		span.RecordError(rejection)
-		span.SetStatus(codes.Error, rejection.FormatReason())
-		return rejection
+		return otel.Error(span, rejection, rejection.FormatReason())
 	}
 
 	partOfRef, err := s.partOf(task, false)
@@ -91,16 +89,12 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 			Reason:       " Task.partOf is invalid",
 			ReasonDetail: err,
 		}
-		span.RecordError(rejection)
-		span.SetStatus(codes.Error, rejection.FormatReason())
-		return rejection
+		return otel.Error(span, rejection, rejection.FormatReason())
 	}
 
 	identities, err := s.profile.Identities(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err, err.Error())
 	}
 	localIdentifiers := coolfhir.OrganizationIdentifiers(identities)
 
@@ -128,9 +122,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		log.Ctx(ctx).Info().Msg("Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
 		err = s.createSubTaskOrAcceptPrimaryTask(ctx, cpsClient, task, task, localIdentifiers)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return fmt.Errorf("failed to process new primary Task: %w", err)
+			return otel.Error(span, fmt.Errorf("failed to process new primary Task: %w", err), err.Error())
 		}
 	} else {
 		span.SetAttributes(
@@ -140,9 +132,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		log.Ctx(ctx).Info().Msgf("Notified Task is a sub-task (id=%s, primary task=%s)", *task.Id, *partOfRef)
 		err = s.handleSubtaskNotification(ctx, cpsClient, task, *partOfRef, localIdentifiers)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return fmt.Errorf("failed to update sub Task: %w", err)
+			return otel.Error(span, fmt.Errorf("failed to update sub Task: %w", err), err.Error())
 		}
 	}
 
@@ -178,9 +168,7 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 			Reason:       "Processing failed",
 			ReasonDetail: fmt.Errorf("failed to fetch primary Task of subtask (subtask.id=%s, primarytask.ref=%s): %w", *task.Id, primaryTaskRef, err),
 		}
-		span.RecordError(rejection)
-		span.SetStatus(codes.Error, rejection.FormatReason())
-		return rejection
+		return otel.Error(span, rejection, rejection.FormatReason())
 	}
 	span.SetAttributes(attribute.String("fhir.primary_task_id", to.Value(primaryTask.Id)))
 
@@ -189,16 +177,12 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 			Reason:       "Invalid Task",
 			ReasonDetail: errors.New("sub-task references another sub-task. Nested subtasks are not supported"),
 		}
-		span.RecordError(rejection)
-		span.SetStatus(codes.Error, rejection.FormatReason())
-		return rejection
+		return otel.Error(span, rejection, rejection.FormatReason())
 	}
 
 	err = s.createSubTaskOrAcceptPrimaryTask(ctx, cpsClient, task, primaryTask, identities)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err, err.Error())
 	}
 
 	span.SetStatus(codes.Ok, "")
@@ -236,9 +220,7 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	// Update the task in the FHIR server
 	err := cpsClient.Update(ref, primaryTask, primaryTask)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err)
+		return otel.Error(span, fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err), err.Error())
 	}
 	log.Ctx(ctx).Debug().Msgf("Successfully accepted task (ref=%s)", ref)
 
@@ -248,8 +230,7 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 		err = s.notifier.NotifyTaskAccepted(ctx, cpsClient.Path().String(), primaryTask)
 		if err != nil {
 			log.Ctx(ctx).Warn().Msgf("Accepted Task with an error in the notification (task=%s): %s", ref, err.Error())
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
+			otel.Error(span, err, err.Error())
 			return nil
 		} else {
 			notificationSent = true
@@ -323,9 +304,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 		rejection := &TaskRejection{
 			Reason: err.Error(),
 		}
-		span.RecordError(rejection)
-		span.SetStatus(codes.Error, rejection.FormatReason())
-		return rejection
+		return otel.Error(span, rejection, rejection.FormatReason())
 	}
 
 	workflowFound := workflow != nil
@@ -356,9 +335,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 							Reason:       "Failed to fetch questionnaire",
 							ReasonDetail: err,
 						}
-						span.RecordError(rejection)
-						span.SetStatus(codes.Error, rejection.FormatReason())
-						return rejection
+						return otel.Error(span, rejection, rejection.FormatReason())
 					}
 					nextStep, err = workflow.Proceed(*item.ValueReference.Reference)
 					if err != nil {
@@ -381,9 +358,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 					Reason:       "Failed to load questionnaire: " + nextStep.QuestionnaireUrl,
 					ReasonDetail: err,
 				}
-				span.RecordError(rejection)
-				span.SetStatus(codes.Error, rejection.FormatReason())
-				return rejection
+				return otel.Error(span, rejection, rejection.FormatReason())
 			}
 		}
 	}
@@ -398,9 +373,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 			rejection := &TaskRejection{
 				Reason: "Did not find a follow-up questionnaire, and the task has no partOf set - cannot mark primary task as accepted",
 			}
-			span.RecordError(rejection)
-			span.SetStatus(codes.Error, rejection.FormatReason())
-			return rejection
+			return otel.Error(span, rejection, rejection.FormatReason())
 		}
 
 		// TODO: Only accept main task is in status 'requested'
@@ -409,8 +382,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 		if isPrimaryTaskOwner {
 			err := s.acceptPrimaryTask(ctx, cpsClient, primaryTask)
 			if err != nil {
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
+				return otel.Error(span, err, err.Error())
 			} else {
 				span.SetStatus(codes.Ok, "Primary task accepted")
 			}
@@ -447,9 +419,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 
 	_, err = coolfhir.ExecuteTransaction(cpsClient, bundle)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return fmt.Errorf("failed to execute transaction: %w", err)
+		return otel.Error(span, fmt.Errorf("failed to execute transaction: %w", err), err.Error())
 	}
 
 	log.Ctx(ctx).Info().Msg("Successfully created a subtask")
@@ -476,9 +446,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 	// Determine service code from Task.focus
 	var serviceRequest fhir.ServiceRequest
 	if err := cpsClient.Read(*task.Focus.Reference, &serviceRequest); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, fmt.Errorf("failed to fetch ServiceRequest (path=%s, task=%s): %w", *task.Focus.Reference, *task.Id, err)
+		return nil, otel.Error(span, fmt.Errorf("failed to fetch ServiceRequest (path=%s, task=%s): %w", *task.Focus.Reference, *task.Id, err), err.Error())
 	}
 	span.SetAttributes(attribute.String("fhir.service_request_id", to.Value(serviceRequest.Id)))
 
@@ -492,9 +460,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 		span.SetAttributes(attribute.String("fhir.reason_reference", to.Value(task.ReasonReference.Reference)))
 		var condition fhir.Condition
 		if err := cpsClient.Read(*task.ReasonReference.Reference, &condition); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return nil, fmt.Errorf("failed to fetch Condition of Task.reasonReference.reference (path=%s, task=%s): %w", *task.ReasonReference.Reference, *task.Id, err)
+			return nil, otel.Error(span, fmt.Errorf("failed to fetch Condition of Task.reasonReference.reference (path=%s, task=%s): %w", *task.ReasonReference.Reference, *task.Id, err), err.Error())
 		}
 		span.SetAttributes(attribute.String("fhir.condition_id", to.Value(condition.Id)))
 		reasonCodesFromCondition := 0
@@ -536,9 +502,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 				continue
 			} else if err != nil {
 				// Other error occurred
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return nil, fmt.Errorf("workflow lookup (service=%s|%s, condition=%s|%s, task=%s): %w", *serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, *task.Id, err)
+				return nil, otel.Error(span, fmt.Errorf("workflow lookup (service=%s|%s, condition=%s|%s, task=%s): %w", *serviceCoding.System, *serviceCoding.Code, *reasonCoding.System, *reasonCoding.Code, *task.Id, err), err.Error())
 			}
 			matchedWorkflows = append(matchedWorkflows, workflow)
 		}
@@ -550,15 +514,9 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 	)
 
 	if len(matchedWorkflows) == 0 {
-		err := fmt.Errorf("ServiceRequest.code and Task.reason.code does not match any workflows (task=%s)", *task.Id)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("ServiceRequest.code and Task.reason.code does not match any workflows (task=%s)", *task.Id), "no matching workflows found")
 	} else if len(matchedWorkflows) > 1 {
-		err := fmt.Errorf("ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one (task=%s)", *task.Id)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one (task=%s)", *task.Id), "multiple workflows matched")
 	}
 
 	span.SetStatus(codes.Ok, "")

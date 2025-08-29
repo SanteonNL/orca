@@ -45,9 +45,7 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	log.Ctx(ctx).Info().Msgf("Searching for %s", resourceType)
 	resources, bundle, policyDecisions, err := h.searchAndFilter(ctx, request.QueryParams, request.Principal, resourceType)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "search and filter failed")
-		return nil, err
+		return nil, otel.Error(span, err, "search and filter failed")
 	}
 
 	// Set meta.source
@@ -124,9 +122,7 @@ func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, quer
 
 	resources, bundle, err := searchResources[T](ctx, h.fhirClientFactory, resourceType, queryParams, new(fhirclient.Headers))
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to search resources")
-		return nil, nil, nil, err
+		return nil, nil, nil, otel.Error(span, err, "failed to search resources")
 	}
 
 	span.SetAttributes(attribute.Int("fhir.search.raw_results", len(resources)))
@@ -182,9 +178,7 @@ func searchResources[T any](ctx context.Context, fhirClientFactory FHIRClientFac
 	if form.Has("_count") {
 		count, err := strconv.Atoi(form.Get("_count"))
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "invalid _count parameter")
-			return nil, &fhir.Bundle{}, fmt.Errorf("invalid _count value: %w", err)
+			return nil, &fhir.Bundle{}, otel.Error(span, fmt.Errorf("invalid _count value: %w", err))
 		}
 		searchLimit = count
 	} else {
@@ -205,17 +199,13 @@ func searchResources[T any](ctx context.Context, fhirClientFactory FHIRClientFac
 	}
 	err = fhirClient.SearchWithContext(ctx, resourceType, form, &bundle, fhirclient.ResponseHeaders(headers))
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "FHIR search request failed")
-		return nil, &fhir.Bundle{}, err
+		return nil, &fhir.Bundle{}, otel.Error(span, err, "FHIR search request failed")
 	}
 
 	var resources []T
 	err = coolfhir.ResourcesInBundle(&bundle, coolfhir.EntryIsOfType(resourceType), &resources)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to extract resources from bundle")
-		return nil, &fhir.Bundle{}, err
+		return nil, &fhir.Bundle{}, otel.Error(span, err, "failed to extract resources from bundle")
 	}
 
 	span.SetAttributes(attribute.Int("fhir.search.bundle_results", len(resources)))

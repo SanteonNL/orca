@@ -316,9 +316,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	} else {
 		err := fmt.Errorf("missing headers, options are: X-Scp-Context header, or X-Scp-WorkflowID both X-Scp-PatientID headers")
 		log.Ctx(ctx).Warn().Err(err).Msg("Missing context headers")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	// We don't want to propagate the X-Scp headers to Zorgplatform, as it's specific to the Shared Care Planning domain.
@@ -349,9 +347,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		}
 		if err != nil {
 			log.Ctx(ctx).Error().Msgf("Unable to get workflow context: %v", err)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "unable to get workflow context")
-			return nil, fmt.Errorf("unable to get workflow context: %w", err)
+			return nil, otel.Error(span, fmt.Errorf("unable to get workflow context: %w", err))
 		}
 
 		//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
@@ -371,9 +367,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		accessToken, err = s.secureTokenService.RequestAccessToken(ctx, launchContext, applicationTokenType)
 		if err != nil {
 			log.Ctx(ctx).Error().Msgf("Unable to request access token for Zorgplatform: %v", err)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "unable to request access token for Zorgplatform")
-			return nil, fmt.Errorf("unable to request access token for Zorgplatform: %w", err)
+			return nil, otel.Error(span, fmt.Errorf("unable to request access token for Zorgplatform: %w", err))
 		}
 		log.Ctx(ctx).Debug().Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
 		s.accessTokenCache.Set(cacheKey, accessToken, ttlcache.DefaultTTL)
@@ -399,16 +393,13 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	log.Ctx(ctx).Debug().Msg("Handling ChipSoft HiX app launch")
 	if err := request.ParseForm(); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, err)
 		http.Error(response, fmt.Errorf("unable to parse form: %w", err).Error(), http.StatusBadRequest)
 		return
 	}
 	samlResponse := request.FormValue("SAMLResponse")
 	if samlResponse == "" {
-		err := errors.New("SAMLResponse not found in request")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		otel.Error(span, errors.New("SAMLResponse not found in request"))
 		http.Error(response, "SAMLResponse not found in request", http.StatusBadRequest)
 		return
 	}
@@ -418,8 +409,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
 		log.Ctx(ctx).Err(err).Msg("unable to validate SAML token")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to validate SAML token")
+		otel.Error(span, err, "unable to validate SAML token")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
@@ -429,8 +419,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
 		log.Ctx(ctx).Err(err).Msg("can't determine tenant")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "can't determine tenant")
+		otel.Error(span, err, "can't determine tenant")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
@@ -441,8 +430,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	accessToken, err := s.secureTokenService.RequestAccessToken(ctx, launchContext, hcpTokenType)
 	if err != nil {
 		log.Ctx(ctx).Err(err).Msg("unable to request access token for HCP ProfessionalService")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to request access token for HCP ProfessionalService")
+		otel.Error(span, err, "unable to request access token for HCP ProfessionalService")
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
@@ -462,8 +450,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 			sleep(200 * time.Duration(i) * time.Millisecond)
 		} else {
 			log.Ctx(ctx).Err(err).Msg("unable to create session data - retry limit reached")
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "unable to create session data - retry limit reached")
+			otel.Error(span, err, "unable to create session data - retry limit reached")
 			http.Error(response, "Application launch failed.", http.StatusInternalServerError)
 			return
 		}
@@ -503,27 +490,21 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	// TODO: use baseURL if there's multiple possible CPS'
 	_, localCarePlanRef, err := coolfhir.ParseExternalLiteralReference(carePlanReference, "CarePlan")
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, fmt.Errorf("invalid CarePlan reference (url=%s): %w", carePlanReference, err)
+		return nil, otel.Error(span, fmt.Errorf("invalid CarePlan reference (url=%s): %w", carePlanReference, err))
 	}
 	log.Ctx(ctx).Debug().Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
 	span.SetAttributes(attribute.String("careplan.local_ref", localCarePlanRef))
 
 	fhirClient, err := s.cpsFhirClient(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	var carePlan fhir.CarePlan
 	err = fhirClient.ReadWithContext(ctx, localCarePlanRef, &carePlan)
 	if err != nil {
 		log.Ctx(ctx).Error().Msgf("Unable to fetch CarePlan resource: %v", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to fetch CarePlan resource")
-		return nil, fmt.Errorf("unable to fetch CarePlan resource: %w", err)
+		return nil, otel.Error(span, fmt.Errorf("unable to fetch CarePlan resource: %w", err))
 	}
 
 	// TODO: What if there's no activities?
@@ -531,9 +512,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	err = fhirClient.ReadWithContext(ctx, *carePlan.Activity[0].Reference.Reference, &task)
 	if err != nil {
 		log.Ctx(ctx).Error().Msgf("Unable to fetch Task resource: %v", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to fetch Task resource")
-		return nil, fmt.Errorf("unable to fetch Task resource: %w", err)
+		return nil, otel.Error(span, fmt.Errorf("unable to fetch Task resource: %w", err))
 	}
 	span.SetAttributes(attribute.String("task.reference", *carePlan.Activity[0].Reference.Reference))
 
@@ -541,18 +520,13 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	err = fhirClient.ReadWithContext(ctx, *task.Focus.Reference, &serviceRequest)
 	if err != nil {
 		log.Ctx(ctx).Error().Msgf("Unable to fetch ServiceRequest resource: %v", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to fetch ServiceRequest resource")
-		return nil, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err)
+		return nil, otel.Error(span, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err))
 	}
 	span.SetAttributes(attribute.String("servicerequest.reference", *task.Focus.Reference))
 
 	workflowIdIdentifiers := coolfhir.FilterIdentifier(&serviceRequest.Identifier, zorgplatformWorkflowIdSystem)
 	if len(workflowIdIdentifiers) != 1 {
-		err := fmt.Errorf("expected ServiceRequest to have 1 identifier with system %s", zorgplatformWorkflowIdSystem)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("expected ServiceRequest to have 1 identifier with system %s", zorgplatformWorkflowIdSystem))
 	}
 	workflowID := *workflowIdIdentifiers[0].Value
 	span.SetAttributes(attribute.String("zorgplatform.workflow_id", workflowID))
@@ -561,18 +535,13 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	err = fhirClient.ReadWithContext(ctx, *carePlan.Subject.Reference, &patient)
 	if err != nil {
 		log.Ctx(ctx).Error().Msgf("Unable to fetch Patient resource: %v", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to fetch Patient resource")
-		return nil, fmt.Errorf("unable to fetch Patient resource: %w", err)
+		return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient resource: %w", err))
 	}
 	span.SetAttributes(attribute.String("patient.reference", *carePlan.Subject.Reference))
 
 	bsnIdentifier := coolfhir.FilterFirstIdentifier(&patient.Identifier, coolfhir.BSNNamingSystem)
 	if bsnIdentifier == nil {
-		err := fmt.Errorf("identifier with system %s not found", coolfhir.BSNNamingSystem)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("identifier with system %s not found", coolfhir.BSNNamingSystem))
 	}
 	result := &workflowContext{
 		workflowId: workflowID,
@@ -617,16 +586,12 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	// New client that uses the access token
 	apiUrl, err := url.Parse(s.config.ApiUrl)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	cpsFHIRClient, err := globals.CreateCPSFHIRClient(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 
 	var existingTaskRef *string
@@ -637,9 +602,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 
 	if err != nil {
 		log.Ctx(ctx).Error().Msgf("Failed to check for existing CPS Task resource: %v", err)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to check for existing CPS Task resource")
-		return nil, fmt.Errorf("failed to check for existing CPS Task resource: %w", err)
+		return nil, otel.Error(span, fmt.Errorf("failed to check for existing CPS Task resource: %w", err))
 	}
 
 	if existingTask != nil {
@@ -654,31 +617,23 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	var task map[string]interface{}
 	taskPath := "Task/" + launchContext.WorkflowId
 	if err = fhirClient.ReadWithContext(ctx, taskPath, &task); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to fetch Task resource")
-		return nil, fmt.Errorf("unable to fetch Task resource (id=%s): %w", launchContext.WorkflowId, err)
+		return nil, otel.Error(span, fmt.Errorf("unable to fetch Task resource (id=%s): %w", launchContext.WorkflowId, err))
 	}
 	span.SetAttributes(attribute.String("zorgplatform.task.reference", taskPath))
 
 	// Determine service and condition code from the workflow specified by Task.definitionReference.reference (e.g. Telemonitoring, COPD)
 	conditionCode, err := getConditionCodeFromWorkflowTask(task)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to get condition code from workflow task")
-		return nil, err
+		return nil, otel.Error(span, err, "unable to get condition code from workflow task")
 	}
 
 	var patientAndPractitionerBundle fhir.Bundle
 	if err = fhirClient.ReadWithContext(ctx, "Patient", &patientAndPractitionerBundle, fhirclient.QueryParam("_include", "Patient:general-practitioner")); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to fetch Patient and Practitioner bundle")
-		return nil, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err)
+		return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
 	}
 	var patient fhir.Patient
 	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to find Patient resource in Bundle")
-		return nil, fmt.Errorf("unable to find Patient resource in Bundle: %w", err)
+		return nil, otel.Error(span, fmt.Errorf("unable to find Patient resource in Bundle: %w", err))
 	}
 	span.SetAttributes(attribute.String("patient.id", *patient.Id))
 
@@ -700,15 +655,10 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	// Resolve identity of local care organization
 	identities, err := s.profile.Identities(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unable to fetch identities")
-		return nil, fmt.Errorf("unable to fetch identities: %w", err)
+		return nil, otel.Error(span, fmt.Errorf("unable to fetch identities: %w", err))
 	}
 	if len(identities) != 1 {
-		err := fmt.Errorf("expected exactly one identity, got %d", len(identities))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, fmt.Errorf("expected exactly one identity, got %d", len(identities)))
 	}
 	organization := identities[0]
 	span.SetAttributes(attribute.Int("identities.count", len(identities)))
@@ -769,9 +719,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
 	span.SetAttributes(attribute.String("tenant.id", tenant.ID))
 

@@ -1,7 +1,7 @@
 package coolfhir
 
 import (
-	"fmt"
+	"errors"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	baseotel "go.opentelemetry.io/otel"
@@ -50,9 +50,7 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	resp, err := t.base.RoundTrip(req)
 
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return resp, err
+		return resp, otel.Error(span, err)
 	}
 
 	// Record response attributes
@@ -62,7 +60,7 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	)
 
 	if resp.StatusCode >= 400 {
-		span.SetStatus(codes.Error, fmt.Sprintf("HTTP %d", resp.StatusCode))
+		otel.Error(span, errors.New(http.StatusText(resp.StatusCode)))
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}

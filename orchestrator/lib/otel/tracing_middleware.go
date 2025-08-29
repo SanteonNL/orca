@@ -1,6 +1,7 @@
 package otel
 
 import (
+	"errors"
 	"go.opentelemetry.io/otel/codes"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 	"go.opentelemetry.io/otel/trace"
@@ -26,7 +27,7 @@ func HandlerWithTracing(tracer trace.Tracer, operationName string, handler http.
 
 		span.SetAttributes(semconv.HTTPStatusCodeKey.Int(wrapped.statusCode))
 		if wrapped.statusCode >= 400 {
-			span.SetStatus(codes.Error, http.StatusText(wrapped.statusCode))
+			Error(span, errors.New(http.StatusText(wrapped.statusCode)))
 		} else {
 			span.SetStatus(codes.Ok, "")
 		}
