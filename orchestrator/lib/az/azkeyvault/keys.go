@@ -43,7 +43,6 @@ type keyPair struct {
 	asJwk      jwk.Key
 	publicKey  crypto.PublicKey
 	client     KeysClient
-	keyID      *string
 }
 
 func (s Suite) SigningKey() crypto.Signer {
