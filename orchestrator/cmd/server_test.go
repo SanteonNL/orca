@@ -7,14 +7,14 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	otelapi "go.opentelemetry.io/otel"
-	"net"
-	"net/http"
-	"os"
-	"strconv"
-	"sync"
-	"testing"
-	"time"
+otelapi baseotel "go.opentelemetry.io/otel"
+"net"
+"net/http"
+"os"
+"strconv"
+"sync"
+"testing"
+"time"
 )
 
 func TestStart(t *testing.T) {

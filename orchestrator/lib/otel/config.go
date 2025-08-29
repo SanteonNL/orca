@@ -3,7 +3,7 @@ package otel
 import (
 	"context"
 	"fmt"
-	"go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
@@ -161,7 +161,7 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	if !config.Enabled {
 		// Set up a no-op tracer provider
 		noopProvider := trace.NewTracerProvider()
-		otel.SetTracerProvider(noopProvider)
+		baseotel.SetTracerProvider(noopProvider)
 		return &TracerProvider{
 			provider: noopProvider,
 			cleanup:  func(context.Context) error { return nil },
@@ -245,10 +245,10 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	tp := trace.NewTracerProvider(opts...)
 
 	// Set global tracer provider
-	otel.SetTracerProvider(tp)
+	baseotel.SetTracerProvider(tp)
 
 	// Set global propagator to tracecontext (W3C Trace Context)
-	otel.SetTextMapPropagator(propagation.TraceContext{})
+	baseotel.SetTextMapPropagator(propagation.TraceContext{})
 
 	return &TracerProvider{
 		provider: tp,

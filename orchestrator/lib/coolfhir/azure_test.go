@@ -6,7 +6,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"net/http"
@@ -243,7 +243,7 @@ func TestNewAuthRoundTripper_OpenTelemetry_Debug(t *testing.T) {
 	tracerProvider := trace.NewTracerProvider(
 		trace.WithSpanProcessor(spanRecorder),
 	)
-	otel.SetTracerProvider(tracerProvider)
+	baseotel.SetTracerProvider(tracerProvider)
 	defer tracerProvider.Shutdown(context.Background())
 
 	t.Logf("Initial spans count: %d", len(spanRecorder.Ended()))
@@ -300,7 +300,7 @@ func TestNewAuthRoundTripper_OpenTelemetry_Debug(t *testing.T) {
 
 	// Try creating a manual span to verify the tracer provider works
 	t.Logf("Creating manual span...")
-	tracer := otel.GetTracerProvider().Tracer("test")
+	tracer := baseotel.GetTracerProvider().Tracer("test")
 	_, manualSpan := tracer.Start(context.Background(), "manual-test-span")
 	manualSpan.End()
 

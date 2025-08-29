@@ -7,12 +7,12 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	lib_otel "github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"go.opentelemetry.io/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
@@ -22,7 +22,7 @@ import (
 	"strings"
 )
 
-var tracer = otel.Tracer("careplancontributor.ehr")
+var tracer = baseotel.Tracer("careplancontributor.ehr")
 
 // BundleSet represents a collection of FHIR bundles associated with a specific task, identified by an ID.
 type BundleSet struct {
@@ -42,7 +42,7 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRTaskID, taskId),
+			attribute.String(otel.FHIRTaskID, taskId),
 		),
 	)
 	defer span.End()
@@ -117,8 +117,8 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	bundles.addBundle(*questionnaireResponseBundles...)
 
 	span.SetAttributes(
-		attribute.Int(lib_otel.FHIRBundlesCount, len(bundles.Bundles)),
-		attribute.String(lib_otel.FHIRBundleSetId, bundles.Id),
+		attribute.Int(otel.FHIRBundlesCount, len(bundles.Bundles)),
+		attribute.String(otel.FHIRBundleSetId, bundles.Id),
 	)
 
 	return &bundles, nil
@@ -130,7 +130,7 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRTaskID, taskId),
+			attribute.String(otel.FHIRTaskID, taskId),
 		),
 	)
 	defer span.End()
@@ -161,8 +161,8 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 	}
 
 	span.SetAttributes(
-		attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
-		attribute.Int(lib_otel.FHIRBundleEntryCount, len(taskBundle.Entry)),
+		attribute.Int(otel.FHIRTasksCount, len(tasks)),
+		attribute.Int(otel.FHIRBundleEntryCount, len(taskBundle.Entry)),
 	)
 
 	return &taskBundle, tasks, nil
@@ -174,7 +174,7 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+			attribute.Int(otel.FHIRTasksCount, len(tasks)),
 		),
 	)
 	defer span.End()
@@ -235,7 +235,7 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+			attribute.Int(otel.FHIRTasksCount, len(tasks)),
 		),
 	)
 	defer span.End()
@@ -267,7 +267,7 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+			attribute.Int(otel.FHIRTasksCount, len(tasks)),
 		),
 	)
 	defer span.End()
@@ -290,7 +290,7 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.Int(lib_otel.FHIRTasksCount, len(tasks)),
+			attribute.Int(otel.FHIRTasksCount, len(tasks)),
 		),
 	)
 	defer span.End()
@@ -361,7 +361,7 @@ func fetchRef(ctx context.Context, cpsClient fhirclient.Client, ref string) (*fh
 		debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
-			attribute.String(lib_otel.FHIRResourceReference, ref),
+			attribute.String(otel.FHIRResourceReference, ref),
 		),
 	)
 	defer span.End()
