@@ -37,6 +37,14 @@ type Suite struct {
 	keyPair
 }
 
+func (s Suite) KeyName() string {
+	return s.keyName
+}
+
+func (s Suite) KeyVersion() string {
+	return s.keyVersion
+}
+
 type keyPair struct {
 	keyName                 string
 	keyVersion              string
