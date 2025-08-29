@@ -6,14 +6,6 @@ import (
 	"crypto/rand"
 	"crypto/rsa"
 	"encoding/json"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
-	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
-	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/go-jose/go-jose/v4"
-	"github.com/go-jose/go-jose/v4/jwt"
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 	"io"
 	"net/http"
 	"net/http/cookiejar"
@@ -22,6 +14,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/go-jose/go-jose/v4"
+	"github.com/go-jose/go-jose/v4/jwt"
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 )
 
 func TestService(t *testing.T) {
@@ -255,5 +256,6 @@ func Test_loadJWTSigningKeyFromAzureKeyVault(t *testing.T) {
 	require.Len(t, jwkKeySet.Keys, 1, "Expected one key in JWK set")
 	require.Equal(t, "RS256", jwkKeySet.Keys[0].Algorithm, "Expected key algorithm to be RS256")
 	require.Equal(t, "sig", jwkKeySet.Keys[0].Use, "Expected key use to be 'sig'")
+	require.Equal(t, "0", jwkKeySet.Keys[0].KeyID, "Expected key ID to be '0'")
 	require.NotNil(t, jwkKeySet.Keys[0].Key)
 }

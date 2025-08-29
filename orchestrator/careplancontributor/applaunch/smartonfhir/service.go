@@ -9,6 +9,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"os"
+	"strings"
+	"sync"
+	"time"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
@@ -25,12 +33,6 @@ import (
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"golang.org/x/oauth2"
-	"log/slog"
-	"net/http"
-	"net/url"
-	"os"
-	"sync"
-	"time"
 
 	"github.com/rs/zerolog/log"
 )
@@ -389,6 +391,16 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get key (name: %s): %w", config.SigningKeyName, err)
 	}
+
+	// Take last part of key as key ID, e.g.:
+	// https://someinstance.vault.azure.net/keys/smartonfhir-jwt-signing-key/ee137e8e02cb420f9809aa18e9fb071d
+	// In this case, ee137e8e02cb420f9809aa18e9fb071d would be the key ID
+	keyIDParts := strings.Split(key.KeyID(), "/")
+	if len(keyIDParts) == 0 {
+		return nil, nil, fmt.Errorf("invalid key ID from Azure Key Vault: %s", key.KeyID())
+	}
+	keyID := keyIDParts[len(keyIDParts)-1]
+
 	return &jose.SigningKey{
 			Algorithm: jose.SignatureAlgorithm(key.SigningAlgorithm()),
 			Key:       cryptosigner.Opaque(key),
@@ -396,7 +408,7 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 			Keys: []jose.JSONWebKey{
 				{
 					Key:       key.Public(),
-					KeyID:     key.KeyID(),
+					KeyID:     keyID,
 					Use:       "sig",
 					Algorithm: key.SigningAlgorithm(),
 				},
