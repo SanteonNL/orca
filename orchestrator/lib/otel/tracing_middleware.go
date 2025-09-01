@@ -1,7 +1,9 @@
 package otel
 
 import (
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
@@ -9,8 +11,11 @@ import (
 
 func HandlerWithTracing(tracer trace.Tracer, operationName string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// Extract trace context from incoming HTTP headers
+		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+
 		ctx, span := tracer.Start(
-			r.Context(),
+			ctx,
 			operationName,
 			trace.WithSpanKind(trace.SpanKindServer),
 			trace.WithAttributes(

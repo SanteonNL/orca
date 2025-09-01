@@ -14,8 +14,10 @@ import (
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
 	"net/url"
@@ -190,7 +192,18 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 	)
 
 	log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to HTTP endpoint (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
-	httpResponse, err := http.Post(taskAcceptedBundleEndpoint, "application/fhir+json", bytes.NewBuffer(jsonData))
+
+	// Create HTTP request with context
+	req, err := http.NewRequestWithContext(ctx, "POST", taskAcceptedBundleEndpoint, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return otel.Error(span, errors.Wrap(err, "failed to create HTTP request"))
+	}
+	req.Header.Set("Content-Type", "application/fhir+json")
+
+	// Inject trace context into request headers
+	baseotel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+
+	httpResponse, err := http.DefaultClient.Do(req)
 	if err != nil {
 		log.Ctx(ctx).Warn().Err(err).Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s) e", set.task, taskAcceptedBundleEndpoint)
 		return otel.Error(span, errors.Wrap(err, "failed to send task to endpoint"))

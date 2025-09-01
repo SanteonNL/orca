@@ -42,12 +42,19 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	)
 	defer span.End()
 
+	// Clone the request to avoid modifying the original
+	reqClone := req.Clone(ctx)
+
+	// Ensure headers map exists
+	if reqClone.Header == nil {
+		reqClone.Header = make(http.Header)
+	}
+
 	// Inject trace context into HTTP headers
-	baseotel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+	baseotel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(reqClone.Header))
 
 	// Execute the request with traced context
-	req = req.WithContext(ctx)
-	resp, err := t.base.RoundTrip(req)
+	resp, err := t.base.RoundTrip(reqClone)
 
 	if err != nil {
 		return resp, otel.Error(span, err)
