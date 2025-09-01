@@ -573,7 +573,7 @@ func (s *Service) handleGet(httpRequest *http.Request, httpResponse http.Respons
 	localIdentity, err := s.getLocalIdentity(ctx)
 	if err != nil {
 		otel.Error(span, err)
-		coolfhir.WriteOperationOutcomeFromError(ctx, otel.Error(span, err), operationName, httpResponse)
+		coolfhir.WriteOperationOutcomeFromError(ctx, err, operationName, httpResponse)
 		return
 	}
 

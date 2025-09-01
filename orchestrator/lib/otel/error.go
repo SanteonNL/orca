@@ -3,6 +3,7 @@ package otel
 import (
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
+	"strings"
 )
 
 // Error records an error on the span, sets the span status to error, and returns the original error.
@@ -16,7 +17,7 @@ func Error(span trace.Span, err error, message ...string) error {
 
 	var statusDesc string
 	if len(message) > 0 && message[0] != "" {
-		statusDesc = message[0]
+		statusDesc = strings.Join(message, ",")
 	} else {
 		statusDesc = err.Error()
 	}
