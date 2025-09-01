@@ -25,11 +25,7 @@ func HandlerWithTracing(tracer trace.Tracer, operationName string, handler http.
 		handler(wrapped, r.WithContext(ctx))
 
 		span.SetAttributes(semconv.HTTPStatusCodeKey.Int(wrapped.statusCode))
-		if wrapped.statusCode >= 400 {
-			span.SetStatus(codes.Error, http.StatusText(wrapped.statusCode))
-		} else {
-			span.SetStatus(codes.Ok, "")
-		}
+		span.SetStatus(codes.Ok, "")
 	}
 }
 

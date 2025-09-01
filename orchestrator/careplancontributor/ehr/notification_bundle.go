@@ -14,7 +14,6 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"net/url"
 	"regexp"
@@ -57,9 +56,7 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 
 	taskBundle, tasks, err := fetchTasks(ctx, cpsClient, taskId)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch tasks")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch tasks")
 	}
 	for i, bundleEntry := range taskBundle.Entry {
 		if err := json.Unmarshal(bundleEntry.Resource, &tasks[i]); err != nil {
@@ -75,37 +72,27 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 
 	carePlanBundle, carePlan, err := fetchCarePlan(ctx, cpsClient, tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch care plan")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch care plan")
 	}
 
 	patientBundle, err := fetchPatient(ctx, cpsClient, carePlan)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch patient")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch patient")
 	}
 
 	serviceRequestBundle, err := fetchServiceRequest(ctx, cpsClient, tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch service request")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch service request")
 	}
 
 	questionnaireBundles, err := fetchQuestionnaires(ctx, cpsClient, tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch questionnaires")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch questionnaires")
 	}
 
 	questionnaireResponseBundles, err := fetchQuestionnaireResponses(ctx, cpsClient, tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch questionnaire responses")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch questionnaire responses")
 	}
 
 	// Bundle order is important for the message
@@ -142,22 +129,16 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 	values.Set("_revinclude", "Task:part-of")
 	err := cpsClient.SearchWithContext(ctx, "Task", values, &taskBundle)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to search tasks")
-		return nil, nil, err
+		return nil, nil, otel.Error(span, err, "failed to search tasks")
 	}
 	if len(taskBundle.Entry) < 2 {
 		err := fmt.Errorf("expected at least 2 Tasks (1 primary, 1 subtask), got %d", len(taskBundle.Entry))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "insufficient tasks found")
-		return nil, nil, err
+		return nil, nil, otel.Error(span, err, "insufficient tasks found")
 	}
 	var tasks []fhir.Task
 	err = coolfhir.ResourcesInBundle(&taskBundle, coolfhir.EntryIsOfType("Task"), &tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to extract tasks from bundle")
-		return nil, nil, err
+		return nil, nil, otel.Error(span, err, "failed to extract tasks from bundle")
 	}
 
 	span.SetAttributes(

@@ -48,26 +48,19 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 	}
 	err = fhirClient.ReadWithContext(ctx, resourceType+"/"+request.ResourceId, &resource, fhirclient.ResponseHeaders(request.FhirHeaders))
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to read resource from FHIR server")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to read resource from FHIR server")
 	}
 
 	authzDecision, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
 	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "authorization check failed")
+			otel.Error(span, err, "authorization check failed")
 			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal has access to %s", resourceType)
-		} else {
-			err := fmt.Errorf("participant does not have access to %s", resourceType)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "authorization denied")
 		}
-		return nil, &coolfhir.ErrorWithCode{
+		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant does not have access to %s", resourceType),
 			StatusCode: http.StatusForbidden,
-		}
+		})
 	}
 
 	// Add authorization decision details to span
@@ -82,9 +75,7 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 
 	resourceRaw, err := json.Marshal(resource)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to marshal resource")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to marshal resource")
 	}
 
 	bundleEntry := fhir.BundleEntry{

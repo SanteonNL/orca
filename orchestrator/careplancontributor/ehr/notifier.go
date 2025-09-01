@@ -83,9 +83,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 
 	// Process the task notification synchronously to propagate errors
@@ -116,33 +114,23 @@ func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcce
 	// Lookup tenant
 	tenant, err := n.tenants.Get(event.TenantID)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return errors.Wrapf(err, "failed to get from task accepted event (tenant-id=%s)", event.TenantID)
+		return otel.Error(span, errors.Wrapf(err, "failed to get from task accepted event (tenant-id=%s)", event.TenantID))
 	}
 	ctx = tenants.WithTenant(ctx, *tenant)
 
 	fhirBaseURL, err := url.Parse(event.FHIRBaseURL)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, err)
 	}
 
 	cpsClient, _, err := n.fhirClientFactory(ctx, fhirBaseURL)
 	if err != nil {
-		err = errors.Wrap(err, "failed to create FHIR client for invoking CarePlanService")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, errors.Wrap(err, "failed to create FHIR client for invoking CarePlanService"))
 	}
 
 	bundles, err := TaskNotificationBundleSet(ctx, cpsClient, *event.Task.Id)
 	if err != nil {
-		err = errors.Wrap(err, "failed to create task notification bundle")
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return err
+		return otel.Error(span, errors.Wrap(err, "failed to create task notification bundle"))
 	}
 	log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
 
@@ -159,10 +147,7 @@ func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcce
 			}
 			err = cpsClient.UpdateWithContext(ctx, "Task/"+*event.Task.Id, task, &task)
 			if err != nil {
-				err = errors.Wrap(err, "failed to update task status")
-				span.RecordError(err)
-				span.SetStatus(codes.Error, err.Error())
-				return err
+				return otel.Error(span, errors.Wrap(err, "failed to update task status"))
 			}
 			return nil
 		}
@@ -198,9 +183,7 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 
 	jsonData, err := json.MarshalIndent(set, "", "\t")
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to serialize bundle set")
-		return err
+		return otel.Error(span, err, "failed to serialize bundle set")
 	}
 	span.SetAttributes(
 		attribute.Int("payload.size_bytes", len(jsonData)),
@@ -209,20 +192,15 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 	log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to HTTP endpoint (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
 	httpResponse, err := http.Post(taskAcceptedBundleEndpoint, "application/fhir+json", bytes.NewBuffer(jsonData))
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to send task to endpoint")
 		log.Ctx(ctx).Warn().Err(err).Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s) e", set.task, taskAcceptedBundleEndpoint)
-		return errors.Wrap(err, "failed to send task to endpoint")
+		return otel.Error(span, errors.Wrap(err, "failed to send task to endpoint"))
 	}
 	defer httpResponse.Body.Close()
 	if httpResponse.StatusCode == http.StatusBadRequest {
 		var badRequest BadRequest
 		var operationOutcome fhir.OperationOutcome
 		if err := json.NewDecoder(httpResponse.Body).Decode(&operationOutcome); err != nil {
-			err = errors.Wrap(err, "failed to decode bad request response")
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			return err
+			return otel.Error(span, errors.Wrap(err, "failed to decode bad request response"))
 		}
 		if len(operationOutcome.Issue) > 0 {
 			badRequest.Reason = operationOutcome.Issue[0].Diagnostics
@@ -233,10 +211,7 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 		return &BadRequest{Reason: badRequest.Reason}
 	}
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
-		err = errors.Errorf("failed to send task to endpoint, status code: %d", httpResponse.StatusCode)
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to send task to endpoint")
-		return err
+		return otel.Error(span, errors.Errorf("failed to send task to endpoint, status code: %d", httpResponse.StatusCode))
 	}
 	log.Ctx(ctx).Info().Msgf("Notified EHR of accepted Task with bundle (ref=%s)", set.task)
 
