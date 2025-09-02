@@ -1,6 +1,10 @@
 package demo
 
 import (
+	"net/http"
+	"net/url"
+	"strconv"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
@@ -13,9 +17,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
-	"strconv"
 )
 
 const fhirLauncherKey = "demo"
@@ -61,9 +62,13 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	log.Ctx(request.Context()).Debug().Msg("Handling demo app launch")
-	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "tenant")
+	values, ok := getQueryParams(response, request, "patient", "practitioner", "tenant")
 	if !ok {
 		return
+	}
+	serviceRequest := request.URL.Query().Get("serviceRequest")
+	if serviceRequest != "" {
+		values["serviceRequest"] = serviceRequest
 	}
 	tenant, err := s.tenants.Get(values["tenant"])
 	if err != nil {
@@ -156,8 +161,15 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	}
 
 	// Redirect to landing page
-	log.Ctx(request.Context()).Debug().Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
-	http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
+	if serviceRequest == "" {
+		// No ServiceRequest given from EHR, redirect to task overview
+		log.Ctx(request.Context()).Debug().Msg("No ServiceRequest provided by EHR, redirecting to Task overview")
+		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("list").String(), http.StatusFound)
+	} else {
+		// ServiceRequest given, redirect to new enrollment landing page
+		log.Ctx(request.Context()).Debug().Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
+		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
+	}
 }
 
 func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {

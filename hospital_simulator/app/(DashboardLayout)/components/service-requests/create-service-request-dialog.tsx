@@ -173,88 +173,6 @@ function createServiceRequestBundle(requestDetails: ServiceRequestDetails,
                 }
             },
             {
-                "fullUrl": "urn:uuid:practitioner-1",
-                "resource": {
-                    "resourceType": "Practitioner",
-                    "id": "practitioner-1",
-                    "identifier": [
-                        {
-                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
-                            "value": "uzi-001"
-                        }
-                    ],
-                    "name": [
-                        {
-                            "family": "Hans",
-                            "given": ["Visser"],
-                            "prefix": ["dr."]
-                        }
-                    ],
-                    "telecom": [
-                        {
-                            "system": "phone",
-                            "value": "987-654-3210",
-                            "use": "work"
-                        },
-                        {
-                            "system": "email",
-                            "value": "practitioner@example.com",
-                            "use": "work"
-                        }
-                    ],
-                    "address": [
-                        {
-                            "use": "work",
-                            "line": "GPStreet 17",
-                            "city": "Health City",
-                            "postalCode": "1234 AA",
-                            "country": "NL"
-                        }
-                    ]
-                },
-                "request": {
-                    "method": "POST",
-                    "url": "Practitioner",
-                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
-                }
-            },
-            {
-                "fullUrl": "urn:uuid:practitionerrole-1",
-                "resource": {
-                    "resourceType": "PractitionerRole",
-                    "id": "practitionerrole-1",
-                    "identifier": [
-                        {
-                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
-                            "value": "uzi-001"
-                        }
-                    ],
-                    "practitioner": {
-                        "type": "Practitioner",
-                        "reference": "urn:uuid:practitioner-1",
-                        "identifier": {
-                            "system": "http://fhir.nl/fhir/NamingSystem/uzi",
-                            "value": "uzi-001"
-                        }
-                    },
-                    "code": [
-                        {
-                            "coding": [
-                                {
-                                    "system": "http://terminology.hl7.org/CodeSystem/practitioner-role",
-                                    "code": "doctor"
-                                }
-                            ]
-                        }
-                    ]
-                },
-                "request": {
-                    "method": "POST",
-                    "url": "PractitionerRole",
-                    "ifNoneExist": "identifier=http://fhir.nl/fhir/NamingSystem/uzi|uzi-001"
-                }
-            },
-            {
                 "fullUrl": "urn:uuid:requester",
                 "resource": requester,
                 "request": {
@@ -317,7 +235,6 @@ function createServiceRequestBundle(requestDetails: ServiceRequestDetails,
                     },
                     "recorder": {
                         "type": "PractitionerRole",
-                        "reference": "urn:uuid:practitionerrole-1",
                         "identifier": {
                             "system": "http://fhir.nl/fhir/NamingSystem/uzi",
                             "value": "uzi-001"
