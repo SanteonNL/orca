@@ -15,9 +15,11 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -96,7 +98,7 @@ type RestHookChannel struct {
 func (r RestHookChannel) Notify(ctx context.Context, notification coolfhir.SubscriptionNotification) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"RestHookChannel/"+debug.GetCallerName(),
+		"RestHookChannel."+debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("notification.endpoint", r.Endpoint),
@@ -120,8 +122,10 @@ func (r RestHookChannel) Notify(ctx context.Context, notification coolfhir.Subsc
 	// Be a good client and read the response, even if we don't actually do anything with it.
 	_, _ = io.ReadAll(io.LimitReader(httpResponse.Body, 1024))
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
-		return errors.Join(ReceiverFailure, fmt.Errorf("non-OK HTTP response from %s status: %v", r.Endpoint, httpResponse.Status))
+		err := errors.Join(ReceiverFailure, fmt.Errorf("non-OK HTTP response from %s status: %v", r.Endpoint, httpResponse.Status))
+		return otel.Error(span, err)
 	}
+	span.SetStatus(codes.Ok, "FHIR notification delivered over REST")
 	return nil
 }
 
