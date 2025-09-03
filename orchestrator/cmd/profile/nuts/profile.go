@@ -5,6 +5,14 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
+	"regexp"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
@@ -20,13 +28,8 @@ import (
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
-	"regexp"
-	"slices"
-	"strings"
-	"sync"
-	"time"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const identitiesCacheTTL = 5 * time.Minute
@@ -48,6 +51,8 @@ type DutchNutsProfile struct {
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
 	clientCerts           []tls.Certificate
+	// nutsAPIHTTPClient is an HTTP client that is configured to communicate with the Nuts node's internal API.
+	nutsAPIHTTPClient *http.Client
 }
 
 func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
@@ -74,12 +79,23 @@ func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
 	} else {
 		log.Warn().Msg("Nuts: no TLS client certificate configured for outbound HTTP requests")
 	}
+	nutsAPIHTTPClient := &http.Client{
+		Transport: otelhttp.NewTransport(
+			http.DefaultTransport,
+			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+				return fmt.Sprintf("nutsnode.%s %s", strings.ToLower(r.Method), r.URL.Path)
+			}),
+			otelhttp.WithSpanOptions(
+				trace.WithSpanKind(trace.SpanKindClient),
+			),
+		),
+	}
 
-	vcrClient, err := vcr.NewClientWithResponses(config.API.URL)
+	vcrClient, err := vcr.NewClientWithResponses(config.API.URL, vcr.WithHTTPClient(nutsAPIHTTPClient))
 	if err != nil {
 		return nil, err
 	}
-	apiClient, _ := discovery.NewClientWithResponses(config.API.URL)
+	apiClient, _ := discovery.NewClientWithResponses(config.API.URL, discovery.WithHTTPClient(nutsAPIHTTPClient))
 	return &DutchNutsProfile{
 		Config:    config,
 		vcrClient: vcrClient,
@@ -164,8 +180,9 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		Transport: &oauth2.Transport{
 			UnderlyingTransport: underlyingTransport,
 			TokenSource: nuts.OAuth2TokenSource{
-				NutsSubject: tenant.Nuts.Subject,
-				NutsAPIURL:  d.Config.API.URL,
+				NutsSubject:    tenant.Nuts.Subject,
+				NutsAPIURL:     d.Config.API.URL,
+				NutsHttpClient: d.nutsAPIHTTPClient,
 			},
 			Scope:          careplancontributor.CarePlanServiceOAuth2Scope,
 			AuthzServerURL: parsedAuthzServerURL,
@@ -197,11 +214,22 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 }
 
 func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseURL string) (*fhir.CapabilityStatement, error) {
+	fhirHTTPClient := &http.Client{
+		Transport: otelhttp.NewTransport(
+			http.DefaultTransport,
+			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+				return fmt.Sprintf("fhir.%s %s", strings.ToLower(r.Method), r.URL.Path)
+			}),
+			otelhttp.WithSpanOptions(
+				trace.WithSpanKind(trace.SpanKindClient),
+			),
+		),
+	}
 	httpRequest, err := http.NewRequestWithContext(ctx, "GET", fhirBaseURL+"/metadata", nil)
 	if err != nil {
 		return nil, err
 	}
-	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	httpResponse, err := fhirHTTPClient.Do(httpRequest)
 	if err != nil {
 		return nil, err
 	}
