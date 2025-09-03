@@ -30,6 +30,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/trace"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const identitiesCacheTTL = 5 * time.Minute
@@ -172,13 +173,27 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		underlyingTransport = http.DefaultTransport.(*http.Transport).Clone()
 		underlyingTransport.TLSClientConfig = globals.DefaultTLSConfig
 	}
+
+	tracedTransport := otelhttp.NewTransport(
+		underlyingTransport,
+		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+			return fmt.Sprintf("(nuts-secured) %s %s", strings.ToLower(r.Method), r.URL.Path)
+		}),
+		otelhttp.WithSpanOptions(
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(
+				attribute.String("oauth2.resource_server.identity", coolfhir.ToString(serverIdentity)),
+			),
+		),
+	)
+
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	client := &http.Client{
 		Transport: &oauth2.Transport{
-			UnderlyingTransport: underlyingTransport,
+			UnderlyingTransport: tracedTransport,
 			TokenSource: nuts.OAuth2TokenSource{
 				NutsSubject:    tenant.Nuts.Subject,
 				NutsAPIURL:     d.Config.API.URL,
