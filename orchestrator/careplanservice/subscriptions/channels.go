@@ -142,7 +142,7 @@ func (i InProcessPubSubChannel) Notify(ctx context.Context, notification coolfhi
 	}
 	ctx, span := tracer.Start(
 		ctx,
-		"InProcessPubSubChannel/"+debug.GetCallerName(),
+		"InProcessPubSubChannel."+debug.GetCallerName(),
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("notification.identity", coolfhir.ToString(identityIdentifier)),
