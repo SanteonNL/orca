@@ -14,8 +14,11 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ChannelFactory defines an interface for creating Subscription Notification Channels (e.g. rest-hook).
@@ -91,6 +94,16 @@ type RestHookChannel struct {
 }
 
 func (r RestHookChannel) Notify(ctx context.Context, notification coolfhir.SubscriptionNotification) error {
+	ctx, span := tracer.Start(
+		ctx,
+		"RestHookChannel/"+debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String("notification.endpoint", r.Endpoint),
+		),
+	)
+	defer span.End()
+
 	notificationJSON, err := json.Marshal(notification)
 	if err != nil {
 		return err
@@ -119,6 +132,20 @@ type InProcessPubSubChannel struct {
 }
 
 func (i InProcessPubSubChannel) Notify(ctx context.Context, notification coolfhir.SubscriptionNotification) error {
+	var identityIdentifier fhir.Identifier
+	if len(i.identity.Identifier) > 0 {
+		identityIdentifier = i.identity.Identifier[0]
+	}
+	ctx, span := tracer.Start(
+		ctx,
+		"InProcessPubSubChannel/"+debug.GetCallerName(),
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String("notification.identity", coolfhir.ToString(identityIdentifier)),
+		),
+	)
+	defer span.End()
+
 	ctx = auth.WithPrincipal(ctx, auth.Principal{
 		Organization: i.identity,
 	})

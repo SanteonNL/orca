@@ -6,6 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
@@ -14,8 +17,6 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/url"
-	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -44,7 +45,7 @@ func NewManager(cpsBaseURLFunc func(tenants.Properties) *url.URL, tenants tenant
 		channels:       channels,
 		messageBroker:  messageBroker,
 	}
-	if err := messageBroker.ReceiveFromQueue(SendNotificationQueue, mgr.receiveMessage); err != nil {
+	if err := messageBroker.ReceiveFromQueue(SendNotificationQueue, mgr.tryNotify); err != nil {
 		return nil, err
 	}
 	return mgr, nil
@@ -193,7 +194,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 	}
 }
 
-func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.Message) error {
+func (r RetryableManager) tryNotify(ctx context.Context, message messaging.Message) error {
 	ctx, span := tracer.Start(
 		ctx,
 		debug.GetCallerName(),
