@@ -7,7 +7,13 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/agoda-com/opentelemetry-go/otelzerolog"
+	"github.com/agoda-com/opentelemetry-logs-go/exporters/otlp/otlplogs"
+	sdk "github.com/agoda-com/opentelemetry-logs-go/sdk/logs"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"go.opentelemetry.io/otel/sdk/resource"
+	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 	"net/http"
 	"os"
 	"os/signal"
@@ -52,6 +58,28 @@ func Start(ctx context.Context, config Config) error {
 			log.Debug().Msg("OpenTelemetry shutdown successfully")
 		}
 	}()
+
+	// Implement otel zerolog hook
+	logExporter, err := otlplogs.NewExporter(ctx)
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to create OTLP log exporter, logging telemetry will be disabled")
+	} else {
+		loggerProvider := sdk.NewLoggerProvider(
+			sdk.WithBatcher(logExporter),
+			sdk.WithResource(resource.NewWithAttributes(
+				semconv.SchemaURL,
+				semconv.ServiceNameKey.String(config.OpenTelemetry.ServiceName),
+			)))
+		hook := otelzerolog.NewHook(loggerProvider)
+		log.Logger = log.Logger.Hook(hook)
+
+		zerolog.DefaultContextLogger = &log.Logger
+		defer func() {
+			if err := loggerProvider.Shutdown(ctx); err != nil {
+				log.Error().Err(err).Msg("Failed to shutdown log provider")
+			}
+		}()
+	}
 
 	globals.StrictMode = config.StrictMode
 	if !globals.StrictMode {

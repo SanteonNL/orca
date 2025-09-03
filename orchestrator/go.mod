@@ -9,6 +9,8 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.4.0
 	github.com/SanteonNL/go-fhir-client v0.5.0
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.1.0
+	github.com/agoda-com/opentelemetry-go/otelzerolog v0.1.0
+	github.com/agoda-com/opentelemetry-logs-go v0.6.0
 	github.com/beevik/etree v1.6.0
 	github.com/braineet/saml v0.4.15
 	github.com/go-jose/go-jose/v4 v4.1.2
