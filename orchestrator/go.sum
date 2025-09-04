@@ -33,6 +33,10 @@ github.com/SanteonNL/go-fhir-client v0.5.0 h1:3Lg/zpqQKvh193F3Hkgrqi1kCuNGBQ2S2U
 github.com/SanteonNL/go-fhir-client v0.5.0/go.mod h1:CcU6J3vgxsdjTWry0s2BAJcV6SvdaRTsry9ixR7zqc4=
 github.com/SanteonNL/nuts-policy-enforcement-point v0.1.0 h1:tbkd8PvQC6+3VeNgq6HiBrdj81PFDAwiIbCbyFfdX9U=
 github.com/SanteonNL/nuts-policy-enforcement-point v0.1.0/go.mod h1:mLVFlPbfU6lbrE/TeUQOpDC53aTC/PyOGYgPIR0S1Yw=
+github.com/agoda-com/opentelemetry-go/otelzerolog v0.1.0 h1:Pg2aWvqU6oAiqCF9mJlWLR1IKnJsKy6GqREviTSRkcU=
+github.com/agoda-com/opentelemetry-go/otelzerolog v0.1.0/go.mod h1:qQ9waMktaEHMkjB4TASRo5dEAHKrp+48yx4LGsDXepI=
+github.com/agoda-com/opentelemetry-logs-go v0.6.0 h1:PdnNbW2a5vp4VWasIGVHJ85/4Eu0kZfLs3ySuitLN20=
+github.com/agoda-com/opentelemetry-logs-go v0.6.0/go.mod h1:zPrxWeyxZ8QRWJFNBFJ2zeWjJu0OuGG+Ow4KYEGEA5o=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0 h1:axGnT1gRIfimI7gJifB699GoE/oq+F2MU7Dml6nw9rQ=
 github.com/apapsch/go-jsonmerge/v2 v2.0.0/go.mod h1:lvDnEdqiQrp0O42VQGgmlKpxL1AP2+08jFMw88y4klk=
 github.com/beevik/etree v1.1.0/go.mod h1:r8Aw8JqVegEf0w2fDnATrX9VpkMcyFeM0FhwO62wh+A=
