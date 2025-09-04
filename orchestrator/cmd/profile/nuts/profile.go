@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -29,8 +30,8 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel/trace"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const identitiesCacheTTL = 5 * time.Minute
@@ -80,17 +81,7 @@ func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
 	} else {
 		log.Warn().Msg("Nuts: no TLS client certificate configured for outbound HTTP requests")
 	}
-	nutsAPIHTTPClient := &http.Client{
-		Transport: otelhttp.NewTransport(
-			http.DefaultTransport,
-			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
-				return fmt.Sprintf("nutsnode.%s %s", strings.ToLower(r.Method), r.URL.Path)
-			}),
-			otelhttp.WithSpanOptions(
-				trace.WithSpanKind(trace.SpanKindClient),
-			),
-		),
-	}
+	nutsAPIHTTPClient := otel.NewTracedHTTPClient("nutsnode")
 
 	vcrClient, err := vcr.NewClientWithResponses(config.API.URL, vcr.WithHTTPClient(nutsAPIHTTPClient))
 	if err != nil {
@@ -109,6 +100,7 @@ func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
 		cachedIdentities:      map[string][]fhir.Organization{},
 		identitiesRefreshedAt: map[string]time.Time{},
 		clientCerts:           clientCerts,
+		nutsAPIHTTPClient:     nutsAPIHTTPClient,
 	}, nil
 }
 
@@ -229,17 +221,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 }
 
 func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseURL string) (*fhir.CapabilityStatement, error) {
-	fhirHTTPClient := &http.Client{
-		Transport: otelhttp.NewTransport(
-			http.DefaultTransport,
-			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
-				return fmt.Sprintf("fhir.%s %s", strings.ToLower(r.Method), r.URL.Path)
-			}),
-			otelhttp.WithSpanOptions(
-				trace.WithSpanKind(trace.SpanKindClient),
-			),
-		),
-	}
+	fhirHTTPClient := otel.NewTracedHTTPClient("fhir")
 	httpRequest, err := http.NewRequestWithContext(ctx, "GET", fhirBaseURL+"/metadata", nil)
 	if err != nil {
 		return nil, err

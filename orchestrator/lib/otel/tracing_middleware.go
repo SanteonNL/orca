@@ -1,13 +1,30 @@
 package otel
 
 import (
+	"fmt"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 	"go.opentelemetry.io/otel/trace"
 	"net/http"
+	"strings"
 )
+
+func NewTracedHTTPClient(spanNameBase string) *http.Client {
+	return &http.Client{
+		Transport: otelhttp.NewTransport(
+			http.DefaultTransport,
+			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+				return fmt.Sprintf("%s.%s %s %s", spanNameBase, operation, strings.ToLower(r.Method), r.URL.Path)
+			}),
+			otelhttp.WithSpanOptions(
+				trace.WithSpanKind(trace.SpanKindClient),
+			),
+		),
+	}
+}
 
 func HandlerWithTracing(tracer trace.Tracer, operationName string, handler http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {

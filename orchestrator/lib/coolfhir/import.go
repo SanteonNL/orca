@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"io"
 	"net/http"
@@ -33,7 +34,7 @@ func ImportResources(ctx context.Context, client fhirclient.Client, resourceType
 		if err != nil {
 			return err
 		}
-		httpResponse, err := http.DefaultClient.Do(httpRequest)
+		httpResponse, err := otel.NewTracedHTTPClient("coolfhir.import").Do(httpRequest)
 		if err != nil {
 			return err
 		}
