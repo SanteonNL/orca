@@ -15,6 +15,7 @@ import TaskBody from "@/app/enrollment/components/task-body";
 import Error from "@/app/error";
 import {organizationNameShort} from "@/lib/fhirRender";
 import {statusLabelLong} from "@/app/utils/mapping";
+import orderTitle from "@/app/enrollment/task/components/util";
 
 export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
@@ -78,7 +79,7 @@ export default function EnrollmentTaskPage() {
         ? <span className='font-medium'>Controleer patiëntgegevens</span>
         : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Controleer
             patiëntgegevens</a>
-    const service = serviceRequest?.code?.coding?.[0].display
+    const serviceRequestTitle = orderTitle(task, serviceRequest)
 
 
     // Auto-launch external app when the following conditions are met:
@@ -92,11 +93,11 @@ export default function EnrollmentTaskPage() {
     const textBottom = executionTextBottom(task.status);
     return (
         <>
-            <TaskHeading title={statusLabelLong(task.status, service, task.owner)}>
+            <TaskHeading title={statusLabelLong(task.status, serviceRequestTitle, task.owner)}>
                 <nav className={`flex items-center space-x-2 text-sm ${isLastStep ? 'invisible' : 'inherit'}`}>
                     {breadcrumb}
                     <ChevronRight className="h-4 w-4"/>
-                    <span className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{service} instellen</span>
+                    <span className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{serviceRequestTitle} instellen</span>
                 </nav>
             </TaskHeading>
             <TaskBody>
@@ -111,10 +112,10 @@ export default function EnrollmentTaskPage() {
                             {
                                 // Either show Task.note, or a default message based on task status
                                 task.note && task.note.length > 0 ? task.note.map(note => note.text).join("\n") :
-                                    executionTextTop(service, task) ?? ''
+                                    executionTextTop(serviceRequestTitle, task) ?? ''
                             }
                         </div>
-                        <PatientDetails task={task} patient={patient}/>
+                        <PatientDetails task={task} serviceRequest={serviceRequest} patient={patient}/>
                         {
                             textBottom ? <div className="w-[568px] font-[500]">{textBottom}</div> : <></>
                         }
