@@ -57,7 +57,7 @@ export default function TaskOverviewTable() {
             </thead>
             <tbody>
             {tasks.map((task, idx) => (
-                <tr key={idx} className="border-t" onClick={() => openTask(task)}>
+                <tr key={idx} className="border-t" onClick={() => openTask(task)} style={{cursor: 'pointer'}}>
                     <td className="px-4 py-2">{new Date(task.meta!.lastUpdated!).toLocaleString("nl-NL")}</td>
                     <td className="px-4 py-2">{task.focus?.display}</td>
                     <td className="px-4 py-2">{taskStatusLabel(task.status)}</td>
