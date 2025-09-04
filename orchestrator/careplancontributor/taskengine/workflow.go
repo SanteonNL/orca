@@ -7,7 +7,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"net/http"
 	"net/url"
 	"strings"
 
@@ -170,7 +169,7 @@ func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl strin
 		return otel.Error(span, err)
 	}
 
-	client := fhirclient.New(parsedBundleUrl, http.DefaultClient, coolfhir.Config())
+	client := fhirclient.New(parsedBundleUrl, otel.NewTracedHTTPClient("taskengine.LoadBundle"), coolfhir.Config())
 	if err := client.ReadWithContext(ctx, "", &bundle, fhirclient.AtUrl(parsedBundleUrl)); err != nil {
 		return otel.Error(span, err)
 	}

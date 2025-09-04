@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -52,6 +53,8 @@ type DutchNutsProfile struct {
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
 	clientCerts           []tls.Certificate
+	// nutsAPIHTTPClient is an HTTP client that is configured to communicate with the Nuts node's internal API.
+	nutsAPIHTTPClient *http.Client
 }
 
 func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
@@ -78,12 +81,13 @@ func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
 	} else {
 		log.Warn().Msg("Nuts: no TLS client certificate configured for outbound HTTP requests")
 	}
+	nutsAPIHTTPClient := otel.NewTracedHTTPClient("nutsnode")
 
-	vcrClient, err := vcr.NewClientWithResponses(config.API.URL)
+	vcrClient, err := vcr.NewClientWithResponses(config.API.URL, vcr.WithHTTPClient(nutsAPIHTTPClient))
 	if err != nil {
 		return nil, err
 	}
-	apiClient, _ := discovery.NewClientWithResponses(config.API.URL)
+	apiClient, _ := discovery.NewClientWithResponses(config.API.URL, discovery.WithHTTPClient(nutsAPIHTTPClient))
 	return &DutchNutsProfile{
 		Config:    config,
 		vcrClient: vcrClient,
@@ -96,6 +100,7 @@ func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
 		cachedIdentities:      map[string][]fhir.Organization{},
 		identitiesRefreshedAt: map[string]time.Time{},
 		clientCerts:           clientCerts,
+		nutsAPIHTTPClient:     nutsAPIHTTPClient,
 	}, nil
 }
 
@@ -182,8 +187,9 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		Transport: &oauth2.Transport{
 			UnderlyingTransport: tracedTransport,
 			TokenSource: nuts.OAuth2TokenSource{
-				NutsSubject: tenant.Nuts.Subject,
-				NutsAPIURL:  d.Config.API.URL,
+				NutsSubject:    tenant.Nuts.Subject,
+				NutsAPIURL:     d.Config.API.URL,
+				NutsHttpClient: d.nutsAPIHTTPClient,
 			},
 			Scope:          careplancontributor.CarePlanServiceOAuth2Scope,
 			AuthzServerURL: parsedAuthzServerURL,
@@ -215,11 +221,12 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 }
 
 func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseURL string) (*fhir.CapabilityStatement, error) {
+	fhirHTTPClient := otel.NewTracedHTTPClient("fhir")
 	httpRequest, err := http.NewRequestWithContext(ctx, "GET", fhirBaseURL+"/metadata", nil)
 	if err != nil {
 		return nil, err
 	}
-	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	httpResponse, err := fhirHTTPClient.Do(httpRequest)
 	if err != nil {
 		return nil, err
 	}
