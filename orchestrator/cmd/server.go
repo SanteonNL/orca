@@ -62,24 +62,24 @@ func Start(ctx context.Context, config Config) error {
 	// Implement otel zerolog hook
 	logExporter, err := otlplogs.NewExporter(ctx)
 	if err != nil {
-		log.Warn().Err(err).Msg("Failed to create OTLP log exporter, logging telemetry will be disabled")
-	} else {
-		loggerProvider := sdk.NewLoggerProvider(
-			sdk.WithBatcher(logExporter),
-			sdk.WithResource(resource.NewWithAttributes(
-				semconv.SchemaURL,
-				semconv.ServiceNameKey.String(config.OpenTelemetry.ServiceName),
-			)))
-		hook := otelzerolog.NewHook(loggerProvider)
-		log.Logger = log.Logger.Hook(hook)
-
-		zerolog.DefaultContextLogger = &log.Logger
-		defer func() {
-			if err := loggerProvider.Shutdown(ctx); err != nil {
-				log.Error().Err(err).Msg("Failed to shutdown log provider")
-			}
-		}()
+		return fmt.Errorf("failed to create OTLP log exporter: %w", err)
 	}
+
+	loggerProvider := sdk.NewLoggerProvider(
+		sdk.WithBatcher(logExporter),
+		sdk.WithResource(resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceNameKey.String(config.OpenTelemetry.ServiceName),
+		)))
+	hook := otelzerolog.NewHook(loggerProvider)
+	log.Logger = log.Logger.Hook(hook)
+
+	zerolog.DefaultContextLogger = &log.Logger
+	defer func() {
+		if err := loggerProvider.Shutdown(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to shutdown log provider")
+		}
+	}()
 
 	globals.StrictMode = config.StrictMode
 	if !globals.StrictMode {
