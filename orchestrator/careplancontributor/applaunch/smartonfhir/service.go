@@ -9,13 +9,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
-	"go.opentelemetry.io/otel/trace"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -298,23 +296,10 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 			Level:     slog.LevelDebug,
 		}),
 	)
-
-	tracedHttpClient := &http.Client{
-		Transport: otelhttp.NewTransport(
-			http.DefaultTransport,
-			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
-				return fmt.Sprintf("smartonfhir.%s %s", strings.ToLower(r.Method), r.URL.Path)
-			}),
-			otelhttp.WithSpanOptions(
-				trace.WithSpanKind(trace.SpanKindClient),
-			),
-		),
-	}
-
 	options := []rp.Option{
 		rp.WithCookieHandler(s.cookieHandler),
 		rp.WithVerifierOpts(rp.WithIssuedAtOffset(clockSkew)),
-		rp.WithHTTPClient(tracedHttpClient),
+		rp.WithHTTPClient(otel.NewTracedHTTPClient("smartonfhir")),
 		rp.WithSigningAlgsFromDiscovery(),
 		rp.WithLogger(logger),
 		rp.WithUnauthorizedHandler(func(httpResponse http.ResponseWriter, httpRequest *http.Request, desc string, _ string) {
