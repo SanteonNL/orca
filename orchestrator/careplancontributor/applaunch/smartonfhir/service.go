@@ -162,7 +162,10 @@ func New(config Config, tenants tenants.Config, sessionManager *user.SessionMana
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	mux.HandleFunc("GET /smart-app-launch-backdoor", s.handleAppLaunchBackdoor)
+	if !s.strictMode {
+		// TODO: Remove before going live
+		mux.HandleFunc("GET /smart-app-launch-backdoor", s.handleAppLaunchBackdoor)
+	}
 	mux.HandleFunc("GET /smart-app-launch", s.handleAppLaunch)
 	mux.HandleFunc("GET /smart-app-launch/callback/{key}", s.handleCallback)
 	mux.HandleFunc("GET /smart-app-launch/.well-known/jwks.json", s.handleGetJWKs)
