@@ -73,7 +73,7 @@ async function fetchTasksForPatient(patientId: Identifier, cpsClient: any): Prom
     const patientBundle = await cpsClient.search({
         resourceType: 'Patient',
         searchParams: {
-            'identifier': identifierToToken(patientId) || '',
+            'identifier': identifierToToken(patientId) || ''
         },
         options: {postSearch: true},
         headers: {
@@ -86,6 +86,7 @@ async function fetchTasksForPatient(patientId: Identifier, cpsClient: any): Prom
         resourceType: 'Task',
         searchParams: {
             'patient': patients.map(p => `Patient/${p.id}`).join(","),
+            '_sort': '-_lastUpdated',
         },
         options: {postSearch: true},
         headers: {
