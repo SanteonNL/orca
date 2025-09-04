@@ -23,6 +23,7 @@ func TestDutchNutsProfile_Authenticator(t *testing.T) {
 					URL: introspectionEndpoint.String(),
 				},
 			},
+			nutsAPIHTTPClient: http.DefaultClient,
 		}
 
 		var capturedPrincipal auth.Principal
@@ -53,6 +54,7 @@ func TestDutchNutsProfile_Authenticator(t *testing.T) {
 					URL: introspectionEndpoint.String(),
 				},
 			},
+			nutsAPIHTTPClient: http.DefaultClient,
 		}
 
 		var capturedError error
