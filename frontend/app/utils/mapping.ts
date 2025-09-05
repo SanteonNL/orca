@@ -48,3 +48,25 @@ export function taskStatusLabel(taskStatus: string): string {
             return taskStatus
     }
 }
+
+const codingLabels = {
+    "http://snomed.info/sct|719858009": "thuismonitoring",
+    "http://snomed.info/sct|84114007": "hartfalen",
+    "http://snomed.info/sct|13645005": "COPD",
+    "http://snomed.info/sct|195967001": "astma",
+}
+
+export function codingLabel(coding: { system?: string; code?: string; display?: string }): string | undefined {
+    if (coding.system && coding.code) {
+        const key = `${coding.system}|${coding.code}`;
+        if (key in codingLabels) {
+            return codingLabels[key as keyof typeof codingLabels];
+        }
+    }
+    return coding.display
+}
+
+export function requiredCodingLabel(coding?: { system?: string; code?: string; display?: string }): string {
+    const fallback = "Onbekend";
+    return (coding ? codingLabel(coding) : fallback) ?? fallback;
+}
