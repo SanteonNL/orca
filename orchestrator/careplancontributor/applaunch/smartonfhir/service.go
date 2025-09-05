@@ -13,10 +13,9 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
-
-	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -449,7 +448,9 @@ func (s *Service) createClientAssertionForAudience(clientID string, audience str
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize JWT client assertion: %w", err)
 	}
-	log.Info().Msgf("Created JWT client assertion: %s", result)
+	if !s.strictMode {
+		log.Debug().Msgf("Created JWT client assertion: %s", result)
+	}
 	return result, nil
 }
 
