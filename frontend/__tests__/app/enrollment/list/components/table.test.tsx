@@ -93,7 +93,8 @@ describe('TaskOverviewTable', () => {
         expect(mockSearch).toHaveBeenNthCalledWith(2, {
             resourceType: 'Task',
             searchParams: {
-                'patient': 'Patient/patient-1'
+                'patient': 'Patient/patient-1',
+                '_sort': '-_lastUpdated'
             },
             options: {postSearch: true},
             headers: {
