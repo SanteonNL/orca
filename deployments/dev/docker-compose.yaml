@@ -219,7 +219,7 @@ services:
       - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
       - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://viewer:3000/viewer/api/fhir
       - OTEL_SERVICE_NAME=clinic-orchestrator
-      - OTEL_EXPORTER_OTLP_ENDPOINT=aspire-dashboard:18889
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire-dashboard:18889
       - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
       - OTEL_RESOURCE_ATTRIBUTES=service.instance.id=clinic-1
       # Register an example web application for discovery by other SCP participants.

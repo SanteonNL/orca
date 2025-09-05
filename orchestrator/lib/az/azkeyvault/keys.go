@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"io"
 	"net/http"
 	"os"
@@ -25,7 +26,7 @@ import (
 
 const AzureKeyVaultTimeout = 10 * time.Second
 
-var AzureHttpRequestDoer HttpRequestDoer = http.DefaultClient
+var AzureHttpRequestDoer HttpRequestDoer = otel.NewTracedHTTPClient("azkeyvault")
 
 type HttpRequestDoer interface {
 	Do(req *http.Request) (*http.Response, error)

@@ -203,7 +203,7 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 	// Inject trace context into request headers
 	baseotel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 
-	httpResponse, err := http.DefaultClient.Do(req)
+	httpResponse, err := otel.NewTracedHTTPClient("ehr.notifier").Do(req)
 	if err != nil {
 		log.Ctx(ctx).Warn().Err(err).Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s) e", set.task, taskAcceptedBundleEndpoint)
 		return otel.Error(span, errors.Wrap(err, "failed to send task to endpoint"))

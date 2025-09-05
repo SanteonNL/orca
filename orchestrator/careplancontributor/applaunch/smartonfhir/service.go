@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -380,7 +381,7 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 	options := []rp.Option{
 		rp.WithCookieHandler(s.cookieHandler),
 		rp.WithVerifierOpts(rp.WithIssuedAtOffset(clockSkew)),
-		rp.WithHTTPClient(http.DefaultClient),
+		rp.WithHTTPClient(otel.NewTracedHTTPClient("smartonfhir")),
 		rp.WithSigningAlgsFromDiscovery(),
 		rp.WithLogger(logger),
 		rp.WithUnauthorizedHandler(func(httpResponse http.ResponseWriter, httpRequest *http.Request, desc string, _ string) {

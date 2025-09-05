@@ -2,16 +2,15 @@ package nuts
 
 import (
 	"errors"
+	"net/http"
+
 	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
 )
-
-var tokenIntrospectionClient = http.DefaultClient
 
 // Authenticator authenticates the caller according to the Nuts authentication.
 // The caller is required to provide an OAuth2 access token in the Authorization header, which is introspected at the Nuts node.
@@ -19,7 +18,7 @@ var tokenIntrospectionClient = http.DefaultClient
 func (d DutchNutsProfile) Authenticator(fn func(writer http.ResponseWriter, request *http.Request)) func(writer http.ResponseWriter, request *http.Request) {
 	authConfig := middleware.Config{
 		TokenIntrospectionEndpoint: d.Config.API.Parse().JoinPath("internal/auth/v2/accesstoken/introspect").String(),
-		TokenIntrospectionClient:   tokenIntrospectionClient,
+		TokenIntrospectionClient:   d.nutsAPIHTTPClient,
 	}
 	return func(writer http.ResponseWriter, request *http.Request) {
 		principal, err := auth.PrincipalFromContext(request.Context())
