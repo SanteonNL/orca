@@ -67,7 +67,6 @@ type Service struct {
 	cookieHandler      *zitadelHTTP.CookieHandler
 	jwtSigningKey      *jose.SigningKey
 	jwtSigingKeyJWKSet *jose.JSONWebKeySet
-	cpsClient          fhirclient.Client
 }
 
 func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {
@@ -323,26 +322,6 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, patien
 			},
 		},
 	}, tenant, nil
-	//fhirClient := createFHIRClient(ctx, must.ParseURL(issuer.issuerLaunchURL), tokens.AccessToken)
-	//var patient fhir.Patient
-	//patientID, hasPatientID := tokens.Extra("patient").(string)
-	//if !hasPatientID || patientID == "" {
-	//	return nil, nil, errors.New("patient ID not found in ID token claims")
-	//}
-	//if err := fhirClient.Read("Patient/"+patientID, &patient); err != nil {
-	//	return nil, nil, fmt.Errorf("failed to read patient resource: %w", err)
-	//}
-	//fhirUser, ok := tokens.IDTokenClaims.Claims["fhirUser"].(string)
-	//if !ok {
-	//	return nil, nil, errors.New("fhirUser claim (practitioner) not found in id_token claims")
-	//}
-	//// fhirUser claim can contain either a relative URL (SMART on FHIR Sandbox Launcher), or an absolute URL (Epic Sandbox).
-	//// We assume, it's always a FHIR Practitioner resource.
-	//var practitioner fhir.Practitioner
-	//if err := fhirClient.Read(fhirUser, &practitioner); err != nil {
-	//	return nil, nil, fmt.Errorf("failed to read practitioner resource: %w", err)
-	//}
-	//return &patient, &practitioner, nil
 }
 
 func (s *Service) getIssuerByKey(request *http.Request, issuerKey string) (rp.RelyingParty, error) {

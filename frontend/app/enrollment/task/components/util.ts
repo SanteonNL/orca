@@ -9,12 +9,13 @@ export default function orderTitle(task: Task, serviceRequest: ServiceRequest | 
     if (task.focus && task.focus.display) {
         return task.focus.display;
     }
-    if (serviceRequest) {
-        if (serviceRequest.code && serviceRequest.code.text) {
-            return serviceRequest.code.text;
-        } else if (serviceRequest.code && serviceRequest.code.coding && serviceRequest.code.coding.length > 0) {
-            return serviceRequest.code.coding.map(coding => coding.display || coding.code).join(", ");
-        }
+    if (!serviceRequest) {
+        return undefined
+    }
+    if (serviceRequest.code && serviceRequest.code.text) {
+        return serviceRequest.code.text;
+    } else if (serviceRequest.code && serviceRequest.code.coding && serviceRequest.code.coding.length > 0) {
+        return serviceRequest.code.coding.map(coding => coding.display || coding.code).join(", ");
     }
     return undefined;
 }
