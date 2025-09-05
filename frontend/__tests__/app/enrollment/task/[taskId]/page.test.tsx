@@ -501,12 +501,13 @@ describe("taskid page tests", () => {
     });
 
     it('renders task heading with correct title for accepted status', async () => {
+        (fhirRender.organizationNameShort as jest.Mock).mockReturnValue('Test Hospital');
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
 
         expect(screen.getByTestId('task-heading')).toBeInTheDocument();
-        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding gelukt');
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding voor cardiologie consult Test Hospital is gelukt!');
     });
 
     it('renders task heading with service name when available for ready status', async () => {
@@ -528,21 +529,7 @@ describe("taskid page tests", () => {
             render(<EnrollmentTaskPage/>);
         });
 
-        expect(screen.getByTestId('task-title')).toHaveTextContent('Cardiology Consultation instellen');
-    });
-
-    it('renders default title when service name not available for requested status', async () => {
-        (TaskProgressHook as jest.Mock).mockReturnValue({
-            task: { ...mockTask, status: 'requested' },
-            isError: false,
-            isLoading: false
-        });
-
-        await act(async () => {
-            render(<EnrollmentTaskPage/>);
-        });
-
-        expect(screen.getByTestId('task-title')).toHaveTextContent('Instellen');
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Cardiologie consult instellen');
     });
 
     it('renders breadcrumb navigation for non-first step', async () => {
@@ -687,8 +674,7 @@ describe("taskid page tests", () => {
 
     it('renders task heading with correct title for accepted status with serviceRequest coding and task owner', async () => {
         const serviceRequest = {
-            ...mockServiceRequest,
-            code: { coding: [{ display: 'Cardiology Consultation' }] }
+            ...mockServiceRequest
         };
         const taskWithOwner = {
             ...mockTask,
@@ -711,6 +697,6 @@ describe("taskid page tests", () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByTestId('task-heading')).toBeInTheDocument();
-        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding voor cardiology consultation Test Hospital is gelukt!');
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding voor cardiologie consult Test Hospital is gelukt!');
     });
 });

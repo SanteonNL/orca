@@ -5,7 +5,7 @@ import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollment from "@/app/hooks/enrollment-hook";
 import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
-import {Questionnaire, Task} from "fhir/r4";
+import {Questionnaire, ServiceRequest, Task} from "fhir/r4";
 import useContext from "@/app/hooks/context-hook";
 import PatientDetails from "@/app/enrollment/task/components/patient-details";
 import TaskProgressHook from "@/app/hooks/task-progress-hook";
@@ -14,6 +14,7 @@ import {ChevronRight} from "lucide-react";
 import TaskBody from "@/app/enrollment/components/task-body";
 import Error from "@/app/error";
 import {organizationNameShort} from "@/lib/fhirRender";
+import orderTitle from "@/app/enrollment/task/components/util";
 import {codingLabel, statusLabelLong} from "@/app/utils/mapping";
 
 export default function EnrollmentTaskPage() {
@@ -35,6 +36,7 @@ export default function EnrollmentTaskPage() {
 
     const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
+    const [cpsServiceRequest, setCPSServiceRequest] = useState<ServiceRequest | undefined>(undefined);
 
     useEffect(() => {
         const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
@@ -49,6 +51,21 @@ export default function EnrollmentTaskPage() {
             launchApp(launchableApps[0].URL)();
         }
     }, [serviceRequest, setLaunchableApps, scpClient, task?.status, launchableApps])
+
+    // Load ServiceRequest from CPS as referred to by the Task.focus, in case the context doesn't specify the ServiceRequest
+    // (e.g. when not launching for a specific Task using /list)
+    useEffect(() => {
+        if (!cpsClient || !task || !setCPSServiceRequest) {
+            return
+        }
+        if (!task.focus?.reference) {
+            return
+        }
+        cpsClient.read({resourceType: 'ServiceRequest', id: task.focus.reference.replace('ServiceRequest/', '')})
+            .then((sr) => {
+                setCPSServiceRequest(sr as ServiceRequest)
+            })
+    }, [setCPSServiceRequest, cpsClient, task]);
 
     useEffect(() => {
         if (!questionnaireMap) {
@@ -76,9 +93,9 @@ export default function EnrollmentTaskPage() {
     const isLastStep = lastStepTaskStates.includes(task.status)
     const breadcrumb = isFirstStep
         ? <span className='font-medium'>Controleer patiëntgegevens</span>
-        : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Controleer
-            patiëntgegevens</a>
-    const service = serviceRequest?.code?.coding?.[0] ? codingLabel(serviceRequest.code.coding[0]) : undefined
+        : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Controleer patiëntgegevens</a>
+    const serviceRequestDisplay = serviceRequest?.code?.coding?.[0].display
+    const serviceRequestTitle = orderTitle(task, serviceRequest || cpsServiceRequest)
 
 
     // Auto-launch external app when the following conditions are met:
@@ -92,11 +109,11 @@ export default function EnrollmentTaskPage() {
     const textBottom = executionTextBottom(task.status);
     return (
         <>
-            <TaskHeading title={statusLabelLong(task.status, service, task.owner)}>
+            <TaskHeading title={statusLabelLong(task.status, serviceRequestTitle, task.owner)}>
                 <nav className={`flex items-center space-x-2 text-sm ${isLastStep ? 'invisible' : 'inherit'}`}>
                     {breadcrumb}
                     <ChevronRight className="h-4 w-4"/>
-                    <span className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{service} instellen</span>
+                    <span className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{serviceRequestTitle} instellen</span>
                 </nav>
             </TaskHeading>
             <TaskBody>
@@ -111,10 +128,10 @@ export default function EnrollmentTaskPage() {
                             {
                                 // Either show Task.note, or a default message based on task status
                                 task.note && task.note.length > 0 ? task.note.map(note => note.text).join("\n") :
-                                    executionTextTop(service, task) ?? ''
+                                    executionTextTop(serviceRequestTitle, task) ?? ''
                             }
                         </div>
-                        <PatientDetails task={task} patient={patient}/>
+                        <PatientDetails task={task} serviceRequest={serviceRequest || cpsServiceRequest} patient={patient}/>
                         {
                             textBottom ? <div className="w-[568px] font-[500]">{textBottom}</div> : <></>
                         }

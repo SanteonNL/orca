@@ -370,7 +370,7 @@ func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[sess
 	frontendUrl, _ := url.Parse(s.config.FrontendConfig.URL)
 
 	if s.config.AppLaunch.SmartOnFhir.Enabled {
-		service, err := smartonfhir.New(s.config.AppLaunch.SmartOnFhir, sessionManager, s.orcaPublicURL, frontendUrl, strictMode)
+		service, err := smartonfhir.New(s.config.AppLaunch.SmartOnFhir, s.tenants, sessionManager, s.orcaPublicURL, frontendUrl, strictMode)
 		if err != nil {
 			return fmt.Errorf("failed to create SMART on FHIR AppLaunch service: %w", err)
 		}
