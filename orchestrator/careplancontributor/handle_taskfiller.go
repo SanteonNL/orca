@@ -56,7 +56,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 	log.Ctx(ctx).Info().Msgf("Running TaskEngine for notification (task=Task/%s)", *task.Id)
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRTaskID, to.Value(task.Id)),
@@ -144,7 +144,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, primaryTaskRef string, identities []fhir.Identifier) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRTaskID, to.Value(task.Id)),
@@ -192,7 +192,7 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, primaryTask *fhir.Task) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRTaskID, to.Value(primaryTask.Id)),
@@ -285,7 +285,7 @@ func (s *Service) isValidTask(task *fhir.Task) error {
 func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task, primaryTask *fhir.Task, localOrgIdentifiers []fhir.Identifier) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRTaskID, to.Value(task.Id)),
@@ -434,7 +434,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Client, task *fhir.Task) (*taskengine.Workflow, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRTaskID, to.Value(task.Id)),

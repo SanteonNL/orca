@@ -98,7 +98,7 @@ type RestHookChannel struct {
 func (r RestHookChannel) Notify(ctx context.Context, notification coolfhir.SubscriptionNotification) error {
 	ctx, span := tracer.Start(
 		ctx,
-		"RestHookChannel."+debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("notification.endpoint", r.Endpoint),
@@ -142,7 +142,7 @@ func (i InProcessPubSubChannel) Notify(ctx context.Context, notification coolfhi
 	}
 	ctx, span := tracer.Start(
 		ctx,
-		"InProcessPubSubChannel."+debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("notification.identity", coolfhir.ToString(identityIdentifier)),

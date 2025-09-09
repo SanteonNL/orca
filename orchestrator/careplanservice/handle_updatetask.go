@@ -25,7 +25,7 @@ import (
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRResourceType, "Task"),

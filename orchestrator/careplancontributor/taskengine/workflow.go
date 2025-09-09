@@ -45,7 +45,7 @@ type FhirApiWorkflowProvider struct {
 func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) (*Workflow, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("service.system", to.EmptyString(serviceCode.System)),
@@ -98,7 +98,7 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 func (f FhirApiWorkflowProvider) searchHealthcareService(ctx context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("service.system", to.EmptyString(serviceCode.System)),
@@ -155,7 +155,7 @@ type MemoryWorkflowProvider struct {
 func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl string) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("bundle.url", bundleUrl),
@@ -202,7 +202,7 @@ func (e *MemoryWorkflowProvider) LoadBundle(ctx context.Context, bundleUrl strin
 func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.Coding, conditionCode fhir.Coding) (*Workflow, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("service.system", to.EmptyString(serviceCode.System)),
@@ -275,7 +275,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl string) (*fhir.Questionnaire, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("questionnaire.url", questionnaireUrl),

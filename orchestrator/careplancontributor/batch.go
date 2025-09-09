@@ -30,7 +30,7 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 	}
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, httpRequest.Method),

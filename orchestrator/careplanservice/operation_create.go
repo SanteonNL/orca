@@ -33,7 +33,7 @@ type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
 func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()
@@ -153,7 +153,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T, resourceType string) (FHIRHandlerResult, error, bool) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRResourceType, resourceType),

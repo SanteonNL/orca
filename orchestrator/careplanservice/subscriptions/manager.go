@@ -74,7 +74,7 @@ type NotificationEvent struct {
 func (r RetryableManager) Notify(ctx context.Context, resource interface{}) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("notification.resource_type", coolfhir.ResourceType(resource)),
@@ -197,7 +197,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 func (r RetryableManager) tryNotify(ctx context.Context, message messaging.Message) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("messaging.operation", "receive"),

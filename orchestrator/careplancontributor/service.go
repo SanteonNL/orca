@@ -423,7 +423,7 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request *http.Request, sessionData *session.Data) {
 	ctx, span := tracer.Start(
 		request.Context(),
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, request.Method),
@@ -463,7 +463,7 @@ func (s Service) handleProxyAppRequestToEHR(writer http.ResponseWriter, request 
 func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, request *http.Request) error {
 	ctx, span := tracer.Start(
 		request.Context(),
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, request.Method),
@@ -637,7 +637,7 @@ func (s Service) withUserAuth(next func(response http.ResponseWriter, request *h
 func (s Service) handleNotification(ctx context.Context, resource any) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(),
 	)
@@ -776,7 +776,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 	}
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 	)
 	defer span.End()
@@ -922,7 +922,7 @@ func (s Service) tenantBasePath(ctx context.Context) (string, error) {
 func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()

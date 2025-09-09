@@ -29,7 +29,7 @@ func NewTracedHTTPTransport(base http.RoundTripper, tracer trace.Tracer) *Traced
 
 func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx, span := t.tracer.Start(req.Context(),
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, req.Method),

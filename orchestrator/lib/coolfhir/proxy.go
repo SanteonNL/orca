@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/rs/zerolog/log"
+	baseotel "go.opentelemetry.io/otel"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,6 +17,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
+
+var tracer = baseotel.Tracer("proxy")
 
 // HttpProxy is an interface for a simple HTTP proxy that forwards requests to an upstream server.
 // It's there so NewProxy can maintain compatibility with httputil.ReverseProxy
@@ -204,7 +207,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		// Note: only for read operations
 		pipe = pipe.AppendResponseTransformer(pipeline.MetaSourceSetter{URI: outRequestUrl.String()})
 	}
-	pipe.DoAndWrite(httpResponseWriter, responseResource, responseStatusCode)
+	pipe.DoAndWrite(request.Context(), tracer, httpResponseWriter, responseResource, responseStatusCode)
 }
 
 func (f *FHIRClientProxy) sanitizeRequestHeaders(header http.Header) http.Header {

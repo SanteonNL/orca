@@ -1,7 +1,9 @@
 package pipeline
 
 import (
+	"context"
 	"github.com/stretchr/testify/require"
+	baseotel "go.opentelemetry.io/otel"
 	"net/http/httptest"
 	"testing"
 )
@@ -13,7 +15,7 @@ func TestInstance_Do(t *testing.T) {
 			"foo": "bar",
 		}
 
-		New().DoAndWrite(httpResponse, resource, 200)
+		New().DoAndWrite(context.Background(), baseotel.Tracer("test"), httpResponse, resource, 200)
 
 		require.JSONEq(t, `{"foo":"bar"}`, httpResponse.Body.String())
 		require.Equal(t, "application/fhir+json", httpResponse.Header().Get("Content-Type"))
@@ -23,7 +25,7 @@ func TestInstance_Do(t *testing.T) {
 	t.Run("doesn't re-marshal byte slice", func(t *testing.T) {
 		httpResponse := httptest.NewRecorder()
 
-		New().DoAndWrite(httpResponse, []byte(`{"foo":"bar"}`), 200)
+		New().DoAndWrite(context.Background(), baseotel.Tracer("test"), httpResponse, []byte(`{"foo":"bar"}`), 200)
 
 		require.Equal(t, `{"foo":"bar"}`, httpResponse.Body.String())
 		require.Equal(t, "application/fhir+json", httpResponse.Header().Get("Content-Type"))
@@ -41,7 +43,7 @@ func TestInstance_Do(t *testing.T) {
 			responseHeaders["Content-Type"] = []string{"application/something+json"}
 		}
 
-		New().AppendResponseTransformer(fn).DoAndWrite(httpResponse, resource, 200)
+		New().AppendResponseTransformer(fn).DoAndWrite(context.Background(), baseotel.Tracer("test"), httpResponse, resource, 200)
 
 		require.JSONEq(t, `{"foo":"bazzzz"}`, httpResponse.Body.String())
 		require.Equal(t, "application/something+json", httpResponse.Header().Get("Content-Type"))

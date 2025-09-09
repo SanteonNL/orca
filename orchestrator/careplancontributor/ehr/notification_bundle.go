@@ -38,7 +38,7 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*BundleSet, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRTaskID, taskId),
@@ -114,7 +114,7 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*fhir.Bundle, []fhir.Task, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRTaskID, taskId),
@@ -152,7 +152,7 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, *fhir.CarePlan, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int(otel.FHIRTasksCount, len(tasks)),
@@ -197,7 +197,7 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 	)
 	defer span.End()
@@ -213,7 +213,7 @@ func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fh
 func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int(otel.FHIRTasksCount, len(tasks)),
@@ -245,7 +245,7 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int(otel.FHIRTasksCount, len(tasks)),
@@ -268,7 +268,7 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int(otel.FHIRTasksCount, len(tasks)),
@@ -295,7 +295,7 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int("count", len(refs)),
@@ -339,7 +339,7 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 func fetchRef(ctx context.Context, cpsClient fhirclient.Client, ref string) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRResourceReference, ref),

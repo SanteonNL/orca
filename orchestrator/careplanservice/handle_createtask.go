@@ -27,7 +27,7 @@ import (
 func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRResourceType, "Task"),
@@ -156,7 +156,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			}
 		}
 
-		ok := careteamservice.ActivateMembership(&careTeam, task.Requester)
+		ok := careteamservice.ActivateMembership(ctx, &careTeam, task.Requester)
 		if !ok {
 			return nil, otel.Error(span, errors.New("failed to activate membership for new CareTeam"), "failed to activate care team membership")
 		}

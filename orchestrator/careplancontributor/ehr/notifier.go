@@ -73,7 +73,7 @@ func NewNotifier(eventManager events.Manager, tenants tenants.Config, taskAccept
 func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, task *fhir.Task) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRBaseURL, fhirBaseURL),
@@ -103,7 +103,7 @@ func (n *notifier) NotifyTaskAccepted(ctx context.Context, fhirBaseURL string, t
 func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcceptedEvent) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRBaseURL, event.FHIRBaseURL),
@@ -173,7 +173,7 @@ func (n *notifier) start() error {
 func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set BundleSet) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindProducer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRBundleSetId, set.Id),
