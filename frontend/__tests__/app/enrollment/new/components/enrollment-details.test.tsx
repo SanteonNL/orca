@@ -136,37 +136,6 @@ describe("EnrollmentDetails component", () => {
         expect(screen.getByText('cardiologie consult')).toHaveClass('first-letter:uppercase');
     });
 
-
-
-    it('displays onbekend when service request code is missing', () => {
-        const serviceRequestWithoutCode = {...mockServiceRequest, code: undefined};
-        (useEnrollment as jest.Mock).mockReturnValue({
-            patient: mockPatient,
-            serviceRequest: serviceRequestWithoutCode,
-            taskCondition: mockTaskCondition,
-            isLoading: false
-        });
-        render(<EnrollmentDetails/>);
-        const requestRow = screen.getByText('Verzoek:').nextElementSibling;
-        expect(requestRow).toHaveTextContent('Onbekend');
-    });
-
-    it('displays onbekend when service request coding is empty', () => {
-        const serviceRequestWithEmptyCoding = {
-            ...mockServiceRequest,
-            code: { coding: [] }
-        };
-        (useEnrollment as jest.Mock).mockReturnValue({
-            patient: mockPatient,
-            serviceRequest: serviceRequestWithEmptyCoding,
-            taskCondition: mockTaskCondition,
-            isLoading: false
-        });
-        render(<EnrollmentDetails/>);
-        const requestRow = screen.getByText('Verzoek:').nextElementSibling;
-        expect(requestRow).toHaveTextContent('Onbekend');
-    });
-
     it('displays condition text when available', () => {
         render(<EnrollmentDetails/>);
         expect(screen.getByText('hartfalen')).toBeInTheDocument();
@@ -217,8 +186,7 @@ describe("EnrollmentDetails component", () => {
         expect(screen.getByText('Patiënt:')).toHaveClass('font-medium');
         expect(screen.getByText('E-mailadres:')).toHaveClass('font-medium');
         expect(screen.getByText('Telefoonnummer:')).toHaveClass('font-medium');
-        expect(screen.getByText('Verzoek:')).toHaveClass('font-medium');
-        expect(screen.getByText('Diagnose:')).toHaveClass('font-medium');
+        expect(screen.getByText('Thuismonitoring voor:')).toHaveClass('font-medium');
         expect(screen.getByText('Uitvoerende organisatie:')).toHaveClass('font-medium');
     })
 
