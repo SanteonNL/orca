@@ -29,25 +29,21 @@ func (p Instance) Do(ctx context.Context, tracer trace.Tracer, httpResponse *htt
 	ctx, span := tracer.Start(ctx, debug.GetFullCallerName(), trace.WithSpanKind(trace.SpanKindServer))
 	defer span.End()
 
-	span.AddEvent("marshall_response_body")
 	var responseBody []byte
 	if resource != nil {
 		var err error
 		responseBody, err = marshalResponse(resource)
 		if err != nil {
-			span.AddEvent("marshall_response_body.error")
 			return otel.Error(span, fmt.Errorf("failed to marshal response: %w", err))
 		}
 	}
 
-	span.AddEvent("response_headers.transform")
 	responseHeaders := httpResponse.Header
 	for _, transformer := range p.httpResponseTransformers {
 		transformer.Transform(&httpResponse.StatusCode, &responseBody, responseHeaders)
 	}
 
 	// Set headers
-	span.AddEvent("response_headers.set")
 	if httpResponse.Header.Get("Content-Type") == "" {
 		httpResponse.Header.Set("Content-Type", "application/fhir+json")
 	}
@@ -76,15 +72,12 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 		StatusCode: responseStatusCode,
 	}
 
-	span.AddEvent("executing_pipeline")
 	err := p.Do(ctx, tracer, httpResponse, resource)
 	var responseBody []byte
 	if err == nil && httpResponse.Body != nil {
-		span.AddEvent("response_body.read")
 		responseBody, err = io.ReadAll(httpResponse.Body)
 	}
 	if err != nil {
-		span.AddEvent("response_body.read.error")
 		log.Error().Err(otel.Error(span, err)).Msg("Failed to marshal pipeline response")
 		httpResponse.StatusCode = http.StatusInternalServerError
 		responseBody = []byte(`{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"Failed to marshal response"}]}`)
@@ -99,11 +92,10 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 	httpResponseWriter.WriteHeader(httpResponse.StatusCode)
 	if responseBody != nil {
 		_, err = httpResponseWriter.Write(responseBody)
-		span.AddEvent("response_body.write.complete")
 		if err != nil {
-			span.AddEvent("response_body.write.error")
 			log.Error().Err(otel.Error(span, err)).Msgf("Failed to write response: %s", string(responseBody))
 		}
+		span.AddEvent("response_body.write.complete")
 	}
 }
 

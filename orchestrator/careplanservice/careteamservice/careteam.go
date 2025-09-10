@@ -34,7 +34,7 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 		ctx,
 		debug.GetFullCallerName(),
 		trace.WithAttributes(
-			attribute.String("care_plan_id", carePlanId),
+			attribute.String("careplan_id", carePlanId),
 			attribute.String("task_id", to.Value(updateTriggerTask.Id)),
 			attribute.String("task_status", updateTriggerTask.Status.String()),
 		),
@@ -88,7 +88,7 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 		changed = true
 	}
 
-	span.SetAttributes(attribute.Bool("care_team_changed", changed))
+	span.SetAttributes(attribute.Bool("careteam_changed", changed))
 
 	if changed {
 		span.AddEvent("updating_careteam")
@@ -113,7 +113,9 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 }
 
 func updateCareTeam(ctx context.Context, careTeam *fhir.CareTeam, otherActivities []fhir.Task, updatedActivity fhir.Task) bool {
-	ctx, span := tracer.Start(ctx, "careteam.updateCareTeam",
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
 		trace.WithAttributes(
 			attribute.String("task_status", updatedActivity.Status.String()),
 			attribute.Int("other_activities_count", len(otherActivities)),
@@ -133,7 +135,9 @@ func updateCareTeam(ctx context.Context, careTeam *fhir.CareTeam, otherActivitie
 }
 
 func ActivateMembership(ctx context.Context, careTeam *fhir.CareTeam, party *fhir.Reference) bool {
-	ctx, span := tracer.Start(ctx, "careteam.ActivateMembership",
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
 		trace.WithAttributes(
 			attribute.String("party_identifier", to.Value(party.Identifier.Value)),
 		),
@@ -160,7 +164,9 @@ func ActivateMembership(ctx context.Context, careTeam *fhir.CareTeam, party *fhi
 }
 
 func deactivateMembership(ctx context.Context, careTeam *fhir.CareTeam, party *fhir.Reference, otherActivities []fhir.Task) bool {
-	ctx, span := tracer.Start(ctx, "careteam.deactivateMembership",
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
 		trace.WithAttributes(
 			attribute.String("party_identifier", to.Value(party.Identifier.Value)),
 			attribute.Int("other_activities_count", len(otherActivities)),
@@ -197,7 +203,9 @@ func deactivateMembership(ctx context.Context, careTeam *fhir.CareTeam, party *f
 }
 
 func resolveActivities(ctx context.Context, bundle *fhir.Bundle, carePlan *fhir.CarePlan) ([]fhir.Task, error) {
-	ctx, span := tracer.Start(ctx, "careteam.resolveActivities",
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
 		trace.WithAttributes(
 			attribute.Int("activity_references_count", len(carePlan.Activity)),
 		),
