@@ -14,9 +14,9 @@ export function statusLabelLong(taskStatus: string, serviceRequestDisplay?: stri
         case "received":
             return `${serviceRequestDisplayCased} instellen`;
         case "accepted":
-            return "Aanmelding voor " + serviceRequestDisplay.toLowerCase() + " " + organizationNameShort(taskOwner) + " is gelukt!"
+            return `Aanmelding voor ${serviceRequestDisplay.toLowerCase()} ${organizationNameShort(taskOwner)} is gelukt!`;
         case "in-progress":
-            return `${serviceRequestDisplay[0].toUpperCase()}${serviceRequestDisplay.slice(1)} beschikbaar`;
+            return `${serviceRequestDisplayCased} beschikbaar`;
         default:
             return taskStatusLabel(taskStatus);
     }

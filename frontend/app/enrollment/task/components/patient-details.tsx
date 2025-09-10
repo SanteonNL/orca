@@ -1,5 +1,5 @@
 import React from 'react';
-import {Task, Patient, ServiceRequest, Condition} from 'fhir/r4';
+import {Task, Patient, ServiceRequest} from 'fhir/r4';
 import {patientName, organizationName} from '@/lib/fhirRender';
 import StatusElement from './status-element';
 import {codingLabel, taskStatusLabel, titleCase} from "@/app/utils/mapping";
@@ -9,10 +9,9 @@ interface PatientDetailsProps {
     task: Task;
     patient: Patient | undefined;
     serviceRequest: ServiceRequest | undefined
-    condition: Condition | undefined;
 }
 
-export default function PatientDetails({task, patient, serviceRequest, condition}: PatientDetailsProps) {
+export default function PatientDetails({task, patient, serviceRequest}: PatientDetailsProps) {
     const requestCoding = serviceRequest?.code?.coding?.[0];
     const requestCodingDisplay = requestCoding ? codingLabel(requestCoding) : undefined;
 
@@ -24,7 +23,7 @@ export default function PatientDetails({task, patient, serviceRequest, condition
             <StatusElement label="Telefoonnummer"
                            value={patient?.telecom?.find(m => m.system === 'phone')?.value ?? 'Onbekend'}/>
             <StatusElement label={requestCodingDisplay ? titleCase(requestCodingDisplay) + " voor" : "Diagnose"}
-                           value={conditionTitle(task, condition) ?? "Onbekend"}/>
+                           value={conditionTitle(task, undefined) ?? "Onbekend"}/>
             <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)}/>
             <StatusElement label="Status"
                            value={taskStatusLabel(task.status) + " op " + (task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend")}/>

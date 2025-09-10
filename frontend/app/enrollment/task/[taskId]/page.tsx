@@ -130,7 +130,7 @@ export default function EnrollmentTaskPage() {
                                     executionTextTop(serviceRequestTitle, task) ?? ''
                             }
                         </div>
-                        <PatientDetails task={task} serviceRequest={serviceRequest || cpsServiceRequest} condition={undefined} patient={patient}/>
+                        <PatientDetails task={task} serviceRequest={serviceRequest || cpsServiceRequest} patient={patient}/>
                         {
                             textBottom ? <div className="w-[568px] font-[500]">{textBottom}</div> : <></>
                         }

@@ -94,7 +94,17 @@ const mockPatient = {
 };
 
 const mockServiceRequest = {
-    performer: [{identifier: {system: 'http://example.com', value: 'org-123'}}]
+    performer: [{identifier: {system: 'http://example.com', value: 'org-123'}}],
+    code: {
+        coding:
+            [
+                {
+                    system: 'http://snomed.info/sct',
+                    code: '394577000',
+                    display: 'Cardiologie consult'
+                }
+            ]
+    }
 };
 
 
@@ -502,10 +512,13 @@ describe("taskid page tests", () => {
 
     it('renders task heading with correct title for accepted status', async () => {
         (fhirRender.organizationNameShort as jest.Mock).mockReturnValue('Test Hospital');
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: { ...mockTask, status: 'accepted' },
+            mockServiceRequest
+        })
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-
         expect(screen.getByTestId('task-heading')).toBeInTheDocument();
         expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding voor cardiologie consult Test Hospital is gelukt!');
     });
@@ -513,7 +526,7 @@ describe("taskid page tests", () => {
     it('renders task heading with service name when available for ready status', async () => {
         const serviceRequest = {
             ...mockServiceRequest,
-            code: { coding: [{ display: 'Cardiology Consultation' }] }
+            code: { coding: [{ display: 'Cardiologie consult' }] }
         };
         (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,

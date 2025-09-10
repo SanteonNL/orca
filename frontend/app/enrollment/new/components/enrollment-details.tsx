@@ -37,7 +37,7 @@ export default function EnrollmentDetails() {
             <div>{patient?.telecom?.find(m => m.system === 'phone')?.value ?? 'Onbekend'}</div>
 
             <div className="font-medium">{requestCodingDisplay ? titleCase(requestCodingDisplay) + " voor" : "Diagnose"}:</div>
-            <div className="first-letter:uppercase">{conditionTitle(undefined, taskCondition)}</div>
+            <div className="first-letter:uppercase">{conditionTitle(undefined, taskCondition) ?? "Onbekend"}</div>
 
             <div className="font-medium">Uitvoerende organisatie:</div>
             <div>

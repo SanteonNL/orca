@@ -10,7 +10,14 @@ export function requestTitle(serviceRequest: ServiceRequest | undefined): string
     if (coding) {
         return codingLabel(coding)
     }
-    return undefined
+    // show list of joined codings
+    const displays = (serviceRequest.code.coding ?? []).
+        map(c => c.display ?? c.code).
+        filter(c => c !== undefined);
+    if (displays.length > 0) {
+        return displays.join(", ");
+    }
+    return undefined;
 }
 
 // conditionTitle creates a title for a condition, which can be shown to the user.
