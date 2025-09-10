@@ -2,7 +2,6 @@ import { Box, Typography } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import DashboardCard from '@/app/(DashboardLayout)/components/shared/DashboardCard';
 import PatientOverview from '@/app/(DashboardLayout)/components/patients/patient-overview';
-import PractitionerProvider from '@/app/(DashboardLayout)/practitioner';
 
 const PatientsPage = () => {
     return (

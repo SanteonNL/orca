@@ -92,6 +92,7 @@ export default async function CreatePractitioner(){
     console.log(`Sending Practitioner and PractitionerRole creation request to: ${requestURL}`);
     const response = await fetch(requestURL, {
         method: "POST",
+        cache: 'no-store',
         headers: {
             "Content-Type": "application/json"
         },

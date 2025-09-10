@@ -68,13 +68,6 @@ describe('populate utility functions', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.spyOn(console, 'log').mockImplementation(() => {});
-    jest.spyOn(console, 'error').mockImplementation(() => {});
-  });
-
-  afterAll(() => {
-    (console.log as jest.Mock).mockRestore();
-    (console.error as jest.Mock).mockRestore();
     console.log = jest.fn();
     console.warn = jest.fn();
     console.error = jest.fn();
