@@ -14,8 +14,8 @@ import {ChevronRight} from "lucide-react";
 import TaskBody from "@/app/enrollment/components/task-body";
 import Error from "@/app/error";
 import {organizationNameShort} from "@/lib/fhirRender";
+import {requestTitle} from "@/app/enrollment/task/components/util";
 import {statusLabelLong} from "@/app/utils/mapping";
-import orderTitle from "@/app/enrollment/task/components/util";
 
 export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
@@ -94,7 +94,7 @@ export default function EnrollmentTaskPage() {
     const breadcrumb = isFirstStep
         ? <span className='font-medium'>Controleer patiëntgegevens</span>
         : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Controleer patiëntgegevens</a>
-    const serviceRequestTitle = orderTitle(task, serviceRequest || cpsServiceRequest)
+    const serviceRequestTitle = requestTitle(serviceRequest || cpsServiceRequest)
 
 
     // Auto-launch external app when the following conditions are met:
