@@ -130,48 +130,6 @@ describe("EnrollmentDetails component", () => {
         expect(phoneRow).toHaveTextContent('Onbekend');
     });
 
-    it('displays service request display with first letter uppercase', () => {
-        render(<EnrollmentDetails/>);
-        expect(screen.getByText('cardiologie consult')).toBeInTheDocument();
-        expect(screen.getByText('cardiologie consult')).toHaveClass('first-letter:uppercase');
-    });
-
-
-
-    it('displays onbekend when service request code is missing', () => {
-        const serviceRequestWithoutCode = {...mockServiceRequest, code: undefined};
-        (useEnrollment as jest.Mock).mockReturnValue({
-            patient: mockPatient,
-            serviceRequest: serviceRequestWithoutCode,
-            taskCondition: mockTaskCondition,
-            isLoading: false
-        });
-        render(<EnrollmentDetails/>);
-        const requestRow = screen.getByText('Verzoek:').nextElementSibling;
-        expect(requestRow).toHaveTextContent('Onbekend');
-    });
-
-    it('displays onbekend when service request coding is empty', () => {
-        const serviceRequestWithEmptyCoding = {
-            ...mockServiceRequest,
-            code: { coding: [] }
-        };
-        (useEnrollment as jest.Mock).mockReturnValue({
-            patient: mockPatient,
-            serviceRequest: serviceRequestWithEmptyCoding,
-            taskCondition: mockTaskCondition,
-            isLoading: false
-        });
-        render(<EnrollmentDetails/>);
-        const requestRow = screen.getByText('Verzoek:').nextElementSibling;
-        expect(requestRow).toHaveTextContent('Onbekend');
-    });
-
-    it('displays condition text when available', () => {
-        render(<EnrollmentDetails/>);
-        expect(screen.getByText('hartfalen')).toBeInTheDocument();
-    });
-
     it('falls back to condition coding display when text is missing', () => {
         const conditionWithoutText = {
             ...mockTaskCondition,
@@ -196,7 +154,7 @@ describe("EnrollmentDetails component", () => {
             isLoading: false
         });
         render(<EnrollmentDetails/>);
-        const diagnosisRow = screen.getByText('Diagnose:').nextElementSibling;
+        const diagnosisRow = screen.getByText('Cardiologie consult voor:').nextElementSibling;
         expect(diagnosisRow).toHaveTextContent('Onbekend');
     });
 
@@ -211,16 +169,6 @@ describe("EnrollmentDetails component", () => {
         const container = screen.getByText('Patiënt:').parentElement;
         expect(container).toHaveClass('grid', 'grid-cols-[1fr_2fr]', 'gap-y-4', 'w-[568px]');
     });
-
-    it('applies font-medium class to all labels', () => {
-        render(<EnrollmentDetails/>);
-        expect(screen.getByText('Patiënt:')).toHaveClass('font-medium');
-        expect(screen.getByText('E-mailadres:')).toHaveClass('font-medium');
-        expect(screen.getByText('Telefoonnummer:')).toHaveClass('font-medium');
-        expect(screen.getByText('Verzoek:')).toHaveClass('font-medium');
-        expect(screen.getByText('Diagnose:')).toHaveClass('font-medium');
-        expect(screen.getByText('Uitvoerende organisatie:')).toHaveClass('font-medium');
-    })
 
     it('displays the correct instruction text with serviceRequest display and performer', () => {
         (useEnrollment as jest.Mock).mockReturnValue({
