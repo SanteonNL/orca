@@ -29,7 +29,7 @@ func NewTracedHTTPTransport(base http.RoundTripper, tracer trace.Tracer) *Traced
 
 func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx, span := t.tracer.Start(req.Context(),
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, req.Method),
@@ -62,8 +62,8 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 
 	// Record response attributes
 	span.SetAttributes(
-		attribute.Int("http.status_code", resp.StatusCode),
-		attribute.String("http.status_text", resp.Status),
+		attribute.Int(otel.HTTPStatusCode, resp.StatusCode),
+		attribute.String(otel.HTTPStatusText, resp.Status),
 	)
 
 	if resp.StatusCode >= 400 {

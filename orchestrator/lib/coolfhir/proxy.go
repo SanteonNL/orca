@@ -5,7 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/rs/zerolog/log"
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"io"
 	"net/http"
 	"net/url"
@@ -16,6 +21,8 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
+
+var tracer = baseotel.Tracer("proxy")
 
 // HttpProxy is an interface for a simple HTTP proxy that forwards requests to an upstream server.
 // It's there so NewProxy can maintain compatibility with httputil.ReverseProxy
@@ -39,10 +46,24 @@ type FHIRClientProxy struct {
 }
 
 func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, request *http.Request) {
+	ctx, span := tracer.Start(
+		request.Context(),
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String(otel.HTTPMethod, request.Method),
+			attribute.String(otel.HTTPURL, request.URL.String()),
+			attribute.String("proxy.base_path", f.proxyBasePath),
+		),
+	)
+	defer span.End()
+
+	request = request.WithContext(ctx)
+
 	if f.HTTPRequestModifier != nil {
 		var err error
 		if request, err = f.HTTPRequestModifier(request); err != nil {
-			WriteOperationOutcomeFromError(request.Context(), err, "FHIR request", httpResponseWriter)
+			WriteOperationOutcomeFromError(ctx, otel.Error(span, err), "FHIR request", httpResponseWriter)
 			return
 		}
 	}
@@ -74,7 +95,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		// LimitReader 10mb to prevent DoS attacks
 		requestData, err = io.ReadAll(io.LimitReader(request.Body, 10*1024*1024+1))
 		if len(requestData) > 10*1024*1024 {
-			WriteOperationOutcomeFromError(request.Context(), fhirclient.OperationOutcomeError{
+			WriteOperationOutcomeFromError(ctx, otel.Error(span, fhirclient.OperationOutcomeError{
 				OperationOutcome: fhir.OperationOutcome{
 					Issue: []fhir.OperationOutcomeIssue{
 						{
@@ -85,11 +106,11 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 					},
 				},
 				HttpStatusCode: http.StatusRequestEntityTooLarge,
-			}, "FHIR request", httpResponseWriter)
+			}), "FHIR request", httpResponseWriter)
 			return
 		}
 		if err != nil {
-			WriteOperationOutcomeFromError(request.Context(), fhirclient.OperationOutcomeError{
+			WriteOperationOutcomeFromError(ctx, otel.Error(span, fhirclient.OperationOutcomeError{
 				OperationOutcome: fhir.OperationOutcome{
 					Issue: []fhir.OperationOutcomeIssue{
 						{
@@ -100,13 +121,13 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 					},
 				},
 				HttpStatusCode: http.StatusBadRequest,
-			}, "FHIR request", httpResponseWriter)
+			}), "FHIR request", httpResponseWriter)
 			return
 		}
 		if len(requestData) > 0 && !strings.HasSuffix(request.URL.Path, "/_search") {
 			requestResource = make(map[string]interface{})
 			if err := json.Unmarshal(requestData, &requestResource); err != nil {
-				WriteOperationOutcomeFromError(request.Context(), fhirclient.OperationOutcomeError{
+				WriteOperationOutcomeFromError(ctx, otel.Error(span, fhirclient.OperationOutcomeError{
 					OperationOutcome: fhir.OperationOutcome{
 						Issue: []fhir.OperationOutcomeIssue{
 							{
@@ -117,13 +138,13 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 						},
 					},
 					HttpStatusCode: http.StatusBadRequest,
-				}, "FHIR request", httpResponseWriter)
+				}), "FHIR request", httpResponseWriter)
 				return
 			}
 		}
 	}
 	if requestResource == nil && (request.Method == http.MethodPost || request.Method == http.MethodPut) && !strings.HasSuffix(request.URL.Path, "/_search") {
-		WriteOperationOutcomeFromError(request.Context(), fhirclient.OperationOutcomeError{
+		WriteOperationOutcomeFromError(ctx, otel.Error(span, fhirclient.OperationOutcomeError{
 			OperationOutcome: fhir.OperationOutcome{
 				Issue: []fhir.OperationOutcomeIssue{
 					{
@@ -134,7 +155,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 				},
 			},
 			HttpStatusCode: http.StatusBadRequest,
-		}, "FHIR request", httpResponseWriter)
+		}), "FHIR request", httpResponseWriter)
 		return
 	}
 
@@ -143,21 +164,21 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 	// Execute the request
 	switch request.Method {
 	case http.MethodGet:
-		err = f.client.ReadWithContext(request.Context(), outRequestUrl.Path, &responseResource, params...)
+		err = f.client.ReadWithContext(ctx, outRequestUrl.Path, &responseResource, params...)
 	case http.MethodPost:
 		if strings.HasSuffix(request.URL.Path, "/_search") {
 			var values url.Values
 			values, err = url.ParseQuery(string(requestData))
 			if err == nil {
-				err = f.client.SearchWithContext(request.Context(), strings.TrimSuffix(outRequestUrl.Path, "/_search"), values, &responseResource, params...)
+				err = f.client.SearchWithContext(ctx, strings.TrimSuffix(outRequestUrl.Path, "/_search"), values, &responseResource, params...)
 			}
 		} else {
-			err = f.client.CreateWithContext(request.Context(), requestResource, &responseResource, params...)
+			err = f.client.CreateWithContext(ctx, requestResource, &responseResource, params...)
 		}
 	case http.MethodPut:
-		err = f.client.UpdateWithContext(request.Context(), outRequestUrl.Path, requestResource, &responseResource, params...)
+		err = f.client.UpdateWithContext(ctx, outRequestUrl.Path, requestResource, &responseResource, params...)
 	case http.MethodDelete:
-		err = f.client.DeleteWithContext(request.Context(), outRequestUrl.Path, params...)
+		err = f.client.DeleteWithContext(ctx, outRequestUrl.Path, params...)
 	default:
 		SendResponse(httpResponseWriter, http.StatusMethodNotAllowed, BadRequest("Method not allowed: %s", request.Method))
 		return
@@ -183,7 +204,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 				HttpStatusCode: responseStatusCode,
 			}
 		}
-		WriteOperationOutcomeFromError(request.Context(), err, "FHIR request", httpResponseWriter)
+		WriteOperationOutcomeFromError(ctx, otel.Error(span, err), "FHIR request", httpResponseWriter)
 		return
 	}
 	upstreamUrl := f.upstreamBaseUrl.String()
@@ -204,7 +225,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		// Note: only for read operations
 		pipe = pipe.AppendResponseTransformer(pipeline.MetaSourceSetter{URI: outRequestUrl.String()})
 	}
-	pipe.DoAndWrite(httpResponseWriter, responseResource, responseStatusCode)
+	pipe.DoAndWrite(ctx, tracer, httpResponseWriter, responseResource, responseStatusCode)
 }
 
 func (f *FHIRClientProxy) sanitizeRequestHeaders(header http.Header) http.Header {
@@ -274,7 +295,18 @@ type LoggingRoundTripper struct {
 }
 
 func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	logger := log.Ctx(request.Context())
+	ctx, span := tracer.Start(
+		request.Context(),
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String(otel.HTTPMethod, request.Method),
+			attribute.String(otel.HTTPURL, request.URL.String()),
+		),
+	)
+	defer span.End()
+
+	logger := log.Ctx(ctx)
 	logger.Info().Msgf("%s request: %s %s", l.Name, request.Method, request.URL.String())
 	if logger.Debug().Enabled() {
 		var headers []string

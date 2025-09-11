@@ -68,7 +68,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		}
 
 		// Verify at least the main handleTaskNotification span is present
-		require.Contains(t, spanNames, "handleTaskNotification", "Expected handleTaskNotification span")
+		require.Contains(t, spanNames, "careplancontributor.(*Service).handleTaskNotification", "Expected handleTaskNotification span")
 
 		exporter.Reset()
 	}
