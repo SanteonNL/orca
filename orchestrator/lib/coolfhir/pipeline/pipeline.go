@@ -62,7 +62,7 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
-			attribute.String("http.status_code", strconv.Itoa(responseStatusCode)),
+			attribute.Int(otel.HTTPStatusCode, responseStatusCode),
 		),
 	)
 	defer span.End()
@@ -86,7 +86,7 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 	for key, value := range httpResponse.Header {
 		httpResponseWriter.Header()[key] = value
 	}
-	span.SetAttributes(attribute.Int("http.status_code", httpResponse.StatusCode))
+	span.SetAttributes(attribute.Int(otel.HTTPStatusCode, httpResponse.StatusCode))
 
 	span.AddEvent("response_body.write")
 	httpResponseWriter.WriteHeader(httpResponse.StatusCode)

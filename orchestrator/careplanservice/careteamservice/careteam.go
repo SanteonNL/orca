@@ -52,7 +52,6 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 		bundle,
 		fhirclient.QueryParam("_id", carePlanId),
 		fhirclient.QueryParam("_include", "CarePlan:activity-reference")); err != nil {
-		span.RecordError(err)
 		return false, otel.Error(span, fmt.Errorf("unable to resolve CarePlan and related resources: %w", err))
 	}
 
@@ -215,14 +214,10 @@ func resolveActivities(ctx context.Context, bundle *fhir.Bundle, carePlan *fhir.
 	var activityRefs []string
 	for _, activityRef := range carePlan.Activity {
 		if activityRef.Reference == nil || activityRef.Reference.Reference == nil {
-			err := errors.New("CarePlan.Activity all must be a FHIR Reference with a string reference")
-			span.RecordError(err)
-			return nil, err
+			return nil, otel.Error(span, errors.New("CarePlan.Activity all must be a FHIR Reference with a string reference"))
 		}
 		if activityRef.Reference.Type == nil || *activityRef.Reference.Type != "Task" {
-			err := errors.New("CarePlan.Activity.Reference must be of type Task")
-			span.RecordError(err)
-			return nil, err
+			return nil, otel.Error(span, errors.New("CarePlan.Activity.Reference must be of type Task"))
 		}
 		activityRefs = append(activityRefs, *activityRef.Reference.Reference)
 	}
@@ -232,8 +227,7 @@ func resolveActivities(ctx context.Context, bundle *fhir.Bundle, carePlan *fhir.
 		if err := coolfhir.ResourcesInBundle(bundle, coolfhir.FilterResource(func(resource coolfhir.Resource) bool {
 			return resource.Type == "Task" && "Task/"+resource.ID == ref
 		}), &tasks); err != nil {
-			span.RecordError(err)
-			return nil, fmt.Errorf("unable to resolve Task in bundle (id=%s): %w", ref, err)
+			return nil, otel.Error(span, fmt.Errorf("unable to resolve Task in bundle (id=%s): %w", ref, err))
 		}
 	}
 

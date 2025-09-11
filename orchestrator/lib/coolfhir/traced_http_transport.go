@@ -62,8 +62,8 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 
 	// Record response attributes
 	span.SetAttributes(
-		attribute.Int("http.status_code", resp.StatusCode),
-		attribute.String("http.status_text", resp.Status),
+		attribute.Int(otel.HTTPStatusCode, resp.StatusCode),
+		attribute.String(otel.HTTPStatusText, resp.Status),
 	)
 
 	if resp.StatusCode >= 400 {
