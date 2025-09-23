@@ -24,7 +24,7 @@ describe('codingToMessage', () => {
     });
     it('unknown code', () => {
         const codings = [{code: '1'}]
-        expect(codingToMessage(codings)).toStrictEqual(['Er is een onbekende fout opgetreden. Probeer het later opnieuw of neem contact op met de beheerder. (code: 1)']);
+        expect(codingToMessage(codings)).toStrictEqual(['Er is een onbekende fout opgetreden. Probeer het later opnieuw of neem contact op met de systeembeheerder: functioneelbeheer@zorgbijjou.nl. Vermeld daarbij de volgende code: 1']);
     });
 
 });
