@@ -364,20 +364,20 @@ export function codingToMessage(codings: Coding[]): String[] {
 
     for (const coding of codings) {
         switch (coding.code) {
-            case "E0001":
-                messages.push(MessageType.NoEmail);
-                break;
-            case "E0002":
-                messages.push(MessageType.NoPhone);
-                break;
-            case "E0003":
-                messages.push(MessageType.InvalidEmail);
-                break;
-            case "E0004":
-                messages.push(MessageType.InvalidPhone);
-                break;
+            // case "E0001":
+            //     messages.push(MessageType.NoEmail);
+            //     break;
+            // case "E0002":
+            //     messages.push(MessageType.NoPhone);
+            //     break;
+            // case "E0003":
+            //     messages.push(MessageType.InvalidEmail);
+            //     break;
+            // case "E0004":
+            //     messages.push(MessageType.InvalidPhone);
+            //     break;
             default:
-                messages.push(MessageType.Unknown + " (code: " + coding.code + ")");
+                messages.push(MessageType.Unknown + coding.code );
                 break;
         }
     }
@@ -385,9 +385,9 @@ export function codingToMessage(codings: Coding[]): String[] {
 }
 
 export enum MessageType {
-    InvalidEmail = "Controleer het e-mailadres van de patiënt in het EPD en probeer het opnieuw.",
-    InvalidPhone = "Het telefoonnummer van de patiënt is geen Nederlands nummer. Een Nederlands nummer is nodig voor de aanmelding.",
+    InvalidEmail = "Ongeldig e-mailadres. Controleer het e-mailadres van de patiënt in het EPD en probeer het opnieuw.",
+    InvalidPhone = "Ongeldig telefoonnummer. Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw. Tip: er is een Nederlands telefoonnummer nodig voor de aanmelding.",
     NoEmail = "Er is geen e-mailadres van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het e-mailadres toe in het EPD en probeer het opnieuw.",
     NoPhone = "Er is geen telefoonnummer van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het telefoonnummer toe in het EPD en probeer het opnieuw.",
-    Unknown = "Er is een onbekende fout opgetreden. Probeer het later opnieuw of neem contact op met de beheerder."
+    Unknown = "Er is een onbekende fout opgetreden. Probeer het later opnieuw of neem contact op met de systeembeheerder: functioneelbeheer@zorgbijjou.nl. Vermeld daarbij de volgende code: "
 }
