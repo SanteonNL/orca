@@ -51,7 +51,7 @@ describe('ValidationErrors', () => {
 
     render(<ValidationErrors validationErrors={validationErrors} />);
 
-    expect(screen.getByText(/Het telefoonnummer van de patiënt is geen Nederlands nummer/)).toBeInTheDocument();
+    expect(screen.getByText(/Ongeldig telefoonnummer\. Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw\. Tip: er is een Nederlands telefoonnummer nodig voor de aanmelding\./)).toBeInTheDocument();
   });
 
   it('displays separate messages for multiple different error codes', () => {
@@ -60,7 +60,7 @@ describe('ValidationErrors', () => {
     render(<ValidationErrors validationErrors={validationErrors} />);
 
     expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
-    expect(screen.getByText(/Het telefoonnummer van de patiënt is geen Nederlands nummer/)).toBeInTheDocument();
+    expect(screen.getByText(/Ongeldig telefoonnummer\. Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw\. Tip: er is een Nederlands telefoonnummer nodig voor de aanmelding\./)).toBeInTheDocument();
   });
 
   it('displays multiple paragraphs for individual errors', () => {
@@ -80,7 +80,7 @@ describe('ValidationErrors', () => {
     expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
     expect(screen.getByText(/Er is geen telefoonnummer/)).toBeInTheDocument();
     expect(screen.getByText(/Controleer het e-mailadres/)).toBeInTheDocument();
-    expect(screen.getByText(/Het telefoonnummer van de patiënt is geen Nederlands nummer/)).toBeInTheDocument();
+    expect(screen.getByText(/Ongeldig telefoonnummer\. Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw\. Tip: er is een Nederlands telefoonnummer nodig voor de aanmelding\./)).toBeInTheDocument();
   });
 
   it('displays unknown error message for empty validation errors', () => {
