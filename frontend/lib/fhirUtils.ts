@@ -364,18 +364,18 @@ export function codingToMessage(codings: Coding[]): String[] {
 
     for (const coding of codings) {
         switch (coding.code) {
-            // case "E0001":
-            //     messages.push(MessageType.NoEmail);
-            //     break;
-            // case "E0002":
-            //     messages.push(MessageType.NoPhone);
-            //     break;
-            // case "E0003":
-            //     messages.push(MessageType.InvalidEmail);
-            //     break;
-            // case "E0004":
-            //     messages.push(MessageType.InvalidPhone);
-            //     break;
+            case "E0001":
+                messages.push(MessageType.NoEmail);
+                break;
+            case "E0002":
+                messages.push(MessageType.NoPhone);
+                break;
+            case "E0003":
+                messages.push(MessageType.InvalidEmail);
+                break;
+            case "E0004":
+                messages.push(MessageType.InvalidPhone);
+                break;
             default:
                 messages.push(MessageType.Unknown + coding.code );
                 break;
