@@ -51,7 +51,7 @@ describe('ValidationErrors', () => {
 
     render(<ValidationErrors validationErrors={validationErrors} />);
 
-    expect(screen.getByText(/Controleer het telefoonnummer/)).toBeInTheDocument();
+    expect(screen.getByText(/Het telefoonnummer van de patiënt is geen Nederlands nummer/)).toBeInTheDocument();
   });
 
   it('displays separate messages for multiple different error codes', () => {
@@ -60,7 +60,7 @@ describe('ValidationErrors', () => {
     render(<ValidationErrors validationErrors={validationErrors} />);
 
     expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
-    expect(screen.getByText(/Controleer het telefoonnummer/)).toBeInTheDocument();
+    expect(screen.getByText(/Het telefoonnummer van de patiënt is geen Nederlands nummer/)).toBeInTheDocument();
   });
 
   it('displays multiple paragraphs for individual errors', () => {
