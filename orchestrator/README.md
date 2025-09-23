@@ -82,8 +82,9 @@ All OTEL settings can be overridden using the `ORCA_*` prefix convention:
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
 #### Zorgplatform integration
+Note: To test a Zorgplatform launch locally, you will need to set `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=false`
 - `ORCA_ZORGPLATFORM_ENABLED`: Enable Zorgplatform integration (default: `false`).
-- `ORCA_TENANT_<ID>_CHIPSOFT_ORGID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
+- `ORCA_TENANT_<ID>_CHIPSOFT_ORGANIZATIONID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
 
 ### Demo configuration
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the "demo" EHR integration, as alternative to production-grade integrations like SMART on FHIR or Zorgplatform (default: `false`).
