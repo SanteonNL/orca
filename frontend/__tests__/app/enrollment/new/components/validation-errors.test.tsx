@@ -80,7 +80,7 @@ describe('ValidationErrors', () => {
     expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
     expect(screen.getByText(/Er is geen telefoonnummer/)).toBeInTheDocument();
     expect(screen.getByText(/Controleer het e-mailadres/)).toBeInTheDocument();
-    expect(screen.getByText(/Controleer het telefoonnummer/)).toBeInTheDocument();
+    expect(screen.getByText(/Het telefoonnummer van de patiënt is geen Nederlands nummer/)).toBeInTheDocument();
   });
 
   it('displays unknown error message for empty validation errors', () => {

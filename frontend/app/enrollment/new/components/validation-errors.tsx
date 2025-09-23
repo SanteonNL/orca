@@ -15,7 +15,7 @@ export default function ValidationErrors({validationErrors}: ValidationErrorsPro
             <div className="flex items-start gap-3">
                 <div className="flex-shrink-0">
                     <div className="w-6 h-6 flex items-center justify-center">
-                        <CircleAlert color="red"/>
+                        <CircleAlert color="#CA323B"/>
                     </div>
                 </div>
                 <div className="flex-grow">
