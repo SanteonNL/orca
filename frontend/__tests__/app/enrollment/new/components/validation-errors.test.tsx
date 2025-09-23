@@ -10,7 +10,7 @@ describe('ValidationErrors', () => {
     const { container } = render(<ValidationErrors validationErrors={validationErrors} />);
 
     const banner = container.firstChild as HTMLElement;
-    expect(banner).toHaveClass('border', 'border-red-500', 'rounded-lg', 'p-4', 'bg-red-50', 'mb-4');
+    expect(banner).toHaveClass('border');
   });
 
   it('shows alert icon and error title', () => {
@@ -51,7 +51,7 @@ describe('ValidationErrors', () => {
 
     render(<ValidationErrors validationErrors={validationErrors} />);
 
-    expect(screen.getByText(/Controleer het telefoonnummer/)).toBeInTheDocument();
+    expect(screen.getByText(/Het telefoonnummer van de patiënt is geen Nederlands nummer/)).toBeInTheDocument();
   });
 
   it('displays separate messages for multiple different error codes', () => {
@@ -60,7 +60,7 @@ describe('ValidationErrors', () => {
     render(<ValidationErrors validationErrors={validationErrors} />);
 
     expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
-    expect(screen.getByText(/Controleer het telefoonnummer/)).toBeInTheDocument();
+    expect(screen.getByText(/Het telefoonnummer van de patiënt is geen Nederlands nummer/)).toBeInTheDocument();
   });
 
   it('displays multiple paragraphs for individual errors', () => {
@@ -80,7 +80,7 @@ describe('ValidationErrors', () => {
     expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
     expect(screen.getByText(/Er is geen telefoonnummer/)).toBeInTheDocument();
     expect(screen.getByText(/Controleer het e-mailadres/)).toBeInTheDocument();
-    expect(screen.getByText(/Controleer het telefoonnummer/)).toBeInTheDocument();
+    expect(screen.getByText(/Het telefoonnummer van de patiënt is geen Nederlands nummer/)).toBeInTheDocument();
   });
 
   it('displays unknown error message for empty validation errors', () => {

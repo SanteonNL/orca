@@ -385,8 +385,8 @@ export function codingToMessage(codings: Coding[]): String[] {
 }
 
 export enum MessageType {
-    InvalidEmail = "Controleer het e-mailadres van de patiënt in het EPD en probeer het opnieuw. ",
-    InvalidPhone = "Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw. ",
+    InvalidEmail = "Controleer het e-mailadres van de patiënt in het EPD en probeer het opnieuw.",
+    InvalidPhone = "Het telefoonnummer van de patiënt is geen Nederlands nummer. Een Nederlands nummer is nodig voor de aanmelding.",
     NoEmail = "Er is geen e-mailadres van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het e-mailadres toe in het EPD en probeer het opnieuw.",
     NoPhone = "Er is geen telefoonnummer van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het telefoonnummer toe in het EPD en probeer het opnieuw.",
     Unknown = "Er is een onbekende fout opgetreden. Probeer het later opnieuw of neem contact op met de beheerder."
