@@ -6,19 +6,19 @@ import (
 	"crypto/rsa"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"github.com/zitadel/oidc/v3/pkg/oidc"
-	"github.com/zitadel/oidc/v3/pkg/op"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"golang.org/x/text/language"
 	"log/slog"
 	"net/http"
 	"net/url"
 	"sync"
+
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/google/uuid"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"github.com/zitadel/oidc/v3/pkg/op"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"golang.org/x/text/language"
 )
 
 type Service struct {
@@ -29,7 +29,7 @@ type Service struct {
 }
 
 func New(strictMode bool, issuer *url.URL, config Config) (*Service, error) {
-	log.Info().Msg("Initializing OpenID Connect Provider")
+	slog.Info("Initializing OpenID Connect Provider")
 	var extraOptions []op.Option
 	if strictMode {
 		extraOptions = append(extraOptions, op.WithAllowInsecure())

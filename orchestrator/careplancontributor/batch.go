@@ -2,6 +2,11 @@ package careplancontributor
 
 import (
 	"errors"
+	"log/slog"
+	"net/http"
+	"strconv"
+	"strings"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -9,14 +14,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"strconv"
-	"strings"
 )
 
 func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
@@ -41,7 +42,7 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 	)
 	defer span.End()
 
-	log.Ctx(ctx).Debug().Msg("Handling external FHIR API request")
+	slog.DebugContext(ctx, "Handling external FHIR API request")
 
 	_, err = s.authorizeScpMember(httpRequest.WithContext(ctx))
 	if err != nil {

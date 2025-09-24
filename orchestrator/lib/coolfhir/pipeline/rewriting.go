@@ -3,7 +3,7 @@ package pipeline
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -17,7 +17,7 @@ type MetaSourceSetter struct {
 
 func (m MetaSourceSetter) Transform(_ *int, responseBody *[]byte, _ map[string][]string) {
 	if err := m.do(responseBody); err != nil {
-		log.Error().Err(err).Msg("MetaSourceSetter: failed to set meta.source")
+		slog.Error("MetaSourceSetter: failed to set meta.source")
 	}
 }
 

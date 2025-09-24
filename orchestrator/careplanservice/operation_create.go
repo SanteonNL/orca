@@ -4,6 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -12,13 +16,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/lib/validation"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"strings"
 )
 
 var _ FHIROperation = &FHIRCreateOperationHandler[fhir.HasExtension]{}
@@ -66,7 +67,10 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
 			otel.Error(span, err, "authorization check failed")
-			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal is authorized to create %s", resourceType)
+			slog.ErrorContext(ctx, "Error checking if principal is authorized to create resource",
+				slog.String("error", err.Error()),
+				slog.String("resource_type", resourceType),
+			)
 		}
 		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant is not authorized to create %s", resourceType),
@@ -80,8 +84,10 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		attribute.StringSlice(otel.AuthZReasons, authzDecision.Reasons),
 	)
 
-	log.Ctx(ctx).Info().Msgf("Creating %s (authz=%s)", resourceType, strings.Join(authzDecision.Reasons, ";"))
-
+	slog.InfoContext(ctx, "Creating resource",
+		slog.String("resource_type", resourceType),
+		slog.String("authz", strings.Join(authzDecision.Reasons, ";")),
+	)
 	if h.validator != nil {
 		result, err2, done := h.validate(ctx, resource, resourceType)
 		if done {

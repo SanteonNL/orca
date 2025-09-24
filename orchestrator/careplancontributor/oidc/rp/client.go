@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/lestrrat-go/jwx/v2/jwt"
-	"github.com/rs/zerolog/log"
-	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/lestrrat-go/jwx/v2/jwa"
+	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/zitadel/oidc/v3/pkg/oidc"
 )
 
 // issuerState tracks the state of an individual issuer
@@ -131,10 +132,13 @@ func newClientWithTrustedIssuers(ctx context.Context, trustedIssuers map[string]
 func (c *Client) refreshAllConfigurations(ctx context.Context) {
 	for issuer, discoveryURL := range c.trustedIssuers {
 		if err := c.refreshIssuerConfiguration(ctx, issuer, discoveryURL); err != nil {
-			log.Ctx(ctx).Warn().Err(err).
-				Str("issuer", issuer).
-				Str("discovery_url", discoveryURL).
-				Msg("Failed to refresh OpenID configuration for issuer, will retry on demand")
+			slog.WarnContext(
+				ctx,
+				"Failed to refresh OpenID configuration for issuer, will retry on demand",
+				slog.String("issuer", issuer),
+				slog.String("discovery_url", discoveryURL),
+				slog.String("error", err.Error()),
+			)
 		}
 	}
 }
@@ -271,9 +275,12 @@ func (c *Client) fetchKeySet(ctx context.Context, issuer string) (jwk.Set, error
 				return nil, fmt.Errorf("failed to load configuration for issuer %s and no cached config available: %w", issuer, err)
 			}
 			// If refresh failed but we have a cached config, log warning and continue with cached config
-			log.Ctx(ctx).Warn().Err(err).
-				Str("issuer", issuer).
-				Msg("Failed to refresh issuer configuration, using cached config")
+			slog.WarnContext(
+				ctx,
+				"Failed to refresh issuer configuration, using cached config",
+				slog.String("issuer", issuer),
+				slog.String("error", err.Error()),
+			)
 		} else {
 			// Refresh succeeded, get the updated config
 			state.mutex.RLock()

@@ -4,13 +4,14 @@ package careplanservice
 import (
 	"context"
 	"fmt"
+	"log/slog"
+	"net/url"
+
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/url"
 )
 
 const CreatorExtensionURL = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator"
@@ -209,7 +210,10 @@ func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource *T, pri
 	// INT-630: We changed CareTeam to be contained within the CarePlan, but old test data in the CarePlan resource does not have CareTeam.
 	//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
 	if err != nil {
-		log.Ctx(ctx).Warn().Err(err).Msgf("Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource (carePlanID=%s)", *carePlan.Id)
+		slog.WarnContext(ctx, "Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource",
+			slog.String("carePlanID", *carePlan.Id),
+			slog.String("error", err.Error()),
+		)
 		return &PolicyDecision{
 			Allowed: false,
 			Reasons: []string{"CareTeamMemberPolicy: unable to derive CareTeam from CarePlan"},

@@ -9,6 +9,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -38,7 +39,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/google/uuid"
 	"github.com/jellydator/ttlcache/v3"
-	"github.com/rs/zerolog/log"
 )
 
 const launcherKey = "zorgplatform"
@@ -85,7 +85,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager[ses
 	} else {
 		appLaunchURL = "http://localhost" + appLaunchURL + appLaunchUrl
 	}
-	log.Ctx(ctx).Info().Msgf("Zorgplatform app launch is: %s", appLaunchURL)
+	slog.InfoContext(ctx, fmt.Sprintf("Zorgplatform app launch is: %s", appLaunchURL))
 
 	// Load certs: signing, TLS client authentication and decryption certificates
 	var signCert [][]byte
@@ -298,7 +298,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	)
 	defer span.End()
 
-	log.Ctx(ctx).Debug().Msg("Handling Zorgplatform STS access token request")
+	slog.DebugContext(ctx, "Handling Zorgplatform STS access token request")
 
 	// Do something to request the access token
 	newHttpRequest := httpRequest.Clone(ctx)
@@ -315,7 +315,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		cacheKey = workflowId + "|" + patientID
 	} else {
 		err := fmt.Errorf("missing headers, options are: X-Scp-Context header, or X-Scp-WorkflowID both X-Scp-PatientID headers")
-		log.Ctx(ctx).Warn().Err(err).Msg("Missing context headers")
+		slog.ErrorContext(ctx, "Missing context headers", slog.String("error", err.Error()))
 		return nil, otel.Error(span, err)
 	}
 
@@ -335,25 +335,25 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		var err error
 		if carePlanReference != "" {
 			// Use X-Scp-Context header
-			log.Ctx(ctx).Debug().Msgf("(cache miss) Getting Zorgplatform access token (careplan=%s)", carePlanReference)
+			slog.DebugContext(ctx, "(cache miss) Getting Zorgplatform access token", slog.String("careplan", carePlanReference))
 			workflowCtx, err = s.getWorkflowContext(ctx, carePlanReference)
 		} else {
 			// Use X-Scp-WorkflowID and X-Scp-PatientID headers
-			log.Ctx(ctx).Debug().Msgf("(cache miss) Getting Zorgplatform access token (workflowId=%s, patientId=%s)", workflowId, patientID)
+			slog.DebugContext(ctx, "(cache miss) Getting Zorgplatform access token", slog.String("workflow_id", workflowId), slog.String("patient_id", patientID))
 			workflowCtx = &workflowContext{
 				workflowId: workflowId,
 				patientBsn: patientID,
 			}
 		}
 		if err != nil {
-			log.Ctx(ctx).Error().Msgf("Unable to get workflow context: %v", err)
+			slog.ErrorContext(ctx, "Unable to get workflow context", slog.String("error", err.Error()))
 			return nil, otel.Error(span, fmt.Errorf("unable to get workflow context: %w", err))
 		}
 
 		//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
 		if !globals.StrictMode {
 			if workflowCtx.patientBsn == "999911120" {
-				log.Ctx(ctx).Warn().Msg("Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
+				slog.WarnContext(ctx, "Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
 				workflowCtx.patientBsn = "999999151"
 			}
 		}
@@ -366,10 +366,10 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 
 		accessToken, err = s.secureTokenService.RequestAccessToken(ctx, launchContext, applicationTokenType)
 		if err != nil {
-			log.Ctx(ctx).Error().Msgf("Unable to request access token for Zorgplatform: %v", err)
+			slog.ErrorContext(ctx, "Unable to request access token for Zorgplatform", slog.String("error", err.Error()))
 			return nil, otel.Error(span, fmt.Errorf("unable to request access token for Zorgplatform: %w", err))
 		}
-		log.Ctx(ctx).Debug().Msgf("Successfully requested access token for Zorgplatform, access_token=%s...", accessToken[:min(len(accessToken), 16)])
+		slog.DebugContext(ctx, "Successfully requested access token for Zorgplatform", slog.String("access_token", accessToken[:min(len(accessToken), 16)]))
 		s.accessTokenCache.Set(cacheKey, accessToken, ttlcache.DefaultTTL)
 	}
 
@@ -391,7 +391,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	)
 	defer span.End()
 
-	log.Ctx(ctx).Debug().Msg("Handling ChipSoft HiX app launch")
+	slog.DebugContext(ctx, "Handling ChipSoft HiX app launch")
 	if err := request.ParseForm(); err != nil {
 		otel.Error(span, err)
 		http.Error(response, fmt.Errorf("unable to parse form: %w", err).Error(), http.StatusBadRequest)
@@ -408,8 +408,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
-		log.Ctx(ctx).Err(err).Msg("unable to validate SAML token")
-		otel.Error(span, err, "unable to validate SAML token")
+		slog.ErrorContext(ctx, "Unable to validate SAML token", slog.String("error", otel.Error(span, err, "unable to validate SAML token").Error()))
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
@@ -418,8 +417,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	tenant, err := s.lookupTenant(launchContext.ChipSoftOrganizationID)
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
-		log.Ctx(ctx).Err(err).Msg("can't determine tenant")
-		otel.Error(span, err, "can't determine tenant")
+		slog.ErrorContext(ctx, "Can't determine tenant", slog.String("error", otel.Error(span, err, "can't determine tenant").Error()))
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
@@ -429,13 +427,12 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
 	accessToken, err := s.secureTokenService.RequestAccessToken(ctx, launchContext, hcpTokenType)
 	if err != nil {
-		log.Ctx(ctx).Err(err).Msg("unable to request access token for HCP ProfessionalService")
-		otel.Error(span, err, "unable to request access token for HCP ProfessionalService")
+		slog.ErrorContext(ctx, "Unable to request access token for HCP ProfessionalService", slog.String("error", otel.Error(span, err, "unable to request access token for HCP ProfessionalService").Error()))
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
 
-	log.Ctx(ctx).Info().Msgf("Successfully requested access token for HCP ProfessionalService, access_token=%s...", accessToken[:min(len(accessToken), 16)])
+	slog.InfoContext(ctx, "Successfully requested access token for HCP ProfessionalService", slog.String("access_token", accessToken[:min(len(accessToken), 16)]))
 	span.SetAttributes(attribute.String("zorgplatform.workflow_id", launchContext.WorkflowId))
 
 	var sessionData *session.Data
@@ -446,11 +443,10 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 			break
 		}
 		if i < 4 {
-			log.Ctx(ctx).Warn().Msg("unable to create session data, retrying")
+			slog.WarnContext(ctx, "unable to create session data, retrying")
 			sleep(200 * time.Duration(i) * time.Millisecond)
 		} else {
-			log.Ctx(ctx).Err(err).Msg("unable to create session data - retry limit reached")
-			otel.Error(span, err, "unable to create session data - retry limit reached")
+			slog.ErrorContext(ctx, "unable to create session data - retry limit reached", slog.String("error", otel.Error(span, err, "unable to create session data - retry limit reached").Error()))
 			http.Error(response, "Application launch failed.", http.StatusInternalServerError)
 			return
 		}
@@ -459,7 +455,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	s.sessionManager.Create(response, *sessionData)
 
 	// Redirect to landing page
-	log.Ctx(ctx).Info().Msg("Successfully launched through ChipSoft HiX app launch")
+	slog.InfoContext(ctx, "Successfully launched through ChipSoft HiX app launch")
 
 	taskResource := sessionData.GetByType("Task")
 	redirectURL := s.frontendLandingUrl
@@ -492,7 +488,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	if err != nil {
 		return nil, otel.Error(span, fmt.Errorf("invalid CarePlan reference (url=%s): %w", carePlanReference, err))
 	}
-	log.Ctx(ctx).Debug().Msgf("Fetching CarePlan resource: %s", localCarePlanRef)
+	slog.DebugContext(ctx, "Fetching CarePlan resource", slog.String("careplan", localCarePlanRef))
 	span.SetAttributes(attribute.String("careplan.local_ref", localCarePlanRef))
 
 	fhirClient, err := s.cpsFhirClient(ctx)
@@ -503,7 +499,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var carePlan fhir.CarePlan
 	err = fhirClient.ReadWithContext(ctx, localCarePlanRef, &carePlan)
 	if err != nil {
-		log.Ctx(ctx).Error().Msgf("Unable to fetch CarePlan resource: %v", err)
+		slog.ErrorContext(ctx, "Unable to fetch CarePlan resource", slog.String("error", err.Error()), slog.String("careplan", localCarePlanRef))
 		return nil, otel.Error(span, fmt.Errorf("unable to fetch CarePlan resource: %w", err))
 	}
 
@@ -511,7 +507,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var task fhir.Task
 	err = fhirClient.ReadWithContext(ctx, *carePlan.Activity[0].Reference.Reference, &task)
 	if err != nil {
-		log.Ctx(ctx).Error().Msgf("Unable to fetch Task resource: %v", err)
+		slog.ErrorContext(ctx, "Unable to fetch Task resource", slog.String("error", err.Error()), slog.String("task", *carePlan.Activity[0].Reference.Reference))
 		return nil, otel.Error(span, fmt.Errorf("unable to fetch Task resource: %w", err))
 	}
 	span.SetAttributes(attribute.String("task.reference", *carePlan.Activity[0].Reference.Reference))
@@ -519,7 +515,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var serviceRequest fhir.ServiceRequest
 	err = fhirClient.ReadWithContext(ctx, *task.Focus.Reference, &serviceRequest)
 	if err != nil {
-		log.Ctx(ctx).Error().Msgf("Unable to fetch ServiceRequest resource: %v", err)
+		slog.ErrorContext(ctx, "Unable to fetch ServiceRequest resource", slog.String("error", err.Error()))
 		return nil, otel.Error(span, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err))
 	}
 	span.SetAttributes(attribute.String("servicerequest.reference", *task.Focus.Reference))
@@ -534,7 +530,7 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var patient fhir.Patient
 	err = fhirClient.ReadWithContext(ctx, *carePlan.Subject.Reference, &patient)
 	if err != nil {
-		log.Ctx(ctx).Error().Msgf("Unable to fetch Patient resource: %v", err)
+		slog.ErrorContext(ctx, "Unable to fetch Patient resource", slog.String("error", err.Error()), slog.String("patient", *carePlan.Subject.Reference))
 		return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient resource: %w", err))
 	}
 	span.SetAttributes(attribute.String("patient.reference", *carePlan.Subject.Reference))
@@ -601,7 +597,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	})
 
 	if err != nil {
-		log.Ctx(ctx).Error().Msgf("Failed to check for existing CPS Task resource: %v", err)
+		slog.ErrorContext(ctx, "Failed to check for existing CPS Task resource", slog.String("error", err.Error()))
 		return nil, otel.Error(span, fmt.Errorf("failed to check for existing CPS Task resource: %w", err))
 	}
 
@@ -680,7 +676,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	}
 	// Enrich performer URA with registered name
 	if result, err := s.profile.CsdDirectory().LookupEntity(ctx, *taskPerformer.Identifier); err != nil {
-		log.Ctx(ctx).Warn().Err(err).Msgf("Couldn't resolve performer name (ura: %s)", s.config.TaskPerformerUra)
+		slog.WarnContext(ctx, "Couldn't resolve performer name", slog.String("ura", s.config.TaskPerformerUra), slog.String("error", err.Error()))
 	} else {
 		taskPerformer = *result
 	}
@@ -836,7 +832,7 @@ func getCertificates(ctx context.Context, pemCert string) ([]*x509.Certificate, 
 			return nil, errors.New("failed to decode certificate PEM")
 		}
 		// Fallback to hardcoded certificate - for some reason the certificate cannot be decoded on Docker Desktop OSX from the env var
-		log.Warn().Msg("Zorgplatform certificate could not be decoded by environment variable, falling back to hardcoded certificate")
+		slog.Warn("Zorgplatform certificate could not be decoded by environment variable, falling back to hardcoded certificate")
 		pemCert = `-----BEGIN CERTIFICATE-----
 MIIGpTCCBY2gAwIBAgIJAJ7SiMwCRCiBMA0GCSqGSIb3DQEBCwUAMIG0MQswCQYD
 VQQGEwJVUzEQMA4GA1UECBMHQXJpem9uYTETMBEGA1UEBxMKU2NvdHRzZGFsZTEa
@@ -892,7 +888,7 @@ U6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
 			return nil, fmt.Errorf("failed to parse certificate #%d: %w", len(result), err)
 		}
 		result = append(result, cert)
-		log.Ctx(ctx).Info().Msgf("Successfully loaded Zorgplatform signing certificate, expiry=%s", cert.NotAfter)
+		slog.InfoContext(ctx, "Successfully loaded Zorgplatform signing certificate", slog.String("expiry", cert.NotAfter.String()))
 	}
 	if len(result) == 0 {
 		return nil, fmt.Errorf("no valid certificates found in PEM data")

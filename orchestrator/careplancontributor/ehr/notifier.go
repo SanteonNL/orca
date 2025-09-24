@@ -5,6 +5,10 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"log/slog"
+	"net/http"
+	"net/url"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/events"
@@ -12,15 +16,12 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"net/url"
 )
 
 var _ events.Type = &TaskAcceptedEvent{}
@@ -134,14 +135,19 @@ func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcce
 	if err != nil {
 		return otel.Error(span, errors.Wrap(err, "failed to create task notification bundle"))
 	}
-	log.Ctx(ctx).Info().Msgf("Sending set for task notifier started")
+	slog.InfoContext(
+		ctx,
+		"Sending set for task notifier started",
+		slog.String("task_id", *event.Task.Id),
+		slog.String("endpoint", n.taskAcceptedBundleEndpoint),
+	)
 
 	err = sendBundle(ctx, n.taskAcceptedBundleEndpoint, *bundles)
 	if err != nil {
 		var badRequest *BadRequest
 		if errors.As(err, &badRequest) {
 			// Handle BadRequest error specifically
-			log.Ctx(ctx).Warn().Err(err).Msg("Task enrollment failed due to bad request")
+			slog.WarnContext(ctx, "Task enrollment failed due to bad request", slog.String("error", err.Error()))
 			task := event.Task
 			task.Status = fhir.TaskStatusRejected
 			task.StatusReason = &fhir.CodeableConcept{
@@ -191,7 +197,12 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 		attribute.Int("payload.size_bytes", len(jsonData)),
 	)
 
-	log.Ctx(ctx).Info().Msgf("Sending set for task (ref=%s) to HTTP endpoint (endpoint=%s)", set.task, taskAcceptedBundleEndpoint)
+	slog.InfoContext(
+		ctx,
+		"Sending set for task to HTTP endpoint",
+		slog.String("endpoint", taskAcceptedBundleEndpoint),
+		slog.String("reference", set.task),
+	)
 
 	// Create HTTP request with context
 	req, err := http.NewRequestWithContext(ctx, "POST", taskAcceptedBundleEndpoint, bytes.NewBuffer(jsonData))
@@ -205,7 +216,13 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 
 	httpResponse, err := otel.NewTracedHTTPClient("ehr.notifier").Do(req)
 	if err != nil {
-		log.Ctx(ctx).Warn().Err(err).Msgf("Sending set for task (ref=%s) to HTTP endpoint failed (endpoint=%s) e", set.task, taskAcceptedBundleEndpoint)
+		slog.ErrorContext(
+			ctx,
+			"Sending set for task to HTTP endpoint failed",
+			slog.String("error", err.Error()),
+			slog.String("endpoint", taskAcceptedBundleEndpoint),
+			slog.String("reference", set.task),
+		)
 		return otel.Error(span, errors.Wrap(err, "failed to send task to endpoint"))
 	}
 	defer httpResponse.Body.Close()
@@ -226,7 +243,7 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
 		return otel.Error(span, errors.Errorf("failed to send task to endpoint, status code: %d", httpResponse.StatusCode))
 	}
-	log.Ctx(ctx).Info().Msgf("Notified EHR of accepted Task with bundle (ref=%s)", set.task)
+	slog.InfoContext(ctx, "Notified EHR of accepted Task with bundle", slog.String("reference", set.task))
 
 	span.SetStatus(codes.Ok, "")
 	return nil

@@ -2,16 +2,17 @@ package nuts
 
 import (
 	"encoding/json"
-	"github.com/SanteonNL/orca/orchestrator/lib/auth"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/rs/zerolog/log"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/auth"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDutchNutsProfile_Authenticator(t *testing.T) {
@@ -29,7 +30,7 @@ func TestDutchNutsProfile_Authenticator(t *testing.T) {
 		var capturedPrincipal auth.Principal
 		var capturedError error
 		handler := profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
-			log.Ctx(request.Context()).Info().Msg("test")
+			slog.InfoContext(request.Context(), "test")
 			capturedPrincipal, capturedError = auth.PrincipalFromContext(request.Context())
 			_, _ = io.ReadAll(request.Body)
 			writer.WriteHeader(http.StatusOK)

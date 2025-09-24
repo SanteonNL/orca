@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 )
 
 // Entity represents a source of messages, such as a topic or queue.
@@ -26,7 +26,7 @@ func (t Entity) FullName(prefix string) string {
 func New(config Config, sources []Entity) (Broker, error) {
 	var broker Broker
 	var err error
-	log.Info().Msgf("Messaging: CONFIG %+v", config)
+	slog.Info(fmt.Sprintf("Messaging: CONFIG %+v", config))
 	if config.AzureServiceBus.Enabled() {
 		broker, err = newAzureServiceBusBroker(config.AzureServiceBus, sources, config.EntityPrefix)
 
@@ -35,12 +35,12 @@ func New(config Config, sources []Entity) (Broker, error) {
 		}
 	} else {
 		// If no configuration is provided, default to an in-memory broker
-		log.Warn().Msg("No messaging configuration provided, defaulting to in-memory broker. " +
+		slog.Warn("No messaging configuration provided, defaulting to in-memory broker. " +
 			"This is unsuitable for production use, since failed messages can't be retried.")
 		broker = NewMemoryBroker()
 	}
 	if config.HTTP.Endpoint != "" {
-		log.Info().Msgf("Messaging: sending messages over HTTP to %s", config.HTTP.Endpoint)
+		slog.Info("Messaging: sending messages over HTTP", slog.String("endpoint", config.HTTP.Endpoint))
 		broker = NewHTTPBroker(config.HTTP, broker)
 	}
 	return broker, nil

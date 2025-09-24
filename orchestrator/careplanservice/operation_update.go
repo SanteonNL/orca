@@ -5,19 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"net/url"
-	"strings"
 )
 
 var _ FHIROperation = &FHIRUpdateOperationHandler[fhir.HasExtension]{}
@@ -99,7 +100,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	// If no entries found, handle as a create operation
 	if len(searchBundle.Entry) == 0 {
 		span.SetAttributes(attribute.String("fhir.update.operation_mode", "upsert_create"))
-		log.Ctx(ctx).Info().Msgf("%s not found, handling as create: %s", resourceType, searchParams.Encode())
+		slog.InfoContext(ctx, fmt.Sprintf("%s not found, handling as create: %s", resourceType, searchParams.Encode()))
 		request.Upsert = true
 		return h.createHandler.Handle(ctx, request, tx)
 	}
@@ -116,8 +117,11 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	authzDecision, err := h.authzPolicy.HasAccess(ctx, existingResource, *request.Principal)
 	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
-			otel.Error(span, err, "authorization check failed")
-			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal has access to create %s", resourceType)
+			slog.ErrorContext(ctx,
+				"Error checking if principal has access to create resource",
+				slog.String("error", otel.Error(span, err, "authorization check failed").Error()),
+				slog.String("resource_type", resourceType),
+			)
 		}
 		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant is not authorized to update %s", resourceType),
@@ -133,7 +137,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	SetCreatorExtensionOnResource(resource, &request.Principal.Organization.Identifier[0])
 
-	log.Ctx(ctx).Info().Msgf("Updating %s (authz=%s)", request.RequestUrl, strings.Join(authzDecision.Reasons, ";"))
+	slog.InfoContext(ctx, fmt.Sprintf("Updating %s (authz=%s)", request.RequestUrl, strings.Join(authzDecision.Reasons, ";")))
 
 	idx := len(tx.Entry)
 	resourceBundleEntry := request.bundleEntryWithResource(resource)

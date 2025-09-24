@@ -5,21 +5,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"log/slog"
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/deep"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/deep"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -33,7 +32,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	)
 	defer span.End()
 
-	log.Ctx(ctx).Info().Msgf("Updating Task: %s", request.RequestUrl)
+	slog.InfoContext(ctx, "Updating Task", slog.String("url", request.RequestUrl.String()))
 	var task fhir.Task
 	var err error
 	if err = json.Unmarshal(request.ResourceData, &task); err != nil {

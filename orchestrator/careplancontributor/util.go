@@ -3,11 +3,12 @@ package careplancontributor
 import (
 	"bytes"
 	"errors"
+	"io"
+	"log/slog"
+	"net/http"
+
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
-	"github.com/rs/zerolog/log"
-	"io"
-	"net/http"
 )
 
 var _ http.RoundTripper = internalDispatchHTTPRoundTripper{}
@@ -56,8 +57,7 @@ func (i internalDispatchHTTPRoundTripper) RoundTrip(request *http.Request) (*htt
 		i.requestVisitor(request)
 	}
 	i.handler.ServeHTTP(responseWriter, request)
-	log.Ctx(ctx).Debug().Msgf("InternalDispatch HTTP Respone.status: %d", responseWriter.status)
-	log.Ctx(ctx).Debug().Msgf("InternalDispatch HTTP Respone.headers: %v", responseWriter.headers)
+	slog.DebugContext(ctx, "InternalDispatch HTTP Response", slog.Int("response", responseWriter.status), slog.Any("headers", responseWriter.headers))
 	return &http.Response{
 		StatusCode: responseWriter.status,
 		Header:     responseWriter.headers,

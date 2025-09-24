@@ -1,9 +1,10 @@
 package coolfhir
 
 import (
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 	"net/http"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
 )
 
 func Config() *fhirclient.Config {
@@ -14,7 +15,12 @@ func Config() *fhirclient.Config {
 		}),
 	}
 	config.Non2xxStatusHandler = func(response *http.Response, responseBody []byte) {
-		log.Debug().Msgf("Non-2xx status code from FHIR server (%s %s, status=%d), content: %s", response.Request.Method, response.Request.URL, response.StatusCode, string(responseBody))
+		slog.Debug("Non-2xx status code from FHIR server (%s %s, status=%d), content: %s",
+			slog.String("method", response.Request.Method),
+			slog.String("url", response.Request.URL.String()),
+			slog.Int("status", response.StatusCode),
+			slog.String("body", string(responseBody)),
+		)
 	}
 	return &config
 }

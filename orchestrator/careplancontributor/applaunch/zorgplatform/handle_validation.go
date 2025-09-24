@@ -5,7 +5,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -15,7 +15,6 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
 	"github.com/beevik/etree"
-	"github.com/rs/zerolog/log"
 )
 
 var now = func() time.Time {
@@ -42,8 +41,8 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("unable to decode base64 SAML response: %w", err)
 	}
 
-	if log.Ctx(ctx).GetLevel() <= zerolog.DebugLevel {
-		log.Ctx(ctx).Debug().Msgf("Zorgplatform SAMLResponse: %s", samlResponse)
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
+		slog.DebugContext(ctx, "Zorgplatform SAMLResponse", slog.String("saml_response", samlResponse))
 	}
 
 	err = doc.ReadFromString(string(decodedResponse))
@@ -53,7 +52,11 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	}
 
 	if doc.Root().Tag == "Error" {
-		log.Ctx(ctx).Error().Msgf("error tag as SAMLResponse: %s", decodedResponse)
+		slog.ErrorContext(
+			ctx,
+			"error tag as SAMLResponse",
+			slog.String("saml_response", string(decodedResponse)),
+		)
 		return LaunchContext{}, errors.New("SAMLResponse from server contains an error, see log for details")
 	}
 
@@ -67,11 +70,11 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("unable to decrypt assertion: %w", err)
 	}
 
-	if log.Ctx(ctx).GetLevel() <= zerolog.DebugLevel {
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		debugDoc := etree.NewDocument()
 		debugDoc.SetRoot(assertion)
 		xml, _ := debugDoc.WriteToString()
-		log.Ctx(ctx).Debug().Msgf("Zorgplatform SAMLResponse assertion: %s", xml)
+		slog.DebugContext(ctx, "Zorgplatform SAMLResponse assertion", slog.String("assertion", xml))
 	}
 
 	// Validate the signature of the assertion using the public key of the Zorgplatform STS
@@ -334,7 +337,7 @@ func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Elem
 				result.Name[0].Prefix = []string{strings.TrimSpace(parts[2])}
 			}
 		} else {
-			log.Ctx(ctx).Debug().Msg("Name attribute not found")
+			slog.DebugContext(ctx, "Name attribute not found")
 		}
 	}
 	// Role (e.g.: <Role code="223366009" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT"/>)
@@ -376,7 +379,7 @@ func (s *Service) extractPractitioner(ctx context.Context, assertion *etree.Elem
 				Value:  to.Ptr(value),
 			})
 		} else {
-			log.Ctx(ctx).Debug().Msg("Email attribute not found")
+			slog.DebugContext(ctx, "Email attribute not found")
 		}
 	}
 
@@ -405,7 +408,7 @@ func (s *Service) extractWorkflowID(ctx context.Context, decryptedAssertion *etr
 		return "", fmt.Errorf("workflow-id attribute not found in the assertion")
 	}
 	workflowId := workflowIdElement.Text()
-	log.Ctx(ctx).Debug().Msgf("Extracted workflow-id: %s", workflowId)
+	slog.DebugContext(ctx, "Extracted workflow ID", slog.String("workflow_id", workflowId))
 
 	return workflowId, nil
 }

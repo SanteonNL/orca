@@ -3,10 +3,11 @@ package careplanservice
 import (
 	"context"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
-	"github.com/rs/zerolog/log"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"log/slog"
 	"net/url"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func CreateConditionAuthzPolicy(profile profile.Provider) Policy[*fhir.Condition] {
@@ -28,7 +29,7 @@ func ReadConditionAuthzPolicy(fhirClientFactory FHIRClientFactory) Policy[*fhir.
 				relatedResourcePolicy: ReadPatientAuthzPolicy(fhirClientFactory),
 				relatedResourceSearchParams: func(ctx context.Context, resource *fhir.Condition) (string, url.Values) {
 					if resource.Subject.Identifier == nil || resource.Subject.Identifier.System == nil || resource.Subject.Identifier.Value == nil {
-						log.Ctx(ctx).Warn().Msg("Condition does not have Patient as subject, can't verify access")
+						slog.WarnContext(ctx, "Condition does not have Patient as subject, can't verify access")
 						return "Patient", nil
 					}
 					return "Patient", url.Values{

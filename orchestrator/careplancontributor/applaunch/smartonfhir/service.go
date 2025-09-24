@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -17,6 +16,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -32,7 +33,6 @@ import (
 	"github.com/go-jose/go-jose/v4/cryptosigner"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/zitadel/oidc/v3/pkg/client/rp"
 	zitadelHTTP "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
@@ -141,7 +141,7 @@ func New(config Config, tenants tenants.Config, sessionManager *user.SessionMana
 			return nil, fmt.Errorf("failed to load JWK set for JWT signing from Azure Key Vault: %w", err)
 		}
 	} else {
-		log.Info().Msg("SMART on FHIR: no Azure Key Vault configured for JWT signing, generating an in-memory key")
+		slog.Info("SMART on FHIR: no Azure Key Vault configured for JWT signing, generating an in-memory key")
 		privateKey, _ := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		service.jwtSigningKey = &jose.SigningKey{
 			Algorithm: jose.ES256,
@@ -173,7 +173,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Request) {
 	// TODO: check whether the issuer is trusted
 	issuer := request.URL.Query().Get("iss")
-	log.Ctx(request.Context()).Info().Msgf("SMART on FHIR app launch request: %s", request.URL.String())
+	slog.InfoContext(request.Context(), "SMART on FHIR app launch request", slog.String("url", request.URL.String()))
 	if len(issuer) == 0 {
 		s.SendError(request.Context(), issuer, errors.New("invalid iss parameter"), response, http.StatusBadRequest)
 		return
@@ -227,7 +227,7 @@ func (s *Service) handleAppLaunchBackdoor(httpResponse http.ResponseWriter, http
 	sessionData.Set("Patient/"+*patient.Id, *patient)
 	sessionData.Set("Practitioner/"+*practitioner.Id, *practitioner)
 	s.sessionManager.Create(httpResponse, sessionData)
-	log.Ctx(httpRequest.Context()).Info().Msg("SMART on FHIR backdoor app launch succeeded")
+	slog.InfoContext(httpRequest.Context(), "SMART on FHIR backdoor app launch succeeded")
 	// Note: we don't support enrolment/task creation through SMART on FHIR yet, so we redirect to the task overview
 	http.Redirect(httpResponse, httpRequest, s.frontendBaseURL.JoinPath("list").String(), http.StatusFound)
 }
@@ -251,13 +251,13 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 	}
 	rp.CodeExchangeHandler(func(httpResponse http.ResponseWriter, httpRequest *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], state string, rp rp.RelyingParty) {
 		idTokenJSON, _ := json.Marshal(tokens.IDTokenClaims)
-		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with ID token: %s", idTokenJSON)
+		slog.InfoContext(request.Context(), "SMART on FHIR app launch with ID token", slog.String("id_token", string(idTokenJSON)))
 		patientID, hasPatientID := tokens.Extra("patient").(string)
 		if !hasPatientID || patientID == "" {
 			s.SendError(request.Context(), issuer.key, errors.New("patient ID not found in ID token claims"), httpResponse, http.StatusBadRequest)
 			return
 		}
-		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with patient ID: %s", patientID)
+		slog.InfoContext(httpRequest.Context(), "SMART on FHIR app launched with patient", slog.String("patient_id", patientID))
 		patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), issuer, patientID)
 		if err != nil {
 			s.SendError(request.Context(), issuer.key, fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
@@ -274,7 +274,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 		sessionData.Set("Patient/"+*patient.Id, *patient)
 		sessionData.Set("Practitioner/"+*practitioner.Id, *practitioner)
 		s.sessionManager.Create(httpResponse, sessionData)
-		log.Ctx(request.Context()).Info().Msg("SMART on FHIR app launch succeeded")
+		slog.InfoContext(request.Context(), "SMART on FHIR app launch succeeded")
 		// Note: we don't support enrolment/task creation through SMART on FHIR yet, so we redirect to the task overview
 		http.Redirect(httpResponse, request, s.frontendBaseURL.JoinPath("list").String(), http.StatusFound)
 	}, issuer.client, codeExchangeOpts...)(response, request)
@@ -370,8 +370,14 @@ func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (
 
 	scopes := []string{"openid", "fhirUser", "launch"}
 	redirectURI := s.orcaBaseURL.JoinPath("smart-app-launch", "callback", issuer.key)
-	log.Ctx(ctx).Info().Msgf("Initiating SMART on FHIR flow (issuer-url=%s, client-id=%s, redirect-uri=%s, scopes=[%s])",
-		issuer.issuerURL(), issuer.clientID, redirectURI.String(), strings.Join(scopes, ","))
+	slog.InfoContext(
+		ctx,
+		"Initiating SMART on FHIR flow",
+		slog.String("issuer_url", issuer.issuerURL()),
+		slog.String("client_id", issuer.clientID),
+		slog.String("redirect_uri", redirectURI.String()),
+		slog.String("scopes", strings.Join(scopes, ",")),
+	)
 	provider, err := rp.NewRelyingPartyOIDC(ctx, issuer.issuerURL(), issuer.clientID, "client_secret_todo", redirectURI.String(), scopes, options...)
 	if err != nil {
 		return nil, fmt.Errorf("provider: %w", err)
@@ -388,14 +394,20 @@ func (s *Service) handleGetJWKs(httpResponse http.ResponseWriter, httpRequest *h
 	httpResponse.WriteHeader(http.StatusOK)
 	_, err := httpResponse.Write(jsonBytes)
 	if err != nil {
-		log.Ctx(httpRequest.Context()).Warn().Err(err).Msg("Failed to write JWKSet response")
+		slog.WarnContext(httpRequest.Context(), "Failed to write JWKSet response", slog.String("error", err.Error()))
 		return
 	}
 }
 
 func (s *Service) SendError(ctx context.Context, issuer string, err error, httpResponse http.ResponseWriter, httpStatusCode int) {
 	launchId := uuid.NewString()
-	log.Ctx(ctx).Error().Err(err).Msgf("SMART on FHIR (issuer=%s) failed (launch-id=%s)", issuer, launchId)
+	slog.ErrorContext(
+		ctx,
+		"SMART on FHIR launch failed",
+		slog.String("issuer", issuer),
+		slog.String("launch_id", launchId),
+		slog.String("error", err.Error()),
+	)
 	// TODO: nice error page
 	msg := "SMART on FHIR launch failed (id=" + launchId + ")"
 	if !s.strictMode {
@@ -429,7 +441,7 @@ func (s *Service) createClientAssertionForAudience(clientID string, audience str
 		return "", fmt.Errorf("failed to serialize JWT client assertion: %w", err)
 	}
 	if !s.strictMode {
-		log.Debug().Msgf("Created JWT client assertion: %s", result)
+		slog.Debug(fmt.Sprintf("Created JWT client assertion: %s", result))
 	}
 	return result, nil
 }
@@ -463,7 +475,12 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 
 	// Log this for analysis: key ID can't be related back to a specific Azure Key Vault version (because it's a thumbprint),
 	// so we log it to be able to trace back which key was used in case of issues.
-	log.Info().Msgf("Loaded SMART on FHIR JWT signing key from Azure Key Vault (key=%s/%s, JWK keyID (thumbprint)=%s)", key.KeyName(), key.KeyVersion(), keyID)
+	slog.Info(
+		"Loaded SMART on FHIR JWT signing key from Azure Key Vault",
+		slog.String("key_name", key.KeyName()),
+		slog.String("key_version", key.KeyVersion()),
+		slog.String("jwk_key_id", keyID),
+	)
 
 	return &jose.SigningKey{
 			Algorithm: jose.SignatureAlgorithm(key.SigningAlgorithm()),

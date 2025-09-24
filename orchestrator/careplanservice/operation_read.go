@@ -4,19 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"strings"
 )
 
 var _ FHIROperation = &FHIRReadOperationHandler[fhir.HasExtension]{}
@@ -55,7 +56,9 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
 			otel.Error(span, err, "authorization check failed")
-			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal has access to %s", resourceType)
+			slog.ErrorContext(ctx, "Error checking if principal has access to resource",
+				slog.String("error", err.Error()),
+				slog.String("resource_type", resourceType))
 		}
 		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant does not have access to %s", resourceType),
@@ -69,8 +72,10 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 		attribute.StringSlice("fhir.authorization.reasons", authzDecision.Reasons),
 	)
 
-	log.Ctx(ctx).Info().Msgf("Getting %s/%s (authz=%s)", resourceType, request.ResourceId, strings.Join(authzDecision.Reasons, ";"))
-
+	slog.InfoContext(ctx, "Getting resource",
+		slog.String("resource_type", resourceType),
+		slog.String("resource_id", request.ResourceId),
+		slog.String("authz", strings.Join(authzDecision.Reasons, ";")))
 	updateMetaSource(resource, request.BaseURL)
 
 	resourceRaw, err := json.Marshal(resource)
