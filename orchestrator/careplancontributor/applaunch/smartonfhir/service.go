@@ -251,6 +251,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 		rp.URLParamOpt(rp.WithClientAssertionJWT(clientAssertion)),
 	}
 	rp.CodeExchangeHandler(func(httpResponse http.ResponseWriter, httpRequest *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], state string, rp rp.RelyingParty) {
+		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR DOB claim: %v", tokens.Extra("dob"))
 		// TODO: Is audience in id_token checked?
 		tokenResponseJSON, _ := json.Marshal(*tokens)
 		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with token response: %s", tokenResponseJSON)
