@@ -32,7 +32,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	)
 	defer span.End()
 
-	slog.InfoContext(ctx, "Updating Task", slog.String("url", request.RequestUrl.String()))
+	slog.InfoContext(ctx, "Updating Task", slog.Any("url", request.RequestUrl))
 	var task fhir.Task
 	var err error
 	if err = json.Unmarshal(request.ResourceData, &task); err != nil {

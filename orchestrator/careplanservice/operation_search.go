@@ -141,6 +141,7 @@ func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, quer
 				slog.String("error", err.Error()),
 				slog.String("resource_type", resourceType),
 				slog.String("resource_id", resourceID))
+			continue
 		}
 		if authzDecision.Allowed {
 			resources[j] = resource
