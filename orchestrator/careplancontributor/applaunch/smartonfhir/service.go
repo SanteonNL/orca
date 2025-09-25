@@ -262,7 +262,11 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 	}
 	rp.CodeExchangeHandler(func(httpResponse http.ResponseWriter, httpRequest *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], state string, rp rp.RelyingParty) {
 		idTokenJSON, _ := json.Marshal(tokens.IDTokenClaims)
-		log.Ctx(httpRequest.Context()).Debug().Msgf("SMART on FHIR app launched with ID token: %s", idTokenJSON)
+		slog.DebugContext(
+			request.Context(),
+			"SMART on FHIR app launched with ID token",
+			slog.String("token", string(idTokenJSON)),
+		)
 		patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), issuer, tokens)
 		if err != nil {
 			s.SendError(request.Context(), issuer.key, fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
@@ -308,7 +312,13 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 			},
 		},
 	}
-	log.Ctx(ctx).Debug().Msgf("SMART on FHIR practitioner: %s %s (id=%s)", userFirstName, userLastName, *practitioner.Id)
+	slog.DebugContext(
+		ctx,
+		"SMART on FHIR practitioner",
+		slog.String("first_name", userFirstName),
+		slog.String("last_name", userLastName),
+		slog.String("practitioner_id", *practitioner.Id),
+	)
 
 	if !strings.HasPrefix(patientID, "Patient/") {
 		// If the patient ID is not prefixed with "Patient/", we assume it's just the ID and prefix it.
