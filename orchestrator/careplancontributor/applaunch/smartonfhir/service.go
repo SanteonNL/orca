@@ -464,7 +464,7 @@ func (s *Service) createClientAssertionForAudience(clientID string, audience str
 		return "", fmt.Errorf("failed to serialize JWT client assertion: %w", err)
 	}
 	if !s.strictMode {
-		slog.Debug(fmt.Sprintf("Created JWT client assertion: %s", result))
+		slog.Debug("Created JWT client assertion", slog.String("assertion", result))
 	}
 	return result, nil
 }
