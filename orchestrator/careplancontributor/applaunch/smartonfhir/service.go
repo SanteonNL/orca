@@ -212,7 +212,17 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 }
 
 func (s *Service) handleAppLaunchBackdoor(httpResponse http.ResponseWriter, httpRequest *http.Request) {
-	patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), &trustedIssuer{tenantID: "saz"}, httpRequest.URL.Query().Get("patient"))
+	tokens := &oidc.Tokens[*oidc.IDTokenClaims]{
+		IDTokenClaims: &oidc.IDTokenClaims{
+			Claims: map[string]any{
+				"patient":       httpRequest.URL.Query().Get("patient"),
+				"userFirstName": "John",
+				"userLastName":  "Doe",
+				"sub":           "1",
+			},
+		},
+	}
+	patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), &trustedIssuer{tenantID: "saz"}, tokens)
 	if err != nil {
 		s.SendError(httpRequest.Context(), "backdoor", fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
 		return
@@ -251,19 +261,10 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 		rp.URLParamOpt(rp.WithClientAssertionJWT(clientAssertion)),
 	}
 	rp.CodeExchangeHandler(func(httpResponse http.ResponseWriter, httpRequest *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], state string, rp rp.RelyingParty) {
-		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR DOB claim: %v", tokens.Extra("dob"))
 		// TODO: Is audience in id_token checked?
-		tokenResponseJSON, _ := json.Marshal(*tokens)
-		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with token response: %s", tokenResponseJSON)
 		idTokenJSON, _ := json.Marshal(tokens.IDTokenClaims)
-		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with ID token: %s", idTokenJSON)
-		patientID, hasPatientID := tokens.Extra("patient").(string)
-		if !hasPatientID || patientID == "" {
-			s.SendError(request.Context(), issuer.key, errors.New("patient ID not found in ID token claims"), httpResponse, http.StatusBadRequest)
-			return
-		}
-		log.Ctx(httpRequest.Context()).Info().Msgf("SMART on FHIR app launched with patient ID: %s", patientID)
-		patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), issuer, patientID)
+		log.Ctx(httpRequest.Context()).Debug().Msgf("SMART on FHIR app launched with ID token: %s", idTokenJSON)
+		patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), issuer, tokens)
 		if err != nil {
 			s.SendError(request.Context(), issuer.key, fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
 			return
@@ -285,7 +286,30 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 	}, issuer.client, codeExchangeOpts...)(response, request)
 }
 
-func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, patientID string) (*fhir.Patient, *fhir.Practitioner, *tenants.Properties, error) {
+func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens *oidc.Tokens[*oidc.IDTokenClaims]) (*fhir.Patient, *fhir.Practitioner, *tenants.Properties, error) {
+	patientID, hasPatientID := tokens.Extra("patient").(string)
+	if !hasPatientID || patientID == "" {
+		return nil, nil, nil, fmt.Errorf("no patient ID found in token response")
+	}
+
+	userFirstName, ok := tokens.Extra("userFirstName").(string)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("no userFirstName found in token response")
+	}
+	userLastName, ok := tokens.Extra("userLastName").(string)
+	if !ok {
+		return nil, nil, nil, fmt.Errorf("no userLastName found in token response")
+	}
+	practitioner := fhir.Practitioner{
+		Id: to.Ptr(tokens.IDTokenClaims.Subject),
+		Name: []fhir.HumanName{
+			{
+				Family: to.Ptr(userLastName),
+				Given:  []string{userFirstName},
+			},
+		},
+	}
+
 	if !strings.HasPrefix(patientID, "Patient/") {
 		// If the patient ID is not prefixed with "Patient/", we assume it's just the ID and prefix it.
 		patientID = "Patient/" + patientID
@@ -310,23 +334,7 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, patien
 	if err := cpsFHIRClient.Read(patientID, &patient); err != nil {
 		return nil, nil, nil, fmt.Errorf("failed to read patient resource: %w", err)
 	}
-	// TODO: Make this the right Practitioner
-	practitionerID := uuid.NewString()
-	return &patient, &fhir.Practitioner{
-		Id: to.Ptr(practitionerID),
-		Identifier: []fhir.Identifier{
-			{
-				System: to.Ptr("https://example.com/fhir/Practitioner"),
-				Value:  to.Ptr(practitionerID),
-			},
-		},
-		Name: []fhir.HumanName{
-			{
-				Family: to.Ptr("TODO"),
-				Given:  []string{"TODO"},
-			},
-		},
-	}, tenant, nil
+	return &patient, &practitioner, tenant, nil
 }
 
 func (s *Service) getIssuerByKey(request *http.Request, issuerKey string) (rp.RelyingParty, error) {
