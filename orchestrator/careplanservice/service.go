@@ -1368,7 +1368,7 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Batch reindexing SearchParameters", slog.Int("count", len(reindexURLs)))
+	slog.InfoContext(ctx, "Batch reindexing SearchParameters", slog.Int(logging.FieldCount, len(reindexURLs)))
 	reindexParam := fhir.Parameters{
 		Parameter: []fhir.ParametersParameter{
 			{
