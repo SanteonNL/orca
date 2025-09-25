@@ -41,9 +41,7 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 		return LaunchContext{}, fmt.Errorf("unable to decode base64 SAML response: %w", err)
 	}
 
-	if slog.Default().Enabled(ctx, slog.LevelDebug) {
-		slog.DebugContext(ctx, "Zorgplatform SAMLResponse", slog.String("saml_response", samlResponse))
-	}
+	slog.DebugContext(ctx, "Zorgplatform SAMLResponse", slog.String("saml_response", samlResponse))
 
 	err = doc.ReadFromString(string(decodedResponse))
 
