@@ -418,7 +418,7 @@ func (s *Service) handleUnmanagedOperation(ctx context.Context, request FHIRHand
 		ctx,
 		"Unmanaged FHIR operation at CarePlanService",
 		slog.String("request", request.HttpMethod),
-		slog.String(logging.FieldUrl, request.HttpMethod),
+		slog.String(logging.FieldUrl, request.RequestUrl.String()),
 	)
 
 	return nil, fmt.Errorf("unsupported operation %s %s", request.HttpMethod, request.RequestUrl.String())
