@@ -15,7 +15,7 @@ func Config() *fhirclient.Config {
 		}),
 	}
 	config.Non2xxStatusHandler = func(response *http.Response, responseBody []byte) {
-		slog.Debug("Non-2xx status code from FHIR server (%s %s, status=%d), content: %s",
+		slog.Debug("Non-2xx status code from FHIR server",
 			slog.String("method", response.Request.Method),
 			slog.String("url", response.Request.URL.String()),
 			slog.Int("status", response.StatusCode),
