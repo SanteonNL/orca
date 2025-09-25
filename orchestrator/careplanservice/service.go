@@ -353,7 +353,7 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		Type: fhir.BundleTypeTransactionResponse,
 	}
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
-		txJson, _ := json.MarshalIndent(tx.Bundle(), "", "  ")
+		txJson, _ := json.MarshalIndent(txResult, "", "  ")
 		slog.DebugContext(ctx, fmt.Sprintf("FHIR Transaction response: %s", txJson))
 	}
 	var notificationResources []any
