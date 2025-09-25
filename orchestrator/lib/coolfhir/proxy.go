@@ -308,7 +308,7 @@ func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 	)
 	defer span.End()
 
-	slog.InfoContext(ctx, "RoundTrip Request",
+	slog.DebugContext(ctx, "RoundTrip Request",
 		slog.String("name", l.Name),
 		slog.String("method", request.Method),
 		slog.String(logging.FieldUrl, request.URL.String()),
