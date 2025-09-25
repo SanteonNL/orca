@@ -14,6 +14,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
@@ -83,13 +84,13 @@ func TestService_handle(t *testing.T) {
 		require.Equal(t, "Practitioner/c", sessionData.GetByType("Practitioner").Path)
 		require.Equal(t, "unit-test-system|10", *sessionData.TaskIdentifier)
 	})
-	t.Run("path traversal", func(t *testing.T) {
+	t.Run("path traversal is disallowed", func(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
 		service := Service{
 			sessionManager: sessionManager, orcaPublicURL: must.ParseURL("/"),
 			frontendLandingUrl: must.ParseURL("/cpc/"),
-			ehrFHIRClientFactory: func(_ *url.URL, _ *http.Client) fhirclient.Client {
-				return ehrFHIRClient
+			ehrFHIRClientFactory: func(fhirBaseURL *url.URL, _ *http.Client) fhirclient.Client {
+				return fhirclient.New(fhirBaseURL, nil, nil)
 			},
 			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
 			tenants: tenantCfg,
@@ -100,6 +101,7 @@ func TestService_handle(t *testing.T) {
 		service.handle(response, request)
 
 		require.Equal(t, http.StatusBadRequest, response.Code)
+		assert.Contains(t, response.Body.String(), "FHIR request URL is outside the base URL hierarchy")
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
