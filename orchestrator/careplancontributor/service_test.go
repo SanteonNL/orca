@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
@@ -31,8 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-
-	"github.com/rs/zerolog/log"
 
 	"io"
 	"net/http"
@@ -382,9 +381,9 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			if tt.url != nil {
 				reqURL = *tt.url
 			}
-			log.Info().Msgf("Requesting %s %s", method, frontServer.URL+reqURL)
-			log.Info().Msgf("FHIR Server URL: %s", fhirServer.URL)
-			log.Info().Msgf("CarePlan Service URL: %s", carePlanServiceURL)
+			slog.Info(fmt.Sprintf("Requesting %s %s", method, frontServer.URL+reqURL))
+			slog.Info(fmt.Sprintf("FHIR Server URL: %s", fhirServer.URL))
+			slog.Info(fmt.Sprintf("CarePlan Service URL: %s", carePlanServiceURL))
 
 			httpRequest, _ := http.NewRequest(method, frontServer.URL+reqURL, nil)
 			httpResponse, err := httpClient.Do(httpRequest)

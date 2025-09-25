@@ -5,16 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
-	"github.com/rs/zerolog/log"
-	baseotel "go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
@@ -306,16 +308,16 @@ func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 	)
 	defer span.End()
 
-	logger := log.Ctx(ctx)
-	logger.Info().Msgf("%s request: %s %s", l.Name, request.Method, request.URL.String())
-	if logger.Debug().Enabled() {
+	slog.DebugContext(ctx, "RoundTrip Request",
+		slog.String("name", l.Name),
+		slog.String("method", request.Method),
+		slog.String(logging.FieldUrl, request.URL.String()),
+	)
+	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		var headers []string
 		for key, values := range request.Header {
 			headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 		}
-		logger.Debug().Msgf("%s request headers: %s", l.Name, strings.Join(headers, ", "))
-	}
-	if logger.Trace().Enabled() {
 		var requestBody []byte
 		var err error
 		if request.Body != nil {
@@ -324,28 +326,36 @@ func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 				return nil, err
 			}
 		}
-		logger.Trace().Msgf("%s request body: %s", l.Name, string(requestBody))
+		slog.DebugContext(ctx, "RoundTrip Request",
+			slog.String("name", l.Name),
+			slog.String("headers", strings.Join(headers, ", ")),
+			slog.String("body", string(requestBody)),
+		)
 		request.Body = io.NopCloser(bytes.NewReader(requestBody))
 	}
 	response, err := l.Next.RoundTrip(request)
 	if err != nil {
-		logger.Warn().Err(err).Msgf("%s request failed (url=%s)", l.Name, request.URL.String())
-	} else {
-		if logger.Debug().Enabled() {
-			var headers []string
-			for key, values := range response.Header {
-				headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
-			}
-			logger.Debug().Msgf("%s response: %s, headers: %s", l.Name, response.Status, strings.Join(headers, ", "))
+		slog.WarnContext(ctx, "RoundTrip Request failed",
+			slog.String("name", l.Name),
+			slog.String(logging.FieldUrl, request.URL.String()),
+			slog.String(logging.FieldError, err.Error()),
+		)
+	} else if slog.Default().Enabled(ctx, slog.LevelDebug) {
+		var headers []string
+		for key, values := range response.Header {
+			headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
 		}
-		if logger.Trace().Enabled() {
-			responseBody, err := io.ReadAll(response.Body)
-			if err != nil {
-				return nil, err
-			}
-			logger.Trace().Msgf("%s response body: %s", l.Name, string(responseBody))
-			response.Body = io.NopCloser(bytes.NewReader(responseBody))
+		responseBody, err := io.ReadAll(response.Body)
+		if err != nil {
+			return nil, err
 		}
+		slog.DebugContext(ctx, "RoundTrip response",
+			slog.String("name", l.Name),
+			slog.String("status", response.Status),
+			slog.String("headers", strings.Join(headers, ", ")),
+			slog.String("body", string(responseBody)),
+		)
+		response.Body = io.NopCloser(bytes.NewReader(responseBody))
 	}
 	return response, err
 }

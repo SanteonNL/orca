@@ -4,21 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/url"
+	"strconv"
+	"strings"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/url"
-	"strconv"
-	"strings"
 )
 
 var _ FHIROperation = &FHIRSearchOperationHandler[any]{}
@@ -42,7 +44,7 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		attribute.String(otel.OperationName, "Search"),
 	)
 
-	log.Ctx(ctx).Info().Msgf("Searching for %s", resourceType)
+	slog.InfoContext(ctx, "Searching", slog.String(logging.FieldResourceType, resourceType))
 	resources, bundle, policyDecisions, err := h.searchAndFilter(ctx, request.QueryParams, request.Principal, resourceType)
 	if err != nil {
 		return nil, otel.Error(span, err, "search and filter failed")
@@ -136,7 +138,10 @@ func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, quer
 		authzDecision, err := h.authzPolicy.HasAccess(ctx, resource, *principal)
 		if err != nil {
 			authzErrors++
-			log.Ctx(ctx).Error().Err(err).Msgf("Error checking authz policy for %s/%s", resourceType, resourceID)
+			slog.ErrorContext(ctx, "Error checking authz policy",
+				slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldResourceType, resourceType),
+				slog.String(logging.FieldResourceID, resourceID))
 			continue
 		}
 		if authzDecision.Allowed {

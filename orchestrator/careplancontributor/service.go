@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"slices"
@@ -24,6 +25,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -42,7 +44,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -92,7 +93,7 @@ func New(
 		// Use embedded workflow provider
 		memoryWorkflowProvider := &taskengine.MemoryWorkflowProvider{}
 		for _, bundleUrl := range config.TaskFiller.QuestionnaireSyncURLs {
-			log.Ctx(ctx).Info().Msgf("Loading Task Filler Questionnaires/HealthcareService resources from URL: %s", bundleUrl)
+			slog.InfoContext(ctx, "Loading Task Filler Questionnaires/HealthcareService resources from URL", slog.String(logging.FieldUrl, bundleUrl))
 			if err := memoryWorkflowProvider.LoadBundle(ctx, bundleUrl); err != nil {
 				return nil, fmt.Errorf("failed to load Task Filler Questionnaires/HealthcareService resources (url=%s): %w", bundleUrl, err)
 			}
@@ -107,12 +108,23 @@ func New(
 		// Load Questionnaire-related resources for the Task Filler Engine from the configured URLs into the Questionnaire FHIR API
 		go func(ctx context.Context, client fhirclient.Client) {
 			if len(config.TaskFiller.QuestionnaireSyncURLs) > 0 {
-				log.Ctx(ctx).Info().Msgf("Synchronizing Task Filler Questionnaires resources to local FHIR store from %d URLs", len(config.TaskFiller.QuestionnaireSyncURLs))
+				slog.InfoContext(ctx, "Synchronizing Task Filler Questionnaires resources to local FHIR store from URLs", slog.Int(logging.FieldCount, len(config.TaskFiller.QuestionnaireSyncURLs)))
 				for _, u := range config.TaskFiller.QuestionnaireSyncURLs {
 					if err := coolfhir.ImportResources(ctx, questionnaireFhirClient, []string{"Questionnaire", "HealthcareService"}, u); err != nil {
-						log.Ctx(ctx).Error().Err(err).Msgf("Failed to synchronize Task Filler Questionnaire resources (url=%s)", u)
+						slog.ErrorContext(
+							ctx,
+							"Failed to synchronize Task Filler Questionnaire resources",
+							slog.String(logging.FieldUrl, u),
+							slog.String(logging.FieldResourceType, fhir.ResourceTypeQuestionnaire.String()),
+							slog.String(logging.FieldError, err.Error()),
+						)
 					} else {
-						log.Ctx(ctx).Debug().Msgf("Synchronized Task Filler Questionnaire resources (url=%s)", u)
+						slog.DebugContext(
+							ctx,
+							"Synchronized Task Filler Questionnaire resources",
+							slog.String(logging.FieldUrl, u),
+							slog.String(logging.FieldResourceType, fhir.ResourceTypeQuestionnaire.String()),
+						)
 					}
 				}
 			}
@@ -154,7 +166,7 @@ func New(
 		if err != nil {
 			return nil, fmt.Errorf("TaskEngine: failed to create EHR notifier: %w", err)
 		}
-		log.Ctx(ctx).Info().Msgf("TaskEngine: created EHR notifier for endpoint %s", config.TaskFiller.TaskAcceptedBundleEndpoint)
+		slog.InfoContext(ctx, "TaskEngine: created EHR notifier", slog.String(logging.FieldEndpoint, config.TaskFiller.TaskAcceptedBundleEndpoint))
 	}
 	pubsub.DefaultSubscribers.FhirSubscriptionNotify = result.handleNotification
 
@@ -205,7 +217,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			},
 		}
 		if err := s.profile.CapabilityStatement(request.Context(), &md); err != nil {
-			log.Ctx(request.Context()).Error().Err(err).Msg("Failed to generate CapabilityStatement")
+			slog.ErrorContext(request.Context(), "Failed to generate CapabilityStatement", slog.String(logging.FieldError, err.Error()))
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Metadata", httpResponse)
 			return
 		}
@@ -299,7 +311,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 
 		err := s.handleProxyExternalRequestToEHR(writer, request)
 		if err != nil {
-			log.Ctx(request.Context()).Err(err).Msgf("FHIR request from external CPC to local EHR failed (url=%s)", request.URL.String())
+			slog.ErrorContext(
+				request.Context(),
+				"FHIR request from external CPC to local EHR failed",
+				slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldUrl, request.URL.String()),
+			)
 			// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 			var operationOutcomeErr fhirclient.OperationOutcomeError
 			if errors.As(err, &operationOutcomeErr) {
@@ -482,7 +499,7 @@ func (s Service) handleProxyExternalRequestToEHR(writer http.ResponseWriter, req
 		return otel.Error(span, coolfhir.BadRequest("EHR API is not supported"))
 	}
 
-	log.Ctx(ctx).Debug().Msg("Handling external FHIR API request")
+	slog.DebugContext(ctx, "Handling external FHIR API request")
 	_, err = s.authorizeScpMember(request.WithContext(ctx))
 	if err != nil {
 		return otel.Error(span, err)
@@ -618,7 +635,7 @@ func (s Service) withUserAuth(next func(response http.ResponseWriter, request *h
 
 			if bearerToken != "" {
 				if _, err := s.tokenClient.ValidateToken(request.Context(), bearerToken); err != nil {
-					log.Ctx(request.Context()).Err(err).Msg("Failed to validate ADB2C token")
+					slog.ErrorContext(request.Context(), "Failed to validate ADB2C token", slog.String(logging.FieldError, err.Error()))
 					http.Error(response, "invalid bearer token", http.StatusUnauthorized)
 					return
 				}
@@ -686,7 +703,12 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		attribute.String("fhir.resource_reference", *focusReference.Reference),
 	)
 
-	log.Ctx(ctx).Info().Msgf("Received notification: Reference %s, Type: %s", *focusReference.Reference, *focusReference.Type)
+	slog.InfoContext(
+		ctx,
+		"Received notification",
+		slog.String(logging.FieldResourceReference, *focusReference.Reference),
+		slog.String(logging.FieldResourceType, *focusReference.Type),
+	)
 
 	if focusReference.Reference == nil {
 		return otel.Error(span, &coolfhir.ErrorWithCode{
@@ -724,7 +746,13 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		}
 
 		if task.Meta.Source != nil && *task.Meta.Source != resourceUrl {
-			log.Ctx(ctx).Warn().Msgf("Task (id=%s) already has a source (%s), overwriting it to (%s)", *task.Id, *task.Meta.Source, resourceUrl)
+			slog.WarnContext(
+				ctx,
+				"Task already has a source, overwriting",
+				slog.String("id", *task.Id),
+				slog.String("source_original", *task.Meta.Source),
+				slog.String("source_new", resourceUrl),
+			)
 		}
 
 		task.Meta.Source = &resourceUrl
@@ -733,13 +761,18 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 		if errors.As(err, &rejection) || errors.As(err, rejection) {
 			if err := s.rejectTask(ctx, fhirClient, task, *rejection); err != nil {
 				// TODO: what to do here?
-				log.Ctx(ctx).Err(err).Msgf("Failed to reject task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+				slog.ErrorContext(
+					ctx,
+					"Failed to reject task",
+					slog.String("id", *task.Id),
+					slog.String("reason", rejection.FormatReason()),
+				)
 			}
 		} else if err != nil {
 			return otel.Error(span, err)
 		}
 	default:
-		log.Ctx(ctx).Debug().Msgf("No handler for notification of type %s, ignoring", *focusReference.Type)
+		slog.DebugContext(ctx, "No handler for notification of type, ignoring", slog.String(logging.FieldResourceType, *focusReference.Type))
 	}
 
 	span.SetAttributes()
@@ -748,7 +781,12 @@ func (s Service) handleNotification(ctx context.Context, resource any) error {
 }
 
 func (s Service) rejectTask(ctx context.Context, client fhirclient.Client, task fhir.Task, rejection TaskRejection) error {
-	log.Ctx(ctx).Info().Msgf("Rejecting task (id=%s, reason=%s)", *task.Id, rejection.FormatReason())
+	slog.InfoContext(
+		ctx,
+		"Rejecting task",
+		slog.String("id", *task.Id),
+		slog.String("reason", rejection.FormatReason()),
+	)
 	task.Status = fhir.TaskStatusRejected
 	task.StatusReason = &fhir.CodeableConcept{
 		Text: to.Ptr(rejection.FormatReason()),

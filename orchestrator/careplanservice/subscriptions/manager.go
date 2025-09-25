@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	baseotel "go.opentelemetry.io/otel"
@@ -21,7 +23,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -141,8 +142,13 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 
 		careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 		if err != nil {
-			otel.Error(span, err, "failed to read CareTeam from CarePlan")
-			log.Ctx(ctx).Err(err).Msg("failed to read CareTeam in CarePlan")
+			slog.ErrorContext(
+				ctx,
+				"Failed to read CareTeam from CarePlan",
+				slog.String(logging.FieldResourceType, resourceType),
+				slog.String(logging.FieldResourceID, *carePlan.Id),
+				slog.String(logging.FieldError, otel.Error(span, err, "failed to read CarePlan").Error()),
+			)
 			return nil
 		}
 
@@ -160,7 +166,13 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 		attribute.Int("notification.subscriber_count", len(subscribers)),
 	)
 
-	log.Ctx(ctx).Info().Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)
+	slog.InfoContext(
+		ctx,
+		"Notifying subscriber(s) for update on resource",
+		slog.Int("subscriber_count", len(subscribers)),
+		slog.String(logging.FieldResourceReference, *focus.Reference),
+		slog.String(logging.FieldResourceType, resourceType),
+	)
 
 	var errs []error
 	successCount := 0

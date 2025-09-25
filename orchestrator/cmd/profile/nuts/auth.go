@@ -2,13 +2,14 @@ package nuts
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -27,25 +28,35 @@ func (d DutchNutsProfile) Authenticator(fn func(writer http.ResponseWriter, requ
 				userInfo := middleware.UserInfo(request.Context())
 				if userInfo == nil {
 					// would be weird, should've been handled by middleware.Secure()
-					log.Ctx(request.Context()).Error().Msg("User info not found in context")
+					slog.ErrorContext(request.Context(), "User info not found in context")
 					http.Error(response, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
 
 				organization, err := claimsToOrganization(userInfo)
 				if err != nil {
-					log.Ctx(request.Context()).Err(err).Msg("Invalid user info in context")
+					slog.ErrorContext(request.Context(), "Invalid user info in context", slog.String(logging.FieldError, err.Error()))
 					http.Error(response, "Unauthorized", http.StatusUnauthorized)
 					return
 				}
 				principal := auth.Principal{
 					Organization: *organization,
 				}
-				log.Ctx(request.Context()).Debug().Msgf("Authenticated user: %v on route %s", principal, request.URL.Path)
+				slog.DebugContext(
+					request.Context(),
+					"Authenticated user",
+					slog.Any("principal", principal),
+					slog.String("route", request.URL.Path),
+				)
 				fn(response, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 			})(writer, request)
 		} else {
-			log.Ctx(request.Context()).Debug().Msgf("Pre-authenticated user: %v on route %s", principal, request.URL.Path)
+			slog.DebugContext(
+				request.Context(),
+				"Pre-authenticated user",
+				slog.Any("principal", principal),
+				slog.String("route", request.URL.Path),
+			)
 			fn(writer, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 		}
 	}

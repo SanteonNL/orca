@@ -1,6 +1,8 @@
 package demo
 
 import (
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -12,10 +14,10 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/user"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -61,7 +63,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
-	log.Ctx(request.Context()).Debug().Msg("Handling demo app launch")
+	slog.DebugContext(request.Context(), "Handling demo app launch")
 	values, ok := getQueryParams(response, request, "patient", "practitioner", "tenant")
 	if !ok {
 		return
@@ -95,7 +97,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	//Destroy the previous session if found
 	existingSession := s.sessionManager.Get(request)
 	if existingSession != nil {
-		log.Ctx(request.Context()).Debug().Msg("Demo launch performed and previous session found - Destroying previous session")
+		slog.DebugContext(request.Context(), "Demo launch performed and previous session found - Destroying previous session")
 		s.sessionManager.Destroy(response, request)
 	}
 
@@ -104,7 +106,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 
 	var practitioner fhir.Practitioner
 	if err := ehrFHIRClient.Read(values["practitioner"], &practitioner); err != nil {
-		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to read practitioner resource")
+		slog.ErrorContext(request.Context(), "Failed to read practitioner resource", slog.String(logging.FieldError, err.Error()))
 		http.Error(response, "Failed to read practitioner resource: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -112,7 +114,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 
 	var patient fhir.Patient
 	if err := ehrFHIRClient.Read(values["patient"], &patient); err != nil {
-		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to read patient resource")
+		slog.ErrorContext(request.Context(), "Failed to read patient resource", slog.String(logging.FieldError, err.Error()))
 		http.Error(response, "Failed to read patient resource: "+err.Error(), http.StatusBadRequest)
 		return
 	}
@@ -122,12 +124,12 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 
 	organizations, err := s.profile.Identities(ctx)
 	if err != nil {
-		log.Ctx(request.Context()).Error().Err(err).Msg("Failed to get active organization")
+		slog.ErrorContext(request.Context(), "Failed to get active organization", slog.String(logging.FieldError, err.Error()))
 		http.Error(response, "Failed to get active organization: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
 	if len(organizations) != 1 {
-		log.Ctx(request.Context()).Error().Msgf("Expected 1 active organization, found %d", len(organizations))
+		slog.ErrorContext(request.Context(), fmt.Sprintf("Expected 1 active organization, found %d", len(organizations)))
 		http.Error(response, "Expected 1 active organization, found "+strconv.Itoa(len(organizations)), http.StatusInternalServerError)
 		return
 	}
@@ -148,14 +150,19 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		}
 		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), fhirClient, *taskIdentifier)
 		if err != nil {
-			log.Ctx(request.Context()).Error().Err(err).Msg("Existing CPS Task check failed for task with identifier: " + coolfhir.ToString(taskIdentifier))
+			slog.ErrorContext(
+				request.Context(),
+				"Existing CPS Task check failed for task",
+				slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldIdentifier, coolfhir.ToString(taskIdentifier)),
+			)
 			http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
 			return
 		}
 	}
 
 	if existingTask != nil {
-		log.Ctx(request.Context()).Debug().Msg("Existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
+		slog.DebugContext(request.Context(), "Existing CPS Task resource found for demo task", slog.String(logging.FieldIdentifier, values["taskIdentifier"]))
 		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("task", *existingTask.Id).String(), http.StatusFound)
 		return
 	}
@@ -163,11 +170,11 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	// Redirect to landing page
 	if serviceRequest == "" {
 		// No ServiceRequest given from EHR, redirect to task overview
-		log.Ctx(request.Context()).Debug().Msg("No ServiceRequest provided by EHR, redirecting to Task overview")
+		slog.DebugContext(request.Context(), "No ServiceRequest provided by EHR, redirecting to Task overview")
 		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("list").String(), http.StatusFound)
 	} else {
 		// ServiceRequest given, redirect to new enrollment landing page
-		log.Ctx(request.Context()).Debug().Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
+		slog.DebugContext(request.Context(), "No existing CPS Task resource found for demo task", slog.String(logging.FieldIdentifier, values["taskIdentifier"]))
 		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
 	}
 }
@@ -183,7 +190,12 @@ func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]
 		fhirBaseURL := must.ParseURL(tenant.Demo.FHIR.BaseURL)
 		transport, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.Demo.FHIR, coolfhir.Config())
 		if err != nil {
-			log.Error().Err(err).Msgf("Failed to create FHIR client for tenant '%s' with base URL '%s'", tenant.ID, fhirBaseURL.String())
+			slog.Error(
+				"Failed to create FHIR client for tenant",
+				slog.String("tenant", tenant.ID),
+				slog.String("baseURL", fhirBaseURL.String()),
+				slog.String(logging.FieldError, err.Error()),
+			)
 			continue
 		}
 		tenantBasePath := "/cpc/" + tenant.ID + "/fhir"
