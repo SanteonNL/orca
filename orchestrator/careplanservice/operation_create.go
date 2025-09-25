@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/lib/validation"
@@ -68,8 +69,8 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		if err != nil {
 			otel.Error(span, err, "authorization check failed")
 			slog.ErrorContext(ctx, "Error checking if principal is authorized to create resource",
-				slog.String("error", err.Error()),
-				slog.String("resource_type", resourceType),
+				slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldResourceType, resourceType),
 			)
 		}
 		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
@@ -85,8 +86,8 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	)
 
 	slog.InfoContext(ctx, "Creating resource",
-		slog.String("resource_type", resourceType),
-		slog.String("authz", strings.Join(authzDecision.Reasons, ";")),
+		slog.String(logging.FieldResourceType, resourceType),
+		slog.String(logging.FieldAuthz, strings.Join(authzDecision.Reasons, ";")),
 	)
 	if h.validator != nil {
 		result, err2, done := h.validate(ctx, resource, resourceType)

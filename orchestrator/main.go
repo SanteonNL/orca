@@ -13,7 +13,7 @@ import (
 func main() {
 	config, err := cmd.LoadConfig()
 	if err != nil {
-		slog.Error("Failed to load configuration", slog.String("error", err.Error()))
+		slog.Error("Failed to load configuration", slog.String(logging.FieldError, err.Error()))
 		os.Exit(1)
 	}
 	// Set global slog logger, with context handler
@@ -27,7 +27,7 @@ func main() {
 	slog.Info(fmt.Sprintf("Public interface listens on %s", config.Public.Address))
 	slog.Info(fmt.Sprintf("Using Nuts API on %s", config.Nuts.API.URL))
 	if err := cmd.Start(context.Background(), *config); err != nil {
-		slog.Error("Failed to start server", slog.String("error", err.Error()))
+		slog.Error("Failed to start server", slog.String(logging.FieldError, err.Error()))
 		os.Exit(1)
 	}
 	slog.Info("Goodbye!")

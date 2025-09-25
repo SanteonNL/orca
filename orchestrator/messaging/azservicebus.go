@@ -11,6 +11,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 var _ Broker = &AzureServiceBusBroker{}
@@ -131,7 +132,7 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 						c.ctx,
 						"AzureServiceBus: receive message failed, backing off",
 						slog.String("source", fullName),
-						slog.String("error", err.Error()),
+						slog.String(logging.FieldError, err.Error()),
 						slog.Duration("backoff_time", backoffTime),
 					)
 				}
@@ -158,7 +159,7 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 					c.ctx,
 					"AzureServiceBus: message handler failed, message will be sent to DLQ",
 					slog.String("source", fullName),
-					slog.String("error", err.Error()),
+					slog.String(logging.FieldError, err.Error()),
 				)
 				if err := receiver.AbandonMessage(c.ctx, azMessage, &azservicebus.AbandonMessageOptions{
 					PropertiesToModify: map[string]any{
@@ -169,7 +170,7 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 						c.ctx,
 						"AzureServiceBus: abandon message (for redelivery) failed",
 						slog.String("source", fullName),
-						slog.String("error", err.Error()),
+						slog.String(logging.FieldError, err.Error()),
 					)
 				}
 			} else {
@@ -178,7 +179,7 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 						c.ctx,
 						"AzureServiceBus: complete message failed",
 						slog.String("source", fullName),
-						slog.String("error", err.Error()),
+						slog.String(logging.FieldError, err.Error()),
 					)
 				}
 			}

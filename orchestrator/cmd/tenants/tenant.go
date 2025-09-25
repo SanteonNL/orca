@@ -91,14 +91,14 @@ func (c Config) HttpHandler(handler func(http.ResponseWriter, *http.Request)) fu
 	return func(writer http.ResponseWriter, request *http.Request) {
 		tenantID := request.PathValue("tenant")
 		if tenantID == "" {
-			slog.ErrorContext(request.Context(), "No tenant ID in HTTP request", slog.String("path", request.URL.Path))
+			slog.ErrorContext(request.Context(), "No tenant ID in HTTP request", slog.String(logging.FieldPath, request.URL.Path))
 			http.Error(writer, "Unable to determine tenant", http.StatusInternalServerError)
 			return
 		}
 		tenant, err := c.Get(tenantID)
 		if err != nil {
-			slog.ErrorContext(request.Context(), "Unknown tenant", slog.String("error", err.Error()),
-				slog.String("path", request.URL.Path),
+			slog.ErrorContext(request.Context(), "Unknown tenant", slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldPath, request.URL.Path),
 				slog.String("tenant_id", tenantID),
 			)
 			http.Error(writer, "Unknown tenant", http.StatusBadRequest)

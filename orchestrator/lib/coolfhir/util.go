@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
@@ -372,7 +373,7 @@ func ParseExternalLiteralReference(literal string, resourceType string) (*url.UR
 func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource interface{}, additionalHeaders ...map[string]string) {
 	data, err := json.MarshalIndent(resource, "", "  ")
 	if err != nil {
-		slog.Error("Failed to marshal response", slog.String("error", err.Error()))
+		slog.Error("Failed to marshal response", slog.String(logging.FieldError, err.Error()))
 		httpStatus = http.StatusInternalServerError
 		data = []byte(`{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"Failed to marshal response"}]}`)
 	}
@@ -386,7 +387,7 @@ func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource int
 	httpResponse.WriteHeader(httpStatus)
 	_, err = httpResponse.Write(data)
 	if err != nil {
-		slog.Error("Failed to write response", slog.String("error", err.Error()), slog.String("data", string(data)))
+		slog.Error("Failed to write response", slog.String(logging.FieldError, err.Error()), slog.String("data", string(data)))
 	}
 }
 

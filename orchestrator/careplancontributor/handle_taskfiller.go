@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/slices"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -52,12 +53,13 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		slog.DebugContext(
 			ctx,
 			"TaskEngine is disabled for this tenant - skipping Task notification handling",
-			slog.String("task_id", *task.Id),
+			slog.String(logging.FieldResourceID, *task.Id),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
 		)
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Running TaskEngine for notification", slog.String("task_id", *task.Id))
+	slog.InfoContext(ctx, "Running TaskEngine for notification", slog.String(logging.FieldResourceID, *task.Id))
 	ctx, span := tracer.Start(
 		ctx,
 		debug.GetFullCallerName(),
@@ -69,7 +71,12 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 	)
 	defer span.End()
 
-	slog.InfoContext(ctx, "Handling Task Notification", slog.String("task_id", *task.Id))
+	slog.InfoContext(
+		ctx,
+		"Handling Task Notification",
+		slog.String(logging.FieldResourceID, *task.Id),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+	)
 
 	if !coolfhir.IsScpTask(task) {
 		slog.InfoContext(ctx, "Task is not an SCP Task - skipping")
@@ -106,7 +113,12 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 	//This only happens on Task update where the Task.output is filled with a QuestionnaireResponse
 	if partOfRef == nil {
 		span.SetAttributes(attribute.Bool("task.is_primary_task", true))
-		slog.InfoContext(ctx, "Notified Task is a primary Task", slog.String("task_id", *task.Id))
+		slog.InfoContext(
+			ctx,
+			"Notified Task is a primary Task",
+			slog.String(logging.FieldResourceID, *task.Id),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		)
 		// Check if the primary task is "created", its status will be updated by subtasks that are completed - not directly here
 		if task.Status != fhir.TaskStatusRequested {
 			slog.DebugContext(ctx, "primary Task.status != requested (workflow already started) - not processing in handleTaskNotification")
@@ -135,9 +147,10 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		)
 		slog.InfoContext(
 			ctx,
-			"Notified Task is a sub-task (id=%s, primary task=%s)",
-			slog.String("task_id", *task.Id),
-			slog.String("part_of_ref", *partOfRef),
+			"Notified Task is a sub-task",
+			slog.String(logging.FieldResourceID, *task.Id),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+			slog.String("primary_task_reference", *partOfRef),
 		)
 		err = s.handleSubtaskNotification(ctx, cpsClient, task, *partOfRef, localIdentifiers)
 		if err != nil {
@@ -210,7 +223,12 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	)
 	defer span.End()
 
-	slog.DebugContext(ctx, "Started function acceptPrimaryTask() for Task", slog.String("task_id", *primaryTask.Id))
+	slog.DebugContext(
+		ctx,
+		"Started function acceptPrimaryTask() for Task",
+		slog.String(logging.FieldResourceID, *primaryTask.Id),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+	)
 	if primaryTask.Status != fhir.TaskStatusRequested && primaryTask.Status != fhir.TaskStatusReceived {
 		slog.DebugContext(ctx, "primary Task.status != requested||received (workflow already started) - not processing in handleTaskNotification")
 		span.SetStatus(codes.Ok, "Task status not requested or received, skipping")
@@ -219,7 +237,13 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	ref := "Task/" + *primaryTask.Id
 	span.SetAttributes(attribute.String("fhir.task_ref", ref))
 
-	slog.InfoContext(ctx, "TaskEngine: Accepting primary Task", slog.String("reference", ref))
+	slog.InfoContext(
+		ctx,
+		"TaskEngine: Accepting primary Task",
+		slog.String(logging.FieldResourceReference, ref),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		slog.String(logging.FieldResourceID, *primaryTask.Id),
+	)
 	primaryTask.Status = fhir.TaskStatusAccepted
 	if note := s.getTaskStatusNote(primaryTask.Status); note != nil {
 		primaryTask.Note = append(primaryTask.Note, fhir.Annotation{
@@ -231,22 +255,29 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	if err != nil {
 		return otel.Error(span, fmt.Errorf("failed to update primary Task status (id=%s): %w", ref, err), err.Error())
 	}
-	slog.DebugContext(ctx, "Successfully accepted task", slog.String("reference", ref))
+	slog.DebugContext(
+		ctx,
+		"Successfully accepted task",
+		slog.String(logging.FieldResourceReference, ref),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+	)
 
 	notificationSent := false
 	if s.notifier != nil {
 		slog.InfoContext(
 			ctx,
 			"TaskEngine: EHR will be notified of accepted Task with bundle of relevant FHIR resources",
-			slog.String("reference", ref),
+			slog.String(logging.FieldResourceReference, ref),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
 		)
 		err = s.notifier.NotifyTaskAccepted(ctx, cpsClient.Path().String(), primaryTask)
 		if err != nil {
 			slog.WarnContext(
 				ctx,
 				"Accepted Task with an error in the notification",
-				slog.String("reference", ref),
-				slog.String("error", otel.Error(span, err, err.Error()).Error()),
+				slog.String(logging.FieldResourceReference, ref),
+				slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+				slog.String(logging.FieldError, otel.Error(span, err, err.Error()).Error()),
 			)
 			return nil
 		} else {
@@ -255,14 +286,24 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	}
 	span.SetAttributes(attribute.Bool("notification.sent", notificationSent))
 
-	slog.DebugContext(ctx, "Successfully accepted Task", slog.String("reference", ref))
+	slog.DebugContext(
+		ctx,
+		"Successfully accepted Task",
+		slog.String(logging.FieldResourceReference, ref),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+	)
 
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
 
 func (s *Service) fetchQuestionnaireByID(ctx context.Context, cpsClient fhirclient.Client, ref string, questionnaire *fhir.Questionnaire) error {
-	slog.DebugContext(ctx, "Fetching Questionnaire by ID", slog.String("reference", ref))
+	slog.DebugContext(
+		ctx,
+		"Fetching Questionnaire by ID",
+		slog.String(logging.FieldResourceReference, ref),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeQuestionnaire.String()),
+	)
 	err := cpsClient.Read(ref, &questionnaire)
 	if err != nil {
 		return fmt.Errorf("failed to fetch Questionnaire: %s", err.Error())
@@ -360,7 +401,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 							ctx,
 							"Unable to determine next questionnaire",
 							slog.String("previous_url", *fetchedQuestionnaire.Url),
-							slog.String("error", err.Error()),
+							slog.String(logging.FieldError, err.Error()),
 						)
 					} else {
 						span.SetAttributes(attribute.String("workflow.step_type", "proceed"))
@@ -431,7 +472,12 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 
 	if isPrimaryTask && primaryTask.Status == fhir.TaskStatusRequested {
 		// Mark the task as "received" to indicate that the task is being processed
-		slog.InfoContext(ctx, "Marking task as received", slog.String("task_id", *task.Id))
+		slog.InfoContext(
+			ctx,
+			"Marking task as received",
+			slog.String(logging.FieldResourceID, *task.Id),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		)
 		primaryTask.Status = fhir.TaskStatusReceived
 		tx.Update(primaryTask, "Task/"+*primaryTask.Id)
 		span.SetAttributes(attribute.Bool("task.primary_task_updated", true))
@@ -519,11 +565,12 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 			workflowLookups++
 			workflow, err := s.workflows.Provide(ctx, serviceCoding, reasonCoding)
 			if errors.Is(err, taskengine.ErrWorkflowNotFound) {
-				slog.DebugContext(ctx, "No workflow found (service=%s|%s, condition=%s|%s, task=%s)",
-					slog.String("error", err.Error()),
+				slog.DebugContext(ctx, "No workflow found",
+					slog.String(logging.FieldError, err.Error()),
 					slog.String("service", fmt.Sprintf("%s|%s", *serviceCoding.System, *serviceCoding.Code)),
 					slog.String("condition", fmt.Sprintf("%s|%s", *reasonCoding.System, *reasonCoding.Code)),
-					slog.String("task_id", *task.Id),
+					slog.String(logging.FieldResourceID, *task.Id),
+					slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
 				)
 				continue
 			} else if err != nil {

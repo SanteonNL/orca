@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -310,7 +311,7 @@ func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 	slog.InfoContext(ctx, "RoundTrip Request",
 		slog.String("name", l.Name),
 		slog.String("method", request.Method),
-		slog.String("url", request.URL.String()),
+		slog.String(logging.FieldUrl, request.URL.String()),
 	)
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		var headers []string
@@ -336,8 +337,8 @@ func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 	if err != nil {
 		slog.WarnContext(ctx, "RoundTrip Request failed",
 			slog.String("name", l.Name),
-			slog.String("url", request.URL.String()),
-			slog.String("error", err.Error()),
+			slog.String(logging.FieldUrl, request.URL.String()),
+			slog.String(logging.FieldError, err.Error()),
 		)
 	} else {
 		if slog.Default().Enabled(ctx, slog.LevelDebug) {

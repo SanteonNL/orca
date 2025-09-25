@@ -12,6 +12,7 @@ import (
 
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	baseotel "go.opentelemetry.io/otel"
@@ -141,7 +142,13 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 
 		careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 		if err != nil {
-			slog.ErrorContext(ctx, "Failed to read CareTeam from CarePlan", slog.String("error", otel.Error(span, err, "failed to read CarePlan").Error()))
+			slog.ErrorContext(
+				ctx,
+				"Failed to read CareTeam from CarePlan",
+				slog.String(logging.FieldResourceType, resourceType),
+				slog.String(logging.FieldResourceID, *carePlan.Id),
+				slog.String(logging.FieldError, otel.Error(span, err, "failed to read CarePlan").Error()),
+			)
 			return nil
 		}
 
@@ -159,7 +166,13 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 		attribute.Int("notification.subscriber_count", len(subscribers)),
 	)
 
-	slog.InfoContext(ctx, "Notifying subscriber(s) for update on resource", slog.Int("subscriber_count", len(subscribers)), slog.String("reference", *focus.Reference))
+	slog.InfoContext(
+		ctx,
+		"Notifying subscriber(s) for update on resource",
+		slog.Int("subscriber_count", len(subscribers)),
+		slog.String(logging.FieldResourceReference, *focus.Reference),
+		slog.String(logging.FieldResourceType, resourceType),
+	)
 
 	var errs []error
 	successCount := 0

@@ -20,6 +20,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
@@ -47,7 +48,7 @@ func Start(ctx context.Context, config Config) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
-			slog.Error("Failed to shutdown OpenTelemetry", slog.String("error", err.Error()))
+			slog.Error("Failed to shutdown OpenTelemetry", slog.String(logging.FieldError, err.Error()))
 		} else {
 			slog.Debug("OpenTelemetry shutdown successfully")
 		}

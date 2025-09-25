@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
 	"github.com/lestrrat-go/jwx/v2/jwt"
@@ -137,7 +138,7 @@ func (c *Client) refreshAllConfigurations(ctx context.Context) {
 				"Failed to refresh OpenID configuration for issuer, will retry on demand",
 				slog.String("issuer", issuer),
 				slog.String("discovery_url", discoveryURL),
-				slog.String("error", err.Error()),
+				slog.String(logging.FieldError, err.Error()),
 			)
 		}
 	}
@@ -279,7 +280,7 @@ func (c *Client) fetchKeySet(ctx context.Context, issuer string) (jwk.Set, error
 				ctx,
 				"Failed to refresh issuer configuration, using cached config",
 				slog.String("issuer", issuer),
-				slog.String("error", err.Error()),
+				slog.String(logging.FieldError, err.Error()),
 			)
 		} else {
 			// Refresh succeeded, get the updated config

@@ -19,6 +19,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -315,7 +316,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		cacheKey = workflowId + "|" + patientID
 	} else {
 		err := fmt.Errorf("missing headers, options are: X-Scp-Context header, or X-Scp-WorkflowID both X-Scp-PatientID headers")
-		slog.ErrorContext(ctx, "Missing context headers", slog.String("error", err.Error()))
+		slog.ErrorContext(ctx, "Missing context headers", slog.String(logging.FieldError, err.Error()))
 		return nil, otel.Error(span, err)
 	}
 
@@ -339,14 +340,19 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 			workflowCtx, err = s.getWorkflowContext(ctx, carePlanReference)
 		} else {
 			// Use X-Scp-WorkflowID and X-Scp-PatientID headers
-			slog.DebugContext(ctx, "(cache miss) Getting Zorgplatform access token", slog.String("workflow_id", workflowId), slog.String("patient_id", patientID))
+			slog.DebugContext(
+				ctx,
+				"(cache miss) Getting Zorgplatform access token",
+				slog.String("workflow_id", workflowId),
+				slog.String("patient_id", patientID),
+			)
 			workflowCtx = &workflowContext{
 				workflowId: workflowId,
 				patientBsn: patientID,
 			}
 		}
 		if err != nil {
-			slog.ErrorContext(ctx, "Unable to get workflow context", slog.String("error", err.Error()))
+			slog.ErrorContext(ctx, "Unable to get workflow context", slog.String(logging.FieldError, err.Error()))
 			return nil, otel.Error(span, fmt.Errorf("unable to get workflow context: %w", err))
 		}
 
@@ -366,7 +372,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 
 		accessToken, err = s.secureTokenService.RequestAccessToken(ctx, launchContext, applicationTokenType)
 		if err != nil {
-			slog.ErrorContext(ctx, "Unable to request access token for Zorgplatform", slog.String("error", err.Error()))
+			slog.ErrorContext(ctx, "Unable to request access token for Zorgplatform", slog.String(logging.FieldError, err.Error()))
 			return nil, otel.Error(span, fmt.Errorf("unable to request access token for Zorgplatform: %w", err))
 		}
 		slog.DebugContext(ctx, "Successfully requested access token for Zorgplatform", slog.String("access_token", accessToken[:min(len(accessToken), 16)]))
@@ -408,7 +414,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
-		slog.ErrorContext(ctx, "Unable to validate SAML token", slog.String("error", otel.Error(span, err, "unable to validate SAML token").Error()))
+		slog.ErrorContext(ctx, "Unable to validate SAML token", slog.String(logging.FieldError, otel.Error(span, err, "unable to validate SAML token").Error()))
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
@@ -417,7 +423,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	tenant, err := s.lookupTenant(launchContext.ChipSoftOrganizationID)
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
-		slog.ErrorContext(ctx, "Can't determine tenant", slog.String("error", otel.Error(span, err, "can't determine tenant").Error()))
+		slog.ErrorContext(ctx, "Can't determine tenant", slog.String(logging.FieldError, otel.Error(span, err, "can't determine tenant").Error()))
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
@@ -427,7 +433,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	// Use the launch context to retrieve an access_token that allows the application to query the HCP ProfessionalService
 	accessToken, err := s.secureTokenService.RequestAccessToken(ctx, launchContext, hcpTokenType)
 	if err != nil {
-		slog.ErrorContext(ctx, "Unable to request access token for HCP ProfessionalService", slog.String("error", otel.Error(span, err, "unable to request access token for HCP ProfessionalService").Error()))
+		slog.ErrorContext(ctx, "Unable to request access token for HCP ProfessionalService", slog.String(logging.FieldError, otel.Error(span, err, "unable to request access token for HCP ProfessionalService").Error()))
 		http.Error(response, "Application launch failed.", http.StatusBadRequest)
 		return
 	}
@@ -446,7 +452,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 			slog.WarnContext(ctx, "unable to create session data, retrying")
 			sleep(200 * time.Duration(i) * time.Millisecond)
 		} else {
-			slog.ErrorContext(ctx, "unable to create session data - retry limit reached", slog.String("error", otel.Error(span, err, "unable to create session data - retry limit reached").Error()))
+			slog.ErrorContext(ctx, "unable to create session data - retry limit reached", slog.String(logging.FieldError, otel.Error(span, err, "unable to create session data - retry limit reached").Error()))
 			http.Error(response, "Application launch failed.", http.StatusInternalServerError)
 			return
 		}
@@ -488,7 +494,12 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	if err != nil {
 		return nil, otel.Error(span, fmt.Errorf("invalid CarePlan reference (url=%s): %w", carePlanReference, err))
 	}
-	slog.DebugContext(ctx, "Fetching CarePlan resource", slog.String("careplan", localCarePlanRef))
+	slog.DebugContext(
+		ctx,
+		"Fetching CarePlan resource",
+		slog.String(logging.FieldResourceReference, localCarePlanRef),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeCarePlan.String()),
+	)
 	span.SetAttributes(attribute.String("careplan.local_ref", localCarePlanRef))
 
 	fhirClient, err := s.cpsFhirClient(ctx)
@@ -499,7 +510,13 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var carePlan fhir.CarePlan
 	err = fhirClient.ReadWithContext(ctx, localCarePlanRef, &carePlan)
 	if err != nil {
-		slog.ErrorContext(ctx, "Unable to fetch CarePlan resource", slog.String("error", err.Error()), slog.String("careplan", localCarePlanRef))
+		slog.ErrorContext(
+			ctx,
+			"Unable to fetch CarePlan resource",
+			slog.String(logging.FieldError, err.Error()),
+			slog.String(logging.FieldResourceReference, localCarePlanRef),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeCarePlan.String()),
+		)
 		return nil, otel.Error(span, fmt.Errorf("unable to fetch CarePlan resource: %w", err))
 	}
 
@@ -507,7 +524,13 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var task fhir.Task
 	err = fhirClient.ReadWithContext(ctx, *carePlan.Activity[0].Reference.Reference, &task)
 	if err != nil {
-		slog.ErrorContext(ctx, "Unable to fetch Task resource", slog.String("error", err.Error()), slog.String("task", *carePlan.Activity[0].Reference.Reference))
+		slog.ErrorContext(
+			ctx,
+			"Unable to fetch Task resource",
+			slog.String(logging.FieldError, err.Error()),
+			slog.String(logging.FieldResourceReference, *carePlan.Activity[0].Reference.Reference),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		)
 		return nil, otel.Error(span, fmt.Errorf("unable to fetch Task resource: %w", err))
 	}
 	span.SetAttributes(attribute.String("task.reference", *carePlan.Activity[0].Reference.Reference))
@@ -515,7 +538,13 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var serviceRequest fhir.ServiceRequest
 	err = fhirClient.ReadWithContext(ctx, *task.Focus.Reference, &serviceRequest)
 	if err != nil {
-		slog.ErrorContext(ctx, "Unable to fetch ServiceRequest resource", slog.String("error", err.Error()))
+		slog.ErrorContext(
+			ctx,
+			"Unable to fetch ServiceRequest resource",
+			slog.String(logging.FieldError, err.Error()),
+			slog.String(logging.FieldResourceReference, *task.Focus.Reference),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeServiceRequest.String()),
+		)
 		return nil, otel.Error(span, fmt.Errorf("unable to fetch ServiceRequest resource: %w", err))
 	}
 	span.SetAttributes(attribute.String("servicerequest.reference", *task.Focus.Reference))
@@ -530,7 +559,13 @@ func (s *stsAccessTokenRoundTripper) getWorkflowContext(ctx context.Context, car
 	var patient fhir.Patient
 	err = fhirClient.ReadWithContext(ctx, *carePlan.Subject.Reference, &patient)
 	if err != nil {
-		slog.ErrorContext(ctx, "Unable to fetch Patient resource", slog.String("error", err.Error()), slog.String("patient", *carePlan.Subject.Reference))
+		slog.ErrorContext(
+			ctx,
+			"Unable to fetch Patient resource",
+			slog.String(logging.FieldError, err.Error()),
+			slog.String(logging.FieldResourceReference, *carePlan.Subject.Reference),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypePatient.String()),
+		)
 		return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient resource: %w", err))
 	}
 	span.SetAttributes(attribute.String("patient.reference", *carePlan.Subject.Reference))
@@ -597,7 +632,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	})
 
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to check for existing CPS Task resource", slog.String("error", err.Error()))
+		slog.ErrorContext(ctx, "Failed to check for existing CPS Task resource", slog.String(logging.FieldError, err.Error()))
 		return nil, otel.Error(span, fmt.Errorf("failed to check for existing CPS Task resource: %w", err))
 	}
 
@@ -676,7 +711,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	}
 	// Enrich performer URA with registered name
 	if result, err := s.profile.CsdDirectory().LookupEntity(ctx, *taskPerformer.Identifier); err != nil {
-		slog.WarnContext(ctx, "Couldn't resolve performer name", slog.String("ura", s.config.TaskPerformerUra), slog.String("error", err.Error()))
+		slog.WarnContext(ctx, "Couldn't resolve performer name", slog.String("ura", s.config.TaskPerformerUra), slog.String(logging.FieldError, err.Error()))
 	} else {
 		taskPerformer = *result
 	}
@@ -888,7 +923,7 @@ U6OWTXiki5XGd75h6duSZG9qvqymSIuTjA==
 			return nil, fmt.Errorf("failed to parse certificate #%d: %w", len(result), err)
 		}
 		result = append(result, cert)
-		slog.InfoContext(ctx, "Successfully loaded Zorgplatform signing certificate", slog.String("expiry", cert.NotAfter.String()))
+		slog.InfoContext(ctx, "Successfully loaded Zorgplatform signing certificate", slog.Time("expiry", cert.NotAfter))
 	}
 	if len(result) == 0 {
 		return nil, fmt.Errorf("no valid certificates found in PEM data")

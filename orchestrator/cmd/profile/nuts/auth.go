@@ -8,6 +8,7 @@ import (
 	"github.com/SanteonNL/nuts-policy-enforcement-point/middleware"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
@@ -34,7 +35,7 @@ func (d DutchNutsProfile) Authenticator(fn func(writer http.ResponseWriter, requ
 
 				organization, err := claimsToOrganization(userInfo)
 				if err != nil {
-					slog.ErrorContext(request.Context(), "Invalid user info in context", slog.String("error", err.Error()))
+					slog.ErrorContext(request.Context(), "Invalid user info in context", slog.String(logging.FieldError, err.Error()))
 					http.Error(response, "Unauthorized", http.StatusUnauthorized)
 					return
 				}

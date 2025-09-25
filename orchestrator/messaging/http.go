@@ -11,6 +11,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 var _ Broker = &HTTPBroker{}
@@ -97,7 +99,7 @@ func (h HTTPBroker) doSend(ctx context.Context, topic Entity, message *Message) 
 		return err
 	}
 	req.Header.Set("Content-Type", message.ContentType)
-	slog.DebugContext(ctx, "Sending message", slog.String("url", req.URL.String()))
+	slog.DebugContext(ctx, "Sending message", slog.String(logging.FieldUrl, req.URL.String()))
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {

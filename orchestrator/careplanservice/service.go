@@ -17,6 +17,7 @@ import (
 
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -252,7 +253,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			},
 		}
 		if err := s.profile.CapabilityStatement(request.Context(), &md); err != nil {
-			slog.ErrorContext(request.Context(), "Failed to customize CapabilityStatement", slog.String("error", err.Error()))
+			slog.ErrorContext(
+				request.Context(),
+				"Failed to generate CapabilityStatement",
+				slog.String(logging.FieldResourceType, fhir.ResourceTypeCapabilityStatement.String()),
+				slog.String(logging.FieldError, err.Error()),
+			)
 			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanService/Metadata", httpResponse)
 			return
 		}
@@ -328,7 +334,11 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		txJson, _ := json.MarshalIndent(tx, "", "  ")
-		slog.DebugContext(ctx, fmt.Sprintf("FHIR Transaction request: %s", txJson))
+		slog.DebugContext(
+			ctx,
+			"FHIR Transaction",
+			slog.String("request", string(txJson)),
+		)
 	}
 
 	span.AddEvent(otel.FHIRTransactionExecute)
@@ -337,7 +347,13 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		otel.Error(span, err, "failed to execute FHIR transaction")
 		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 		txResultJson, _ := json.Marshal(tx.Bundle())
-		slog.ErrorContext(ctx, fmt.Sprintf("Failed to execute transaction (url=%s): %s", request.URL.String(), string(txResultJson)), slog.String("error", err.Error()))
+		slog.ErrorContext(
+			ctx,
+			"Failed to execute transaction",
+			slog.String(logging.FieldUrl, request.URL.String()),
+			slog.String("request", string(txResultJson)),
+			slog.String(logging.FieldError, err.Error()),
+		)
 		var operationOutcomeErr fhirclient.OperationOutcomeError
 		if errors.As(err, &operationOutcomeErr) {
 			operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
@@ -354,7 +370,11 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 	}
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		txJson, _ := json.MarshalIndent(txResult, "", "  ")
-		slog.DebugContext(ctx, fmt.Sprintf("FHIR Transaction response: %s", txJson))
+		slog.DebugContext(
+			ctx,
+			"FHIR Transaction response",
+			slog.String("response", string(txJson)),
+		)
 	}
 	var notificationResources []any
 	for entryIdx, resultHandler := range resultHandlers {
@@ -394,7 +414,12 @@ func (s *Service) handleTransactionEntry(ctx context.Context, span trace.Span, r
 }
 
 func (s *Service) handleUnmanagedOperation(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
-	slog.WarnContext(ctx, fmt.Sprintf("Unmanaged FHIR operation at CarePlanService: %s %s", request.HttpMethod, request.RequestUrl.String()))
+	slog.WarnContext(
+		ctx,
+		"Unmanaged FHIR operation at CarePlanService",
+		slog.String("request", request.HttpMethod),
+		slog.String(logging.FieldUrl, request.HttpMethod),
+	)
 
 	return nil, fmt.Errorf("unsupported operation %s %s", request.HttpMethod, request.RequestUrl.String())
 }
@@ -415,7 +440,11 @@ func (s *Service) extractResponseHeadersAndStatus(entry *fhir.BundleEntry, ctx c
 	if fhirResponse.Status != "" {
 		statusParts := strings.Split(fhirResponse.Status, " ")
 		if parsedCode, err := strconv.Atoi(statusParts[0]); err != nil {
-			slog.WarnContext(ctx, fmt.Sprintf("Failed to parse status code from transaction result (responding with 200 OK): %s", fhirResponse.Status), slog.String("error", err.Error()))
+			slog.WarnContext(
+				ctx,
+				"Failed to parse status code from transaction result (responding with 200 OK)",
+				slog.String("status", fhirResponse.Status),
+				slog.String(logging.FieldError, err.Error()))
 		} else {
 			statusCode = parsedCode
 		}
@@ -460,7 +489,7 @@ func (s *Service) writeTransactionResponse(httpResponse http.ResponseWriter, txR
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to extract tenant from context", slog.String("error", otel.Error(span, err).Error()))
+		slog.ErrorContext(ctx, "Failed to extract tenant from context", slog.String(logging.FieldError, otel.Error(span, err).Error()))
 	}
 
 	s.pipelineByTenant[tenant.ID].
@@ -1116,7 +1145,7 @@ func (s *Service) handleBundle(httpRequest *http.Request, httpResponse http.Resp
 
 	tenant, err = tenants.FromContext(ctx)
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to extract tenant from context", slog.String("error", otel.Error(span, err).Error()))
+		slog.ErrorContext(ctx, "Failed to extract tenant from context", slog.String(logging.FieldError, otel.Error(span, err).Error()))
 	}
 	s.pipelineByTenant[tenant.ID].DoAndWrite(ctx, tracer, httpResponse, resultBundle, http.StatusOK)
 }
@@ -1163,7 +1192,11 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 		if err := s.subscriptionManager.Notify(notifyCtx, resource); err != nil {
 			otel.Error(span, err)
 			span.SetAttributes(attribute.String(otel.NotificationStatus, "failed"))
-			slog.ErrorContext(ctx, fmt.Sprintf("Failed to notify subscribers for resource %T", resource), slog.String("error", err.Error()))
+			slog.ErrorContext(
+				ctx,
+				"Failed to notify subscribers",
+				slog.Any("resource", resource),
+				slog.String(logging.FieldError, err.Error()))
 		} else {
 			span.SetAttributes(
 				attribute.String(otel.NotificationStatus, "success"),
@@ -1282,7 +1315,11 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 	reindexURLs := []string{}
 
 	for _, param := range params {
-		slog.InfoContext(ctx, fmt.Sprintf("Processing custom SearchParameter %s", param.SearchParamId))
+		slog.InfoContext(
+			ctx,
+			"Processing custom SearchParameter",
+			slog.String("search_parameter_id", param.SearchParamId),
+		)
 		// Check if param exists before creating
 		existingParamBundle := fhir.Bundle{}
 		err := fhirClient.Search("SearchParameter", url.Values{"url": {param.SearchParam.Url}}, &existingParamBundle)
@@ -1291,14 +1328,26 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 		}
 
 		if len(existingParamBundle.Entry) > 0 {
-			slog.InfoContext(ctx, fmt.Sprintf("SearchParameter/%s already exists, checking if it needs to be re-indexed", param.SearchParamId))
+			slog.InfoContext(
+				ctx,
+				"SearchParameter already exists, checking if it needs to be re-indexed",
+				slog.String("search_parameter_id", param.SearchParamId),
+			)
 			// Azure FHIR: if the SearchParameter exists but isn't in the CapabilityStatement, it needs to be re-indexed.
 			// See https://learn.microsoft.com/en-us/azure/healthcare-apis/azure-api-for-fhir/how-to-do-custom-search
 			if !searchParameterExists(capabilityStatement, param.SearchParam.Url) {
-				slog.InfoContext(ctx, fmt.Sprintf("SearchParameter/%s needs to be re-indexed", param.SearchParamId))
+				slog.InfoContext(
+					ctx,
+					"SearchParameter needs to be re-indexed",
+					slog.String("search_parameter_id", param.SearchParamId),
+				)
 				reindexURLs = append(reindexURLs, param.SearchParam.Url)
 			}
-			slog.InfoContext(ctx, fmt.Sprintf("SearchParameter/%s already exists, skipping creation", param.SearchParamId))
+			slog.InfoContext(
+				ctx,
+				"SearchParameter already exists, skipping creation",
+				slog.String("search_parameter_id", param.SearchParamId),
+			)
 			continue
 		}
 
@@ -1307,7 +1356,11 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 			return fmt.Errorf("create SearchParameter %s: %w", param.SearchParamId, err)
 		}
 		reindexURLs = append(reindexURLs, param.SearchParam.Url)
-		slog.InfoContext(ctx, fmt.Sprintf("Created SearchParameter/%s and added to list for batch re-index job.", param.SearchParamId))
+		slog.InfoContext(
+			ctx,
+			"Created SearchParameter and added to list for batch re-index job.",
+			slog.String("search_parameter_id", param.SearchParamId),
+		)
 	}
 
 	if len(reindexURLs) == 0 {
@@ -1326,7 +1379,11 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 	}
 	var response []byte
 	err = fhirClient.CreateWithContext(ctx, reindexParam, &response, fhirclient.AtPath("/$reindex"))
-	slog.InfoContext(ctx, fmt.Sprintf("Reindexing SearchParameter response %s", string(response)))
+	slog.InfoContext(
+		ctx,
+		"Reindexing SearchParameter",
+		slog.String("response", string(response)),
+	)
 	if err != nil {
 		return fmt.Errorf("batch reindex SearchParameter %s: %w", strings.Join(reindexURLs, ","), err)
 	}

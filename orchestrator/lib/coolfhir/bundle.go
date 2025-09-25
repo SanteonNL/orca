@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -163,7 +164,7 @@ func WithAuditEvent(ctx context.Context, t *BundleBuilder, info AuditEventInfo) 
 		// Extract resource type and ID for logging
 		var res Resource
 		if err := json.Unmarshal(entry.Resource, &res); err != nil {
-			slog.ErrorContext(ctx, "Error unmarshalling resource to create audit event", slog.String("error", err.Error()))
+			slog.ErrorContext(ctx, "Error unmarshalling resource to create audit event", slog.String(logging.FieldError, err.Error()))
 			t.Append(FailedBundleEntry{
 				ResourceType: "",
 				ID:           "",
@@ -413,7 +414,7 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 		return fhir.Bundle{}, fmt.Errorf("result bundle is nil")
 	}
 
-	slog.Debug("Executed Bundle successfully", slog.Int("count", len(resultBundle.Entry)))
+	slog.Debug("Executed Bundle successfully", slog.Int(logging.FieldCount, len(resultBundle.Entry)))
 	// The transaction was successfully executed, return the result bundle
 	return resultBundle, nil
 }

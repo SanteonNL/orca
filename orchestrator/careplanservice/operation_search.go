@@ -14,6 +14,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -43,7 +44,7 @@ func (h FHIRSearchOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		attribute.String(otel.OperationName, "Search"),
 	)
 
-	slog.InfoContext(ctx, "Searching", slog.String("resource_type", resourceType))
+	slog.InfoContext(ctx, "Searching", slog.String(logging.FieldResourceType, resourceType))
 	resources, bundle, policyDecisions, err := h.searchAndFilter(ctx, request.QueryParams, request.Principal, resourceType)
 	if err != nil {
 		return nil, otel.Error(span, err, "search and filter failed")
@@ -138,9 +139,9 @@ func (h FHIRSearchOperationHandler[T]) searchAndFilter(ctx context.Context, quer
 		if err != nil {
 			authzErrors++
 			slog.ErrorContext(ctx, "Error checking authz policy",
-				slog.String("error", err.Error()),
-				slog.String("resource_type", resourceType),
-				slog.String("resource_id", resourceID))
+				slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldResourceType, resourceType),
+				slog.String(logging.FieldResourceID, resourceID))
 			continue
 		}
 		if authzDecision.Allowed {

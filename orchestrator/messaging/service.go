@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 // Entity represents a source of messages, such as a topic or queue.
@@ -40,7 +42,7 @@ func New(config Config, sources []Entity) (Broker, error) {
 		broker = NewMemoryBroker()
 	}
 	if config.HTTP.Endpoint != "" {
-		slog.Info("Messaging: sending messages over HTTP", slog.String("endpoint", config.HTTP.Endpoint))
+		slog.Info("Messaging: sending messages over HTTP", slog.String(logging.FieldEndpoint, config.HTTP.Endpoint))
 		broker = NewHTTPBroker(config.HTTP, broker)
 	}
 	return broker, nil

@@ -13,6 +13,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/pkg/errors"
@@ -138,8 +139,9 @@ func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcce
 	slog.InfoContext(
 		ctx,
 		"Sending set for task notifier started",
-		slog.String("task_id", *event.Task.Id),
-		slog.String("endpoint", n.taskAcceptedBundleEndpoint),
+		slog.String(logging.FieldResourceID, *event.Task.Id),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		slog.String(logging.FieldEndpoint, n.taskAcceptedBundleEndpoint),
 	)
 
 	err = sendBundle(ctx, n.taskAcceptedBundleEndpoint, *bundles)
@@ -147,7 +149,7 @@ func (n *notifier) processTaskAcceptedEvent(ctx context.Context, event *TaskAcce
 		var badRequest *BadRequest
 		if errors.As(err, &badRequest) {
 			// Handle BadRequest error specifically
-			slog.WarnContext(ctx, "Task enrollment failed due to bad request", slog.String("error", err.Error()))
+			slog.WarnContext(ctx, "Task enrollment failed due to bad request", slog.String(logging.FieldError, err.Error()))
 			task := event.Task
 			task.Status = fhir.TaskStatusRejected
 			task.StatusReason = &fhir.CodeableConcept{
@@ -200,8 +202,9 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 	slog.InfoContext(
 		ctx,
 		"Sending set for task to HTTP endpoint",
-		slog.String("endpoint", taskAcceptedBundleEndpoint),
-		slog.String("reference", set.task),
+		slog.String(logging.FieldEndpoint, taskAcceptedBundleEndpoint),
+		slog.String(logging.FieldResourceReference, set.task),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
 	)
 
 	// Create HTTP request with context
@@ -219,9 +222,10 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 		slog.ErrorContext(
 			ctx,
 			"Sending set for task to HTTP endpoint failed",
-			slog.String("error", err.Error()),
-			slog.String("endpoint", taskAcceptedBundleEndpoint),
-			slog.String("reference", set.task),
+			slog.String(logging.FieldError, err.Error()),
+			slog.String(logging.FieldEndpoint, taskAcceptedBundleEndpoint),
+			slog.String(logging.FieldResourceReference, set.task),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
 		)
 		return otel.Error(span, errors.Wrap(err, "failed to send task to endpoint"))
 	}
@@ -243,7 +247,7 @@ func sendBundle(ctx context.Context, taskAcceptedBundleEndpoint string, set Bund
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
 		return otel.Error(span, errors.Errorf("failed to send task to endpoint, status code: %d", httpResponse.StatusCode))
 	}
-	slog.InfoContext(ctx, "Notified EHR of accepted Task with bundle", slog.String("reference", set.task))
+	slog.InfoContext(ctx, "Notified EHR of accepted Task with bundle", slog.String(logging.FieldResourceReference, set.task))
 
 	span.SetStatus(codes.Ok, "")
 	return nil

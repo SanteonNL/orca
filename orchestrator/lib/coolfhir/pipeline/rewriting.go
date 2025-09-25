@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 var _ HttpResponseTransformer = &MetaSourceSetter{}
@@ -17,7 +19,7 @@ type MetaSourceSetter struct {
 
 func (m MetaSourceSetter) Transform(_ *int, responseBody *[]byte, _ map[string][]string) {
 	if err := m.do(responseBody); err != nil {
-		slog.Error("MetaSourceSetter: failed to set meta.source", slog.String("error", err.Error()))
+		slog.Error("MetaSourceSetter: failed to set meta.source", slog.String(logging.FieldError, err.Error()))
 	}
 }
 

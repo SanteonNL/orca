@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"go.opentelemetry.io/otel/attribute"
 
@@ -79,7 +80,7 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 		responseBody, err = io.ReadAll(httpResponse.Body)
 	}
 	if err != nil {
-		slog.ErrorContext(ctx, "Failed to marshal pipeline response", slog.String("error", otel.Error(span, err).Error()))
+		slog.ErrorContext(ctx, "Failed to marshal pipeline response", slog.String(logging.FieldError, otel.Error(span, err).Error()))
 		httpResponse.StatusCode = http.StatusInternalServerError
 		responseBody = []byte(`{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"Failed to marshal response"}]}`)
 	}
@@ -97,7 +98,7 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 			slog.ErrorContext(
 				ctx,
 				"Failed to write response",
-				slog.String("error", otel.Error(span, err).Error()),
+				slog.String(logging.FieldError, otel.Error(span, err).Error()),
 				slog.String("body", string(responseBody)),
 			)
 		}

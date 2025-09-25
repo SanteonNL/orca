@@ -37,7 +37,7 @@ func (h ContextHandler) Handle(ctx context.Context, r slog.Record) error {
 	return h.Handler.Handle(ctx, r)
 }
 
-// AppendCtx adds an slog attribute to the provided context so that it will be included in any Record created with such context
+// AppendCtx adds a slog attribute to the provided context so that it will be included in any Record created with such context
 func AppendCtx(parent context.Context, attr slog.Attr) context.Context {
 	if parent == nil {
 		parent = context.Background()

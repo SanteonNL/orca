@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"log/slog"
 	"sync/atomic"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 var _ Broker = &MemoryBroker{}
@@ -36,7 +38,7 @@ func (m *MemoryBroker) SendMessage(_ context.Context, entity Entity, message *Me
 			m.LastHandlerError.Store(&err)
 			slog.WarnContext(ctx, "Handler for entity failed",
 				slog.String("entity_name", entity.Name),
-				slog.String("error", err.Error()),
+				slog.String(logging.FieldError, err.Error()),
 			)
 		}
 	}

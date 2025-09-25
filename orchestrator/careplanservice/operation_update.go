@@ -13,6 +13,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -100,7 +101,12 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	// If no entries found, handle as a create operation
 	if len(searchBundle.Entry) == 0 {
 		span.SetAttributes(attribute.String("fhir.update.operation_mode", "upsert_create"))
-		slog.InfoContext(ctx, fmt.Sprintf("%s not found, handling as create: %s", resourceType, searchParams.Encode()))
+		slog.InfoContext(
+			ctx,
+			"Resource not found, handling as create",
+			slog.String(logging.FieldResourceType, resourceType),
+			slog.String("encoded_search_parameters", searchParams.Encode()),
+		)
 		request.Upsert = true
 		return h.createHandler.Handle(ctx, request, tx)
 	}
@@ -119,8 +125,8 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		if err != nil {
 			slog.ErrorContext(ctx,
 				"Error checking if principal has access to create resource",
-				slog.String("error", otel.Error(span, err, "authorization check failed").Error()),
-				slog.String("resource_type", resourceType),
+				slog.String(logging.FieldError, otel.Error(span, err, "authorization check failed").Error()),
+				slog.String(logging.FieldResourceType, resourceType),
 			)
 		}
 		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
@@ -137,7 +143,13 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	SetCreatorExtensionOnResource(resource, &request.Principal.Organization.Identifier[0])
 
-	slog.InfoContext(ctx, fmt.Sprintf("Updating %s (authz=%s)", request.RequestUrl, strings.Join(authzDecision.Reasons, ";")))
+	slog.InfoContext(
+		ctx,
+		"Updating Resource",
+		slog.String(logging.FieldResourceType, resourceType),
+		slog.Any("url", request.RequestUrl),
+		slog.String(logging.FieldAuthz, strings.Join(authzDecision.Reasons, ";")),
+	)
 
 	idx := len(tx.Entry)
 	resourceBundleEntry := request.bundleEntryWithResource(resource)

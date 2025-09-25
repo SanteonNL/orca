@@ -13,6 +13,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -32,7 +33,12 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	)
 	defer span.End()
 
-	slog.InfoContext(ctx, "Updating Task", slog.Any("url", request.RequestUrl))
+	slog.InfoContext(
+		ctx,
+		"Updating Task",
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		slog.Any("url", request.RequestUrl),
+	)
 	var task fhir.Task
 	var err error
 	if err = json.Unmarshal(request.ResourceData, &task); err != nil {

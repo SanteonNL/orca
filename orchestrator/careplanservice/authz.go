@@ -10,6 +10,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
@@ -211,8 +212,9 @@ func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource *T, pri
 	//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
 	if err != nil {
 		slog.WarnContext(ctx, "Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource",
-			slog.String("carePlanID", *carePlan.Id),
-			slog.String("error", err.Error()),
+			slog.String(logging.FieldResourceID, *carePlan.Id),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeCarePlan.String()),
+			slog.String(logging.FieldError, err.Error()),
 		)
 		return &PolicyDecision{
 			Allowed: false,

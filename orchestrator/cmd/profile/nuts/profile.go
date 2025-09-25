@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
@@ -151,7 +152,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		return nil, fmt.Errorf("unsupported server identity system: %s", *serverIdentity.System)
 	}
 
-	slog.DebugContext(ctx, "Using OAuth2 Authorization Server", slog.String("url", authzServerURL))
+	slog.DebugContext(ctx, "Using OAuth2 Authorization Server", slog.String(logging.FieldUrl, authzServerURL))
 	parsedAuthzServerURL, err := url.Parse(authzServerURL)
 	if err != nil {
 		return nil, err
@@ -208,7 +209,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 	if time.Since(d.identitiesRefreshedAt[tenant.ID]) > identitiesCacheTTL || len(d.cachedIdentities[tenant.ID]) == 0 {
 		identifiers, err := d.identities(ctx, tenant.Nuts.Subject)
 		if err != nil {
-			slog.WarnContext(ctx, "Failed to refresh local identities using Nuts node", slog.String("error", err.Error()))
+			slog.WarnContext(ctx, "Failed to refresh local identities using Nuts node", slog.String(logging.FieldError, err.Error()))
 			if d.cachedIdentities == nil {
 				// If we don't have a cached value, we can't return anything, so return the error.
 				return nil, fmt.Errorf("failed to load local identities: %w", err)
@@ -258,7 +259,7 @@ func (d DutchNutsProfile) identities(ctx context.Context, subject string) ([]fhi
 	for _, cred := range *response.JSON200 {
 		identities, err := d.identifiersFromCredential(cred)
 		if err != nil {
-			slog.WarnContext(ctx, "Failed to extract identities from credential", slog.String("error", err.Error()), slog.String("id", cred.ID.String()))
+			slog.WarnContext(ctx, "Failed to extract identities from credential", slog.String(logging.FieldError, err.Error()), slog.String("id", cred.ID.String()))
 			continue
 		}
 		results = append(results, identities...)

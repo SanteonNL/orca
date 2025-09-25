@@ -12,6 +12,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/audit"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -57,8 +58,8 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 		if err != nil {
 			otel.Error(span, err, "authorization check failed")
 			slog.ErrorContext(ctx, "Error checking if principal has access to resource",
-				slog.String("error", err.Error()),
-				slog.String("resource_type", resourceType))
+				slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldResourceType, resourceType))
 		}
 		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant does not have access to %s", resourceType),
@@ -73,9 +74,9 @@ func (h FHIRReadOperationHandler[T]) Handle(ctx context.Context, request FHIRHan
 	)
 
 	slog.InfoContext(ctx, "Getting resource",
-		slog.String("resource_type", resourceType),
-		slog.String("resource_id", request.ResourceId),
-		slog.String("authz", strings.Join(authzDecision.Reasons, ";")))
+		slog.String(logging.FieldResourceType, resourceType),
+		slog.String(logging.FieldResourceID, request.ResourceId),
+		slog.String(logging.FieldAuthz, strings.Join(authzDecision.Reasons, ";")))
 	updateMetaSource(resource, request.BaseURL)
 
 	resourceRaw, err := json.Marshal(resource)

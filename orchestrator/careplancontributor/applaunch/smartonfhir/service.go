@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -173,7 +174,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Request) {
 	// TODO: check whether the issuer is trusted
 	issuer := request.URL.Query().Get("iss")
-	slog.InfoContext(request.Context(), "SMART on FHIR app launch request", slog.String("url", request.URL.String()))
+	slog.InfoContext(request.Context(), "SMART on FHIR app launch request", slog.String(logging.FieldUrl, request.URL.String()))
 	if len(issuer) == 0 {
 		s.SendError(request.Context(), issuer, errors.New("invalid iss parameter"), response, http.StatusBadRequest)
 		return
@@ -394,7 +395,7 @@ func (s *Service) handleGetJWKs(httpResponse http.ResponseWriter, httpRequest *h
 	httpResponse.WriteHeader(http.StatusOK)
 	_, err := httpResponse.Write(jsonBytes)
 	if err != nil {
-		slog.WarnContext(httpRequest.Context(), "Failed to write JWKSet response", slog.String("error", err.Error()))
+		slog.WarnContext(httpRequest.Context(), "Failed to write JWKSet response", slog.String(logging.FieldError, err.Error()))
 		return
 	}
 }
@@ -406,7 +407,7 @@ func (s *Service) SendError(ctx context.Context, issuer string, err error, httpR
 		"SMART on FHIR launch failed",
 		slog.String("issuer", issuer),
 		slog.String("launch_id", launchId),
-		slog.String("error", err.Error()),
+		slog.String(logging.FieldError, err.Error()),
 	)
 	// TODO: nice error page
 	msg := "SMART on FHIR launch failed (id=" + launchId + ")"
