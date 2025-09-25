@@ -309,6 +309,7 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 			},
 		},
 	}
+	log.Ctx(ctx).Debug().Msgf("SMART on FHIR practitioner: %s %s (id=%s)", userFirstName, userLastName, *practitioner.Id)
 
 	if !strings.HasPrefix(patientID, "Patient/") {
 		// If the patient ID is not prefixed with "Patient/", we assume it's just the ID and prefix it.
