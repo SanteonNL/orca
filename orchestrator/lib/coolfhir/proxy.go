@@ -356,24 +356,6 @@ func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 			slog.String("body", string(responseBody)),
 		)
 		response.Body = io.NopCloser(bytes.NewReader(responseBody))
-	} else {
-		if slog.Default().Enabled(ctx, slog.LevelDebug) {
-			var headers []string
-			for key, values := range response.Header {
-				headers = append(headers, fmt.Sprintf("(%s: %s)", key, strings.Join(values, ", ")))
-			}
-			responseBody, err := io.ReadAll(response.Body)
-			if err != nil {
-				return nil, err
-			}
-			slog.DebugContext(ctx, "RoundTrip response",
-				slog.String("name", l.Name),
-				slog.String("status", response.Status),
-				slog.String("headers", strings.Join(headers, ", ")),
-				slog.String("body", string(responseBody)),
-			)
-			response.Body = io.NopCloser(bytes.NewReader(responseBody))
-		}
 	}
 	return response, err
 }
