@@ -356,6 +356,7 @@ func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 				slog.String("headers", strings.Join(headers, ", ")),
 				slog.String("body", string(responseBody)),
 			)
+			response.Body = io.NopCloser(bytes.NewReader(responseBody))
 		}
 	}
 	return response, err
