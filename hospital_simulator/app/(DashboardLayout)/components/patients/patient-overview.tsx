@@ -3,7 +3,7 @@ import CreatePatientDialog from './create-patient-dialog';
 import PatientTable from './patient-table';
 import {Bundle, Identifier, Patient} from 'fhir/r4';
 import CreatePractitioner from "@/app/(DashboardLayout)/practitioner";
-import {DefaultAzureCredential} from '@azure/identity';
+import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 export default async function PatientOverview() {
 
@@ -13,28 +13,10 @@ export default async function PatientOverview() {
     }
     await CreatePractitioner();
 
-    // Get authentication token for Azure FHIR if not in local environment
-    let token: string | null = null;
-    const fhirUrl = process.env.FHIR_BASE_URL || '';
-    if (!fhirUrl.includes('localhost') && !fhirUrl.includes('fhirstore')) {
-        try {
-            const credential = new DefaultAzureCredential();
-            const tokenResponse = await credential.getToken(`${fhirUrl}/.default`);
-            token = tokenResponse.token;
-        } catch (error) {
-            console.error('Azure authentication failed:', error);
-            throw error;
-        }
-    }
-
-    const headers: HeadersInit = {
+    const headers = await addFhirAuthHeaders({
         "Cache-Control": "no-cache",
         "Content-Type": "application/x-www-form-urlencoded"
-    };
-
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
+    });
 
     const searchResponse = await fetch(`${process.env.FHIR_BASE_URL}/Patient/_search`, {
         method: 'POST',

@@ -3,7 +3,7 @@ import CreateServiceRequestDialog from './create-service-request-dialog';
 import ServiceRequestTable from './service-request-table';
 import {Bundle, ServiceRequest} from 'fhir/r4';
 import {ReadPatient} from "@/utils/fhir";
-import {DefaultAzureCredential} from '@azure/identity';
+import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 type Input = {
     patientID: string
@@ -15,27 +15,9 @@ export default async function Overview(props: Input) {
         return <>FHIR_BASE_URL is not defined</>;
     }
 
-    // Get authentication token for Azure FHIR if not in local environment
-    let token: string | null = null;
-    const fhirUrl = process.env.FHIR_BASE_URL || '';
-    if (!fhirUrl.includes('localhost') && !fhirUrl.includes('fhirstore')) {
-        try {
-            const credential = new DefaultAzureCredential();
-            const tokenResponse = await credential.getToken(`${fhirUrl}/.default`);
-            token = tokenResponse.token;
-        } catch (error) {
-            console.error('Azure authentication failed:', error);
-            throw error;
-        }
-    }
-
-    const headers: HeadersInit = {
+    const headers = await addFhirAuthHeaders({
         "Cache-Control": "no-cache"
-    };
-
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
+    });
 
     const response = await fetch(`${process.env.FHIR_BASE_URL}/ServiceRequest?patient=Patient/${props.patientID}&_count=500`, {
         cache: 'no-store',

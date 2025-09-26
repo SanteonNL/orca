@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { DefaultAzureCredential } from '@azure/identity';
+import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 export async function POST(req: NextRequest) {
     try {
@@ -11,26 +11,9 @@ export async function POST(req: NextRequest) {
 
         console.log(`Forwarding Bundle POST request to ${fhirBaseUrl}`)
 
-        // Get authentication token for Azure FHIR if not in local environment
-        let token: string | null = null;
-        if (!fhirBaseUrl.includes('localhost') && !fhirBaseUrl.includes('fhirstore')) {
-            try {
-                const credential = new DefaultAzureCredential();
-                const tokenResponse = await credential.getToken(`${fhirBaseUrl}/.default`);
-                token = tokenResponse.token;
-            } catch (error) {
-                console.error('Azure authentication failed:', error);
-                return NextResponse.json({ message: 'Azure authentication failed', error: error }, { status: 500 });
-            }
-        }
-
-        const headers: HeadersInit = {
+        const headers = await addFhirAuthHeaders({
             'Content-Type': 'application/json',
-        };
-
-        if (token) {
-            headers['Authorization'] = `Bearer ${token}`;
-        }
+        });
 
         // Forward the request to the FHIR server
         const response = await fetch(fhirBaseUrl, {

@@ -1,31 +1,14 @@
 "use server"
 
 import {Bundle, Organization} from "fhir/r4"
-import {DefaultAzureCredential} from '@azure/identity';
+import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 export const getEnrollmentUrl = async (patientId: string, serviceRequestId: string | undefined) => {
     if (!process.env.TENANT_ID) {
         throw new Error('TENANT_ID is not defined');
     }
 
-    // Get authentication token for Azure FHIR if not in local environment
-    let token: string | null = null;
-    const fhirUrl = process.env.FHIR_BASE_URL || '';
-    if (!fhirUrl.includes('localhost') && !fhirUrl.includes('fhirstore')) {
-        try {
-            const credential = new DefaultAzureCredential();
-            const tokenResponse = await credential.getToken(`${fhirUrl}/.default`);
-            token = tokenResponse.token;
-        } catch (error) {
-            console.error('Azure authentication failed:', error);
-            throw error;
-        }
-    }
-
-    const headers: HeadersInit = {};
-    if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-    }
+    const headers = await addFhirAuthHeaders();
 
     const practitioners = await fetch(`${process.env.FHIR_BASE_URL}/Practitioner`, {
         headers: headers
