@@ -24,7 +24,7 @@ require (
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250508174153-3ca2640a22ea
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.37.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.37.0
-	go.opentelemetry.io/otel/sdk v1.37.0
+	go.opentelemetry.io/otel/sdk v1.38.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/oauth2 v0.30.0
 )
