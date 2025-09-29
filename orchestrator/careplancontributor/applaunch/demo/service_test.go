@@ -1,6 +1,12 @@
 package demo
 
 import (
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+	"time"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -8,11 +14,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"testing"
-	"time"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
@@ -81,6 +83,25 @@ func TestService_handle(t *testing.T) {
 		require.Equal(t, "ServiceRequest/b", sessionData.GetByType("ServiceRequest").Path)
 		require.Equal(t, "Practitioner/c", sessionData.GetByType("Practitioner").Path)
 		require.Equal(t, "unit-test-system|10", *sessionData.TaskIdentifier)
+	})
+	t.Run("path traversal is disallowed", func(t *testing.T) {
+		sessionManager := user.NewSessionManager[session.Data](time.Minute)
+		service := Service{
+			sessionManager: sessionManager, orcaPublicURL: must.ParseURL("/"),
+			frontendLandingUrl: must.ParseURL("/cpc/"),
+			ehrFHIRClientFactory: func(fhirBaseURL *url.URL, _ *http.Client) fhirclient.Client {
+				return fhirclient.New(fhirBaseURL, nil, nil)
+			},
+			profile: profile.TestProfile{Principal: auth.TestPrincipal1},
+			tenants: tenantCfg,
+		}
+		response := httptest.NewRecorder()
+		request := httptest.NewRequest("GET", "/demo-app-launch?patient=../Patient/a&serviceRequest=../ServiceRequest/b&practitioner=../Practitioner/c&tenant="+tenant.ID+"&taskIdentifier=unit-test-system|10", nil)
+
+		service.handle(response, request)
+
+		require.Equal(t, http.StatusBadRequest, response.Code)
+		assert.Contains(t, response.Body.String(), "FHIR request URL is outside the base URL hierarchy")
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)
