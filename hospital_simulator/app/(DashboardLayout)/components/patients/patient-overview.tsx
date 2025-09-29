@@ -3,7 +3,6 @@ import CreatePatientDialog from './create-patient-dialog';
 import PatientTable from './patient-table';
 import {Bundle, Identifier, Patient} from 'fhir/r4';
 import CreatePractitioner from "@/app/(DashboardLayout)/practitioner";
-import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 export default async function PatientOverview() {
 
@@ -13,15 +12,13 @@ export default async function PatientOverview() {
     }
     await CreatePractitioner();
 
-    const headers = await addFhirAuthHeaders({
-        "Cache-Control": "no-cache",
-        "Content-Type": "application/x-www-form-urlencoded"
-    });
-
     const searchResponse = await fetch(`${process.env.FHIR_BASE_URL}/Patient/_search`, {
         method: 'POST',
         cache: 'no-store',
-        headers: headers,
+        headers: {
+            "Cache-Control": "no-cache",
+            "Content-Type": "application/x-www-form-urlencoded"
+        },
         body: new URLSearchParams({
             "_count": "500"
         })

@@ -1,4 +1,21 @@
-import { addFhirAuthHeaders } from '@/utils/azure-auth';
+import {DefaultAzureCredential} from '@azure/identity';
+
+async function authenticateWithDefaultCredential() {
+    const fhirUrl = process.env.FHIR_BASE_URL || '';
+    if (fhirUrl.includes('localhost') || fhirUrl.includes('fhirstore')) {
+        return null;
+    }
+
+    try {
+        const credential = new DefaultAzureCredential();
+        const tokenResponse = await credential.getToken(`${fhirUrl}/.default`);
+
+        return tokenResponse.token;
+    } catch (error) {
+        console.error('authenticateWithDefaultCredential authentication failed:', error);
+        throw error;
+    }
+}
 
 export default async function CreatePractitioner() {
     // Create the following resource:
@@ -92,9 +109,14 @@ export default async function CreatePractitioner() {
 
 
     const requestURL = `${process.env.FHIR_BASE_URL}/`;
-    const headers = await addFhirAuthHeaders({
+    const token = await authenticateWithDefaultCredential();
+    const headers: HeadersInit = {
         "Content-Type": "application/json"
-    });
+    };
+
+    if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+    }
 
     console.log(`Sending Practitioner and PractitionerRole creation request to: ${requestURL}`);
     const response = await fetch(requestURL, {

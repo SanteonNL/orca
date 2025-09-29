@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
-type Params = Promise<{ id: string[] }>
+type Params = Promise<{ id: string }>
 
 export async function PATCH(req: NextRequest, { params }: { params: Params }) {
     try {
@@ -12,16 +11,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Params }) {
         }
 
         const patchData = await req.json(); // Extract the patch data from the request body
-        const { id: idArray } = await params; // Extract the ServiceRequest ID array from the URL
-        const id = idArray[0]; // Get the first element since we expect a single ID
-
-        const headers = await addFhirAuthHeaders({
-            'Content-Type': 'application/json-patch+json'
-        });
+        const { id } = await params; // Extract the ServiceRequest ID from the URL
 
         const patchResponse = await fetch(`${fhirBaseUrl}/ServiceRequest/${id}`, {
             method: 'PATCH',
-            headers: headers,
+            headers: { 'Content-Type': 'application/json-patch+json' },
             body: JSON.stringify(patchData), // Send the patch data
         });
 
