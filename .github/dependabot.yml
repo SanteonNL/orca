@@ -28,7 +28,5 @@ updates:
   - package-ecosystem: "npm"
     directories:
       - "/frontend"
-      - "/hospital_simulator"
-      - "/viewer_simulator"
     schedule:
       interval: "daily"
