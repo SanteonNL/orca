@@ -1,0 +1,43 @@
+<Assertion ID="_{{ASSERTION_ID}}" IssueInstant="{{CURRENT_DATETIME}}" Version="2.0"
+           xmlns="urn:oasis:names:tc:SAML:2.0:assertion">
+    <Issuer>{{ISSUER}}</Issuer>
+    <Subject>
+        <NameID>{{USER_ID}}@{{ORG_ID}}</NameID>
+        <SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"/>
+    </Subject>
+    <Conditions NotBefore="{{NOTBEFORE_DATETIME}}" NotOnOrAfter="{{NOTAFTER_DATETIME}}">
+        <AudienceRestriction>
+            <Audience>{{AUDIENCE}}</Audience>
+        </AudienceRestriction>
+    </Conditions>
+    <AttributeStatement>
+        <Attribute Name="urn:oasis:names:tc:xspa:1.0:subject:purposeofuse">
+            <AttributeValue>
+                <PurposeOfUse code="TREATMENT" codeSystem="2.16.840.1.113883.3.18.7.1" codeSystemName="nhin-purpose"
+                              displayName="" xmlns="urn:hl7-org:v3"/>
+            </AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xacml:2.0:subject:role">
+            <AttributeValue>
+                <Role code="223366009" codeSystem="2.16.840.1.113883.6.96" codeSystemName="SNOMED_CT" displayName=""
+                      xmlns="urn:hl7-org:v3"/>
+            </AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xacml:1.0:resource:resource-id">
+            <AttributeValue>
+                <InstanceIdentifier root="2.16.840.1.113883.2.4.6.3" extension="{{PATIENT_BSN}}" xmlns="urn:hl7-org:v3"/>
+            </AttributeValue>
+        </Attribute>
+        <Attribute Name="urn:oasis:names:tc:xspa:1.0:subject:organization-id">
+            <AttributeValue>{{ORG_ID}}</AttributeValue>
+        </Attribute>
+        <Attribute Name="http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id">
+            <AttributeValue>{{WORKFLOW_ID}}</AttributeValue>
+        </Attribute>
+    </AttributeStatement>
+    <AuthnStatement AuthnInstant="{{CURRENT_DATETIME}}">
+        <AuthnContext>
+            <AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:X509</AuthnContextClassRef>
+        </AuthnContext>
+    </AuthnStatement>
+</Assertion>
