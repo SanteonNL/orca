@@ -1,18 +1,13 @@
 "use server"
 
 import {Bundle, Organization} from "fhir/r4"
-import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 export const getEnrollmentUrl = async (patientId: string, serviceRequestId: string | undefined) => {
     if (!process.env.TENANT_ID) {
         throw new Error('TENANT_ID is not defined');
     }
 
-    const headers = await addFhirAuthHeaders();
-
-    const practitioners = await fetch(`${process.env.FHIR_BASE_URL}/Practitioner`, {
-        headers: headers
-    })
+    const practitioners = await fetch(`${process.env.FHIR_BASE_URL}/Practitioner`)
     if (!practitioners.ok) {
         throw new Error(`Failed to fetch ${process.env.FHIR_BASE_URL}/Practitioner: ${practitioners.statusText}`)
     }

@@ -1,6 +1,4 @@
-import { addFhirAuthHeaders } from '@/utils/azure-auth';
-
-export default async function CreatePractitioner() {
+export default async function CreatePractitioner(){
     // Create the following resource:
     const bundle = {
         "resourceType": "Bundle",
@@ -90,17 +88,14 @@ export default async function CreatePractitioner() {
         ]
     };
 
-
     const requestURL = `${process.env.FHIR_BASE_URL}/`;
-    const headers = await addFhirAuthHeaders({
-        "Content-Type": "application/json"
-    });
-
     console.log(`Sending Practitioner and PractitionerRole creation request to: ${requestURL}`);
     const response = await fetch(requestURL, {
         method: "POST",
         cache: 'no-store',
-        headers: headers,
+        headers: {
+            "Content-Type": "application/json"
+        },
         body: JSON.stringify(bundle)
     });
     if (!response.ok) {

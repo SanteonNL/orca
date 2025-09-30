@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 export async function POST(req: NextRequest) {
     try {
@@ -11,14 +10,12 @@ export async function POST(req: NextRequest) {
 
         console.log(`Forwarding Bundle POST request to ${fhirBaseUrl}`)
 
-        const headers = await addFhirAuthHeaders({
-            'Content-Type': 'application/json',
-        });
-
         // Forward the request to the FHIR server
         const response = await fetch(fhirBaseUrl, {
             method: 'POST',
-            headers: headers,
+            headers: {
+                'Content-Type': 'application/json',
+            },
             body: await req.text(), // Pass the request body directly
         });
 
