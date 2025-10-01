@@ -42,8 +42,9 @@ func New(sessionManager *user.SessionManager[session.Data], config Config, tenan
 		frontendLandingUrl: frontendLandingUrl,
 		profile:            profile,
 		tenants:            tenants,
-		ehrFHIRClientFactory: func(baseURL *url.URL, httpClient *http.Client) fhirclient.Client {
-			return fhirclient.New(baseURL, httpClient, coolfhir.Config())
+		ehrFHIRClientFactory: func(config coolfhir.ClientConfig) (fhirclient.Client, error) {
+			_, client, err := coolfhir.NewAuthRoundTripper(config, coolfhir.Config())
+			return client, err
 		},
 	}
 }
@@ -54,7 +55,7 @@ type Service struct {
 	tenants              tenants.Config
 	orcaPublicURL        *url.URL
 	frontendLandingUrl   *url.URL
-	ehrFHIRClientFactory func(*url.URL, *http.Client) fhirclient.Client
+	ehrFHIRClientFactory func(config coolfhir.ClientConfig) (fhirclient.Client, error)
 	profile              profile.Provider
 }
 
@@ -101,8 +102,13 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		s.sessionManager.Destroy(response, request)
 	}
 
-	ehrFHIRClientProps := clients.Factories[fhirLauncherKey](sessionData.LauncherProperties)
-	ehrFHIRClient := s.ehrFHIRClientFactory(ehrFHIRClientProps.BaseURL, &http.Client{Transport: ehrFHIRClientProps.Client})
+	// Create FHIR client using the factory
+	ehrFHIRClient, err := s.ehrFHIRClientFactory(tenant.Demo.FHIR)
+	if err != nil {
+		slog.ErrorContext(request.Context(), "Failed to create FHIR client", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, "Failed to create FHIR client: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	var practitioner fhir.Practitioner
 	if err := ehrFHIRClient.Read(values["practitioner"], &practitioner); err != nil {
