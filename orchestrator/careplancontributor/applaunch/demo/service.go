@@ -1,6 +1,8 @@
 package demo
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -27,9 +29,36 @@ func init() {
 	// Register FHIR client factory that can create FHIR clients when the Demo AppLaunch is used
 	clients.Factories[fhirLauncherKey] = func(properties map[string]string) clients.ClientProperties {
 		fhirServerURL, _ := url.Parse(properties["iss"])
+
+		fhirConfigJSON, ok := properties["fhir_config"]
+		if !ok {
+			return clients.ClientProperties{
+				BaseURL: fhirServerURL,
+				Client:  http.DefaultTransport,
+			}
+		}
+
+		var fhirConfig coolfhir.ClientConfig
+		err := json.Unmarshal([]byte(fhirConfigJSON), &fhirConfig)
+
+		if err != nil {
+			slog.ErrorContext(context.Background(), "Failed to unmarshal serialized FHIR config", slog.String(logging.FieldError, err.Error()))
+			return clients.ClientProperties{
+				BaseURL: fhirServerURL,
+				Client:  http.DefaultTransport,
+			}
+		}
+		transport, _, err := coolfhir.NewAuthRoundTripper(fhirConfig, coolfhir.Config())
+		if err != nil {
+			slog.Error("Failed to create authenticated FHIR transport", slog.String(logging.FieldError, err.Error()))
+			return clients.ClientProperties{
+				BaseURL: fhirServerURL,
+				Client:  http.DefaultTransport,
+			}
+		}
 		return clients.ClientProperties{
 			BaseURL: fhirServerURL,
-			Client:  http.DefaultTransport,
+			Client:  transport,
 		}
 	}
 }
@@ -82,11 +111,20 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		http.Error(response, "App launch failed: FHIR base URL is not configured for tenant "+tenant.ID, http.StatusBadRequest)
 		return
 	}
+	// Serialize FHIR config to pass authentication settings to the factory
+	fhirConfigJSON, err := json.Marshal(tenant.Demo.FHIR)
+	if err != nil {
+		slog.ErrorContext(request.Context(), "Failed to serialize FHIR config", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, "Failed to serialize FHIR config: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	sessionData := session.Data{
 		FHIRLauncher: fhirLauncherKey,
 		TenantID:     tenant.ID,
 		LauncherProperties: map[string]string{
-			"iss": tenant.Demo.FHIR.BaseURL,
+			"iss":         tenant.Demo.FHIR.BaseURL,
+			"fhir_config": string(fhirConfigJSON),
 		},
 	}
 	sessionData.Set(values["serviceRequest"], nil)
