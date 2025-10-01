@@ -301,7 +301,6 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 				slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
 				slog.String(logging.FieldError, otel.Error(span, err, err.Error()).Error()),
 			)
-			otel.Error(span, err, err.Error())
 			return nil
 		} else {
 			notificationSent = true
