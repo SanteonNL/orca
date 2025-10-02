@@ -50,7 +50,7 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		return err
 	}
 	if !tenant.TaskEngine.Enabled {
-		slog.DebugContext(
+		slog.InfoContext(
 			ctx,
 			"TaskEngine is disabled for this tenant - skipping Task notification handling",
 			slog.String(logging.FieldResourceID, *task.Id),
@@ -59,7 +59,12 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		return nil
 	}
 
-	slog.InfoContext(ctx, "Running TaskEngine for notification", slog.String(logging.FieldResourceID, *task.Id))
+	slog.InfoContext(
+		ctx,
+		"Running TaskEngine for notification",
+		slog.String(logging.FieldResourceID, *task.Id),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+	)
 	ctx, span := tracer.Start(
 		ctx,
 		debug.GetFullCallerName(),
@@ -121,7 +126,13 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		)
 		// Check if the primary task is "created", its status will be updated by subtasks that are completed - not directly here
 		if task.Status != fhir.TaskStatusRequested {
-			slog.DebugContext(ctx, "primary Task.status != requested (workflow already started) - not processing in handleTaskNotification")
+			slog.InfoContext(
+				ctx,
+				"primary Task.status != requested (workflow already started) - not processing in handleTaskNotification",
+				slog.String(logging.FieldResourceID, *task.Id),
+				slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+				slog.String("task_status", task.Status.String()),
+			)
 			span.SetStatus(codes.Ok, "Primary task status not requested, skipping")
 			return nil
 		}
@@ -135,7 +146,12 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 			return nil
 		}
 
-		slog.InfoContext(ctx, "Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it.")
+		slog.InfoContext(
+			ctx,
+			"Task is a 'primary' task, checking if more information is needed via a Questionnaire, or if we can accept it",
+			slog.String(logging.FieldResourceID, *task.Id),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		)
 		err = s.createSubTaskOrAcceptPrimaryTask(ctx, cpsClient, task, task, localIdentifiers)
 		if err != nil {
 			return otel.Error(span, fmt.Errorf("failed to process new primary Task: %w", err), err.Error())
@@ -158,6 +174,12 @@ func (s *Service) handleTaskNotification(ctx context.Context, cpsClient fhirclie
 		}
 	}
 
+	slog.InfoContext(
+		ctx,
+		"Finished processing Task notification",
+		slog.String(logging.FieldResourceID, *task.Id),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+	)
 	span.SetStatus(codes.Ok, "")
 	return nil
 }
@@ -177,7 +199,7 @@ func (s *Service) handleSubtaskNotification(ctx context.Context, cpsClient fhirc
 	defer span.End()
 
 	if task.Status != fhir.TaskStatusCompleted {
-		slog.DebugContext(ctx, "Task.status is not completed - skipping")
+		slog.InfoContext(ctx, "Task.status is not completed - skipping")
 		span.SetStatus(codes.Ok, "Task status not completed, skipping")
 		return nil
 	}
@@ -286,11 +308,12 @@ func (s *Service) acceptPrimaryTask(ctx context.Context, cpsClient fhirclient.Cl
 	}
 	span.SetAttributes(attribute.Bool("notification.sent", notificationSent))
 
-	slog.DebugContext(
+	slog.InfoContext(
 		ctx,
 		"Successfully accepted Task",
 		slog.String(logging.FieldResourceReference, ref),
 		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		slog.String("endpoint", cpsClient.Path().String()),
 	)
 
 	span.SetStatus(codes.Ok, "")
@@ -369,14 +392,32 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 	span.SetAttributes(attribute.Bool("workflow.found", workflowFound))
 
 	if workflow != nil {
+		slog.InfoContext(
+			ctx,
+			"Found workflow for Task",
+			slog.String(logging.FieldResourceID, *task.Id),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		)
 		var nextStep *taskengine.WorkflowStep
 		if isPrimaryTask {
+			slog.InfoContext(
+				ctx,
+				"Primary Task - starting workflow",
+				slog.String(logging.FieldResourceID, *task.Id),
+				slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+			)
 			nextStep = new(taskengine.WorkflowStep)
 			*nextStep = workflow.Start()
 			span.SetAttributes(attribute.String("workflow.step_type", "start"))
 		} else {
 			// For subtasks, we need to make sure it's completed, and if so, find out if more Questionnaires are needed.
 			// We do this by fetching the Questionnaire, and comparing it's url value to the followUpQuestionnaireMap
+			slog.InfoContext(
+				ctx,
+				"SubTask - proceeding in workflow",
+				slog.String(logging.FieldResourceID, *task.Id),
+				slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+			)
 			if task.Status != fhir.TaskStatusCompleted {
 				slog.InfoContext(ctx, "SubTask is not completed - skipping")
 			}
@@ -414,7 +455,7 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 		// TODO: If we can't perform the next step, we should mark the primary task as failed?
 		if nextStep != nil {
 			span.SetAttributes(attribute.String("questionnaire.next_url", nextStep.QuestionnaireUrl))
-			slog.DebugContext(ctx, "Found next step in workflow, loading questionnaire", slog.String("next_url", nextStep.QuestionnaireUrl))
+			slog.InfoContext(ctx, "Found next step in workflow, loading questionnaire", slog.String("next_url", nextStep.QuestionnaireUrl))
 			questionnaire, err = s.workflows.QuestionnaireLoader().Load(ctx, nextStep.QuestionnaireUrl)
 			if err != nil {
 				rejection := &TaskRejection{
@@ -429,6 +470,12 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 	// No follow-up questionnaire found, check if we can accept the primary Task
 	if questionnaire == nil {
 		span.SetAttributes(attribute.String("task.outcome", "accept_or_skip"))
+		slog.InfoContext(
+			ctx,
+			"No follow-up questionnaire found in workflow, checking if we can accept the primary Task",
+			slog.String(logging.FieldResourceID, *task.Id),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		)
 
 		if task.PartOf == nil {
 			// TODO: reject here: nothing more to do
@@ -443,6 +490,13 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 		isPrimaryTaskOwner, _ := coolfhir.IsIdentifierTaskOwnerAndRequester(primaryTask, localOrgIdentifiers)
 		span.SetAttributes(attribute.Bool("task.is_primary_task_owner", isPrimaryTaskOwner))
 		if isPrimaryTaskOwner {
+			slog.InfoContext(
+				ctx,
+				"Owner of the primary task - marking as accepted",
+				slog.String(logging.FieldResourceID, *task.Id),
+				slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+			)
+			// Mark the primary task as accepted
 			err := s.acceptPrimaryTask(ctx, cpsClient, primaryTask)
 			if err != nil {
 				return otel.Error(span, err, err.Error())
@@ -451,6 +505,12 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 			}
 			return err
 		} else {
+			slog.InfoContext(
+				ctx,
+				"Not the owner of the primary task - cannot mark as accepted, skipping",
+				slog.String(logging.FieldResourceID, *task.Id),
+				slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+			)
 			span.SetStatus(codes.Ok, "Not primary task owner, skipping")
 			return nil
 		}
@@ -461,6 +521,14 @@ func (s *Service) createSubTaskOrAcceptPrimaryTask(ctx context.Context, cpsClien
 		attribute.String("task.outcome", "create_subtask"),
 		attribute.String("questionnaire.id", to.Value(questionnaire.Id)),
 	)
+	slog.InfoContext(
+		ctx,
+		"Creating subtask based on Questionnaire",
+		slog.String(logging.FieldResourceID, *task.Id),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		slog.String("questionnaire_id", to.Value(questionnaire.Id)),
+	)
+
 	questionnaireRef := "Questionnaire/" + *questionnaire.Id
 	subtask := s.getSubTask(primaryTask, questionnaireRef)
 	subtaskRef := "urn:uuid:" + *subtask.Id
