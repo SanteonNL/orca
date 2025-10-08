@@ -427,12 +427,14 @@ func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[sess
 // If there's no active session, it returns a 401 Unauthorized response.
 func (s Service) withSession(next func(response http.ResponseWriter, request *http.Request, session *session.Data)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
-		sessionData := s.SessionManager.Get(request)
-		if sessionData == nil {
-			http.Error(response, "no session found", http.StatusUnauthorized)
-			return
-		}
-		next(response, request, sessionData)
+		s.withUserAuth(func(response http.ResponseWriter, request *http.Request) {
+			sessionData := s.SessionManager.Get(request)
+			if sessionData == nil {
+				http.Error(response, "no session found", http.StatusUnauthorized)
+				return
+			}
+			next(response, request, sessionData)
+		})(response, request)
 	}
 }
 
@@ -615,8 +617,23 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 
 func (s Service) withUserAuth(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
+		// Determine if the request is scoped to a tenant (/cpc/{tenant}/...).
+		var tenant *tenants.Properties
+		if request.PathValue("tenant") != "" {
+			tenantValue, err := tenants.FromContext(request.Context())
+			if err != nil {
+				http.Error(response, "failed to determine tenant: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			tenant = &tenantValue
+		}
+
 		// Session will be present for FE requests
-		if s.SessionManager.Get(request) != nil {
+		if data := s.SessionManager.Get(request); data != nil {
+			if tenant != nil && data.TenantID != tenant.ID {
+				http.Error(response, "session tenant does not match request tenant", http.StatusForbidden)
+				return
+			}
 			next(response, request)
 			return
 		}
