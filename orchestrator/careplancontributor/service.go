@@ -427,7 +427,12 @@ func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[sess
 // If there's no active session, it returns a 401 Unauthorized response.
 func (s Service) withSession(next func(response http.ResponseWriter, request *http.Request, session *session.Data)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
-		sessionData := s.SessionManager.Get(request)
+		sessionData, err := s.getAndValidateUserSession(request)
+		if err != nil {
+			// Invalid session/request
+			http.Error(response, err.Error(), http.StatusForbidden)
+			return
+		}
 		if sessionData == nil {
 			http.Error(response, "no session found", http.StatusUnauthorized)
 			return
@@ -613,10 +618,38 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 	_ = json.NewEncoder(response).Encode(contextData)
 }
 
+func (s Service) getAndValidateUserSession(request *http.Request) (*session.Data, error) {
+	// Determine if the request is scoped to a tenant (/cpc/{tenant}/...).
+	var tenant *tenants.Properties
+	if request.PathValue("tenant") != "" {
+		tenantValue, err := tenants.FromContext(request.Context())
+		if err != nil {
+			return nil, errors.New("failed to determine tenant from request")
+		}
+		tenant = &tenantValue
+	}
+
+	// Get session, and if there is one, make sure it matches the tenant (if any)
+	if data := s.SessionManager.Get(request); data != nil {
+		if tenant != nil && data.TenantID != tenant.ID {
+			return nil, errors.New("session tenant does not match request tenant")
+		}
+		return data, nil
+	}
+	// No user session found
+	return nil, nil
+}
+
 func (s Service) withUserAuth(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
-		// Session will be present for FE requests
-		if s.SessionManager.Get(request) != nil {
+		sessionData, err := s.getAndValidateUserSession(request)
+		if err != nil {
+			// Invalid session/request
+			http.Error(response, err.Error(), http.StatusForbidden)
+			return
+		}
+		if sessionData != nil {
+			// Valid user session found, proceed
 			next(response, request)
 			return
 		}
