@@ -382,7 +382,7 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 	span.AddEvent(otel.FHIRTransactionExecute)
 	var txResult fhir.Bundle
 	if err := fhirClient.CreateWithContext(ctx, tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
-		err = otel.Error(span, err, "failed to execute FHIR transaction")
+		otel.Error(span, err, "failed to execute FHIR transaction")
 		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 		txResultJson, _ := json.Marshal(tx.Bundle())
 		slog.ErrorContext(
