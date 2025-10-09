@@ -173,7 +173,7 @@ ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTES_ACCEPTED=Work on the task will s
 ```
 
 ##### EHR integration
-If you want to receive accepted tasks in your EHR, you can set `ORCA_CfAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
+If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
 to the messaging topic or queue on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
 
 See "Messaging configuration" for more information.
