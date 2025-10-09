@@ -27,34 +27,30 @@ func NewTracedHTTPClient(spanNameBase string) *http.Client {
 	}
 }
 
-func HandlerWithTracingProvider(tracer trace.Tracer, operationName string) func(http.HandlerFunc) http.HandlerFunc {
+func HandlerWithTracing(tracer trace.Tracer, operationName string) func(http.HandlerFunc) http.HandlerFunc {
 	return func(handler http.HandlerFunc) http.HandlerFunc {
-		return HandlerWithTracing(tracer, operationName, handler)
-	}
-}
+		return func(w http.ResponseWriter, r *http.Request) {
+			// Extract trace context from incoming HTTP headers
+			ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
 
-func HandlerWithTracing(tracer trace.Tracer, operationName string, handler http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		// Extract trace context from incoming HTTP headers
-		ctx := otel.GetTextMapPropagator().Extract(r.Context(), propagation.HeaderCarrier(r.Header))
+			ctx, span := tracer.Start(
+				ctx,
+				operationName,
+				trace.WithSpanKind(trace.SpanKindServer),
+				trace.WithAttributes(
+					semconv.HTTPMethodKey.String(r.Method),
+					semconv.HTTPURLKey.String(r.URL.String()),
+					semconv.HostNameKey.String(r.Host),
+				),
+			)
+			defer span.End()
 
-		ctx, span := tracer.Start(
-			ctx,
-			operationName,
-			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				semconv.HTTPMethodKey.String(r.Method),
-				semconv.HTTPURLKey.String(r.URL.String()),
-				semconv.HostNameKey.String(r.Host),
-			),
-		)
-		defer span.End()
+			wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
+			handler(wrapped, r.WithContext(ctx))
 
-		wrapped := &responseWriter{ResponseWriter: w, statusCode: http.StatusOK}
-		handler(wrapped, r.WithContext(ctx))
-
-		span.SetAttributes(semconv.HTTPStatusCodeKey.Int(wrapped.statusCode))
-		span.SetStatus(codes.Ok, "")
+			span.SetAttributes(semconv.HTTPStatusCodeKey.Int(wrapped.statusCode))
+			span.SetStatus(codes.Ok, "")
+		}
 	}
 }
 
