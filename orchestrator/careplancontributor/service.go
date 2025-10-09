@@ -25,6 +25,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/httpserv"
 	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	baseotel "go.opentelemetry.io/otel"
@@ -202,180 +203,154 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
 	}
 
-	// Metadata
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/metadata", s.tenants.HttpHandler(func(httpResponse http.ResponseWriter, request *http.Request) {
-		md := fhir.CapabilityStatement{
-			FhirVersion: fhir.FHIRVersion4_0_1,
-			Date:        time.Now().Format(time.RFC3339),
-			Status:      fhir.PublicationStatusActive,
-			Kind:        fhir.CapabilityStatementKindInstance,
-			Format:      []string{"json"},
-			Rest: []fhir.CapabilityStatementRest{
-				{
-					Mode: fhir.RestfulCapabilityModeServer,
-				},
-			},
-		}
-		if err := s.profile.CapabilityStatement(request.Context(), &md); err != nil {
-			slog.ErrorContext(request.Context(), "Failed to generate CapabilityStatement", slog.String(logging.FieldError, err.Error()))
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Metadata", httpResponse)
-			return
-		}
-		coolfhir.SendResponse(httpResponse, http.StatusOK, md)
-	}))
-	//
-	// The section below defines endpoints specified by Shared Care Planning.
-	// These are secured through the profile (e.g. Nuts access tokens)
-	//
-	handleBundle := func(httpRequest *http.Request) (*fhir.Bundle, error) {
-		var bundle fhir.Bundle
-		if err := json.NewDecoder(httpRequest.Body).Decode(&bundle); err != nil {
-			return nil, coolfhir.BadRequest("failed to decode bundle: %w", err)
-		}
-		if coolfhir.IsSubscriptionNotification(&bundle) {
-			if err := s.handleNotification(httpRequest.Context(), (*coolfhir.SubscriptionNotification)(&bundle)); err != nil {
-				return nil, err
-			}
-			return &fhir.Bundle{Type: fhir.BundleTypeHistory}, nil
-		} else if bundle.Type == fhir.BundleTypeBatch {
-			return s.handleBatch(httpRequest, bundle)
-		}
-		return nil, coolfhir.BadRequest("bundle type not supported: %s", bundle.Type.String())
+	routes := []struct {
+		method     string
+		path       string
+		handler    http.HandlerFunc
+		middleware func(http.HandlerFunc) http.HandlerFunc
+	}{
+		//
+		// The section below defines endpoints specified by Shared Care Planning.
+		// These are secured through the profile (e.g. Nuts access tokens)
+		//
+		// Metadata
+		{
+			method:     "GET",
+			path:       basePathWithTenant + "/fhir/metadata",
+			handler:    s.handleFHIRGetMetadata,
+			middleware: httpserv.Chain(s.tenants.HttpHandler),
+		},
+		// Bundle handling
+		{
+			method:  "POST",
+			path:    basePathWithTenant + "/fhir",
+			handler: s.handleFHIRBundle,
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "ProcessBundle"),
+				s.tenants.HttpHandler,
+				s.profile.Authenticator,
+			),
+		},
+		{
+			method:  "POST",
+			path:    basePathWithTenant + "/fhir/{$}",
+			handler: s.handleFHIRBundle,
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "ProcessBundle"),
+				s.tenants.HttpHandler,
+				s.profile.Authenticator,
+			),
+		},
+		//
+		// This is a special endpoint, used by other SCP-nodes to discovery applications.
+		//
+		{
+			method:  "GET",
+			path:    basePathWithTenant + "/fhir/Endpoint",
+			handler: s.handleFHIRSearchEndpoints,
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "DiscoverEndpoints"),
+				s.tenants.HttpHandler,
+				s.profile.Authenticator,
+			),
+		},
+		//
+		// The following endpoints forward to the FHIR API of the local EHR. They are used by external SCP nodes to query or retrieve resources from the local EHR.
+		//
+		// The code to GET or POST/_search are the same, so we can use the same handler for both
+		{
+			method:  "GET",
+			path:    basePathWithTenant + "/fhir/{resourceType}/{id}",
+			handler: s.handleFHIRProxyGetOrSearch,
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "ProxyFHIRRead"),
+				s.tenants.HttpHandler,
+				s.profile.Authenticator,
+			),
+		},
+		{
+			method:  "POST",
+			path:    basePathWithTenant + "/fhir/{resourceType}/_search",
+			handler: s.handleFHIRProxyGetOrSearch,
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "ProxyFHIRSearch"),
+				s.tenants.HttpHandler,
+				s.profile.Authenticator,
+			),
+		},
+		{
+			method:  "GET",
+			path:    basePathWithTenant + "/fhir/{resourceType}",
+			handler: s.handleFHIRProxyGetOrSearch,
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "ProxyFHIRSearch"),
+				s.tenants.HttpHandler,
+				s.profile.Authenticator,
+			),
+		},
+		//
+		// Custom operations
+		//
+		{
+			method:  "POST",
+			path:    basePathWithTenant + "/fhir/$import",
+			handler: s.handleFHIRImportOperation,
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "ImportOperation"),
+				s.tenants.HttpHandler,
+				s.profile.Authenticator,
+			),
+		},
+		//
+		// The section below defines endpoints used for integrating the local EHR with ORCA.
+		// They are NOT specified by SCP. Authorization is specific to the local EHR.
+		//
+		// This endpoint is used by the EHR and ORCA Frontend to query the FHIR API of a remote SCP-node.
+		// The remote SCP-node to query can be specified using the following HTTP headers:
+		// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL
+		{
+			path:    basePathWithTenant + "/external/fhir/{rest...}",
+			handler: s.handleFHIRExternalProxy,
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "ProxyExternalFHIR"),
+				s.tenants.HttpHandler,
+				s.withUserAuth,
+			),
+		},
+		{
+			method:  "GET",
+			path:    basePath + "/context",
+			handler: s.withSession(s.handleGetContext),
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "GetContext"),
+				s.withUserAuth,
+			),
+		},
+		{
+			method:  "GET",
+			path:    basePathWithTenant + "/ehr/fhir/{rest...}",
+			handler: s.withSession(s.handleProxyAppRequestToEHR),
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "ProxyAppToEHR"),
+				s.tenants.HttpHandler,
+				s.withUserAuth,
+			),
+		},
+		{
+			path:    "/logout",
+			handler: s.handleLogout,
+			middleware: httpserv.Chain(
+				otel.HandlerWithTracingProvider(tracer, "Logout"),
+				s.withUserAuth,
+			),
+		},
 	}
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir", otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
-		if bundle, err := handleBundle(request); err != nil {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
-		} else {
-			coolfhir.SendResponse(writer, http.StatusOK, bundle)
-		}
-	}))))
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{$}", otel.HandlerWithTracing(tracer, "ProcessBundle", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
-		if bundle, err := handleBundle(request); err != nil {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/CreateBundle", writer)
-		} else {
-			coolfhir.SendResponse(writer, http.StatusOK, bundle)
-		}
-	}))))
 
-	//
-	// This is a special endpoint, used by other SCP-nodes to discovery applications.
-	//
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/Endpoint", otel.HandlerWithTracing(tracer, "DiscoverEndpoints", s.tenants.HttpHandler(s.profile.Authenticator(func(writer http.ResponseWriter, request *http.Request) {
-		if len(request.URL.Query()) > 0 {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), coolfhir.BadRequest("search parameters are not supported on this endpoint"), fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-		}
-		bundle := coolfhir.BundleBuilder{}
-		bundle.Type = fhir.BundleTypeSearchset
-		endpoints := make(map[string]fhir.Endpoint)
-		endpointNames := make([]string, 0)
-		for _, appConfig := range s.config.AppLaunch.External {
-			endpoint := fhir.Endpoint{
-				Status: fhir.EndpointStatusActive,
-				ConnectionType: fhir.Coding{
-					System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"),
-					Code:   to.Ptr("web-oauth2"),
-				},
-				PayloadType: []fhir.CodeableConcept{
-					{
-						Coding: []fhir.Coding{
-							{
-								System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-payload-type"),
-								Code:   to.Ptr("web-application"),
-							},
-						},
-					},
-				},
-				Name:    to.Ptr(appConfig.Name),
-				Address: appConfig.URL,
-			}
-			endpoints[appConfig.Name] = endpoint
-			endpointNames = append(endpointNames, appConfig.Name)
-		}
-		// Stable order for sanity and easier testing
-		slices.Sort(endpointNames)
-		for _, name := range endpointNames {
-			bundle.Append(endpoints[name], nil, nil)
-		}
-		coolfhir.SendResponse(writer, http.StatusOK, bundle, nil)
-	}))))
-	// The code to GET or POST/_search are the same, so we can use the same handler for both
-	proxyGetOrSearchHandler := http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
-		if !s.healthdataviewEndpointEnabled || globals.StrictMode {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), &coolfhir.ErrorWithCode{
-				Message:    "health data view proxy endpoint is disabled or strict mode is enabled",
-				StatusCode: http.StatusMethodNotAllowed,
-			}, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-
-		err := s.handleProxyExternalRequestToEHR(writer, request)
-		if err != nil {
-			slog.ErrorContext(
-				request.Context(),
-				"FHIR request from external CPC to local EHR failed",
-				slog.String(logging.FieldError, err.Error()),
-				slog.String(logging.FieldUrl, request.URL.String()),
-			)
-			// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
-			var operationOutcomeErr fhirclient.OperationOutcomeError
-			if errors.As(err, &operationOutcomeErr) {
-				operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
-				err = operationOutcomeErr
-			}
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-	})
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}/{id}", otel.HandlerWithTracing(tracer, "ProxyFHIRRead", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/{resourceType}/_search", otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
-	mux.HandleFunc("GET "+basePathWithTenant+"/fhir/{resourceType}", otel.HandlerWithTracing(tracer, "ProxyFHIRSearch", s.tenants.HttpHandler(s.profile.Authenticator(proxyGetOrSearchHandler))))
-	// Custom operations
-	mux.HandleFunc("POST "+basePathWithTenant+"/fhir/$import", otel.HandlerWithTracing(tracer, "CarePlanContributor/FHIR Import", s.tenants.HttpHandler(s.profile.Authenticator(func(httpResponse http.ResponseWriter, request *http.Request) {
-		result, err := s.handleImport(request)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Import", httpResponse)
-			return
-		}
-		coolfhir.SendResponse(httpResponse, http.StatusOK, result, nil)
-	}))))
-	//
-	// The section below defines endpoints used for integrating the local EHR with ORCA.
-	// They are NOT specified by SCP. Authorization is specific to the local EHR.
-	//
-	// This endpoint is used by the EHR and ORCA Frontend to query the FHIR API of a remote SCP-node.
-	// The remote SCP-node to query can be specified using the following HTTP headers:
-	// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL
-	mux.HandleFunc(basePathWithTenant+"/external/fhir/{rest...}", otel.HandlerWithTracing(tracer, "ProxyExternalFHIR", s.tenants.HttpHandler(s.withUserAuth(func(writer http.ResponseWriter, request *http.Request) {
-		// TODO: Extract relevant data from the bearer JWT
-		fhirBaseURL, httpClient, err := s.createFHIRClientForExternalRequest(request.Context(), request)
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-		proxyBasePath, err := s.tenantBasePath(request.Context())
-		if err != nil {
-			coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
-			return
-		}
-		proxyBasePath += "/external/fhir/"
-		fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), coolfhir.NewTracedHTTPTransport(httpClient.Transport, tracer), true, true)
-		fhirProxy.ServeHTTP(writer, request)
-	}))))
-	mux.HandleFunc("GET "+basePath+"/context", otel.HandlerWithTracing(tracer, "GetContext", s.withSession(s.handleGetContext)))
-	mux.HandleFunc(basePathWithTenant+"/ehr/fhir/{rest...}", otel.HandlerWithTracing(tracer, "ProxyAppToEHR", s.tenants.HttpHandler(s.withSession(s.handleProxyAppRequestToEHR))))
-
-	// Logout endpoint
-	mux.HandleFunc("/logout", otel.HandlerWithTracing(tracer, "Logout", s.withSession(func(writer http.ResponseWriter, request *http.Request, _ *session.Data) {
-		s.SessionManager.Destroy(writer, request)
-		// If there is a 'Referer' value in the header, redirect to that URL
-		if referer := request.Header.Get("Referer"); referer != "" {
-			http.Redirect(writer, request, referer, http.StatusFound)
-		} else {
-			// This redirection will be handled by middleware in the frontend
-			http.Redirect(writer, request, s.config.FrontendConfig.URL, http.StatusOK)
-		}
-	})))
+	for _, route := range routes {
+		mux.HandleFunc(strings.Join([]string{route.method, route.path}, " "), func(writer http.ResponseWriter, request *http.Request) {
+			route.middleware(route.handler)(writer, request)
+		})
+	}
 
 	// App launch endpoints
 	for _, appLaunch := range s.appLaunches {
@@ -438,6 +413,125 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 			return
 		}
 		next(response, request, sessionData)
+	}
+}
+
+// handleFHIRGetMetadata handles the FHIR CapabilityStatement request.
+func (s *Service) handleFHIRGetMetadata(httpResponse http.ResponseWriter, request *http.Request) {
+	md := fhir.CapabilityStatement{
+		FhirVersion: fhir.FHIRVersion4_0_1,
+		Date:        time.Now().Format(time.RFC3339),
+		Status:      fhir.PublicationStatusActive,
+		Kind:        fhir.CapabilityStatementKindInstance,
+		Format:      []string{"json"},
+		Rest: []fhir.CapabilityStatementRest{
+			{
+				Mode: fhir.RestfulCapabilityModeServer,
+			},
+		},
+	}
+	if err := s.profile.CapabilityStatement(request.Context(), &md); err != nil {
+		slog.ErrorContext(request.Context(), "Failed to generate CapabilityStatement", slog.String(logging.FieldError, err.Error()))
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, "CarePlanContributor/Metadata", httpResponse)
+		return
+	}
+	coolfhir.SendResponse(httpResponse, http.StatusOK, md)
+}
+
+// handleFHIRBundle handles a FHIR Bundle request, which can be either a subscription notification or a batch request.
+func (s *Service) handleFHIRBundle(httpResponse http.ResponseWriter, httpRequest *http.Request) {
+	var bundle fhir.Bundle
+	if err := json.NewDecoder(httpRequest.Body).Decode(&bundle); err != nil {
+		err := coolfhir.BadRequest("failed to decode bundle: %w", err)
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, "CarePlanContributor/CreateBundle", httpResponse)
+		return
+	}
+	if coolfhir.IsSubscriptionNotification(&bundle) {
+		if err := s.handleNotification(httpRequest.Context(), (*coolfhir.SubscriptionNotification)(&bundle)); err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, "CarePlanContributor/CreateBundle", httpResponse)
+			return
+		}
+		coolfhir.SendResponse(httpResponse, http.StatusOK, &fhir.Bundle{Type: fhir.BundleTypeHistory})
+		return
+	} else if bundle.Type == fhir.BundleTypeBatch {
+		result, err := s.handleFHIRBatchBundle(httpRequest, bundle)
+		if err != nil {
+			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, "CarePlanContributor/CreateBundle", httpResponse)
+			return
+		}
+		coolfhir.SendResponse(httpResponse, http.StatusOK, result, nil)
+		return
+	}
+	err := coolfhir.BadRequest("bundle type not supported: %s", bundle.Type.String())
+	coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, "CarePlanContributor/CreateBundle", httpResponse)
+}
+
+func (s *Service) handleFHIRSearchEndpoints(httpResponse http.ResponseWriter, httpRequest *http.Request) {
+	if len(httpRequest.URL.Query()) > 0 {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("search parameters are not supported on this endpoint"), fmt.Sprintf("CarePlanContributor/%s %s", httpRequest.Method, httpRequest.URL.Path), httpResponse)
+		return
+	}
+	bundle := coolfhir.BundleBuilder{}
+	bundle.Type = fhir.BundleTypeSearchset
+	endpoints := make(map[string]fhir.Endpoint)
+	endpointNames := make([]string, 0)
+	for _, appConfig := range s.config.AppLaunch.External {
+		endpoint := fhir.Endpoint{
+			Status: fhir.EndpointStatusActive,
+			ConnectionType: fhir.Coding{
+				System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"),
+				Code:   to.Ptr("web-oauth2"),
+			},
+			PayloadType: []fhir.CodeableConcept{
+				{
+					Coding: []fhir.Coding{
+						{
+							System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-payload-type"),
+							Code:   to.Ptr("web-application"),
+						},
+					},
+				},
+			},
+			Name:    to.Ptr(appConfig.Name),
+			Address: appConfig.URL,
+		}
+		endpoints[appConfig.Name] = endpoint
+		endpointNames = append(endpointNames, appConfig.Name)
+	}
+	// Stable order for sanity and easier testing
+	slices.Sort(endpointNames)
+	for _, name := range endpointNames {
+		bundle.Append(endpoints[name], nil, nil)
+	}
+	coolfhir.SendResponse(httpResponse, http.StatusOK, bundle, nil)
+}
+
+func (s *Service) handleFHIRProxyGetOrSearch(writer http.ResponseWriter, request *http.Request) {
+	//TODO: Make this endpoint more secure, currently it is only allowed when strict mode is disabled
+	if !s.healthdataviewEndpointEnabled || globals.StrictMode {
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), &coolfhir.ErrorWithCode{
+			Message:    "health data view proxy endpoint is disabled or strict mode is enabled",
+			StatusCode: http.StatusMethodNotAllowed,
+		}, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
+	}
+
+	err := s.handleProxyExternalRequestToEHR(writer, request)
+	if err != nil {
+		slog.ErrorContext(
+			request.Context(),
+			"FHIR request from external CPC to local EHR failed",
+			slog.String(logging.FieldError, err.Error()),
+			slog.String(logging.FieldUrl, request.URL.String()),
+		)
+		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
+		var operationOutcomeErr fhirclient.OperationOutcomeError
+		if errors.As(err, &operationOutcomeErr) {
+			operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
+			err = operationOutcomeErr
+		}
+		coolfhir.WriteOperationOutcomeFromError(request.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", request.Method, request.URL.Path), writer)
+		return
 	}
 }
 
@@ -640,7 +734,7 @@ func (s Service) getAndValidateUserSession(request *http.Request) (*session.Data
 	return nil, nil
 }
 
-func (s Service) withUserAuth(next func(response http.ResponseWriter, request *http.Request)) http.HandlerFunc {
+func (s Service) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
 		sessionData, err := s.getAndValidateUserSession(request)
 		if err != nil {
@@ -990,6 +1084,32 @@ func (s Service) tenantBasePath(ctx context.Context) (string, error) {
 	return basePath + "/" + tenant.ID, nil
 }
 
+func (s *Service) handleFHIRImportOperation(httpResponse http.ResponseWriter, httpRequest *http.Request) {
+	result, err := s.handleImport(httpRequest)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, "CarePlanContributor/Import", httpResponse)
+		return
+	}
+	coolfhir.SendResponse(httpResponse, http.StatusOK, result, nil)
+}
+
+func (s *Service) handleFHIRExternalProxy(httpResponse http.ResponseWriter, httpRequest *http.Request) {
+	// TODO: Extract relevant data from the bearer JWT
+	fhirBaseURL, httpClient, err := s.createFHIRClientForExternalRequest(httpRequest.Context(), httpRequest)
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", httpRequest.Method, httpRequest.URL.Path), httpResponse)
+		return
+	}
+	proxyBasePath, err := s.tenantBasePath(httpRequest.Context())
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, fmt.Sprintf("CarePlanContributor/%s %s", httpRequest.Method, httpRequest.URL.Path), httpResponse)
+		return
+	}
+	proxyBasePath += "/external/fhir/"
+	fhirProxy := coolfhir.NewProxy("EHR(local)->EHR(external) FHIR proxy", fhirBaseURL, proxyBasePath, s.orcaPublicURL.JoinPath(proxyBasePath), coolfhir.NewTracedHTTPTransport(httpClient.Transport, tracer), true, true)
+	fhirProxy.ServeHTTP(httpResponse, httpRequest)
+}
+
 func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		httpRequest.Context(),
@@ -1082,6 +1202,17 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 		return nil, otel.Error(span, fmt.Errorf("import failed: %w", err))
 	}
 	return result, nil
+}
+
+func (s *Service) handleLogout(httpResponse http.ResponseWriter, httpRequest *http.Request) {
+	s.SessionManager.Destroy(httpResponse, httpRequest)
+	// If there is a 'Referer' value in the header, redirect to that URL
+	if referer := httpRequest.Header.Get("Referer"); referer != "" {
+		http.Redirect(httpResponse, httpRequest, referer, http.StatusFound)
+	} else {
+		// This redirection will be handled by middleware in the frontend
+		http.Redirect(httpResponse, httpRequest, s.config.FrontendConfig.URL, http.StatusOK)
+	}
 }
 
 func getIdentifierParameter(params fhir.Parameters, name string) (*fhir.Identifier, error) {
