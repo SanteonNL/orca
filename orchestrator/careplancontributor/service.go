@@ -198,12 +198,23 @@ type Service struct {
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
+	var routes []httpserv.Route
 	if s.oidcProvider != nil {
-		mux.HandleFunc(basePath+"/login", otel.HandlerWithTracing(tracer, "Login", s.withSession(s.oidcProvider.HandleLogin)))
-		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
+		routes = append(routes, []httpserv.Route{
+			{
+				Path:       basePath + "/login",
+				Handler:    s.withSession(s.oidcProvider.HandleLogin),
+				Middleware: otel.HandlerWithTracing(tracer, "Login"),
+			},
+			{
+				Path:       basePath + "/",
+				Handler:    http.StripPrefix(basePath, s.oidcProvider).ServeHTTP,
+				Middleware: otel.HandlerWithTracing(tracer, "OIDCProvider"),
+			},
+		}...)
 	}
 
-	routes := []httpserv.Route{
+	routes = append(routes, []httpserv.Route{
 		//
 		// The section below defines endpoints specified by Shared Care Planning.
 		// These are secured through the profile (e.g. Nuts access tokens)
@@ -221,7 +232,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/fhir",
 			Handler: s.handleFHIRBundle,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "ProcessBundle"),
+				otel.HandlerWithTracing(tracer, "ProcessBundle"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -231,7 +242,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/fhir/{$}",
 			Handler: s.handleFHIRBundle,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "ProcessBundle"),
+				otel.HandlerWithTracing(tracer, "ProcessBundle"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -244,7 +255,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/fhir/Endpoint",
 			Handler: s.handleFHIRSearchEndpoints,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "DiscoverEndpoints"),
+				otel.HandlerWithTracing(tracer, "DiscoverEndpoints"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -258,7 +269,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/fhir/{resourceType}/{id}",
 			Handler: s.handleFHIRProxyGetOrSearch,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "ProxyFHIRRead"),
+				otel.HandlerWithTracing(tracer, "ProxyFHIRRead"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -268,7 +279,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/fhir/{resourceType}/_search",
 			Handler: s.handleFHIRProxyGetOrSearch,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "ProxyFHIRSearch"),
+				otel.HandlerWithTracing(tracer, "ProxyFHIRSearch"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -278,7 +289,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/fhir/{resourceType}",
 			Handler: s.handleFHIRProxyGetOrSearch,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "ProxyFHIRSearch"),
+				otel.HandlerWithTracing(tracer, "ProxyFHIRSearch"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -291,7 +302,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/fhir/$import",
 			Handler: s.handleFHIRImportOperation,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "ImportOperation"),
+				otel.HandlerWithTracing(tracer, "ImportOperation"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -307,7 +318,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/external/fhir/{rest...}",
 			Handler: s.handleFHIRExternalProxy,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "ProxyExternalFHIR"),
+				otel.HandlerWithTracing(tracer, "ProxyExternalFHIR"),
 				s.tenants.HttpHandler,
 				s.withUserAuth,
 			),
@@ -317,7 +328,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePath + "/context",
 			Handler: s.withSession(s.handleGetContext),
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "GetContext"),
+				otel.HandlerWithTracing(tracer, "GetContext"),
 				s.withUserAuth,
 			),
 		},
@@ -326,7 +337,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/ehr/fhir/{rest...}",
 			Handler: s.withSession(s.handleProxyAppRequestToEHR),
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "ProxyAppToEHR"),
+				otel.HandlerWithTracing(tracer, "ProxyAppToEHR"),
 				s.tenants.HttpHandler,
 				s.withUserAuth,
 			),
@@ -335,11 +346,11 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    "/logout",
 			Handler: s.handleLogout,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, "Logout"),
+				otel.HandlerWithTracing(tracer, "Logout"),
 				s.withUserAuth,
 			),
 		},
-	}
+	}...)
 
 	httpserv.RegisterRoutes(mux, routes...)
 

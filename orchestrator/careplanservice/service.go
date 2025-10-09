@@ -255,7 +255,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				s.handleModification(request, httpResponse, resourceType, "CarePlanService/Create"+resourceType)
 			},
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, fmt.Sprintf("%s.fhir.create_resource", tracerName)),
+				otel.HandlerWithTracing(tracer, fmt.Sprintf("%s.fhir.create_resource", tracerName)),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -269,7 +269,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				s.handleSearchRequest(request, httpResponse, resourceType, "CarePlanService/Search"+resourceType)
 			},
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, fmt.Sprintf("%s.fhir.search_resource", tracerName)),
+				otel.HandlerWithTracing(tracer, fmt.Sprintf("%s.fhir.search_resource", tracerName)),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -280,7 +280,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/",
 			Handler: s.handleBundle,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, fmt.Sprintf("%s.fhir.create_bundle", tracerName)),
+				otel.HandlerWithTracing(tracer, fmt.Sprintf("%s.fhir.create_bundle", tracerName)),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -291,7 +291,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant,
 			Handler: s.handleBundle,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, fmt.Sprintf("%s.fhir.create_bundle", tracerName)),
+				otel.HandlerWithTracing(tracer, fmt.Sprintf("%s.fhir.create_bundle", tracerName)),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -306,7 +306,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				s.handleModification(request, httpResponse, resourceType+"/"+resourceId, "CarePlanService/Update"+resourceType)
 			},
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, fmt.Sprintf("%s.fhir.update_resource", tracerName)),
+				otel.HandlerWithTracing(tracer, fmt.Sprintf("%s.fhir.update_resource", tracerName)),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -320,7 +320,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				s.handleModification(request, httpResponse, resourceType, "CarePlanService/Update"+resourceType)
 			},
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, fmt.Sprintf("%s.fhir.update_resource", tracerName)),
+				otel.HandlerWithTracing(tracer, fmt.Sprintf("%s.fhir.update_resource", tracerName)),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -335,7 +335,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 				s.handleGet(request, httpResponse, resourceId, resourceType, "CarePlanService/Get"+resourceType)
 			},
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, fmt.Sprintf("%s.fhir.read_resource", tracerName)),
+				otel.HandlerWithTracing(tracer, fmt.Sprintf("%s.fhir.read_resource", tracerName)),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
@@ -346,7 +346,7 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			Path:    basePathWithTenant + "/$import",
 			Handler: s.handleFHIRImportOperation,
 			Middleware: httpserv.Chain(
-				otel.HandlerWithTracingProvider(tracer, fmt.Sprintf("%s.fhir.fhir_import", tracerName)),
+				otel.HandlerWithTracing(tracer, fmt.Sprintf("%s.fhir.fhir_import", tracerName)),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
