@@ -347,8 +347,9 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	}
 
 	for _, route := range routes {
-		mux.HandleFunc(strings.Join([]string{route.method, route.path}, " "), func(writer http.ResponseWriter, request *http.Request) {
-			route.middleware(route.handler)(writer, request)
+		r := route // create a new loop-scoped variable
+		mux.HandleFunc(strings.Join([]string{r.method, r.path}, " "), func(writer http.ResponseWriter, request *http.Request) {
+			r.middleware(r.handler)(writer, request)
 		})
 	}
 
