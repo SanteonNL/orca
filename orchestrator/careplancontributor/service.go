@@ -460,7 +460,7 @@ func (s *Service) handleFHIRBundle(httpResponse http.ResponseWriter, httpRequest
 			coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, "CarePlanContributor/CreateBundle", httpResponse)
 			return
 		}
-		coolfhir.SendResponse(httpResponse, http.StatusOK, result, nil)
+		coolfhir.SendResponse(httpResponse, http.StatusOK, result)
 		return
 	}
 	err := coolfhir.BadRequest("bundle type not supported: %s", bundle.Type.String())
