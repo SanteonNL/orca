@@ -87,7 +87,7 @@ func WithTenant(ctx context.Context, props Properties) context.Context {
 }
 
 // HttpHandler wraps an HTTP handler to inject the tenant into the request context.
-func (c Config) HttpHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+func (c Config) HttpHandler(handler http.HandlerFunc) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		tenantID := request.PathValue("tenant")
 		if tenantID == "" {

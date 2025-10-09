@@ -20,7 +20,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
+func (s *Service) handleFHIRBatchBundle(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
 	tenant, err := tenants.FromContext(httpRequest.Context())
 	if err != nil {
 		return nil, err

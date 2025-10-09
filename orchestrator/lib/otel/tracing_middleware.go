@@ -2,14 +2,15 @@ package otel
 
 import (
 	"fmt"
+	"net/http"
+	"strings"
+
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/propagation"
 	semconv "go.opentelemetry.io/otel/semconv/v1.20.0"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"strings"
 )
 
 func NewTracedHTTPClient(spanNameBase string) *http.Client {
@@ -23,6 +24,12 @@ func NewTracedHTTPClient(spanNameBase string) *http.Client {
 				trace.WithSpanKind(trace.SpanKindClient),
 			),
 		),
+	}
+}
+
+func HandlerWithTracingProvider(tracer trace.Tracer, operationName string) func(http.HandlerFunc) http.HandlerFunc {
+	return func(handler http.HandlerFunc) http.HandlerFunc {
+		return HandlerWithTracing(tracer, operationName, handler)
 	}
 }
 
