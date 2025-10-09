@@ -203,39 +203,34 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		mux.Handle(basePath+"/", http.StripPrefix(basePath, s.oidcProvider))
 	}
 
-	routes := []struct {
-		method     string
-		path       string
-		handler    http.HandlerFunc
-		middleware func(http.HandlerFunc) http.HandlerFunc
-	}{
+	routes := []httpserv.Route{
 		//
 		// The section below defines endpoints specified by Shared Care Planning.
 		// These are secured through the profile (e.g. Nuts access tokens)
 		//
 		// Metadata
 		{
-			method:     "GET",
-			path:       basePathWithTenant + "/fhir/metadata",
-			handler:    s.handleFHIRGetMetadata,
-			middleware: httpserv.Chain(s.tenants.HttpHandler),
+			Method:     "GET",
+			Path:       basePathWithTenant + "/fhir/metadata",
+			Handler:    s.handleFHIRGetMetadata,
+			Middleware: httpserv.Chain(s.tenants.HttpHandler),
 		},
 		// Bundle handling
 		{
-			method:  "POST",
-			path:    basePathWithTenant + "/fhir",
-			handler: s.handleFHIRBundle,
-			middleware: httpserv.Chain(
+			Method:  "POST",
+			Path:    basePathWithTenant + "/fhir",
+			Handler: s.handleFHIRBundle,
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "ProcessBundle"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
 		},
 		{
-			method:  "POST",
-			path:    basePathWithTenant + "/fhir/{$}",
-			handler: s.handleFHIRBundle,
-			middleware: httpserv.Chain(
+			Method:  "POST",
+			Path:    basePathWithTenant + "/fhir/{$}",
+			Handler: s.handleFHIRBundle,
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "ProcessBundle"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
@@ -245,10 +240,10 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		// This is a special endpoint, used by other SCP-nodes to discovery applications.
 		//
 		{
-			method:  "GET",
-			path:    basePathWithTenant + "/fhir/Endpoint",
-			handler: s.handleFHIRSearchEndpoints,
-			middleware: httpserv.Chain(
+			Method:  "GET",
+			Path:    basePathWithTenant + "/fhir/Endpoint",
+			Handler: s.handleFHIRSearchEndpoints,
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "DiscoverEndpoints"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
@@ -257,32 +252,32 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		//
 		// The following endpoints forward to the FHIR API of the local EHR. They are used by external SCP nodes to query or retrieve resources from the local EHR.
 		//
-		// The code to GET or POST/_search are the same, so we can use the same handler for both
+		// The code to GET or POST/_search are the same, so we can use the same Handler for both
 		{
-			method:  "GET",
-			path:    basePathWithTenant + "/fhir/{resourceType}/{id}",
-			handler: s.handleFHIRProxyGetOrSearch,
-			middleware: httpserv.Chain(
+			Method:  "GET",
+			Path:    basePathWithTenant + "/fhir/{resourceType}/{id}",
+			Handler: s.handleFHIRProxyGetOrSearch,
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "ProxyFHIRRead"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
 		},
 		{
-			method:  "POST",
-			path:    basePathWithTenant + "/fhir/{resourceType}/_search",
-			handler: s.handleFHIRProxyGetOrSearch,
-			middleware: httpserv.Chain(
+			Method:  "POST",
+			Path:    basePathWithTenant + "/fhir/{resourceType}/_search",
+			Handler: s.handleFHIRProxyGetOrSearch,
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "ProxyFHIRSearch"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
 			),
 		},
 		{
-			method:  "GET",
-			path:    basePathWithTenant + "/fhir/{resourceType}",
-			handler: s.handleFHIRProxyGetOrSearch,
-			middleware: httpserv.Chain(
+			Method:  "GET",
+			Path:    basePathWithTenant + "/fhir/{resourceType}",
+			Handler: s.handleFHIRProxyGetOrSearch,
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "ProxyFHIRSearch"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
@@ -292,10 +287,10 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		// Custom operations
 		//
 		{
-			method:  "POST",
-			path:    basePathWithTenant + "/fhir/$import",
-			handler: s.handleFHIRImportOperation,
-			middleware: httpserv.Chain(
+			Method:  "POST",
+			Path:    basePathWithTenant + "/fhir/$import",
+			Handler: s.handleFHIRImportOperation,
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "ImportOperation"),
 				s.tenants.HttpHandler,
 				s.profile.Authenticator,
@@ -309,48 +304,44 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		// The remote SCP-node to query can be specified using the following HTTP headers:
 		// - X-Scp-Entity-Identifier: Uses the identifier of the SCP-node to query (in the form of <system>|<value>), to resolve the registered FHIR base URL
 		{
-			path:    basePathWithTenant + "/external/fhir/{rest...}",
-			handler: s.handleFHIRExternalProxy,
-			middleware: httpserv.Chain(
+			Path:    basePathWithTenant + "/external/fhir/{rest...}",
+			Handler: s.handleFHIRExternalProxy,
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "ProxyExternalFHIR"),
 				s.tenants.HttpHandler,
 				s.withUserAuth,
 			),
 		},
 		{
-			method:  "GET",
-			path:    basePath + "/context",
-			handler: s.withSession(s.handleGetContext),
-			middleware: httpserv.Chain(
+			Method:  "GET",
+			Path:    basePath + "/context",
+			Handler: s.withSession(s.handleGetContext),
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "GetContext"),
 				s.withUserAuth,
 			),
 		},
 		{
-			method:  "GET",
-			path:    basePathWithTenant + "/ehr/fhir/{rest...}",
-			handler: s.withSession(s.handleProxyAppRequestToEHR),
-			middleware: httpserv.Chain(
+			Method:  "GET",
+			Path:    basePathWithTenant + "/ehr/fhir/{rest...}",
+			Handler: s.withSession(s.handleProxyAppRequestToEHR),
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "ProxyAppToEHR"),
 				s.tenants.HttpHandler,
 				s.withUserAuth,
 			),
 		},
 		{
-			path:    "/logout",
-			handler: s.handleLogout,
-			middleware: httpserv.Chain(
+			Path:    "/logout",
+			Handler: s.handleLogout,
+			Middleware: httpserv.Chain(
 				otel.HandlerWithTracingProvider(tracer, "Logout"),
 				s.withUserAuth,
 			),
 		},
 	}
 
-	for _, route := range routes {
-		mux.HandleFunc(strings.Join([]string{route.method, route.path}, " "), func(writer http.ResponseWriter, request *http.Request) {
-			route.middleware(route.handler)(writer, request)
-		})
-	}
+	httpserv.RegisterRoutes(mux, routes...)
 
 	// App launch endpoints
 	for _, appLaunch := range s.appLaunches {
