@@ -1368,6 +1368,22 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 				Xpath:       to.Ptr("f:Task/f:input/f:valueReference"),
 			},
 		},
+		{
+			SearchParamId: "Task-patient-identifier",
+			SearchParam: fhir.SearchParameter{
+				Id:          to.Ptr("Task-patient-identifier"),
+				Url:         "http://santeonnl.github.io/shared-care-planning/cps-searchparameter-task-patient-identifier.json",
+				Name:        "patient-identifier",
+				Status:      fhir.PublicationStatusActive,
+				Description: "Search Tasks by patient identifier",
+				Code:        "patient-identifier",
+				Base:        []fhir.ResourceType{fhir.ResourceTypeTask},
+				Type:        fhir.SearchParamTypeToken,
+				Expression:  to.Ptr("Task.for.identifier"),
+				XpathUsage:  to.Ptr(fhir.XPathUsageTypeNormal),
+				Xpath:       to.Ptr("f:Task/f:for/f:identifier"),
+			},
+		},
 	}
 
 	fhirClient := s.fhirClientByTenant[tenant.ID]
