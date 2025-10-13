@@ -1376,6 +1376,13 @@ func (s *Service) ensureCustomSearchParametersExists(ctx context.Context) error 
 		return fmt.Errorf("failed to read CapabilityStatement: %w", err)
 	}
 
+	capabilityJSON, err := json.MarshalIndent(capabilityStatement, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal CapabilityStatement to JSON: %w", err)
+	}
+
+	slog.InfoContext(ctx, "CapabilityStatement", slog.String("capabilityStatement", string(capabilityJSON)))
+
 	reindexURLs := []string{}
 
 	for _, param := range params {
