@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -20,14 +23,13 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRResourceType, "Task"),
@@ -35,7 +37,11 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	)
 	defer span.End()
 
-	log.Ctx(ctx).Info().Msg("Creating Task")
+	slog.InfoContext(
+		ctx,
+		"Creating Task",
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+	)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, otel.Error(span, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err)), "failed to unmarshal task")
@@ -78,12 +84,22 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	// Enrich Task.Requester and Task.Owner with info from CSD (if available), typically to add the organization name
 	// TODO: CSD is queried again later, to get the notification endpoint. We should optimize/cache this. Maybe in the context.Context?
 	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Requester.Identifier); err != nil {
-		log.Ctx(ctx).Info().Err(err).Msgf("Unable to lookup Task.requester in CSD, won't be enriched.")
+		slog.ErrorContext(
+			ctx,
+			"Unable to lookup Task.requester in CSD, won't be enriched.",
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+			slog.String(logging.FieldError, err.Error()),
+		)
 	} else {
 		task.Requester = entity
 	}
 	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Owner.Identifier); err != nil {
-		log.Ctx(ctx).Info().Err(err).Msgf("Unable to lookup Task.owner in CSD, won't be enriched.")
+		slog.ErrorContext(
+			ctx,
+			"Unable to lookup Task.owner in CSD, won't be enriched.",
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+			slog.String(logging.FieldError, err.Error()),
+		)
 	} else {
 		task.Owner = entity
 	}
@@ -99,6 +115,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	fhirClient := s.fhirClientByTenant[request.Tenant.ID]
 	if task.BasedOn == nil || len(task.BasedOn) == 0 {
 		// The CarePlan does not exist, a CarePlan and CareTeam will be created and the requester will be added as a member
+		span.AddEvent("creating_new_careplan_and_careteam")
 		span.SetAttributes(attribute.String("fhir.careplan.creation_mode", "new"))
 
 		// In order to create a CarePlan, the requester must have the same URA number as the current node
@@ -156,7 +173,8 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			}
 		}
 
-		ok := careteamservice.ActivateMembership(&careTeam, task.Requester)
+		span.AddEvent("activating_careteam_membership")
+		ok := careteamservice.ActivateMembership(ctx, &careTeam, task.Requester)
 		if !ok {
 			return nil, otel.Error(span, errors.New("failed to activate membership for new CareTeam"), "failed to activate care team membership")
 		}
@@ -197,6 +215,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			},
 		}
 
+		span.AddEvent("adding_careplan_and_task_to_transaction_bundle")
 		carePlanBundleEntryIdx = len(tx.Entry)
 		tx.Create(carePlan, coolfhir.WithFullUrl(carePlanURL), coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 			ActingAgent: &fhir.Reference{
@@ -218,6 +237,8 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			Action:   fhir.AuditEventActionC,
 		}))
 		taskBundleEntry = tx.Entry[taskEntryIdx]
+
+		span.AddEvent("notifying_careplan_created_event")
 		if s.eventManager.HasSubscribers(CarePlanCreatedEvent{}) {
 			if err := s.eventManager.Notify(ctx, CarePlanCreatedEvent{
 				CarePlan: carePlan,
@@ -227,6 +248,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 	} else {
 		// Adding a task to an existing CarePlan
+		span.AddEvent("adding_task_to_existing_careplan")
 		span.SetAttributes(attribute.String("fhir.careplan.creation_mode", "existing"))
 
 		carePlanRef, err := basedOn(task)
@@ -235,7 +257,6 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}
 
 		var carePlan fhir.CarePlan
-
 		if err := fhirClient.ReadWithContext(ctx, *carePlanRef, &carePlan); err != nil {
 			return nil, otel.Error(span, fmt.Errorf("failed to read CarePlan: %w", err), "failed to read care plan")
 		}
@@ -254,6 +275,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 			},
 		}
 
+		span.AddEvent("validating_patient_consistency")
 		samePatient := false
 		// If either task.For or CarePlan.Subject contains an identifier, they must be equal
 		// If neither contain an identifier, the reference must be equal
@@ -269,6 +291,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 		// Different validation logic for an SCP subtask
 		if len(task.PartOf) > 0 {
+			span.AddEvent("processing_scp_subtask")
 			span.SetAttributes(attribute.String(otel.FHIRTaskType, "subtask"))
 
 			if len(task.PartOf) != 1 {
@@ -293,6 +316,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 				return nil, otel.Error(span, coolfhir.NewErrorWithCode("owner is not the same as the parent task requester", http.StatusBadRequest), "owner mismatch with parent task requester")
 			}
 		} else {
+			span.AddEvent("processing_primary_task")
 			span.SetAttributes(attribute.String(otel.FHIRTaskType, "primary"))
 
 			careTeam, err := coolfhir.CareTeamFromCarePlan(&carePlan)
@@ -325,6 +349,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 		}))
 
 		if len(task.PartOf) == 0 {
+			span.AddEvent("updating_careplan_activities")
 			// Don't add subtasks to CarePlan.activity
 			carePlan.Activity = append(carePlan.Activity, fhir.CarePlanActivity{
 				Reference: &fhir.Reference{
@@ -340,6 +365,7 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 
 			carePlanBundleEntryIdx = len(tx.Entry)
 			if !updated {
+				span.AddEvent("add_careplan_update_to_transaction")
 				tx.Update(carePlan, "CarePlan/"+*carePlan.Id, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
 					ActingAgent: &fhir.Reference{
 						Identifier: task.Requester.Identifier,

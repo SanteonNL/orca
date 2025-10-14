@@ -6,10 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 
 	events "github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/rs/zerolog/log"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 // See: https://go.googlesource.com/go/+/refs/tags/go1.20.4/src/net/http/server.go#1098
@@ -19,7 +20,7 @@ var _ events.Handler = EventHandler{}
 
 func disposeResponseBody(r io.ReadCloser) {
 	if _, err := io.CopyN(io.Discard, r, maxPostHandlerReadBytes); err != nil {
-		log.Err(err).Msg("failed to read response body")
+		slog.Error("failed to read response body", slog.String(logging.FieldError, err.Error()))
 	}
 }
 
@@ -56,7 +57,7 @@ func (w EventHandler) Handle(ctx context.Context, event events.Type) error {
 		return fmt.Errorf("unexpected status code: %d", response.StatusCode)
 	}
 
-	log.Ctx(ctx).Info().Msgf("Successfully sent event to webhook: %s", w.URL)
+	slog.InfoContext(ctx, "Successfully sent event to webhook", slog.String(logging.FieldUrl, w.URL))
 
 	return nil
 }

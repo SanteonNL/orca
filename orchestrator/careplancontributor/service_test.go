@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
@@ -31,8 +32,6 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-
-	"github.com/rs/zerolog/log"
 
 	"io"
 	"net/http"
@@ -382,9 +381,9 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			if tt.url != nil {
 				reqURL = *tt.url
 			}
-			log.Info().Msgf("Requesting %s %s", method, frontServer.URL+reqURL)
-			log.Info().Msgf("FHIR Server URL: %s", fhirServer.URL)
-			log.Info().Msgf("CarePlan Service URL: %s", carePlanServiceURL)
+			slog.Info(fmt.Sprintf("Requesting %s %s", method, frontServer.URL+reqURL))
+			slog.Info(fmt.Sprintf("FHIR Server URL: %s", fhirServer.URL))
+			slog.Info(fmt.Sprintf("CarePlan Service URL: %s", carePlanServiceURL))
 
 			httpRequest, _ := http.NewRequest(method, frontServer.URL+reqURL, nil)
 			httpResponse, err := httpClient.Do(httpRequest)
@@ -682,7 +681,13 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, events.NewManager(messageBroker), true, nil)
+	tenantCfg := tenants.Config{
+		"test": tenants.Test().Sole(),
+		"other": tenants.Test(func(properties *tenants.Properties) {
+			properties.ID = "other"
+		}).Sole(),
+	}
+	service, err := New(Config{}, tenantCfg, profile.Test(), orcaPublicURL, sessionManager, events.NewManager(messageBroker), true, nil)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -701,6 +706,21 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 
 	t.Run("caching is not allowed", func(t *testing.T) {
 		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
+	})
+
+	t.Run("multi-tenancy", func(t *testing.T) {
+		t.Run("request targets a different tenant than the session's", func(t *testing.T) {
+			httpRequest, _ = http.NewRequest("GET", frontServer.URL+"/cpc/other/ehr/fhir/Patient/1", nil)
+			httpRequest.AddCookie(&http.Cookie{
+				Name:  "sid",
+				Value: sessionID,
+			})
+			httpResponse, err = frontServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			require.Equal(t, "session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
+		})
 	})
 
 	// Logout and attempt to get the patient again
@@ -841,6 +861,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 	})
 
 	httpServer := httptest.NewServer(mux)
+	sessionManager, sessionID := createTestSession()
 	service := &Service{
 		profile: profile.TestProfile{
 			Principal: auth.TestPrincipal1,
@@ -852,11 +873,17 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 				},
 			},
 		},
-		tenants:       tenants.Test(),
-		httpHandler:   mux,
-		cpsEnabled:    true,
-		orcaPublicURL: must.ParseURL(httpServer.URL),
-		config:        Config{StaticBearerToken: "secret"},
+		tenants: map[string]tenants.Properties{
+			"test": tenants.Test().Sole(),
+			"other": tenants.Test(func(properties *tenants.Properties) {
+				properties.ID = "other"
+			}).Sole(),
+		},
+		httpHandler:    mux,
+		cpsEnabled:     true,
+		orcaPublicURL:  must.ParseURL(httpServer.URL),
+		config:         Config{StaticBearerToken: "secret"},
+		SessionManager: sessionManager,
 	}
 	service.createFHIRClientForURL = service.defaultCreateFHIRClientForURL
 	service.RegisterHandlers(mux)
@@ -930,6 +957,25 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 			responseData, err := io.ReadAll(httpResponse.Body)
 			require.NoError(t, err)
 			assert.NotEmpty(t, responseData)
+		})
+	})
+	t.Run("multi-tenancy", func(t *testing.T) {
+		t.Run("user agent is browser, user session", func(t *testing.T) {
+			t.Run("request targets a different tenant than the session's", func(t *testing.T) {
+				// User session is for tenant "test", request is for tenant "other"
+				httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/other/external/fhir", nil)
+				httpRequest.Header.Set("X-Scp-Fhir-Url", remoteSCPNode.URL+"/fhir")
+				httpRequest.AddCookie(&http.Cookie{
+					Name:  "sid",
+					Value: sessionID,
+				})
+				httpResponse, err := httpServer.Client().Do(httpRequest)
+				require.NoError(t, err)
+				require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
+				responseData, err := io.ReadAll(httpResponse.Body)
+				require.NoError(t, err)
+				assert.Equal(t, "session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
+			})
 		})
 	})
 	t.Run("can't determine remote node", func(t *testing.T) {
@@ -1189,33 +1235,32 @@ func TestService_withSessionOrBearerToken(t *testing.T) {
 			// Setup: Create a session manager with a test session
 			sessionManager, sessionCookie := createTestSession()
 
-			// Setup: Create a handler that will be called if authentication is successful
-			handlerCalled := false
-			handler := func(writer http.ResponseWriter, request *http.Request) {
-				handlerCalled = true
-				writer.WriteHeader(http.StatusOK)
-			}
-
 			// Setup: Create the service with the session manager
 			service := &Service{
 				SessionManager: sessionManager,
 				config:         Config{StaticBearerToken: tt.staticToken},
 				tokenClient:    nil,
+				tenants:        tenants.Test(),
 			}
-
 			if tt.withMockClient {
 				service.tokenClient = mockClient.Client
 			}
 
+			// Setup: Create a handler that will be called if authentication is successful
+			handlerCalled := false
+			handler := http.NewServeMux()
 			// Call the middleware with our handler
-			wrappedHandler := service.withUserAuth(handler)
+			handler.HandleFunc("/{tenant}", service.tenants.HttpHandler(service.withUserAuth(func(res http.ResponseWriter, req *http.Request) {
+				handlerCalled = true
+				res.WriteHeader(http.StatusOK)
+			})))
 
 			// Create a test HTTP server with the wrapped handler
-			testServer := httptest.NewServer(wrappedHandler)
+			testServer := httptest.NewServer(handler)
 			defer testServer.Close()
 
 			// Create a test request
-			req, err := http.NewRequest("GET", testServer.URL, nil)
+			req, err := http.NewRequest("GET", testServer.URL+"/test", nil)
 			require.NoError(t, err)
 
 			// Add a session cookie if the test case needs it
@@ -1253,6 +1298,7 @@ func createTestSession() (*user.SessionManager[session.Data], string) {
 	sessionHttpResponse := httptest.NewRecorder()
 	sessionManager.Create(sessionHttpResponse, session.Data{
 		FHIRLauncher: "test",
+		TenantID:     tenants.Test().Sole().ID,
 	})
 	// extract session ID; sid=<something>;
 	cookieValue := sessionHttpResponse.Header().Get("Set-Cookie")

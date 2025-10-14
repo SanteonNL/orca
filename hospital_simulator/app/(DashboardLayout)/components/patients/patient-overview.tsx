@@ -2,6 +2,8 @@ import React from 'react';
 import CreatePatientDialog from './create-patient-dialog';
 import PatientTable from './patient-table';
 import {Bundle, Identifier, Patient} from 'fhir/r4';
+import CreatePractitioner from "@/app/(DashboardLayout)/practitioner";
+import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 export default async function PatientOverview() {
 
@@ -9,14 +11,17 @@ export default async function PatientOverview() {
         console.error('FHIR_BASE_URL is not defined');
         return <>FHIR_BASE_URL is not defined</>;
     }
+    await CreatePractitioner();
+
+    const headers = await addFhirAuthHeaders({
+        "Cache-Control": "no-cache",
+        "Content-Type": "application/x-www-form-urlencoded"
+    });
 
     const searchResponse = await fetch(`${process.env.FHIR_BASE_URL}/Patient/_search`, {
         method: 'POST',
         cache: 'no-store',
-        headers: {
-            "Cache-Control": "no-cache",
-            "Content-Type": "application/x-www-form-urlencoded"
-        },
+        headers: headers,
         body: new URLSearchParams({
             "_count": "500"
         })
@@ -38,6 +43,7 @@ export default async function PatientOverview() {
     const rows = patients.map((patient: Patient) => {
         return {
             id: patient.identifier?.find((identifier: Identifier) => identifier.system === "http://fhir.nl/fhir/NamingSystem/bsn")!!.value!!,
+            resourceId: patient.id!!,
             primaryIdentifier: patient.identifier?.find((identifier: Identifier) => identifier.system === "http://fhir.nl/fhir/NamingSystem/bsn")!!,
             name: patient.name?.[0]!!,
             gender: patient.gender!!,
