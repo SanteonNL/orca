@@ -28,6 +28,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/httpserv"
 	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/google/uuid"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -1148,7 +1149,7 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 		return nil, otel.Error(span, err)
 	}
 	workflowID, err := getIdentifierParameter(params, "chipsoft_zorgplatform_workflowid")
-	if err != nil {
+	if err != nil && !strings.HasPrefix(err.Error(), "missing parameter") {
 		return nil, otel.Error(span, err)
 	}
 	serviceRequest, err := getCodingParameter(params, "servicerequest")
@@ -1173,19 +1174,35 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 		return nil, otel.Error(span, err)
 	}
 
+	//
 	// Read patient
-	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
-	var patientAndPractitionerBundle fhir.Bundle
-	reqHeadersOpts := fhirclient.RequestHeaders(map[string][]string{
-		"X-Scp-PatientID":  {*patientIdentifier.Value},
-		"X-Scp-WorkflowID": {*workflowID.Value},
-	})
-	// Fetch patient from EHR according to BgZ (the general-practitioner is not needed, but added for conformance).
-	if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"_include": []string{"Patient:general-practitioner"}}, &patientAndPractitionerBundle, reqHeadersOpts); err != nil {
-		return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
-	}
+	//
 	var patient fhir.Patient
-	if err := coolfhir.ResourceInBundle(&patientAndPractitionerBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
+	var patientBundle fhir.Bundle
+	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
+	var externalIdentifier fhir.Identifier
+	if workflowID != nil {
+		// Zorgplatform
+		reqHeadersOpts := fhirclient.RequestHeaders(map[string][]string{
+			"X-Scp-PatientID":  {*patientIdentifier.Value},
+			"X-Scp-WorkflowID": {*workflowID.Value},
+		})
+		// Fetch patient from EHR according to BgZ (the general-practitioner is not needed, but added for conformance).
+		if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"_include": []string{"Patient:general-practitioner"}}, &patientBundle, reqHeadersOpts); err != nil {
+			return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
+		}
+		externalIdentifier = *workflowID
+	} else {
+		// Demo EHR
+		if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"identifier": []string{coolfhir.IdentifierToToken(*patientIdentifier)}}, &patientBundle); err != nil {
+			return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
+		}
+		externalIdentifier = fhir.Identifier{
+			System: to.Ptr("urn:ietf:rfc:4122"),
+			Value:  to.Ptr(uuid.New().String()),
+		}
+	}
+	if err := coolfhir.ResourceInBundle(&patientBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
 		return nil, otel.Error(span, fmt.Errorf("unable to find Patient resource in Bundle: %w", err))
 	}
 
@@ -1198,8 +1215,12 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	}
 	taskRequester := taskRequesterCandidates[0]
 
+	slog.InfoContext(
+		ctx,
+		"Invoking CPS $import operation",
+	)
 	cpsFHIRClient := fhirclient.New(tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL), s.httpClientForLocalCPS(tenant), coolfhir.Config())
-	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, *patientIdentifier, patient, *workflowID, *serviceRequest, *condition, *startDate)
+	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, *patientIdentifier, patient, externalIdentifier, *serviceRequest, *condition, *startDate)
 	if err != nil {
 		return nil, otel.Error(span, fmt.Errorf("import failed: %w", err))
 	}

@@ -39,6 +39,7 @@ func setupOrchestrator(t *testing.T, dockerNetworkName string, containerName str
 			"ORCA_TENANT_" + tenant + "_CPS_FHIR_URL":       fhirStoreURL,
 			"ORCA_TENANT_" + tenant + "_DEMO_FHIR_URL":      fhirStoreURL,
 			"ORCA_TENANT_" + tenant + "_TASKENGINE_ENABLED": "true",
+			"ORCA_TENANT_" + tenant + "_ENABLEIMPORT":       "true",
 			"ORCA_NUTS_DISCOVERYSERVICE":                    "dev:HomeMonitoring2024",
 			"ORCA_CAREPLANSERVICE_ENABLED":                  strconv.FormatBool(cpsEnabled),
 			// HAPI FHIR can only store Questionnaires in the default partition.
