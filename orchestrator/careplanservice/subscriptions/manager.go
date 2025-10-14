@@ -6,21 +6,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/url"
+	"time"
+
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/url"
-	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -44,7 +46,7 @@ func NewManager(cpsBaseURLFunc func(tenants.Properties) *url.URL, tenants tenant
 		channels:       channels,
 		messageBroker:  messageBroker,
 	}
-	if err := messageBroker.ReceiveFromQueue(SendNotificationQueue, mgr.receiveMessage); err != nil {
+	if err := messageBroker.ReceiveFromQueue(SendNotificationQueue, mgr.tryNotify); err != nil {
 		return nil, err
 	}
 	return mgr, nil
@@ -73,7 +75,7 @@ type NotificationEvent struct {
 func (r RetryableManager) Notify(ctx context.Context, resource interface{}) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String("notification.resource_type", coolfhir.ResourceType(resource)),
@@ -83,9 +85,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to get tenant from context")
-		return err
+		return otel.Error(span, err, "failed to get tenant from context")
 	}
 
 	span.SetAttributes(
@@ -142,9 +142,13 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 
 		careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "failed to read CareTeam from CarePlan")
-			log.Ctx(ctx).Err(err).Msg("failed to read CareTeam in CarePlan")
+			slog.ErrorContext(
+				ctx,
+				"Failed to read CareTeam from CarePlan",
+				slog.String(logging.FieldResourceType, resourceType),
+				slog.String(logging.FieldResourceID, *carePlan.Id),
+				slog.String(logging.FieldError, otel.Error(span, err, "failed to read CarePlan").Error()),
+			)
 			return nil
 		}
 
@@ -154,10 +158,7 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			}
 		}
 	default:
-		err := fmt.Errorf("subscription manager does not support notifying for resource type: %s", coolfhir.ResourceType(resource))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "unsupported resource type")
-		return err
+		return otel.Error(span, fmt.Errorf("subscription manager does not support notifying for resource type: %s", coolfhir.ResourceType(resource)), "unsupported resource type")
 	}
 
 	span.SetAttributes(
@@ -165,7 +166,13 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 		attribute.Int("notification.subscriber_count", len(subscribers)),
 	)
 
-	log.Ctx(ctx).Info().Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)
+	slog.InfoContext(
+		ctx,
+		"Notifying subscriber(s) for update on resource",
+		slog.Int("subscriber_count", len(subscribers)),
+		slog.String(logging.FieldResourceReference, *focus.Reference),
+		slog.String(logging.FieldResourceType, resourceType),
+	)
 
 	var errs []error
 	successCount := 0
@@ -192,19 +199,17 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 
 	if len(errs) > 0 {
 		joinedErr := fmt.Errorf("couldn't notify all subscribers (this is non-recoverable!): %w", errors.Join(errs...))
-		span.RecordError(joinedErr)
-		span.SetStatus(codes.Error, "partial notification failure")
-		return joinedErr
+		return otel.Error(span, joinedErr, "partial notification failure")
 	} else {
 		span.SetStatus(codes.Ok, "")
 		return nil
 	}
 }
 
-func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.Message) error {
+func (r RetryableManager) tryNotify(ctx context.Context, message messaging.Message) error {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindConsumer),
 		trace.WithAttributes(
 			attribute.String("messaging.operation", "receive"),
@@ -215,9 +220,7 @@ func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.
 
 	var evt NotificationEvent
 	if err := json.Unmarshal(message.Body, &evt); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to unmarshal notification event")
-		return fmt.Errorf("failed to unmarshal message into %T: %w", evt, err)
+		return otel.Error(span, fmt.Errorf("failed to unmarshal message into %T: %w", evt, err), "failed to unmarshal notification event")
 	}
 
 	// Add notification event details to span
@@ -231,9 +234,7 @@ func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.
 	// Enrich context with the correct tenant
 	tenant, err := r.tenants.Get(evt.TenantID)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to get tenant")
-		return fmt.Errorf("get tenant %s: %w", evt.TenantID, err)
+		return otel.Error(span, fmt.Errorf("get tenant %s: %w", evt.TenantID, err), "failed to get tenant")
 	}
 	ctx = tenants.WithTenant(ctx, *tenant)
 
@@ -241,9 +242,7 @@ func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.
 
 	channel, err := r.channels.Create(ctx, evt.Subscriber)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to create notification channel")
-		return fmt.Errorf("notification-channel for subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err)
+		return otel.Error(span, fmt.Errorf("notification-channel for subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err), "failed to create notification channel")
 	}
 
 	// TODO: refer to stored subscription
@@ -261,9 +260,7 @@ func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.
 	span.SetAttributes(attribute.String("notification.cps_base_url", cpsBaseURL.String()))
 
 	if err = channel.Notify(ctx, notification); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to send notification to channel")
-		return fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err)
+		return otel.Error(span, fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err), "failed to send notification to channel")
 	}
 
 	span.SetAttributes(

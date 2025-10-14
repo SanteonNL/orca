@@ -4,22 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	baseotel "go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
-	"go.opentelemetry.io/otel/trace"
+	"log/slog"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/google/uuid"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var tracer = baseotel.Tracer("careplancontributor.ehr")
@@ -39,7 +40,7 @@ func (b *BundleSet) addBundle(bundle ...fhir.Bundle) {
 func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*BundleSet, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRTaskID, taskId),
@@ -48,7 +49,13 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	defer span.End()
 
 	ref := "Task/" + taskId
-	log.Ctx(ctx).Debug().Msgf("NotifyTaskAccepted Task (ref=%s) to message broker", ref)
+	slog.DebugContext(
+		ctx,
+		"NotifyTaskAccepted Task to message broker",
+		slog.String(logging.FieldResourceReference, ref),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		slog.String(logging.FieldResourceID, taskId),
+	)
 	id := uuid.NewString()
 	bundles := BundleSet{
 		Id:   id,
@@ -57,9 +64,7 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 
 	taskBundle, tasks, err := fetchTasks(ctx, cpsClient, taskId)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch tasks")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch tasks")
 	}
 	for i, bundleEntry := range taskBundle.Entry {
 		if err := json.Unmarshal(bundleEntry.Resource, &tasks[i]); err != nil {
@@ -75,37 +80,27 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 
 	carePlanBundle, carePlan, err := fetchCarePlan(ctx, cpsClient, tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch care plan")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch care plan")
 	}
 
 	patientBundle, err := fetchPatient(ctx, cpsClient, carePlan)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch patient")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch patient")
 	}
 
 	serviceRequestBundle, err := fetchServiceRequest(ctx, cpsClient, tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch service request")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch service request")
 	}
 
 	questionnaireBundles, err := fetchQuestionnaires(ctx, cpsClient, tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch questionnaires")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch questionnaires")
 	}
 
 	questionnaireResponseBundles, err := fetchQuestionnaireResponses(ctx, cpsClient, tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to fetch questionnaire responses")
-		return nil, err
+		return nil, otel.Error(span, err, "failed to fetch questionnaire responses")
 	}
 
 	// Bundle order is important for the message
@@ -127,7 +122,7 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string) (*fhir.Bundle, []fhir.Task, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRTaskID, taskId),
@@ -142,22 +137,16 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 	values.Set("_revinclude", "Task:part-of")
 	err := cpsClient.SearchWithContext(ctx, "Task", values, &taskBundle)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to search tasks")
-		return nil, nil, err
+		return nil, nil, otel.Error(span, err, "failed to search tasks")
 	}
 	if len(taskBundle.Entry) < 2 {
 		err := fmt.Errorf("expected at least 2 Tasks (1 primary, 1 subtask), got %d", len(taskBundle.Entry))
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "insufficient tasks found")
-		return nil, nil, err
+		return nil, nil, otel.Error(span, err, "insufficient tasks found")
 	}
 	var tasks []fhir.Task
 	err = coolfhir.ResourcesInBundle(&taskBundle, coolfhir.EntryIsOfType("Task"), &tasks)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to extract tasks from bundle")
-		return nil, nil, err
+		return nil, nil, otel.Error(span, err, "failed to extract tasks from bundle")
 	}
 
 	span.SetAttributes(
@@ -171,7 +160,7 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, *fhir.CarePlan, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int(otel.FHIRTasksCount, len(tasks)),
@@ -186,7 +175,12 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 			for _, reference := range basedOnReferences {
 				basedOnReference := reference.Reference
 				if basedOnReference != nil && !slices.Contains(carePlanRefs, *basedOnReference) {
-					log.Ctx(ctx).Debug().Msgf("Found carePlanRef %s", *basedOnReference)
+					slog.DebugContext(
+						ctx,
+						"Found carePlanRef",
+						slog.String(logging.FieldResourceReference, *basedOnReference),
+						slog.String(logging.FieldResourceType, fhir.ResourceTypeCarePlan.String()),
+					)
 					carePlanRefs = append(carePlanRefs, *basedOnReference)
 				}
 			}
@@ -195,7 +189,7 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 	if len(carePlanRefs) != 1 {
 		return nil, nil, fmt.Errorf("expected exactly 1 CarePlan, got %d", len(carePlanRefs))
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d carePlanRefs", len(carePlanRefs))
+	slog.DebugContext(ctx, "Found a carePlanRef")
 	carePlanBundle, err := fetchRef(ctx, cpsClient, carePlanRefs[0])
 	if err != nil {
 		return nil, nil, err
@@ -216,7 +210,7 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fhir.CarePlan) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 	)
 	defer span.End()
@@ -232,7 +226,7 @@ func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fh
 func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int(otel.FHIRTasksCount, len(tasks)),
@@ -245,7 +239,12 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 		if task.Focus != nil {
 			focusReference := task.Focus.Reference
 			if focusReference != nil && !slices.Contains(serviceRequestRefs, *focusReference) {
-				log.Ctx(ctx).Debug().Msgf("Found serviceRequestRef %s", *focusReference)
+				slog.DebugContext(
+					ctx,
+					"Found serviceRequestRef",
+					slog.String(logging.FieldResourceReference, *focusReference),
+					slog.String(logging.FieldResourceType, fhir.ResourceTypeServiceRequest.String()),
+				)
 				serviceRequestRefs = append(serviceRequestRefs, *focusReference)
 			}
 		}
@@ -253,7 +252,7 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 	if len(serviceRequestRefs) != 1 {
 		return nil, fmt.Errorf("expected exactly 1 ServiceRequest, got %d", len(serviceRequestRefs))
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d serviceRequestRefs", len(serviceRequestRefs))
+	slog.DebugContext(ctx, "Found a serviceRequestRef")
 	serviceRequestBundle, err := fetchRef(ctx, cpsClient, serviceRequestRefs[0])
 	if err != nil {
 		return nil, err
@@ -264,7 +263,7 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int(otel.FHIRTasksCount, len(tasks)),
@@ -276,7 +275,12 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 	for _, task := range tasks {
 		questionnaireRefs = append(questionnaireRefs, fetchTaskInputs(task)...)
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
+	slog.DebugContext(
+		ctx,
+		"Found questionnaireRefs",
+		slog.Int(logging.FieldCount, len(questionnaireRefs)),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeQuestionnaire.String()),
+	)
 	questionnaireBundle, err := fetchRefs(ctx, cpsClient, questionnaireRefs)
 	if err != nil {
 		return nil, err
@@ -287,7 +291,7 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Client, tasks []fhir.Task) (*[]fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int(otel.FHIRTasksCount, len(tasks)),
@@ -299,7 +303,12 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 	for _, task := range tasks {
 		questionnaireResponseRefs = append(questionnaireResponseRefs, fetchTaskOutputs(task)...)
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d questionnaireResponseRefs", len(questionnaireResponseRefs))
+	slog.DebugContext(
+		ctx,
+		"Found questionnaireResponseRefs",
+		slog.Int(logging.FieldCount, len(questionnaireResponseRefs)),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeQuestionnaireResponse.String()),
+	)
 	questionnaireResponseBundle, err := fetchRefs(ctx, cpsClient, questionnaireResponseRefs)
 	if err != nil {
 		return nil, err
@@ -314,7 +323,7 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) (*[]fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.Int("count", len(refs)),
@@ -358,7 +367,7 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 func fetchRef(ctx context.Context, cpsClient fhirclient.Client, ref string) (*fhir.Bundle, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindInternal),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRResourceReference, ref),
@@ -432,7 +441,7 @@ func isOfType(valueReference *fhir.Reference, typeName string) bool {
 		if strings.HasPrefix(*valueReference.Reference, "https://") {
 			compile, err := regexp.Compile(fmt.Sprintf("^https:/.*/%s/(.+)$", typeName))
 			if err != nil {
-				log.Error().Msgf("Failed to compile regex: %s", err.Error())
+				slog.Error("Failed to compile regex", slog.String(logging.FieldError, err.Error()))
 			} else {
 				matchesType = compile.MatchString(*valueReference.Reference)
 			}

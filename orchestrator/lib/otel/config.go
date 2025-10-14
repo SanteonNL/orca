@@ -248,7 +248,10 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	baseotel.SetTracerProvider(tp)
 
 	// Set global propagator to tracecontext (W3C Trace Context)
-	baseotel.SetTextMapPropagator(propagation.TraceContext{})
+	baseotel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
 
 	return &TracerProvider{
 		provider: tp,

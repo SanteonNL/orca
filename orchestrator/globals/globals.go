@@ -4,15 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 )
-
-func init() {
-	zerolog.DefaultContextLogger = &log.Logger
-}
 
 // CreateCPSFHIRClient creates a FHIR client for the Care Plan Service (CPS), based on the tenant information in the context.
 // If the tenant is not found or no client is registered for the tenant, it returns an error.

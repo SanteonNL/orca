@@ -5,19 +5,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"strings"
+
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"net/url"
-	"strings"
 )
 
 var _ FHIROperation = &FHIRUpdateOperationHandler[fhir.HasExtension]{}
@@ -33,7 +35,7 @@ type FHIRUpdateOperationHandler[T fhir.HasExtension] struct {
 func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()
@@ -46,9 +48,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to unmarshal resource")
-		return nil, coolfhir.BadRequest("invalid %s: %s", resourceType, err)
+		return nil, otel.Error(span, coolfhir.BadRequest("invalid %s: %s", resourceType, err))
 	}
 
 	resourceID := coolfhir.ResourceID(resource)
@@ -58,9 +58,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	// Check we're only allowing secure external literal references
 	if err := validateLiteralReferences(ctx, h.profile, &resource); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "literal reference validation failed")
-		return nil, err
+		return nil, otel.Error(span, err, "literal reference validation failed")
 	}
 
 	// Search for the existing resource
@@ -74,10 +72,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		)
 
 		if coolfhir.ResourceID(resource) != nil && *coolfhir.ResourceID(resource) != request.ResourceId {
-			err := coolfhir.BadRequest("resource ID mismatch: %s != %s", *coolfhir.ResourceID(resource), request.ResourceId)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "resource ID mismatch")
-			return nil, err
+			return nil, otel.Error(span, coolfhir.BadRequest("resource ID mismatch: %s != %s", *coolfhir.ResourceID(resource), request.ResourceId))
 		}
 		searchParams = url.Values{
 			"_id": []string{request.ResourceId},
@@ -97,9 +92,7 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	if len(searchParams) > 0 {
 		err := fhirClient.SearchWithContext(ctx, resourceType, searchParams, &searchBundle)
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "failed to search for existing resource")
-			return nil, fmt.Errorf("failed to search for %s: %w", resourceType, err)
+			return nil, otel.Error(span, fmt.Errorf("failed to search for %s: %w", resourceType, err))
 		}
 	}
 
@@ -108,7 +101,12 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	// If no entries found, handle as a create operation
 	if len(searchBundle.Entry) == 0 {
 		span.SetAttributes(attribute.String("fhir.update.operation_mode", "upsert_create"))
-		log.Ctx(ctx).Info().Msgf("%s not found, handling as create: %s", resourceType, searchParams.Encode())
+		slog.InfoContext(
+			ctx,
+			"Resource not found, handling as create",
+			slog.String(logging.FieldResourceType, resourceType),
+			slog.String("encoded_search_parameters", searchParams.Encode()),
+		)
 		request.Upsert = true
 		return h.createHandler.Handle(ctx, request, tx)
 	}
@@ -119,26 +117,22 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 	var existingResource T
 	err = json.Unmarshal(searchBundle.Entry[0].Resource, &existingResource)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to unmarshal existing resource")
-		return nil, fmt.Errorf("failed to unmarshal existing %s: %w", resourceType, err)
+		return nil, otel.Error(span, fmt.Errorf("failed to unmarshal existing %s: %w", resourceType, err))
 	}
 
 	authzDecision, err := h.authzPolicy.HasAccess(ctx, existingResource, *request.Principal)
 	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "authorization check failed")
-			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal has access to create %s", resourceType)
-		} else {
-			err := fmt.Errorf("participant is not authorized to update %s", resourceType)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "authorization denied")
+			slog.ErrorContext(ctx,
+				"Error checking if principal has access to create resource",
+				slog.String(logging.FieldError, otel.Error(span, err, "authorization check failed").Error()),
+				slog.String(logging.FieldResourceType, resourceType),
+			)
 		}
-		return nil, &coolfhir.ErrorWithCode{
+		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant is not authorized to update %s", resourceType),
 			StatusCode: http.StatusForbidden,
-		}
+		})
 	}
 
 	// Add authorization decision details to span
@@ -149,7 +143,13 @@ func (h FHIRUpdateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	SetCreatorExtensionOnResource(resource, &request.Principal.Organization.Identifier[0])
 
-	log.Ctx(ctx).Info().Msgf("Updating %s (authz=%s)", request.RequestUrl, strings.Join(authzDecision.Reasons, ";"))
+	slog.InfoContext(
+		ctx,
+		"Updating Resource",
+		slog.String(logging.FieldResourceType, resourceType),
+		slog.Any("url", request.RequestUrl),
+		slog.String(logging.FieldAuthz, strings.Join(authzDecision.Reasons, ";")),
+	)
 
 	idx := len(tx.Entry)
 	resourceBundleEntry := request.bundleEntryWithResource(resource)

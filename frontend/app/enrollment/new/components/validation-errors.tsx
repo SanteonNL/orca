@@ -11,18 +11,18 @@ export default function ValidationErrors({validationErrors}: ValidationErrorsPro
     const messages = codingToMessage(validationErrors);
 
     return (
-        <div className="border border-red-500 rounded-lg p-4 bg-red-50 mb-4">
+        <div className="border rounded-lg p-4 bg-red-50 mb-4" style={{ borderColor: '#CA323B', maxWidth: 560, borderWidth: 2 }}>
             <div className="flex items-start gap-3">
                 <div className="flex-shrink-0">
                     <div className="w-6 h-6 flex items-center justify-center">
-                        <CircleAlert color="red"/>
+                        <CircleAlert color="#CA323B"/>
                     </div>
                 </div>
                 <div className="flex-grow">
-                    <h3 className="font-semibold text-gray-900 mb-3">Er gaat iets mis</h3>
-                    <div className="space-y-2">
+                    <h3 className="font-semibold mb-3" style={{ color: '#222222' }}>Er gaat iets mis</h3>
+                    <div className="space-y-[8px]">
                         {messages.map((message, index) => (
-                            <p key={index} className="text-gray-700">
+                            <p key={index} style={{ color: '#222222' }}>
                                 {message}
                             </p>
                         ))}

@@ -4,21 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/lib/validation"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
-	"net/http"
-	"strings"
 )
 
 var _ FHIROperation = &FHIRCreateOperationHandler[fhir.HasExtension]{}
@@ -33,7 +35,7 @@ type FHIRCreateOperationHandler[T fhir.HasExtension] struct {
 func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRHandlerRequest, tx *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 	)
 	defer span.End()
@@ -46,12 +48,10 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "failed to unmarshal resource")
-		return nil, &coolfhir.ErrorWithCode{
+		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("invalid %s: %v", resourceType, err),
 			StatusCode: http.StatusBadRequest,
-		}
+		})
 	}
 
 	resourceID := coolfhir.ResourceID(resource)
@@ -61,26 +61,22 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	// Check we're only allowing secure external literal references
 	if err := validateLiteralReferences(ctx, h.profile, &resource); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "literal reference validation failed")
-		return nil, err
+		return nil, otel.Error(span, err, "literal reference validation failed")
 	}
 
 	authzDecision, err := h.authzPolicy.HasAccess(ctx, resource, *request.Principal)
 	if authzDecision == nil || !authzDecision.Allowed {
 		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "authorization check failed")
-			log.Ctx(ctx).Error().Err(err).Msgf("Error checking if principal is authorized to create %s", resourceType)
-		} else {
-			err := fmt.Errorf("participant is not authorized to create %s", resourceType)
-			span.RecordError(err)
-			span.SetStatus(codes.Error, "authorization denied")
+			otel.Error(span, err, "authorization check failed")
+			slog.ErrorContext(ctx, "Error checking if principal is authorized to create resource",
+				slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldResourceType, resourceType),
+			)
 		}
-		return nil, &coolfhir.ErrorWithCode{
+		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("Participant is not authorized to create %s", resourceType),
 			StatusCode: http.StatusForbidden,
-		}
+		})
 	}
 
 	// Add authorization decision details to span
@@ -89,8 +85,10 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 		attribute.StringSlice(otel.AuthZReasons, authzDecision.Reasons),
 	)
 
-	log.Ctx(ctx).Info().Msgf("Creating %s (authz=%s)", resourceType, strings.Join(authzDecision.Reasons, ";"))
-
+	slog.InfoContext(ctx, "Creating resource",
+		slog.String(logging.FieldResourceType, resourceType),
+		slog.String(logging.FieldAuthz, strings.Join(authzDecision.Reasons, ";")),
+	)
 	if h.validator != nil {
 		result, err2, done := h.validate(ctx, resource, resourceType)
 		if done {
@@ -162,7 +160,7 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T, resourceType string) (FHIRHandlerResult, error, bool) {
 	ctx, span := tracer.Start(
 		ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.FHIRResourceType, resourceType),
@@ -203,9 +201,7 @@ func (h FHIRCreateOperationHandler[T]) validate(ctx context.Context, resource T,
 			HttpStatusCode: http.StatusBadRequest,
 		}
 
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "validation failed")
-		return nil, err, true
+		return nil, otel.Error(span, err, "validation failed"), true
 	}
 
 	span.SetAttributes(

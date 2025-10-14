@@ -1,7 +1,7 @@
 package coolfhir
 
 import (
-	"fmt"
+	"errors"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	baseotel "go.opentelemetry.io/otel"
@@ -29,7 +29,7 @@ func NewTracedHTTPTransport(base http.RoundTripper, tracer trace.Tracer) *Traced
 
 func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	ctx, span := t.tracer.Start(req.Context(),
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, req.Method),
@@ -42,27 +42,32 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 	)
 	defer span.End()
 
+	// Clone the request to avoid modifying the original
+	reqClone := req.Clone(ctx)
+
+	// Ensure headers map exists
+	if reqClone.Header == nil {
+		reqClone.Header = make(http.Header)
+	}
+
 	// Inject trace context into HTTP headers
-	baseotel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
+	baseotel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(reqClone.Header))
 
 	// Execute the request with traced context
-	req = req.WithContext(ctx)
-	resp, err := t.base.RoundTrip(req)
+	resp, err := t.base.RoundTrip(reqClone)
 
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
-		return resp, err
+		return resp, otel.Error(span, err)
 	}
 
 	// Record response attributes
 	span.SetAttributes(
-		attribute.Int("http.status_code", resp.StatusCode),
-		attribute.String("http.status_text", resp.Status),
+		attribute.Int(otel.HTTPStatusCode, resp.StatusCode),
+		attribute.String(otel.HTTPStatusText, resp.Status),
 	)
 
 	if resp.StatusCode >= 400 {
-		span.SetStatus(codes.Error, fmt.Sprintf("HTTP %d", resp.StatusCode))
+		otel.Error(span, errors.New(http.StatusText(resp.StatusCode)))
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}

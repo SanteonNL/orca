@@ -5,9 +5,12 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/trace"
+	"net/http"
 	"net/url"
 )
 
@@ -23,9 +26,21 @@ func NewTracedFHIRClient(client fhirclient.Client, tracer trace.Tracer) *TracedF
 	}
 }
 
+// injectTraceContext creates headers with injected trace context and adds them to options
+func (t *TracedFHIRClient) injectTraceContext(ctx context.Context, options []fhirclient.Option) []fhirclient.Option {
+	headers := make(http.Header)
+	baseotel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(headers))
+
+	if len(headers) > 0 {
+		options = append(options, fhirclient.RequestHeaders(headers))
+	}
+
+	return options
+}
+
 func (t *TracedFHIRClient) CreateWithContext(ctx context.Context, resource interface{}, result interface{}, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "create"),
@@ -34,10 +49,11 @@ func (t *TracedFHIRClient) CreateWithContext(ctx context.Context, resource inter
 	)
 	defer span.End()
 
+	options = t.injectTraceContext(ctx, options)
+
 	err := t.client.CreateWithContext(ctx, resource, result, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
@@ -50,7 +66,7 @@ func (t *TracedFHIRClient) Create(resource interface{}, result interface{}, opti
 
 func (t *TracedFHIRClient) ReadWithContext(ctx context.Context, path string, result interface{}, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "read"),
@@ -59,10 +75,11 @@ func (t *TracedFHIRClient) ReadWithContext(ctx context.Context, path string, res
 	)
 	defer span.End()
 
+	options = t.injectTraceContext(ctx, options)
+
 	err := t.client.ReadWithContext(ctx, path, result, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
@@ -75,7 +92,7 @@ func (t *TracedFHIRClient) Read(path string, result interface{}, options ...fhir
 
 func (t *TracedFHIRClient) UpdateWithContext(ctx context.Context, path string, resource interface{}, result interface{}, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "update"),
@@ -84,10 +101,11 @@ func (t *TracedFHIRClient) UpdateWithContext(ctx context.Context, path string, r
 	)
 	defer span.End()
 
+	options = t.injectTraceContext(ctx, options)
+
 	err := t.client.UpdateWithContext(ctx, path, resource, result, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
@@ -100,7 +118,7 @@ func (t *TracedFHIRClient) Update(path string, resource interface{}, result inte
 
 func (t *TracedFHIRClient) DeleteWithContext(ctx context.Context, path string, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "delete"),
@@ -109,10 +127,11 @@ func (t *TracedFHIRClient) DeleteWithContext(ctx context.Context, path string, o
 	)
 	defer span.End()
 
+	options = t.injectTraceContext(ctx, options)
+
 	err := t.client.DeleteWithContext(ctx, path, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}
@@ -125,7 +144,7 @@ func (t *TracedFHIRClient) Delete(path string, options ...fhirclient.Option) err
 
 func (t *TracedFHIRClient) SearchWithContext(ctx context.Context, resourceType string, params url.Values, result interface{}, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "search"),
@@ -135,10 +154,11 @@ func (t *TracedFHIRClient) SearchWithContext(ctx context.Context, resourceType s
 	)
 	defer span.End()
 
+	options = t.injectTraceContext(ctx, options)
+
 	err := t.client.SearchWithContext(ctx, resourceType, params, result, options...)
 	if err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, err.Error())
+		return otel.Error(span, err)
 	} else {
 		span.SetStatus(codes.Ok, "")
 	}

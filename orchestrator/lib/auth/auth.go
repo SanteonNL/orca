@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/rs/zerolog/log"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -26,8 +28,8 @@ func PrincipalFromContext(ctx context.Context) (Principal, error) {
 
 func WithPrincipal(ctx context.Context, principal Principal) context.Context {
 	ctx = context.WithValue(ctx, principalContextKey, principal)
-	// Add a child logger with the 'principal' field set, to log it on every log line related to this request
-	ctx = log.Ctx(ctx).With().Str("principal", principal.ID()).Logger().WithContext(ctx)
+	// Add the principal to the context for logging
+	ctx = logging.AppendCtx(ctx, slog.String("principal", principal.ID()))
 	return ctx
 }
 
