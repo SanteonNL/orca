@@ -132,7 +132,9 @@ func TestService(t *testing.T) {
 			"token_type": "Bearer",	
 			"expires_in": 3600,
 			"scope": "` + strings.Join(capturedScope, " ") + `",
-			"patient": "1234"
+			"patient": "1234",
+			"userFirstName": "John",
+			"userLastName": "Doe"
 		}`))
 	})
 

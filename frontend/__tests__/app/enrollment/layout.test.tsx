@@ -5,7 +5,7 @@ import EnrollmentLayout from '@/app/enrollment/layout'
 describe('EnrollmentLayout', () => {
   it('renders children content within the layout', () => {
     const testContent = 'Test enrollment content'
-
+    
     render(
       <EnrollmentLayout>
         <div>{testContent}</div>
@@ -59,7 +59,7 @@ describe('EnrollmentLayout', () => {
 
     const parent = screen.getByTestId('parent')
     const nestedChild = screen.getByTestId('nested-child')
-
+    
     expect(parent).toBeInTheDocument()
     expect(nestedChild).toBeInTheDocument()
     expect(parent).toContainElement(nestedChild)

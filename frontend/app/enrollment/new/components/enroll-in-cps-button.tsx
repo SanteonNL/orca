@@ -116,7 +116,7 @@ export default function EnrollInCpsButton({className}: Props) {
 
     return (
         <ThemeProvider theme={defaultTheme}>
-            <div>
+            <div className="mb-8">
                 {validationErrors && (
                     <ValidationErrors validationErrors={validationErrors}/>
                 )}

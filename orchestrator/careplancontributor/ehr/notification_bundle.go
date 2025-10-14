@@ -4,21 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	baseotel "go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
+	"log/slog"
 	"net/url"
 	"regexp"
 	"slices"
 	"strings"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/google/uuid"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 var tracer = baseotel.Tracer("careplancontributor.ehr")
@@ -47,7 +49,13 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 	defer span.End()
 
 	ref := "Task/" + taskId
-	log.Ctx(ctx).Debug().Msgf("NotifyTaskAccepted Task (ref=%s) to message broker", ref)
+	slog.DebugContext(
+		ctx,
+		"NotifyTaskAccepted Task to message broker",
+		slog.String(logging.FieldResourceReference, ref),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+		slog.String(logging.FieldResourceID, taskId),
+	)
 	id := uuid.NewString()
 	bundles := BundleSet{
 		Id:   id,
@@ -167,7 +175,12 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 			for _, reference := range basedOnReferences {
 				basedOnReference := reference.Reference
 				if basedOnReference != nil && !slices.Contains(carePlanRefs, *basedOnReference) {
-					log.Ctx(ctx).Debug().Msgf("Found carePlanRef %s", *basedOnReference)
+					slog.DebugContext(
+						ctx,
+						"Found carePlanRef",
+						slog.String(logging.FieldResourceReference, *basedOnReference),
+						slog.String(logging.FieldResourceType, fhir.ResourceTypeCarePlan.String()),
+					)
 					carePlanRefs = append(carePlanRefs, *basedOnReference)
 				}
 			}
@@ -176,7 +189,7 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 	if len(carePlanRefs) != 1 {
 		return nil, nil, fmt.Errorf("expected exactly 1 CarePlan, got %d", len(carePlanRefs))
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d carePlanRefs", len(carePlanRefs))
+	slog.DebugContext(ctx, "Found a carePlanRef")
 	carePlanBundle, err := fetchRef(ctx, cpsClient, carePlanRefs[0])
 	if err != nil {
 		return nil, nil, err
@@ -226,7 +239,12 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 		if task.Focus != nil {
 			focusReference := task.Focus.Reference
 			if focusReference != nil && !slices.Contains(serviceRequestRefs, *focusReference) {
-				log.Ctx(ctx).Debug().Msgf("Found serviceRequestRef %s", *focusReference)
+				slog.DebugContext(
+					ctx,
+					"Found serviceRequestRef",
+					slog.String(logging.FieldResourceReference, *focusReference),
+					slog.String(logging.FieldResourceType, fhir.ResourceTypeServiceRequest.String()),
+				)
 				serviceRequestRefs = append(serviceRequestRefs, *focusReference)
 			}
 		}
@@ -234,7 +252,7 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 	if len(serviceRequestRefs) != 1 {
 		return nil, fmt.Errorf("expected exactly 1 ServiceRequest, got %d", len(serviceRequestRefs))
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d serviceRequestRefs", len(serviceRequestRefs))
+	slog.DebugContext(ctx, "Found a serviceRequestRef")
 	serviceRequestBundle, err := fetchRef(ctx, cpsClient, serviceRequestRefs[0])
 	if err != nil {
 		return nil, err
@@ -257,7 +275,12 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 	for _, task := range tasks {
 		questionnaireRefs = append(questionnaireRefs, fetchTaskInputs(task)...)
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d questionnaireRefs", len(questionnaireRefs))
+	slog.DebugContext(
+		ctx,
+		"Found questionnaireRefs",
+		slog.Int(logging.FieldCount, len(questionnaireRefs)),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeQuestionnaire.String()),
+	)
 	questionnaireBundle, err := fetchRefs(ctx, cpsClient, questionnaireRefs)
 	if err != nil {
 		return nil, err
@@ -280,7 +303,12 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 	for _, task := range tasks {
 		questionnaireResponseRefs = append(questionnaireResponseRefs, fetchTaskOutputs(task)...)
 	}
-	log.Ctx(ctx).Debug().Msgf("Found %d questionnaireResponseRefs", len(questionnaireResponseRefs))
+	slog.DebugContext(
+		ctx,
+		"Found questionnaireResponseRefs",
+		slog.Int(logging.FieldCount, len(questionnaireResponseRefs)),
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeQuestionnaireResponse.String()),
+	)
 	questionnaireResponseBundle, err := fetchRefs(ctx, cpsClient, questionnaireResponseRefs)
 	if err != nil {
 		return nil, err
@@ -413,7 +441,7 @@ func isOfType(valueReference *fhir.Reference, typeName string) bool {
 		if strings.HasPrefix(*valueReference.Reference, "https://") {
 			compile, err := regexp.Compile(fmt.Sprintf("^https:/.*/%s/(.+)$", typeName))
 			if err != nil {
-				log.Error().Msgf("Failed to compile regex: %s", err.Error())
+				slog.Error("Failed to compile regex", slog.String(logging.FieldError, err.Error()))
 			} else {
 				matchesType = compile.MatchString(*valueReference.Reference)
 			}

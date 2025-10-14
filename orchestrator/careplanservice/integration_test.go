@@ -4,17 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"log/slog"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/sdk/trace/tracetest"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"testing"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -22,7 +24,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -860,7 +861,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	fhirClient := fhirclient.New(fhirBaseURL, &http.Client{}, nil)
 
 	ctx := context.Background()
-	log.Ctx(ctx).Debug().Msg("Testing handleSearchResource function with real FHIR server")
+	slog.DebugContext(ctx, "Testing handleSearchResource function with real FHIR server")
 
 	patients := []fhir.Patient{
 		{
@@ -897,7 +898,7 @@ func Test_HandleSearchResource(t *testing.T) {
 		err := fhirClient.Create(patient, &createdPatients[i])
 		require.NoError(t, err)
 		require.NotNil(t, createdPatients[i].Id)
-		log.Ctx(ctx).Debug().Msgf("Created test patient with ID: %s", *createdPatients[i].Id)
+		slog.DebugContext(ctx, "Created test patient", slog.String("id", *createdPatients[i].Id))
 	}
 
 	carePlans := []fhir.CarePlan{
@@ -929,7 +930,7 @@ func Test_HandleSearchResource(t *testing.T) {
 		err := fhirClient.Create(carePlan, &createdCarePlans[i])
 		require.NoError(t, err)
 		require.NotNil(t, createdCarePlans[i].Id)
-		log.Ctx(ctx).Debug().Msgf("Created test care plan with ID: %s", *createdCarePlans[i].Id)
+		slog.DebugContext(ctx, "Created test care plan", slog.String("id", *createdCarePlans[i].Id))
 	}
 
 	t.Run("search patients with multiple IDs", func(t *testing.T) {
