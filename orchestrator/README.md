@@ -24,6 +24,51 @@ Note: the tenant ID is converted to lower case, even if it's in upper case in th
 - `ORCA_NUTS_AZUREKV_CLIENTCERTNAME`: Name of the certificate(s) for outbound HTTP requests. You can use a comma-separated list of names to use multiple certificates.
 - `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 
+### OpenTelemetry (OTEL) Configuration
+ORCA supports OpenTelemetry for distributed tracing, which helps with monitoring and debugging across services.
+
+#### Default Configuration
+By default, OTEL is enabled with the following settings:
+- **Service Name**: `orca-orchestrator`
+- **Protocol**: `grpc`
+- **Endpoint**: `localhost:4317` (standard OTLP gRPC port)
+- **Connection**: Insecure (for local development)
+- **Exporter Type**: `otlp`
+
+#### Standard OTEL Environment Variables
+ORCA reads the following standard OpenTelemetry environment variables:
+
+- `OTEL_SERVICE_NAME`: Name of the service for tracing
+- `OTEL_EXPORTER_OTLP_PROTOCOL`: Protocol to use for OTLP export, currently supports `grpc` (default: `grpc`)
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP endpoint URL
+  - For gRPC: URL schemes (`http://`, `https://`) are automatically stripped
+  - HTTPS endpoints automatically enable secure connections
+- `OTEL_RESOURCE_ATTRIBUTES`: Comma-separated key=value pairs for additional resource attributes
+  - Example: `service.namespace=production,service.instance.id=abc123,environment=staging`
+
+#### Azure Container Apps Integration
+For Azure Container Apps environments, ORCA also supports:
+- `CONTAINERAPP_OTEL_METRIC_GRPC_ENDPOINT`: Azure-specific metric endpoint
+- `CONTAINERAPP_OTEL_LOGGING_GRPC_ENDPOINT`: Azure-specific logging endpoint
+
+#### ORCA-Specific Overrides
+All OTEL settings can be overridden using the `ORCA_*` prefix convention:
+
+- `ORCA_OTEL_ENABLED`: Enable/disable OpenTelemetry (default: `true`)
+- `ORCA_OTEL_SERVICE_NAME`: Override service name
+- `ORCA_OTEL_SERVICE_VERSION`: Service version for tracing (default: `1.0.0`)
+- `ORCA_OTEL_EXPORTER_TYPE`: Exporter type: `otlp`, `stdout`, or `none` (default: `otlp`)
+- `ORCA_OTEL_EXPORTER_PROTOCOL`: Protocol for OTLP exporter: `grpc` (default: `grpc`)
+- `ORCA_OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP endpoint override
+- `ORCA_OTEL_EXPORTER_OTLP_METRIC_ENDPOINT`: Metric endpoint override
+- `ORCA_OTEL_EXPORTER_OTLP_LOGGING_ENDPOINT`: Logging endpoint override
+- `ORCA_OTEL_EXPORTER_OTLP_INSECURE`: Force insecure connection (default: auto-detected from endpoint)
+- `ORCA_OTEL_EXPORTER_OTLP_TIMEOUT`: Request timeout (default: `10s`)
+- `ORCA_OTEL_EXPORTER_OTLP_HEADERS_<KEY>`: Additional headers for OTLP requests
+- `ORCA_OTEL_RESOURCE_ATTRIBUTES_<KEY>`: Additional resource attributes
+
+**Note**: Currently, only the gRPC protocol is supported for OTLP export. HTTP support requires additional dependencies.
+
 ### Care Plan Service configuration
 - `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
 - `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL`: URL to which the CPS sends webhooks when a CarePlan is created. It sends the CarePlan resource as HTTP POST request with content type `application/json`.
@@ -37,8 +82,9 @@ Note: the tenant ID is converted to lower case, even if it's in upper case in th
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
 #### Zorgplatform integration
+Note: To test a Zorgplatform launch locally, you will need to set `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=false`
 - `ORCA_ZORGPLATFORM_ENABLED`: Enable Zorgplatform integration (default: `false`).
-- `ORCA_TENANT_<ID>_CHIPSOFT_ORGID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
+- `ORCA_TENANT_<ID>_CHIPSOFT_ORGANIZATIONID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
 
 ### Demo configuration
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the "demo" EHR integration, as alternative to production-grade integrations like SMART on FHIR or Zorgplatform (default: `false`).
@@ -157,6 +203,68 @@ If you're Azure Service Bus, depending on the features you've enabled, you'll ne
 - Queue `orca.hl7.fhir.careplan-created` (if `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL` is set).
 - Queue `orca.subscriptionmgr.notification` (if `ORCA_CAREPLANSERVICE_ENABLED` is `true`).
 
+### Data Import
+
+The CarePlanContributor and CarePlanService support importing existing data into ORCA as SharedCarePlanning resources through their `$import` operations.
+
+The CPC's `/cpc/<tenant>/fhir/$import` operation creates an in-progress SCP Task, owned by the invoker and requested by the tenant.
+It takes the following JSON post body parameters:
+- `patient`: Patient identifier as FHIR identifier.
+- `servicerequest`: ServiceRequest code as FHIR Coding.
+- `condition`: Condition code as FHIR Coding.
+- `chipsoft_zorgplatform_workflowid`: ChipSoft Zorgplatform Workflow ID as FHIR token, required to read the patient.
+- `start`: Start date of the enrollment period, in `xs:dateTime` format.
+
+Example:
+
+```json
+{
+  "resourceType": "Parameters",
+  "parameter": [
+    {
+      "name": "patient",
+      "valueIdentifier": {
+        "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+        "value": "123456789"
+      }
+    },
+    {
+      "name": "servicerequest",
+      "valueCoding": {
+        "system": "http://example.com/servicerequest",
+        "code": "sr1",
+        "display": "ServiceRequestDisplay"
+      }
+    },
+    {
+      "name": "condition",
+      "valueCoding": {
+        "system": "http://example.com/condition",
+        "code": "c1",
+        "display": "ConditionDisplay"
+      }
+    },
+    {
+      "name": "chipsoft_zorgplatform_workflowid",
+      "valueIdentifier": {
+        "system": "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id",
+        "value": "workflow-123"
+      }
+    },
+    {
+      "name": "start",
+      "valueDateTime": "2024-01-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+The CPS's `/cps/<tenant>/$import` operation takes a FHIR transaction bundle and executes it on the CPS's FHIR store.
+It circumvents any validation or authorization checks, so it can only contain POST requests to create resources.
+Only the local tenant can invoke this operation (the CPC import operation invokes this operation to actually create the resources).
+
+To enable the `$import` operations for a tenant, set `ORCA_TENANT_<ID>_ENABLEIMPORT` to `true`.
+
 ### App Launch options
 
 #### Demo
@@ -176,6 +284,7 @@ The JWK set will be available at `/smart-app-launch/.well-known/jwks.json`.
 
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ENABLED`: Enables the SMART on FHIR app launch endpoint (default: `false`).
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_CLIENTID` (required): The OAuth2 `client_id`.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_TENANT` (required): The tenant to which app launches from this issuer are logged in. 
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_URL` (required): SMART on FHIR server base URL that launches the application.
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_OAUTH2URL` (optional): In some cases (Epic on FHIR), the actual OAuth2 Authorization Server URL (`issuer` property in the discovered OpenID Configuration) differs from the SMART on FHIR server base URL (`iss` parameter in the launch).
    Setting this option overrides the OAuth2 Authorization Server URL, if not set, the FHIR server base URL is used.

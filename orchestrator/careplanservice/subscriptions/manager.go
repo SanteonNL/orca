@@ -6,15 +6,23 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
+	"log/slog"
 	"net/url"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -22,6 +30,8 @@ var SendNotificationQueue = messaging.Entity{
 	Name:   "orca.subscriptionmgr.notification",
 	Prefix: true,
 }
+
+var tracer = baseotel.Tracer("careplanservice.subscriptions")
 
 var timeFunc = time.Now
 
@@ -36,7 +46,7 @@ func NewManager(cpsBaseURLFunc func(tenants.Properties) *url.URL, tenants tenant
 		channels:       channels,
 		messageBroker:  messageBroker,
 	}
-	if err := messageBroker.ReceiveFromQueue(SendNotificationQueue, mgr.receiveMessage); err != nil {
+	if err := messageBroker.ReceiveFromQueue(SendNotificationQueue, mgr.tryNotify); err != nil {
 		return nil, err
 	}
 	return mgr, nil
@@ -63,19 +73,39 @@ type NotificationEvent struct {
 }
 
 func (r RetryableManager) Notify(ctx context.Context, resource interface{}) error {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String("notification.resource_type", coolfhir.ResourceType(resource)),
+		),
+	)
+	defer span.End()
+
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
-		return err
+		return otel.Error(span, err, "failed to get tenant from context")
 	}
+
+	span.SetAttributes(
+		attribute.String("tenant.id", tenant.ID),
+	)
+
 	var focus fhir.Reference
 	var subscribers []fhir.Identifier
-	switch coolfhir.ResourceType(resource) {
+	resourceType := coolfhir.ResourceType(resource)
+
+	switch resourceType {
 	case "Task":
 		task := resource.(*fhir.Task)
 		focus = fhir.Reference{
 			Reference: to.Ptr("Task/" + *task.Id),
 			Type:      to.Ptr("Task"),
 		}
+
+		span.SetAttributes(attribute.String(otel.FHIRResourceID, *task.Id))
+
 		if task.Owner != nil {
 			if coolfhir.IsLogicalIdentifier(task.Owner.Identifier) {
 				subscribers = append(subscribers, *task.Owner.Identifier)
@@ -94,6 +124,8 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			Type:      to.Ptr("CareTeam"),
 		}
 
+		span.SetAttributes(attribute.String(otel.FHIRResourceID, *careTeam.Id))
+
 		for _, participant := range careTeam.Participant {
 			if coolfhir.IsLogicalIdentifier(participant.Member.Identifier) {
 				subscribers = append(subscribers, *participant.Member.Identifier)
@@ -106,9 +138,17 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			Type:      to.Ptr("CarePlan"),
 		}
 
+		span.SetAttributes(attribute.String(otel.FHIRResourceID, *carePlan.Id))
+
 		careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 		if err != nil {
-			log.Ctx(ctx).Err(err).Msg("failed to read CareTeam in CarePlan")
+			slog.ErrorContext(
+				ctx,
+				"Failed to read CareTeam from CarePlan",
+				slog.String(logging.FieldResourceType, resourceType),
+				slog.String(logging.FieldResourceID, *carePlan.Id),
+				slog.String(logging.FieldError, otel.Error(span, err, "failed to read CarePlan").Error()),
+			)
 			return nil
 		}
 
@@ -118,12 +158,24 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			}
 		}
 	default:
-		return fmt.Errorf("subscription manager does not support notifying for resource type: %T", resource)
+		return otel.Error(span, fmt.Errorf("subscription manager does not support notifying for resource type: %s", coolfhir.ResourceType(resource)), "unsupported resource type")
 	}
 
-	log.Ctx(ctx).Info().Msgf("Notifying %d subscriber(s) for update on resource: %s", len(subscribers), *focus.Reference)
+	span.SetAttributes(
+		attribute.String("fhir.focus_reference", *focus.Reference),
+		attribute.Int("notification.subscriber_count", len(subscribers)),
+	)
+
+	slog.InfoContext(
+		ctx,
+		"Notifying subscriber(s) for update on resource",
+		slog.Int("subscriber_count", len(subscribers)),
+		slog.String(logging.FieldResourceReference, *focus.Reference),
+		slog.String(logging.FieldResourceType, resourceType),
+	)
 
 	var errs []error
+	successCount := 0
 	for _, subscriber := range subscribers {
 		data, _ := json.Marshal(NotificationEvent{
 			Subscriber: subscriber,
@@ -135,43 +187,85 @@ func (r RetryableManager) Notify(ctx context.Context, resource interface{}) erro
 			ContentType: "application/json",
 		}); err != nil {
 			errs = append(errs, fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(subscriber), err))
+		} else {
+			successCount++
 		}
 	}
 
+	span.SetAttributes(
+		attribute.Int("notification.success_count", successCount),
+		attribute.Int("notification.error_count", len(errs)),
+	)
+
 	if len(errs) > 0 {
-		return fmt.Errorf("couldn't notify all subscribers (this is non-recoverable!): %w", errors.Join(errs...))
+		joinedErr := fmt.Errorf("couldn't notify all subscribers (this is non-recoverable!): %w", errors.Join(errs...))
+		return otel.Error(span, joinedErr, "partial notification failure")
 	} else {
+		span.SetStatus(codes.Ok, "")
 		return nil
 	}
 }
 
-func (r RetryableManager) receiveMessage(ctx context.Context, message messaging.Message) error {
+func (r RetryableManager) tryNotify(ctx context.Context, message messaging.Message) error {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String("messaging.operation", "receive"),
+			attribute.String("messaging.destination.name", SendNotificationQueue.Name),
+		),
+	)
+	defer span.End()
+
 	var evt NotificationEvent
 	if err := json.Unmarshal(message.Body, &evt); err != nil {
-		return fmt.Errorf("failed to unmarshal message into %T: %w", evt, err)
+		return otel.Error(span, fmt.Errorf("failed to unmarshal message into %T: %w", evt, err), "failed to unmarshal notification event")
 	}
+
+	// Add notification event details to span
+	span.SetAttributes(
+		attribute.String("tenant.id", evt.TenantID),
+		attribute.String("notification.focus_reference", *evt.Focus.Reference),
+		attribute.String("notification.focus_type", *evt.Focus.Type),
+		attribute.String("notification.subscriber", coolfhir.ToString(evt.Subscriber)),
+	)
 
 	// Enrich context with the correct tenant
 	tenant, err := r.tenants.Get(evt.TenantID)
 	if err != nil {
-		return fmt.Errorf("get tenant %s: %w", evt.TenantID, err)
+		return otel.Error(span, fmt.Errorf("get tenant %s: %w", evt.TenantID, err), "failed to get tenant")
 	}
 	ctx = tenants.WithTenant(ctx, *tenant)
 
+	span.SetAttributes(attribute.String("tenant.id", tenant.ID))
+
 	channel, err := r.channels.Create(ctx, evt.Subscriber)
 	if err != nil {
-		return fmt.Errorf("notification-channel for subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err)
+		return otel.Error(span, fmt.Errorf("notification-channel for subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err), "failed to create notification channel")
 	}
+
 	// TODO: refer to stored subscription
 	subscription := fhir.Reference{
 		Reference: to.Ptr("Subscription/" + uuid.NewString()),
 	}
+
+	span.SetAttributes(attribute.String("fhir.subscription_id", *subscription.Reference))
+
 	// TODO: Read event number from store
 	// TODO: Do we need an audit event for subscription notifications?
 	cpsBaseURL := r.cpsBaseURLFunc(*tenant)
 	notification := coolfhir.CreateSubscriptionNotification(cpsBaseURL, timeFunc(), subscription, 0, evt.Focus)
+
+	span.SetAttributes(attribute.String("notification.cps_base_url", cpsBaseURL.String()))
+
 	if err = channel.Notify(ctx, notification); err != nil {
-		return fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err)
+		return otel.Error(span, fmt.Errorf("notify subscriber %s: %w", coolfhir.ToString(evt.Subscriber), err), "failed to send notification to channel")
 	}
+
+	span.SetAttributes(
+		attribute.String("notification.status", "delivered"),
+	)
+	span.SetStatus(codes.Ok, "")
 	return nil
 }

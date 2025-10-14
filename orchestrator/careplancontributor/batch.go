@@ -2,19 +2,25 @@ package careplancontributor
 
 import (
 	"errors"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
-func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
+func (s *Service) handleFHIRBatchBundle(httpRequest *http.Request, requestBundle fhir.Bundle) (*fhir.Bundle, error) {
 	tenant, err := tenants.FromContext(httpRequest.Context())
 	if err != nil {
 		return nil, err
@@ -23,13 +29,33 @@ func (s *Service) handleBatch(httpRequest *http.Request, requestBundle fhir.Bund
 	if fhirClient == nil {
 		return nil, coolfhir.BadRequest("EHR API is not supported")
 	}
+	ctx, span := tracer.Start(
+		httpRequest.Context(),
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.String(otel.HTTPMethod, httpRequest.Method),
+			attribute.String(otel.HTTPURL, httpRequest.URL.String()),
+			attribute.String(otel.FHIRBundleType, requestBundle.Type.String()),
+			attribute.Int(otel.FHIRBundleEntryCount, len(requestBundle.Entry)),
+		),
+	)
+	defer span.End()
 
-	log.Ctx(httpRequest.Context()).Debug().Msg("Handling external FHIR API request")
-	_, err = s.authorizeScpMember(httpRequest)
+	slog.DebugContext(ctx, "Handling external FHIR API request")
+
+	_, err = s.authorizeScpMember(httpRequest.WithContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, otel.Error(span, err)
 	}
-	return s.doHandleBatch(httpRequest, requestBundle, fhirClient)
+
+	result, err := s.doHandleBatch(httpRequest.WithContext(ctx), requestBundle, fhirClient)
+	if err != nil {
+		return nil, otel.Error(span, err)
+	}
+
+	span.SetStatus(codes.Ok, "")
+	return result, nil
 }
 
 func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bundle, fhirClient fhirclient.Client) (*fhir.Bundle, error) {

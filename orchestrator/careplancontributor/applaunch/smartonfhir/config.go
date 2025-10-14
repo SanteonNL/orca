@@ -16,6 +16,7 @@ type IssuerConfig struct {
 	URL       string `koanf:"url"`
 	ClientID  string `koanf:"clientid"`
 	OAuth2URL string `koanf:"oauth2url"`
+	Tenant    string `koanf:"tenant"`
 }
 
 func DefaultConfig() Config {
@@ -31,6 +32,9 @@ func (c Config) Validate() error {
 		return nil
 	}
 	for key, issuer := range c.Issuer {
+		if issuer.Tenant == "" {
+			return fmt.Errorf("issuer %s tenant is required", key)
+		}
 		if !strings.HasPrefix(issuer.URL, "https://") && !strings.HasPrefix(issuer.URL, "http://") {
 			return fmt.Errorf("issuer %s URL must start with http:// or https://", key)
 		}

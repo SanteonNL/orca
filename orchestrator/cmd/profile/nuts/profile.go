@@ -5,6 +5,18 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
+	"regexp"
+	"slices"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
@@ -18,15 +30,10 @@ import (
 	"github.com/nuts-foundation/go-nuts-client/nuts/discovery"
 	"github.com/nuts-foundation/go-nuts-client/nuts/vcr"
 	"github.com/nuts-foundation/go-nuts-client/oauth2"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"net/url"
-	"regexp"
-	"slices"
-	"strings"
-	"sync"
-	"time"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const identitiesCacheTTL = 5 * time.Minute
@@ -48,6 +55,8 @@ type DutchNutsProfile struct {
 	vcrClient             vcr.ClientWithResponsesInterface
 	csd                   csd.Directory
 	clientCerts           []tls.Certificate
+	// nutsAPIHTTPClient is an HTTP client that is configured to communicate with the Nuts node's internal API.
+	nutsAPIHTTPClient *http.Client
 }
 
 func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
@@ -72,14 +81,15 @@ func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
 			clientCerts = append(clientCerts, *clientCert)
 		}
 	} else {
-		log.Warn().Msg("Nuts: no TLS client certificate configured for outbound HTTP requests")
+		slog.Warn("Nuts: no TLS client certificate configured for outbound HTTP requests")
 	}
+	nutsAPIHTTPClient := otel.NewTracedHTTPClient("nutsnode")
 
-	vcrClient, err := vcr.NewClientWithResponses(config.API.URL)
+	vcrClient, err := vcr.NewClientWithResponses(config.API.URL, vcr.WithHTTPClient(nutsAPIHTTPClient))
 	if err != nil {
 		return nil, err
 	}
-	apiClient, _ := discovery.NewClientWithResponses(config.API.URL)
+	apiClient, _ := discovery.NewClientWithResponses(config.API.URL, discovery.WithHTTPClient(nutsAPIHTTPClient))
 	return &DutchNutsProfile{
 		Config:    config,
 		vcrClient: vcrClient,
@@ -92,6 +102,7 @@ func New(config Config, tenants tenants.Config) (*DutchNutsProfile, error) {
 		cachedIdentities:      map[string][]fhir.Organization{},
 		identitiesRefreshedAt: map[string]time.Time{},
 		clientCerts:           clientCerts,
+		nutsAPIHTTPClient:     nutsAPIHTTPClient,
 	}, nil
 }
 
@@ -102,7 +113,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 	var authzServerURL string
 	switch to.EmptyString(serverIdentity.System) {
 	case "https://build.fhir.org/http.html#root":
-		log.Ctx(ctx).Trace().Msg("Using CapabilityStatement for OAuth2 token acquisition")
+		slog.DebugContext(ctx, "Using CapabilityStatement for OAuth2 token acquisition")
 		// FHIR base URL: need to look up CapabilityStatement
 		capabilityStatement, err := d.readCapabilityStatement(ctx, *serverIdentity.Value)
 		if err != nil {
@@ -127,7 +138,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 			return nil, fmt.Errorf("no OAuth Authorization Server URL found in CapabilityStatement, expected at CapabilityStatement.rest.security.service.extension[%s]", nutsAuthorizationServerExtensionURL)
 		}
 	case coolfhir.URANamingSystem:
-		log.Ctx(ctx).Trace().Msg("Using CSD lookup for OAuth2 token acquisition")
+		slog.DebugContext(ctx, "Using CSD lookup for OAuth2 token acquisition")
 		// Care Plan Contributor: need to look up authz server URL in CSD
 		authServerURLEndpoints, err := d.csd.LookupEndpoint(ctx, &serverIdentity, authzServerURLEndpointName)
 		if err != nil {
@@ -141,7 +152,7 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		return nil, fmt.Errorf("unsupported server identity system: %s", *serverIdentity.System)
 	}
 
-	log.Ctx(ctx).Debug().Msgf("Using OAuth2 Authorization Server URL: %s", authzServerURL)
+	slog.DebugContext(ctx, "Using OAuth2 Authorization Server", slog.String(logging.FieldUrl, authzServerURL))
 	parsedAuthzServerURL, err := url.Parse(authzServerURL)
 	if err != nil {
 		return nil, err
@@ -156,16 +167,31 @@ func (d DutchNutsProfile) HttpClient(ctx context.Context, serverIdentity fhir.Id
 		underlyingTransport = http.DefaultTransport.(*http.Transport).Clone()
 		underlyingTransport.TLSClientConfig = globals.DefaultTLSConfig
 	}
+
+	tracedTransport := otelhttp.NewTransport(
+		underlyingTransport,
+		otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+			return fmt.Sprintf("(nuts-secured) %s %s", strings.ToLower(r.Method), r.URL.Path)
+		}),
+		otelhttp.WithSpanOptions(
+			trace.WithSpanKind(trace.SpanKindClient),
+			trace.WithAttributes(
+				attribute.String("oauth2.resource_server.identity", coolfhir.ToString(serverIdentity)),
+			),
+		),
+	)
+
 	tenant, err := tenants.FromContext(ctx)
 	if err != nil {
 		return nil, err
 	}
 	client := &http.Client{
 		Transport: &oauth2.Transport{
-			UnderlyingTransport: underlyingTransport,
+			UnderlyingTransport: tracedTransport,
 			TokenSource: nuts.OAuth2TokenSource{
-				NutsSubject: tenant.Nuts.Subject,
-				NutsAPIURL:  d.Config.API.URL,
+				NutsSubject:    tenant.Nuts.Subject,
+				NutsAPIURL:     d.Config.API.URL,
+				NutsHttpClient: d.nutsAPIHTTPClient,
 			},
 			Scope:          careplancontributor.CarePlanServiceOAuth2Scope,
 			AuthzServerURL: parsedAuthzServerURL,
@@ -183,7 +209,7 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 	if time.Since(d.identitiesRefreshedAt[tenant.ID]) > identitiesCacheTTL || len(d.cachedIdentities[tenant.ID]) == 0 {
 		identifiers, err := d.identities(ctx, tenant.Nuts.Subject)
 		if err != nil {
-			log.Ctx(ctx).Warn().Err(err).Msg("Failed to refresh local identities using Nuts node")
+			slog.WarnContext(ctx, "Failed to refresh local identities using Nuts node", slog.String(logging.FieldError, err.Error()))
 			if d.cachedIdentities == nil {
 				// If we don't have a cached value, we can't return anything, so return the error.
 				return nil, fmt.Errorf("failed to load local identities: %w", err)
@@ -197,11 +223,12 @@ func (d *DutchNutsProfile) Identities(ctx context.Context) ([]fhir.Organization,
 }
 
 func (d DutchNutsProfile) readCapabilityStatement(ctx context.Context, fhirBaseURL string) (*fhir.CapabilityStatement, error) {
+	fhirHTTPClient := otel.NewTracedHTTPClient("fhir")
 	httpRequest, err := http.NewRequestWithContext(ctx, "GET", fhirBaseURL+"/metadata", nil)
 	if err != nil {
 		return nil, err
 	}
-	httpResponse, err := http.DefaultClient.Do(httpRequest)
+	httpResponse, err := fhirHTTPClient.Do(httpRequest)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +259,7 @@ func (d DutchNutsProfile) identities(ctx context.Context, subject string) ([]fhi
 	for _, cred := range *response.JSON200 {
 		identities, err := d.identifiersFromCredential(cred)
 		if err != nil {
-			log.Ctx(ctx).Warn().Err(err).Msgf("Failed to extract identities from credential: %s", cred.ID)
+			slog.WarnContext(ctx, "Failed to extract identities from credential", slog.String(logging.FieldError, err.Error()), slog.String("id", cred.ID.String()))
 			continue
 		}
 		results = append(results, identities...)

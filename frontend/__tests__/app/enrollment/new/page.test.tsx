@@ -1,6 +1,16 @@
 import { render, screen } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ConfirmDataPreEnrollment from '@/app/enrollment/new/page';
+import useEnrollment from "@/app/hooks/enrollment-hook";
+
+jest.mock('@/app/hooks/enrollment-hook');
+
+const mockServiceRequest = {
+    performer: [{identifier: {system: 'http://example.com', value: 'org-123'}}]
+};
+(useEnrollment as jest.Mock).mockReturnValue({
+    serviceRequest: mockServiceRequest
+});
 
 jest.mock('@/app/enrollment/new/components/enroll-in-cps-button', () => {
   return function MockEnrollInCpsButton({ className }: { className?: string }) {
@@ -16,7 +26,7 @@ jest.mock('@/app/enrollment/new/components/enrollment-details', () => {
 
 it('renders the instruction message', () => {
   render(<ConfirmDataPreEnrollment />);
-  expect(screen.getByText('Indien het verzoek niet klopt, pas het dan aan in het EPD.')).toBeInTheDocument();
+  expect(screen.getByText('Indien de gegevens van de patiënt niet kloppen, pas het dan aan in het EPD.')).toBeInTheDocument();
 });
 
 it('renders enrollment details component', () => {

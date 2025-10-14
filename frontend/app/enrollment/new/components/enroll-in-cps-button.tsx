@@ -1,6 +1,6 @@
 "use client"
 import {findInBundle, getPatientIdentifier, constructTaskBundle} from '@/lib/fhirUtils'
-import useEnrollment from '@/lib/store/enrollment-store'
+import useEnrollment from '@/app/hooks/enrollment-hook'
 import {Bundle, Coding, Condition, OperationOutcome, PractitionerRole} from 'fhir/r4'
 import React, {useEffect, useState} from 'react'
 import {toast} from "sonner"
@@ -10,7 +10,7 @@ import {Spinner} from '@/components/spinner'
 import {Button, ThemeProvider} from '@mui/material'
 import {defaultTheme} from "@/app/theme"
 import ValidationErrors from './validation-errors'
-import useContext from "@/lib/store/context-store"
+import useContext from "@/app/hooks/context-hook"
 
 interface Props {
     className?: string
@@ -31,7 +31,7 @@ export default function EnrollInCpsButton({className}: Props) {
         taskCondition,
         practitionerRole,
         serviceRequest,
-        loading,
+        isLoading,
     } = useEnrollment()
     const {
         launchContext,
@@ -45,8 +45,8 @@ export default function EnrollInCpsButton({className}: Props) {
     const router = useRouter()
 
     useEffect(() => {
-        setDisabled(submitted || !taskCondition || loading)
-    }, [taskCondition, selectedCarePlan, submitted, loading])
+        setDisabled(submitted || !taskCondition || isLoading)
+    }, [taskCondition, selectedCarePlan, submitted, isLoading])
 
     const informCps = async () => {
         setSubmitted(true)
@@ -116,7 +116,7 @@ export default function EnrollInCpsButton({className}: Props) {
 
     return (
         <ThemeProvider theme={defaultTheme}>
-            <div>
+            <div className="mb-8">
                 {validationErrors && (
                     <ValidationErrors validationErrors={validationErrors}/>
                 )}

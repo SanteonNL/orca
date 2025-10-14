@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 	"net/http"
 	"strconv"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 type Config map[string]Properties
@@ -79,28 +81,31 @@ func FromContext(ctx context.Context) (Properties, error) {
 // WithTenant set the tenant on the request context.
 func WithTenant(ctx context.Context, props Properties) context.Context {
 	ctx = context.WithValue(ctx, tenantContextKey, props)
-	// Add a child logger with the 'principal' field set, to log it on every log line related to this request
-	ctx = log.Ctx(ctx).With().Str("tenant", props.ID).Logger().WithContext(ctx)
+	// Add the tenant to the context for logging
+	ctx = logging.AppendCtx(ctx, slog.String("tenant", props.ID))
 	return ctx
 }
 
 // HttpHandler wraps an HTTP handler to inject the tenant into the request context.
-func (c Config) HttpHandler(handler func(http.ResponseWriter, *http.Request)) func(http.ResponseWriter, *http.Request) {
+func (c Config) HttpHandler(handler http.HandlerFunc) http.HandlerFunc {
 	return func(writer http.ResponseWriter, request *http.Request) {
 		tenantID := request.PathValue("tenant")
 		if tenantID == "" {
-			log.Ctx(request.Context()).Error().Msgf("No tenant ID in HTTP request path: %s", request.URL.Path)
+			slog.ErrorContext(request.Context(), "No tenant ID in HTTP request", slog.String(logging.FieldPath, request.URL.Path))
 			http.Error(writer, "Unable to determine tenant", http.StatusInternalServerError)
 			return
 		}
 		tenant, err := c.Get(tenantID)
 		if err != nil {
-			log.Ctx(request.Context()).Error().Err(err).Msgf("Unknown tenant (id=%s, request=%s)", tenantID, request.URL.Path)
+			slog.ErrorContext(request.Context(), "Unknown tenant", slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldPath, request.URL.Path),
+				slog.String("tenant_id", tenantID),
+			)
 			http.Error(writer, "Unknown tenant", http.StatusBadRequest)
 			return
 		}
 		ctx := WithTenant(request.Context(), *tenant)
-		log.Ctx(ctx).Debug().Msgf("Handling request for tenant: %s", tenant.ID)
+		slog.DebugContext(ctx, "Handling request", slog.String("tenant_id", tenant.ID))
 		request = request.WithContext(ctx)
 		handler(writer, request)
 	}

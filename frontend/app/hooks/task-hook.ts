@@ -1,6 +1,6 @@
 import Client from "fhir-kit-client";
 import {Task} from "fhir/r4";
-import {FetchData} from "@/app/hooks/fetch-data";
+import {useQuery} from "@tanstack/react-query";
 import {fetchTaskById} from "@/lib/fhirUtils";
 
 export type TaskHookArgs = {
@@ -15,15 +15,15 @@ export type TaskHookResult = {
 }
 
 export default function TaskHook({cpsClient, taskId}: TaskHookArgs ): TaskHookResult {
-    const {data, isError, isLoading} =  FetchData<Task>({
-        queryKey: [taskId],
-        queryFn: async ()=> {
-            return await fetchTaskById(cpsClient, taskId);
-        },
-        initialData: {} as Task
+    const {data, isError, isLoading} = useQuery({
+        queryKey: ['task', taskId],
+        queryFn: () => fetchTaskById(cpsClient, taskId),
+        refetchInterval: 2000, // Poll every 2 seconds
+        enabled: !!taskId && !!cpsClient,
     });
+    
     return {
-        task: data,
+        task: data || ({} as Task),
         isLoading,
         isError
     }

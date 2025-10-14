@@ -1,7 +1,7 @@
 .PHONY: gen-api gen-mocks
 
 install-tools:
-	go install go.uber.org/mock/mockgen@v0.5.1
+	go install go.uber.org/mock/mockgen@v0.6.0
 	go install github.com/vektra/mockery/v2@v2.43.2
 
 gen-mocks:

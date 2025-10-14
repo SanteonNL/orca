@@ -3,16 +3,18 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
-	"github.com/rs/zerolog"
+	"log/slog"
+
+	"net/url"
+	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/knadh/koanf/v2"
-	"net/url"
-	"strings"
 
 	"github.com/knadh/koanf/providers/env"
 )
@@ -28,8 +30,10 @@ type Config struct {
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
 	Tenants         tenants.Config         `koanf:"tenant"`
 	Messaging       messaging.Config       `koanf:"messaging"`
-	LogLevel        zerolog.Level          `koanf:"loglevel"`
+	LogLevel        slog.Level             `koanf:"loglevel"`
 	StrictMode      bool                   `koanf:"strictmode"`
+	// OpenTelemetry holds the configuration for observability
+	OpenTelemetry otel.Config `koanf:"opentelemetry"`
 }
 
 func (c Config) Validate() error {
@@ -41,6 +45,9 @@ func (c Config) Validate() error {
 	}
 	if err := c.Messaging.Validate(c.StrictMode); err != nil {
 		return fmt.Errorf("invalid messaging configuration: %w", err)
+	}
+	if err := c.OpenTelemetry.Validate(); err != nil {
+		return fmt.Errorf("invalid OpenTelemetry configuration: %w", err)
 	}
 	if c.Public.URL == "" {
 		return errors.New("public base URL is not configured")
@@ -117,7 +124,7 @@ func splitWithEscaping(s, separator, escape string) []string {
 // DefaultConfig returns sensible, but not complete, default configuration values.
 func DefaultConfig() Config {
 	return Config{
-		LogLevel:   zerolog.InfoLevel,
+		LogLevel:   slog.LevelInfo,
 		StrictMode: true,
 		Public: InterfaceConfig{
 			Address: ":8080",
@@ -125,5 +132,6 @@ func DefaultConfig() Config {
 		},
 		CarePlanContributor: careplancontributor.DefaultConfig(),
 		CarePlanService:     careplanservice.DefaultConfig(),
+		OpenTelemetry:       otel.DefaultConfig(),
 	}
 }

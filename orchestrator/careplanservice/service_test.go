@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"go.uber.org/mock/gomock"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -14,6 +11,10 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"go.uber.org/mock/gomock"
 
 	events "github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
@@ -338,7 +339,18 @@ func TestService_Handle(t *testing.T) {
 			},
 		}
 	})
+	tenant := tenantCfg.Sole()
+	tenantCfg["tenant_import_not_enabled"] = tenants.Test(func(properties *tenants.Properties) {
+		properties.ID = "tenant_import_not_enabled"
+		properties.EnableImport = false
+		properties.CPS = tenants.CarePlanServiceProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirServer.URL + "/fhir",
+			},
+		}
+	}).Sole()
 	service, err := New(DefaultConfig(), tenantCfg, profile.Test(), orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
+	require.NoError(t, err)
 
 	var capturedHeaders []http.Header
 	service.handlerProvider = func(method string, resourceType string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -405,7 +417,7 @@ func TestService_Handle(t *testing.T) {
 	httpClient := frontServer.Client()
 	httpClient.Transport = auth.AuthenticatedTestRoundTripper(frontServer.Client().Transport, auth.TestPrincipal1, "")
 	cpsBaseUrl, _ := url.Parse(frontServer.URL)
-	fhirClient := fhirclient.New(cpsBaseUrl.JoinPath("cps", tenantCfg.Sole().ID), httpClient, nil)
+	fhirClient := fhirclient.New(cpsBaseUrl.JoinPath("cps", tenant.ID), httpClient, nil)
 
 	t.Run("Bundle", func(t *testing.T) {
 		t.Run("POST 2 items (CarePlan, Task)", func(t *testing.T) {
@@ -676,6 +688,49 @@ func TestService_Handle(t *testing.T) {
 			err = fhirClient.Update("Organization/123", org, &org)
 
 			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/UpdateOrganization failed: this fails on purpose")
+		})
+	})
+	t.Run("$import operation", func(t *testing.T) {
+		t.Run("ok", func(t *testing.T) {
+			var requestBundle fhir.Bundle
+			var responseBundle fhir.Bundle
+			hdrs := new(fhirclient.Headers)
+
+			err = fhirClient.Create(requestBundle, &responseBundle, fhirclient.ResponseHeaders(hdrs), fhirclient.AtPath("/$import"))
+
+			require.NoError(t, err)
+			assert.Len(t, responseBundle.Entry, 2)
+			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
+		})
+		t.Run("invoker is not the local tenant", func(t *testing.T) {
+			var responseBundle fhir.Bundle
+			hdrs := new(fhirclient.Headers)
+
+			httpClient := http.Client{
+				Transport: auth.AuthenticatedTestRoundTripper(http.DefaultTransport, auth.TestPrincipal2, ""),
+			}
+			fhirClient := fhirclient.New(cpsBaseUrl.JoinPath("cps", tenant.ID), &httpClient, nil)
+
+			err = fhirClient.Create(fhir.Bundle{}, &responseBundle, fhirclient.ResponseHeaders(hdrs), fhirclient.AtPath("/$import"))
+
+			require.ErrorContains(t, err, "requester must be local care organization to use $import")
+			assert.Empty(t, responseBundle.Entry)
+			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
+		})
+		t.Run("not enabled", func(t *testing.T) {
+			var responseBundle fhir.Bundle
+			hdrs := new(fhirclient.Headers)
+
+			httpClient := http.Client{
+				Transport: auth.AuthenticatedTestRoundTripper(http.DefaultTransport, auth.TestPrincipal2, ""),
+			}
+			fhirClient := fhirclient.New(cpsBaseUrl.JoinPath("cps", "tenant_import_not_enabled"), &httpClient, nil)
+
+			err := fhirClient.Create(fhir.Bundle{}, &responseBundle, fhirclient.ResponseHeaders(hdrs), fhirclient.AtPath("/$import"))
+
+			require.ErrorContains(t, err, "import is not enabled for this tenant")
+			assert.Empty(t, responseBundle.Entry)
+			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 		})
 	})
 }

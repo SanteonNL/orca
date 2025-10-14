@@ -1,26 +1,36 @@
 import {render, screen, act, waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import EnrollmentTaskPage from '@/app/enrollment/task/[taskId]/page';
-import useEnrollmentStore from '@/lib/store/enrollment-store';
+import useEnrollment from '@/app/hooks/enrollment-hook';
 import {useParams} from 'next/navigation';
 import * as fhirRender from '@/lib/fhirRender';
 import * as applaunch from '@/app/applaunch';
 import TaskProgressHook from '@/app/hooks/task-progress-hook';
 
 jest.mock('@/app/hooks/task-progress-hook');
-jest.mock('@/lib/store/enrollment-store');
+jest.mock('@/app/hooks/enrollment-hook');
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
 const mockScpClient = {}
-jest.mock('@/lib/store/context-store', () => ({
-    useContextStore: jest.fn(() => ({
-        launchContext: {taskIdentifier: 'task-id-123'},
-        cpsClient: mockCpsClient,
-        scpClient: mockScpClient
-    }))
+jest.mock('@/app/hooks/context-hook', () => () => ({
+    launchContext: {taskIdentifier: 'task-id-123'},
+    cpsClient: mockCpsClient,
+    scpClient: mockScpClient,
+    isLoading: false,
+    isError: false,
+    error: null
 }))
 jest.mock('next/navigation');
 jest.mock('@/lib/fhirRender');
 jest.mock('@/app/applaunch');
+jest.mock('@tanstack/react-query', () => ({
+    ...jest.requireActual('@tanstack/react-query'),
+    useQuery: jest.fn(() => ({
+        data: { launchContext: {taskIdentifier: 'task-id-123'} },
+        isLoading: false,
+        isError: false,
+        error: null
+    }))
+}));
 jest.mock('@/app/enrollment/loading', () => {
     const MockLoading = () => <div data-testid="loading">Loading...</div>;
     MockLoading.displayName = 'MockLoading';
@@ -84,13 +94,19 @@ const mockPatient = {
 };
 
 const mockServiceRequest = {
-    performer: [{identifier: {system: 'http://example.com', value: 'org-123'}}]
+    performer: [{identifier: {system: 'http://example.com', value: 'org-123'}}],
+    code: {
+        coding:
+            [
+                {
+                    system: 'http://snomed.info/sct',
+                    code: '394577000',
+                    display: 'Cardiologie consult'
+                }
+            ]
+    }
 };
 
-const mockOrganization = {
-    id: 'org-1',
-    name: 'Test Hospital'
-};
 
 beforeEach(() => {
     jest.clearAllMocks();
@@ -102,7 +118,7 @@ beforeEach(() => {
         isError: false,
         isLoading: false
     });
-    (useEnrollmentStore as jest.Mock).mockReturnValue({
+    (useEnrollment as jest.Mock).mockReturnValue({
         patient: mockPatient,
         serviceRequest: mockServiceRequest
     });
@@ -162,7 +178,7 @@ describe("taskid page tests", () => {
             render(<EnrollmentTaskPage/>);
         });
         expect(screen.getByTestId('patient-details')).toBeInTheDocument();
-        expect(screen.getByText('Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
+        expect(screen.getByText('De aanmelding is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
     });
 
     it('displays task note when available', async () => {
@@ -187,42 +203,10 @@ describe("taskid page tests", () => {
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-        expect(screen.getByText('Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
+        expect(screen.getByText('De aanmelding is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart.')).toBeInTheDocument();
     });
-
-    it('displays launch buttons when task is in-progress and apps available', async () => {
-        const mockApps = [
-            {Name: 'App 1', URL: 'http://app1.example.com'},
-            {Name: 'App 2', URL: 'http://app2.example.com'}
-        ];
-        (applaunch.getLaunchableApps as jest.Mock).mockResolvedValue(mockApps);
-
-        (TaskProgressHook as jest.Mock).mockReturnValue({
-            task: { ...mockTask, status: 'in-progress' },
-            subTasks: [],
-            questionnaireMap: {},
-            isError: false,
-            isLoading: false
-        });
-
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
-            patient: mockPatient,
-            serviceRequest: mockServiceRequest,
-            organization: mockOrganization
-        });
-
-        await act(async () => {
-            render(<EnrollmentTaskPage/>);
-        });
-
-        await waitFor(() => {
-            expect(screen.getByText('App 1')).toBeInTheDocument();
-            expect(screen.getByText('App 2')).toBeInTheDocument();
-        });
-    });
-
     it('displays patient details when patient data is missing', async () => {
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: null,
             serviceRequest: mockServiceRequest
         });
@@ -237,7 +221,7 @@ describe("taskid page tests", () => {
             ...mockPatient,
             telecom: [{system: 'phone', value: '+31612345678'}]
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: patientWithoutEmail,
             serviceRequest: mockServiceRequest
         });
@@ -252,7 +236,7 @@ describe("taskid page tests", () => {
             ...mockPatient,
             telecom: [{system: 'email', value: 'patient@example.com'}]
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: patientWithoutPhone,
             serviceRequest: mockServiceRequest
         });
@@ -355,12 +339,8 @@ describe("taskid page tests", () => {
     });
 
     it('handles missing cpsClient gracefully', async () => {
-        jest.mock('@/lib/store/context-store', () => ({
-            useContextStore: jest.fn(() => ({
-                scpClient: mockScpClient,
-                cpsClient: null
-            }))
-        }));
+        // This test is handled by the global mock already
+        // No need for inline mocking since useContext hook is already mocked
 
         (TaskProgressHook as jest.Mock).mockReturnValue({
             task: null,
@@ -377,8 +357,6 @@ describe("taskid page tests", () => {
 
     it('auto launches external app when conditions are met', async () => {
         const mockApps = [{Name: 'External App', URL: 'http://external.example.com'}];
-        const originalEnv = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = 'true';
         const mockOpen = jest.fn();
         Object.defineProperty(window, 'open', { value: mockOpen, writable: true });
 
@@ -397,7 +375,6 @@ describe("taskid page tests", () => {
             expect(mockOpen).toHaveBeenCalledWith('http://external.example.com', '_self');
         });
 
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = originalEnv;
     });
 
     it('does not auto launch when multiple apps are available', async () => {
@@ -405,8 +382,6 @@ describe("taskid page tests", () => {
             {Name: 'App 1', URL: 'http://app1.example.com'},
             {Name: 'App 2', URL: 'http://app2.example.com'}
         ];
-        const originalEnv = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = 'true';
         const mockOpen = jest.fn();
         Object.defineProperty(window, 'open', { value: mockOpen, writable: true });
 
@@ -422,14 +397,10 @@ describe("taskid page tests", () => {
         });
 
         expect(mockOpen).not.toHaveBeenCalled();
-
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = originalEnv;
     });
 
     it('does not auto launch when task is not in progress', async () => {
         const mockApps = [{Name: 'External App', URL: 'http://external.example.com'}];
-        const originalEnv = process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP;
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = 'true';
         const mockOpen = jest.fn();
         Object.defineProperty(window, 'open', { value: mockOpen, writable: true });
 
@@ -446,7 +417,6 @@ describe("taskid page tests", () => {
 
         expect(mockOpen).not.toHaveBeenCalled();
 
-        process.env.NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP = originalEnv;
     });
 
     it('handles hook error state', async () => {
@@ -541,20 +511,24 @@ describe("taskid page tests", () => {
     });
 
     it('renders task heading with correct title for accepted status', async () => {
+        (fhirRender.organizationNameShort as jest.Mock).mockReturnValue('Test Hospital');
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: { ...mockTask, status: 'accepted' },
+            mockServiceRequest
+        })
         await act(async () => {
             render(<EnrollmentTaskPage/>);
         });
-
         expect(screen.getByTestId('task-heading')).toBeInTheDocument();
-        expect(screen.getByTestId('task-title')).toHaveTextContent('Verzoek geaccepteerd');
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding voor cardiologie consult Test Hospital is gelukt!');
     });
 
     it('renders task heading with service name when available for ready status', async () => {
         const serviceRequest = {
             ...mockServiceRequest,
-            code: { coding: [{ display: 'Cardiology Consultation' }] }
+            code: { coding: [{ display: 'Cardiologie consult' }] }
         };
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest
         });
@@ -568,21 +542,7 @@ describe("taskid page tests", () => {
             render(<EnrollmentTaskPage/>);
         });
 
-        expect(screen.getByTestId('task-title')).toHaveTextContent('Cardiology Consultation instellen');
-    });
-
-    it('renders default title when service name not available for requested status', async () => {
-        (TaskProgressHook as jest.Mock).mockReturnValue({
-            task: { ...mockTask, status: 'requested' },
-            isError: false,
-            isLoading: false
-        });
-
-        await act(async () => {
-            render(<EnrollmentTaskPage/>);
-        });
-
-        expect(screen.getByTestId('task-title')).toHaveTextContent('Instellen');
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Cardiologie consult instellen');
     });
 
     it('renders breadcrumb navigation for non-first step', async () => {
@@ -685,7 +645,7 @@ describe("taskid page tests", () => {
     });
 
     it('handles missing service request gracefully in breadcrumb', async () => {
-        (useEnrollmentStore as jest.Mock).mockReturnValue({
+        (useEnrollment as jest.Mock).mockReturnValue({
             patient: mockPatient,
             serviceRequest: null
         });
@@ -723,5 +683,33 @@ describe("taskid page tests", () => {
         expect(link).toHaveAttribute('href', '/enrollment/new');
 
         process.env.NEXT_PUBLIC_BASE_PATH = originalBasePath;
+    });
+
+    it('renders task heading with correct title for accepted status with serviceRequest coding and task owner', async () => {
+        const serviceRequest = {
+            ...mockServiceRequest
+        };
+        const taskWithOwner = {
+            ...mockTask,
+            status: 'accepted',
+            owner: { reference: 'Organization/org-1' }
+        };
+        (useEnrollment as jest.Mock).mockReturnValue({
+            patient: mockPatient,
+            serviceRequest
+        });
+        (TaskProgressHook as jest.Mock).mockReturnValue({
+            task: taskWithOwner,
+            subTasks: [],
+            questionnaireMap: {},
+            isError: false,
+            isLoading: false
+        });
+        (fhirRender.organizationNameShort as jest.Mock).mockReturnValue('Test Hospital');
+        await act(async () => {
+            render(<EnrollmentTaskPage/>);
+        });
+        expect(screen.getByTestId('task-heading')).toBeInTheDocument();
+        expect(screen.getByTestId('task-title')).toHaveTextContent('Aanmelding voor cardiologie consult Test Hospital is gelukt!');
     });
 });

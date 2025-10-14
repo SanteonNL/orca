@@ -1,14 +1,15 @@
 import {act, render, screen} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TaskOverviewTable from '@/app/enrollment/list/components/table';
-import useEnrollmentStore from '@/lib/store/enrollment-store';
-import useContext from '@/lib/store/context-store';
+import useEnrollment from '@/app/hooks/enrollment-hook';
+import useContext from '@/app/hooks/context-hook';
 import * as fhirUtils from '@/lib/fhirUtils';
-import EnrollmentTaskPage from "@/app/enrollment/task/[taskId]/page";
+import {useRouter} from 'next/navigation';
 
-jest.mock('@/lib/store/enrollment-store');
-jest.mock('@/lib/store/context-store');
+jest.mock('@/app/hooks/enrollment-hook');
+jest.mock('@/app/hooks/context-hook');
 jest.mock('@/lib/fhirUtils');
+jest.mock('next/navigation');
 
 const mockPatient = {
     id: 'patient-1',
@@ -17,33 +18,20 @@ const mockPatient = {
     ]
 };
 
-const mockTasks = [
-    {
-        id: 'task-1',
-        owner: {display: 'Dr. Smith'},
-        focus: {display: 'Cardiologie consult'},
-        status: 'requested',
-        lastModified: '2024-01-15'
-    },
-    {
-        id: 'task-2',
-        owner: {display: 'Dr. Johnson'},
-        focus: {display: 'Bloedonderzoek'},
-        status: 'completed',
-        lastModified: '2024-01-14'
-    }
-];
-
 beforeEach(() => {
     jest.clearAllMocks();
-    (useEnrollmentStore as jest.Mock).mockReturnValue({patient: mockPatient});
+    (useEnrollment as jest.Mock).mockReturnValue({patient: mockPatient});
     const mockSearchFn = jest.fn();
-    mockSearchFn.mockResolvedValue([]);
+    mockSearchFn.mockResolvedValue({entry: []});
     (useContext as jest.Mock).mockReturnValue({
         launchContext: {taskIdentifier: 'task-id-123'},
         cpsClient: {search: mockSearchFn}
     });
     (fhirUtils.getPatientIdentifier as jest.Mock).mockReturnValue(mockPatient.identifier[0]);
+    (fhirUtils.identifierToToken as jest.Mock).mockReturnValue('http://fhir.nl/fhir/NamingSystem/bsn|123456789');
+    (useRouter as jest.Mock).mockReturnValue({
+        push: jest.fn(),
+    });
 });
 
 describe('TaskOverviewTable', () => {
@@ -52,14 +40,34 @@ describe('TaskOverviewTable', () => {
             render(<TaskOverviewTable/>);
         });
         expect(screen.getByText('Uitvoerder')).toBeInTheDocument();
-        expect(screen.getByText('Verzoek')).toBeInTheDocument();
+        expect(screen.getByText('Type')).toBeInTheDocument();
         expect(screen.getByText('Status')).toBeInTheDocument();
         expect(screen.getByText('Datum')).toBeInTheDocument();
     });
 
     it('calls cpsClient search with correct patient identifier when patient has BSN', async () => {
         const mockSearch = jest.fn();
-        mockSearch.mockResolvedValue([]);
+        // Mock the patient search response first, then the task search response
+        mockSearch
+            .mockResolvedValueOnce({entry: [{resource: {id: 'patient-1', resourceType: 'Patient'}}]})
+            .mockResolvedValueOnce({
+                entry: [{
+                    resource: {
+                        id: 'task-1',
+                        resourceType: 'Task',
+                        status: 'ready',
+                        meta: {
+                            lastUpdated: '2023-01-01T00:00:00Z'
+                        },
+                        focus: {
+                            display: 'Test Service Request'
+                        },
+                        owner: {
+                            display: 'Test Owner'
+                        }
+                    }
+                }]
+            });
         (useContext as jest.Mock).mockReturnValue({
             launchContext: {taskIdentifier: 'task-id-123'},
             cpsClient: {search: mockSearch}
@@ -69,10 +77,28 @@ describe('TaskOverviewTable', () => {
             render(<TaskOverviewTable/>);
         });
 
-        expect(mockSearch).toHaveBeenCalledWith({
+        // First call should be to find the patient
+        expect(mockSearch).toHaveBeenNthCalledWith(1, {
+            resourceType: 'Patient',
+            searchParams: {
+                'identifier': 'http://fhir.nl/fhir/NamingSystem/bsn|123456789'
+            },
+            options: {postSearch: true},
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
+            }
+        });
+
+        // Second call should be to find tasks for the patient
+        expect(mockSearch).toHaveBeenNthCalledWith(2, {
             resourceType: 'Task',
             searchParams: {
-                'patient': 'http://fhir.nl/fhir/NamingSystem/bsn|123456789'
+                'patient': 'Patient/patient-1',
+                '_sort': '-_lastUpdated'
+            },
+            options: {postSearch: true},
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
             }
         });
     });
@@ -85,28 +111,40 @@ describe('TaskOverviewTable', () => {
             ]
         };
         const mockSearch = jest.fn();
-        mockSearch.mockResolvedValue([]);
+        mockSearch
+            .mockResolvedValueOnce({entry: [{resource: {id: 'patient-2', resourceType: 'Patient'}}]})
+            .mockResolvedValueOnce({entry: []});
         (useContext as jest.Mock).mockReturnValue({
             launchContext: {taskIdentifier: 'task-id-123'},
             cpsClient: {search: mockSearch}
         });
-        (useEnrollmentStore as jest.Mock).mockReturnValue({patient: patientWithoutBSN});
+        (useEnrollment as jest.Mock).mockReturnValue({patient: patientWithoutBSN});
         (fhirUtils.getPatientIdentifier as jest.Mock).mockReturnValue(null);
+        (fhirUtils.identifierToToken as jest.Mock).mockImplementation((identifier) => {
+            if (identifier && identifier.system && identifier.value) {
+                return `${identifier.system}|${identifier.value}`;
+            }
+            return '';
+        });
 
         await act(async () => {
             render(<TaskOverviewTable/>);
         });
 
-        expect(mockSearch).toHaveBeenCalledWith({
-            resourceType: 'Task',
+        expect(mockSearch).toHaveBeenNthCalledWith(1, {
+            resourceType: 'Patient',
             searchParams: {
-                'patient': 'http://example.com/mrn|MRN123'
+                'identifier': 'http://example.com/mrn|MRN123'
+            },
+            options: {postSearch: true},
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded'
             }
         });
     });
 
     it('does not call search when patient is not available', async () => {
-        (useEnrollmentStore as jest.Mock).mockReturnValue({patient: null});
+        (useEnrollment as jest.Mock).mockReturnValue({patient: null});
         const mockSearch = jest.fn();
         mockSearch.mockResolvedValue([]);
         (useContext as jest.Mock).mockReturnValue({
@@ -123,9 +161,9 @@ describe('TaskOverviewTable', () => {
 
     it('throws error when patient has no identifiers', () => {
         const patientWithoutIdentifiers = {id: 'patient-3', identifier: []};
-        (useEnrollmentStore as jest.Mock).mockReturnValue({patient: patientWithoutIdentifiers});
+        (useEnrollment as jest.Mock).mockReturnValue({patient: patientWithoutIdentifiers});
         (fhirUtils.getPatientIdentifier as jest.Mock).mockReturnValue(null);
 
-        expect(() => render(<TaskOverviewTable/>)).toThrow('No patient identifier found for the patient');
+        expect(() => render(<TaskOverviewTable/>)).toThrow('No identifier found for the patient');
     })
 });
