@@ -1655,6 +1655,15 @@ func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) 
 			return nil, otel.Error(span, coolfhir.BadRequest("only POST operations are supported in import Bundle"))
 		}
 	}
+
+	// REMOVE THIS
+	txJson, _ := json.MarshalIndent(transaction, "", "  ")
+	slog.InfoContext(
+		ctx,
+		"Import Transaction",
+		slog.String("transaction", string(txJson)),
+	)
+
 	var transactionResult fhir.Bundle
 	if err = s.fhirClientByTenant[tenant.ID].CreateWithContext(ctx, transaction, &transactionResult, fhirclient.AtPath("/")); err != nil {
 		return nil, otel.Error(span, fmt.Errorf("failed to import Bundle: %w", err))
