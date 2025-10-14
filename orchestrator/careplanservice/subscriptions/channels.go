@@ -1,4 +1,4 @@
-//go:generate mockgen -destination=./channels_mock_test.go -package=subscriptions -source=channels.go
+//go:generate mockgen -destination=./channels_mock.go -package=subscriptions -source=channels.go
 package subscriptions
 
 import (
@@ -7,14 +7,20 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"net/http"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/pubsub"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"io"
-	"net/http"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // ChannelFactory defines an interface for creating Subscription Notification Channels (e.g. rest-hook).
@@ -90,6 +96,16 @@ type RestHookChannel struct {
 }
 
 func (r RestHookChannel) Notify(ctx context.Context, notification coolfhir.SubscriptionNotification) error {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String("notification.endpoint", r.Endpoint),
+		),
+	)
+	defer span.End()
+
 	notificationJSON, err := json.Marshal(notification)
 	if err != nil {
 		return err
@@ -106,8 +122,10 @@ func (r RestHookChannel) Notify(ctx context.Context, notification coolfhir.Subsc
 	// Be a good client and read the response, even if we don't actually do anything with it.
 	_, _ = io.ReadAll(io.LimitReader(httpResponse.Body, 1024))
 	if httpResponse.StatusCode < 200 || httpResponse.StatusCode >= 300 {
-		return errors.Join(ReceiverFailure, fmt.Errorf("non-OK HTTP response status: %v", httpResponse.Status))
+		err := errors.Join(ReceiverFailure, fmt.Errorf("non-OK HTTP response from %s status: %v", r.Endpoint, httpResponse.Status))
+		return otel.Error(span, err)
 	}
+	span.SetStatus(codes.Ok, "FHIR notification delivered over REST")
 	return nil
 }
 
@@ -118,6 +136,20 @@ type InProcessPubSubChannel struct {
 }
 
 func (i InProcessPubSubChannel) Notify(ctx context.Context, notification coolfhir.SubscriptionNotification) error {
+	var identityIdentifier fhir.Identifier
+	if len(i.identity.Identifier) > 0 {
+		identityIdentifier = i.identity.Identifier[0]
+	}
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindConsumer),
+		trace.WithAttributes(
+			attribute.String("notification.identity", coolfhir.ToString(identityIdentifier)),
+		),
+	)
+	defer span.End()
+
 	ctx = auth.WithPrincipal(ctx, auth.Principal{
 		Organization: i.identity,
 	})

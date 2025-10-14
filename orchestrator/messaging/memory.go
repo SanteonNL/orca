@@ -3,8 +3,10 @@ package messaging
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 	"sync/atomic"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 var _ Broker = &MemoryBroker{}
@@ -20,19 +22,24 @@ type MemoryBroker struct {
 	LastHandlerError atomic.Pointer[error]
 }
 
-func (m *MemoryBroker) Receive(queue Topic, handler func(context.Context, Message) error) error {
+func (m *MemoryBroker) ReceiveFromQueue(queue Entity, handler func(context.Context, Message) error) error {
 	m.handlers[queue.Name] = append(m.handlers[queue.Name], handler)
 	return nil
 }
 
-func (m *MemoryBroker) SendMessage(ctx context.Context, topic Topic, message *Message) error {
-	if len(m.handlers[topic.Name]) == 0 {
-		return fmt.Errorf("no handlers for topic %s", topic.Name)
+func (m *MemoryBroker) SendMessage(_ context.Context, entity Entity, message *Message) error {
+	if len(m.handlers[entity.Name]) == 0 {
+		return fmt.Errorf("no handlers for entity %s", entity.Name)
 	}
-	for _, handler := range m.handlers[topic.Name] {
+	// Create a new context for the handlers, because it is supposed to be an asynchronous (background) operation
+	ctx := context.Background()
+	for _, handler := range m.handlers[entity.Name] {
 		if err := handler(ctx, *message); err != nil {
 			m.LastHandlerError.Store(&err)
-			log.Ctx(ctx).Warn().Msgf("Handler for topic %s failed: %s", topic.Name, err.Error())
+			slog.WarnContext(ctx, "Handler for entity failed",
+				slog.String("entity_name", entity.Name),
+				slog.String(logging.FieldError, err.Error()),
+			)
 		}
 	}
 	return nil

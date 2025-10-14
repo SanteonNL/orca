@@ -1,0 +1,31 @@
+#
+name: Orchestrator Sonar Scan
+
+# Configures this workflow to run every time a change is pushed to the branch called `main`.
+on:
+  push:
+    paths:
+      - orchestrator/**
+      - .github/workflows/orchestrator_sonar.yaml
+
+# There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
+jobs:
+  sonar-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: "1.24"
+      - name: Collect test coverage
+        working-directory: ./orchestrator
+        run: go test --tags=slowtests -v ./... -coverprofile=coverage.out
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: orchestrator

@@ -1,12 +1,27 @@
-import { CarePlan, Task } from "fhir/r4"
+import {CarePlan, CareTeam, Identifier, Task} from "fhir/r4"
 import { FHIR_SCP_CONTEXT_SYSTEM } from "./const/const";
 
 export function getBsn(carePlan?: CarePlan) {
     const identifier = carePlan?.subject?.identifier;
     if (identifier?.system === 'http://fhir.nl/fhir/NamingSystem/bsn') {
-        return identifier.value;
+        return identifier.value || "Unknown";
     }
     return "Unknown";
+}
+
+/**
+ * Returns the CareTeam contained within the CarePlan. If the CarePlan doesn't reference a contained CareTeam, it returns undefined.
+ * @param carePlan
+ */
+export function careTeamFromCarePlan(carePlan: CarePlan): CareTeam | undefined {
+    if (!carePlan.contained) {
+        return undefined
+    }
+    return carePlan.contained.find((contained) => contained.resourceType === "CareTeam") as CareTeam | undefined
+}
+
+export function identifierToToken(identifier: Identifier) {
+    return `${identifier.system ?? ''}|${identifier.value ?? ''}`
 }
 
 //This function takes in a Task and searches for a Task.basedOn CarePlan reference OR identifier. 

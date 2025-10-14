@@ -4,13 +4,25 @@ import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import { Tooltip } from '@mui/material';
 import { IconEye, IconProgressBolt, IconProgressCheck, IconProgressHelp, IconProgressX } from '@tabler/icons-react';
 import BgzDataViewer from './bgz-data-viewer';
+import { CarePlan, CareTeam } from 'fhir/r4';
 
-interface Props {
-    rows: any[]
+export type Row = {
+  id: string,
+  bsn: string,
+  category: string,
+  carePlan: CarePlan,
+  status: string,
+  lastUpdated: Date,
+  careTeamMembers: string
 }
 
-export default function BgzTable({ rows }: Props) {
+interface Props {
+    name: string,
+    rows: Row[],
+    loading?: boolean,
+}
 
+export default function BgzTable({ name, rows, loading }: Props) {
     const columns: GridColDef[] = [
 
         { field: 'bsn', headerName: 'BSN', flex: 1 },
@@ -35,8 +47,8 @@ export default function BgzTable({ rows }: Props) {
             field: 'medicalRecordViewer',
             headerName: 'Medical Records',
             flex: 1,
-            renderCell: (params) => {
-                return <BgzDataViewer carePlan={params.row.carePlan} careTeam={params.row.careTeam} />
+            renderCell: (params: { row: Row }) => {
+                return <BgzDataViewer name={name} carePlan={params.row.carePlan} />
             }
         },
         { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 2 },
@@ -45,6 +57,7 @@ export default function BgzTable({ rows }: Props) {
     return (
         <div>
             <DataGrid
+                loading={loading}
                 rows={rows}
                 columns={columns}
                 components={{ Toolbar: GridToolbar }}

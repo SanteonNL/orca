@@ -4,51 +4,73 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"slices"
 	"strings"
 	"time"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
-var nowFunc = time.Now
+var (
+	nowFunc = time.Now
+	tracer  = baseotel.Tracer("careplanservice.careteamservice")
+)
 
 // Update updates the CareTeam for a CarePlan based on its activities.
 // It implements the business rules specified by https://santeonnl.github.io/shared-care-planning/overview.html#creating-and-responding-to-a-task
 // updateTrigger is the Task that triggered the update, which is used to determine the CareTeam membership.
 // It's passed to the function, as the new Task is not yet stored in the FHIR server, since the update is to be done in a single transaction.
 // When the CareTeam is updated, it adds the update(s) to the given transaction and returns true. If no changes are made, it returns false.
-func Update(ctx context.Context, client fhirclient.Client, carePlanId string, updateTriggerTask fhir.Task, tx *coolfhir.BundleBuilder) (bool, error) {
+func Update(ctx context.Context, client fhirclient.Client, carePlanId string, updateTriggerTask fhir.Task, localIdentity *fhir.Identifier, tx *coolfhir.BundleBuilder) (bool, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithAttributes(
+			attribute.String("careplan_id", carePlanId),
+			attribute.String("task_id", to.Value(updateTriggerTask.Id)),
+			attribute.String("task_status", updateTriggerTask.Status.String()),
+		),
+	)
+	defer span.End()
+
 	if len(updateTriggerTask.PartOf) > 0 {
-		// Only update the CareTeam if the Task is not a subtask
+		span.AddEvent("skipping_subtask")
 		return false, nil
 	}
 
 	bundle := new(fhir.Bundle)
+	span.AddEvent("fetching_careplan_and_activities")
 	if err := client.Read("CarePlan",
 		bundle,
 		fhirclient.QueryParam("_id", carePlanId),
 		fhirclient.QueryParam("_include", "CarePlan:activity-reference")); err != nil {
-		return false, fmt.Errorf("unable to resolve CarePlan and related resources: %w", err)
+		return false, otel.Error(span, fmt.Errorf("unable to resolve CarePlan and related resources: %w", err))
 	}
 
 	carePlan := new(fhir.CarePlan)
 	if err := coolfhir.ResourceInBundle(bundle, coolfhir.EntryHasID(carePlanId), carePlan); err != nil {
-		return false, fmt.Errorf("CarePlan not found (id=%s): %w", carePlanId, err)
+		return false, otel.Error(span, fmt.Errorf("CarePlan not found (id=%s): %w", carePlanId, err))
 	}
 
 	careTeam, err := coolfhir.CareTeamFromCarePlan(carePlan)
 	if err != nil {
-		return false, err
+		return false, otel.Error(span, err)
 	}
 
-	activities, err := resolveActivities(bundle, carePlan)
+	activities, err := resolveActivities(ctx, bundle, carePlan)
 	if err != nil {
-		return false, err
+		return false, otel.Error(span, err)
 	}
+
+	span.SetAttributes(attribute.Int("activities_count", len(activities)))
 
 	// TODO: ETag on CareTeam
 	var otherActivities []fhir.Task
@@ -57,23 +79,31 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 			otherActivities = append(otherActivities, activity)
 		}
 	}
+
 	// Make sure Task.requester is always in the CareTeam
 	// TODO: But are they always active, regardless of Task status?
-	changed := ActivateMembership(careTeam, updateTriggerTask.Requester)
-	if updateCareTeam(careTeam, otherActivities, updateTriggerTask) {
+	changed := ActivateMembership(ctx, careTeam, updateTriggerTask.Requester)
+	if updateCareTeam(ctx, careTeam, otherActivities, updateTriggerTask) {
 		changed = true
 	}
 
+	span.SetAttributes(attribute.Bool("careteam_changed", changed))
+
 	if changed {
+		span.AddEvent("updating_careteam")
 		sortParticipants(careTeam.Participant)
 
 		contained, err := coolfhir.UpdateContainedResource(carePlan.Contained, &carePlan.CareTeam[0], careTeam)
 		if err != nil {
-			return false, fmt.Errorf("unable to update CarePlan.Contained: %w", err)
+			return false, otel.Error(span, fmt.Errorf("unable to update CarePlan.Contained: %w", err))
 		}
 
 		carePlan.Contained = contained
-		tx.Update(carePlan, "CarePlan/"+*carePlan.Id)
+		tx.Update(carePlan, "CarePlan/"+*carePlan.Id, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
+			ActingAgent: updateTriggerTask.Requester,
+			Observer:    *localIdentity,
+			Action:      fhir.AuditEventActionU,
+		}))
 
 		return true, nil
 	}
@@ -81,30 +111,48 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 	return false, nil
 }
 
-func updateCareTeam(careTeam *fhir.CareTeam, otherActivities []fhir.Task, updatedActivity fhir.Task) bool {
+func updateCareTeam(ctx context.Context, careTeam *fhir.CareTeam, otherActivities []fhir.Task, updatedActivity fhir.Task) bool {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithAttributes(
+			attribute.String("task_status", updatedActivity.Status.String()),
+			attribute.Int("other_activities_count", len(otherActivities)),
+		),
+	)
+	defer span.End()
+
 	if updatedActivity.Status == fhir.TaskStatusAccepted {
-		// Task.owner should be an active member
-		return ActivateMembership(careTeam, updatedActivity.Owner)
+		return ActivateMembership(ctx, careTeam, updatedActivity.Owner)
 	}
 	if updatedActivity.Status == fhir.TaskStatusCompleted ||
 		updatedActivity.Status == fhir.TaskStatusFailed ||
 		updatedActivity.Status == fhir.TaskStatusCancelled {
-		// Task.owner should not be an active member, or should have an end date set if it was an active member.
-		// If there's still other Tasks that are active (status accepted, in-progress or on-hold), the member should remain in the CareTeam.
-		return deactivateMembership(careTeam, updatedActivity.Owner, otherActivities)
+		return deactivateMembership(ctx, careTeam, updatedActivity.Owner, otherActivities)
 	}
 	return false
 }
 
-func ActivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference) bool {
+func ActivateMembership(ctx context.Context, careTeam *fhir.CareTeam, party *fhir.Reference) bool {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithAttributes(
+			attribute.String("party_identifier", to.Value(party.Identifier.Value)),
+		),
+	)
+	defer span.End()
+
+	span.AddEvent("activating_membership")
+
 	for _, participant := range careTeam.Participant {
 		if coolfhir.IdentifierEquals(participant.Member.Identifier, party.Identifier) {
-			// Already in CareTeam
+			span.AddEvent("member_already_in_careteam")
 			return false
 		}
 	}
-	// Not yet in CareTeam, add member
-	// TODO: Set Member
+
+	span.AddEvent("adding_member_to_careteam")
 	careTeam.Participant = append(careTeam.Participant, fhir.CareTeamParticipant{
 		Member: party,
 		Period: &fhir.Period{
@@ -114,11 +162,23 @@ func ActivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference) bool {
 	return true
 }
 
-func deactivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference, otherActivities []fhir.Task) bool {
+func deactivateMembership(ctx context.Context, careTeam *fhir.CareTeam, party *fhir.Reference, otherActivities []fhir.Task) bool {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithAttributes(
+			attribute.String("party_identifier", to.Value(party.Identifier.Value)),
+			attribute.Int("other_activities_count", len(otherActivities)),
+		),
+	)
+	defer span.End()
+
+	span.AddEvent("deactivating_membership")
+
 	// If the party has another Task that gives active membership, don't deactivate
 	for _, activity := range otherActivities {
 		if coolfhir.IdentifierEquals(activity.Owner.Identifier, party.Identifier) {
-			// Still active
+			span.AddEvent("member_still_active_in_other_tasks")
 			return false
 		}
 	}
@@ -129,35 +189,49 @@ func deactivateMembership(careTeam *fhir.CareTeam, party *fhir.Reference, otherA
 			continue
 		}
 		if coolfhir.IdentifierEquals(participant.Member.Identifier, party.Identifier) {
-			// Update end date
 			if participant.Period.End == nil {
+				span.AddEvent("setting_end_date_for_member")
 				careTeam.Participant[i].Period.End = to.Ptr(now())
 				result = true
 			}
 		}
 	}
+
+	span.SetAttributes(attribute.Bool("membership_deactivated", result))
 	return result
 }
 
-func resolveActivities(bundle *fhir.Bundle, carePlan *fhir.CarePlan) ([]fhir.Task, error) {
+func resolveActivities(ctx context.Context, bundle *fhir.Bundle, carePlan *fhir.CarePlan) ([]fhir.Task, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithAttributes(
+			attribute.Int("activity_references_count", len(carePlan.Activity)),
+		),
+	)
+	defer span.End()
+
 	var activityRefs []string
 	for _, activityRef := range carePlan.Activity {
 		if activityRef.Reference == nil || activityRef.Reference.Reference == nil {
-			return nil, errors.New("CarePlan.Activity all must be a FHIR Reference with a string reference")
+			return nil, otel.Error(span, errors.New("CarePlan.Activity all must be a FHIR Reference with a string reference"))
 		}
 		if activityRef.Reference.Type == nil || *activityRef.Reference.Type != "Task" {
-			return nil, errors.New("CarePlan.Activity.Reference must be of type Task")
+			return nil, otel.Error(span, errors.New("CarePlan.Activity.Reference must be of type Task"))
 		}
 		activityRefs = append(activityRefs, *activityRef.Reference.Reference)
 	}
+
 	var tasks []fhir.Task
 	for _, ref := range activityRefs {
 		if err := coolfhir.ResourcesInBundle(bundle, coolfhir.FilterResource(func(resource coolfhir.Resource) bool {
 			return resource.Type == "Task" && "Task/"+resource.ID == ref
 		}), &tasks); err != nil {
-			return nil, fmt.Errorf("unable to resolve Task in bundle (id=%s): %w", ref, err)
+			return nil, otel.Error(span, fmt.Errorf("unable to resolve Task in bundle (id=%s): %w", ref, err))
 		}
 	}
+
+	span.SetAttributes(attribute.Int("resolved_tasks_count", len(tasks)))
 	return tasks, nil
 }
 

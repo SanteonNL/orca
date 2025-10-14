@@ -2,12 +2,20 @@ package pipeline
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"io"
+	"log/slog"
 	"net/http"
 	"strconv"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"go.opentelemetry.io/otel/attribute"
+
+	"go.opentelemetry.io/otel/trace"
 )
 
 func New() Instance {
@@ -19,15 +27,19 @@ type Instance struct {
 }
 
 // Do executes the pipeline, returning an error if marshalling fails.
-func (p Instance) Do(httpResponse *http.Response, resource any) error {
+func (p Instance) Do(ctx context.Context, tracer trace.Tracer, httpResponse *http.Response, resource any) error {
+	ctx, span := tracer.Start(ctx, debug.GetFullCallerName(), trace.WithSpanKind(trace.SpanKindServer))
+	defer span.End()
+
 	var responseBody []byte
 	if resource != nil {
 		var err error
 		responseBody, err = marshalResponse(resource)
 		if err != nil {
-			return fmt.Errorf("failed to marshal response: %w", err)
+			return otel.Error(span, fmt.Errorf("failed to marshal response: %w", err))
 		}
 	}
+
 	responseHeaders := httpResponse.Header
 	for _, transformer := range p.httpResponseTransformers {
 		transformer.Transform(&httpResponse.StatusCode, &responseBody, responseHeaders)
@@ -46,18 +58,29 @@ func (p Instance) Do(httpResponse *http.Response, resource any) error {
 
 // DoAndWrite executes the pipeline, writing the response to the given HTTP response writer.
 // If an error occurs, an internal server error is written to the response.
-func (p Instance) DoAndWrite(httpResponseWriter http.ResponseWriter, resource any, responseStatusCode int) {
+func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpResponseWriter http.ResponseWriter, resource any, responseStatusCode int) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+		trace.WithAttributes(
+			attribute.Int(otel.HTTPStatusCode, responseStatusCode),
+		),
+	)
+	defer span.End()
+
 	httpResponse := &http.Response{
 		Header:     http.Header{},
 		StatusCode: responseStatusCode,
 	}
-	err := p.Do(httpResponse, resource)
+
+	err := p.Do(ctx, tracer, httpResponse, resource)
 	var responseBody []byte
 	if err == nil && httpResponse.Body != nil {
 		responseBody, err = io.ReadAll(httpResponse.Body)
 	}
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal pipeline response")
+		slog.ErrorContext(ctx, "Failed to marshal pipeline response", slog.String(logging.FieldError, otel.Error(span, err).Error()))
 		httpResponse.StatusCode = http.StatusInternalServerError
 		responseBody = []byte(`{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"Failed to marshal response"}]}`)
 	}
@@ -65,12 +88,21 @@ func (p Instance) DoAndWrite(httpResponseWriter http.ResponseWriter, resource an
 	for key, value := range httpResponse.Header {
 		httpResponseWriter.Header()[key] = value
 	}
+	span.SetAttributes(attribute.Int(otel.HTTPStatusCode, httpResponse.StatusCode))
+
+	span.AddEvent("response_body.write")
 	httpResponseWriter.WriteHeader(httpResponse.StatusCode)
 	if responseBody != nil {
 		_, err = httpResponseWriter.Write(responseBody)
 		if err != nil {
-			log.Error().Err(err).Msgf("Failed to write response: %s", string(responseBody))
+			slog.ErrorContext(
+				ctx,
+				"Failed to write response",
+				slog.String(logging.FieldError, otel.Error(span, err).Error()),
+				slog.String("body", string(responseBody)),
+			)
 		}
+		span.AddEvent("response_body.write.complete")
 	}
 }
 

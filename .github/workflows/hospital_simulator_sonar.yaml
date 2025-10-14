@@ -1,0 +1,36 @@
+#
+name: Hospital Simulator Sonar Scan
+
+# Configures this workflow to run every time a change is pushed to the branch called `main`.
+on:
+  push:
+    paths:
+      - hospital_simulator/**
+      - .github/workflows/hospital_simulator_sonar.yaml
+
+# There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
+jobs:
+  sonar-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 23
+      - name: Install pnpm as prerequisite for caching setup.
+        run: npm install --global pnpm@8
+      - name: Install dependencies
+        working-directory: ./hospital_simulator
+        run: |
+          pnpm -v
+          pnpm install
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v6
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        with:
+          projectBaseDir: hospital_simulator

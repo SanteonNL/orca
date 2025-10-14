@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"net/url"
 	"reflect"
 	"testing"
@@ -463,11 +464,14 @@ func Test_handleUpdateTask(t *testing.T) {
 	err := json.Unmarshal(carePlanBundle.Entry[0].Resource, &carePlan)
 	require.NoError(t, err)
 
+	tenant := tenants.Test().Sole()
 	ctrl := gomock.NewController(t)
 	fhirClient := mock.NewMockClient(ctrl)
 	service := &Service{
-		fhirClient: fhirClient,
-		profile:    profile.Test(),
+		fhirClientByTenant: map[string]fhirclient.Client{
+			tenant.ID: fhirClient,
+		},
+		profile: profile.Test(),
 	}
 	fhirClient.EXPECT().Read("CarePlan", gomock.Any(), gomock.Any()).DoAndReturn(func(path string, result *fhir.Bundle, option ...fhirclient.Option) error {
 		*result = carePlanBundle
@@ -508,6 +512,7 @@ func Test_handleUpdateTask(t *testing.T) {
 				System: to.Ptr(coolfhir.URANamingSystem),
 				Value:  to.Ptr("2"),
 			},
+			Tenant: tenants.Test().Sole(),
 		}
 	}
 
@@ -520,7 +525,7 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 3)
+		require.Len(t, tx.Entry, 4)
 		require.Equal(t, "Task?_id=1", tx.Entry[0].Request.Url)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
 		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
@@ -537,7 +542,7 @@ func Test_handleUpdateTask(t *testing.T) {
 		_, err := service.handleUpdateTask(ctx, request, tx)
 
 		require.NoError(t, err)
-		require.Len(t, tx.Entry, 3)
+		require.Len(t, tx.Entry, 4)
 		require.Equal(t, fhir.HTTPVerbPUT, tx.Entry[0].Request.Method)
 		audit.VerifyAuditEventForTest(t, &tx.Entry[1], "Task/"+*task.Id, fhir.AuditEventActionU, &fhir.Reference{
 			Identifier: &auth.TestPrincipal2.Organization.Identifier[0],
@@ -679,9 +684,12 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 	mockFHIRClient := mock.NewMockClient(ctrl)
 
 	// Create the service with the mock FHIR client
+	tenant := tenants.Test().Sole()
 	service := &Service{
-		fhirClient: mockFHIRClient,
-		profile:    profile.Test(),
+		fhirClientByTenant: map[string]fhirclient.Client{
+			tenant.ID: mockFHIRClient,
+		},
+		profile: profile.Test(),
 	}
 
 	updateTaskAcceptedData := mustReadFile("./testdata/task-update-accepted.json")
@@ -836,8 +844,10 @@ func Test_handleUpdateTask_Validation(t *testing.T) {
 					return tt.errorFromRead
 				})
 			}
+			request := tt.request
+			request.Tenant = tenant
 
-			_, err := service.handleUpdateTask(tt.ctx, tt.request, tx)
+			_, err := service.handleUpdateTask(tt.ctx, request, tx)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("handleUpdateTask() error = %v, wantErr %v", err, tt.wantErr)
 			}

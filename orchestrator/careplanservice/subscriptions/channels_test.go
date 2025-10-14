@@ -3,6 +3,14 @@ package subscriptions
 import (
 	"context"
 	"encoding/json"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"testing"
+	"time"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -11,12 +19,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"io"
-	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"testing"
-	"time"
 )
 
 func TestRestHookChannel_Notify(t *testing.T) {
@@ -60,7 +62,7 @@ func TestRestHookChannel_Notify(t *testing.T) {
 		err := channel.Notify(context.Background(), notification)
 
 		require.ErrorIs(t, err, ReceiverFailure)
-		require.EqualError(t, err, "FHIR subscription could not be delivered to receiver\nnon-OK HTTP response status: 404 Not Found")
+		require.EqualError(t, err, "FHIR subscription could not be delivered to receiver\nnon-OK HTTP response from "+subscriberServer.URL+" status: 404 Not Found")
 	})
 	t.Run("subscriber endpoint unreachable", func(t *testing.T) {
 		subscriberServer := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -80,6 +82,7 @@ func TestRestHookChannel_Notify(t *testing.T) {
 }
 
 func TestInProcessChannelFactory(t *testing.T) {
+	ctx := tenants.WithTenant(context.Background(), tenants.Test().Sole())
 	t.Run("local identity, in-process channel can be used", func(t *testing.T) {
 		factory := InProcessChannelFactory{
 			Profile: profile.Test(),
@@ -95,12 +98,12 @@ func TestInProcessChannelFactory(t *testing.T) {
 			return nil
 		}
 
-		channel, err := factory.Create(context.Background(), auth.TestPrincipal1.Organization.Identifier[0])
+		channel, err := factory.Create(ctx, auth.TestPrincipal1.Organization.Identifier[0])
 
 		require.NoError(t, err)
 		require.NotNil(t, channel)
 
-		err = channel.Notify(context.Background(), coolfhir.SubscriptionNotification{})
+		err = channel.Notify(ctx, coolfhir.SubscriptionNotification{})
 		require.NoError(t, err)
 		require.Equal(t, 1, notificationsReceived)
 		require.Equal(t, auth.TestPrincipal1.Organization, capturedPrincipal.Organization)
@@ -116,7 +119,7 @@ func TestInProcessChannelFactory(t *testing.T) {
 		}
 
 		expected := auth.TestPrincipal1.Organization.Identifier[0]
-		_, err := factory.Create(context.Background(), expected)
+		_, err := factory.Create(ctx, expected)
 
 		require.NoError(t, err)
 		require.Len(t, defaultChannelFactory.calls, 1)
@@ -136,7 +139,7 @@ func TestInProcessChannelFactory(t *testing.T) {
 			DefaultChannelFactory: defaultChannelFactory,
 		}
 
-		_, err := factory.Create(context.Background(), fhir.Identifier{})
+		_, err := factory.Create(ctx, fhir.Identifier{})
 
 		require.NoError(t, err)
 		require.Len(t, defaultChannelFactory.calls, 1)

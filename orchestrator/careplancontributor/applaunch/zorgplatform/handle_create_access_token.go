@@ -10,10 +10,9 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"time"
-
-	"github.com/rs/zerolog/log"
 
 	"github.com/beevik/etree"
 	"github.com/google/uuid"
@@ -72,7 +71,7 @@ var hcpTokenType = TokenType{
 
 var _ SecureTokenService = &Service{}
 
-// RequestAccessToken generates the SAML assertion, signs it, sends the SOAP request to the Zorgplatform STS and teturns the SAML access token
+// RequestAccessToken generates the SAML assertion, signs it, sends the SOAP request to the Zorgplatform STS and returns the SAML access token
 func (s *Service) RequestAccessToken(ctx context.Context, launchContext LaunchContext, tokenType TokenType) (string, error) {
 	// Create the SAML assertion
 	assertion, err := s.createSAMLAssertion(&launchContext, tokenType)
@@ -392,8 +391,8 @@ func (s *Service) submitSAMLRequest(ctx context.Context, envelope string) (strin
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		log.Ctx(ctxWithTimeout).Debug().Msgf("Zorgplatform STS SOAP request: %s", envelope)
-		log.Ctx(ctxWithTimeout).Debug().Msgf("Zorgplatform STS SOAP response: %s", string(responseBody))
+		slog.DebugContext(ctxWithTimeout, "Zorgplatform STS SOAP request", slog.String("request", envelope))
+		slog.DebugContext(ctxWithTimeout, "Zorgplatform STS SOAP response", slog.String("response", string(responseBody)))
 		return "", fmt.Errorf("unexpected response status: %d", resp.StatusCode)
 	}
 

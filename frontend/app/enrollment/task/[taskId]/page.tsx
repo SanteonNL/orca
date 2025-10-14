@@ -1,127 +1,176 @@
 "use client"
-import React, { useEffect, useState } from 'react'
-import useTaskProgressStore from '@/lib/store/task-progress-store'
-import { useParams } from 'next/navigation'
+import React, {useEffect, useState} from 'react'
+import {useParams} from 'next/navigation'
 import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
-import useEnrollmentStore from "@/lib/store/enrollment-store";
-import { patientName, organizationName } from "@/lib/fhirRender";
-import DataViewer from '@/components/data-viewer'
-import { viewerFeatureIsEnabled } from '@/app/actions'
+import useEnrollment from "@/app/hooks/enrollment-hook";
+import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
+import {Questionnaire, ServiceRequest, Task} from "fhir/r4";
+import useContext from "@/app/hooks/context-hook";
+import PatientDetails from "@/app/enrollment/task/components/patient-details";
+import TaskProgressHook from "@/app/hooks/task-progress-hook";
+import TaskHeading from "@/app/enrollment/components/task-heading";
+import {ChevronRight} from "lucide-react";
+import TaskBody from "@/app/enrollment/components/task-body";
+import Error from "@/app/error";
+import {organizationNameShort} from "@/lib/fhirRender";
+import {requestTitle} from "@/app/enrollment/task/components/util";
+import {statusLabelLong} from "@/app/utils/mapping";
 
 export default function EnrollmentTaskPage() {
-    const { taskId } = useParams()
-    const { task, loading, initialized, setSelectedTaskId, subTasks, taskToQuestionnaireMap } = useTaskProgressStore()
-    const { patient } = useEnrollmentStore()
-    const [viewerFeatureEnabled, setViewerFeatureEnabled] = useState(false)
-    const [showViewer, setShowViewer] = useState(false)
+    const {taskId} = useParams()
+    const {scpClient, cpsClient} = useContext()
+
+    const {
+        task,
+        subTasks,
+        questionnaireMap,
+        isError,
+        isLoading
+    } = TaskProgressHook({
+        taskId: Array.isArray(taskId) ? taskId[0] : taskId!,
+        cpsClient: cpsClient!,
+        pollingInterval: 1000
+    })
+    const {patient, serviceRequest} = useEnrollment()
+
+    const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
+    const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
+    const [cpsServiceRequest, setCPSServiceRequest] = useState<ServiceRequest | undefined>(undefined);
 
     useEffect(() => {
-        if (taskId) {
-            //TODO: Currently we only have one Questionnaire per enrollment flow. But we support multiple. The UX for multiple still needs to be made. When it's there, this is the place to add it
-            const selectedTaskId = Array.isArray(taskId) ? taskId[0] : taskId;
-            setSelectedTaskId(selectedTaskId);
+        const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
+        if (!primaryTaskPerformer || !scpClient) {
+            return
         }
-    }, [taskId, setSelectedTaskId])
-
-    useEffect(() => {
-        setShowViewer(viewerFeatureEnabled && !!task && (task.status === "accepted" || task.status === "in-progress"))
-    }, [task, viewerFeatureEnabled])
-
-    useEffect(() => {
-        viewerFeatureIsEnabled()
-            .then((enabled) => {
-                setViewerFeatureEnabled(enabled)
+        getLaunchableApps(scpClient, primaryTaskPerformer)
+            .then((apps) => {
+                setLaunchableApps(apps)
             })
-    }, [])
+        if (task?.status === "in-progress" && launchableApps && launchableApps.length === 1) {
+            launchApp(launchableApps[0].URL)();
+        }
+    }, [serviceRequest, setLaunchableApps, scpClient, task?.status, launchableApps])
 
-    if (loading || !initialized) return <Loading />
+    // Load ServiceRequest from CPS as referred to by the Task.focus, in case the context doesn't specify the ServiceRequest
+    // (e.g. when not launching for a specific Task using /list)
+    useEffect(() => {
+        if (!cpsClient || !task || !setCPSServiceRequest) {
+            return
+        }
+        if (!task.focus?.reference) {
+            return
+        }
+        cpsClient.read({resourceType: 'ServiceRequest', id: task.focus.reference.replace('ServiceRequest/', '')})
+            .then((sr) => {
+                setCPSServiceRequest(sr as ServiceRequest)
+            })
+    }, [setCPSServiceRequest, cpsClient, task]);
 
+    useEffect(() => {
+        if (!questionnaireMap) {
+            return undefined
+        }
+        if (!subTasks || subTasks.length === 0) {
+            return undefined
+        }
+        setCurrentQuestionnaire(questionnaireMap[subTasks[0].id!!])
+    }, [questionnaireMap, subTasks]);
+
+    if (isLoading) return <Loading/>
+    if (isError) {
+        return <Error error={{
+            name: 'TaskError',
+            message: '"Er is een probleem opgetreden bij het ophalen van de taak"'
+        }} reset={() => isError}/>
+    }
     if (!task) {
         return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
     }
 
-    const StatusElement = ({ label, value, noUpperCase }: { label: string, value: string, noUpperCase?: boolean | undefined }) =>
+    const lastStepTaskStates = ['accepted', 'in-progress', 'rejected', 'failed', 'completed', 'cancelled', 'on-hold']
+    const isFirstStep = task.status === "requested"
+    const isLastStep = lastStepTaskStates.includes(task.status)
+    const breadcrumb = isFirstStep
+        ? <span className='font-medium'>Controleer patiëntgegevens</span>
+        : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Controleer patiëntgegevens</a>
+    const serviceRequestTitle = requestTitle(serviceRequest || cpsServiceRequest)
+
+
+    // Auto-launch external app when the following conditions are met:
+    // - Task.status is "in-progress"
+    // - There is exactly one launchable app
+    // - Auto-launch is enabled
+    const launchApp = (URL: string) => () => {
+        window.open(URL, "_self");
+    }
+
+    const textBottom = executionTextBottom(task.status);
+    return (
         <>
-            <div>{label}:</div>
-            <div className={"font-[500] " + !noUpperCase ? "first-letter:uppercase" : ""}>{value}</div>
+            <TaskHeading title={statusLabelLong(task.status, serviceRequestTitle, task.owner)}>
+                <nav className={`flex items-center space-x-2 text-sm ${isLastStep ? 'invisible' : 'inherit'}`}>
+                    {breadcrumb}
+                    <ChevronRight className="h-4 w-4"/>
+                    <span className={`first-letter:uppercase ${isFirstStep ? 'text-muted-foreground' : ''}`}>{serviceRequestTitle} instellen</span>
+                </nav>
+            </TaskHeading>
+            <TaskBody>
+                {task.status === "received" && currentQuestionnaire && subTasks?.[0] ? <>
+                    <QuestionnaireRenderer
+                        questionnaire={currentQuestionnaire}
+                        inputTask={subTasks[0]}
+                    />
+                </> : (
+                    <div className='w-full flex flex-col auto-cols-max gap-y-10'>
+                        <div className="w-[568px] font-[500]">
+                            {
+                                // Either show Task.note, or a default message based on task status
+                                task.note && task.note.length > 0 ? task.note.map(note => note.text).join("\n") :
+                                    executionTextTop(serviceRequestTitle, task) ?? ''
+                            }
+                        </div>
+                        <PatientDetails task={task} serviceRequest={serviceRequest || cpsServiceRequest} patient={patient}/>
+                        {
+                            textBottom ? <div className="w-[568px] font-[500]">{textBottom}</div> : <></>
+                        }
+                    </div>
+                )}
+            </TaskBody>
         </>
-
-    if (task.status === "received") {
-        if (!taskToQuestionnaireMap || !subTasks?.[0]?.id || !taskToQuestionnaireMap[subTasks[0].id]) {
-            return <>Task is ontvangen, maar er ontbreekt informatie.</>
-        }
-        return <QuestionnaireRenderer
-            questionnaire={taskToQuestionnaireMap[subTasks[0].id]}
-            inputTask={subTasks[0]}
-        />
-    } else {
-        return <div className='w-full flex flex-col auto-cols-max'>
-            {
-                task && executionText(task.status) ?
-                    <p className="w-[568px] text-muted-foreground pb-8">{executionText(task.status)}</p> : <></>
-            }
-            <div className="w-[568px] grid grid-cols-[1fr,2fr] gap-y-4">
-                <StatusElement label="Patiënt" value={patient ? patientName(patient) : "Onbekend"} noUpperCase={true} />
-                <StatusElement label="Verzoek" value={task?.focus?.display || "Onbekend"} />
-                <StatusElement label="Diagnose" value={task?.reasonCode?.coding?.[0].display || "Onbekend"} />
-                <StatusElement label="Uitvoerende organisatie" value={organizationName(task.owner)} />
-                <StatusElement label="Status"
-                    value={statusLabel(task.status) + " op " + (task?.meta?.lastUpdated ? new Date(task.meta.lastUpdated).toLocaleDateString("nl-NL") : "Onbekend")} />
-                {task.statusReason
-                    ? <StatusElement label="Statusreden"
-                        value={task.statusReason.text ?? task.statusReason.coding?.at(0)?.code ?? "Onbekend"} />
-                    : <></>
-                }
-            </div>
-            {showViewer && <DataViewer task={task} />}
-        </div>
-    }
+    )
 }
 
-function statusLabel(taskStatus: string): string {
-    switch (taskStatus) {
-        case "accepted":
-            return "Geaccepteerd"
-        case "completed":
-            return "Afgerond"
-        case "cancelled":
-            return "Geannuleerd"
-        case "failed":
-            return "Mislukt"
-        case "in-progress":
-            return "In behandeling"
-        case "on-hold":
-            return "Gepauzeerd"
+function executionTextTop(serviceDisplay: string | undefined, task: Task) {
+    switch (task.status) {
         case "requested":
-            return "Verstuurd"
         case "received":
-            return "Ontvangen"
+            return `Je gaat deze patient aanmelden ${serviceDisplay ? `voor ${serviceDisplay}` : ''} ${task.owner ? ` van ${organizationNameShort(task.owner)}` : ''}.`
+        case "accepted":
+            return "De aanmelding is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart."
+        case "in-progress":
+            return "De aanmelding is door de uitvoerende partij geaccepteerd, en uitvoering is gestart."
+        case "cancelled":
+            return "De aanmelding is afgebroken."
         case "rejected":
-            return "Afgewezen"
+            return "De aanmelding is door de uitvoerende partij afgewezen."
+        case "failed":
+            return "De aanmelding is mislukt."
+        case "completed":
+            return "De aanmelding is door de uitvoerende partij afgerond."
+        case "on-hold":
+            return "De aanmelding is door de uitvoerende partij gepauzeerd."
         default:
-            return taskStatus
+            return null
     }
 }
 
-function executionText(taskStatus: string) {
+function executionTextBottom(taskStatus: string) {
     switch (taskStatus) {
         case "requested":
-            return "Het verzoek is door de uitvoerende organisatie ontvangen, maar nog niet beoordeeld."
-        case "accepted":
-            return "Het verzoek is door de uitvoerende organisatie geaccepteerd, maar uitvoering is nog niet gestart."
-        case "in-progress":
-            return "Het verzoek is door de uitvoerende partij geaccepteerd, en uitvoering is gestart."
-        case "cancelled":
-            return "Het verzoek is afgebroken."
-        case "rejected":
-            return "Het verzoek is door de uitvoerende partij afgewezen."
-        case "failed":
-            return "Het verzoek is mislukt."
-        case "completed":
-            return "Het verzoek is door de uitvoerende partij afgerond."
-        case "on-hold":
-            return "Het verzoek is door de uitvoerende partij gepauzeerd."
+            // fallthrough
+        case "received":
+            return "Indien de gegevens van de patiënt niet kloppen, pas het dan aan in het EPD."
         default:
             return null
     }

@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"log/slog"
 	"net/http"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 
@@ -21,14 +24,56 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 	"go.uber.org/mock/gomock"
 )
 
 func TestService_handleTaskFillerCreate(t *testing.T) {
+	defaultCtx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+	defaultCtx = tenants.WithTenant(defaultCtx, tenants.Test(func(properties *tenants.Properties) {
+		properties.TaskEngine = tenants.TaskEngineProperties{
+			Enabled: true,
+		}
+	}).Sole())
+	var capturedTask fhir.Task
+
+	// Set up trace mocking
+	originalTP := baseotel.GetTracerProvider()
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+	baseotel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		tp.Shutdown(context.Background())
+		baseotel.SetTracerProvider(originalTP)
+	})
+
+	// Helper function to assert spans are created
+	assertSpansCreated := func(t *testing.T) {
+		// Force any pending spans to be exported
+		tp.ForceFlush(context.Background())
+
+		spans := exporter.GetSpans()
+		require.NotEmpty(t, spans, "Expected spans to be created for task filling operations")
+
+		// Look for key span operations
+		spanNames := make([]string, len(spans))
+		for i, span := range spans {
+			spanNames[i] = span.Name
+		}
+
+		// Verify at least the main handleTaskNotification span is present
+		require.Contains(t, spanNames, "careplancontributor.(*Service).handleTaskNotification", "Expected handleTaskNotification span")
+
+		exporter.Reset()
+	}
+
 	tests := []struct {
 		name                    string
 		ctx                     context.Context
@@ -41,6 +86,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		mock                    func(*mock.MockClient)
 		expectSubmission        bool
 		expectPrimaryTaskStatus *fhir.TaskStatus
+		expectNote              string
 	}{
 		{
 			name:                    "primary task, owner = local organization, triggers subtask creation",
@@ -51,7 +97,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 		{
 			name:             "primary task, owner != local organization, nothing should happen",
 			profile:          profile.TestProfile{Principal: auth.TestPrincipal2},
-			ctx:              auth.WithPrincipal(context.Background(), *auth.TestPrincipal2),
+			ctx:              auth.WithPrincipal(defaultCtx, *auth.TestPrincipal2),
 			notificationTask: deep.Copy(primaryTask),
 		},
 		{
@@ -232,11 +278,13 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 				client.EXPECT().
 					Update("Task/primary", gomock.Any(), gomock.Any()).
 					DoAndReturn(func(_ string, updatedPrimaryTask *fhir.Task, _ interface{}, options ...fhirclient.Option) error {
+						capturedTask = *updatedPrimaryTask
 						assert.Equal(t, fhir.TaskStatusAccepted, updatedPrimaryTask.Status)
 						return nil
 					})
 			},
 			expectSubmission: true,
+			expectNote:       "Task accepted by TaskFiller",
 		},
 		{
 			name:             "subtask status=completed, primary task status=accepted (nothing should be done)",
@@ -320,6 +368,13 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			service := &Service{
 				workflows: taskengine.DefaultTestWorkflowProvider(),
 				notifier:  notifierMock,
+				config: Config{
+					TaskFiller: TaskFillerConfig{
+						StatusNote: map[string]string{
+							"accepted": "Task accepted by TaskFiller",
+						},
+					},
+				},
 			}
 			if tt.mock != nil {
 				tt.mock(mockFHIRClient)
@@ -343,7 +398,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			if tt.profile != nil {
 				service.profile = tt.profile
 			}
-			ctx := auth.WithPrincipal(context.Background(), *auth.TestPrincipal1)
+			var ctx = defaultCtx
 			if tt.ctx != nil {
 				ctx = tt.ctx
 			}
@@ -365,7 +420,7 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 			if tt.expectSubmission {
 				expectedSubmissions = 1
 			}
-			notifierMock.EXPECT().NotifyTaskAccepted(ctx, fhirBaseURL.String(), gomock.Any()).Times(expectedSubmissions)
+			notifierMock.EXPECT().NotifyTaskAccepted(gomock.Any(), fhirBaseURL.String(), gomock.Any()).Times(expectedSubmissions)
 			var capturedTx fhir.Bundle
 			if tt.numBundlesPosted > 0 {
 				mockFHIRClient.EXPECT().
@@ -388,10 +443,9 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 						}
 
 						if tt.expectPrimaryTaskStatus != nil {
-							var existingTask fhir.Task
-							err := coolfhir.ResourceInBundle(&capturedTx, coolfhir.EntryHasID("primary"), &existingTask)
+							err := coolfhir.ResourceInBundle(&capturedTx, coolfhir.EntryHasID("primary"), &capturedTask)
 							require.NoError(t, err)
-							require.Equal(t, *tt.expectPrimaryTaskStatus, existingTask.Status)
+							require.Equal(t, *tt.expectPrimaryTaskStatus, capturedTask.Status)
 						}
 						bytes, _ := json.Marshal(mockResponse)
 						_ = json.Unmarshal(bytes, &result)
@@ -400,15 +454,49 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					Times(tt.numBundlesPosted)
 			}
 
-			log.Info().Msgf("Running test case: %s", tt.name)
 			err := service.handleTaskNotification(ctx, mockFHIRClient, &notifiedTask)
+
+			// Force flush before any assertions to ensure spans are exported
+			tp.ForceFlush(context.Background())
+
 			if tt.expectedError != nil {
 				require.EqualError(t, err, tt.expectedError.Error())
 			} else {
 				require.NoError(t, err)
 			}
+			assertSpansCreated(t)
+
+			// Verify spans contain expected attributes for different scenarios
+			spans := exporter.GetSpans()
+			if len(spans) > 0 {
+				// Find the main handleTaskNotification span
+				var mainSpan *tracetest.SpanStub
+				for _, span := range spans {
+					if span.Name == "handleTaskNotification" {
+						mainSpan = &span
+						break
+					}
+				}
+
+				if mainSpan != nil {
+					// Verify task ID is recorded in the main span
+					taskIDFound := false
+					for _, attr := range mainSpan.Attributes {
+						if attr.Key == "fhir.task_id" && attr.Value.AsString() == *notifiedTask.Id {
+							taskIDFound = true
+							break
+						}
+					}
+					require.True(t, taskIDFound, "Expected task ID in span attributes")
+				}
+			}
+
 			for _, bundleEntry := range capturedTx.Entry {
 				require.NotEmpty(t, bundleEntry.Request.Url)
+			}
+			if tt.expectNote != "" {
+				require.Len(t, capturedTask.Note, 1)
+				require.Equal(t, tt.expectNote, capturedTask.Note[0].Text)
 			}
 		})
 	}
@@ -442,7 +530,7 @@ func TestService_getSubTask(t *testing.T) {
 	require.NotNil(t, questionnaire)
 
 	questionnaireRef := "urn:uuid:" + *questionnaire.Id
-	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
+	slog.Info("Creating a new Enrollment Criteria subtask", slog.String("questionnaire_reference", questionnaireRef))
 	subtask := service.getSubTask(&primaryTask, questionnaireRef)
 
 	expectedSubTaskInput := []fhir.TaskInput{

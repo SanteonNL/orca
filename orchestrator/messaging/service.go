@@ -5,39 +5,44 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/rs/zerolog/log"
+	"log/slog"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
-type Topic struct {
+// Entity represents a source of messages, such as a topic or queue.
+type Entity struct {
 	Name string
-	// Prefix indicates whether the topic name should be prefixed with the TopicPrefix from the messaging configuration.
+	// Prefix indicates whether the entity name should be prefixed with the EntityPrefix from the messaging configuration.
 	Prefix bool
 }
 
-// FullName returns the full name of the topic, optionally prefixed with the provided prefix.
-func (t Topic) FullName(prefix string) string {
+// FullName returns the full name of the entity, optionally prefixed with the provided prefix.
+func (t Entity) FullName(prefix string) string {
 	if t.Prefix {
 		return prefix + t.Name
 	}
 	return t.Name
 }
 
-func New(config Config, topics []Topic) (Broker, error) {
+func New(config Config, sources []Entity) (Broker, error) {
 	var broker Broker
 	var err error
+	slog.Info(fmt.Sprintf("Messaging: CONFIG %+v", config))
 	if config.AzureServiceBus.Enabled() {
-		broker, err = newAzureServiceBusBroker(config.AzureServiceBus, topics, config.TopicPrefix)
+		broker, err = newAzureServiceBusBroker(config.AzureServiceBus, sources, config.EntityPrefix)
+
 		if err != nil {
 			return nil, fmt.Errorf("azure service bus: %w", err)
 		}
 	} else {
 		// If no configuration is provided, default to an in-memory broker
-		log.Warn().Msg("No messaging configuration provided, defaulting to in-memory broker. " +
+		slog.Warn("No messaging configuration provided, defaulting to in-memory broker. " +
 			"This is unsuitable for production use, since failed messages can't be retried.")
 		broker = NewMemoryBroker()
 	}
 	if config.HTTP.Endpoint != "" {
-		log.Info().Msgf("Messaging: sending messages over HTTP to %s", config.HTTP.Endpoint)
+		slog.Info("Messaging: sending messages over HTTP", slog.String(logging.FieldEndpoint, config.HTTP.Endpoint))
 		broker = NewHTTPBroker(config.HTTP, broker)
 	}
 	return broker, nil
@@ -48,8 +53,8 @@ type Config struct {
 	// AzureServiceBus holds the configuration for messaging using Azure ServiceBus.
 	AzureServiceBus AzureServiceBusConfig `koanf:"azureservicebus"`
 	HTTP            HTTPBrokerConfig      `koanf:"http"`
-	// TopicPrefix is the prefix to use for all topics, which allows for multi-tenant use of the underlying message broker infrastructure.
-	TopicPrefix string `koanf:"topicprefix"`
+	// EntityPrefix is the prefix to use for all topics and queues, which allows for multi-tenant use of the underlying message broker infrastructure.
+	EntityPrefix string `koanf:"entityprefix"`
 }
 
 func (c Config) Validate(strictMode bool) error {
@@ -72,8 +77,8 @@ type Message struct {
 // Broker defines an interface for interacting with a message broker, including sending messages and closing connections.
 type Broker interface {
 	Close(ctx context.Context) error
-	SendMessage(ctx context.Context, topic Topic, message *Message) error
-	// Receive subscribes to a queue and calls the handler function for each message received.
+	SendMessage(ctx context.Context, topic Entity, message *Message) error
+	// ReceiveFromQueue subscribes to a queue and calls the handler function for each message received.
 	// The handler function should return an error if the message processing fails, which will cause the message to be retried or sent to the DLQ.
-	Receive(queue Topic, handler func(context.Context, Message) error) error
+	ReceiveFromQueue(queue Entity, handler func(context.Context, Message) error) error
 }

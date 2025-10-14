@@ -1,5 +1,11 @@
 ## Configuration
-Use the following environment variables to configure the orchestrator:
+This section describes how to configure the service.
+
+### Multi-tenancy
+ORCA is multi-tenant, which means it can handle multiple care organizations (tenants) in a single instance.
+Each tenant can have its own CarePlanService FHIR store and app launch settings.
+
+Note: the tenant ID is converted to lower case, even if it's in upper case in the environment variables.
 
 ### General configuration
 - `ORCA_PUBLIC_BASEURL` (required): base URL of the public endpoints.
@@ -10,26 +16,136 @@ Use the following environment variables to configure the orchestrator:
    - Zorgplatform app launch: patient BSN `999911120` is changed to `999999151` (to cope with a bug in its test data).
 
 #### Required configuration for Nuts
+- `ORCA_TENANT_<ID>_NUTS_SUBJECT`: Nuts subject of the tenant, as it was created in/by the Nuts node.
 - `ORCA_NUTS_PUBLIC_URL`: public URL of the Nuts, used for informing OAuth2 clients of the URL of the OAuth2 Authorization Server, e.g. `http://example.com/nuts`.
 - `ORCA_NUTS_API_URL`: address of the Nuts node API to use, e.g. `http://nutsnode:8081`.
-- `ORCA_NUTS_SUBJECT`: Nuts subject of the local party, as it was created in/by the Nuts node.
 - `ORCA_NUTS_DISCOVERYSERVICE`: ID of the Nuts Discovery Service that is used for CSD lookups (finding (local) care organizations and looking up their endpoints).
 - `ORCA_NUTS_AZUREKV_URL`: URL of the Azure Key Vault that holds the client certificate for outbound HTTP requests.
-- `ORCA_NUTS_AZUREKV_CLIENTCERTNAME`: Name of the certificate for outbound HTTP requests.
+- `ORCA_NUTS_AZUREKV_CLIENTCERTNAME`: Name of the certificate(s) for outbound HTTP requests. You can use a comma-separated list of names to use multiple certificates.
 - `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
+
+### OpenTelemetry (OTEL) Configuration
+ORCA supports OpenTelemetry for distributed tracing, which helps with monitoring and debugging across services.
+
+#### Default Configuration
+By default, OTEL is enabled with the following settings:
+- **Service Name**: `orca-orchestrator`
+- **Protocol**: `grpc`
+- **Endpoint**: `localhost:4317` (standard OTLP gRPC port)
+- **Connection**: Insecure (for local development)
+- **Exporter Type**: `otlp`
+
+#### Standard OTEL Environment Variables
+ORCA reads the following standard OpenTelemetry environment variables:
+
+- `OTEL_SERVICE_NAME`: Name of the service for tracing
+- `OTEL_EXPORTER_OTLP_PROTOCOL`: Protocol to use for OTLP export, currently supports `grpc` (default: `grpc`)
+- `OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP endpoint URL
+  - For gRPC: URL schemes (`http://`, `https://`) are automatically stripped
+  - HTTPS endpoints automatically enable secure connections
+- `OTEL_RESOURCE_ATTRIBUTES`: Comma-separated key=value pairs for additional resource attributes
+  - Example: `service.namespace=production,service.instance.id=abc123,environment=staging`
+
+#### Azure Container Apps Integration
+For Azure Container Apps environments, ORCA also supports:
+- `CONTAINERAPP_OTEL_METRIC_GRPC_ENDPOINT`: Azure-specific metric endpoint
+- `CONTAINERAPP_OTEL_LOGGING_GRPC_ENDPOINT`: Azure-specific logging endpoint
+
+#### ORCA-Specific Overrides
+All OTEL settings can be overridden using the `ORCA_*` prefix convention:
+
+- `ORCA_OTEL_ENABLED`: Enable/disable OpenTelemetry (default: `true`)
+- `ORCA_OTEL_SERVICE_NAME`: Override service name
+- `ORCA_OTEL_SERVICE_VERSION`: Service version for tracing (default: `1.0.0`)
+- `ORCA_OTEL_EXPORTER_TYPE`: Exporter type: `otlp`, `stdout`, or `none` (default: `otlp`)
+- `ORCA_OTEL_EXPORTER_PROTOCOL`: Protocol for OTLP exporter: `grpc` (default: `grpc`)
+- `ORCA_OTEL_EXPORTER_OTLP_ENDPOINT`: OTLP endpoint override
+- `ORCA_OTEL_EXPORTER_OTLP_METRIC_ENDPOINT`: Metric endpoint override
+- `ORCA_OTEL_EXPORTER_OTLP_LOGGING_ENDPOINT`: Logging endpoint override
+- `ORCA_OTEL_EXPORTER_OTLP_INSECURE`: Force insecure connection (default: auto-detected from endpoint)
+- `ORCA_OTEL_EXPORTER_OTLP_TIMEOUT`: Request timeout (default: `10s`)
+- `ORCA_OTEL_EXPORTER_OTLP_HEADERS_<KEY>`: Additional headers for OTLP requests
+- `ORCA_OTEL_RESOURCE_ATTRIBUTES_<KEY>`: Additional resource attributes
+
+**Note**: Currently, only the gRPC protocol is supported for OTLP export. HTTP support requires additional dependencies.
+
+### Care Plan Service configuration
+- `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
+- `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL`: URL to which the CPS sends webhooks when a CarePlan is created. It sends the CarePlan resource as HTTP POST request with content type `application/json`.
+- `ORCA_TENANT_<ID>_CPS_FHIR_URL`: Base URL of the FHIR API the CPS uses for storage, for the specified tenant.
+- `ORCA_TENANT_<ID>_CPS_FHIR_AUTH_TYPE`: Authentication type for this tenant's CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
+- `ORCA_TENANT_<ID>_CPS_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with this tenant's CPS FHIR store. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
 
 ### Care Plan Contributor configuration
 - `ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN`: Secures the EHR-facing endpoints with a static HTTP Bearer token. Only intended for development and testing purposes, since they're unpractical to change often.
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_URL`: Base URL of the FHIR API the CPC uses for storage. When `ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED` is enabled, data is retrieved from this FHIR API.
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_AUTH_TYPE`: Authentication type for the CPC FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
-- `ORCA_CAREPLANCONTRIBUTOR_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the demo app launch endpoint (default: `false`).
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_FHIRPROXYURL`: Enable FHIR proxy for demo purposes on `/demo/fhirproxy`, which proxies requests to this URL.
 - `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
-### Care Plan Contributor Task Filler configuration
+#### Zorgplatform integration
+Note: To test a Zorgplatform launch locally, you will need to set `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=false`
+- `ORCA_ZORGPLATFORM_ENABLED`: Enable Zorgplatform integration (default: `false`).
+- `ORCA_TENANT_<ID>_CHIPSOFT_ORGANIZATIONID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
+
+### Demo configuration
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the "demo" EHR integration, as alternative to production-grade integrations like SMART on FHIR or Zorgplatform (default: `false`).
+- `ORCA_TENANT_<ID>_DEMO_FHIR_URL`: Base URL of the FHIR API of the "demo" EHR, for the specified tenant.
+- `ORCA_TENANT_<ID>_DEMO_FHIR_AUTH_TYPE`: Authentication type for this tenant's demo FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
+- `ORCA_TENANT_<ID>_DEMO_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with this tenant's demo FHIR store. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
+
+#### OIDC Configuration
+ORCA supports OpenID Connect (OIDC) for both acting as a Relying Party (validating JWT tokens) and as an OpenID Connect Provider (issuing ID tokens for authenticated users).
+
+##### Relying Party Configuration (JWT Token Validation)
+API calls can be authenticated using a JWT bearer token, which is validated by the Relying Party.
+A received token is validated against a trusted OpenID Connect provider, and the user information is extracted from the token.
+The trusted OpenID Connect provider must be configured, it will be compared against the claim `iss` in the JWT.
+This is designed to work with OpenID Connect providers that support the discovery URL, such as Azure B2C (which has been tested).
+
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_ENABLED`: Enable the Relying Party for JWT token validation (default: `false`).
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_CLIENTID`: ClientID used for token validation, this will typically be the same as the `aud` claim in the JWT being validated.
+
+The following two fields can be repeated for multiple trusted issuers, but must both be set for each issuer:
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_<ISSUER_NAME>_ISSUERURL`: Same as the `iss` claim in the JWT.
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_<ISSUER_NAME>_DISCOVERYURL`: OpenID Connect discovery URL for the issuer.
+
+Note: This has been tested with Azure B2C, but should work with any OpenID Connect provider that supports the discovery URL.
+For an Azure B2C token, the format of the discovery URL is the same as the `iss` claim in the JWT, but with `tfp` before `/v2.0/` as well as the `.well-known/openid_configuration` suffix.
+
+Example:
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_EXAMPLE_ISSUERURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/v2.0/`
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_RELYINGPARTY_TRUSTEDISSUERS_EXAMPLE_DISCOVERYURL`: `https://your-tenant.b2clogin.com/your-tenant.onmicrosoft.com/B2C_1_local_login/v2.0/.well-known/openid_configuration`
+
+##### OpenID Connect Provider Configuration
+ORCA can act as OpenID Connect Provider for users that have an existing session (initiated through app launch).
+This allows the launch of OIDC-enabled applications that can't directly authenticate using the EHR.
+It supports the following scopes:
+- `openid`: required, adds the `sub`  and `orgid` claims.
+  - The `sub` claim contains the user identifier unique to the integrated EHR. Its format depends on the EHR (e.g., for ChipSoft HiX it's `<user id>@<HL7 NL OID>`).
+  - The `orgid` claim contains an array of organization identifiers (string) for which the user is authenticated in HL7 FHIR token format.
+    It follows the following format: `<system>|<value>`, where the `system` depends on the SCP profile.
+    Note: currently, the system of the identifier will always be URA (`http://fhir.nl/fhir/NamingSystem/ura`).
+- `profile`: adds the `name` and `roles` claims.
+- `email`: adds the `email` claim.
+- `patient`: adds `patient` claim, which contains an array with identifiers of the patient associated with the ORCA user session. The format of the identifiers is `<system>|<value>`.
+
+The claims in the ID token are based on the user information from the EHR.
+
+To configure the OIDC Provider, set the following environment variables:
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_ENABLED`: Enables the OIDC provider (default: `false`).
+
+To register a client (application), set the following environment variables for that client:
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_CLIENTS_<clientname>_ID`: ID of the client, which will be used as `client_id` in the OIDC flow.
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_CLIENTS_<clientname>_REDIRECTURI`: URL to which the OIDC provider will redirect the user after authentication.
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_CLIENTS_<clientname>_SECRET`: `client_secret` to authenticate the client. It can be either stored in hashed form (recommended) or plaintext (if it can be stored securely).
+  If using a hashed secret, it must be prefixed with `sha256|` and salted with the `client_id` (`<client_id>|<secret>`) to ensure uniqueness and security:
+  `concat('sha256|', hex(sha256(<client_id>|<secret>)))`. Note that the hexadecimal function should yield a lowercase string.
+
+#### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
+You can enable the Task Engine by setting the following environment variables:
+
+- `ORCA_TENANT_<ID>_TASKENGINE_ENABLED`: Enables the Task Filler engine for the specified tenant (default: `false`).
+
 You have the following options:
 
 1. Read them from your FHIR API
@@ -48,17 +164,27 @@ Configure these options to achieve this:
 If you don't want to query the FHIR Questionnaire and HealthcareService resources from your FHIR API, only set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS`.
 The downside of this option is that the resources MUST be available on startup.
 
-#### EHR integration
+##### Task status notes
+You can have the Task Filler engine add notes to the Task when changing its status by configuring `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTE`.
+It's a map with keys as Task status codes (non-letters removed) and values as the note to add, e.g.:
+
+```
+ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTES_ACCEPTED=Work on the task will start tomorrow.
+```
+
+##### EHR integration
 If you want to receive accepted tasks in your EHR, you can set `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC`
-to the messaging topic on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
+to the messaging topic or queue on which the task bundle will be delivered. You will also need to create the `orca.taskengine.task-accepted` on your broker.
 
-See "Messaging configuration" for more information.  
+See "Messaging configuration" for more information.
 
-### Care Plan Service configuration
-- `ORCA_CAREPLANSERVICE_ENABLED`: Enable the CPS (default: `false`).
-- `ORCA_CAREPLANSERVICE_FHIR_URL`: Base URL of the FHIR API the CPS uses for storage.
-- `ORCA_CAREPLANSERVICE_FHIR_AUTH_TYPE`: Authentication type for the CPS FHIR store, options: `` (empty, no authentication), `azure-managedidentity` (Azure Managed Identity).
-- `ORCA_CAREPLANSERVICE_FHIR_AUTH_SCOPES`: OAuth2 scopes to request when authenticating with the FHIR server. If no scopes are provided, the default scope might be used, depending on the authentication method (e.g. Azure default scope).
+#### External application discovery
+If you have web applications that you want other care organizations to discovery through ORCA, you can set the following options:
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_NAME`: Name of the external application.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_URL`: URL of the external application.
+
+These configured applications are discovered by searching for FHIR Endpoints on the CPC's FHIR Endpoint.
+Note: this endpoint only supports searching using HTTP GET, without query parameters.
 
 ### Messaging configuration
 Application event handling and FHIR Subscription notification sending uses a message broker.
@@ -67,13 +193,81 @@ For production environments, it's recommended to use Azure ServiceBus.
 
 * `ORCA_MESSAGING_AZURESERVICEBUS_HOSTNAME`: The hostname of the Azure ServiceBus instance, setting this (or the connection string) enables use of Azure ServiceBus as message broker.
 * `ORCA_MESSAGING_AZURESERVICEBUS_CONNECTIONSTRING`: The connection string of the Azure ServiceBus instance, setting this (or the hostname) enables use of Azure ServiceBus as message broker.
-* `ORCA_MESSAGING_TOPICPREFIX`: Optional prefix for topics, which allows multi-tenancy (using the same underlying message broker infrastructure for multiple ORCA instances) by prefixing the topic names with a tenant identifier.
+* `ORCA_MESSAGING_ENTITYPREFIX`: Optional prefix for topics and queues, which allows multi-tenancy (using the same underlying message broker infrastructure for multiple ORCA instances) by prefixing the entity names with a tenant identifier.
 * `ORCA_MESSAGING_HTTP_ENDPOINT`: For demo purposes: a URL pointing HTTP endpoint, to which messages will also be delivered. It appends the topic name to this URL.
 * `ORCA_MESSAGING_HTTP_TOPICFILTER`: For demo purposes: topics to enable the HTTP endpoint for (separator: `,`). If not set, all topics are enabled.
 
-## App Launch options
+If you're Azure Service Bus, depending on the features you've enabled, you'll need to create the following queues: 
 
-### Demo
+- Queue `orca.taskengine.task-accepted` (if `ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLETOPIC` is set).
+- Queue `orca.hl7.fhir.careplan-created` (if `ORCA_CAREPLANSERVICE_EVENTS_WEBHOOK_URL` is set).
+- Queue `orca.subscriptionmgr.notification` (if `ORCA_CAREPLANSERVICE_ENABLED` is `true`).
+
+### Data Import
+
+The CarePlanContributor and CarePlanService support importing existing data into ORCA as SharedCarePlanning resources through their `$import` operations.
+
+The CPC's `/cpc/<tenant>/fhir/$import` operation creates an in-progress SCP Task, owned by the invoker and requested by the tenant.
+It takes the following JSON post body parameters:
+- `patient`: Patient identifier as FHIR identifier.
+- `servicerequest`: ServiceRequest code as FHIR Coding.
+- `condition`: Condition code as FHIR Coding.
+- `chipsoft_zorgplatform_workflowid`: ChipSoft Zorgplatform Workflow ID as FHIR token, required to read the patient.
+- `start`: Start date of the enrollment period, in `xs:dateTime` format.
+
+Example:
+
+```json
+{
+  "resourceType": "Parameters",
+  "parameter": [
+    {
+      "name": "patient",
+      "valueIdentifier": {
+        "system": "http://fhir.nl/fhir/NamingSystem/bsn",
+        "value": "123456789"
+      }
+    },
+    {
+      "name": "servicerequest",
+      "valueCoding": {
+        "system": "http://example.com/servicerequest",
+        "code": "sr1",
+        "display": "ServiceRequestDisplay"
+      }
+    },
+    {
+      "name": "condition",
+      "valueCoding": {
+        "system": "http://example.com/condition",
+        "code": "c1",
+        "display": "ConditionDisplay"
+      }
+    },
+    {
+      "name": "chipsoft_zorgplatform_workflowid",
+      "valueIdentifier": {
+        "system": "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id",
+        "value": "workflow-123"
+      }
+    },
+    {
+      "name": "start",
+      "valueDateTime": "2024-01-01T12:00:00Z"
+    }
+  ]
+}
+```
+
+The CPS's `/cps/<tenant>/$import` operation takes a FHIR transaction bundle and executes it on the CPS's FHIR store.
+It circumvents any validation or authorization checks, so it can only contain POST requests to create resources.
+Only the local tenant can invoke this operation (the CPC import operation invokes this operation to actually create the resources).
+
+To enable the `$import` operations for a tenant, set `ORCA_TENANT_<ID>_ENABLEIMPORT` to `true`.
+
+### App Launch options
+
+#### Demo
 
 Redirect the browser to `/demo-app-launch`, and provide the following query parameters:
 
@@ -82,11 +276,23 @@ Redirect the browser to `/demo-app-launch`, and provide the following query para
 - `practitioner`: reference to the FHIR PractitionerRole resource of the current user.
 - `iss`: FHIR server base URL.
 
-### SMART on FHIR
+#### SMART on FHIR
 
-Currently not up-to-date, it probably won't work.
+Tested with SMART on FHIR Sandbox. It will always act as confidential client with JWT client assertions.
+If the JWT signing key is not sourced from an external source, it will generate an in-memory key pair on startup.
+The JWK set will be available at `/smart-app-launch/.well-known/jwks.json`.
 
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_REDIRECTURI`: SMART App launch redirect URI that is used to send the `code` to by the EHR
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_CLIENTID`:  The `client_id` assigned by the EHR
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_CLIENT_SECRET`: The `client_secret` assigned by the EHR
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_SCOPE`: Any specific scope, for example `launch fhirUser`
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ENABLED`: Enables the SMART on FHIR app launch endpoint (default: `false`).
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_CLIENTID` (required): The OAuth2 `client_id`.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_TENANT` (required): The tenant to which app launches from this issuer are logged in. 
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_URL` (required): SMART on FHIR server base URL that launches the application.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_OAUTH2URL` (optional): In some cases (Epic on FHIR), the actual OAuth2 Authorization Server URL (`issuer` property in the discovered OpenID Configuration) differs from the SMART on FHIR server base URL (`iss` parameter in the launch).
+   Setting this option overrides the OAuth2 Authorization Server URL, if not set, the FHIR server base URL is used.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_URL`: Azure Key Vault URL to source the JWT signing key from.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_CREDENTIALTYPE`: Credential type for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_AZUREKV_SIGNINGKEY`: Name of the JWT signing key in the Azure Key Vault.
+
+You can test the SMART on FHIR app launch using the [SMART on FHIR sandbox](https://launch.smarthealthit.org/).
+Select launch type "Provider EHR Launch", select a patient (e.g. `14867dba-fb11-4df3-9829-8e8e081b39e6`),
+and fill in the following App Launch URL: `http://localhost:8081/orca/smart-app-launch` (assuming you're running `deployments/dev`).
+Click "Launch" to launch the application.

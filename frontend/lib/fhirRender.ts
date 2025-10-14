@@ -33,3 +33,15 @@ export const organizationName = (reference?: Reference) => {
 
     return displayName ? `${displayName} (${identifierValue})` : identifierValue
 }
+
+// organizationNameShort is a shorter version of organizationName that omits the display name, or the reference value if no display name is present.
+export const organizationNameShort = (reference: Reference) => {
+    if (reference.display) {
+        return reference.display;
+    }
+    if (!reference.identifier?.value) {
+        return "(unknown)";
+    }
+
+    return `(${reference.identifier.system}: ${reference.identifier.value})`
+}

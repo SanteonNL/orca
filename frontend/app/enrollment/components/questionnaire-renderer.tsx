@@ -1,19 +1,19 @@
 'use client'
+
 import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient } from '@aehrc/smart-forms-renderer';
 import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
 import { useEffect, useState } from 'react';
+
 import { toast } from 'sonner';
-import useCpsClient from '@/hooks/use-cps-client';
-import useTaskProgressStore from '@/lib/store/task-progress-store';
-import {findQuestionnaireResponse, getPatientIdentifier} from '@/lib/fhirUtils';
+import { findQuestionnaireResponse, getPatientIdentifier } from '@/lib/fhirUtils';
 import { Spinner } from '@/components/spinner';
 import { v4 } from 'uuid';
 import { populateQuestionnaire } from '../../utils/populate';
-import useEnrollmentStore from '@/lib/store/enrollment-store';
-import { useRouter } from 'next/navigation';
+import useEnrollment from '@/app/hooks/enrollment-hook';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Button, createTheme, Shadows, ThemeProvider } from '@mui/material';
 import Loading from '../loading';
+import useContext from "@/app/hooks/context-hook";
 
 interface QuestionnaireRendererPageProps {
   questionnaire: Questionnaire;
@@ -27,34 +27,20 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
   const responseIsValid = useQuestionnaireResponseStore.use.responseIsValid();
 
-  const { patient, practitioner } = useEnrollmentStore()
+  const { launchContext, cpsClient } = useContext();
+  const { patient, practitioner } = useEnrollment()
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prePopulated, setPrePopulated] = useState(false);
   const [initialized, setInitialized] = useState(false)
-  const [shouldScroll, setShouldScroll] = useState(false)
 
   const [, setPrevQuestionnaireResponse] = useState<QuestionnaireResponse>()
 
-  const cpsClient = useCpsClient()
-  const { onSubTaskSubmit, task } = useTaskProgressStore()
-  const router = useRouter()
-
   useEffect(() => {
-    if (shouldScroll) {
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      setShouldScroll(false);
-    }
-  }, [shouldScroll]);
-
-  useEffect(() => {
-
     const fetchQuestionnaireResponse = async () => {
 
-      if (!inputTask || !questionnaire) return
+      if (!inputTask || !questionnaire || !launchContext || !cpsClient) return
 
-      const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire) as QuestionnaireResponse
-
-      console.log(`Found QuestionnaireResponse: ${JSON.stringify(questionnaireResponse)}`)
+      const questionnaireResponse = await findQuestionnaireResponse(cpsClient, inputTask, questionnaire) as QuestionnaireResponse
 
       if (questionnaireResponse) {
         setPrevQuestionnaireResponse(questionnaireResponse)
@@ -69,7 +55,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       setInitialized(true)
     }
 
-  }, [initialized, inputTask, questionnaire])
+  }, [initialized, inputTask, questionnaire, launchContext, cpsClient])
 
   const submitQuestionnaireResponse = async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
 
@@ -79,13 +65,15 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       toast.error("Cannot set QuestionnaireResponse, no Task provided")
       return
     }
+    if (!launchContext || !cpsClient) {
+      toast.error("No launch context found")
+      return
+    }
 
     setIsSubmitting(true)
 
-    setShouldScroll(true)
-
     const outputTask = { ...inputTask }
-    const questionnaireResponse = await findQuestionnaireResponse(inputTask, questionnaire)
+    const questionnaireResponse = await findQuestionnaireResponse(cpsClient, inputTask, questionnaire)
 
     const newId = v4()
     const responseExists = !!questionnaireResponse?.id
@@ -141,11 +129,11 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       ]
     };
 
-    await cpsClient?.transaction({
+    await cpsClient!.transaction({
       body: bundle
     });
 
-    onSubTaskSubmit(router.push(`/enrollment/task/${task!.id}`))
+
   }
 
   useEffect(() => {
@@ -214,7 +202,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         <div className='flex gap-3 mt-5'>
           <Button type="button" variant='contained' disabled={isSubmitting || !responseIsValid} onClick={submitQuestionnaireResponse}>
             {isSubmitting && <Spinner className='h-6 mr-2 text-inherit' />}
-            Verzoek versturen
+            Aanmelding versturen
           </Button>
         </div>
       </ThemeProvider>

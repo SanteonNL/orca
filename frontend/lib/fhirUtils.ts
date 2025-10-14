@@ -1,6 +1,6 @@
 import Client from 'fhir-kit-client';
 import {
-    Bundle,
+    Bundle, Coding,
     Condition,
     Identifier,
     Patient,
@@ -12,6 +12,7 @@ import {
     Task
 } from 'fhir/r4';
 
+
 type FhirClient = Client;
 type FhirBundle<T extends Resource> = Bundle<T>;
 
@@ -19,20 +20,27 @@ export const patientIdentifierSystem = () => {
     return process.env.ORCA_PATIENT_IDENTIFIER_SYSTEM ?? "http://fhir.nl/fhir/NamingSystem/bsn";
 }
 
-export const createEhrClient = () => {
-    const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/ehr/fhir`
-        : "http://localhost:9090/fhir";
-
-    return new Client({ baseUrl });
+// This function creates a FHIR client to communicate with other (remote) SCP nodes' FHIR APIs.
+export const createScpClient = (tenantId: string) => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/${tenantId}/external/fhir`;
+    return new Client({baseUrl});
 };
 
-export const createCpsClient = () => {
-    const baseUrl = process.env.NODE_ENV === "production"
-        ? `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/cps/fhir`
-        : "http://localhost:9090/fhir";
+// This function creates a FHIR client to communicate with the EHR's FHIR API.
+export const createEhrClient = (tenantId: string) => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/${tenantId}/ehr/fhir`;
+    return new Client({baseUrl});
+};
 
-    return new Client({ baseUrl });
+// This function creates a FHIR client to communicate with the ORCA instance's own CarePlanService.
+export const createCpsClient = (tenantId: string) => {
+    const baseUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/orca/cpc/${tenantId}/external/fhir`;
+    return new Client({
+        baseUrl: baseUrl,
+        customHeaders: {
+            'X-Scp-Fhir-Url': 'local-cps',
+        }
+    });
 };
 
 export const fetchAllBundlePages = async <T extends Resource>(
@@ -56,7 +64,7 @@ export const fetchAllBundlePages = async <T extends Resource>(
             bundle: {
                 resourceType: 'Bundle',
                 type: 'searchset',
-                link: [{ relation: 'next', url: nextPageUrl }]
+                link: [{relation: 'next', url: nextPageUrl}]
             }
         });
         const bundle = result as FhirBundle<T>;
@@ -76,7 +84,7 @@ export const findInBundle = (resourceType: string, bundle?: Bundle) => {
 }
 
 const cleanPatient = (patient: Patient) => {
-    const cleanedPatient = { ...patient, id: undefined }
+    const cleanedPatient = {...patient, id: undefined}
     if (cleanedPatient.contact) {
         for (const contact of cleanedPatient.contact) {
             if (contact.organization?.reference) {
@@ -109,7 +117,7 @@ const cleanPatient = (patient: Patient) => {
 
 const cleanServiceRequest = (serviceRequest: ServiceRequest, patient: Patient, patientReference: string, taskIdentifier?: string) => {
     // Clean up the ServiceRequest by removing relative references - the CPS won't understand them
-    const cleanedServiceRequest = { ...serviceRequest, id: undefined };
+    const cleanedServiceRequest = {...serviceRequest, id: undefined};
 
     const patientIdentifier = getPatientIdentifier(patient);
     if (!patientIdentifier || serviceRequest.subject?.identifier?.system !== patientIdentifier.system || serviceRequest.subject?.identifier?.value !== patientIdentifier.value) {
@@ -233,7 +241,8 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
         taskEntry.request.ifNoneExist = `identifier=${taskIdentifier}`
     }
 
-    const patientIdentifier = getPatientIdentifier(patient)!;
+    const patientToken = encodeURIComponent(identifierToToken(getPatientIdentifier(patient)) || '');
+
     const bundle = {
         resourceType: "Bundle",
         type: "transaction",
@@ -244,7 +253,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
                 request: {
                     method: "POST",
                     url: "Patient",
-                    ifNoneExist: `identifier=${patientIdentifier.system}|${patientIdentifier.value}`
+                    ifNoneExist: `identifier=${patientToken}`
                 }
             },
             serviceRequestEntry,
@@ -255,7 +264,7 @@ export const constructTaskBundle = (serviceRequest: ServiceRequest, primaryCondi
     return bundle as Bundle & { type: "transaction" }
 }
 
-export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Questionnaire) => {
+export const findQuestionnaireResponse = async (cpsClient: FhirClient, task?: Task, questionnaire?: Questionnaire) => {
     if (!task || !task.output || !questionnaire) return
 
     const questionnaireResponse = task.output.find((output) => {
@@ -266,8 +275,6 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
 
     const questionnaireResponseId = questionnaireResponse.valueReference?.reference
     if (!questionnaireResponseId) return
-
-    const cpsClient = createCpsClient()
     return await cpsClient.read({
         resourceType: "QuestionnaireResponse",
         id: questionnaireResponseId.split("/")[1]
@@ -276,14 +283,111 @@ export const findQuestionnaireResponse = async (task?: Task, questionnaire?: Que
 
 /**
  * Returns a string representation of an Identifier ONLY if both the system and value are set. Otherwise, returns undefined.
- * @param identifier 
- * @returns 
+ * @param identifier
+ * @returns
  */
-export function identifierToString(identifier?: Identifier) {
+export function identifierToToken(identifier?: Identifier) {
 
     if (!identifier?.system || !identifier.value) {
         return
     }
 
     return `${identifier.system}|${identifier.value}`
+}
+
+export type TaskProgress = {
+    task: Task;
+    questionnaireMap: Record<string, Questionnaire>;
+    subTasks: Task[]
+}
+
+export const fetchTaskById = async (cpsClient: Client, taskId: string) => {
+    return await cpsClient.read({resourceType: 'Task', id: taskId}) as Task;
+}
+
+export const fetchAllResources = async (taskId: string, cpsClient: Client): Promise<TaskProgress> => {
+    const [task, subTasks] = await Promise.all([
+        await fetchTaskById(cpsClient, taskId),
+        await fetchSubTasks(cpsClient, taskId)
+    ])
+
+    const questionnaireMap = await fetchQuestionnaires(cpsClient, subTasks);
+    return {task, questionnaireMap, subTasks};
+}
+
+
+export const fetchQuestionnaires = async (cpsClient: Client, subTasks: Task[]) => {
+    const questionnaireMap: Record<string, Questionnaire> = {};
+    await Promise.all(subTasks.map(async (task: Task) => {
+        if (task.input && task.input.length > 0) {
+            const input = task.input.find(input => input.valueReference?.reference?.startsWith("Questionnaire"));
+            if (input && task.id && input.valueReference?.reference) {
+                const questionnaireId = input.valueReference.reference;
+                try {
+                    questionnaireMap[task.id] = await cpsClient.read({
+                        resourceType: "Questionnaire",
+                        id: questionnaireId.split("/")[1]
+                    }) as Questionnaire;
+                } catch (error) {
+                    throw new Error(`Failed to fetch questionnaire: ${error}`);
+                }
+            }
+        }
+    }));
+    return questionnaireMap
+}
+
+
+export const fetchSubTasks = async (cpsClient: Client, taskId: string) => {
+    try {
+        const subTaskBundle = await cpsClient.search({
+            resourceType: 'Task',
+            searchParams: {"part-of": `Task/${taskId}`},
+            headers: {"Cache-Control": "no-cache"},
+            // @ts-ignore
+            options: {postSearch: true}
+        }) as Bundle<Task>;
+        const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle);
+        if (Array.isArray(subTasks) && subTasks.length > 0) {
+            return subTasks;
+        }
+    } catch (error) {
+        throw new Error(`Failed to fetch sub-tasks: ${error}`);
+    }
+    return [];
+}
+
+
+export function codingToMessage(codings: Coding[]): String[] {
+    if (!codings.length) return [MessageType.Unknown];
+    const messages: String[] = [];
+
+    for (const coding of codings) {
+        switch (coding.code) {
+            case "E0001":
+                messages.push(MessageType.NoEmail);
+                break;
+            case "E0002":
+                messages.push(MessageType.NoPhone);
+                break;
+            case "E0003":
+                messages.push(MessageType.InvalidEmail);
+                break;
+            case "E0004":
+                messages.push(MessageType.InvalidPhone);
+                break;
+            default:
+                messages.push(MessageType.Unknown + coding.code );
+                break;
+        }
+    }
+    return messages;
+}
+
+export enum MessageType {
+    InvalidEmail = "Ongeldig e-mailadres. Controleer het e-mailadres van de patiënt in het EPD en probeer het opnieuw.",
+    InvalidPhone = "Ongeldig telefoonnummer. Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw. Tip: er is een Nederlands telefoonnummer nodig voor de aanmelding.",
+    NoEmail = "Er is geen e-mailadres van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het e-mailadres toe in het EPD en probeer het opnieuw.",
+    NoPhone = "Er is geen telefoonnummer van de patiënt gevonden. Dit is nodig voor de aanmelding. Voeg het telefoonnummer toe in het EPD en probeer het opnieuw.",
+    Unknown = "Er is een onbekende fout opgetreden. Probeer het later opnieuw of neem contact op met de systeembeheerder: functioneelbeheer@zorgbijjou.nl. Vermeld daarbij de volgende code: "
 }

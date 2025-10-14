@@ -2,6 +2,8 @@ package careplancontributor
 
 import (
 	"errors"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"strings"
 	"time"
 
@@ -13,6 +15,7 @@ func DefaultConfig() Config {
 	return Config{
 		Enabled:        true,
 		AppLaunch:      applaunch.DefaultConfig(),
+		OIDC:           oidc.DefaultConfig(),
 		SessionTimeout: 15 * time.Minute,
 		FrontendConfig: FrontendConfig{
 			URL: "/frontend/enrollment",
@@ -21,22 +24,28 @@ func DefaultConfig() Config {
 }
 
 type Config struct {
-	FrontendConfig FrontendConfig   `koanf:"frontend"`
-	AppLaunch      applaunch.Config `koanf:"applaunch"`
-	// FHIR contains the configuration to connect to the FHIR API holding EHR data,
-	// to be made available through the CarePlanContributor.
-	FHIR                          coolfhir.ClientConfig `koanf:"fhir"`
-	TaskFiller                    TaskFillerConfig      `koanf:"taskfiller"`
-	Enabled                       bool                  `koanf:"enabled"`
-	HealthDataViewEndpointEnabled bool                  `koanf:"healthdataviewendpointenabled"`
-	SessionTimeout                time.Duration         `koanf:"sessiontimeout"`
-	Events                        EventsConfig          `koanf:"events"`
+	FrontendConfig                FrontendConfig   `koanf:"frontend"`
+	AppLaunch                     applaunch.Config `koanf:"applaunch"`
+	OIDC                          oidc.Config      `koanf:"oidc"`
+	TaskFiller                    TaskFillerConfig `koanf:"taskfiller"`
+	Enabled                       bool             `koanf:"enabled"`
+	HealthDataViewEndpointEnabled bool             `koanf:"healthdataviewendpointenabled"`
+	SessionTimeout                time.Duration    `koanf:"sessiontimeout"`
 	StaticBearerToken             string
 }
 
 func (c Config) Validate() error {
 	if !c.Enabled {
 		return nil
+	}
+	if globals.StrictMode == true && c.StaticBearerToken != "" {
+		return errors.New("staticbearertoken is not allowed in strict mode")
+	}
+	if err := c.OIDC.Validate(); err != nil {
+		return err
+	}
+	if err := c.AppLaunch.Validate(); err != nil {
+		return err
 	}
 	return nil
 }
@@ -47,9 +56,11 @@ type TaskFillerConfig struct {
 	// also because HAPI doesn't allow storing Questionnaires in partitions.
 	QuestionnaireFHIR     coolfhir.ClientConfig `koanf:"questionnairefhir"`
 	QuestionnaireSyncURLs []string              `koanf:"questionnairesyncurls"`
-	// TaskAcceptedBundleTopic is a Message Broker topic to which the TaskFiller will publish a message when a Task is accepted.
 	// The bundle will contain the Task, Patient, and other relevant resources.
-	TaskAcceptedBundleTopic string `koanf:"taskacceptedbundletopic"`
+	TaskAcceptedBundleEndpoint string `koanf:"taskacceptedbundleendpoint"`
+	// StatusNote contains notes that'll be added on the Task when a Task status is updated.
+	// The key is the Task status, and the value is the note to be set.
+	StatusNote map[string]string `koanf:"statusnote"`
 }
 
 func (c TaskFillerConfig) Validate() error {
@@ -60,21 +71,7 @@ func (c TaskFillerConfig) Validate() error {
 			return errors.New("questionnairesyncurls must be http, https or file URLs")
 		}
 	}
-	return nil
-}
-
-type EventsConfig struct {
-	WebHooks []WebHookEventHandlerConfig `koanf:"webhooks"`
-}
-
-type WebHookEventHandlerConfig struct {
-	// ResourceType is the FHIR resource type for which the event handler is triggered.
-	// If blank, it's triggered for all resource types.
-	ResourceType string
-	// Name is the unique name of the event handler, used for persisting retry state.
-	Name string
-	// URL is the URL to which the event should be sent.
-	URL string
+	return c.QuestionnaireFHIR.Validate()
 }
 
 type FrontendConfig struct {

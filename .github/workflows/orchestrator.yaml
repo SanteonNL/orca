@@ -1,11 +1,12 @@
 #
 name: Orchestrator
 
-# Configures this workflow to run every time a change is pushed to the branch called `main`.
+# Configures this workflow to run every time a change is pushed on any branch.
 on:
   push:
     paths:
       - orchestrator/**
+      - e2e-tests/**
       - .github/workflows/orchestrator.yaml
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
@@ -17,11 +18,11 @@ jobs:
   unit-test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.24'
       - name: Test
         working-directory: ./orchestrator
         run: go test --tags=slowtests -v ./...
@@ -39,7 +40,7 @@ jobs:
       fully_qualified: ${{ steps.meta.outputs.tags }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       
       # This step sets the IMAGE_NAME and lowercases the Github username (organizationname) and reponame. This avoids errors (could not find image) in the artifact attestation step 
       - name: set IMAGE_NAME (and lowercase GITHUB_REPOSITORY)
@@ -75,7 +76,7 @@ jobs:
       
       # This step generates an artifact attestation for the image, which is an unforgeable statement about where and how it was built. It increases supply chain security for people who consume the image. For more information, see "[AUTOTITLE](/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)." 
       - name: Generate artifact attestation
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@v3
         with:
           subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME}}
           subject-digest: ${{ steps.push.outputs.digest }}
@@ -86,12 +87,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
-          go-version: '1.22'
+          go-version: '1.24'
       - name: Run E2E tests
         working-directory: ./e2e-tests
         # Docker outputs contains 2 docker tags, we only need the first one
-        run: ORCHESTRATOR_IMAGE=$(echo "${{needs.docker-image.outputs.fully_qualified}}" | cut -d' ' -f1-1) go test -v ./...
+        run: ORCHESTRATOR_IMAGE=$(echo "${{needs.docker-image.outputs.fully_qualified}}" | tr '\n' ' ' | cut -d' ' -f1-1) go test -v ./...

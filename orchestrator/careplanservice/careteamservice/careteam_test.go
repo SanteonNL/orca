@@ -11,6 +11,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/mock"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
@@ -90,7 +91,10 @@ func TestUpdate(t *testing.T) {
 
 			// Perform
 			tx := coolfhir.Transaction()
-			updated, err := Update(auth.WithPrincipal(context.Background(), *auth.TestPrincipal1), fhirClient, "1", *tc.UpdatedTask(), tx)
+			updated, err := Update(auth.WithPrincipal(context.Background(), *auth.TestPrincipal1), fhirClient, "1", *tc.UpdatedTask(), &fhir.Identifier{
+				System: to.Ptr("http://santeon.nl/organization"),
+				Value:  to.Ptr("1"),
+			}, tx)
 			require.NoError(t, err)
 
 			// Assert

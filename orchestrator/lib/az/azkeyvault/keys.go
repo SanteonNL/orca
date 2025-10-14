@@ -9,9 +9,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -20,12 +23,11 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/rs/zerolog/log"
 )
 
 const AzureKeyVaultTimeout = 10 * time.Second
 
-var AzureHttpRequestDoer HttpRequestDoer = http.DefaultClient
+var AzureHttpRequestDoer HttpRequestDoer = otel.NewTracedHTTPClient("azkeyvault")
 
 type HttpRequestDoer interface {
 	Do(req *http.Request) (*http.Response, error)
@@ -37,12 +39,25 @@ type Suite struct {
 	keyPair
 }
 
+func (s Suite) KeyName() string {
+	return s.keyName
+}
+
+func (s Suite) KeyVersion() string {
+	return s.keyVersion
+}
+
 type keyPair struct {
-	keyName    string
-	keyVersion string
-	asJwk      jwk.Key
-	publicKey  crypto.PublicKey
-	client     KeysClient
+	keyName                 string
+	keyVersion              string
+	asJwk                   jwk.Key
+	publicKey               crypto.PublicKey
+	client                  KeysClient
+	publicKeyThumbprintS256 []byte
+}
+
+func (s Suite) PublicKeyThumbprintS256() []byte {
+	return s.publicKeyThumbprintS256
 }
 
 func (s Suite) SigningKey() crypto.Signer {
@@ -97,17 +112,24 @@ func GetKey(client KeysClient, keyName string) (*Suite, error) {
 	if err != nil {
 		return nil, fmt.Errorf("unable to parse public key from Azure KeyVault: %w", err)
 	}
+
+	thumbprintS256, err := publicKeyJWK.Thumbprint(crypto.SHA256)
+	if err != nil {
+		return nil, err
+	}
+
 	var publicKey crypto.PublicKey
 	if err = publicKeyJWK.Raw(&publicKey); err != nil {
 		return nil, fmt.Errorf("unable to parse public key from Azure KeyVault: %w", err)
 	}
 	return &Suite{
 		keyPair{
-			keyName:    key.KID.Name(),
-			keyVersion: key.KID.Version(),
-			asJwk:      parsedKey,
-			publicKey:  publicKey,
-			client:     client,
+			keyName:                 key.KID.Name(),
+			keyVersion:              key.KID.Version(),
+			asJwk:                   parsedKey,
+			publicKey:               publicKey,
+			publicKeyThumbprintS256: thumbprintS256,
+			client:                  client,
 		},
 	}, nil
 }
@@ -125,7 +147,7 @@ func createCredential(credentialType string) (azcore.TokenCredential, error) {
 		// For UserAssignedManagedIdentity, client ID needs to be explicitly set.
 		// Taken from github.com/!azure/azure-sdk-for-go/sdk/azidentity@v1.7.0/default_azure_credential.go:100
 		if ID, ok := os.LookupEnv("AZURE_CLIENT_ID"); ok {
-			log.Logger.Debug().Msg("Azure: configuring UserAssignedManagedIdentity (using AZURE_CLIENT_ID) for Azure Key Vault client.")
+			slog.Debug("Azure: configuring UserAssignedManagedIdentity (using AZURE_CLIENT_ID) for Azure Key Vault client.")
 			opts.ID = azidentity.ClientID(ID)
 		}
 		return azidentity.NewManagedIdentityCredential(opts)
