@@ -5,9 +5,9 @@ import (
 	"strings"
 )
 
-// GetCallerName returns the name of the calling function.
+// GetFullCallerName returns the name of the calling function.
 // It skips the specified number of stack frames (default is 1 to skip the immediate caller).
-func GetCallerName(skip ...int) string {
+func GetFullCallerName(skip ...int) string {
 	skipFrames := 1
 	if len(skip) > 0 {
 		skipFrames = skip[0]
@@ -24,11 +24,10 @@ func GetCallerName(skip ...int) string {
 	}
 
 	fullName := fn.Name()
-	// Extract just the function name from the full package path
-	parts := strings.Split(fullName, ".")
-	if len(parts) > 0 {
-		return parts[len(parts)-1]
+	// Extract package name (everything after the last slash, before the first dot)
+	lastSlash := strings.LastIndex(fullName, "/")
+	if lastSlash != -1 {
+		fullName = fullName[lastSlash+1:]
 	}
-
 	return fullName
 }

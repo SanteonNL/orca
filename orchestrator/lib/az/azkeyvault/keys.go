@@ -8,11 +8,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -21,7 +23,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/lestrrat-go/jwx/v2/jwa"
 	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/rs/zerolog/log"
 )
 
 const AzureKeyVaultTimeout = 10 * time.Second
@@ -146,7 +147,7 @@ func createCredential(credentialType string) (azcore.TokenCredential, error) {
 		// For UserAssignedManagedIdentity, client ID needs to be explicitly set.
 		// Taken from github.com/!azure/azure-sdk-for-go/sdk/azidentity@v1.7.0/default_azure_credential.go:100
 		if ID, ok := os.LookupEnv("AZURE_CLIENT_ID"); ok {
-			log.Logger.Debug().Msg("Azure: configuring UserAssignedManagedIdentity (using AZURE_CLIENT_ID) for Azure Key Vault client.")
+			slog.Debug("Azure: configuring UserAssignedManagedIdentity (using AZURE_CLIENT_ID) for Azure Key Vault client.")
 			opts.ID = azidentity.ClientID(ID)
 		}
 		return azidentity.NewManagedIdentityCredential(opts)

@@ -8,8 +8,10 @@ const (
 	OperationName = "operation.name"
 
 	// HTTP attributes
-	HTTPMethod = "http.method"
-	HTTPURL    = "http.url"
+	HTTPMethod     = "http.method"
+	HTTPURL        = "http.url"
+	HTTPStatusCode = "http.status_code"
+	HTTPStatusText = "http.status_text"
 
 	// FHIR attributes
 	FHIRResourceType      = "fhir.resource_type"

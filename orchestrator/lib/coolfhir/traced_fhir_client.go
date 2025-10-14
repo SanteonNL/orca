@@ -40,7 +40,7 @@ func (t *TracedFHIRClient) injectTraceContext(ctx context.Context, options []fhi
 
 func (t *TracedFHIRClient) CreateWithContext(ctx context.Context, resource interface{}, result interface{}, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "create"),
@@ -66,7 +66,7 @@ func (t *TracedFHIRClient) Create(resource interface{}, result interface{}, opti
 
 func (t *TracedFHIRClient) ReadWithContext(ctx context.Context, path string, result interface{}, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "read"),
@@ -92,7 +92,7 @@ func (t *TracedFHIRClient) Read(path string, result interface{}, options ...fhir
 
 func (t *TracedFHIRClient) UpdateWithContext(ctx context.Context, path string, resource interface{}, result interface{}, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "update"),
@@ -118,7 +118,7 @@ func (t *TracedFHIRClient) Update(path string, resource interface{}, result inte
 
 func (t *TracedFHIRClient) DeleteWithContext(ctx context.Context, path string, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "delete"),
@@ -144,7 +144,7 @@ func (t *TracedFHIRClient) Delete(path string, options ...fhirclient.Option) err
 
 func (t *TracedFHIRClient) SearchWithContext(ctx context.Context, resourceType string, params url.Values, result interface{}, options ...fhirclient.Option) error {
 	ctx, span := t.tracer.Start(ctx,
-		debug.GetCallerName(),
+		debug.GetFullCallerName(),
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String("fhir.operation", "search"),

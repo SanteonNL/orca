@@ -3,17 +3,18 @@ package cmd
 import (
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
-	"github.com/rs/zerolog"
+	"log/slog"
+
+	"net/url"
+	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/knadh/koanf/v2"
-	"net/url"
-	"strings"
 
 	"github.com/knadh/koanf/providers/env"
 )
@@ -29,7 +30,7 @@ type Config struct {
 	CarePlanService careplanservice.Config `koanf:"careplanservice"`
 	Tenants         tenants.Config         `koanf:"tenant"`
 	Messaging       messaging.Config       `koanf:"messaging"`
-	LogLevel        zerolog.Level          `koanf:"loglevel"`
+	LogLevel        slog.Level             `koanf:"loglevel"`
 	StrictMode      bool                   `koanf:"strictmode"`
 	// OpenTelemetry holds the configuration for observability
 	OpenTelemetry otel.Config `koanf:"opentelemetry"`
@@ -123,7 +124,7 @@ func splitWithEscaping(s, separator, escape string) []string {
 // DefaultConfig returns sensible, but not complete, default configuration values.
 func DefaultConfig() Config {
 	return Config{
-		LogLevel:   zerolog.InfoLevel,
+		LogLevel:   slog.LevelInfo,
 		StrictMode: true,
 		Public: InterfaceConfig{
 			Address: ":8080",

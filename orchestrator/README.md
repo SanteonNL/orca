@@ -82,8 +82,9 @@ All OTEL settings can be overridden using the `ORCA_*` prefix convention:
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
 
 #### Zorgplatform integration
+Note: To test a Zorgplatform launch locally, you will need to set `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=false`
 - `ORCA_ZORGPLATFORM_ENABLED`: Enable Zorgplatform integration (default: `false`).
-- `ORCA_TENANT_<ID>_CHIPSOFT_ORGID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
+- `ORCA_TENANT_<ID>_CHIPSOFT_ORGANIZATIONID`: Zorgplatform organization ID (HL7 NL OID) of the tenant, as the care organization is identified by ChipSoft.
 
 ### Demo configuration
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED`: Enable the "demo" EHR integration, as alternative to production-grade integrations like SMART on FHIR or Zorgplatform (default: `false`).
@@ -283,6 +284,7 @@ The JWK set will be available at `/smart-app-launch/.well-known/jwks.json`.
 
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ENABLED`: Enables the SMART on FHIR app launch endpoint (default: `false`).
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_CLIENTID` (required): The OAuth2 `client_id`.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_TENANT` (required): The tenant to which app launches from this issuer are logged in. 
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_URL` (required): SMART on FHIR server base URL that launches the application.
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_<KEY>_OAUTH2URL` (optional): In some cases (Epic on FHIR), the actual OAuth2 Authorization Server URL (`issuer` property in the discovered OpenID Configuration) differs from the SMART on FHIR server base URL (`iss` parameter in the launch).
    Setting this option overrides the OAuth2 Authorization Server URL, if not set, the FHIR server base URL is used.
