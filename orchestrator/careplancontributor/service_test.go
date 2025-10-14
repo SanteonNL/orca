@@ -1094,7 +1094,6 @@ func TestService_Import(t *testing.T) {
 			},
 		}
 		requestBodyJSON := must.MarshalJSON(requestBody)
-		println(string(requestBodyJSON))
 		httpRequest, _ := http.NewRequest("POST", httpServer.URL+"/cpc/test/fhir/$import", bytes.NewReader(requestBodyJSON))
 		httpRequest.Header.Set("Content-Type", "application/fhir+json")
 		httpResponse, err := httpClient.Do(httpRequest)
