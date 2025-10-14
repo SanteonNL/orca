@@ -1174,9 +1174,7 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 		return nil, otel.Error(span, err)
 	}
 
-	//
-	// Read patient
-	//
+	// Read patient information from EHR or Zorgplatform
 	var patient fhir.Patient
 	var patientBundle fhir.Bundle
 	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
