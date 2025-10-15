@@ -58,9 +58,9 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows, notificationBundles }) => {
             <DataGrid
                 rows={rows}
                 columns={columns}
-                components={{ Toolbar: GridToolbar }}
+                slots={{ toolbar: GridToolbar }}
                 autoHeight
-                componentsProps={{
+                slotProps={{
                     toolbar: {
                         showQuickFilter: true,
                     },
@@ -70,7 +70,9 @@ const EnrolledTaskTable: React.FC<Props> = ({ rows, notificationBundles }) => {
                         sortModel: [{ field: 'lastUpdated', sort: 'desc' }]
                     },
                     pagination: {
-                        pageSize: 10,
+                        paginationModel: {
+                            pageSize: 10,
+                        },
                     },
                 }}
             />
