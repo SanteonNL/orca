@@ -2,13 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/nuts-foundation/go-nuts-client/nuts"
-	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/nuts-foundation/go-nuts-client/nuts"
+	"github.com/nuts-foundation/go-nuts-client/oauth2"
+	"github.com/stretchr/testify/assert"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/stretchr/testify/require"
@@ -344,6 +346,73 @@ func Test_Main(t *testing.T) {
 			err = hospitalOrcaFHIRClient.Read("Task/"+*unsupportedTask.Id, &rejectedTask)
 			require.NoError(t, err)
 			require.Equal(t, fhir.TaskStatusRejected, rejectedTask.Status)
+		})
+	})
+	t.Run("Import data using CPC $import operation", func(t *testing.T) {
+		adminHTTPClient := &http.Client{
+			Transport: &oauth2.Transport{
+				UnderlyingTransport: http.DefaultTransport,
+				TokenSource: nuts.OAuth2TokenSource{
+					NutsSubject: "hospital",
+					NutsAPIURL:  nutsInternalURL,
+				},
+				Scope:          "careplanservice",
+				AuthzServerURL: hospitalAuthServerURL,
+			},
+		}
+		importClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/hospital/fhir"), adminHTTPClient, nil)
+
+		var importResult fhir.Bundle
+		err := importClient.Create(fhir.Parameters{
+			Parameter: []fhir.ParametersParameter{
+				{
+					Name: "patient",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
+				{
+					Name: "servicerequest",
+					ValueCoding: &fhir.Coding{
+						System: to.Ptr("request-code-system"),
+						Code:   to.Ptr("56789"),
+					},
+				},
+				{
+					Name: "condition",
+					ValueCoding: &fhir.Coding{
+						System: to.Ptr("condition-code-system"),
+						Code:   to.Ptr("1234"),
+					},
+				},
+				{
+					Name:          "start",
+					ValueDateTime: to.Ptr("2025-10-12T09:00:00+01:00"),
+				},
+			},
+		}, &importResult, fhirclient.AtPath("/$import"))
+
+		require.NoError(t, err)
+
+		t.Run("assert imported task", func(t *testing.T) {
+			var tasks fhir.Bundle
+			err = hospitalOrcaFHIRClient.Search("Task", nil, &tasks)
+			require.NoError(t, err)
+			var task fhir.Task
+			err = json.Unmarshal(tasks.Entry[len(tasks.Entry)-1].Resource, &task)
+			require.NoError(t, err)
+
+			assert.Equal(t, "condition-code-system", *task.ReasonCode.Coding[0].System)
+			assert.Equal(t, "1234", *task.ReasonCode.Coding[0].Code)
+
+			t.Run("assert imported ServiceRequest", func(t *testing.T) {
+				var serviceRequest fhir.ServiceRequest
+				err = hospitalOrcaFHIRClient.Read(*task.Focus.Reference, &serviceRequest)
+				require.NoError(t, err)
+				assert.Equal(t, "request-code-system", *serviceRequest.Code.Coding[0].System)
+				assert.Equal(t, "56789", *serviceRequest.Code.Coding[0].Code)
+			})
 		})
 	})
 }

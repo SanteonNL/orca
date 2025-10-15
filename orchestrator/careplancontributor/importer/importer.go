@@ -9,12 +9,17 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/google/uuid"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	taskRequesterOrg fhir.Organization, taskPerformerOrg fhir.Organization, patientIdentifier fhir.Identifier, patient fhir.Patient,
 	externalIdentifier fhir.Identifier, serviceRequestCode fhir.Coding, conditionCode fhir.Coding, startDate time.Time) (*fhir.Bundle, error) {
+	serviceRequestId := uuid.NewString()
+	carePlanId := uuid.NewString()
+	taskId := uuid.NewString()
+	patientId := uuid.NewString()
 	requesterOrgRef := &fhir.Reference{
 		Type:       to.Ptr("Organization"),
 		Identifier: &taskRequesterOrg.Identifier[0],
@@ -28,7 +33,7 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	patientRef := fhir.Reference{
 		Type:       to.Ptr("Patient"),
 		Identifier: &patientIdentifier,
-		Reference:  to.Ptr("urn:uuid:patient"),
+		Reference:  to.Ptr("urn:uuid:" + patientId),
 	}
 
 	tx := coolfhir.Transaction()
@@ -36,7 +41,7 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	// CarePlan
 	//
 	carePlan := fhir.CarePlan{
-		Id:     to.Ptr("urn:uuid:careplan"),
+		Id:     to.Ptr(carePlanId),
 		Author: requesterOrgRef,
 		Category: []fhir.CodeableConcept{
 			{
@@ -56,7 +61,7 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 			{
 				Reference: &fhir.Reference{
 					Type:      to.Ptr("Task"),
-					Reference: to.Ptr("urn:uuid:task"),
+					Reference: to.Ptr("urn:uuid:" + taskId),
 				},
 			},
 		},
@@ -87,12 +92,12 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 		}),
 	}
 	careplanservice.SetCreatorExtensionOnResource(&carePlan, requesterOrgRef.Identifier)
-	tx = tx.Create(carePlan)
+	tx = tx.Create(carePlan, coolfhir.WithFullUrl("urn:uuid:"+carePlanId))
 	//
 	// ServiceRequest
 	//
 	serviceRequest := fhir.ServiceRequest{
-		Id: to.Ptr("urn:uuid:servicerequest"),
+		Id: to.Ptr(serviceRequestId),
 		Code: &fhir.CodeableConcept{
 			Coding: []fhir.Coding{serviceRequestCode},
 		},
@@ -109,22 +114,22 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 		},
 	}
 	careplanservice.SetCreatorExtensionOnResource(&serviceRequest, requesterOrgRef.Identifier)
-	tx = tx.Create(serviceRequest)
+	tx = tx.Create(serviceRequest, coolfhir.WithFullUrl("urn:uuid:"+serviceRequestId))
 	//
 	// Task
 	//
 	task := fhir.Task{
-		Id: to.Ptr("urn:uuid:task"),
+		Id: to.Ptr(taskId),
 		BasedOn: []fhir.Reference{
 			{
 				Type:      to.Ptr("CarePlan"),
-				Reference: to.Ptr("urn:uuid:careplan"),
+				Reference: to.Ptr("urn:uuid:" + carePlanId),
 			},
 		},
 		Focus: &fhir.Reference{
 			Type:      to.Ptr("ServiceRequest"),
 			Display:   serviceRequestCode.Display,
-			Reference: to.Ptr("urn:uuid:servicerequest"),
+			Reference: to.Ptr("urn:uuid:" + serviceRequestId),
 		},
 		For:        &patientRef,
 		Identifier: []fhir.Identifier{externalIdentifier},
@@ -142,14 +147,14 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 		Status: fhir.TaskStatusInProgress,
 	}
 	careplanservice.SetCreatorExtensionOnResource(&task, requesterOrgRef.Identifier)
-	tx = tx.Create(task)
+	tx = tx.Create(task, coolfhir.WithFullUrl("urn:uuid:"+taskId))
 	//
 	// Patient
 	//
 	cleanPatient(&patient)
-	patient.Id = to.Ptr("urn:uuid:patient")
+	patient.Id = to.Ptr(patientId)
 	careplanservice.SetCreatorExtensionOnResource(&patient, requesterOrgRef.Identifier)
-	tx = tx.Create(patient)
+	tx = tx.Create(patient, coolfhir.WithFullUrl("urn:uuid:"+patientId))
 
 	// Perform
 	var result fhir.Bundle
