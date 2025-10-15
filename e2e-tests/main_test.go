@@ -2,13 +2,15 @@ package main
 
 import (
 	"encoding/json"
-	"github.com/nuts-foundation/go-nuts-client/nuts"
-	"github.com/nuts-foundation/go-nuts-client/oauth2"
 	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 	"testing"
+
+	"github.com/nuts-foundation/go-nuts-client/nuts"
+	"github.com/nuts-foundation/go-nuts-client/oauth2"
+	"github.com/stretchr/testify/assert"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/stretchr/testify/require"
@@ -22,6 +24,10 @@ const URANamingSystem = "http://fhir.nl/fhir/NamingSystem/ura"
 func Test_Main(t *testing.T) {
 	dockerNetwork, err := setupDockerNetwork(t)
 	require.NoError(t, err)
+
+	setupOTELCollector(t, dockerNetwork.Name)
+	t.Logf("OTEL Collector will export traces to otel_traces.txt after test completion")
+
 	// Setup HAPI FHIR server
 	hapiBaseURL := setupHAPI(t, dockerNetwork.Name)
 	hapiFhirClient := fhirclient.New(hapiBaseURL, http.DefaultClient, nil)
@@ -43,20 +49,21 @@ func Test_Main(t *testing.T) {
 	const hospitalBaseUrl = "http://hospital-orchestrator:8080"
 	const hospitalURA = 2
 
-	// Setup Clinic
-	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/fhir", false)
+	// Setup Clinic with OpenTelemetry enabled
+	err = createTenant(nutsInternalURL, hapiFhirClient, "clinic", clinicURA, "Clinic", "Bug City", clinicBaseUrl+"/cpc/clinic/fhir", false)
 	require.NoError(t, err)
-	_ = setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
+	_ = setupOrchestrator(t, dockerNetwork.Name, "clinic-orchestrator", "clinic", false, clinicFHIRStoreURL, clinicQuestionnaireFHIRStoreURL)
 
-	// Setup Hospital
+	// Setup Hospital with OpenTelemetry enabled
 	// Questionnaires can't be created in HAPI FHIR server partitions, only in the default partition.
 	// Otherwise, the following error occurs: HAPI-1318: Resource type Questionnaire can not be partitioned
 	// This is why the hospital, running the CPS, stores its data in the default partition.
-	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/fhir", true)
+	err = createTenant(nutsInternalURL, hapiFhirClient, "hospital", hospitalURA, "Hospital", "Fix City", hospitalBaseUrl+"/cpc/hospital/fhir", true)
 	require.NoError(t, err)
-	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL, true)
+	hospitalOrcaURL := setupOrchestrator(t, dockerNetwork.Name, "hospital-orchestrator", "hospital", true, hospitalFHIRStoreURL, clinicQuestionnaireFHIRStoreURL)
+
 	// hospitalOrcaFHIRClient is the FHIR client the hospital uses to interact with the CarePlanService
-	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/external/fhir"), orcaHttpClient, &fhirclient.Config{
+	hospitalOrcaFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/hospital/external/fhir"), orcaHttpClient, &fhirclient.Config{
 		DefaultOptions: []fhirclient.Option{
 			fhirclient.RequestHeaders(map[string][]string{"X-Scp-Fhir-Url": {"local-cps"}}),
 		},
@@ -76,7 +83,7 @@ func Test_Main(t *testing.T) {
 			AuthzServerURL: hospitalAuthServerURL,
 		},
 	}
-	clinicOrcaCPSFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cps"), clinicHTTPClient, nil)
+	clinicOrcaCPSFHIRClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cps/hospital"), clinicHTTPClient, nil)
 
 	var patient fhir.Patient
 	var task fhir.Task
@@ -95,6 +102,16 @@ func Test_Main(t *testing.T) {
 					{
 						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
 						Value:  to.Ptr("1333333337"),
+					},
+				},
+				Telecom: []fhir.ContactPoint{
+					{
+						System: to.Ptr(fhir.ContactPointSystemPhone),
+						Value:  to.Ptr("+31612345678"),
+					},
+					{
+						System: to.Ptr(fhir.ContactPointSystemEmail),
+						Value:  to.Ptr("test@test.com"),
 					},
 				},
 			}
@@ -329,6 +346,73 @@ func Test_Main(t *testing.T) {
 			err = hospitalOrcaFHIRClient.Read("Task/"+*unsupportedTask.Id, &rejectedTask)
 			require.NoError(t, err)
 			require.Equal(t, fhir.TaskStatusRejected, rejectedTask.Status)
+		})
+	})
+	t.Run("Import data using CPC $import operation", func(t *testing.T) {
+		adminHTTPClient := &http.Client{
+			Transport: &oauth2.Transport{
+				UnderlyingTransport: http.DefaultTransport,
+				TokenSource: nuts.OAuth2TokenSource{
+					NutsSubject: "hospital",
+					NutsAPIURL:  nutsInternalURL,
+				},
+				Scope:          "careplanservice",
+				AuthzServerURL: hospitalAuthServerURL,
+			},
+		}
+		importClient := fhirclient.New(hospitalOrcaURL.JoinPath("/cpc/hospital/fhir"), adminHTTPClient, nil)
+
+		var importResult fhir.Bundle
+		err := importClient.Create(fhir.Parameters{
+			Parameter: []fhir.ParametersParameter{
+				{
+					Name: "patient",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("1333333337"),
+					},
+				},
+				{
+					Name: "servicerequest",
+					ValueCoding: &fhir.Coding{
+						System: to.Ptr("request-code-system"),
+						Code:   to.Ptr("56789"),
+					},
+				},
+				{
+					Name: "condition",
+					ValueCoding: &fhir.Coding{
+						System: to.Ptr("condition-code-system"),
+						Code:   to.Ptr("1234"),
+					},
+				},
+				{
+					Name:          "start",
+					ValueDateTime: to.Ptr("2025-10-12T09:00:00+01:00"),
+				},
+			},
+		}, &importResult, fhirclient.AtPath("/$import"))
+
+		require.NoError(t, err)
+
+		t.Run("assert imported task", func(t *testing.T) {
+			var tasks fhir.Bundle
+			err = hospitalOrcaFHIRClient.Search("Task", nil, &tasks)
+			require.NoError(t, err)
+			var task fhir.Task
+			err = json.Unmarshal(tasks.Entry[len(tasks.Entry)-1].Resource, &task)
+			require.NoError(t, err)
+
+			assert.Equal(t, "condition-code-system", *task.ReasonCode.Coding[0].System)
+			assert.Equal(t, "1234", *task.ReasonCode.Coding[0].Code)
+
+			t.Run("assert imported ServiceRequest", func(t *testing.T) {
+				var serviceRequest fhir.ServiceRequest
+				err = hospitalOrcaFHIRClient.Read(*task.Focus.Reference, &serviceRequest)
+				require.NoError(t, err)
+				assert.Equal(t, "request-code-system", *serviceRequest.Code.Coding[0].System)
+				assert.Equal(t, "56789", *serviceRequest.Code.Coding[0].Code)
+			})
 		})
 	})
 }

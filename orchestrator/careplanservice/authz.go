@@ -4,14 +4,15 @@ package careplanservice
 import (
 	"context"
 	"fmt"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"log/slog"
+	"net/url"
+
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/url"
 )
 
 const CreatorExtensionURL = "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator"
@@ -106,7 +107,7 @@ var _ Policy[any] = &RelatedResourcePolicy[any, any]{}
 // RelatedResourcePolicy is a policy that allows access if the user has access to the related resource(s).
 // For instance, if the user has access to a ServiceRequest, if the user has access to the related Task.
 type RelatedResourcePolicy[T any, R any] struct {
-	fhirClient            fhirclient.Client
+	fhirClientFactory     FHIRClientFactory
 	relatedResourcePolicy Policy[R]
 	// relatedResourceSearchParams is a function that returns the search parameters for the related resource.
 	// If the resource lacks a reference to the related resource, this function should return nil for searchParams.
@@ -123,8 +124,8 @@ func (r RelatedResourcePolicy[T, R]) HasAccess(ctx context.Context, resource T, 
 		}, nil
 	}
 	searchHandler := FHIRSearchOperationHandler[R]{
-		fhirClient:  r.fhirClient,
-		authzPolicy: r.relatedResourcePolicy,
+		fhirClientFactory: r.fhirClientFactory,
+		authzPolicy:       r.relatedResourcePolicy,
 	}
 	const maxIterations = 100
 	for i := 0; i < maxIterations; i++ {
@@ -210,7 +211,11 @@ func (c CareTeamMemberPolicy[T]) HasAccess(ctx context.Context, resource *T, pri
 	// INT-630: We changed CareTeam to be contained within the CarePlan, but old test data in the CarePlan resource does not have CareTeam.
 	//          For temporary backwards compatibility, ignore these CarePlans. It can be removed when old data has been purged.
 	if err != nil {
-		log.Ctx(ctx).Warn().Err(err).Msgf("Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource (carePlanID=%s)", *carePlan.Id)
+		slog.WarnContext(ctx, "Unable to derive CareTeam from CarePlan, ignoring CarePlan for authorizing access to FHIR Patient resource",
+			slog.String(logging.FieldResourceID, *carePlan.Id),
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeCarePlan.String()),
+			slog.String(logging.FieldError, err.Error()),
+		)
 		return &PolicyDecision{
 			Allowed: false,
 			Reasons: []string{"CareTeamMemberPolicy: unable to derive CareTeam from CarePlan"},

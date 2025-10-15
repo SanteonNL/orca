@@ -4,6 +4,7 @@ import { DataGrid, GridColDef, GridToolbar } from '@mui/x-data-grid';
 import {HumanName, Identifier} from "fhir/r4";
 import {IconCheckupList} from "@tabler/icons-react";
 import {FormatHumanName} from "@/utils/fhir";
+import EnrollmentPopup from "@/app/(DashboardLayout)/components/service-requests/enrollment-popup";
 
 interface Props {
     rows: PatientDetails[]
@@ -11,6 +12,8 @@ interface Props {
 
 interface PatientDetails {
     id: string
+    resourceId: string
+    lastUpdated: Date
     primaryIdentifier: Identifier
     name: HumanName
     gender: string
@@ -22,6 +25,7 @@ const PatientTable: React.FC<Props> = ({ rows }) => {
             field: 'id',
             headerName: 'BSN',
         },
+        { field: 'lastUpdated', headerName: 'Last Updated', type: 'dateTime', flex: 1 },
         {
             field: 'name',
             headerName: 'Name',
@@ -42,6 +46,14 @@ const PatientTable: React.FC<Props> = ({ rows }) => {
                         <IconCheckupList />
                     </a>
                 );
+            }
+        },
+        {
+            headerName: 'External Tasks',
+            flex: 1,
+            field: 'resourceId',
+            renderCell: params => {
+                return  <EnrollmentPopup patientId={'Patient/' + params.row.resourceId} />;
             }
         },
     ];

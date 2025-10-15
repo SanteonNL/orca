@@ -1,4 +1,5 @@
 import {Bundle, HumanName, Identifier, Patient} from "fhir/r4";
+import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 export function TokenToIdentifier(str: string): Identifier | undefined {
     if (!str) {
@@ -16,12 +17,14 @@ export function TokenToIdentifier(str: string): Identifier | undefined {
 }
 
 export async function ReadPatient(i : string | Identifier) {
+    const headers = await addFhirAuthHeaders({
+        "Cache-Control": "no-cache"
+    });
+
     if (typeof i === "string") {
         const httpResponse = await fetch(`${process.env.FHIR_BASE_URL}/Patient/${i}`, {
             cache: 'no-store',
-            headers: {
-                "Cache-Control": "no-cache"
-            }
+            headers: headers
         });
         if (!httpResponse.ok) {
             const errorText = await httpResponse.text();
@@ -33,9 +36,7 @@ export async function ReadPatient(i : string | Identifier) {
     const identifier = i as Identifier;
     const httpResponse = await fetch(`${process.env.FHIR_BASE_URL}/Patient?identifier=${encodeURIComponent(identifier.system + "|" + identifier.value)}`, {
         cache: 'no-store',
-        headers: {
-            "Cache-Control": "no-cache"
-        }
+        headers: headers
     });
     if (!httpResponse.ok) {
         const errorText = await httpResponse.text();

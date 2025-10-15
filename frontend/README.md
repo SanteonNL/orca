@@ -14,7 +14,6 @@ The following configuration options are supported:
 - `NEXT_PUBLIC_TITLE`: the title of the application, defaults to `ORCA Frontend`.
 - `ORCA_PATIENT_IDENTIFIER_SYSTEM`: the FHIR coding system for patient identifiers, defaults to `http://fhir.nl/fhir/NamingSystem/bsn`.
 - `SUPPORT_CONTACT_LINK`: a link to support resource, e.g. a `mailto:` link or an `https://` link to a support page. It will be shown on error pages.
-- `NEXT_PUBLIC_AUTOLAUNCH_EXTERNAL_APP`: when set to `true`, the application will automatically launch the external app (if there's exactly 1), exposed by the Task filler, if the Task is in the `in-progress` state. Defaults to `false`. 
 
 ## Getting Started
 ### 1. Install dependencies
@@ -33,11 +32,6 @@ cp .env.secrets.example .env.secrets
 ```
 
 Add details to the `.env.local` if they need to change. The defaults in the example are set to the local orchestrator and the nuts-node from the [dev deployment docker-compose](/deployments/dev/hospital/docker-compose.yaml).
-
-> ⓘ **Optional Step**: If you do not configure the secrets step below and the terminology server does require auth, the Questionnaire renderer will simply show a "Unable to fetch" message in the form. The application will still function without this step.
-
-Modify the [`./.env.secrets`](./.env.secrets), make sure the `TERMINOLOGY_SERVER_USERNAME` and `TERMINOLOGY_SERVER_PASSWORD` point to valid credentials for the Dutch national terminology server. 
-See [this](https://nictiz.nl/publicaties/nationale-terminologie-server-handleiding-voor-nieuwe-gebruikers/) manual on how to connect.
 
 ### 3. Start the application
 #### Dev mode

@@ -4,7 +4,7 @@ Run `docker compose up` to start the development environment.
 
 URLs:
 - Hospital EHR (task sender): http://localhost:8081/ehr
-- Clinic EHR (task receiver): http://localhost:8080/viewer
+- Clinic EHR (task receiver): http://localhost:8082/viewer
 
 ## Rebuilding
 

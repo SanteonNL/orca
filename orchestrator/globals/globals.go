@@ -1,17 +1,37 @@
 package globals
 
 import (
+	"context"
 	"crypto/tls"
+	"fmt"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 )
 
-func init() {
-	zerolog.DefaultContextLogger = &log.Logger
+// CreateCPSFHIRClient creates a FHIR client for the Care Plan Service (CPS), based on the tenant information in the context.
+// If the tenant is not found or no client is registered for the tenant, it returns an error.
+func CreateCPSFHIRClient(ctx context.Context) (fhirclient.Client, error) {
+	tenant, err := tenants.FromContext(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("create CPS FHIR client: %w", err)
+	}
+	fhirClient := cpsFHIRClientsByTenant[tenant.ID]
+	if fhirClient == nil {
+		return nil, fmt.Errorf("create CPS FHIR client: no client for tenant (id=%s)", tenant.ID)
+	}
+	return fhirClient, nil
 }
 
-var CarePlanServiceFhirClient fhirclient.Client
+// RegisterCPSFHIRClient registers a FHIR client for the Care Plan Service (CPS) for a specific tenant.
+func RegisterCPSFHIRClient(tenantID string, client fhirclient.Client) {
+	if _, exists := cpsFHIRClientsByTenant[tenantID]; StrictMode && exists {
+		panic(fmt.Sprintf("CPS FHIR client for tenant %s already exists", tenantID))
+	}
+	cpsFHIRClientsByTenant[tenantID] = client
+}
+
+var cpsFHIRClientsByTenant = make(map[string]fhirclient.Client)
 
 // StrictMode is a global variable that can be set to true to enable strict mode. If strict mode is enabled,
 // potentially unsafe behavior is disabled.

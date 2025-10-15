@@ -25,7 +25,6 @@ activate CPS
     CPC1 --> Practitioner1 : 200 OK
 deactivate CPC1
     CPS -> CPC2: notify Task(main)\n[HTTP]
-    note left: Risk of lost notification
     activate CPC2
         CPC2 -> CPS: fetch Task(main)\n[HTTP]
         activate CPS
@@ -34,11 +33,9 @@ deactivate CPC1
         CPC2 --> CPS: 200 OK
 deactivate CPS
     CPC2 -> taskEngine: notify Task(main)\n[event]
-    note left: Risk of lost notification
 deactivate CPC2
 
 activate taskEngine
-loop until questionnaires filled out
     taskEngine -> taskEngine: evaluate Task
     taskEngine -> CPC2: create Task(subtask)\ncreate Questionnaire\n[call]
     activate CPC2
@@ -50,7 +47,6 @@ loop until questionnaires filled out
         deactivate taskEngine
         CPS -> CPC1: notify Task(subtask)\n[HTTP]
         activate CPC1
-            note right: Risk of lost notification
             CPC1 -> CPS: fetch Task(subtask)\n[HTTP]
             activate CPS
             CPS --> CPC1: 200 OK
@@ -67,7 +63,6 @@ loop until questionnaires filled out
         CPC1 --> Practitioner1: 200 OK
     deactivate CPC1
         CPS -> CPC2: notify Task(subtask)
-        note left: Risk of lost notification
         activate CPC2
             CPC2 ->  CPS: fetch Task(subtask)
             activate CPS
@@ -75,10 +70,9 @@ loop until questionnaires filled out
             deactivate CPS
     deactivate CPS
         CPC2 -> taskEngine: notify Task(subtask)\n[event]
-        note left: Risk of lost notification
         deactivate CPC2
         activate taskEngine
-end loop
+
 taskEngine -> CPC2: accept Task(main)\n[in-process call]
 activate CPC2
     CPC2 -> CPS: update Task(main)\n[HTTP]
@@ -107,5 +101,5 @@ activate CPC2
 deactivate CPC2
 end loop
 taskEngine -> taskEngine: create enrolment\nbundle
-taskEngine -> careprofs: notify enrolment\nbundle\n[ServiceBus]
+taskEngine -> careprofs: notify enrolment\nbundle\n[REST API]
 @enduml

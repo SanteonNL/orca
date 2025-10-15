@@ -2,7 +2,6 @@ package careplanservice
 
 import (
 	"context"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/url"
@@ -18,12 +17,12 @@ func UpdateQuestionnaireResponseAuthzPolicy() Policy[*fhir.QuestionnaireResponse
 	return CreatorPolicy[*fhir.QuestionnaireResponse]{}
 }
 
-func ReadQuestionnaireResponseAuthzPolicy(fhirClient fhirclient.Client) Policy[*fhir.QuestionnaireResponse] {
+func ReadQuestionnaireResponseAuthzPolicy(fhirClientFactory FHIRClientFactory) Policy[*fhir.QuestionnaireResponse] {
 	return AnyMatchPolicy[*fhir.QuestionnaireResponse]{
 		Policies: []Policy[*fhir.QuestionnaireResponse]{
 			RelatedResourcePolicy[*fhir.QuestionnaireResponse, *fhir.Task]{
-				fhirClient:            fhirClient,
-				relatedResourcePolicy: ReadTaskAuthzPolicy(fhirClient),
+				fhirClientFactory:     fhirClientFactory,
+				relatedResourcePolicy: ReadTaskAuthzPolicy(fhirClientFactory),
 				relatedResourceSearchParams: func(ctx context.Context, resource *fhir.QuestionnaireResponse) (resourceType string, searchParams url.Values) {
 					return "Task", url.Values{"output-reference": []string{"QuestionnaireResponse/" + *resource.Id}}
 				},
