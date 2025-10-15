@@ -11,8 +11,7 @@ require (
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.1.0
 	github.com/beevik/etree v1.6.0
 	github.com/braineet/saml v0.4.15
-	github.com/go-jose/go-jose/v4 v4.1.2
-	github.com/go-test/deep v1.1.1
+	github.com/go-jose/go-jose/v4 v4.1.3
 	github.com/google/uuid v1.6.0
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/knadh/koanf/providers/env v1.1.0
@@ -45,6 +44,7 @@ require (
 	github.com/ebitengine/purego v0.8.4 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/go-chi/chi/v5 v5.2.3 // indirect
+	github.com/go-test/deep v1.1.1 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.27.2 // indirect
 	github.com/moby/go-archive v0.1.0 // indirect
