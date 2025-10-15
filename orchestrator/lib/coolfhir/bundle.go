@@ -5,14 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -27,6 +30,12 @@ func Transaction() *BundleBuilder {
 func SearchSet() *BundleBuilder {
 	return &BundleBuilder{
 		Type: fhir.BundleTypeSearchset,
+	}
+}
+
+func BatchResponse() *BundleBuilder {
+	return &BundleBuilder{
+		Type: fhir.BundleTypeBatchResponse,
 	}
 }
 
@@ -90,6 +99,18 @@ func (t *BundleBuilder) AppendEntry(entry fhir.BundleEntry, opts ...BundleEntryO
 	return t
 }
 
+func (t *BundleBuilder) AppendOperationOutcome(statusCode int, issues ...fhir.OperationOutcomeIssue) *BundleBuilder {
+	t.AppendEntry(fhir.BundleEntry{
+		Response: &fhir.BundleEntryResponse{
+			Status: fmt.Sprintf("%d %s", statusCode, http.StatusText(statusCode)),
+			Outcome: must.MarshalJSON(fhir.OperationOutcome{
+				Issue: issues,
+			}),
+		},
+	})
+	return t
+}
+
 func (t *BundleBuilder) Bundle() fhir.Bundle {
 	return fhir.Bundle(*t)
 }
@@ -143,8 +164,7 @@ func WithAuditEvent(ctx context.Context, t *BundleBuilder, info AuditEventInfo) 
 		// Extract resource type and ID for logging
 		var res Resource
 		if err := json.Unmarshal(entry.Resource, &res); err != nil {
-			log.Ctx(ctx).Error().Err(err).
-				Msg("Error unmarshalling resource to create audit event")
+			slog.ErrorContext(ctx, "Error unmarshalling resource to create audit event", slog.String(logging.FieldError, err.Error()))
 			t.Append(FailedBundleEntry{
 				ResourceType: "",
 				ID:           "",
@@ -164,7 +184,7 @@ func WithAuditEvent(ctx context.Context, t *BundleBuilder, info AuditEventInfo) 
 			resourceRef.Reference = to.Ptr(fmt.Sprintf("%s/%s", res.Type, res.ID))
 			resourceRef.Type = to.Ptr(res.Type)
 		} else {
-			log.Ctx(ctx).Error().Msgf("Unable to create proper reference for audit event, missing both FullUrl and resource ID")
+			slog.ErrorContext(ctx, "Unable to create proper reference for audit event, missing both FullUrl and resource ID")
 			// TODO: Find some way to fail the bundle creation
 			t.Append(FailedBundleEntry{
 				ResourceType: res.Type,
@@ -394,7 +414,7 @@ func ExecuteTransaction(fhirClient fhirclient.Client, bundle fhir.Bundle) (fhir.
 		return fhir.Bundle{}, fmt.Errorf("result bundle is nil")
 	}
 
-	log.Debug().Msgf("Executed Bundle successfully, got %d entries", len(resultBundle.Entry))
+	slog.Debug("Executed Bundle successfully", slog.Int(logging.FieldCount, len(resultBundle.Entry)))
 	// The transaction was successfully executed, return the result bundle
 	return resultBundle, nil
 }
@@ -459,7 +479,7 @@ func NormalizeTransactionBundleResponseEntry(ctx context.Context, fhirClient fhi
 
 		if resourcePath == "" {
 			responseBundleEntryJson, _ := json.Marshal(responseEntry)
-			log.Ctx(ctx).Warn().Msgf("Failed to determine resource path from FHIR transaction resultEntry bundle: %s", string(responseBundleEntryJson))
+			slog.WarnContext(ctx, "Failed to determine resource path from FHIR transaction", slog.String("result_bundle", string(responseBundleEntryJson)))
 		} else if len(searchParams) == 0 {
 			var resourceData []byte
 			if err := fhirClient.ReadWithContext(ctx, resourcePath, &resourceData); err != nil {

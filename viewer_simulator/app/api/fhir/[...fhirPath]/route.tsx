@@ -19,10 +19,10 @@ import { FHIR_SCP_CONTEXT_SYSTEM } from "@/utils/const/const";
  * Does NOT support vread, history, or any other FHIR operations.
  */
 
-export async function GET(req: NextRequest, { params }: { params: Promise<{ fhirPath: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ fhirPath: string[] }> }) {
     try {
         const { fhirPath } = await params;
-        const fhirPathUrlSegment = Array.isArray(fhirPath) ? fhirPath.join('/') : fhirPath;
+        const fhirPathUrlSegment = fhirPath.join('/');
         const [resourceType, resourceId] = fhirPathUrlSegment.replace("/_search", "").split('/');
 
         if (!supportedResourceTypes.includes(resourceType)) {
@@ -70,9 +70,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ fhir
     }
 }
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ fhirPath: string }> }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ fhirPath: string[] }> }) {
     try {
-
         const { fhirPath } = await params;
         if (fhirPath[fhirPath.length - 1] === '_search') {
             return GET(req, { params });

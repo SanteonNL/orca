@@ -7,6 +7,11 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/oauth2"
 	"net/http"
 	"net/url"
@@ -65,6 +70,19 @@ type ClientConfig struct {
 	Auth AuthConfig `koanf:"auth"`
 }
 
+func (c ClientConfig) ParseBaseURL() *url.URL {
+	return must.ParseURL(c.BaseURL)
+}
+
+func (c ClientConfig) Validate() error {
+	if c.BaseURL != "" {
+		if _, err := url.Parse(c.BaseURL); err != nil {
+			return fmt.Errorf("invalid FHIR base URL: %w", err)
+		}
+	}
+	return nil
+}
+
 type AuthConfigType string
 
 const (
@@ -86,6 +104,7 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 	if err != nil {
 		return nil, nil, err
 	}
+
 	switch config.Auth.Type {
 	case AzureManagedIdentity:
 		opts := &azidentity.ManagedIdentityCredentialOptions{
@@ -107,13 +126,55 @@ func NewAuthRoundTripper(config ClientConfig, fhirClientConfig *fhirclient.Confi
 			return nil, nil, fmt.Errorf("unable to get credential for Azure FHIR API client: %w", err)
 		}
 		httpClient := NewAzureHTTPClient(credential, scopes)
-		transport = httpClient.Transport
-		fhirClient = fhirclient.New(fhirURL, httpClient, fhirClientConfig)
+
+		// Wrap the transport with OTEL instrumentation
+		transport = otelhttp.NewTransport(
+			httpClient.Transport,
+			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+				return fmt.Sprintf("fhir.%s %s", strings.ToLower(r.Method), r.URL.Path)
+			}),
+			otelhttp.WithSpanOptions(
+				trace.WithSpanKind(trace.SpanKindClient),
+				trace.WithAttributes(
+					attribute.String(otel.FHIRBaseURL, fhirURL.String()),
+					attribute.String("fhir.auth_type", string(config.Auth.Type)),
+					attribute.String("service.component", "fhir-client"),
+				),
+			),
+		)
+
+		// Create an instrumented HTTP client
+		instrumentedClient := &http.Client{
+			Transport: transport,
+			Timeout:   httpClient.Timeout,
+		}
+
+		fhirClient = fhirclient.New(fhirURL, instrumentedClient, fhirClientConfig)
 	case Default:
-		transport = http.DefaultTransport
-		fhirClient = fhirclient.New(fhirURL, http.DefaultClient, fhirClientConfig)
+		// Wrap default transport with OTEL instrumentation
+		transport = otelhttp.NewTransport(
+			http.DefaultTransport,
+			otelhttp.WithSpanNameFormatter(func(operation string, r *http.Request) string {
+				return fmt.Sprintf("fhir.%s %s", strings.ToLower(r.Method), r.URL.Path)
+			}),
+			otelhttp.WithSpanOptions(
+				trace.WithSpanKind(trace.SpanKindClient),
+				trace.WithAttributes(
+					attribute.String(otel.FHIRBaseURL, fhirURL.String()),
+					attribute.String("fhir.auth_type", string(config.Auth.Type)),
+					attribute.String("service.component", "fhir-client"),
+				),
+			),
+		)
+
+		instrumentedClient := &http.Client{
+			Transport: transport,
+		}
+
+		fhirClient = fhirclient.New(fhirURL, instrumentedClient, fhirClientConfig)
 	default:
 		return nil, nil, fmt.Errorf("invalid FHIR authentication type: %s", config.Auth.Type)
 	}
+
 	return transport, fhirClient, nil
 }

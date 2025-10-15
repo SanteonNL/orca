@@ -11,6 +11,8 @@ type FHIRResource struct {
 }
 
 type Data struct {
+	// TenantID identifies the tenant for which the user session was created.
+	TenantID string
 	// FHIRLauncher is the name of the FHIRLauncher (FHIR client factory) that should be used to create a FHIR client
 	// to interact with the EHR's FHIR API.
 	FHIRLauncher string
@@ -32,7 +34,16 @@ func (d *Data) Set(path string, resource any) {
 	d.ContextResources = append(d.ContextResources, res)
 }
 
-func (d *Data) Get(resourceType string) *FHIRResource {
+func (d *Data) GetByPath(resourcePath string) *FHIRResource {
+	for _, resource := range d.ContextResources {
+		if resource.Path == resourcePath {
+			return &resource
+		}
+	}
+	return nil
+}
+
+func (d *Data) GetByType(resourceType string) *FHIRResource {
 	for _, resource := range d.ContextResources {
 		if strings.HasPrefix(resource.Path, resourceType+"/") {
 			return &resource
@@ -43,7 +54,7 @@ func (d *Data) Get(resourceType string) *FHIRResource {
 
 func Get[T any](data *Data) *T {
 	var zero T
-	resource := data.Get(coolfhir.ResourceType(zero))
+	resource := data.GetByType(coolfhir.ResourceType(zero))
 	if resource == nil {
 		return nil
 	}

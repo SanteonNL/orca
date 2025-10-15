@@ -192,6 +192,25 @@ func main() {
 	code += "	}\n"
 	code += "}\n\n"
 
+	//
+	// func SetSource(resource interface{}, source string)
+	//
+	code += "func SetSource(resource interface{}, source *string) {\n"
+	code += "	switch resource.(type) {\n"
+	for _, fhirType := range listOfFHIRTypes {
+		code += "	case *fhir." + fhirType + ":\n"
+		code += "		meta := resource.(*fhir." + fhirType + ").Meta\n"
+		code += "		if meta == nil {\n"
+		code += "			meta = &fhir.Meta{}\n"
+		code += "			resource.(*fhir." + fhirType + ").Meta = meta\n"
+		code += "		}\n"
+		code += "		meta.Source = source\n"
+	}
+	code += "	default:\n"
+	code += "		panic(\"SetSource called with non-FHIR resource, or not a pointer: \" + fmt.Sprintf(\"%T\", resource))\n"
+	code += "	}\n"
+	code += "}\n\n"
+
 	// Write the generated code to a file
 	if err := os.WriteFile("type.gen.go", []byte(code), 0644); err != nil {
 		panic(err)

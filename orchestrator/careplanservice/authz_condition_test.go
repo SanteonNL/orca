@@ -84,7 +84,7 @@ func TestConditionAuthzPolicy(t *testing.T) {
 		})
 	})
 	t.Run("read", func(t *testing.T) {
-		policy := ReadConditionAuthzPolicy(fhirClient)
+		policy := ReadConditionAuthzPolicy(FHIRClientFactoryFor(fhirClient))
 		testPolicies(t, []AuthzPolicyTest[*fhir.Condition]{
 			{
 				name:      "allow (is creator)",

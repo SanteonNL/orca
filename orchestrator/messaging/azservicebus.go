@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 var _ Broker = &AzureServiceBusBroker{}
@@ -75,17 +77,17 @@ type AzureServiceBusBroker struct {
 
 // Close releases the underlying resources associated with the AzureServiceBusBroker instance.
 func (c *AzureServiceBusBroker) Close(ctx context.Context) error {
-	log.Ctx(ctx).Debug().Msg("AzureServiceBus: closing...")
+	slog.DebugContext(ctx, "AzureServiceBus: closing...")
 	c.senderLock.Lock()
 	defer c.senderLock.Unlock()
 
 	// Wait for all receivers to finish before closing the client.
-	log.Ctx(ctx).Debug().Msg("AzureServiceBus: waiting for all receivers to close")
+	slog.DebugContext(ctx, "AzureServiceBus: waiting for all receivers to close")
 	c.ctxCancel()
 	c.receivers.Wait()
 
 	// Collect all close() errors from senders, receivers and client, then return them as a whole.
-	log.Ctx(ctx).Debug().Msg("AzureServiceBus: waiting for all senders to close")
+	slog.DebugContext(ctx, "AzureServiceBus: waiting for all senders to close")
 	var errs []error
 	for topic, sender := range c.senders {
 		if err := sender.Close(ctx); err != nil {
@@ -93,7 +95,7 @@ func (c *AzureServiceBusBroker) Close(ctx context.Context) error {
 		}
 		delete(c.senders, topic)
 	}
-	log.Ctx(ctx).Debug().Msg("AzureServiceBus: finally, closing client")
+	slog.DebugContext(ctx, "AzureServiceBus: finally, closing client")
 	if err := c.client.Close(ctx); err != nil {
 		errs = append(errs, fmt.Errorf("failed to close client: %w", err))
 	}
@@ -103,7 +105,7 @@ func (c *AzureServiceBusBroker) Close(ctx context.Context) error {
 			errs...,
 		)...)
 	}
-	log.Ctx(ctx).Debug().Msg("AzureServiceBus: closed")
+	slog.DebugContext(ctx, "AzureServiceBus: closed")
 	return nil
 }
 
@@ -123,10 +125,16 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 		defer c.receivers.Done()
 		for c.ctx.Err() == nil {
 			messages, err := receiver.ReceiveMessages(c.ctx, 1, &azservicebus.ReceiveMessagesOptions{})
-			if err != nil {
+			if err != nil || len(messages) == 0 {
 				const backoffTime = time.Minute
 				if !errors.Is(err, context.Canceled) {
-					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: receive message failed, backing off for %s (src: %s)", backoffTime, fullName)
+					slog.ErrorContext(
+						c.ctx,
+						"AzureServiceBus: receive message failed, backing off",
+						slog.String("source", fullName),
+						slog.String(logging.FieldError, err.Error()),
+						slog.Duration("backoff_time", backoffTime),
+					)
 				}
 				// Sleep for a minute before retrying, to avoid spamming the logs.
 				// But, the server might be instructed to shut down in the meantime, and we don't want the sleep to block the shutdown.
@@ -147,17 +155,32 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 				message.ContentType = *azMessage.ContentType
 			}
 			if err := handler(c.ctx, message); err != nil {
-				log.Ctx(c.ctx).Warn().Err(err).Msgf("AzureServiceBus: message handler failed (src: %s), message will be sent to DLQ", fullName)
+				slog.ErrorContext(
+					c.ctx,
+					"AzureServiceBus: message handler failed, message will be sent to DLQ",
+					slog.String("source", fullName),
+					slog.String(logging.FieldError, err.Error()),
+				)
 				if err := receiver.AbandonMessage(c.ctx, azMessage, &azservicebus.AbandonMessageOptions{
 					PropertiesToModify: map[string]any{
 						"deliveryfailure-" + strconv.Itoa(int(azMessage.DeliveryCount)): err.Error(),
 					},
 				}); err != nil {
-					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: abandon message (for redelivery) failed (src: %s)", fullName)
+					slog.ErrorContext(
+						c.ctx,
+						"AzureServiceBus: abandon message (for redelivery) failed",
+						slog.String("source", fullName),
+						slog.String(logging.FieldError, err.Error()),
+					)
 				}
 			} else {
 				if err := receiver.CompleteMessage(c.ctx, azMessage, &azservicebus.CompleteMessageOptions{}); err != nil {
-					log.Ctx(c.ctx).Err(err).Msgf("AzureServiceBus: complete message failed (src: %s)", fullName)
+					slog.ErrorContext(
+						c.ctx,
+						"AzureServiceBus: complete message failed",
+						slog.String("source", fullName),
+						slog.String(logging.FieldError, err.Error()),
+					)
 				}
 			}
 		}
