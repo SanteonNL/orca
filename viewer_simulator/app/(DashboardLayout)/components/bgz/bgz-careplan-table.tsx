@@ -60,9 +60,9 @@ export default function BgzTable({ name, rows, loading }: Props) {
                 loading={loading}
                 rows={rows}
                 columns={columns}
-                components={{ Toolbar: GridToolbar }}
+                slots={{ toolbar: GridToolbar }}
                 autoHeight
-                componentsProps={{
+                slotProps={{
                     toolbar: {
                         showQuickFilter: true,
                     },
@@ -72,7 +72,9 @@ export default function BgzTable({ name, rows, loading }: Props) {
                         sortModel: [{ field: 'lastUpdated', sort: 'desc' }]
                     },
                     pagination: {
-                        pageSize: 10,
+                        paginationModel: {
+                            pageSize: 10,
+                        },
                     },
                 }}
             />
