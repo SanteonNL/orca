@@ -26,7 +26,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/go-test/deep"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1056,7 +1055,51 @@ func TestService_Import(t *testing.T) {
 		Transport: auth.AuthenticatedTestRoundTripper(http.DefaultTransport, auth.TestPrincipal2, ""),
 	}
 
-	t.Run("ok", func(t *testing.T) {
+	t.Run("ok - Demo EHR", func(t *testing.T) {
+		t.Log("In this test, test org 2 imports data into org 1's CPS")
+		cpsFHIRClient := &test.StubFHIRClient{}
+		globals.RegisterCPSFHIRClient(tenant.ID, cpsFHIRClient)
+
+		start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+		requestBody := fhir.Parameters{
+			Parameter: []fhir.ParametersParameter{
+				{
+					Name: "patient",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("123456789"),
+					},
+				},
+				{
+					Name: "servicerequest",
+					ValueCoding: &fhir.Coding{
+						System:  to.Ptr("http://example.com/servicerequest"),
+						Code:    to.Ptr("sr1"),
+						Display: to.Ptr("ServiceRequestDisplay"),
+					},
+				},
+				{
+					Name: "condition",
+					ValueCoding: &fhir.Coding{
+						System:  to.Ptr("http://example.com/condition"),
+						Code:    to.Ptr("c1"),
+						Display: to.Ptr("ConditionDisplay"),
+					},
+				},
+				{
+					Name:          "start",
+					ValueDateTime: to.Ptr(start.Format(time.RFC3339)),
+				},
+			},
+		}
+		requestBodyJSON := must.MarshalJSON(requestBody)
+		httpRequest, _ := http.NewRequest("POST", httpServer.URL+"/cpc/test/fhir/$import", bytes.NewReader(requestBodyJSON))
+		httpRequest.Header.Set("Content-Type", "application/fhir+json")
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("ok - zorgplatform", func(t *testing.T) {
 		t.Log("In this test, test org 2 imports data into org 1's CPS")
 		cpsFHIRClient := &test.StubFHIRClient{}
 		globals.RegisterCPSFHIRClient(tenant.ID, cpsFHIRClient)
@@ -1110,26 +1153,74 @@ func TestService_Import(t *testing.T) {
 
 		// Assert sent bundle
 		t.Run("assert sent bundle", func(t *testing.T) {
-			expectedBundleJSON, err := os.ReadFile("importer/test/expected-bundle.json")
-			require.NoError(t, err)
-			var expectedBundle fhir.Bundle
-			require.NoError(t, json.Unmarshal(expectedBundleJSON, &expectedBundle))
-			for _, capturedEntry := range capturedBundle.Entry {
-				resourceType := capturedEntry.Request.Url
-				var capturedResource map[string]any
-				require.NoError(t, json.Unmarshal(capturedEntry.Resource, &capturedResource))
-
-				// Find resourceType in expectedBundle, unmarshal, compare
-				var expectedResources []map[string]any
-				err := coolfhir.ResourcesInBundle(&expectedBundle, coolfhir.EntryIsOfType(resourceType), &expectedResources)
-				require.NoError(t, err, "resource %s not found in expected bundle", resourceType)
-
-				diffs := deep.Equal(expectedResources[0], capturedResource)
-				for _, diff := range diffs {
-					println("Diff for", resourceType, ":", diff)
-				}
-				assert.Empty(t, diffs, "resource %s does not match expected", resourceType)
-			}
+			t.Run("assert Patient resource", func(t *testing.T) {
+				var patients []fhir.Patient
+				err := coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("Patient"), &patients)
+				require.NoError(t, err)
+				require.Len(t, patients, 1)
+				patient := patients[0]
+				require.Len(t, patient.Identifier, 1)
+				assert.Equal(t, "123456789", *patient.Identifier[0].Value)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/bsn", *patient.Identifier[0].System)
+				// resource-creator extension
+				require.Len(t, patient.Extension, 1)
+				assert.Equal(t, "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator", patient.Extension[0].Url)
+			})
+			t.Run("assert CarePlan resource", func(t *testing.T) {
+				var carePlans []fhir.CarePlan
+				err := coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("CarePlan"), &carePlans)
+				require.NoError(t, err)
+				require.Len(t, carePlans, 1)
+				carePlan := carePlans[0]
+				assert.Equal(t, fhir.CarePlanIntentOrder, carePlan.Intent)
+				assert.Equal(t, fhir.RequestStatusActive, carePlan.Status)
+				// resource-creator extension
+				require.Len(t, carePlan.Extension, 1)
+				assert.Equal(t, "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator", carePlan.Extension[0].Url)
+				// subject
+				require.NotNil(t, carePlan.Subject)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/bsn", *carePlan.Subject.Identifier.System)
+				assert.Equal(t, "123456789", *carePlan.Subject.Identifier.Value)
+				// contained CareTeam
+				var careTeam []fhir.CareTeam
+				err = json.Unmarshal(carePlan.Contained, &careTeam)
+				require.NoError(t, err)
+				require.Len(t, careTeam, 1)
+			})
+			t.Run("assert Task resource", func(t *testing.T) {
+				var tasks []fhir.Task
+				err := coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("Task"), &tasks)
+				require.NoError(t, err)
+				require.Len(t, tasks, 1)
+				task := tasks[0]
+				// owner and requester
+				require.NotNil(t, task.Owner)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/ura|2", coolfhir.IdentifierToToken(*task.Owner.Identifier))
+				require.NotNil(t, task.Requester)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/ura|1", coolfhir.IdentifierToToken(*task.Requester.Identifier))
+				// focus
+				require.NotNil(t, task.Focus)
+				assert.NotEmpty(t, *task.Focus.Reference)
+				assert.Equal(t, "ServiceRequest", *task.Focus.Type)
+				// identifier
+				require.Len(t, task.Identifier, 1)
+				assert.Equal(t, "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id|workflow-123", coolfhir.IdentifierToToken(task.Identifier[0]))
+				// status
+				assert.Equal(t, fhir.TaskStatusInProgress, task.Status)
+			})
+			t.Run("assert ServiceRequest resource", func(t *testing.T) {
+				var serviceRequests []fhir.ServiceRequest
+				err := coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("ServiceRequest"), &serviceRequests)
+				require.NoError(t, err)
+				require.Len(t, serviceRequests, 1)
+				sr := serviceRequests[0]
+				// code
+				assert.Equal(t, "http://example.com/servicerequest", *sr.Code.Coding[0].System)
+				assert.Equal(t, "sr1", *sr.Code.Coding[0].Code)
+				// subject
+				require.NotNil(t, sr.Subject)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/bsn|123456789", coolfhir.IdentifierToToken(*sr.Subject.Identifier))
+			})
 		})
 	})
 	t.Run("$import operation not enabled for this tenant", func(t *testing.T) {
