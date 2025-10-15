@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
+	"net/http"
+
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
-	"net/http"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
 
@@ -22,7 +24,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/deep"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -453,7 +454,6 @@ func TestService_handleTaskFillerCreate(t *testing.T) {
 					Times(tt.numBundlesPosted)
 			}
 
-			log.Info().Msgf("Running test case: %s", tt.name)
 			err := service.handleTaskNotification(ctx, mockFHIRClient, &notifiedTask)
 
 			// Force flush before any assertions to ensure spans are exported
@@ -530,7 +530,7 @@ func TestService_getSubTask(t *testing.T) {
 	require.NotNil(t, questionnaire)
 
 	questionnaireRef := "urn:uuid:" + *questionnaire.Id
-	log.Info().Msgf("Creating a new Enrollment Criteria subtask - questionnaireRef: %s", questionnaireRef)
+	slog.Info("Creating a new Enrollment Criteria subtask", slog.String("questionnaire_reference", questionnaireRef))
 	subtask := service.getSubTask(&primaryTask, questionnaireRef)
 
 	expectedSubTaskInput := []fhir.TaskInput{

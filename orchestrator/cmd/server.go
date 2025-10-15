@@ -4,10 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
-	"github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,11 +13,15 @@ import (
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
+	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
 )
@@ -30,12 +31,12 @@ func Start(ctx context.Context, config Config) error {
 	if config.Validate() != nil {
 		return fmt.Errorf("invalid configuration: %w", config.Validate())
 	}
-
 	// Initialize OpenTelemetry
-	log.Info().Bool("enabled", config.OpenTelemetry.Enabled).
-		Str("service_name", config.OpenTelemetry.ServiceName).
-		Str("exporter_type", config.OpenTelemetry.Exporter.Type).
-		Msg("Initializing OpenTelemetry")
+	slog.Info("Initializing OpenTelemetry",
+		slog.Bool("enabled", config.OpenTelemetry.Enabled),
+		slog.String("service_name", config.OpenTelemetry.ServiceName),
+		slog.String("exporter_type", config.OpenTelemetry.Exporter.Type),
+	)
 
 	tracerProvider, err := otel.Initialize(ctx, config.OpenTelemetry)
 	if err != nil {
@@ -47,15 +48,15 @@ func Start(ctx context.Context, config Config) error {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
-			log.Error().Err(err).Msg("Failed to shutdown OpenTelemetry")
+			slog.Error("Failed to shutdown OpenTelemetry", slog.String(logging.FieldError, err.Error()))
 		} else {
-			log.Debug().Msg("OpenTelemetry shutdown successfully")
+			slog.Debug("OpenTelemetry shutdown successfully")
 		}
 	}()
 
 	globals.StrictMode = config.StrictMode
 	if !globals.StrictMode {
-		log.Warn().Msg("Strict mode is disabled, do not use in production")
+		slog.Warn("Strict mode is disabled, do not use in production")
 	}
 
 	// Set up dependencies
@@ -158,7 +159,7 @@ func Start(ctx context.Context, config Config) error {
 		// Start context cancelled, need to shut down gracefully
 		break
 	}
-	log.Info().Msg("Shutting down...")
+	slog.Info("Shutting down...")
 	if err := httpServer.Shutdown(context.Background()); err != nil {
 		return fmt.Errorf("failed to shut down HTTP server: %w", err)
 	}

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log/slog"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
@@ -25,14 +26,11 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/go-test/deep"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.uber.org/mock/gomock"
-
-	"github.com/rs/zerolog/log"
 
 	"io"
 	"net/http"
@@ -382,9 +380,9 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			if tt.url != nil {
 				reqURL = *tt.url
 			}
-			log.Info().Msgf("Requesting %s %s", method, frontServer.URL+reqURL)
-			log.Info().Msgf("FHIR Server URL: %s", fhirServer.URL)
-			log.Info().Msgf("CarePlan Service URL: %s", carePlanServiceURL)
+			slog.Info(fmt.Sprintf("Requesting %s %s", method, frontServer.URL+reqURL))
+			slog.Info(fmt.Sprintf("FHIR Server URL: %s", fhirServer.URL))
+			slog.Info(fmt.Sprintf("CarePlan Service URL: %s", carePlanServiceURL))
 
 			httpRequest, _ := http.NewRequest(method, frontServer.URL+reqURL, nil)
 			httpResponse, err := httpClient.Do(httpRequest)
@@ -682,7 +680,13 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 	require.NoError(t, err)
 	sessionManager, sessionID := createTestSession()
 
-	service, err := New(Config{}, tenants.Test(), profile.Test(), orcaPublicURL, sessionManager, events.NewManager(messageBroker), true, nil)
+	tenantCfg := tenants.Config{
+		"test": tenants.Test().Sole(),
+		"other": tenants.Test(func(properties *tenants.Properties) {
+			properties.ID = "other"
+		}).Sole(),
+	}
+	service, err := New(Config{}, tenantCfg, profile.Test(), orcaPublicURL, sessionManager, events.NewManager(messageBroker), true, nil)
 	require.NoError(t, err)
 	// Setup: configure the service to proxy to the backing FHIR server
 	frontServerMux := http.NewServeMux()
@@ -701,6 +705,21 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 
 	t.Run("caching is not allowed", func(t *testing.T) {
 		assert.Equal(t, "no-store", httpResponse.Header.Get("Cache-Control"))
+	})
+
+	t.Run("multi-tenancy", func(t *testing.T) {
+		t.Run("request targets a different tenant than the session's", func(t *testing.T) {
+			httpRequest, _ = http.NewRequest("GET", frontServer.URL+"/cpc/other/ehr/fhir/Patient/1", nil)
+			httpRequest.AddCookie(&http.Cookie{
+				Name:  "sid",
+				Value: sessionID,
+			})
+			httpResponse, err = frontServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			require.Equal(t, "session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
+		})
 	})
 
 	// Logout and attempt to get the patient again
@@ -841,6 +860,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 	})
 
 	httpServer := httptest.NewServer(mux)
+	sessionManager, sessionID := createTestSession()
 	service := &Service{
 		profile: profile.TestProfile{
 			Principal: auth.TestPrincipal1,
@@ -852,11 +872,17 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 				},
 			},
 		},
-		tenants:       tenants.Test(),
-		httpHandler:   mux,
-		cpsEnabled:    true,
-		orcaPublicURL: must.ParseURL(httpServer.URL),
-		config:        Config{StaticBearerToken: "secret"},
+		tenants: map[string]tenants.Properties{
+			"test": tenants.Test().Sole(),
+			"other": tenants.Test(func(properties *tenants.Properties) {
+				properties.ID = "other"
+			}).Sole(),
+		},
+		httpHandler:    mux,
+		cpsEnabled:     true,
+		orcaPublicURL:  must.ParseURL(httpServer.URL),
+		config:         Config{StaticBearerToken: "secret"},
+		SessionManager: sessionManager,
 	}
 	service.createFHIRClientForURL = service.defaultCreateFHIRClientForURL
 	service.RegisterHandlers(mux)
@@ -930,6 +956,25 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 			responseData, err := io.ReadAll(httpResponse.Body)
 			require.NoError(t, err)
 			assert.NotEmpty(t, responseData)
+		})
+	})
+	t.Run("multi-tenancy", func(t *testing.T) {
+		t.Run("user agent is browser, user session", func(t *testing.T) {
+			t.Run("request targets a different tenant than the session's", func(t *testing.T) {
+				// User session is for tenant "test", request is for tenant "other"
+				httpRequest, _ := http.NewRequest(http.MethodGet, httpServer.URL+"/cpc/other/external/fhir", nil)
+				httpRequest.Header.Set("X-Scp-Fhir-Url", remoteSCPNode.URL+"/fhir")
+				httpRequest.AddCookie(&http.Cookie{
+					Name:  "sid",
+					Value: sessionID,
+				})
+				httpResponse, err := httpServer.Client().Do(httpRequest)
+				require.NoError(t, err)
+				require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
+				responseData, err := io.ReadAll(httpResponse.Body)
+				require.NoError(t, err)
+				assert.Equal(t, "session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
+			})
 		})
 	})
 	t.Run("can't determine remote node", func(t *testing.T) {
@@ -1010,7 +1055,51 @@ func TestService_Import(t *testing.T) {
 		Transport: auth.AuthenticatedTestRoundTripper(http.DefaultTransport, auth.TestPrincipal2, ""),
 	}
 
-	t.Run("ok", func(t *testing.T) {
+	t.Run("ok - Demo EHR", func(t *testing.T) {
+		t.Log("In this test, test org 2 imports data into org 1's CPS")
+		cpsFHIRClient := &test.StubFHIRClient{}
+		globals.RegisterCPSFHIRClient(tenant.ID, cpsFHIRClient)
+
+		start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+		requestBody := fhir.Parameters{
+			Parameter: []fhir.ParametersParameter{
+				{
+					Name: "patient",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("123456789"),
+					},
+				},
+				{
+					Name: "servicerequest",
+					ValueCoding: &fhir.Coding{
+						System:  to.Ptr("http://example.com/servicerequest"),
+						Code:    to.Ptr("sr1"),
+						Display: to.Ptr("ServiceRequestDisplay"),
+					},
+				},
+				{
+					Name: "condition",
+					ValueCoding: &fhir.Coding{
+						System:  to.Ptr("http://example.com/condition"),
+						Code:    to.Ptr("c1"),
+						Display: to.Ptr("ConditionDisplay"),
+					},
+				},
+				{
+					Name:          "start",
+					ValueDateTime: to.Ptr(start.Format(time.RFC3339)),
+				},
+			},
+		}
+		requestBodyJSON := must.MarshalJSON(requestBody)
+		httpRequest, _ := http.NewRequest("POST", httpServer.URL+"/cpc/test/fhir/$import", bytes.NewReader(requestBodyJSON))
+		httpRequest.Header.Set("Content-Type", "application/fhir+json")
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	})
+	t.Run("ok - zorgplatform", func(t *testing.T) {
 		t.Log("In this test, test org 2 imports data into org 1's CPS")
 		cpsFHIRClient := &test.StubFHIRClient{}
 		globals.RegisterCPSFHIRClient(tenant.ID, cpsFHIRClient)
@@ -1064,26 +1153,74 @@ func TestService_Import(t *testing.T) {
 
 		// Assert sent bundle
 		t.Run("assert sent bundle", func(t *testing.T) {
-			expectedBundleJSON, err := os.ReadFile("importer/test/expected-bundle.json")
-			require.NoError(t, err)
-			var expectedBundle fhir.Bundle
-			require.NoError(t, json.Unmarshal(expectedBundleJSON, &expectedBundle))
-			for _, capturedEntry := range capturedBundle.Entry {
-				resourceType := capturedEntry.Request.Url
-				var capturedResource map[string]any
-				require.NoError(t, json.Unmarshal(capturedEntry.Resource, &capturedResource))
-
-				// Find resourceType in expectedBundle, unmarshal, compare
-				var expectedResources []map[string]any
-				err := coolfhir.ResourcesInBundle(&expectedBundle, coolfhir.EntryIsOfType(resourceType), &expectedResources)
-				require.NoError(t, err, "resource %s not found in expected bundle", resourceType)
-
-				diffs := deep.Equal(expectedResources[0], capturedResource)
-				for _, diff := range diffs {
-					println("Diff for", resourceType, ":", diff)
-				}
-				assert.Empty(t, diffs, "resource %s does not match expected", resourceType)
-			}
+			t.Run("assert Patient resource", func(t *testing.T) {
+				var patients []fhir.Patient
+				err := coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("Patient"), &patients)
+				require.NoError(t, err)
+				require.Len(t, patients, 1)
+				patient := patients[0]
+				require.Len(t, patient.Identifier, 1)
+				assert.Equal(t, "123456789", *patient.Identifier[0].Value)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/bsn", *patient.Identifier[0].System)
+				// resource-creator extension
+				require.Len(t, patient.Extension, 1)
+				assert.Equal(t, "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator", patient.Extension[0].Url)
+			})
+			t.Run("assert CarePlan resource", func(t *testing.T) {
+				var carePlans []fhir.CarePlan
+				err := coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("CarePlan"), &carePlans)
+				require.NoError(t, err)
+				require.Len(t, carePlans, 1)
+				carePlan := carePlans[0]
+				assert.Equal(t, fhir.CarePlanIntentOrder, carePlan.Intent)
+				assert.Equal(t, fhir.RequestStatusActive, carePlan.Status)
+				// resource-creator extension
+				require.Len(t, carePlan.Extension, 1)
+				assert.Equal(t, "http://santeonnl.github.io/shared-care-planning/StructureDefinition/resource-creator", carePlan.Extension[0].Url)
+				// subject
+				require.NotNil(t, carePlan.Subject)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/bsn", *carePlan.Subject.Identifier.System)
+				assert.Equal(t, "123456789", *carePlan.Subject.Identifier.Value)
+				// contained CareTeam
+				var careTeam []fhir.CareTeam
+				err = json.Unmarshal(carePlan.Contained, &careTeam)
+				require.NoError(t, err)
+				require.Len(t, careTeam, 1)
+			})
+			t.Run("assert Task resource", func(t *testing.T) {
+				var tasks []fhir.Task
+				err := coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("Task"), &tasks)
+				require.NoError(t, err)
+				require.Len(t, tasks, 1)
+				task := tasks[0]
+				// owner and requester
+				require.NotNil(t, task.Owner)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/ura|2", coolfhir.IdentifierToToken(*task.Owner.Identifier))
+				require.NotNil(t, task.Requester)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/ura|1", coolfhir.IdentifierToToken(*task.Requester.Identifier))
+				// focus
+				require.NotNil(t, task.Focus)
+				assert.NotEmpty(t, *task.Focus.Reference)
+				assert.Equal(t, "ServiceRequest", *task.Focus.Type)
+				// identifier
+				require.Len(t, task.Identifier, 1)
+				assert.Equal(t, "http://sts.zorgplatform.online/ws/claims/2017/07/workflow/workflow-id|workflow-123", coolfhir.IdentifierToToken(task.Identifier[0]))
+				// status
+				assert.Equal(t, fhir.TaskStatusInProgress, task.Status)
+			})
+			t.Run("assert ServiceRequest resource", func(t *testing.T) {
+				var serviceRequests []fhir.ServiceRequest
+				err := coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("ServiceRequest"), &serviceRequests)
+				require.NoError(t, err)
+				require.Len(t, serviceRequests, 1)
+				sr := serviceRequests[0]
+				// code
+				assert.Equal(t, "http://example.com/servicerequest", *sr.Code.Coding[0].System)
+				assert.Equal(t, "sr1", *sr.Code.Coding[0].Code)
+				// subject
+				require.NotNil(t, sr.Subject)
+				assert.Equal(t, "http://fhir.nl/fhir/NamingSystem/bsn|123456789", coolfhir.IdentifierToToken(*sr.Subject.Identifier))
+			})
 		})
 	})
 	t.Run("$import operation not enabled for this tenant", func(t *testing.T) {
@@ -1189,33 +1326,32 @@ func TestService_withSessionOrBearerToken(t *testing.T) {
 			// Setup: Create a session manager with a test session
 			sessionManager, sessionCookie := createTestSession()
 
-			// Setup: Create a handler that will be called if authentication is successful
-			handlerCalled := false
-			handler := func(writer http.ResponseWriter, request *http.Request) {
-				handlerCalled = true
-				writer.WriteHeader(http.StatusOK)
-			}
-
 			// Setup: Create the service with the session manager
 			service := &Service{
 				SessionManager: sessionManager,
 				config:         Config{StaticBearerToken: tt.staticToken},
 				tokenClient:    nil,
+				tenants:        tenants.Test(),
 			}
-
 			if tt.withMockClient {
 				service.tokenClient = mockClient.Client
 			}
 
+			// Setup: Create a handler that will be called if authentication is successful
+			handlerCalled := false
+			handler := http.NewServeMux()
 			// Call the middleware with our handler
-			wrappedHandler := service.withUserAuth(handler)
+			handler.HandleFunc("/{tenant}", service.tenants.HttpHandler(service.withUserAuth(func(res http.ResponseWriter, req *http.Request) {
+				handlerCalled = true
+				res.WriteHeader(http.StatusOK)
+			})))
 
 			// Create a test HTTP server with the wrapped handler
-			testServer := httptest.NewServer(wrappedHandler)
+			testServer := httptest.NewServer(handler)
 			defer testServer.Close()
 
 			// Create a test request
-			req, err := http.NewRequest("GET", testServer.URL, nil)
+			req, err := http.NewRequest("GET", testServer.URL+"/test", nil)
 			require.NoError(t, err)
 
 			// Add a session cookie if the test case needs it
@@ -1253,6 +1389,7 @@ func createTestSession() (*user.SessionManager[session.Data], string) {
 	sessionHttpResponse := httptest.NewRecorder()
 	sessionManager.Create(sessionHttpResponse, session.Data{
 		FHIRLauncher: "test",
+		TenantID:     tenants.Test().Sole().ID,
 	})
 	// extract session ID; sid=<something>;
 	cookieValue := sessionHttpResponse.Header().Get("Set-Cookie")

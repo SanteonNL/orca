@@ -1,12 +1,12 @@
 package user
 
 import (
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/rs/zerolog/log"
 )
 
 // NewSessionManager creates a new session manager.
@@ -63,7 +63,7 @@ func (m *SessionManager[TData]) Destroy(response http.ResponseWriter, request *h
 	if sessionID != "" {
 		m.store.destroy(sessionID)
 	} else {
-		log.Ctx(request.Context()).Warn().Msg("No session to destroy")
+		slog.WarnContext(request.Context(), "No session to destroy")
 	}
 	cookie := http.Cookie{
 		Name:     "sid",
@@ -110,7 +110,7 @@ func (s *sessionStore[TData]) prune() {
 }
 
 func (s *sessionStore[TData]) destroy(id string) {
-	log.Info().Msgf("Destroying user session (id=%s)", id)
+	slog.Info("Destroying user session", slog.String("id", id))
 	s.mux.Lock()
 	defer s.mux.Unlock()
 	delete(s.sessions, id)

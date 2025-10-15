@@ -3,6 +3,7 @@ import CreateServiceRequestDialog from './create-service-request-dialog';
 import ServiceRequestTable from './service-request-table';
 import {Bundle, ServiceRequest} from 'fhir/r4';
 import {ReadPatient} from "@/utils/fhir";
+import { addFhirAuthHeaders } from '@/utils/azure-auth';
 
 type Input = {
     patientID: string
@@ -14,11 +15,13 @@ export default async function Overview(props: Input) {
         return <>FHIR_BASE_URL is not defined</>;
     }
 
+    const headers = await addFhirAuthHeaders({
+        "Cache-Control": "no-cache"
+    });
+
     const response = await fetch(`${process.env.FHIR_BASE_URL}/ServiceRequest?patient=Patient/${props.patientID}&_count=500`, {
         cache: 'no-store',
-        headers: {
-            "Cache-Control": "no-cache"
-        }
+        headers: headers
     });
 
     console.log(`Fetched SRs, status: ${response.status}`);

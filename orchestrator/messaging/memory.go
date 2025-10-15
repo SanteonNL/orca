@@ -3,8 +3,10 @@ package messaging
 import (
 	"context"
 	"fmt"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 	"sync/atomic"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 )
 
 var _ Broker = &MemoryBroker{}
@@ -34,7 +36,10 @@ func (m *MemoryBroker) SendMessage(_ context.Context, entity Entity, message *Me
 	for _, handler := range m.handlers[entity.Name] {
 		if err := handler(ctx, *message); err != nil {
 			m.LastHandlerError.Store(&err)
-			log.Ctx(ctx).Warn().Msgf("Handler for entity %s failed: %s", entity.Name, err.Error())
+			slog.WarnContext(ctx, "Handler for entity failed",
+				slog.String("entity_name", entity.Name),
+				slog.String(logging.FieldError, err.Error()),
+			)
 		}
 	}
 	return nil

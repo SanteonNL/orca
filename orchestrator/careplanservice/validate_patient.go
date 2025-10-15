@@ -1,12 +1,13 @@
 package careplanservice
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/lib/validation"
-	"github.com/rs/zerolog/log"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"log/slog"
 	"net/mail"
 	"regexp"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/validation"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 type PatientValidator struct {
@@ -50,7 +51,7 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []*validation.Error {
 	}
 
 	if len(errs) > 0 {
-		log.Debug().Msgf("Validation errors: %v", errs)
+		slog.Debug("Validation errors", slog.Any("errors", errs))
 		return errs
 	}
 	return nil

@@ -5,10 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/SanteonNL/orca/orchestrator/lib/debug"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"log/slog"
 	"net/http"
 	"strings"
+
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
@@ -20,7 +23,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/careteamservice"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -35,7 +37,11 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	)
 	defer span.End()
 
-	log.Ctx(ctx).Info().Msg("Creating Task")
+	slog.InfoContext(
+		ctx,
+		"Creating Task",
+		slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+	)
 	var task fhir.Task
 	if err := json.Unmarshal(request.ResourceData, &task); err != nil {
 		return nil, otel.Error(span, fmt.Errorf("invalid %T: %w", task, coolfhir.BadRequestError(err)), "failed to unmarshal task")
@@ -78,12 +84,22 @@ func (s *Service) handleCreateTask(ctx context.Context, request FHIRHandlerReque
 	// Enrich Task.Requester and Task.Owner with info from CSD (if available), typically to add the organization name
 	// TODO: CSD is queried again later, to get the notification endpoint. We should optimize/cache this. Maybe in the context.Context?
 	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Requester.Identifier); err != nil {
-		log.Ctx(ctx).Info().Err(err).Msgf("Unable to lookup Task.requester in CSD, won't be enriched.")
+		slog.ErrorContext(
+			ctx,
+			"Unable to lookup Task.requester in CSD, won't be enriched.",
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+			slog.String(logging.FieldError, err.Error()),
+		)
 	} else {
 		task.Requester = entity
 	}
 	if entity, err := s.profile.CsdDirectory().LookupEntity(ctx, *task.Owner.Identifier); err != nil {
-		log.Ctx(ctx).Info().Err(err).Msgf("Unable to lookup Task.owner in CSD, won't be enriched.")
+		slog.ErrorContext(
+			ctx,
+			"Unable to lookup Task.owner in CSD, won't be enriched.",
+			slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+			slog.String(logging.FieldError, err.Error()),
+		)
 	} else {
 		task.Owner = entity
 	}
