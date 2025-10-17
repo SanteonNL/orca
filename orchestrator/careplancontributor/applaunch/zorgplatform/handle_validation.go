@@ -79,6 +79,7 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	if err != nil {
 		return LaunchContext{}, otel.Error(span, fmt.Errorf("unable to decrypt assertion: %w", err))
 	}
+	span.AddEvent("decrypted assertion")
 
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		debugDoc := etree.NewDocument()
@@ -91,27 +92,38 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	if err := s.validateZorgplatformSignature(assertion); err != nil {
 		return LaunchContext{}, otel.Error(span, fmt.Errorf("invalid assertion signature: %w", err))
 	}
+	span.AddEvent("validated assertion signature")
 
 	if err := s.validateAudience(assertion); err != nil {
 		return LaunchContext{}, otel.Error(span, fmt.Errorf("invalid audience: %w", err))
 	}
+	span.AddEvent("validated assertion audience")
+
 	if err := s.validateIssuer(assertion); err != nil {
 		return LaunchContext{}, otel.Error(span, fmt.Errorf("invalid issuer: %w", err))
 	}
+	span.AddEvent("validated assertion issuer")
 
 	return s.parseAssertion(ctx, assertion)
 }
 
 func (s *Service) parseAssertion(ctx context.Context, assertion *etree.Element) (LaunchContext, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindServer),
+	)
+	defer span.End()
+
 	// Extract Subject/NameID and log in the user
 	practitioner, err := s.extractPractitioner(ctx, assertion)
 	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to extract Practitioner from SAML Assertion.Subject: %w", err)
+		return LaunchContext{}, otel.Error(span, fmt.Errorf("unable to extract Practitioner from SAML Assertion.Subject: %w", err))
 	}
 
 	practitionerRole, err := s.extractPractitionerRole(assertion)
 	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to extract PractitionerRole from SAML Assertion.Subject: %w", err)
+		return LaunchContext{}, otel.Error(span, fmt.Errorf("unable to extract PractitionerRole from SAML Assertion.Subject: %w", err))
 	}
 	if len(practitioner.Identifier) > 0 {
 		practitionerRole.Practitioner = &fhir.Reference{
@@ -122,21 +134,23 @@ func (s *Service) parseAssertion(ctx context.Context, assertion *etree.Element) 
 	// Extract resource-id claim to select the correct patient
 	resourceID, err := s.extractResourceID(assertion)
 	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to extract resource-id: %w", err)
+		return LaunchContext{}, otel.Error(span, fmt.Errorf("unable to extract resource-id: %w", err))
 	}
 	workflowID, err := s.extractWorkflowID(ctx, assertion)
 	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to extract workflow-id: %w", err)
+		return LaunchContext{}, otel.Error(span, fmt.Errorf("unable to extract workflow-id: %w", err))
 	}
 
 	chipSoftOrgID, err := s.extractOrganizationID(assertion)
 	if err != nil {
-		return LaunchContext{}, fmt.Errorf("unable to extract organization ID: %w", err)
+		return LaunchContext{}, otel.Error(span, fmt.Errorf("unable to extract organization ID: %w", err))
 	}
 	// // Process any other required attributes (claims)
 	// if err := s.processAdditionalAttributes(assertion); err != nil {
 	// 	return fmt.Errorf("unable to process additional attributes: %w", err)
 	// }
+
+	span.AddEvent("SAML Assertion parsed successfully")
 
 	return LaunchContext{
 		Bsn:                    resourceID,
