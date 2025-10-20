@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:24-alpine AS base
+FROM node:25-alpine AS base
 
 WORKDIR /app
 
@@ -10,7 +10,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:24-alpine AS production
+FROM node:25-alpine AS production
 WORKDIR /app
 ENV NODE_ENV production
 ENV NEXT_PUBLIC_BASE_PATH /ehr
