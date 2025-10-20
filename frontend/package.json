@@ -12,7 +12,7 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "@aehrc/sdc-populate": "^4.6.2",
+    "@aehrc/sdc-populate": "^3.0.3",
     "@aehrc/smart-forms-renderer": "^0.45.1",
     "@babel/core": "^7.26.10",
     "@babel/preset-env": "^7.26.9",
