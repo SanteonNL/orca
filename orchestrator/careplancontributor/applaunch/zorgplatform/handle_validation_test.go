@@ -8,11 +8,12 @@ import (
 	"encoding/base64"
 	"encoding/pem"
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
-	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
@@ -352,7 +353,7 @@ func TestService_parseSamlResponse(t *testing.T) {
 		actual, err := s.parseSamlResponse(ctx, xmlBase64Encoded)
 
 		assert.Empty(t, actual)
-		require.EqualError(t, err, "SAMLResponse from server contains an error, see log for details")
+		require.EqualError(t, err, "received SAMLResponse contains an error tag and cannot be processed, check error log for details")
 	})
 }
 
