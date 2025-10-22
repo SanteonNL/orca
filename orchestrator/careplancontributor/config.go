@@ -2,10 +2,11 @@ package careplancontributor
 
 import (
 	"errors"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
-	"github.com/SanteonNL/orca/orchestrator/globals"
 	"strings"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc"
+	"github.com/SanteonNL/orca/orchestrator/globals"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
@@ -20,6 +21,7 @@ func DefaultConfig() Config {
 		FrontendConfig: FrontendConfig{
 			URL: "/frontend/enrollment",
 		},
+		ParallelBatch: true,
 	}
 }
 
@@ -31,6 +33,7 @@ type Config struct {
 	Enabled                       bool             `koanf:"enabled"`
 	HealthDataViewEndpointEnabled bool             `koanf:"healthdataviewendpointenabled"`
 	SessionTimeout                time.Duration    `koanf:"sessiontimeout"`
+	ParallelBatch                 bool             `koanf:"parallelbatch"`
 	StaticBearerToken             string
 }
 

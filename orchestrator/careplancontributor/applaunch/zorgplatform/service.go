@@ -325,64 +325,77 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 	newHttpRequest.Header.Del("X-Scp-WorkflowID")
 	newHttpRequest.Header.Del("X-Scp-PatientID")
 
-	// First see if cached
-	var accessToken string
-	if cacheEntry := s.accessTokenCache.Get(cacheKey); cacheEntry != nil {
-		accessToken = cacheEntry.Value()
-		span.SetAttributes(attribute.Bool("access_token.cached", true))
-	} else {
-		span.SetAttributes(attribute.Bool("access_token.cached", false))
-		var workflowCtx *workflowContext
-		var err error
-		if carePlanReference != "" {
-			// Use X-Scp-Context header
-			slog.DebugContext(ctx, "(cache miss) Getting Zorgplatform access token", slog.String("careplan", carePlanReference))
-			workflowCtx, err = s.getWorkflowContext(ctx, carePlanReference)
-		} else {
-			// Use X-Scp-WorkflowID and X-Scp-PatientID headers
-			slog.DebugContext(
-				ctx,
-				"(cache miss) Getting Zorgplatform access token",
-				slog.String("workflow_id", workflowId),
-				slog.String("patient_id", patientID),
-			)
-			workflowCtx = &workflowContext{
-				workflowId: workflowId,
-				patientBsn: patientID,
-			}
-		}
-		if err != nil {
-			slog.ErrorContext(ctx, "Unable to get workflow context", slog.String(logging.FieldError, err.Error()))
-			return nil, otel.Error(span, fmt.Errorf("unable to get workflow context: %w", err))
-		}
-
-		//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
-		if !globals.StrictMode {
-			if workflowCtx.patientBsn == "999911120" {
-				slog.WarnContext(ctx, "Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
-				workflowCtx.patientBsn = "999999151"
-			}
-		}
-
-		launchContext := LaunchContext{
-			WorkflowId: workflowCtx.workflowId,
-			Bsn:        workflowCtx.patientBsn,
-		}
-		span.SetAttributes(attribute.String("zorgplatform.workflow_id", workflowCtx.workflowId))
-
-		accessToken, err = s.secureTokenService.RequestAccessToken(ctx, launchContext, applicationTokenType)
-		if err != nil {
-			slog.ErrorContext(ctx, "Unable to request access token for Zorgplatform", slog.String(logging.FieldError, err.Error()))
-			return nil, otel.Error(span, fmt.Errorf("unable to request access token for Zorgplatform: %w", err))
-		}
-		slog.DebugContext(ctx, "Successfully requested access token for Zorgplatform", slog.String("access_token", accessToken[:min(len(accessToken), 16)]))
-		s.accessTokenCache.Set(cacheKey, accessToken, ttlcache.DefaultTTL)
+	// Get cached token, or refresh if not available/expired
+	var err error
+	accessToken, cached := s.accessTokenCache.GetOrSetFunc(cacheKey, func() string {
+		var accessToken string
+		accessToken, err = s.refreshAccessToken(ctx, carePlanReference, workflowId, patientID)
+		return accessToken
+	})
+	if err != nil {
+		return nil, otel.Error(span, err)
 	}
+	span.SetAttributes(attribute.Bool("access_token.cached", cached))
 
 	newHttpRequest.Header.Add("Accept", "application/fhir+json")
-	newHttpRequest.Header.Add("Authorization", "SAML "+accessToken)
+	newHttpRequest.Header.Add("Authorization", "SAML "+accessToken.Value())
 	span.SetStatus(codes.Ok, "")
 	return s.transport.RoundTrip(newHttpRequest)
+}
+
+func (s *stsAccessTokenRoundTripper) refreshAccessToken(ctx context.Context, carePlanReference string, workflowId string, patientID string) (string, error) {
+	ctx, span := tracer.Start(
+		ctx,
+		debug.GetFullCallerName(),
+		trace.WithSpanKind(trace.SpanKindClient),
+	)
+	defer span.End()
+
+	var workflowCtx *workflowContext
+	var err error
+	if carePlanReference != "" {
+		// Use X-Scp-Context header
+		slog.DebugContext(ctx, "(cache miss) Getting Zorgplatform access token", slog.String("careplan", carePlanReference))
+		workflowCtx, err = s.getWorkflowContext(ctx, carePlanReference)
+	} else {
+		// Use X-Scp-WorkflowID and X-Scp-PatientID headers
+		slog.DebugContext(
+			ctx,
+			"(cache miss) Getting Zorgplatform access token",
+			slog.String("workflow_id", workflowId),
+			slog.String("patient_id", patientID),
+		)
+		workflowCtx = &workflowContext{
+			workflowId: workflowId,
+			patientBsn: patientID,
+		}
+	}
+	if err != nil {
+		slog.ErrorContext(ctx, "Unable to get workflow context", slog.String(logging.FieldError, err.Error()))
+		return "", otel.Error(span, fmt.Errorf("unable to get workflow context: %w", err))
+	}
+
+	//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
+	if !globals.StrictMode {
+		if workflowCtx.patientBsn == "999911120" {
+			slog.WarnContext(ctx, "Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
+			workflowCtx.patientBsn = "999999151"
+		}
+	}
+
+	launchContext := LaunchContext{
+		WorkflowId: workflowCtx.workflowId,
+		Bsn:        workflowCtx.patientBsn,
+	}
+	span.SetAttributes(attribute.String("zorgplatform.workflow_id", workflowCtx.workflowId))
+
+	accessToken, err := s.secureTokenService.RequestAccessToken(ctx, launchContext, applicationTokenType)
+	if err != nil {
+		slog.ErrorContext(ctx, "Unable to request access token for Zorgplatform", slog.String(logging.FieldError, err.Error()))
+		return "", otel.Error(span, fmt.Errorf("unable to request access token for Zorgplatform: %w", err))
+	}
+	slog.DebugContext(ctx, "Successfully requested access token for Zorgplatform", slog.String("access_token", accessToken[:min(len(accessToken), 16)]))
+	return accessToken, nil
 }
 
 func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Request) {

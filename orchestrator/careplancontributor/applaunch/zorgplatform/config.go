@@ -1,8 +1,9 @@
 package zorgplatform
 
 import (
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 )
 
 func DefaultConfig() Config {

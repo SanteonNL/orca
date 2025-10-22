@@ -3,14 +3,15 @@ package careplancontributor
 import (
 	"encoding/json"
 	"errors"
+	"net/http"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
-	"testing"
 )
 
 func TestService_handleBatch(t *testing.T) {
@@ -85,8 +86,48 @@ func TestService_handleBatch(t *testing.T) {
 			fhir.Task{
 				Id: to.Ptr("123"),
 			},
+			fhir.Task{
+				Id: to.Ptr("456"),
+			},
 		},
 	}
+	t.Run("parallel", func(t *testing.T) {
+		s := &Service{
+			config: Config{
+				ParallelBatch: true,
+			},
+		}
+		requestBundle := fhir.Bundle{
+			Entry: []fhir.BundleEntry{
+				{
+					Request: &fhir.BundleEntryRequest{
+						Method: fhir.HTTPVerbGET,
+						Url:    "Task/123",
+					},
+				},
+				{
+					Request: &fhir.BundleEntryRequest{
+						Method: fhir.HTTPVerbGET,
+						Url:    "Task/456",
+					},
+				},
+			},
+		}
+		actual, err := s.doHandleBatch(httpRequest, requestBundle, fhirClient)
+
+		require.NoError(t, err)
+		require.Len(t, actual.Entry, 2)
+		require.NotNil(t, actual.Entry[0].Response)
+		require.Equal(t, "200 OK", actual.Entry[0].Response.Status)
+		require.NotNil(t, actual.Entry[0].Resource)
+
+		var entry1 fhir.Task
+		require.NoError(t, json.Unmarshal(actual.Entry[0].Resource, &entry1))
+		require.Equal(t, "123", *entry1.Id)
+		var entry2 fhir.Task
+		require.NoError(t, json.Unmarshal(actual.Entry[1].Resource, &entry2))
+		require.Equal(t, "456", *entry2.Id)
+	})
 	t.Run("successful GET request", func(t *testing.T) {
 		s := &Service{}
 		requestBundle := fhir.Bundle{
