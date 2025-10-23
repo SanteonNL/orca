@@ -141,7 +141,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
     const prePopulate = async () => {
       const { populateResult } = await populateQuestionnaire(questionnaire, patient, practitioner, {
-        clientEndpoint: `http://localhost:9090/fhir`, //TODO: Fixme - not used as $populate is local
+        sourceServerUrl: `http://localhost:9090/fhir`, //TODO: Fixme - not used as $populate is local
         authToken: null
       });
 
