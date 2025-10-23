@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
-	"slices"
 	"strconv"
 	"strings"
 
@@ -160,9 +159,6 @@ func (s *Service) doHandleBatch(httpRequest *http.Request, requestBundle fhir.Bu
 		outcomes[result.index] = result
 	}
 	close(outcomesChan)
-	slices.SortFunc(outcomes, func(a, b entryResult) int {
-		return a.index - b.index
-	})
 	// Build response bundle
 	for _, outcome := range outcomes {
 		if outcome.operationOutcomeIssue != nil {
