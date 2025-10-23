@@ -163,7 +163,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const queryClient = useRendererQueryClient();
 
   // This hook builds the form based on the questionnaire
-  const isBuilding = useBuildForm(questionnaire);
+  const isBuilding = useBuildForm({ questionnaire });
 
   const theme = createTheme({
     palette: {
