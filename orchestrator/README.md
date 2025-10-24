@@ -80,6 +80,7 @@ All OTEL settings can be overridden using the `ORCA_*` prefix convention:
 - `ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN`: Secures the EHR-facing endpoints with a static HTTP Bearer token. Only intended for development and testing purposes, since they're unpractical to change often.
 - `ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL`: Base URL of the frontend application, to which the browser is redirected on app launch (default: `/frontend/enrollment`).
 - `ORCA_CAREPLANCONTRIBUTOR_SESSIONTIMEOUT`: Configure the user session timeout, use Golang time.Duration format (default: 15m).
+- `ORCA_CAREPLANCONTRIBUTOR_PARALLELBATCH`: Enable/disable parallel execution of individual FHIR batch bundle requests, when proxying to the EHR's FHIR API (default: `true`).
 
 #### Zorgplatform integration
 Note: To test a Zorgplatform launch locally, you will need to set `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=false`
