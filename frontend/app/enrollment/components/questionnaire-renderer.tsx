@@ -141,7 +141,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
     const prePopulate = async () => {
       const { populateResult } = await populateQuestionnaire(questionnaire, patient, practitioner, {
-        clientEndpoint: `http://localhost:9090/fhir`, //TODO: Fixme - not used as $populate is local
+        sourceServerUrl: `http://localhost:9090/fhir`, //TODO: Fixme - not used as $populate is local
         authToken: null
       });
 
@@ -163,7 +163,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const queryClient = useRendererQueryClient();
 
   // This hook builds the form based on the questionnaire
-  const isBuilding = useBuildForm(questionnaire);
+  const isBuilding = useBuildForm({ questionnaire });
 
   const theme = createTheme({
     palette: {
