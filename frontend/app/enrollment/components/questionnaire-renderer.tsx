@@ -20,6 +20,10 @@ interface QuestionnaireRendererPageProps {
   inputTask?: Task
 }
 
+const rendererConfigOptions = {
+  hideClearButton: true
+}
+
 const scpSubTaskIdentifierSystem = "http://santeonnl.github.io/shared-care-planning/scp-identifier"
 
 function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
@@ -163,7 +167,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const queryClient = useRendererQueryClient();
 
   // This hook builds the form based on the questionnaire
-  const isBuilding = useBuildForm({ questionnaire });
+  const isBuilding = useBuildForm({ questionnaire, rendererConfigOptions });
 
   const theme = createTheme({
     palette: {
