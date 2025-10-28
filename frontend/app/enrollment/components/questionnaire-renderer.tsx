@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient } from '@aehrc/smart-forms-renderer';
+import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient, RendererConfig } from '@aehrc/smart-forms-renderer';
 import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
 import { useEffect, useState } from 'react';
 
@@ -20,7 +20,7 @@ interface QuestionnaireRendererPageProps {
   inputTask?: Task
 }
 
-const rendererConfigOptions = {
+const rendererConfigOptions : RendererConfig = {
   hideClearButton: true
 }
 
@@ -170,6 +170,9 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const isBuilding = useBuildForm({ questionnaire, rendererConfigOptions });
 
   const theme = createTheme({
+    typography: {
+      fontFamily: 'fsMeFont, fsMeFont Fallback'
+    },
     palette: {
       primary: {
         main: '#1c6268',
