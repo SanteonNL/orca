@@ -957,6 +957,36 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 			require.NoError(t, err)
 			assert.NotEmpty(t, responseData)
 		})
+		t.Run("session auth with non-local-cps header should fail", func(t *testing.T) {
+			t.Log("when user is authenticated via session, only 'local-cps' should be allowed as header value")
+			httpRequest, _ := http.NewRequest(http.MethodGet, baseURL+"/Task/1", nil)
+			httpRequest.Header.Set("X-Scp-Fhir-Url", remoteSCPNode.URL+"/fhir")
+			httpRequest.AddCookie(&http.Cookie{
+				Name:  "sid",
+				Value: sessionID,
+			})
+			httpResponse, err := httpServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
+			responseData, err := io.ReadAll(httpResponse.Body)
+			require.NoError(t, err)
+			assert.Contains(t, string(responseData), "only 'local-cps' is allowed when authenticated by user session")
+		})
+		t.Run("session auth with local-cps header should succeed", func(t *testing.T) {
+			t.Log("when user is authenticated via session, 'local-cps' should be allowed")
+			httpRequest, _ := http.NewRequest(http.MethodGet, baseURL+"/Task/2", nil)
+			httpRequest.Header.Set("X-Scp-Fhir-Url", "local-cps")
+			httpRequest.AddCookie(&http.Cookie{
+				Name:  "sid",
+				Value: sessionID,
+			})
+			httpResponse, err := httpServer.Client().Do(httpRequest)
+			require.NoError(t, err)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+			responseData, err := io.ReadAll(httpResponse.Body)
+			require.NoError(t, err)
+			assert.NotEmpty(t, responseData)
+		})
 	})
 	t.Run("multi-tenancy", func(t *testing.T) {
 		t.Run("user agent is browser, user session", func(t *testing.T) {
