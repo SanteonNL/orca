@@ -969,11 +969,12 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 			if err != nil {
 				return nil, nil, otel.Error(span, err)
 			}
-			if checkSession != nil && headerValue != "local-cps" {
-				return nil, nil, otel.Error(span, coolfhir.BadRequest("%s: invalid header value, only 'local-cps' is allowed when authenticated by user session", header))
-			}
 
 			localCPSURL := tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL)
+			if checkSession != nil && headerValue != "local-cps" && headerValue != localCPSURL.String() {
+				return nil, nil, otel.Error(span, coolfhir.BadRequest("%s: only 'local-cps' or local CPS URL is allowed when authenticated by user session", header))
+			}
+
 			if headerValue == "local-cps" || headerValue == localCPSURL.String() {
 				// Targeted FHIR API is local CPS, either through 'local-cps' or because the target URL matches the local CPS URL
 				if !s.cpsEnabled && headerValue == "local-cps" {

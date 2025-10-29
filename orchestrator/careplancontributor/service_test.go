@@ -970,7 +970,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 			require.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 			responseData, err := io.ReadAll(httpResponse.Body)
 			require.NoError(t, err)
-			assert.Contains(t, string(responseData), "only 'local-cps' is allowed when authenticated by user session")
+			assert.Contains(t, string(responseData), "only 'local-cps' or local CPS URL is allowed when authenticated by user session")
 		})
 		t.Run("session auth with local-cps header should succeed", func(t *testing.T) {
 			t.Log("when user is authenticated via session, 'local-cps' should be allowed")
