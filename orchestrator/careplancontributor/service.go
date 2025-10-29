@@ -964,16 +964,7 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 
 		switch header {
 		case scpFHIRBaseURL:
-			// Check if the user is authenticated by session i.e. request is from the Frontend, if so, only allow local-cps as header value
-			checkSession, err := s.getAndValidateUserSession(request)
-			if err != nil {
-				return nil, nil, otel.Error(span, err)
-			}
-
 			localCPSURL := tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL)
-			if checkSession != nil && headerValue != "local-cps" && headerValue != localCPSURL.String() {
-				return nil, nil, otel.Error(span, coolfhir.BadRequest("%s: only 'local-cps' or local CPS URL is allowed when authenticated by user session", header))
-			}
 
 			if headerValue == "local-cps" || headerValue == localCPSURL.String() {
 				// Targeted FHIR API is local CPS, either through 'local-cps' or because the target URL matches the local CPS URL
@@ -985,6 +976,15 @@ func (s Service) createFHIRClientForExternalRequest(ctx context.Context, request
 				fhirBaseURL = localCPSURL
 				span.SetAttributes(attribute.String(otel.FHIRClientType, "local-cps"))
 			} else {
+				// Check if the user is authenticated by session i.e. request is from Frontend. If so, disallow using external FHIR base URL.
+				checkSession, err := s.getAndValidateUserSession(request)
+				if err != nil {
+					return nil, nil, otel.Error(span, err)
+				}
+				if checkSession != nil {
+					return nil, nil, otel.Error(span, coolfhir.BadRequest("%s: only 'local-cps' or local CPS URL is allowed when authenticated by user session", header))
+				}
+
 				fhirBaseURL, err = s.parseFHIRBaseURL(headerValue)
 				if err != nil {
 					return nil, nil, otel.Error(span, fmt.Errorf("%s: %w", header, err))
