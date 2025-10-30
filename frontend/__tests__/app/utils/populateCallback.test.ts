@@ -3,14 +3,14 @@
  */
 
 import { fetchResourceCallback } from '@/app/utils/populateCallback';
-import type { RequestConfig } from '@/app/utils/populateCallback';
+import { FetchResourceRequestConfig } from '@aehrc/sdc-populate';
 
 // Mock fetch globally
 global.fetch = jest.fn();
 
 describe('fetchResourceCallback', () => {
-  const mockRequestConfig: RequestConfig = {
-    clientEndpoint: 'https://api.example.com',
+  const mockRequestConfig: FetchResourceRequestConfig = {
+    sourceServerUrl: 'https://api.example.com',
     authToken: 'test-token'
   };
 
@@ -23,8 +23,8 @@ describe('fetchResourceCallback', () => {
   });
 
   it('makes fetch request with correct headers when no auth token provided', () => {
-    const configWithoutAuth: RequestConfig = {
-      clientEndpoint: 'https://api.example.com',
+    const configWithoutAuth: FetchResourceRequestConfig = {
+      sourceServerUrl: 'https://api.example.com',
       authToken: null
     };
 
@@ -38,8 +38,8 @@ describe('fetchResourceCallback', () => {
   });
 
   it('adds trailing slash to client endpoint when missing', () => {
-    const configWithoutSlash: RequestConfig = {
-      clientEndpoint: 'https://api.example.com',
+    const configWithoutSlash: FetchResourceRequestConfig = {
+      sourceServerUrl: 'https://api.example.com',
       authToken: null
     };
 
@@ -53,8 +53,8 @@ describe('fetchResourceCallback', () => {
   });
 
   it('does not add trailing slash when client endpoint already has one', () => {
-    const configWithSlash: RequestConfig = {
-      clientEndpoint: 'https://api.example.com/',
+    const configWithSlash: FetchResourceRequestConfig = {
+      sourceServerUrl: 'https://api.example.com/',
       authToken: null
     };
 

@@ -8,9 +8,8 @@ import type {
   Practitioner,
   Questionnaire
 } from 'fhir/r4';
-import type { InputParameters, OutputParameters } from '@aehrc/sdc-populate';
+import type { FetchResourceRequestConfig, InputParameters, OutputParameters } from '@aehrc/sdc-populate';
 import { isInputParameters, isOutputParameters } from '@aehrc/sdc-populate';
-import type { RequestConfig } from '@/app/utils/populateCallback';
 import { createPopulateInputParameters } from '@/app/utils/populateInputParams';
 
 // Mock dependencies
@@ -61,8 +60,8 @@ describe('populate utility functions', () => {
     id: 'test-practitioner'
   };
 
-  const mockRequestConfig: RequestConfig = {
-    clientEndpoint: 'https://api.example.com',
+  const mockRequestConfig: FetchResourceRequestConfig = {
+    sourceServerUrl: 'https://api.example.com',
     authToken: 'test-token'
   };
 

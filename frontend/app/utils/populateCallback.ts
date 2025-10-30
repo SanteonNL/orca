@@ -15,21 +15,16 @@
  * limitations under the License.
  */
 
-import type { FetchResourceCallback } from '@aehrc/sdc-populate';
+import type { FetchResourceCallback, FetchResourceRequestConfig } from '@aehrc/sdc-populate';
 // import axios from 'axios';
 
 const ABSOLUTE_URL_REGEX = /^(https?|ftp):\/\/[^\s/$.?#].[^\s]*$/;
 
-export interface RequestConfig {
-  clientEndpoint: string;
-  authToken: string | null;
-}
-
 export const fetchResourceCallback: FetchResourceCallback = (
   query: string,
-  requestConfig: RequestConfig
+  requestConfig: FetchResourceRequestConfig
 ) => {
-  let { clientEndpoint } = requestConfig;
+  let { sourceServerUrl } = requestConfig;
   const { authToken } = requestConfig;
 
   const headers = {
@@ -40,8 +35,8 @@ export const fetchResourceCallback: FetchResourceCallback = (
   //   headers['Authorization'] = `Bearer ${authToken}`;
   // }
 
-  if (!clientEndpoint.endsWith('/')) {
-    clientEndpoint += '/';
+  if (!sourceServerUrl.endsWith('/')) {
+    sourceServerUrl += '/';
   }
 
   if (ABSOLUTE_URL_REGEX.test(query)) {
@@ -50,7 +45,7 @@ export const fetchResourceCallback: FetchResourceCallback = (
     });
   }
 
-  return fetch(clientEndpoint + query, {
+  return fetch(sourceServerUrl + query, {
     headers: headers
   });
 };

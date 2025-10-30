@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient } from '@aehrc/smart-forms-renderer';
+import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient, RendererConfig } from '@aehrc/smart-forms-renderer';
 import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
 import { useEffect, useState } from 'react';
 
@@ -18,6 +18,10 @@ import useContext from "@/app/hooks/context-hook";
 interface QuestionnaireRendererPageProps {
   questionnaire: Questionnaire;
   inputTask?: Task
+}
+
+const rendererConfigOptions : RendererConfig = {
+  hideClearButton: true
 }
 
 const scpSubTaskIdentifierSystem = "http://santeonnl.github.io/shared-care-planning/scp-identifier"
@@ -141,7 +145,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
     const prePopulate = async () => {
       const { populateResult } = await populateQuestionnaire(questionnaire, patient, practitioner, {
-        clientEndpoint: `http://localhost:9090/fhir`, //TODO: Fixme - not used as $populate is local
+        sourceServerUrl: `http://localhost:9090/fhir`, //TODO: Fixme - not used as $populate is local
         authToken: null
       });
 
@@ -163,9 +167,12 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const queryClient = useRendererQueryClient();
 
   // This hook builds the form based on the questionnaire
-  const isBuilding = useBuildForm(questionnaire);
+  const isBuilding = useBuildForm({ questionnaire, rendererConfigOptions });
 
   const theme = createTheme({
+    typography: {
+      fontFamily: 'fsMeFont, fsMeFont Fallback'
+    },
     palette: {
       primary: {
         main: '#1c6268',
