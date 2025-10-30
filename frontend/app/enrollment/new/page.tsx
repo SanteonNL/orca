@@ -32,8 +32,8 @@ export default function ConfirmDataPreEnrollment() {
                         <EnrollmentDetails/>
                     </CardContent>
                     <CardHeader className="px-0 space-y-0 pt-0 pb-8">
-                        <p className="text-muted-foreground">
-                            Indien de gegevens van de patiënt niet kloppen, pas het dan aan in het EPD.
+                        <p className="text-muted-foreground max-w-[560px]">
+                            Indien de gegevens van de patiënt niet kloppen, pas het dan aan in het EPD. Sluit daarna dit scherm en open het opnieuw om de wijzigingen te zien.
                         </p>
                     </CardHeader>
                     <EnrollInCpsButton className='mt-5'/>
