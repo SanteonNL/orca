@@ -26,7 +26,7 @@ jest.mock('@/app/enrollment/new/components/enrollment-details', () => {
 
 it('renders the instruction message', () => {
   render(<ConfirmDataPreEnrollment />);
-  expect(screen.getByText('Indien de gegevens van de patiënt niet kloppen, pas het dan aan in het EPD.')).toBeInTheDocument();
+  expect(screen.getByText('Indien de gegevens van de patiënt niet kloppen, pas het dan aan in het EPD. Sluit daarna dit scherm en open het opnieuw om de wijzigingen te zien.')).toBeInTheDocument();
 });
 
 it('renders enrollment details component', () => {

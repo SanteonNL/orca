@@ -170,7 +170,7 @@ function executionTextBottom(taskStatus: string) {
         case "requested":
             // fallthrough
         case "received":
-            return "Indien de gegevens van de patiënt niet kloppen, pas het dan aan in het EPD."
+            return "Indien de gegevens van de patiënt niet kloppen, pas het dan aan in het EPD. Sluit daarna dit scherm en open het opnieuw om de wijzigingen te zien."
         default:
             return null
     }
