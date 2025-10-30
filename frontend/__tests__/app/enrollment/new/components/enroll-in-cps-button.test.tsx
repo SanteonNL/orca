@@ -195,7 +195,7 @@ describe("enroll in cps button test", () => {
         await waitFor(() => {
             expect(screen.getByText('Er gaat iets mis')).toBeInTheDocument();
             expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
-            expect(screen.getByText(/Ongeldig telefoonnummer. Controleer het telefoonnummer van de patiënt in het EPD en probeer het opnieuw. Tip: er is een Nederlands telefoonnummer nodig voor de aanmelding./)).toBeInTheDocument();
+            expect(screen.getByText(/Ongeldig telefoonnummer. Er is een Nederlands mobiel telefoonnummer nodig voor de aanmelding. Controleer het telefoonnummer in het EPD en probeer het opnieuw./)).toBeInTheDocument();
         });
     });
 
