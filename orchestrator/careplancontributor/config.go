@@ -2,6 +2,7 @@ package careplancontributor
 
 import (
 	"errors"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -42,7 +43,9 @@ func (c Config) Validate() error {
 		return nil
 	}
 	if globals.StrictMode == true && c.StaticBearerToken != "" {
-		return errors.New("staticbearertoken is not allowed in strict mode")
+		slog.Warn("staticbearertoken is set while strict mode is enabled")
+		// TODO: uncomment once JWT auth is implemented
+		//return errors.New("staticbearertoken is not allowed in strict mode")
 	}
 	if err := c.OIDC.Validate(); err != nil {
 		return err
