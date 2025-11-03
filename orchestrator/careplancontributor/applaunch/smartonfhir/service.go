@@ -162,10 +162,6 @@ func New(config Config, tenants tenants.Config, sessionManager *user.SessionMana
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
-	if !s.strictMode {
-		// TODO: Remove before going live
-		mux.HandleFunc("GET /smart-app-launch-backdoor", s.handleAppLaunchBackdoor)
-	}
 	mux.HandleFunc("GET /smart-app-launch", s.handleAppLaunch)
 	mux.HandleFunc("GET /smart-app-launch/callback/{key}", s.handleCallback)
 	mux.HandleFunc("GET /smart-app-launch/.well-known/jwks.json", s.handleGetJWKs)
@@ -209,38 +205,6 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 		provider,
 		urlOptions...,
 	)(response, request)
-}
-
-func (s *Service) handleAppLaunchBackdoor(httpResponse http.ResponseWriter, httpRequest *http.Request) {
-	tokens := &oidc.Tokens[*oidc.IDTokenClaims]{
-		IDTokenClaims: &oidc.IDTokenClaims{
-			Claims: map[string]any{
-				"patient":       httpRequest.URL.Query().Get("patient"),
-				"userFirstName": "John",
-				"userLastName":  "Doe",
-				"sub":           "1",
-			},
-		},
-	}
-	patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), &trustedIssuer{tenantID: "saz"}, tokens)
-	if err != nil {
-		s.SendError(httpRequest.Context(), "backdoor", fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
-		return
-	}
-	sessionData := session.Data{
-		FHIRLauncher: fhirLauncherKey,
-		LauncherProperties: map[string]string{
-			"access_token": "done",
-			"iss":          "backdoor://",
-		},
-		TenantID: tenant.ID,
-	}
-	sessionData.Set("Patient/"+*patient.Id, *patient)
-	sessionData.Set("Practitioner/"+*practitioner.Id, *practitioner)
-	s.sessionManager.Create(httpResponse, sessionData)
-	slog.InfoContext(httpRequest.Context(), "SMART on FHIR backdoor app launch succeeded")
-	// Note: we don't support enrolment/task creation through SMART on FHIR yet, so we redirect to the task overview
-	http.Redirect(httpResponse, httpRequest, s.frontendBaseURL.JoinPath("list").String(), http.StatusFound)
 }
 
 func (s *Service) handleCallback(response http.ResponseWriter, request *http.Request) {
