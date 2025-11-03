@@ -47,10 +47,13 @@ export default function EnrollmentTaskPage() {
             .then((apps) => {
                 setLaunchableApps(apps)
             })
+    }, [serviceRequest, setLaunchableApps, scpClient])
+
+    useEffect(() => {
         if (task?.status === "in-progress" && launchableApps && launchableApps.length === 1) {
             launchApp(launchableApps[0].URL)();
         }
-    }, [serviceRequest, setLaunchableApps, scpClient, task?.status, launchableApps])
+    }, [task?.status, launchableApps])
 
     // Load ServiceRequest from CPS as referred to by the Task.focus, in case the context doesn't specify the ServiceRequest
     // (e.g. when not launching for a specific Task using /list)
