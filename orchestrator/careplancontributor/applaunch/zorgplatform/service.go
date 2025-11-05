@@ -451,7 +451,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		return
 	}
 
-	slog.InfoContext(ctx, "Successfully requested access token for HCP ProfessionalService", slog.String("access_token", accessToken[:min(len(accessToken), 16)]))
+	slog.DebugContext(ctx, "Successfully requested access token for HCP ProfessionalService", slog.String("access_token", accessToken[:min(len(accessToken), 16)]))
 	span.SetAttributes(attribute.String("zorgplatform.workflow_id", launchContext.WorkflowId))
 
 	var sessionData *session.Data
