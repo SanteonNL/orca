@@ -1427,3 +1427,39 @@ func createTestSession() (*user.SessionManager[session.Data], string) {
 	cookieValue = strings.Split(cookieValue, "=")[1]
 	return sessionManager, cookieValue
 }
+
+func TestService_HealthCheck(t *testing.T) {
+	tenant := tenants.Test().Sole()
+	mux := http.NewServeMux()
+	httpServer := httptest.NewServer(mux)
+
+	service := &Service{
+		profile: profile.Test(),
+		tenants: tenants.Test(),
+	}
+	service.RegisterHandlers(mux)
+
+	t.Run("successful health check with authentication", func(t *testing.T) {
+		httpClient := httpServer.Client()
+		httpClient.Transport = auth.AuthenticatedTestRoundTripper(httpServer.Client().Transport, auth.TestPrincipal1, "")
+
+		httpResponse, err := httpClient.Get(httpServer.URL + "/cpc/" + tenant.ID + "/health-check")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+
+		responseData, err := io.ReadAll(httpResponse.Body)
+		require.NoError(t, err)
+
+		var bundle fhir.Bundle
+		require.NoError(t, json.Unmarshal(responseData, &bundle))
+		assert.Equal(t, fhir.BundleTypeCollection, bundle.Type)
+		assert.Equal(t, 0, len(bundle.Entry))
+		assert.Equal(t, "application/fhir+json", httpResponse.Header.Get("Content-Type"))
+	})
+
+	t.Run("health check without authentication should fail", func(t *testing.T) {
+		httpResponse, err := http.Get(httpServer.URL + "/cpc/" + tenant.ID + "/health-check")
+		require.NoError(t, err)
+		require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
+	})
+}
