@@ -220,6 +220,17 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 		// The section below defines endpoints specified by Shared Care Planning.
 		// These are secured through the profile (e.g. Nuts access tokens)
 		//
+		// Health Check (With auth, to allow us to test authorization after releases)
+		{
+			Method:  "GET",
+			Path:    basePathWithTenant + "/health-check",
+			Handler: s.handleHealthCheck,
+			Middleware: httpserv.Chain(
+				otel.HandlerWithTracing(tracer, "HealthCheck"),
+				s.tenants.HttpHandler,
+				s.profile.Authenticator,
+			),
+		},
 		// Metadata
 		{
 			Method:     "GET",
@@ -439,6 +450,14 @@ func (s *Service) handleFHIRGetMetadata(httpResponse http.ResponseWriter, reques
 		return
 	}
 	coolfhir.SendResponse(httpResponse, http.StatusOK, md)
+}
+
+func (s *Service) handleHealthCheck(httpResponse http.ResponseWriter, httpRequest *http.Request) {
+	// Always return an empty collection bundle for health check
+	coolfhir.SendResponse(httpResponse, http.StatusOK, fhir.Bundle{
+		Type:  fhir.BundleTypeCollection,
+		Entry: make([]fhir.BundleEntry, 0),
+	})
 }
 
 // handleFHIRBundle handles a FHIR Bundle request, which can be either a subscription notification or a batch request.
