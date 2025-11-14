@@ -1,7 +1,9 @@
 package nuts
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
@@ -11,10 +13,17 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/lib/auth"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/debug"
 	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
+
+var tracer = baseotel.Tracer("nuts")
 
 // Authenticator authenticates the caller according to the Nuts authentication.
 // The caller is required to provide an OAuth2 access token in the Authorization header, which is introspected at the Nuts node.
@@ -39,41 +48,45 @@ func (d DutchNutsProfile) Authenticator(fn http.HandlerFunc) http.HandlerFunc {
 		TokenIntrospectionClient:   d.nutsAPIHTTPClient,
 	}
 	return func(writer http.ResponseWriter, request *http.Request) {
+		ctx, span := tracer.Start(
+			request.Context(),
+			debug.GetFullCallerName(),
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+		defer span.End()
+		request = request.WithContext(ctx)
+
 		principal, err := auth.PrincipalFromContext(request.Context())
 		if err != nil {
+			span.SetAttributes(attribute.String(otel.AuthNMethod, otel.AuthNMethodNuts))
 			middleware.Secure(authConfig, func(response http.ResponseWriter, request *http.Request) {
 				userInfo := middleware.UserInfo(request.Context())
 				if userInfo == nil {
 					// would be weird, should've been handled by middleware.Secure()
-					slog.ErrorContext(request.Context(), "User info not found in context")
-					http.Error(response, "Unauthorized", http.StatusUnauthorized)
+					respondAuthError(ctx, response, span, errors.New("user info not found in context"))
 					return
 				}
 				subject, err := d.claimsToNutsSubject(userInfo)
 				if err != nil {
-					slog.ErrorContext(request.Context(), "Can't determine Nuts subject from token introspection response", slog.String(logging.FieldError, err.Error()))
-					http.Error(response, "Unauthorized", http.StatusUnauthorized)
+					respondAuthError(ctx, response, span, errors.New("can't determine Nuts subject from token introspection response"))
 					return
 				}
 
 				// If there's a tenant in the context, validate that it matches the Nuts subject.
 				tenant, err := tenants.FromContext(request.Context())
 				if err != nil && !errors.Is(err, tenants.ErrNoTenant) {
-					slog.ErrorContext(request.Context(), "Error getting tenant from context", slog.String(logging.FieldError, err.Error()))
-					http.Error(response, "Unauthorized", http.StatusUnauthorized)
+					respondAuthError(ctx, response, span, fmt.Errorf("getting tenant from context: %w", err))
 					return
 				} else if err == nil {
 					if tenant.Nuts.Subject != subject {
-						slog.ErrorContext(request.Context(), "Nuts access token issuer does not match tenant", slog.String("expected", tenant.Nuts.Subject), slog.String("got", subject))
-						http.Error(response, "Unauthorized", http.StatusUnauthorized)
+						respondAuthError(ctx, response, span, fmt.Errorf("nuts access token issuer does not match tenant: expected %s, got %s", tenant.Nuts.Subject, subject))
 						return
 					}
 				}
 
 				organization, err := claimsToOrganization(userInfo)
 				if err != nil {
-					slog.ErrorContext(request.Context(), "Invalid user info in context", slog.String(logging.FieldError, err.Error()))
-					http.Error(response, "Unauthorized", http.StatusUnauthorized)
+					respondAuthError(ctx, response, span, fmt.Errorf("invalid user info in context: %w", err))
 					return
 				}
 				principal := auth.Principal{
@@ -85,9 +98,11 @@ func (d DutchNutsProfile) Authenticator(fn http.HandlerFunc) http.HandlerFunc {
 					slog.Any("principal", principal),
 					slog.String("route", request.URL.Path),
 				)
+				span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeOK))
 				fn(response, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 			})(writer, request)
 		} else {
+			span.SetAttributes(attribute.String(otel.AuthNMethod, otel.AuthNMethodNuts+"(pre-authenticated)"))
 			slog.DebugContext(
 				request.Context(),
 				"Pre-authenticated user",
@@ -97,6 +112,13 @@ func (d DutchNutsProfile) Authenticator(fn http.HandlerFunc) http.HandlerFunc {
 			fn(writer, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 		}
 	}
+}
+
+func respondAuthError(ctx context.Context, response http.ResponseWriter, span trace.Span, err error) {
+	span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
+	otel.Error(span, err)
+	slog.ErrorContext(ctx, "Nuts authentication failed", slog.String(logging.FieldError, err.Error()))
+	http.Error(response, "Unauthorized", http.StatusUnauthorized)
 }
 
 func (d DutchNutsProfile) claimsToNutsSubject(userInfo map[string]interface{}) (string, error) {

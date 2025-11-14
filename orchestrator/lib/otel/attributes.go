@@ -27,7 +27,17 @@ const (
 	FHIRTaskType          = "fhir.task.type"
 	FHIRClientType        = "fhir.client.type"
 
-	// Auth
+	// AuthN
+	AuthNOutcome           = "authN.outcome"
+	AuthNOutcomeOK         = "ok"
+	AuthNOutcomeFailed     = "failed"
+	AuthNMethod            = "authN.method"
+	AuthNMethodUserSession = "user_session"
+	AuthNMethodStaticToken = "static_bearer_token"
+	AuthNMethodJWT         = "jwt"
+	AuthNMethodNuts        = "nuts"
+
+	// AuthZ
 	AuthZAllowed = "authorization.allowed"
 	AuthZReasons = "authorization.reasons"
 
