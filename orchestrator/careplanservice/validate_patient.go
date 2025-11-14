@@ -52,7 +52,7 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []*validation.Error {
 	if !hasPhone {
 		errs = append(errs, &validation.Error{Code: PhoneRequired})
 	}
-	if !hasValidPhoneNumber {
+	if hasPhone && !hasValidPhoneNumber {
 		errs = append(errs, &validation.Error{Code: InvalidPhone})
 	}
 

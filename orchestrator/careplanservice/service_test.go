@@ -240,9 +240,14 @@ func TestService_ValidationErrorHandling(t *testing.T) {
 
 	require.NotNil(t, target)
 	require.NotEmpty(t, target.Issue)
-	require.Equal(t, InvalidPhone, *target.Issue[0].Details.Coding[0].Code)
+	assert.Len(t, target.Issue, 1)
+
+	issue := target.Issue[0]
+	assert.Len(t, issue.Details.Coding, 2)
+	require.Equal(t, InvalidEmail, *issue.Details.Coding[0].Code)
+	require.Equal(t, InvalidPhone, *issue.Details.Coding[1].Code)
 	var codes []string
-	for _, coding := range target.Issue[0].Details.Coding {
+	for _, coding := range issue.Details.Coding {
 		if coding.Code != nil {
 			codes = append(codes, *coding.Code)
 		}
