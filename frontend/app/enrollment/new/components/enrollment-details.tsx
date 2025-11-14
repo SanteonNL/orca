@@ -36,7 +36,7 @@ export default function EnrollmentDetails() {
             <div className="font-medium">Telefoonnummer:</div>
             <div>
                 {patient?.telecom?.filter(m => m.system === 'phone').length > 0
-                    ? patient.telecom.filter(m => m.system === 'phone').map((t, idx) => (
+                    ? patient?.telecom.filter(m => m.system === 'phone').map((t, idx) => (
                         <div key={idx}>{t.value}</div>
                     ))
                     : 'Onbekend'
