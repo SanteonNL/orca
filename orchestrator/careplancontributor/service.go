@@ -420,10 +420,6 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 			request.Context(),
 			"userSessionAuthMiddleware",
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.String(otel.HTTPMethod, request.Method),
-				attribute.String(otel.HTTPURL, request.URL.String()),
-			),
 		)
 		defer span.End()
 
@@ -782,10 +778,6 @@ func (s Service) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 			request.Context(),
 			"userAuthMiddleware",
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.String(otel.HTTPMethod, request.Method),
-				attribute.String(otel.HTTPURL, request.URL.String()),
-			),
 		)
 		defer span.End()
 		request = request.WithContext(ctx)

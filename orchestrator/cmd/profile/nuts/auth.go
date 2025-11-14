@@ -52,10 +52,6 @@ func (d DutchNutsProfile) Authenticator(fn http.HandlerFunc) http.HandlerFunc {
 			request.Context(),
 			debug.GetFullCallerName(),
 			trace.WithSpanKind(trace.SpanKindServer),
-			trace.WithAttributes(
-				attribute.String(otel.HTTPMethod, request.Method),
-				attribute.String(otel.HTTPURL, request.URL.String()),
-			),
 		)
 		defer span.End()
 		request = request.WithContext(ctx)
