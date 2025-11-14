@@ -16,6 +16,7 @@ type PatientValidator struct {
 func (v *PatientValidator) Validate(patient *fhir.Patient) []*validation.Error {
 	var errs []*validation.Error
 	hasEmail, hasPhone := false, false
+	hasValidPhoneNumber := false
 
 	if patient == nil {
 		errs = append(errs, &validation.Error{
@@ -33,10 +34,12 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []*validation.Error {
 				}
 				hasEmail = true
 			case fhir.ContactPointSystemPhone:
-				if err := validatePhone(point.Value); err != nil {
-					errs = append(errs, err)
+				if point.Value != nil && *point.Value != "" {
+					hasPhone = true
+					if err := validatePhone(point.Value); err == nil {
+						hasValidPhoneNumber = true
+					}
 				}
-				hasPhone = true
 			default:
 				continue
 			}
@@ -48,6 +51,9 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []*validation.Error {
 	}
 	if !hasPhone {
 		errs = append(errs, &validation.Error{Code: PhoneRequired})
+	}
+	if !hasValidPhoneNumber {
+		errs = append(errs, &validation.Error{Code: InvalidPhone})
 	}
 
 	if len(errs) > 0 {
