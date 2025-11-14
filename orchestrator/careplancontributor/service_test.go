@@ -718,7 +718,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
 			responseData, _ := io.ReadAll(httpResponse.Body)
-			require.Equal(t, "session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
+			require.Equal(t, "user session: session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
 		})
 	})
 
@@ -1003,7 +1003,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 				require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
 				responseData, err := io.ReadAll(httpResponse.Body)
 				require.NoError(t, err)
-				assert.Equal(t, "session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
+				assert.Equal(t, "user session: session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
 			})
 		})
 	})
