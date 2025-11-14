@@ -34,7 +34,14 @@ export default function EnrollmentDetails() {
             <div>{patient?.telecom?.find(m => m.system === 'email')?.value ?? 'Onbekend'}</div>
 
             <div className="font-medium">Telefoonnummer:</div>
-            <div>{patient?.telecom?.find(m => m.system === 'phone')?.value ?? 'Onbekend'}</div>
+            <div>
+                {(() => {
+                    const phoneNumbers = patient?.telecom?.filter(m => m.system === 'phone') ?? [];
+                    return phoneNumbers.length > 0
+                        ? phoneNumbers.map((t, idx) => <div key={idx}>{t.value}</div>)
+                        : 'Onbekend';
+                })()}
+            </div>
 
             <div className="font-medium">{requestCodingDisplay ? titleCase(requestCodingDisplay) + " voor" : "Diagnose"}:</div>
             <div className="first-letter:uppercase">{conditionTitle(undefined, taskCondition) ?? "Onbekend"}</div>
