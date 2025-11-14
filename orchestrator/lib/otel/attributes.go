@@ -28,10 +28,10 @@ const (
 	FHIRClientType        = "fhir.client.type"
 
 	// AuthN
-	AuthNOutcome           = "auth.outcome"
+	AuthNOutcome           = "authN.outcome"
 	AuthNOutcomeOK         = "ok"
 	AuthNOutcomeFailed     = "failed"
-	AuthNMethod            = "auth.method"
+	AuthNMethod            = "authN.method"
 	AuthNMethodUserSession = "user_session"
 	AuthNMethodStaticToken = "static_bearer_token"
 	AuthNMethodJWT         = "jwt"
