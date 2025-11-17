@@ -429,14 +429,13 @@ func (s Service) withSession(next func(response http.ResponseWriter, request *ht
 			// Invalid session/request
 			span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
 			otel.Error(span, err)
-			http.Error(response, err.Error(), http.StatusForbidden)
+			http.Error(response, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
 		if sessionData == nil {
 			span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
-			err := errors.New("no user session found")
-			otel.Error(span, err)
-			http.Error(response, err.Error(), http.StatusUnauthorized)
+			otel.Error(span, errors.New("no user session found"))
+			http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
 
@@ -787,9 +786,9 @@ func (s Service) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 			// Invalid session/request
 			span.SetAttributes(attribute.String(otel.AuthNMethod, otel.AuthNMethodUserSession))
 			span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
-			err = fmt.Errorf("user session: %w", err)
-			otel.Error(span, err)
-			http.Error(response, err.Error(), http.StatusForbidden)
+			slog.ErrorContext(ctx, "failed to validate user session", slog.String("error", err.Error()))
+			otel.Error(span, fmt.Errorf("user session: %w", err))
+			http.Error(response, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
 		if sessionData != nil {
@@ -821,7 +820,7 @@ func (s Service) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 					err = fmt.Errorf("JWT authentication: %w", err)
 					otel.Error(span, err)
 					slog.ErrorContext(request.Context(), "Failed to validate ADB2C token", slog.String(logging.FieldError, err.Error()))
-					http.Error(response, "invalid bearer token", http.StatusUnauthorized)
+					http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 					return
 				}
 
@@ -835,7 +834,8 @@ func (s Service) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 		span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
 		err = errors.New("no user authentication found")
 		otel.Error(span, err)
-		http.Error(response, err.Error(), http.StatusUnauthorized)
+		slog.ErrorContext(ctx, "failed to validate user session", slog.String("error", err.Error()))
+		http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 	}
 }
 

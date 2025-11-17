@@ -84,21 +84,25 @@ func New(strictMode bool, issuer *url.URL, config Config) (*Service, error) {
 func (s *Service) HandleLogin(httpResponse http.ResponseWriter, httpRequest *http.Request, sessionData *session.Data) {
 	ctx := op.ContextWithIssuer(httpRequest.Context(), s.issuerURL.String())
 	if err := httpRequest.ParseForm(); err != nil {
-		http.Error(httpResponse, fmt.Errorf("parse form: %w", err).Error(), http.StatusBadRequest)
+		slog.ErrorContext(ctx, "failed to parse form", slog.String("error", err.Error()))
+		http.Error(httpResponse, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 	authRequestID := httpRequest.FormValue("authRequestID") // specified by Zitadel/OpenID Provider
 	if authRequestID == "" {
-		http.Error(httpResponse, "authRequestID is required", http.StatusBadRequest)
+		slog.ErrorContext(ctx, "authRequestID form value missing in login request")
+		http.Error(httpResponse, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 	userDetails, err := userFromSession(sessionData)
 	if err != nil {
-		http.Error(httpResponse, fmt.Errorf("get user from session: %w", err).Error(), http.StatusBadRequest)
+		slog.ErrorContext(ctx, "failed to get user from session", slog.String("error", err.Error()))
+		http.Error(httpResponse, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
 		return
 	}
 	if err = s.storage.AuthenticateUser(ctx, authRequestID, *userDetails); err != nil {
-		http.Error(httpResponse, fmt.Errorf("authenticate user: %w", err).Error(), http.StatusInternalServerError)
+		slog.ErrorContext(ctx, "failed to authenticate user", slog.String("error", err.Error()))
+		http.Error(httpResponse, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	redirectURL := s.callbackURLFunc(ctx, authRequestID)

@@ -400,7 +400,8 @@ func (s *Service) SendError(ctx context.Context, issuer string, err error, httpR
 	if !s.strictMode {
 		msg += ": " + err.Error()
 	}
-	http.Error(httpResponse, msg, httpStatusCode)
+	slog.ErrorContext(ctx, "SendError", slog.String("msg", msg))
+	http.Error(httpResponse, http.StatusText(httpStatusCode), httpStatusCode)
 }
 
 func (s *Service) createClientAssertion(issuer *trustedIssuer) (string, error) {
