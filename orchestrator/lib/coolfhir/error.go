@@ -105,6 +105,9 @@ func WriteOperationOutcomeFromError(ctx context.Context, err error, desc string,
 			statusCode = operationOutcomeErr.HttpStatusCode
 		}
 		operationOutcome = operationOutcomeErr.OperationOutcome
+		if statusCode != http.StatusBadRequest {
+			operationOutcome = SanitizeOperationOutcome(operationOutcome)
+		}
 	} else {
 		// Error type: ErrorWithCode
 		var errorWithCode = new(ErrorWithCode)
@@ -114,12 +117,17 @@ func WriteOperationOutcomeFromError(ctx context.Context, err error, desc string,
 			}
 		}
 
+		diagnostics := http.StatusText(statusCode)
+		// Include error message for bad requests
+		if statusCode == http.StatusBadRequest {
+			diagnostics = fmt.Sprintf("%s failed: %s", desc, err.Error())
+		}
 		operationOutcome = fhir.OperationOutcome{
 			Issue: []fhir.OperationOutcomeIssue{
 				{
 					Severity:    fhir.IssueSeverityError,
 					Code:        fhir.IssueTypeProcessing,
-					Diagnostics: to.Ptr(http.StatusText(statusCode)),
+					Diagnostics: to.Ptr(diagnostics),
 				},
 			},
 		}

@@ -405,7 +405,7 @@ func (s *Service) SendError(ctx context.Context, issuer string, err error, httpR
 		"HTTP error response sent for SMART on FHIR launch failure",
 		slog.String("issuer", issuer),
 		slog.String("launch_id", launchId),
-		slog.String("error", err.Error()),
+		slog.String(logging.FieldError, err.Error()),
 		slog.Int("http_status_code", httpStatusCode),
 		slog.String("msg", msg),
 	)

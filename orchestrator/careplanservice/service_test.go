@@ -193,7 +193,7 @@ func TestService_ErrorHandling(t *testing.T) {
 
 	require.NotNil(t, target)
 	require.NotEmpty(t, target.Issue)
-	require.Equal(t, "Bad Request", *target.Issue[0].Diagnostics)
+	require.Equal(t, "CarePlanService/CreateTask failed: invalid fhir.Task: unexpected end of JSON input", *target.Issue[0].Diagnostics)
 }
 
 func TestService_ValidationErrorHandling(t *testing.T) {
@@ -532,7 +532,7 @@ func TestService_Handle(t *testing.T) {
 
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bad Request")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0]: this fails on purpose")
 		})
 		t.Run("commit fails, FHIR server returns non-FHIR response", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
@@ -613,7 +613,7 @@ func TestService_Handle(t *testing.T) {
 
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bad Request")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: only write operations are supported in Bundle")
 		})
 		t.Run("entry without request.url", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
@@ -630,7 +630,7 @@ func TestService_Handle(t *testing.T) {
 
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bad Request")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0].request.url (entry #) is required")
 		})
 		t.Run("POST with URL containing too many parts", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
@@ -648,7 +648,7 @@ func TestService_Handle(t *testing.T) {
 
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bad Request")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0].request.url (entry #) has too many paths")
 		})
 		t.Run("POST with URL containing a fully qualified url", func(t *testing.T) {
 			requestBundle := fhir.Bundle{
@@ -666,7 +666,7 @@ func TestService_Handle(t *testing.T) {
 
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bad Request")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/CreateBundle failed: bundle.entry[0].request.url (entry #) must be a relative URL")
 		})
 	})
 	t.Run("Single resources", func(t *testing.T) {

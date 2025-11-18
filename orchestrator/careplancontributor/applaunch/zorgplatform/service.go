@@ -414,15 +414,15 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	if err := request.ParseForm(); err != nil {
 		otel.Error(span, err)
 		slog.ErrorContext(ctx, "Unable to parse form", slog.String(logging.FieldError, err.Error()))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, "Application launch failed", http.StatusBadRequest)
 		return
 	}
 	samlResponse := request.FormValue("SAMLResponse")
 	if samlResponse == "" {
 		err := errors.New("SAMLResponse not found in request")
 		otel.Error(span, err)
-		slog.ErrorContext(ctx, "Unable to parse SAMLResponse", slog.String("error", err.Error()))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		slog.ErrorContext(ctx, "SAMLResponse not found in request", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, "Application launch failed", http.StatusBadRequest)
 		return
 	}
 
@@ -431,7 +431,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
 		slog.ErrorContext(ctx, "Unable to validate SAML token", slog.String(logging.FieldError, otel.Error(span, err, "unable to validate SAML token").Error()))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, "Invalid SAML token", http.StatusBadRequest)
 		return
 	}
 
@@ -440,7 +440,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	if err != nil {
 		// Only log sensitive information, the response just sends out 400
 		slog.ErrorContext(ctx, "Can't determine tenant", slog.String(logging.FieldError, otel.Error(span, err, "can't determine tenant").Error()))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, "Application launch failed", http.StatusBadRequest)
 		return
 	}
 	ctx = tenants.WithTenant(ctx, *tenant)
@@ -450,7 +450,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 	accessToken, err := s.secureTokenService.RequestAccessToken(ctx, launchContext, hcpTokenType)
 	if err != nil {
 		slog.ErrorContext(ctx, "Unable to request access token for HCP ProfessionalService", slog.String(logging.FieldError, otel.Error(span, err, "unable to request access token for HCP ProfessionalService").Error()))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, "Application launch failed", http.StatusBadRequest)
 		return
 	}
 

@@ -222,7 +222,7 @@ func TestProxy(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, http.StatusBadRequest, httpResponse.StatusCode)
 			responseData, _ := io.ReadAll(httpResponse.Body)
-			assert.Contains(t, string(responseData), "Request body isn't valid JSON")
+			assert.Contains(t, string(responseData), "Invalid JSON in request body")
 		})
 	})
 	t.Run("POST request - Search", func(t *testing.T) {

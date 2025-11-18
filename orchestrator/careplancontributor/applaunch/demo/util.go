@@ -1,6 +1,7 @@
 package demo
 
 import (
+	"fmt"
 	"log/slog"
 	"net/http"
 )
@@ -21,7 +22,7 @@ func getQueryParam(response http.ResponseWriter, request *http.Request, key stri
 	value := request.URL.Query().Get(key)
 	if value == "" {
 		slog.ErrorContext(request.Context(), "missing query parameter", slog.String("key", key))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, fmt.Sprintf("query parameter [%s] is expected but missing a value", key), http.StatusBadRequest)
 		return "", false
 	}
 	return value, true

@@ -104,12 +104,12 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	tenant, err := s.tenants.Get(values["tenant"])
 	if err != nil {
 		slog.ErrorContext(context.Background(), "Failed to get tenant", slog.String(logging.FieldError, err.Error()))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, "Invalid tenant", http.StatusBadRequest)
 		return
 	}
 	if tenant.Demo.FHIR.BaseURL == "" {
 		slog.ErrorContext(request.Context(), "FHIR base URL is not configured for tenant", slog.String("tenantID", tenant.ID))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	// Serialize FHIR config to pass authentication settings to the factory
@@ -152,7 +152,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	var practitioner fhir.Practitioner
 	if err := ehrFHIRClient.Read(values["practitioner"], &practitioner); err != nil {
 		slog.ErrorContext(request.Context(), "Failed to read practitioner resource", slog.String(logging.FieldError, err.Error()))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	sessionData.Set("Practitioner/"+*practitioner.Id, practitioner)
@@ -160,7 +160,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	var patient fhir.Patient
 	if err := ehrFHIRClient.Read(values["patient"], &patient); err != nil {
 		slog.ErrorContext(request.Context(), "Failed to read patient resource", slog.String(logging.FieldError, err.Error()))
-		http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	sessionData.Set("Patient/"+*patient.Id, patient)
@@ -186,7 +186,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		taskIdentifier, err := coolfhir.TokenToIdentifier(*sessionData.TaskIdentifier)
 		if err != nil {
 			slog.ErrorContext(ctx, "Failed to get task identifier", slog.String(logging.FieldError, err.Error()))
-			http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusBadRequest)
+			http.Error(response, "Invalid task identifier", http.StatusBadRequest)
 			return
 		}
 		fhirClient, err := globals.CreateCPSFHIRClient(ctx)

@@ -48,6 +48,12 @@ func (h FHIRCreateOperationHandler[T]) Handle(ctx context.Context, request FHIRH
 
 	var resource T
 	if err := json.Unmarshal(request.ResourceData, &resource); err != nil {
+		slog.ErrorContext(
+			ctx,
+			"failed to unmarshal resource data",
+			slog.String("resourceData", string(request.ResourceData)),
+			slog.String(logging.FieldError, err.Error()),
+		)
 		return nil, otel.Error(span, &coolfhir.ErrorWithCode{
 			Message:    fmt.Sprintf("invalid %s: %v", resourceType, err),
 			StatusCode: http.StatusBadRequest,
