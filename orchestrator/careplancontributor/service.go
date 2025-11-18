@@ -834,7 +834,7 @@ func (s Service) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 		span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
 		err = errors.New("no user authentication found")
 		otel.Error(span, err)
-		slog.ErrorContext(ctx, "failed to validate user session", slog.String("error", err.Error()))
+		slog.ErrorContext(ctx, "no user authentication found", slog.String("error", err.Error()))
 		http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 	}
 }

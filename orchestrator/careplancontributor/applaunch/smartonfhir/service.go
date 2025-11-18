@@ -400,7 +400,15 @@ func (s *Service) SendError(ctx context.Context, issuer string, err error, httpR
 	if !s.strictMode {
 		msg += ": " + err.Error()
 	}
-	slog.ErrorContext(ctx, "SendError", slog.String("msg", msg))
+	slog.ErrorContext(
+		ctx,
+		"HTTP error response sent for SMART on FHIR launch failure",
+		slog.String("issuer", issuer),
+		slog.String("launch_id", launchId),
+		slog.String("error", err.Error()),
+		slog.Int("http_status_code", httpStatusCode),
+		slog.String("msg", msg),
+	)
 	http.Error(httpResponse, http.StatusText(httpStatusCode), httpStatusCode)
 }
 

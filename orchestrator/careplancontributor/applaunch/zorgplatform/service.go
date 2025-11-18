@@ -469,7 +469,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 			sleep(200 * time.Duration(i) * time.Millisecond)
 		} else {
 			slog.ErrorContext(ctx, "unable to create session data - retry limit reached", slog.String(logging.FieldError, otel.Error(span, err, "unable to create session data - retry limit reached").Error()))
-			http.Error(response, http.StatusText(http.StatusBadRequest), http.StatusInternalServerError)
+			http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 	}
