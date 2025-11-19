@@ -118,7 +118,7 @@ func respondAuthError(ctx context.Context, response http.ResponseWriter, span tr
 	span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
 	otel.Error(span, err)
 	slog.ErrorContext(ctx, "Nuts authentication failed", slog.String(logging.FieldError, err.Error()))
-	http.Error(response, "Unauthorized", http.StatusUnauthorized)
+	http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 }
 
 func (d DutchNutsProfile) claimsToNutsSubject(userInfo map[string]interface{}) (string, error) {

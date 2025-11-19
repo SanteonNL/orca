@@ -118,7 +118,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readStatusReturn:   http.StatusNotFound,
 			readBodyReturnFile: "./testdata/careplan-not-found.json",
 			xSCPContext:        "CarePlan/not-exists",
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: Not Found"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: CarePlan in header not found - POST",
@@ -128,7 +128,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			xSCPContext:        "CarePlan/not-exists",
 			method:             to.Ptr("POST"),
 			url:                to.Ptr("/cpc/test/fhir/Patient/_search"),
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: OperationOutcome, issues: [not-found error] CarePlan not found"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: Not Found"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: CareTeam not present in bundle - GET",
@@ -136,7 +136,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readBodyReturnFile: "./testdata/careplan-careteam-missing.json",
 			readStatusReturn:   http.StatusOK,
 			xSCPContext:        "CarePlan/cps-careplan-01",
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: Internal Server Error"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: CareTeam not present in bundle - POST",
@@ -146,7 +146,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			xSCPContext:        "CarePlan/cps-careplan-01",
 			method:             to.Ptr("POST"),
 			url:                to.Ptr("/cpc/test/fhir/Patient/_search"),
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: invalid CareTeam reference (must be a reference to a contained resource): CareTeam/cps-careteam-01"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: Internal Server Error"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: requester not part of CareTeam - GET",
@@ -155,7 +155,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			readBodyReturnFile: "./testdata/careplan-valid.json",
 			readStatusReturn:   http.StatusOK,
 			xSCPContext:        "CarePlan/cps-careplan-01",
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: Forbidden"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:               "Fails: requester not part of CareTeam - POST",
@@ -166,7 +166,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			xSCPContext:        "CarePlan/cps-careplan-01",
 			method:             to.Ptr("POST"),
 			url:                to.Ptr("/cpc/test/fhir/Patient/_search"),
-			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:       `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: Forbidden"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:                         "Fails: proxied request returns error - GET",
@@ -197,7 +197,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			xSCPContext:                  "CarePlan/cps-careplan-01",
 			mockedFHIRRequestURL:         to.Ptr("GET /fhir/Patient/1"),
 			mockedFHIRResponseStatusCode: to.Ptr(http.StatusOK),
-			expectedJSON:                 `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:                 `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/GET /cpc/test/fhir/Patient/1 failed: Forbidden"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:                         "Fails: requester is CareTeam member but Period is expired - POST",
@@ -210,7 +210,7 @@ func TestService_Proxy_Get_And_Search(t *testing.T) {
 			mockedFHIRResponseStatusCode: to.Ptr(http.StatusOK),
 			method:                       to.Ptr("POST"),
 			url:                          to.Ptr("/cpc/test/fhir/Patient/_search"),
-			expectedJSON:                 `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: requester does not have access to resource"}],"resourceType":"OperationOutcome"}`,
+			expectedJSON:                 `{"issue":[{"severity":"error","code":"processing","diagnostics":"CarePlanContributor/POST /cpc/test/fhir/Patient/_search failed: Forbidden"}],"resourceType":"OperationOutcome"}`,
 		},
 		{
 			name:                         "Success: valid request - GET",
@@ -718,7 +718,7 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
 			responseData, _ := io.ReadAll(httpResponse.Body)
-			require.Equal(t, "user session: session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
+			require.Equal(t, "Forbidden", strings.TrimSpace(string(responseData)))
 		})
 	})
 
@@ -1003,7 +1003,7 @@ func TestService_ExternalFHIRProxy(t *testing.T) {
 				require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
 				responseData, err := io.ReadAll(httpResponse.Body)
 				require.NoError(t, err)
-				assert.Equal(t, "user session: session tenant does not match request tenant", strings.TrimSpace(string(responseData)))
+				assert.Equal(t, "Forbidden", strings.TrimSpace(string(responseData)))
 			})
 		})
 	})
@@ -1259,7 +1259,7 @@ func TestService_Import(t *testing.T) {
 		})
 		require.NoError(t, err)
 		responseData, _ := io.ReadAll(httpResponse.Body)
-		assert.Contains(t, string(responseData), "not enabled")
+		assert.Contains(t, string(responseData), "Forbidden")
 		require.Equal(t, http.StatusForbidden, httpResponse.StatusCode)
 	})
 }

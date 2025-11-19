@@ -92,7 +92,7 @@ func (c Config) HttpHandler(handler http.HandlerFunc) http.HandlerFunc {
 		tenantID := request.PathValue("tenant")
 		if tenantID == "" {
 			slog.ErrorContext(request.Context(), "No tenant ID in HTTP request", slog.String(logging.FieldPath, request.URL.Path))
-			http.Error(writer, "Unable to determine tenant", http.StatusInternalServerError)
+			http.Error(writer, "Tenant is required in request path", http.StatusBadRequest)
 			return
 		}
 		tenant, err := c.Get(tenantID)
@@ -101,7 +101,7 @@ func (c Config) HttpHandler(handler http.HandlerFunc) http.HandlerFunc {
 				slog.String(logging.FieldPath, request.URL.Path),
 				slog.String("tenant_id", tenantID),
 			)
-			http.Error(writer, "Unknown tenant", http.StatusBadRequest)
+			http.Error(writer, "Invalid tenant provided in path", http.StatusBadRequest)
 			return
 		}
 		ctx := WithTenant(request.Context(), *tenant)

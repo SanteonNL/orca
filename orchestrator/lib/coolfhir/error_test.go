@@ -2,14 +2,15 @@ package coolfhir
 
 import (
 	"context"
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/stretchr/testify/assert"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"testing"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/to"
+	"github.com/stretchr/testify/assert"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 func TestWriteOperationOutcomeFromError(t *testing.T) {
@@ -39,7 +40,7 @@ func TestWriteOperationOutcomeFromError(t *testing.T) {
 				desc: "test",
 			},
 			expectedCode: 500,
-			expectedBody: `{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"test failed: oops"}]}`,
+			expectedBody: `{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"test failed: Internal Server Error"}]}`,
 		},
 		{
 			name: "OperationOutcomeError",
