@@ -120,14 +120,14 @@ func WriteOperationOutcomeFromError(ctx context.Context, err error, desc string,
 		diagnostics := http.StatusText(statusCode)
 		// Include error message for bad requests
 		if statusCode == http.StatusBadRequest {
-			diagnostics = fmt.Sprintf("%s failed: %s", desc, err.Error())
+			diagnostics = err.Error()
 		}
 		operationOutcome = fhir.OperationOutcome{
 			Issue: []fhir.OperationOutcomeIssue{
 				{
 					Severity:    fhir.IssueSeverityError,
 					Code:        fhir.IssueTypeProcessing,
-					Diagnostics: to.Ptr(diagnostics),
+					Diagnostics: to.Ptr(fmt.Sprintf("%s failed: %s", desc, diagnostics)),
 				},
 			},
 		}

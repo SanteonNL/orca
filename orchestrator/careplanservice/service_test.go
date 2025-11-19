@@ -552,7 +552,7 @@ func TestService_Handle(t *testing.T) {
 			hdrs := new(fhirclient.Headers)
 			err = fhirClient.Create(requestBundle, &resultBundle, fhirclient.AtPath("/"), fhirclient.ResponseHeaders(hdrs))
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bad Gateway")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Bundle failed: Bad Gateway")
 			assert.Equal(t, "application/fhir+json", hdrs.Get("Content-Type"))
 		})
 		t.Run("commit fails, FHIR server returns OperationOutcome", func(t *testing.T) {
@@ -692,7 +692,7 @@ func TestService_Handle(t *testing.T) {
 
 			err = fhirClient.Update("Organization/123", org, &org)
 
-			require.EqualError(t, err, "OperationOutcome, issues: [processing error] Internal Server Error")
+			require.EqualError(t, err, "OperationOutcome, issues: [processing error] CarePlanService/UpdateOrganization failed: Internal Server Error")
 		})
 	})
 	t.Run("$import operation", func(t *testing.T) {

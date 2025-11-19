@@ -40,7 +40,7 @@ func TestWriteOperationOutcomeFromError(t *testing.T) {
 				desc: "test",
 			},
 			expectedCode: 500,
-			expectedBody: `{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"Internal Server Error"}]}`,
+			expectedBody: `{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"test failed: Internal Server Error"}]}`,
 		},
 		{
 			name: "OperationOutcomeError",
