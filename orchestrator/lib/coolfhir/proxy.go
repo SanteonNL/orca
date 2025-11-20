@@ -231,6 +231,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		// Note: only for read operations
 		pipe = pipe.AppendResponseTransformer(pipeline.MetaSourceSetter{URI: outRequestUrl.String()})
 	}
+	pipe.AppendResponseTransformer(pipeline.StripResponseHeaders{})
 	pipe.DoAndWrite(ctx, tracer, httpResponseWriter, responseResource, responseStatusCode)
 }
 
