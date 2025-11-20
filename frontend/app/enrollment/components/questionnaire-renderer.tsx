@@ -180,6 +180,13 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
     },
     shadows: Array(25).fill('none') as Shadows,
     components: {
+      MuiTypography: {
+        styleOverrides: {
+          caption: {
+            color: '#717171 !important',
+          },
+        },
+      },
       MuiGrid: {
         defaultProps: {
           mb: 1
