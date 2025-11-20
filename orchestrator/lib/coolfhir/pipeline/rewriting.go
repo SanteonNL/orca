@@ -91,7 +91,9 @@ var _ HttpResponseTransformer = &StripResponseHeaders{}
 // StripResponseHeaders is a transformer that removes all HTTP response headers
 // that are not in the allowlist.
 
-var allowedHeaders = []string{
+type StripResponseHeaders struct{}
+
+var AllowedResponseHeaders = []string{
 	// FHIR-specific headers
 	"content-type",
 	"content-length",
@@ -111,12 +113,10 @@ var allowedHeaders = []string{
 	"expires",
 }
 
-type StripResponseHeaders struct{}
-
 func (h StripResponseHeaders) Transform(responseStatus *int, responseBody *[]byte, responseHeaders map[string][]string) {
 	for headerName := range responseHeaders {
 		// Header name cases can be inconsistent, so we normalize to lower case for comparison
-		if !slices.Contains(allowedHeaders, strings.ToLower(headerName)) {
+		if !slices.Contains(AllowedResponseHeaders, strings.ToLower(headerName)) {
 			delete(responseHeaders, headerName)
 		}
 	}

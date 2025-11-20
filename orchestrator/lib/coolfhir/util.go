@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir/pipeline"
 	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -382,6 +383,12 @@ func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource int
 	for _, hdrs := range additionalHeaders {
 		for key, value := range hdrs {
 			httpResponse.Header().Add(key, value)
+		}
+	}
+	// range through all header values and remove any not part of a list of allowed headers
+	for key := range httpResponse.Header() {
+		if !slices.Contains(pipeline.AllowedResponseHeaders, strings.ToLower(key)) {
+			httpResponse.Header().Del(key)
 		}
 	}
 	httpResponse.WriteHeader(httpStatus)
