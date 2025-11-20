@@ -2,6 +2,12 @@ package op
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/cookiejar"
+	"net/http/httptest"
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/lib/must"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -11,11 +17,6 @@ import (
 	zitadelHTTP "github.com/zitadel/oidc/v3/pkg/http"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"io"
-	"net/http"
-	"net/http/cookiejar"
-	"net/http/httptest"
-	"testing"
 )
 
 func TestService_IntegrationTest(t *testing.T) {
@@ -71,7 +72,7 @@ func TestService_IntegrationTest(t *testing.T) {
 	httpServer := httptest.NewServer(mux)
 	issuerURL := must.ParseURL(httpServer.URL + "/provider")
 	clientURL := must.ParseURL(httpServer.URL + "/client")
-	clientRedirectURL := clientURL.JoinPath("callback")
+	clientRedirectURI := clientURL.JoinPath("callback")
 	clientLoginURL := clientURL.JoinPath("login")
 	requestedScopes := []string{"openid", "profile", "email", "patient"}
 	const clientID = "test-client-id"
@@ -83,7 +84,7 @@ func TestService_IntegrationTest(t *testing.T) {
 		Clients: map[string]ClientConfig{
 			"test": {
 				ID:          clientID,
-				RedirectURI: clientRedirectURL.String(),
+				RedirectURI: []string{clientRedirectURI.String()},
 			},
 		},
 	})
@@ -101,13 +102,13 @@ func TestService_IntegrationTest(t *testing.T) {
 		rp.WithCookieHandler(clientCookieHandler),
 		rp.WithPKCE(clientCookieHandler),
 	}
-	client, err := rp.NewRelyingPartyOIDC(ctx, issuerURL.String(), clientID, clientSecret, clientRedirectURL.String(), requestedScopes, clientOpts...)
+	client, err := rp.NewRelyingPartyOIDC(ctx, issuerURL.String(), clientID, clientSecret, clientRedirectURI.String(), requestedScopes, clientOpts...)
 	require.NoError(t, err)
 	mux.Handle(clientLoginURL.Path, rp.AuthURLHandler(func() string {
 		return "fixed-state"
 	}, client))
 	var capturedIDTokenClaims *oidc.IDTokenClaims
-	mux.Handle(clientRedirectURL.Path, rp.CodeExchangeHandler(rp.UserinfoCallback(func(w http.ResponseWriter, r *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], state string, provider rp.RelyingParty, info *oidc.UserInfo) {
+	mux.Handle(clientRedirectURI.Path, rp.CodeExchangeHandler(rp.UserinfoCallback(func(w http.ResponseWriter, r *http.Request, tokens *oidc.Tokens[*oidc.IDTokenClaims], state string, provider rp.RelyingParty, info *oidc.UserInfo) {
 		capturedIDTokenClaims = tokens.IDTokenClaims
 	}), client))
 
