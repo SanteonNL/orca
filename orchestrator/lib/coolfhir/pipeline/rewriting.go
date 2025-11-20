@@ -90,9 +90,10 @@ var _ HttpResponseTransformer = &StripResponseHeaders{}
 
 // StripResponseHeaders is a transformer that removes all HTTP response headers
 // that are not in the allowlist.
-
 type StripResponseHeaders struct{}
 
+// AllowedResponseHeaders defines the HTTP response headers that are permitted to pass through.
+// all other headers will be stripped for security purposes.
 var AllowedResponseHeaders = []string{
 	// FHIR-specific headers
 	"content-type",
