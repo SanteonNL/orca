@@ -532,6 +532,7 @@ func (s *Service) writeTransactionResponse(httpResponse http.ResponseWriter, txR
 
 	s.pipelineByTenant[tenant.ID].
 		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
+		AppendResponseTransformer(pipeline.StripResponseHeaders{}).
 		DoAndWrite(ctx, tracer, httpResponse, resultResource, statusCode)
 }
 
@@ -542,11 +543,13 @@ func (s *Service) writeSearchResponse(httpResponse http.ResponseWriter, txResult
 		slog.WarnContext(ctx, "No entries in search result")
 		// Return an empty bundle instead of 204 No Content
 		tenant, _ := tenants.FromContext(ctx)
-		s.pipelineByTenant[tenant.ID].DoAndWrite(ctx, tracer, httpResponse, &fhir.Bundle{
-			Type:  fhir.BundleTypeSearchset,
-			Entry: []fhir.BundleEntry{},
-			Total: to.Ptr(0),
-		}, http.StatusOK)
+		s.pipelineByTenant[tenant.ID].
+			AppendResponseTransformer(pipeline.StripResponseHeaders{}).
+			DoAndWrite(ctx, tracer, httpResponse, &fhir.Bundle{
+				Type:  fhir.BundleTypeSearchset,
+				Entry: []fhir.BundleEntry{},
+				Total: to.Ptr(0),
+			}, http.StatusOK)
 		return
 	}
 
@@ -555,6 +558,7 @@ func (s *Service) writeSearchResponse(httpResponse http.ResponseWriter, txResult
 	tenant, _ := tenants.FromContext(ctx)
 	s.pipelineByTenant[tenant.ID].
 		PrependResponseTransformer(pipeline.ResponseHeaderSetter(headers)).
+		AppendResponseTransformer(pipeline.StripResponseHeaders{}).
 		DoAndWrite(ctx, tracer, httpResponse, txResult, statusCode)
 }
 
@@ -1211,7 +1215,9 @@ func (s *Service) handleBundle(httpResponse http.ResponseWriter, httpRequest *ht
 	if err != nil {
 		slog.ErrorContext(ctx, "Failed to extract tenant from context", slog.String(logging.FieldError, otel.Error(span, err).Error()))
 	}
-	s.pipelineByTenant[tenant.ID].DoAndWrite(ctx, tracer, httpResponse, resultBundle, http.StatusOK)
+	s.pipelineByTenant[tenant.ID].
+		AppendResponseTransformer(pipeline.StripResponseHeaders{}).
+		DoAndWrite(ctx, tracer, httpResponse, resultBundle, http.StatusOK)
 }
 
 func (s *Service) defaultHandlerProvider(method string, resourcePath string) func(context.Context, FHIRHandlerRequest, *coolfhir.BundleBuilder) (FHIRHandlerResult, error) {
@@ -1610,7 +1616,9 @@ func (s *Service) handleFHIRImportOperation(httpResponse http.ResponseWriter, ht
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), err, "CarePlanService/Import", httpResponse)
 		return
 	}
-	s.pipelineByTenant[tenant.ID].DoAndWrite(httpRequest.Context(), tracer, httpResponse, &result, http.StatusOK)
+	s.pipelineByTenant[tenant.ID].
+		AppendResponseTransformer(pipeline.StripResponseHeaders{}).
+		DoAndWrite(httpRequest.Context(), tracer, httpResponse, &result, http.StatusOK)
 }
 
 func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {

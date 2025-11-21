@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/logging"
@@ -81,6 +82,43 @@ func (r ResponseHeaderSetter) Transform(_ *int, _ *[]byte, responseHeaders map[s
 	if r != nil {
 		for headerName, headerValues := range r {
 			responseHeaders[headerName] = headerValues
+		}
+	}
+}
+
+var _ HttpResponseTransformer = &StripResponseHeaders{}
+
+// StripResponseHeaders is a transformer that removes all HTTP response headers
+// that are not in the allowlist.
+type StripResponseHeaders struct{}
+
+// AllowedResponseHeaders defines the HTTP response headers that are permitted to pass through.
+// all other headers will be stripped for security purposes.
+var AllowedResponseHeaders = []string{
+	// FHIR-specific headers
+	"content-type",
+	"content-length",
+	"location",
+	"etag",
+	"last-modified",
+	// CORS headers
+	"access-control-allow-origin",
+	"access-control-allow-methods",
+	"access-control-allow-headers",
+	// Security headers
+	"x-content-type-options",
+	"x-frame-options",
+	"content-security-policy",
+	// Caching headers
+	"cache-control",
+	"expires",
+}
+
+func (h StripResponseHeaders) Transform(responseStatus *int, responseBody *[]byte, responseHeaders map[string][]string) {
+	for headerName := range responseHeaders {
+		// Header name cases can be inconsistent, so we normalize to lower case for comparison
+		if !slices.Contains(AllowedResponseHeaders, strings.ToLower(headerName)) {
+			delete(responseHeaders, headerName)
 		}
 	}
 }
