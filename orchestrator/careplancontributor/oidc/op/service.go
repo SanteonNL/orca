@@ -65,7 +65,7 @@ func New(strictMode bool, issuer *url.URL, config Config) (*Service, error) {
 		storage.clients[client.ID] = Client{
 			id:           client.ID,
 			secret:       client.Secret,
-			redirectURIs: []string{client.RedirectURI},
+			redirectURIs: client.RedirectURI,
 			loginURL:     issuer.JoinPath("login"),
 		}
 	}
