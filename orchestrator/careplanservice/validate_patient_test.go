@@ -345,7 +345,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 					{
 						System: &phoneSystem,
-						Value:  to.Ptr("+32478123456"),
+						Value:  to.Ptr("+32485128355"),
 					},
 				},
 			},
@@ -361,7 +361,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 					},
 					{
 						System: &phoneSystem,
-						Value:  to.Ptr("+491711234567"),
+						Value:  to.Ptr("+4915123456789"),
 					},
 				},
 			},
@@ -394,6 +394,22 @@ func TestPatientValidator_Validate(t *testing.T) {
 					{
 						System: &phoneSystem,
 						Value:  to.Ptr("+491601234567"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts German mobile with 017 prefix",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+491701234567"),
 					},
 				},
 			},
