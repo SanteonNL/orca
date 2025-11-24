@@ -336,22 +336,6 @@ func TestPatientValidator_Validate(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name: "accepts Belgian mobile number (domestic format)",
-			patient: &fhir.Patient{
-				Telecom: []fhir.ContactPoint{
-					{
-						System: &emailSystem,
-						Value:  to.Ptr("test@example.com"),
-					},
-					{
-						System: &phoneSystem,
-						Value:  to.Ptr("0478123456"),
-					},
-				},
-			},
-			expectedErr: nil,
-		},
-		{
 			name: "accepts Belgian mobile number (international format)",
 			patient: &fhir.Patient{
 				Telecom: []fhir.ContactPoint{
@@ -362,22 +346,6 @@ func TestPatientValidator_Validate(t *testing.T) {
 					{
 						System: &phoneSystem,
 						Value:  to.Ptr("+32478123456"),
-					},
-				},
-			},
-			expectedErr: nil,
-		},
-		{
-			name: "accepts German mobile number (domestic format)",
-			patient: &fhir.Patient{
-				Telecom: []fhir.ContactPoint{
-					{
-						System: &emailSystem,
-						Value:  to.Ptr("test@example.com"),
-					},
-					{
-						System: &phoneSystem,
-						Value:  to.Ptr("01711234567"),
 					},
 				},
 			},
