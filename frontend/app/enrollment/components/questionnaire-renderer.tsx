@@ -198,6 +198,15 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
             backgroundColor: '#F5F5F5',
           },
         },
+      },
+      // Add a shadow around the dropdown for the autocomplete.
+      MuiAutocomplete: {
+        styleOverrides: {
+          paper: {
+            boxShadow: '0px 2px 6px #BCBCBC',
+            border: '1px solid #949494'
+         }
+        }
       }
     }
   });
