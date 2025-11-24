@@ -51,7 +51,7 @@ describe('ValidationErrors', () => {
 
     render(<ValidationErrors validationErrors={validationErrors} />);
 
-    expect(screen.getByText('Ongeldig telefoonnummer. Er is een Nederlands mobiel telefoonnummer nodig voor de aanmelding. Controleer het telefoonnummer in het EPD en probeer het opnieuw.')).toBeInTheDocument();
+    expect(screen.getByText('Ongeldig telefoonnummer. Er is ten minste één geldig mobiel telefoonnummer nodig voor de aanmelding (Nederlands, Belgisch of Duits). Controleer de telefoonnummers in het EPD en probeer het opnieuw.')).toBeInTheDocument();
   });
 
   it('displays separate messages for multiple different error codes', () => {
@@ -60,7 +60,7 @@ describe('ValidationErrors', () => {
     render(<ValidationErrors validationErrors={validationErrors} />);
 
     expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
-    expect(screen.getByText('Ongeldig telefoonnummer. Er is een Nederlands mobiel telefoonnummer nodig voor de aanmelding. Controleer het telefoonnummer in het EPD en probeer het opnieuw.')).toBeInTheDocument();
+    expect(screen.getByText('Ongeldig telefoonnummer. Er is ten minste één geldig mobiel telefoonnummer nodig voor de aanmelding (Nederlands, Belgisch of Duits). Controleer de telefoonnummers in het EPD en probeer het opnieuw.')).toBeInTheDocument();
   });
 
   it('displays multiple paragraphs for individual errors', () => {
@@ -80,7 +80,7 @@ describe('ValidationErrors', () => {
     expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
     expect(screen.getByText(/Er is geen telefoonnummer/)).toBeInTheDocument();
     expect(screen.getByText(/Controleer het e-mailadres/)).toBeInTheDocument();
-    expect(screen.getByText('Ongeldig telefoonnummer. Er is een Nederlands mobiel telefoonnummer nodig voor de aanmelding. Controleer het telefoonnummer in het EPD en probeer het opnieuw.')).toBeInTheDocument();
+    expect(screen.getByText('Ongeldig telefoonnummer. Er is ten minste één geldig mobiel telefoonnummer nodig voor de aanmelding (Nederlands, Belgisch of Duits). Controleer de telefoonnummers in het EPD en probeer het opnieuw.')).toBeInTheDocument();
   });
 
   it('displays unknown error message for empty validation errors', () => {
