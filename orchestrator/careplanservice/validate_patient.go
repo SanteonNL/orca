@@ -95,8 +95,7 @@ func validatePhone(phone *string) *validation.Error {
 	}
 
 	// German mobile: +4915x/+4916x/+4917x (12-13 digits)
-	lenNorm := len(normalised)
-	if (lenNorm == 12 || lenNorm == 13) && (strings.HasPrefix(normalised, "+4915") || strings.HasPrefix(normalised, "+4916") || strings.HasPrefix(normalised, "+4917")) {
+	if (len(normalised) == 12 || len(normalised) == 13) && (strings.HasPrefix(normalised, "+4915") || strings.HasPrefix(normalised, "+4916") || strings.HasPrefix(normalised, "+4917")) {
 		return nil
 	}
 
