@@ -44,11 +44,6 @@ beforeEach(() => {
     (fhirUtils.findInBundle as jest.Mock).mockReturnValue(mockTask);
     (useRouter as jest.Mock).mockReturnValue({push: jest.fn()});
 
-    mockUseLaunchContext.mockReturnValue({
-      launchContext: {
-        taskIdentifier: 'task-id-123',
-      },
-    })
     mockTransaction.mockReturnValue(mockTaskBundle)
     mockUseClients.mockReturnValue({
       cpsClient: {
@@ -57,12 +52,15 @@ beforeEach(() => {
     })
 });
 
-const mockUseLaunchContext = jest.fn()
 const mockTransaction = jest.fn()
 const mockUseClients = jest.fn()
 
 jest.mock('@/app/hooks/context-hook', () => ({
-  useLaunchContext: () => mockUseLaunchContext(),
+  useLaunchContext: () => ({
+      launchContext: {
+        taskIdentifier: 'task-id-123',
+      },
+    }),
   useClients: () => mockUseClients(),
 }))
 

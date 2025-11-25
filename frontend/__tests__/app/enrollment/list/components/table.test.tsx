@@ -25,23 +25,21 @@ beforeEach(() => {
         push: jest.fn(),
     });
 
-    mockUseLaunchContext.mockReturnValue({
-      launchContext: {
-        taskIdentifier: 'task-id-123',
-      },
-    })
     mockSearch.mockResolvedValue({ entry: [] })
     mockUseClients.mockReturnValue({
       cpsClient: { search: mockSearch },
     })
 });
 
-const mockUseLaunchContext = jest.fn()
 const mockSearch = jest.fn()
 const mockUseClients = jest.fn()
 
 jest.mock('@/app/hooks/context-hook', () => ({
-  useLaunchContext: () => mockUseLaunchContext(),
+  useLaunchContext: () => ({
+      launchContext: {
+        taskIdentifier: 'task-id-123',
+      },
+    }),
   useClients: () => mockUseClients(),
 }))
 
