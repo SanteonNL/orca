@@ -6,7 +6,7 @@ import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollment from "@/app/hooks/enrollment-hook";
 import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
 import {Questionnaire, ServiceRequest, Task} from "fhir/r4";
-import useContext from "@/app/hooks/context-hook";
+import { useClients } from '@/app/hooks/context-hook'
 import PatientDetails from "@/app/enrollment/task/components/patient-details";
 import TaskProgressHook from "@/app/hooks/task-progress-hook";
 import TaskHeading from "@/app/enrollment/components/task-heading";
@@ -19,7 +19,7 @@ import {statusLabelLong} from "@/app/utils/mapping";
 
 export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
-    const {scpClient, cpsClient} = useContext()
+    const { scpClient, cpsClient } = useClients()
 
     const {
         task,

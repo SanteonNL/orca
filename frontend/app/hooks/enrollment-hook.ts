@@ -1,6 +1,10 @@
 import {useQuery, useMutation, useQueryClient} from "@tanstack/react-query";
 import {CarePlan, Condition, Patient, Practitioner, PractitionerRole, ServiceRequest} from "fhir/r4";
-import useContext, {LaunchContext} from "@/app/hooks/context-hook";
+import {
+  LaunchContext,
+  useClients,
+  useLaunchContext,
+} from '@/app/hooks/context-hook'
 import Client from "fhir-kit-client";
 
 export type EnrollmentResources = {
@@ -66,7 +70,8 @@ const fetchEhrResources = async (launchContext: LaunchContext, ehrClient: Client
 };
 
 export default function useEnrollment(): EnrollmentHookResult {
-    const {ehrClient, launchContext} = useContext();
+    const { launchContext } = useLaunchContext()
+    const { ehrClient } = useClients()
 
     const {data, isLoading, isError, error} = useQuery({
         queryKey: ['enrollment-resources', launchContext?.patient, launchContext?.practitioner],

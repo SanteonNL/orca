@@ -76,12 +76,12 @@ jest.mock('sonner', () => ({toast: {error: jest.fn(), success: jest.fn(),}}))
 jest.mock('@/app/hooks/enrollment-hook')
 
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
-jest.mock('@/app/hooks/context-hook', () => () => ({
-    launchContext: {taskIdentifier: 'task-id-123'},
-    cpsClient: mockCpsClient,
-    isLoading: false,
-    isError: false,
-    error: null
+
+const mockUseLaunchContext = jest.fn()
+
+jest.mock('@/app/hooks/context-hook', () => ({
+  useLaunchContext: () => mockUseLaunchContext(),
+  useClients: () => ({ cpsClient: mockCpsClient }),
 }))
 jest.mock('@/lib/fhirUtils')
 jest.mock('../../../../app/utils/populate')
@@ -107,6 +107,12 @@ beforeEach(() => {
     (useEnrollment as jest.Mock).mockReturnValue({patient: mockPatient, practitioner: mockPractitioner});
     (fhirUtils.findQuestionnaireResponse as jest.Mock).mockResolvedValue(mockQuestionnaireResponse);
     (populateUtils.populateQuestionnaire as jest.Mock).mockResolvedValue({populateResult: {populated: {id: 'populated'}}});
+    
+    mockUseLaunchContext.mockReturnValue({
+      launchContext: {
+        taskIdentifier: 'task-id-123',
+      },
+    })
 })
 describe("QuestionnaireRenderer", () => {
     it('renders loading state when questionnaire is not provided', () => {

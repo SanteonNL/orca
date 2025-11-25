@@ -10,7 +10,7 @@ import {Spinner} from '@/components/spinner'
 import {Button, ThemeProvider} from '@mui/material'
 import {defaultTheme} from "@/app/theme"
 import ValidationErrors from './validation-errors'
-import useContext from "@/app/hooks/context-hook"
+import { useClients, useLaunchContext } from '@/app/hooks/context-hook'
 
 interface Props {
     className?: string
@@ -32,10 +32,10 @@ export default function EnrollInCpsButton({className}: Props) {
         serviceRequest,
         isLoading,
     } = useEnrollment()
-    const {
-        launchContext,
-        cpsClient
-    } = useContext()
+
+    const { launchContext } = useLaunchContext()
+    const { cpsClient } = useClients()
+
     const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
     const [error, setError] = useState<string | null>()
