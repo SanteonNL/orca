@@ -3,7 +3,7 @@
 #
 # Binaries for programs and plugins
 *.exe
-*.exe~
+*.exe*
 *.dll
 *.so
 *.dylib
@@ -26,7 +26,8 @@ go.work
 .DS_Store
 
 # VS Code files
-.vscode
+.vscode/**
+!.vscode/*.default.json
 
 # draw.io backup files
 *.bkp

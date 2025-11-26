@@ -1,0 +1,83 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Install Hospital Frontend Dependencies",
+      "type": "shell",
+      "command": "pnpm",
+      "args": [
+        "install"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/frontend"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "panel": "shared",
+        "group": "install"
+      }
+    },
+    {
+      "label": "Install Hospital EHR Simulator Dependencies",
+      "type": "shell",
+      "command": "npm",
+      "args": [
+        "ci"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}/hospital_simulator"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": false
+      },
+      "presentation": {
+        "panel": "shared",
+        "group": "install"
+      }
+    },
+    {
+      "label": "Install All Frontend Dependencies",
+      "dependsOrder": "parallel",
+      "dependsOn": [
+        "Install Hospital Frontend Dependencies",
+        "Install Hospital EHR Simulator Dependencies"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "panel": "shared",
+        "group": "install"
+      }
+    },
+    {
+      "label": "Docker Compose Up",
+      "type": "shell",
+      "command": "docker-compose up -d",
+      "options": {
+        "cwd": "${workspaceFolder}/deployments/debug"
+      }
+    },
+    {
+      "label": "Docker Compose Wait",
+      "type": "shell",
+      "command": "docker-compose wait fhirstore-healthcheck || echo 'healthcheck already finished, continuing...'",
+      "options": {
+        "cwd": "${workspaceFolder}/deployments/debug"
+      }
+    },
+    {
+      "label": "Prepare Debug",
+      "dependsOn": [
+        "Docker Compose Up",
+        "Docker Compose Wait"
+      ],
+      "dependsOrder": "sequence"
+    }
+  ]
+}
