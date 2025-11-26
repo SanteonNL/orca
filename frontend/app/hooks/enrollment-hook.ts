@@ -17,12 +17,9 @@ type EnrollmentHookResult = {
     practitionerRole?: PractitionerRole;
     serviceRequest?: ServiceRequest;
     taskCondition?: Condition;
-    selectedCarePlan?: CarePlan | null;
     isLoading: boolean;
     isError: boolean;
     error?: Error | null;
-    setSelectedCarePlan: (carePlan?: CarePlan | null) => void;
-    setTaskCondition: (condition?: Condition) => void;
 }
 
 const fetchEhrResources = async (launchContext: LaunchContext, ehrClient: Client): Promise<EnrollmentResources> => {
@@ -70,7 +67,6 @@ const fetchEhrResources = async (launchContext: LaunchContext, ehrClient: Client
 
 export default function useEnrollment(): EnrollmentHookResult {
     const {ehrClient, launchContext} = useContext();
-    const queryClient = useQueryClient();
 
     const {data, isLoading, isError, error} = useQuery({
         queryKey: ['enrollment-resources', launchContext?.patient, launchContext?.practitioner],
@@ -79,35 +75,14 @@ export default function useEnrollment(): EnrollmentHookResult {
         staleTime: 5 * 60 * 1000, // 5 minutes - enrollment resources don't change frequently
     });
 
-    // Mutations for updating local state
-    const setSelectedCarePlanMutation = useMutation({
-        mutationFn: async (carePlan?: CarePlan | null) => carePlan,
-        onSuccess: (carePlan) => {
-            queryClient.setQueryData(['selected-care-plan'], carePlan);
-        }
-    });
-
-    const setTaskConditionMutation = useMutation({
-        mutationFn: async (condition?: Condition) => condition,
-        onSuccess: (condition) => {
-            queryClient.setQueryData(['task-condition'], condition);
-        }
-    });
-
-    // Get local state values
-    const selectedCarePlan = queryClient.getQueryData<CarePlan | null>(['selected-care-plan']);
-    
     return {
         patient: data?.patient,
         practitioner: data?.practitioner,
         practitionerRole: data?.practitionerRole,
         serviceRequest: data?.serviceRequest,
         taskCondition: data?.taskCondition,
-        selectedCarePlan,
         isLoading,
         isError,
-        error,
-        setSelectedCarePlan: (carePlan) => setSelectedCarePlanMutation.mutate(carePlan),
-        setTaskCondition: (condition) => setTaskConditionMutation.mutate(condition),
+        error
     };
 }

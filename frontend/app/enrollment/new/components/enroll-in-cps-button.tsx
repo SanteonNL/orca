@@ -27,7 +27,6 @@ export default function EnrollInCpsButton({className}: Props) {
 
     const {
         patient,
-        selectedCarePlan,
         taskCondition,
         practitionerRole,
         serviceRequest,
@@ -46,7 +45,7 @@ export default function EnrollInCpsButton({className}: Props) {
 
     useEffect(() => {
         setDisabled(submitted || !taskCondition || isLoading)
-    }, [taskCondition, selectedCarePlan, submitted, isLoading])
+    }, [taskCondition, submitted, isLoading])
 
     const informCps = async () => {
         setSubmitted(true)
