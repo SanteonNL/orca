@@ -89,6 +89,16 @@ func validatePhone(phone *string) *validation.Error {
 		return nil
 	}
 
+	// Belgian mobile: +324xxxxxxxx (12 digits)
+	if len(normalised) == 12 && strings.HasPrefix(normalised, "+324") {
+		return nil
+	}
+
+	// German mobile: +4915x/+4916x/+4917x (13-14 digits)
+	if (len(normalised) == 13 || len(normalised) == 14) && (strings.HasPrefix(normalised, "+4915") || strings.HasPrefix(normalised, "+4916") || strings.HasPrefix(normalised, "+4917")) {
+		return nil
+	}
+
 	return &validation.Error{Code: InvalidPhone}
 }
 

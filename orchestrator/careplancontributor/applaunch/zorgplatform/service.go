@@ -156,7 +156,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager[ses
 		tlsClientCert = *tlsClientCertPtr
 	}
 
-	zorgplatformSignCerts, err := getCertificates(ctx, config.DecryptConfig.SignCertPem)
+	zorgplatformSignCerts, err := getCertificates(ctx, strings.ReplaceAll(config.DecryptConfig.SignCertPem, "\\n", "\n"))
 	if err != nil {
 		return nil, fmt.Errorf("unable to load Zorgplatform's public signing certificate: %w", err)
 	}

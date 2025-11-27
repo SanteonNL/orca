@@ -1,7 +1,6 @@
-import {useQuery, useMutation, useQueryClient} from "@tanstack/react-query";
-import {CarePlan, Condition, Patient, Practitioner, PractitionerRole, ServiceRequest} from "fhir/r4";
-import useContext, {LaunchContext} from "@/app/hooks/context-hook";
-import Client from "fhir-kit-client";
+import { useClients, useLaunchContext } from "@/app/hooks/context-hook";
+import {useQuery} from "@tanstack/react-query";
+import {Condition, Patient, Practitioner, PractitionerRole, ServiceRequest} from "fhir/r4";
 
 export type EnrollmentResources = {
     patient: Patient;
@@ -17,97 +16,80 @@ type EnrollmentHookResult = {
     practitionerRole?: PractitionerRole;
     serviceRequest?: ServiceRequest;
     taskCondition?: Condition;
-    selectedCarePlan?: CarePlan | null;
     isLoading: boolean;
     isError: boolean;
     error?: Error | null;
-    setSelectedCarePlan: (carePlan?: CarePlan | null) => void;
-    setTaskCondition: (condition?: Condition) => void;
 }
 
-const fetchEhrResources = async (launchContext: LaunchContext, ehrClient: Client): Promise<EnrollmentResources> => {
-    const [patient, practitioner, practitionerRole, serviceRequest] = await Promise.all([
-        ehrClient.read({resourceType: 'Patient', id: launchContext.patient.replace("Patient/", "")}),
-        ehrClient.read({resourceType: 'Practitioner', id: launchContext.practitioner.replace("Practitioner/", "")}),
-        launchContext.practitionerRole
-            ? ehrClient.read({
-                resourceType: 'PractitionerRole',
-                id: launchContext.practitionerRole.replace("PractitionerRole/", "")
-            })
-            : Promise.resolve(undefined as PractitionerRole | undefined),
-        launchContext.serviceRequest
-            ? ehrClient.read({
-                resourceType: 'ServiceRequest',
-                id: launchContext.serviceRequest.replace("ServiceRequest/", "")
-            })
-            : Promise.resolve(undefined as ServiceRequest | undefined)
-    ]);
-
-    const sr = serviceRequest as ServiceRequest
-
-    // Extract the Task Condition from the ServiceRequest, for now, simply match the first Condition reference
-    // TODO: We need to ensure only one Condition is bound to the ServiceRequest
-    const taskReference = sr?.reasonReference?.find(ref => ref.reference?.startsWith("Condition"))
-
-    let taskCondition: Condition | undefined = undefined;
-    if (taskReference && taskReference.reference) {
-        taskCondition = await ehrClient.read({
-            resourceType: 'Condition',
-            id: taskReference.reference.replace("Condition/", "")
-        }) as Condition
-    } else {
-        console.warn(`No Task Condition found for ServiceRequest/${serviceRequest?.id ?? "(missing)"}`);
-    }
-
-    return {
-        patient: patient as Patient,
-        practitioner: practitioner as Practitioner,
-        practitionerRole: practitionerRole as PractitionerRole,
-        serviceRequest: sr,
-        taskCondition: taskCondition,
-    };
-};
-
 export default function useEnrollment(): EnrollmentHookResult {
-    const {ehrClient, launchContext} = useContext();
-    const queryClient = useQueryClient();
+  const { launchContext } = useLaunchContext()
+  const { ehrClient } = useClients()
 
-    const {data, isLoading, isError, error} = useQuery({
-        queryKey: ['enrollment-resources', launchContext?.patient, launchContext?.practitioner],
-        queryFn: () => fetchEhrResources(launchContext!, ehrClient!),
-        enabled: !!launchContext && !!ehrClient,
-        staleTime: 5 * 60 * 1000, // 5 minutes - enrollment resources don't change frequently
-    });
+  const enabled = !!launchContext && !!ehrClient
+  const staleTime = 5 * 60 * 1000; // 5 minutes - enrollment resources don't change frequently
 
-    // Mutations for updating local state
-    const setSelectedCarePlanMutation = useMutation({
-        mutationFn: async (carePlan?: CarePlan | null) => carePlan,
-        onSuccess: (carePlan) => {
-            queryClient.setQueryData(['selected-care-plan'], carePlan);
-        }
-    });
+  const patientId = launchContext?.patient.replace("Patient/", "");
+  const patientQuery = useQuery({
+    queryKey: ['patient', patientId],
+    queryFn: () => ehrClient!.read({ resourceType: 'Patient', id: patientId! }) as Promise<Patient>,
+    enabled: enabled,
+    staleTime
+  })
 
-    const setTaskConditionMutation = useMutation({
-        mutationFn: async (condition?: Condition) => condition,
-        onSuccess: (condition) => {
-            queryClient.setQueryData(['task-condition'], condition);
-        }
-    });
+  const practitionerId = launchContext?.practitioner.replace("Practitioner/", "");
+  const practitionerQuery = useQuery({
+    queryKey: ['practitioner', practitionerId],
+    queryFn: () => ehrClient!.read({ resourceType: 'Practitioner', id: practitionerId! }) as Promise<Practitioner>,
+    enabled: enabled,
+    staleTime
+  })
 
-    // Get local state values
-    const selectedCarePlan = queryClient.getQueryData<CarePlan | null>(['selected-care-plan']);
-    
-    return {
-        patient: data?.patient,
-        practitioner: data?.practitioner,
-        practitionerRole: data?.practitionerRole,
-        serviceRequest: data?.serviceRequest,
-        taskCondition: data?.taskCondition,
-        selectedCarePlan,
-        isLoading,
-        isError,
-        error,
-        setSelectedCarePlan: (carePlan) => setSelectedCarePlanMutation.mutate(carePlan),
-        setTaskCondition: (condition) => setTaskConditionMutation.mutate(condition),
-    };
+  const practitionerRoleId = launchContext?.practitionerRole?.replace("PractitionerRole/", "");
+  const practitionerRoleQuery = useQuery({
+    queryKey: ['practitionerRole', practitionerRoleId],
+    queryFn: () => ehrClient!.read({ resourceType: 'PractitionerRole', id: practitionerRoleId! }) as Promise<PractitionerRole>,
+    enabled: enabled && !!practitionerRoleId,
+    staleTime
+  })
+
+  const serviceRequestId = launchContext?.serviceRequest?.replace("ServiceRequest/", "");
+  const serviceRequestQuery = useQuery({
+    queryKey: ['serviceRequest', serviceRequestId],  
+    queryFn: () => ehrClient!.read({ resourceType: 'ServiceRequest', id: serviceRequestId! }) as Promise<ServiceRequest>,
+    enabled: enabled && !!serviceRequestId,
+    staleTime
+  })
+
+  // Extract the Task Condition from the ServiceRequest, for now, simply match the first Condition reference
+  // TODO: We need to ensure only one Condition is bound to the ServiceRequest
+  const taskReference = serviceRequestQuery.data?.reasonReference?.find(ref => ref.reference?.startsWith("Condition"))
+  const conditionId = taskReference?.reference?.replace("Condition/", "");
+
+  const conditionQuery = useQuery({
+    queryKey: ['task-condition', {serviceRequestId, conditionId}],
+    queryFn: () => {
+      if (!conditionId) {
+        console.warn(`No Task Condition found for ServiceRequest/${serviceRequestId ?? "(missing)"}`)
+        return null
+      }
+      else return ehrClient!.read({ resourceType: 'Condition', id: conditionId! }) as Promise<Condition>
+    },
+    enabled: enabled && serviceRequestQuery.isSuccess,
+    staleTime
+  })
+
+  const isLoading = patientQuery.isLoading || practitionerQuery.isLoading || practitionerRoleQuery.isLoading || serviceRequestQuery.isLoading || conditionQuery.isLoading
+  const isError = patientQuery.isError || practitionerQuery.isError || practitionerRoleQuery.isError || serviceRequestQuery.isError || conditionQuery.isError
+  const error = patientQuery.error || practitionerQuery.error || practitionerRoleQuery.error || serviceRequestQuery.error || conditionQuery.error
+
+  return {
+    patient: patientQuery.data,
+    practitioner: practitionerQuery.data,
+    practitionerRole: practitionerRoleQuery.data,
+    serviceRequest: serviceRequestQuery.data,
+    taskCondition: conditionQuery.data ?? undefined,
+    isLoading,
+    isError,
+    error
+  }
 }

@@ -76,12 +76,14 @@ jest.mock('sonner', () => ({toast: {error: jest.fn(), success: jest.fn(),}}))
 jest.mock('@/app/hooks/enrollment-hook')
 
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
-jest.mock('@/app/hooks/context-hook', () => () => ({
-    launchContext: {taskIdentifier: 'task-id-123'},
-    cpsClient: mockCpsClient,
-    isLoading: false,
-    isError: false,
-    error: null
+
+jest.mock('@/app/hooks/context-hook', () => ({
+  useLaunchContext: () => ({
+    launchContext: {
+      taskIdentifier: 'task-id-123'
+    }
+  }),
+  useClients: () => ({ cpsClient: mockCpsClient })
 }))
 jest.mock('@/lib/fhirUtils')
 jest.mock('../../../../app/utils/populate')
@@ -125,7 +127,7 @@ describe("QuestionnaireRenderer", () => {
             expect(mockCpsClient.transaction).toHaveBeenCalled()
         })
     })
-//
+    
     it('disables submit button when response is invalid', async () => {
         mockResponseIsValid.mockReturnValue(false)
         await act(async () => {

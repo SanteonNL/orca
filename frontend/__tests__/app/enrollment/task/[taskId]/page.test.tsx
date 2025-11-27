@@ -11,14 +11,16 @@ jest.mock('@/app/hooks/task-progress-hook');
 jest.mock('@/app/hooks/enrollment-hook');
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
 const mockScpClient = {}
-jest.mock('@/app/hooks/context-hook', () => () => ({
-    launchContext: {taskIdentifier: 'task-id-123'},
-    cpsClient: mockCpsClient,
-    scpClient: mockScpClient,
-    isLoading: false,
-    isError: false,
-    error: null
+
+jest.mock('@/app/hooks/context-hook', () => ({
+  useLaunchContext: () => ({
+      launchContext: {
+        taskIdentifier: 'task-id-123',
+      },
+    }),
+  useClients: () => ({ cpsClient: mockCpsClient, scpClient: mockScpClient }),
 }))
+
 jest.mock('next/navigation');
 jest.mock('@/lib/fhirRender');
 jest.mock('@/app/applaunch');
