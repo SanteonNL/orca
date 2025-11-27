@@ -1172,3 +1172,213 @@ func assertContainsNotification(t *testing.T, resourceType string, notifications
 	}
 	assert.Fail(t, "notification not found", "expected notification for resource type %s", resourceType)
 }
+
+func Test_MultipleCarePath_Enrollment(t *testing.T) {
+	t.Log("This test enrolls the same patient in two different care paths and verifies proper resource creation")
+
+	// Set up trace mocking
+	originalTP := baseotel.GetTracerProvider()
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+
+	baseotel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		_ = tp.Shutdown(context.Background())
+		baseotel.SetTracerProvider(originalTP)
+	})
+
+	var cpc1Notifications []coolfhir.SubscriptionNotification
+	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
+		cpc1Notifications = append(cpc1Notifications, n)
+	})
+	var cpc2Notifications []coolfhir.SubscriptionNotification
+	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
+		cpc2Notifications = append(cpc2Notifications, n)
+	})
+	fhirBaseURL := test.SetupHAPI(t)
+	carePlanContributor1, _, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, fhirBaseURL)
+
+	// Create patient for enrollment
+	testPatientReference := fhir.Reference{
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+			Value:  to.Ptr("1234567890"),
+		},
+	}
+
+	patient := fhir.Patient{
+		Identifier: []fhir.Identifier{
+			*testPatientReference.Identifier,
+		},
+		Telecom: telecom,
+	}
+	err := carePlanContributor1.Create(patient, &patient)
+	require.NoError(t, err)
+
+	// Care path conditions
+	copdCondition := &fhir.Identifier{
+		System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+		Value:  to.Ptr("99534756439"), // COPD
+	}
+
+	asthmaCondition := &fhir.Identifier{
+		System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+		Value:  to.Ptr("195967001"), // Asthma
+	}
+
+	var carePlan1, carePlan2 fhir.CarePlan
+	var task1, task2 fhir.Task
+
+	t.Run("First enrollment - COPD care path", func(t *testing.T) {
+		// Reset notifications
+		cpc1Notifications = nil
+		cpc2Notifications = nil
+
+		task1 = fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			Focus: &fhir.Reference{
+				Identifier: copdCondition,
+			},
+			For: &testPatientReference,
+		}
+
+		err := carePlanContributor1.Create(task1, &task1)
+		require.NoError(t, err, "Failed to create first task for COPD")
+
+		// Get the created CarePlan
+		err = carePlanContributor1.Read(*task1.BasedOn[0].Reference, &carePlan1)
+		require.NoError(t, err, "Failed to read first CarePlan")
+
+		// Verify CarePlan properties
+		require.Equal(t, fhir.CarePlanIntentOrder, carePlan1.Intent)
+		require.Equal(t, fhir.RequestStatusActive, carePlan1.Status)
+		require.Equal(t, testPatientReference, carePlan1.Subject)
+
+		// Verify Task properties
+		require.NotNil(t, task1.Id)
+		require.Equal(t, "CarePlan/"+*carePlan1.Id, *task1.BasedOn[0].Reference)
+		require.Equal(t, copdCondition.System, task1.Focus.Identifier.System)
+		require.Equal(t, copdCondition.Value, task1.Focus.Identifier.Value)
+
+		// Verify notifications were sent
+		require.Len(t, cpc1Notifications, 2, "Expected 2 notifications for CPC1 (Task + CarePlan)")
+		require.Len(t, cpc2Notifications, 1, "Expected 1 notification for CPC2 (Task)")
+	})
+
+	t.Run("Second enrollment - Asthma care path", func(t *testing.T) {
+		// Reset notifications
+		cpc1Notifications = nil
+		cpc2Notifications = nil
+
+		task2 = fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			Focus: &fhir.Reference{
+				Identifier: asthmaCondition,
+			},
+			For: &testPatientReference, // Same patient as first enrollment
+		}
+
+		err := carePlanContributor1.Create(task2, &task2)
+		require.NoError(t, err, "Failed to create second task for Asthma")
+
+		// Get the created CarePlan
+		err = carePlanContributor1.Read(*task2.BasedOn[0].Reference, &carePlan2)
+		require.NoError(t, err, "Failed to read second CarePlan")
+
+		// Verify CarePlan properties
+		require.Equal(t, fhir.CarePlanIntentOrder, carePlan2.Intent)
+		require.Equal(t, fhir.RequestStatusActive, carePlan2.Status)
+		require.Equal(t, testPatientReference, carePlan2.Subject)
+
+		// Verify Task properties
+		require.NotNil(t, task2.Id)
+		require.Equal(t, "CarePlan/"+*carePlan2.Id, *task2.BasedOn[0].Reference)
+		require.Equal(t, asthmaCondition.System, task2.Focus.Identifier.System)
+		require.Equal(t, asthmaCondition.Value, task2.Focus.Identifier.Value)
+
+		// Verify this is a different CarePlan than the first one
+		require.NotEqual(t, *carePlan1.Id, *carePlan2.Id, "Second enrollment should create a new CarePlan")
+
+		// Verify notifications were sent
+		require.Len(t, cpc1Notifications, 2, "Expected 2 notifications for CPC1 (Task + CarePlan)")
+		require.Len(t, cpc2Notifications, 1, "Expected 1 notification for CPC2 (Task)")
+	})
+
+	t.Run("Validation - Verify final state", func(t *testing.T) {
+		// Search for all patients with our BSN to verify only 1 exists
+		var patientBundle fhir.Bundle
+		err := carePlanContributor1.Search("Patient", url.Values{
+			"identifier": {*testPatientReference.Identifier.System + "|" + *testPatientReference.Identifier.Value},
+		}, &patientBundle)
+		require.NoError(t, err, "Failed to search for patients")
+		require.Len(t, patientBundle.Entry, 1, "Expected exactly 1 patient")
+
+		// Search for all care plans associated with our patient
+		var carePlanBundle fhir.Bundle
+		err = carePlanContributor1.Search("CarePlan", url.Values{
+			"subject-identifier": {*testPatientReference.Identifier.System + "|" + *testPatientReference.Identifier.Value},
+		}, &carePlanBundle)
+		require.NoError(t, err, "Failed to search for care plans")
+		require.Len(t, carePlanBundle.Entry, 2, "Expected exactly 2 care plans")
+
+		// Search for all tasks associated with our patient
+		var taskBundle fhir.Bundle
+		err = carePlanContributor1.Search("Task", url.Values{
+			"subject": {*testPatientReference.Reference},
+		}, &taskBundle)
+		require.NoError(t, err, "Failed to search for tasks")
+		require.Len(t, taskBundle.Entry, 2, "Expected exactly 2 tasks")
+
+		// Extract and verify the conditions are different
+		var extractedCarePlans []fhir.CarePlan
+		for _, entry := range carePlanBundle.Entry {
+			var cp fhir.CarePlan
+			err := json.Unmarshal(entry.Resource, &cp)
+			require.NoError(t, err, "Failed to unmarshal CarePlan")
+			extractedCarePlans = append(extractedCarePlans, cp)
+		}
+
+		// Get the tasks from each care plan to verify different conditions
+		var conditions []string
+		for _, cp := range extractedCarePlans {
+			require.Len(t, cp.Activity, 1, "Each CarePlan should have exactly 1 activity")
+
+			// Read the task referenced by this CarePlan
+			var task fhir.Task
+			err := carePlanContributor1.Read(*cp.Activity[0].Reference.Reference, &task)
+			require.NoError(t, err, "Failed to read task from CarePlan activity")
+
+			// Extract condition from task focus
+			require.NotNil(t, task.Focus, "Task should have Focus")
+			require.NotNil(t, task.Focus.Identifier, "Task Focus should have Identifier")
+			require.NotNil(t, task.Focus.Identifier.Value, "Task Focus Identifier should have Value")
+
+			conditions = append(conditions, *task.Focus.Identifier.Value)
+		}
+
+		// Verify we have both expected conditions
+		require.Len(t, conditions, 2, "Should have 2 different conditions")
+		require.Contains(t, conditions, *copdCondition.Value, "Should contain COPD condition")
+		require.Contains(t, conditions, *asthmaCondition.Value, "Should contain Asthma condition")
+		require.NotEqual(t, conditions[0], conditions[1], "Conditions should be different")
+
+		// Verify both CarePlans reference the same patient
+		for _, cp := range extractedCarePlans {
+			require.Equal(t, testPatientReference, cp.Subject, "All CarePlans should reference the same patient")
+		}
+	})
+}
