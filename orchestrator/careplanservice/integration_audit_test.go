@@ -182,25 +182,25 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	t.Run("Update Patient with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("Patient/"+*patient.Id, patient, &patient)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Participant is not authorized to update Patient")
+		require.Contains(t, err.Error(), "Forbidden")
 	})
 
 	t.Run("Update QuestionnaireResponse with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponse, &questionnaireResponse)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Participant is not authorized to update QuestionnaireResponse")
+		require.Contains(t, err.Error(), "Forbidden")
 	})
 
 	t.Run("Update ServiceRequest with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Participant is not authorized to update ServiceRequest")
+		require.Contains(t, err.Error(), "Forbidden")
 	})
 
 	t.Run("Update Condition with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("Condition/"+*condition.Id, condition, &condition)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Participant is not authorized to update Condition")
+		require.Contains(t, err.Error(), "Forbidden")
 	})
 
 	// Update non-existing resources (creates new ones)

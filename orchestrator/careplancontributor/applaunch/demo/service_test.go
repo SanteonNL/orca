@@ -104,8 +104,8 @@ func TestService_handle(t *testing.T) {
 
 		service.handle(response, request)
 
-		require.Equal(t, http.StatusBadRequest, response.Code)
-		assert.Contains(t, response.Body.String(), "FHIR request URL is outside the base URL hierarchy")
+		require.Equal(t, http.StatusInternalServerError, response.Code)
+		assert.Contains(t, response.Body.String(), http.StatusText(http.StatusInternalServerError))
 	})
 	t.Run("subpath base URL", func(t *testing.T) {
 		sessionManager := user.NewSessionManager[session.Data](time.Minute)

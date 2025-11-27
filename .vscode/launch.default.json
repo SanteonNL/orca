@@ -1,0 +1,154 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Hospital Frontend (Next.js)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "pnpm run dev -p 3003",
+      "cwd": "${workspaceFolder}/frontend",
+      "env": {
+        "NEXT_PUBLIC_BASE_PATH": "/frontend",
+        "SUPPORT_CONTACT_LINK": "mailto:support@example.com",
+        "PATIENT_VIEWER_URL": "https://msc-viewer-url/ehr/patient",
+        "NEXT_ALLOWED_ORIGINS": "localhost:8081"
+      },
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Hospital Orchestrator (Go)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/orchestrator/main.go",
+      "cwd": "${workspaceFolder}/orchestrator",
+      "env": {
+        "ORCA_PUBLIC_ADDRESS": "localhost:8090",
+        "ORCA_NUTS_API_URL": "http://localhost:9081",
+        "ORCA_NUTS_PUBLIC_URL": "http://localhost:8080",
+        "ORCA_NUTS_DISCOVERYSERVICE": "dev:HomeMonitoring2024",
+        "ORCA_PUBLIC_URL": "http://localhost:8090",
+        "ORCA_STRICTMODE": "false",
+        "ORCA_CAREPLANSERVICE_ENABLED": "true",
+        "ORCA_CAREPLANCONTRIBUTOR_ENABLED": "true",
+        "ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN": "valid",
+        "ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL": "http://localhost:8081/frontend/enrollment",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED": "true",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ENABLED": "true",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_0_URL": "https://launch.smarthealthit.org/v/r4/fhir",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_0_CLIENTID": "demo-client",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_0_TENANT": "hospital",
+        "ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED": "true",
+        "ORCA_TENANT_HOSPITAL_NUTS_SUBJECT": "hospital",
+        "ORCA_TENANT_HOSPITAL_DEMO_FHIR_URL": "http://localhost:9090/fhir",
+        "ORCA_TENANT_HOSPITAL_CPS_FHIR_URL": "http://localhost:9090/fhir",
+        "OTEL_SERVICE_NAME": "hospital-orchestrator",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:18889",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+        "OTEL_RESOURCE_ATTRIBUTES": "service.instance.id=hospital-1",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_ENABLED": "false",
+        "ORCA_TENANT_HOSPITAL_CHIPSOFT_ORGANIZATIONID": "2.16.840.1.113883.2.4.3.124.8.50.26.03",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_CPSFHIRENDPOINT_URL": "http://localhost:9090/fhir",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_SIGN_ISS": "<iss>",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_SIGN_AUD": "https://zorgplatform.online/sts",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_DECRYPT_ISS": "https://zorgplatform.online/sts",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_DECRYPT_AUD": "<aud>",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_DECRYPT_SIGNCERTPEM": "-----BEGIN CERTIFICATE-----\\nMIIGpDCCBYygAwIBAgIIQi3sO82UPxQwDQYJKoZIhvcNAQELBQAwgbQxCzAJBgNV\\nBAYTAlVTMRAwDgYDVQQIEwdBcml6b25hMRMwEQYDVQQHEwpTY290dHNkYWxlMRow\\nGAYDVQQKExFHb0RhZGR5LmNvbSwgSW5jLjEtMCsGA1UECxMkaHR0cDovL2NlcnRz\\nLmdvZGFkZHkuY29tL3JlcG9zaXRvcnkvMTMwMQYDVQQDEypHbyBEYWRkeSBTZWN1\\ncmUgQ2VydGlmaWNhdGUgQXV0aG9yaXR5IC0gRzIwHhcNMjUwNzExMTIzNjExWhcN\\nMjYwODEyMTIzNjExWjAgMR4wHAYDVQQDDBUqLnpvcmdwbGF0Zm9ybS5vbmxpbmUw\\nggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDJTa7qXqcfKMtpCSpTaFLI\\n6JYhMYK7uCfLlxc5dVTjRy3bwUXf81WIgL9vRJ5IKaX5WJPdzSG5nTskEsiXctMG\\nsccRNDuAURtR4vNF2r3vKYFFGBtjUUyqveWpHgvX8WAEh7cGUnc3kWZ86TwSsbhq\\n8rhuTqquXCvbpNUCcteftpN4U36g6oXHdwdWxyxNdszCVUqYIRwxNSQg/k2OKRcz\\nRJYg92RIblJB3vOlUCQyuKvek/U2KZITQewNsfm9D83NPcjLMIgwfc37rPM668h9\\nAOc3QO6Odmt6YvdEORV78FmZJvs3XAYKXdfC0CN9czIoDc+9aN90ELPyvcIjwpUV\\nAgMBAAGjggNLMIIDRzAMBgNVHRMBAf8EAjAAMB0GA1UdJQQWMBQGCCsGAQUFBwMB\\nBggrBgEFBQcDAjAOBgNVHQ8BAf8EBAMCBaAwOQYDVR0fBDIwMDAuoCygKoYoaHR0\\ncDovL2NybC5nb2RhZGR5LmNvbS9nZGlnMnMxLTUzNzg0LmNybDBdBgNVHSAEVjBU\\nMEgGC2CGSAGG/W0BBxcBMDkwNwYIKwYBBQUHAgEWK2h0dHA6Ly9jZXJ0aWZpY2F0\\nZXMuZ29kYWRkeS5jb20vcmVwb3NpdG9yeS8wCAYGZ4EMAQIBMHYGCCsGAQUFBwEB\\nBGowaDAkBggrBgEFBQcwAYYYaHR0cDovL29jc3AuZ29kYWRkeS5jb20vMEAGCCsG\\nAQUFBzAChjRodHRwOi8vY2VydGlmaWNhdGVzLmdvZGFkZHkuY29tL3JlcG9zaXRv\\ncnkvZ2RpZzIuY3J0MB8GA1UdIwQYMBaAFEDCvSeOzDSDMKIz1/tss/C0LIDOMDUG\\nA1UdEQQuMCyCFSouem9yZ3BsYXRmb3JtLm9ubGluZYITem9yZ3BsYXRmb3JtLm9u\\nbGluZTAdBgNVHQ4EFgQUxDJv8EH7WJZ9alS39HFpSX+pBT4wggF9BgorBgEEAdZ5\\nAgQCBIIBbQSCAWkBZwB2ANgJVTuUT3r/yBYZb5RPhauw+Pxeh1UmDxXRLnK7RUsU\\nAAABl/l8cvUAAAQDAEcwRQIhAKhL9p19HmpgUaa5xQ7PCVlPc1ei/PpcWtycN2Pc\\nIpklAiBmiWtdITvGIn7b7iZlmg0TllfE6nW05PT9yZHDlsDltAB2AMs49xWJfISh\\nRF9bwd37yW7ymlnNRwppBYWwyxTDFFjnAAABl/l8c5wAAAQDAEcwRQIgTLNztGOd\\nrNJtDfxkTq4hRYV3OR8K990HhrDtSZigHZECIQCAvHtdvhLq51OQAGAo+Bh8oZvL\\nbVkAGfeL35SaxXy3vAB1AHTbnVj31H6d/Xh6FiqZHBjPaY2nxymRjJoYsEUNukS8\\nAAABl/l8dFYAAAQDAEYwRAIgRQoTKnvUodfRJK1WGWtjYVhEIj2xIm1lb1Yl7AnS\\n+R8CIEpQ527APxP3rKdrbW9nzNmyA2PuIQUDEnPTCplKTXfqMA0GCSqGSIb3DQEB\\nCwUAA4IBAQAsSfw03qlyFNrShMqSJNl2Sdyszv3hSLZoxwz9PCywiL8fMcbFdzO0\\ncFDmU+kzGprd2kKyLZhsdJQaS3f86a8nXowXj1VC9AiyVALr1c1Tfw12Fsn7uswj\\nLl6yf9+EUq3RPTohuUFH2N18WPxJsyBtmPGsv3ujtMvKDbjpZ0R82jRhGKUUjbsL\\nkoutfBdMmDqt2VGXFw57n9Ne8k0ainQTyHWKUedJBfshx1zBAjyi0v5n5pIcnyml\\nosfJPs4YoaW8jQApFbbu/m47mQR7uL80TVjVzQIldF7oC4H/4Ky6YdVJzigyHgHP\\np8I0oKN9lbiMXco3Brtwtkf3NxnYLmQN\\n-----END CERTIFICATE-----",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_BASEURL": "https://zorgplatform.online",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_STSURL": "https://zorgplatform.online/sts",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_TASKPERFORMERURA": "1234",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_APIURL": "https://api.zorgplatform.online/fhir/V1",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_CREDENTIALTYPE": "default",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_X509_SIGNCERTFILE": "../deployments/debug/hospital/config/test-sign-zorgplatform.private.pem",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_X509_SIGNKEYFILE": "../deployments/debug/hospital/config/test-sign-zorgplatform.private.pem",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_X509_DECRYPTCERTFILE": "../deployments/debug/hospital/config/test-decrypt-zorgplatform.private.pem",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_X509_CLIENTCERTFILE": "../deployments/debug/hospital/config/test-tls-zorgplatform.private.pem"
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Clinic Orchestrator (Go)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/orchestrator/main.go",
+      "cwd": "${workspaceFolder}/orchestrator",
+      "env": {
+        "ORCA_PUBLIC_ADDRESS": "localhost:8091",
+        "ORCA_NUTS_API_URL": "http://localhost:9081",
+        "ORCA_NUTS_PUBLIC_URL": "http://localhost:8080",
+        "ORCA_TENANT_CLINIC_NUTS_SUBJECT": "clinic",
+        "ORCA_TENANT_CLINIC_TASKENGINE_ENABLED": "true",
+        "ORCA_NUTS_DISCOVERYSERVICE": "dev:HomeMonitoring2024",
+        "ORCA_PUBLIC_URL": "http://localhost:3030",
+        "ORCA_STRICTMODE": "false",
+        "ORCA_MESSAGING_HTTP_ENDPOINT": "http://localhost:3000/viewer/api/delivery",
+        "ORCA_MESSAGING_HTTP_TOPICFILTER": "orca-enroll-patient",
+        "ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN": "valid",
+        "ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED": "true",
+        "ORCA_CAREPLANCONTRIBUTOR_FHIR_URL": "http://localhost:3000/viewer/api/fhir",
+        "OTEL_SERVICE_NAME": "clinic-orchestrator",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:18889",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
+        "OTEL_RESOURCE_ATTRIBUTES": "service.instance.id=clinic-1",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_NAME": "Example Web Application",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_URL": "https://example.com",
+        "ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLEENDPOINT": "http://localhost:5188/orca/v1/enroll",
+        "ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS": "https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-healthcareservices.json,https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-questionnaires.json",
+        "ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTE_ACCEPTED": "Work on the Task will start tomorrow."
+      },
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Hospital EHR Simulator (Next.js)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev -- -p 3001",
+      "cwd": "${workspaceFolder}/hospital_simulator",
+      "env": {
+        "TENANT_ID": "hospital",
+        "ORCA_BASE_URL": "http://localhost:8081/orca",
+        "ORCA_LOCAL_ORGANIZATION_URA": "4567",
+        "ORCA_LOCAL_ORGANIZATION_NAME": "Demo Hospital",
+        "ORCA_PERFORMER_ORGANIZATION_URA": "1234",
+        "ORCA_PERFORMER_ORGANIZATION_NAME": "Demo Clinic",
+        "NEXT_ALLOWED_ORIGINS": "localhost:8081",
+        "FHIR_BASE_URL": "http://localhost:9090/fhir"
+      },
+      "internalConsoleOptions": "neverOpen"
+    },
+    {
+      "name": "Frontend Client Debug",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:8081/ehr",
+      "sourceMapPathOverrides": {
+        "webpack://_N_E/*": "${workspaceFolder}/frontend/*",
+        "webpack:///./*": "${workspaceFolder}/frontend/*"
+      },
+      "skipFiles": [
+        "<node_internals>/**",
+        "node_modules/**"
+      ]
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Launch Hospital & Clinic Applications",
+      "configurations": [
+        "Hospital Frontend (Next.js)",
+        "Hospital EHR Simulator (Next.js)",
+        "Hospital Orchestrator (Go)",
+        "Clinic Orchestrator (Go)",
+        "Frontend Client Debug"
+      ],
+      "stopAll": true,
+      "presentation": {
+        "hidden": false,
+        "group": "orca-dev",
+        "order": 1
+      },
+      "preLaunchTask": "Prepare Debug"
+    }
+  ]
+}

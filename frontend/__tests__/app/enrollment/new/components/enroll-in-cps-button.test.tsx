@@ -2,13 +2,11 @@ import {render, screen, fireEvent, waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import EnrollInCpsButton from '@/app/enrollment/new/components/enroll-in-cps-button';
 import useEnrollment from '@/app/hooks/enrollment-hook';
-import useContext from '@/app/hooks/context-hook';
 import * as fhirUtils from '@/lib/fhirUtils';
 import {useRouter} from 'next/navigation';
 import {toast} from 'sonner';
 
 jest.mock('@/app/hooks/enrollment-hook');
-jest.mock('@/app/hooks/context-hook');
 jest.mock('@/lib/fhirUtils');
 jest.mock('next/navigation');
 jest.mock('sonner');
@@ -32,7 +30,7 @@ const mockTaskBundle = {resourceType: 'Bundle', type: 'transaction', entry: []};
 const mockTask = {id: 'task-1', resourceType: 'Task'};
 
 beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     (useEnrollment as jest.Mock).mockReturnValue({
         patient: mockPatient,
         selectedCarePlan: {id: 'care-plan-1'},
@@ -41,15 +39,32 @@ beforeEach(() => {
         serviceRequest: mockServiceRequest,
         isLoading: false,
     });
-    (useContext as jest.Mock).mockReturnValue({
-        launchContext: {taskIdentifier: 'task-id-123'},
-        cpsClient: {transaction: jest.fn().mockResolvedValue(mockTaskBundle)}
-    });
     (fhirUtils.getPatientIdentifier as jest.Mock).mockReturnValue(mockPatient.identifier[0]);
     (fhirUtils.constructTaskBundle as jest.Mock).mockReturnValue(mockTaskBundle);
     (fhirUtils.findInBundle as jest.Mock).mockReturnValue(mockTask);
     (useRouter as jest.Mock).mockReturnValue({push: jest.fn()});
+
+    mockUseLaunchContext.mockReturnValue({
+      launchContext: {
+        taskIdentifier: 'task-id-123',
+      },
+    })
+    mockTransaction.mockReturnValue(mockTaskBundle)
+    mockUseClients.mockReturnValue({
+      cpsClient: {
+        transaction: () => mockTransaction(),
+      },
+    })
 });
+
+const mockUseLaunchContext = jest.fn()
+const mockTransaction = jest.fn()
+const mockUseClients = jest.fn()
+
+jest.mock('@/app/hooks/context-hook', () => ({
+  useLaunchContext: () => mockUseLaunchContext(),
+  useClients: () => mockUseClients(),
+}))
 
 describe("enroll in cps button test", () => {
 
@@ -106,10 +121,9 @@ describe("enroll in cps button test", () => {
 
 
     it('handles missing cpsClient error', async () => {
-        (useContext as jest.Mock).mockReturnValue({
-            launchContext: {taskIdentifier: 'task-id-123'},
-            cpsClient: null
-        });
+        mockUseClients.mockReturnValue({
+          cpsClient: null,
+        })
 
         render(<EnrollInCpsButton/>);
 
@@ -154,9 +168,7 @@ describe("enroll in cps button test", () => {
     });
 
     it('handles cps transaction error', async () => {
-        const mockTransaction = jest.fn().mockRejectedValue(new Error('Transaction failed'));
-
-        (useContext as jest.Mock).mockReturnValue({cpsClient: {transaction: mockTransaction}});
+        mockTransaction.mockRejectedValue(new Error('Transaction failed'))
 
         render(<EnrollInCpsButton/>);
 
@@ -182,11 +194,7 @@ describe("enroll in cps button test", () => {
                 }
             }
         };
-        const mockTransaction = jest.fn().mockRejectedValue(validationError);
-        (useContext as jest.Mock).mockReturnValue({
-            cpsClient: {transaction: mockTransaction},
-            launchContext: {taskIdentifier: 'task-id-123'},
-        });
+        mockTransaction.mockRejectedValue(validationError)
 
         render(<EnrollInCpsButton/>);
 
@@ -195,7 +203,7 @@ describe("enroll in cps button test", () => {
         await waitFor(() => {
             expect(screen.getByText('Er gaat iets mis')).toBeInTheDocument();
             expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
-            expect(screen.getByText(/Ongeldig telefoonnummer. Er is een Nederlands mobiel telefoonnummer nodig voor de aanmelding. Controleer het telefoonnummer in het EPD en probeer het opnieuw./)).toBeInTheDocument();
+            expect(screen.getByText(/Ongeldig telefoonnummer. Voor de aanmelding is minstens één mobiel nummer uit Nederland, België of Duitsland nodig. Controleer de telefoonnummers in het EPD en probeer het opnieuw./)).toBeInTheDocument();
         });
     });
 
@@ -215,11 +223,7 @@ describe("enroll in cps button test", () => {
                 }
             }
         };
-        const mockTransaction = jest.fn().mockRejectedValue(validationError);
-        (useContext as jest.Mock).mockReturnValue({
-            cpsClient: {transaction: mockTransaction},
-            launchContext: {taskIdentifier: 'task-id-123'},
-        });
+        mockTransaction.mockRejectedValue(validationError)
 
         render(<EnrollInCpsButton/>);
 
@@ -246,11 +250,7 @@ describe("enroll in cps button test", () => {
                 }
             }
         };
-        const mockTransaction = jest.fn().mockRejectedValue(validationError);
-        (useContext as jest.Mock).mockReturnValue({
-            cpsClient: {transaction: mockTransaction},
-            launchContext: {taskIdentifier: 'task-id-123'},
-        });
+        mockTransaction.mockRejectedValue(validationError)
 
         const { container } = render(<EnrollInCpsButton/>);
 
@@ -279,11 +279,7 @@ describe("enroll in cps button test", () => {
                 }
             }
         };
-        const mockTransaction = jest.fn().mockRejectedValue(validationError);
-        (useContext as jest.Mock).mockReturnValue({
-            cpsClient: {transaction: mockTransaction},
-            launchContext: {taskIdentifier: 'task-id-123'},
-        });
+        mockTransaction.mockRejectedValue(validationError)
 
         render(<EnrollInCpsButton/>);
 

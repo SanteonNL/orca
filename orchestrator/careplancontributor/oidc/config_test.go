@@ -1,13 +1,14 @@
 package oidc
 
 import (
+	"os"
+	"strings"
+	"testing"
+
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/rp"
 	"github.com/knadh/koanf/providers/env"
 	"github.com/knadh/koanf/v2"
-	"os"
-	"strings"
-	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -35,7 +36,7 @@ func TestConfig_Validate(t *testing.T) {
 				Clients: map[string]op.ClientConfig{
 					"test-client": {
 						ID:          "test-client-id",
-						RedirectURI: "https://example.com/callback",
+						RedirectURI: []string{"https://example.com/callback"},
 						Secret:      "test-secret",
 					},
 				},
@@ -92,7 +93,7 @@ func TestConfig_KoanfIntegration(t *testing.T) {
 		// Set up environment variables for both OP and RP configs
 		os.Setenv("OIDC_PROVIDER_ENABLED", "true")
 		os.Setenv("OIDC_PROVIDER_CLIENTS_CLIENT1_ID", "test-op-client-id")
-		os.Setenv("OIDC_PROVIDER_CLIENTS_CLIENT1_REDIRECTURI", "https://example.com/callback")
+		os.Setenv("OIDC_PROVIDER_CLIENTS_CLIENT1_REDIRECTURI", "https://example.com/callback,https://example.com/alt-callback")
 		os.Setenv("OIDC_PROVIDER_CLIENTS_CLIENT1_SECRET", "test-secret")
 
 		os.Setenv("OIDC_RELYINGPARTY_ENABLED", "true")
@@ -113,8 +114,21 @@ func TestConfig_KoanfIntegration(t *testing.T) {
 
 		// Load configuration using koanf
 		k := koanf.New(".")
-		err := k.Load(env.Provider("OIDC_", ".", func(s string) string {
-			return strings.Replace(strings.ToLower(strings.TrimPrefix(s, "OIDC_")), "_", ".", -1)
+		// Copied from orchestrator/cmd/config.go to mirror behaviour when the whole app is running
+		err := k.Load(env.ProviderWithValue("OIDC_", ".", func(key string, value string) (string, interface{}) {
+			key = strings.Replace(strings.ToLower(strings.TrimPrefix(key, "OIDC_")), "_", ".", -1)
+			if len(value) == 0 {
+				return key, nil
+			}
+			sliceValues := splitWithEscaping(value, ",", "\\")
+			for i, s := range sliceValues {
+				sliceValues[i] = strings.TrimSpace(s)
+			}
+			var parsedValue any = sliceValues
+			if len(sliceValues) == 1 {
+				parsedValue = sliceValues[0]
+			}
+			return key, parsedValue
 		}), nil)
 		require.NoError(t, err)
 
@@ -130,7 +144,7 @@ func TestConfig_KoanfIntegration(t *testing.T) {
 
 		client := config.Provider.Clients["client1"]
 		assert.Equal(t, "test-op-client-id", client.ID)
-		assert.Equal(t, "https://example.com/callback", client.RedirectURI)
+		assert.Equal(t, []string{"https://example.com/callback", "https://example.com/alt-callback"}, client.RedirectURI)
 		assert.Equal(t, "test-secret", client.Secret)
 
 		// Verify RelyingParty config
@@ -147,4 +161,13 @@ func TestConfig_KoanfIntegration(t *testing.T) {
 		err = config.Validate()
 		assert.NoError(t, err)
 	})
+}
+
+func splitWithEscaping(s, separator, escape string) []string {
+	s = strings.ReplaceAll(s, escape+separator, "\x00")
+	tokens := strings.Split(s, separator)
+	for i, token := range tokens {
+		tokens[i] = strings.ReplaceAll(token, "\x00", separator)
+	}
+	return tokens
 }

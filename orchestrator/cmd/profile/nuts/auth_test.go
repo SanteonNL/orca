@@ -96,7 +96,7 @@ func TestDutchNutsProfile_Authenticator(t *testing.T) {
 
 			require.False(t, called)
 			require.Equal(t, http.StatusUnauthorized, httpResponse.Code)
-			require.Contains(t, capturedLogs.String(), "Nuts access token issuer does not match tenant")
+			require.Contains(t, capturedLogs.String(), "nuts access token issuer does not match tenant: expected other, got test")
 		})
 	})
 }

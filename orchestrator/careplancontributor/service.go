@@ -416,16 +416,31 @@ func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[sess
 // If there's no active session, it returns a 401 Unauthorized response.
 func (s Service) withSession(next func(response http.ResponseWriter, request *http.Request, session *session.Data)) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
+		ctx, span := tracer.Start(
+			request.Context(),
+			"userSessionAuthMiddleware",
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+		defer span.End()
+
+		span.SetAttributes(attribute.String(otel.AuthNMethod, otel.AuthNMethodUserSession))
 		sessionData, err := s.getAndValidateUserSession(request)
 		if err != nil {
 			// Invalid session/request
-			http.Error(response, err.Error(), http.StatusForbidden)
+			span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
+			otel.Error(span, err)
+			http.Error(response, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
 		if sessionData == nil {
-			http.Error(response, "no session found", http.StatusUnauthorized)
+			span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
+			slog.ErrorContext(ctx, "No user session found", slog.String(logging.FieldError, otel.Error(span, errors.New("no user session found")).Error()))
+			http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 			return
 		}
+
+		span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeOK))
+		request = request.WithContext(ctx)
 		next(response, request, sessionData)
 	}
 }
@@ -758,14 +773,27 @@ func (s Service) getAndValidateUserSession(request *http.Request) (*session.Data
 
 func (s Service) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(response http.ResponseWriter, request *http.Request) {
+		ctx, span := tracer.Start(
+			request.Context(),
+			"userAuthMiddleware",
+			trace.WithSpanKind(trace.SpanKindServer),
+		)
+		defer span.End()
+		request = request.WithContext(ctx)
+
 		sessionData, err := s.getAndValidateUserSession(request)
 		if err != nil {
 			// Invalid session/request
-			http.Error(response, err.Error(), http.StatusForbidden)
+			span.SetAttributes(attribute.String(otel.AuthNMethod, otel.AuthNMethodUserSession))
+			span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
+			slog.ErrorContext(ctx, "failed to validate user session", slog.String(logging.FieldError, otel.Error(span, fmt.Errorf("user session: %w", err)).Error()))
+			http.Error(response, http.StatusText(http.StatusForbidden), http.StatusForbidden)
 			return
 		}
 		if sessionData != nil {
 			// Valid user session found, proceed
+			span.SetAttributes(attribute.String(otel.AuthNMethod, otel.AuthNMethodUserSession))
+			span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeOK))
 			next(response, request)
 			return
 		}
@@ -773,6 +801,8 @@ func (s Service) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 		bearer := request.Header.Get("Authorization")
 		// Static bearer token, not valid in prod
 		if bearer == "Bearer "+s.config.StaticBearerToken {
+			span.SetAttributes(attribute.String(otel.AuthNMethod, otel.AuthNMethodStaticToken))
+			span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeOK))
 			next(response, request)
 			return
 		}
@@ -783,20 +813,28 @@ func (s Service) withUserAuth(next http.HandlerFunc) http.HandlerFunc {
 			bearerToken := strings.TrimPrefix(bearer, "Bearer ")
 
 			if bearerToken != "" {
+				span.SetAttributes(attribute.String(otel.AuthNMethod, otel.AuthNMethodJWT))
 				if _, err := s.tokenClient.ValidateToken(request.Context(), bearerToken); err != nil {
+					span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
+					err = fmt.Errorf("JWT authentication: %w", err)
+					otel.Error(span, err)
 					slog.ErrorContext(request.Context(), "Failed to validate ADB2C token", slog.String(logging.FieldError, err.Error()))
-					http.Error(response, "invalid bearer token", http.StatusUnauthorized)
+					http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 					return
 				}
 
 				// TODO: additional validation: from the claims we need to at least extract the user ID so we can use that for BGZ data request
-
+				span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeOK))
 				next(response, request)
 				return
 			}
 		}
 
-		http.Error(response, "no user authentication found", http.StatusUnauthorized)
+		span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeFailed))
+		err = errors.New("no user authentication found")
+		otel.Error(span, err)
+		slog.ErrorContext(ctx, "no user authentication found", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, http.StatusText(http.StatusUnauthorized), http.StatusUnauthorized)
 	}
 }
 
