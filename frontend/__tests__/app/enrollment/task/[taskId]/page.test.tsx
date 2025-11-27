@@ -12,10 +12,12 @@ jest.mock('@/app/hooks/enrollment-hook');
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
 const mockScpClient = {}
 
-const mockUseLaunchContext = jest.fn()
-
 jest.mock('@/app/hooks/context-hook', () => ({
-  useLaunchContext: () => mockUseLaunchContext(),
+  useLaunchContext: () => ({
+      launchContext: {
+        taskIdentifier: 'task-id-123',
+      },
+    }),
   useClients: () => ({ cpsClient: mockCpsClient, scpClient: mockScpClient }),
 }))
 
@@ -125,12 +127,6 @@ beforeEach(() => {
     (fhirRender.patientName as jest.Mock).mockReturnValue('John Doe');
     (fhirRender.organizationName as jest.Mock).mockReturnValue('Test Hospital');
     (applaunch.getLaunchableApps as jest.Mock).mockResolvedValue([]);
-
-    mockUseLaunchContext.mockReturnValue({
-      launchContext: {
-        taskIdentifier: 'task-id-123',
-      },
-    })
 });
 
 describe("taskid page tests", () => {

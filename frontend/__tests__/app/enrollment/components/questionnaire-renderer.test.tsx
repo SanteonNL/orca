@@ -77,11 +77,13 @@ jest.mock('@/app/hooks/enrollment-hook')
 
 const mockCpsClient = {transaction: jest.fn().mockResolvedValue({})}
 
-const mockUseLaunchContext = jest.fn()
-
 jest.mock('@/app/hooks/context-hook', () => ({
-  useLaunchContext: () => mockUseLaunchContext(),
-  useClients: () => ({ cpsClient: mockCpsClient }),
+  useLaunchContext: () => ({
+    launchContext: {
+      taskIdentifier: 'task-id-123'
+    }
+  }),
+  useClients: () => ({ cpsClient: mockCpsClient })
 }))
 jest.mock('@/lib/fhirUtils')
 jest.mock('../../../../app/utils/populate')
@@ -107,12 +109,6 @@ beforeEach(() => {
     (useEnrollment as jest.Mock).mockReturnValue({patient: mockPatient, practitioner: mockPractitioner});
     (fhirUtils.findQuestionnaireResponse as jest.Mock).mockResolvedValue(mockQuestionnaireResponse);
     (populateUtils.populateQuestionnaire as jest.Mock).mockResolvedValue({populateResult: {populated: {id: 'populated'}}});
-    
-    mockUseLaunchContext.mockReturnValue({
-      launchContext: {
-        taskIdentifier: 'task-id-123',
-      },
-    })
 })
 describe("QuestionnaireRenderer", () => {
     it('renders loading state when questionnaire is not provided', () => {
@@ -131,7 +127,7 @@ describe("QuestionnaireRenderer", () => {
             expect(mockCpsClient.transaction).toHaveBeenCalled()
         })
     })
-//
+    
     it('disables submit button when response is invalid', async () => {
         mockResponseIsValid.mockReturnValue(false)
         await act(async () => {
