@@ -7,7 +7,6 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"strconv"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
@@ -104,18 +103,20 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	}
 	tenant, err := s.tenants.Get(values["tenant"])
 	if err != nil {
-		http.Error(response, "App launch failed: "+err.Error(), http.StatusBadRequest)
+		slog.ErrorContext(context.Background(), "Failed to get tenant", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, "Invalid tenant", http.StatusBadRequest)
 		return
 	}
 	if tenant.Demo.FHIR.BaseURL == "" {
-		http.Error(response, "App launch failed: FHIR base URL is not configured for tenant "+tenant.ID, http.StatusBadRequest)
+		slog.ErrorContext(request.Context(), "FHIR base URL is not configured for tenant", slog.String("tenantID", tenant.ID))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	// Serialize FHIR config to pass authentication settings to the factory
 	fhirConfigJSON, err := json.Marshal(tenant.Demo.FHIR)
 	if err != nil {
 		slog.ErrorContext(request.Context(), "Failed to serialize FHIR config", slog.String(logging.FieldError, err.Error()))
-		http.Error(response, "Failed to serialize FHIR config: "+err.Error(), http.StatusInternalServerError)
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
@@ -144,14 +145,14 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	ehrFHIRClient, err := s.ehrFHIRClientFactory(tenant.Demo.FHIR)
 	if err != nil {
 		slog.ErrorContext(request.Context(), "Failed to create FHIR client", slog.String(logging.FieldError, err.Error()))
-		http.Error(response, "Failed to create FHIR client: "+err.Error(), http.StatusInternalServerError)
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 
 	var practitioner fhir.Practitioner
 	if err := ehrFHIRClient.Read(values["practitioner"], &practitioner); err != nil {
 		slog.ErrorContext(request.Context(), "Failed to read practitioner resource", slog.String(logging.FieldError, err.Error()))
-		http.Error(response, "Failed to read practitioner resource: "+err.Error(), http.StatusBadRequest)
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	sessionData.Set("Practitioner/"+*practitioner.Id, practitioner)
@@ -159,7 +160,7 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	var patient fhir.Patient
 	if err := ehrFHIRClient.Read(values["patient"], &patient); err != nil {
 		slog.ErrorContext(request.Context(), "Failed to read patient resource", slog.String(logging.FieldError, err.Error()))
-		http.Error(response, "Failed to read patient resource: "+err.Error(), http.StatusBadRequest)
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	sessionData.Set("Patient/"+*patient.Id, patient)
@@ -169,12 +170,12 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	organizations, err := s.profile.Identities(ctx)
 	if err != nil {
 		slog.ErrorContext(request.Context(), "Failed to get active organization", slog.String(logging.FieldError, err.Error()))
-		http.Error(response, "Failed to get active organization: "+err.Error(), http.StatusInternalServerError)
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	if len(organizations) != 1 {
 		slog.ErrorContext(request.Context(), fmt.Sprintf("Expected 1 active organization, found %d", len(organizations)))
-		http.Error(response, "Expected 1 active organization, found "+strconv.Itoa(len(organizations)), http.StatusInternalServerError)
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 		return
 	}
 	sessionData.Set("Organization/magic-"+uuid.NewString(), organizations[0])
@@ -184,23 +185,26 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 	if sessionData.TaskIdentifier != nil {
 		taskIdentifier, err := coolfhir.TokenToIdentifier(*sessionData.TaskIdentifier)
 		if err != nil {
-			http.Error(response, "Failed to parse task identifier: "+err.Error(), http.StatusBadRequest)
+			slog.ErrorContext(ctx, "Failed to get task identifier", slog.String(logging.FieldError, err.Error()))
+			http.Error(response, "Invalid task identifier", http.StatusBadRequest)
 			return
 		}
 		fhirClient, err := globals.CreateCPSFHIRClient(ctx)
 		if err != nil {
-			http.Error(response, "Failed to create FHIR client for existing Task check: "+err.Error(), http.StatusInternalServerError)
+			slog.ErrorContext(ctx, "Failed to create FHIR client for existing Task check", slog.String(logging.FieldError, err.Error()))
+			http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
-		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), fhirClient, *taskIdentifier)
+		existingTask, err = coolfhir.GetTaskByIdentifier(ctx, fhirClient, *taskIdentifier)
 		if err != nil {
 			slog.ErrorContext(
-				request.Context(),
+				ctx,
 				"Existing CPS Task check failed for task",
 				slog.String(logging.FieldError, err.Error()),
 				slog.String(logging.FieldIdentifier, coolfhir.ToString(taskIdentifier)),
 			)
-			http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
+			slog.ErrorContext(ctx, "Failed to get existing task", slog.String(logging.FieldError, err.Error()))
+			http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 	}

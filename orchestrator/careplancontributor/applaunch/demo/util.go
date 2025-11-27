@@ -1,6 +1,10 @@
 package demo
 
-import "net/http"
+import (
+	"fmt"
+	"log/slog"
+	"net/http"
+)
 
 func getQueryParams(response http.ResponseWriter, request *http.Request, keys ...string) (map[string]string, bool) {
 	results := map[string]string{}
@@ -17,7 +21,8 @@ func getQueryParams(response http.ResponseWriter, request *http.Request, keys ..
 func getQueryParam(response http.ResponseWriter, request *http.Request, key string) (string, bool) {
 	value := request.URL.Query().Get(key)
 	if value == "" {
-		http.Error(response, "missing query parameter: "+key, http.StatusBadRequest)
+		slog.ErrorContext(request.Context(), "missing query parameter", slog.String("key", key))
+		http.Error(response, fmt.Sprintf("query parameter [%s] is expected but missing a value", key), http.StatusBadRequest)
 		return "", false
 	}
 	return value, true

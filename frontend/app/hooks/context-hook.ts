@@ -13,54 +13,68 @@ export interface LaunchContext {
     taskIdentifier?: string
 }
 
-export interface ContextHookResult {
-    launchContext?: LaunchContext;
-    ehrClient?: Client;
-    cpsClient?: Client;
-    scpClient?: Client;
-    isLoading: boolean;
-    isError: boolean;
-    error?: Error | null;
+export interface LaunchContextHookResult {
+  launchContext?: LaunchContext
+  isLoading: boolean
+  isError: boolean
+  error?: Error | null
+}
+
+export interface ClientHookResult {
+  ehrClient?: Client
+  cpsClient?: Client
+  scpClient?: Client
 }
 
 const fetchLaunchContext = async (): Promise<LaunchContext> => {
-    const launchContextRes = await fetch(`/orca/cpc/context`);
-    if (!launchContextRes.ok) {
-        throw new Error(`Failed to fetch context: ${launchContextRes.statusText}`);
+  const launchContextRes = await fetch(`/orca/cpc/context`)
+  if (!launchContextRes.ok) {
+    throw new Error(`Failed to fetch context: ${launchContextRes.statusText}`)
+  }
+  return await launchContextRes.json()
+}
+
+export function useLaunchContext(): LaunchContextHookResult {
+  const {
+    data: launchContext,
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ['launch-context'],
+    queryFn: fetchLaunchContext,
+    staleTime: 60 * 60 * 1000, // 1 hour - launch context rarely changes
+    retry: 3,
+  })
+
+  return {
+    launchContext,
+    isLoading,
+    isError,
+    error,
+  }
+}
+
+export function useClients(): ClientHookResult {
+  const { launchContext } = useLaunchContext()
+  const tenantId = launchContext?.tenantId
+
+  // Create FHIR clients based on launch context
+  const clients = React.useMemo(() => {
+    if (!tenantId) {
+      return {
+        ehrClient: undefined,
+        cpsClient: undefined,
+        scpClient: undefined,
+      }
     }
-    return await launchContextRes.json();
-};
-
-export default function useContext(): ContextHookResult {
-    const { data: launchContext, isLoading, isError, error } = useQuery({
-        queryKey: ['launch-context'],
-        queryFn: fetchLaunchContext,
-        staleTime: 60 * 60 * 1000, // 1 hour - launch context rarely changes
-        retry: 3,
-    });
-
-    // Create FHIR clients based on launch context
-    const clients = React.useMemo(() => {
-        if (!launchContext?.tenantId) {
-            return {
-                ehrClient: undefined,
-                cpsClient: undefined,
-                scpClient: undefined,
-            };
-        }
-
-        return {
-            ehrClient: createEhrClient(launchContext.tenantId),
-            cpsClient: createCpsClient(launchContext.tenantId),
-            scpClient: createScpClient(launchContext.tenantId),
-        };
-    }, [launchContext?.tenantId]);
 
     return {
-        launchContext,
-        ...clients,
-        isLoading,
-        isError,
-        error,
-    };
+      ehrClient: createEhrClient(tenantId),
+      cpsClient: createCpsClient(tenantId),
+      scpClient: createScpClient(tenantId),
+    }
+  }, [tenantId])
+
+  return clients
 }

@@ -13,7 +13,7 @@ import useEnrollment from '@/app/hooks/enrollment-hook';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { Button, createTheme, Shadows, ThemeProvider } from '@mui/material';
 import Loading from '../loading';
-import useContext from "@/app/hooks/context-hook";
+import { useClients, useLaunchContext } from '@/app/hooks/context-hook'
 
 interface QuestionnaireRendererPageProps {
   questionnaire: Questionnaire;
@@ -31,7 +31,8 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
   const responseIsValid = useQuestionnaireResponseStore.use.responseIsValid();
 
-  const { launchContext, cpsClient } = useContext();
+  const { launchContext } = useLaunchContext()
+  const { cpsClient } = useClients()
   const { patient, practitioner } = useEnrollment()
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prePopulated, setPrePopulated] = useState(false);
@@ -180,6 +181,13 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
     },
     shadows: Array(25).fill('none') as Shadows,
     components: {
+      MuiTypography: {
+        styleOverrides: {
+          caption: {
+            color: '#717171 !important',
+          },
+        },
+      },
       MuiGrid: {
         defaultProps: {
           mb: 1
@@ -191,6 +199,15 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
             backgroundColor: '#F5F5F5',
           },
         },
+      },
+      // Add a shadow around the dropdown for the autocomplete.
+      MuiAutocomplete: {
+        styleOverrides: {
+          paper: {
+            boxShadow: '0px 2px 6px #BCBCBC',
+            border: '1px solid #949494'
+         }
+        }
       }
     }
   });

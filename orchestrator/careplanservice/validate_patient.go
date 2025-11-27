@@ -16,6 +16,7 @@ type PatientValidator struct {
 func (v *PatientValidator) Validate(patient *fhir.Patient) []*validation.Error {
 	var errs []*validation.Error
 	hasEmail, hasPhone := false, false
+	hasValidPhoneNumber := false
 
 	if patient == nil {
 		errs = append(errs, &validation.Error{
@@ -33,10 +34,12 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []*validation.Error {
 				}
 				hasEmail = true
 			case fhir.ContactPointSystemPhone:
-				if err := validatePhone(point.Value); err != nil {
-					errs = append(errs, err)
+				if point.Value != nil && *point.Value != "" {
+					hasPhone = true
+					if err := validatePhone(point.Value); err == nil {
+						hasValidPhoneNumber = true
+					}
 				}
-				hasPhone = true
 			default:
 				continue
 			}
@@ -48,6 +51,9 @@ func (v *PatientValidator) Validate(patient *fhir.Patient) []*validation.Error {
 	}
 	if !hasPhone {
 		errs = append(errs, &validation.Error{Code: PhoneRequired})
+	}
+	if hasPhone && !hasValidPhoneNumber {
+		errs = append(errs, &validation.Error{Code: InvalidPhone})
 	}
 
 	if len(errs) > 0 {
@@ -80,6 +86,16 @@ func validatePhone(phone *string) *validation.Error {
 	// Dutch mobile: 06xxxxxxxx (10 digits) or +316xxxxxxxx (12 digits)
 	if (len(normalised) == 10 && strings.HasPrefix(normalised, "06")) ||
 		(len(normalised) == 12 && strings.HasPrefix(normalised, "+316")) {
+		return nil
+	}
+
+	// Belgian mobile: +324xxxxxxxx (12 digits)
+	if len(normalised) == 12 && strings.HasPrefix(normalised, "+324") {
+		return nil
+	}
+
+	// German mobile: +4915x/+4916x/+4917x (13-14 digits)
+	if (len(normalised) == 13 || len(normalised) == 14) && (strings.HasPrefix(normalised, "+4915") || strings.HasPrefix(normalised, "+4916") || strings.HasPrefix(normalised, "+4917")) {
 		return nil
 	}
 

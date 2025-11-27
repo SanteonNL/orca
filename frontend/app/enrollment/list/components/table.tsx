@@ -3,13 +3,13 @@ import React, {useEffect, useState} from 'react'
 import useEnrollment from '@/app/hooks/enrollment-hook'
 import type {Task, Patient, Bundle, Identifier} from "fhir/r4";
 import {getPatientIdentifier, identifierToToken} from "@/lib/fhirUtils";
-import useContext from "@/app/hooks/context-hook";
+import { useClients } from '@/app/hooks/context-hook';
 import {taskStatusLabel} from "@/app/utils/mapping";
 import {useRouter} from "next/navigation";
 
 export default function TaskOverviewTable() {
     const {patient} = useEnrollment()
-    const {cpsClient} = useContext()
+    const { cpsClient } = useClients()
     const [tasks, setTasks] = useState([] as Task[]);
 
     useEffect(() => {

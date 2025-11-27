@@ -400,7 +400,16 @@ func (s *Service) SendError(ctx context.Context, issuer string, err error, httpR
 	if !s.strictMode {
 		msg += ": " + err.Error()
 	}
-	http.Error(httpResponse, msg, httpStatusCode)
+	slog.ErrorContext(
+		ctx,
+		"HTTP error response sent for SMART on FHIR launch failure",
+		slog.String("issuer", issuer),
+		slog.String("launch_id", launchId),
+		slog.String(logging.FieldError, err.Error()),
+		slog.Int("http_status_code", httpStatusCode),
+		slog.String("msg", msg),
+	)
+	http.Error(httpResponse, http.StatusText(httpStatusCode), httpStatusCode)
 }
 
 func (s *Service) createClientAssertion(issuer *trustedIssuer) (string, error) {

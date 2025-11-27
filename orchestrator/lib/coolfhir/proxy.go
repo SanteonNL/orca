@@ -112,13 +112,15 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 			return
 		}
 		if err != nil {
+			slog.ErrorContext(ctx, "Invalid request body", slog.String(logging.FieldError, err.Error()))
+
 			WriteOperationOutcomeFromError(ctx, otel.Error(span, fhirclient.OperationOutcomeError{
 				OperationOutcome: fhir.OperationOutcome{
 					Issue: []fhir.OperationOutcomeIssue{
 						{
 							Severity:    fhir.IssueSeverityError,
 							Code:        fhir.IssueTypeStructure,
-							Diagnostics: to.Ptr("Couldn't read request body: " + err.Error()),
+							Diagnostics: to.Ptr("Invalid request body"),
 						},
 					},
 				},
@@ -129,13 +131,15 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		if len(requestData) > 0 && !strings.HasSuffix(request.URL.Path, "/_search") {
 			requestResource = make(map[string]interface{})
 			if err := json.Unmarshal(requestData, &requestResource); err != nil {
+				slog.ErrorContext(ctx, "Invalid JSON in request body", slog.String(logging.FieldError, err.Error()))
+
 				WriteOperationOutcomeFromError(ctx, otel.Error(span, fhirclient.OperationOutcomeError{
 					OperationOutcome: fhir.OperationOutcome{
 						Issue: []fhir.OperationOutcomeIssue{
 							{
 								Severity:    fhir.IssueSeverityError,
 								Code:        fhir.IssueTypeStructure,
-								Diagnostics: to.Ptr("Request body isn't valid JSON: " + err.Error()),
+								Diagnostics: to.Ptr("Invalid JSON in request body"),
 							},
 						},
 					},
