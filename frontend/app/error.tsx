@@ -3,7 +3,7 @@
 import { Button } from '@/components/ui/button'
 import { RefreshCw, AlertTriangle } from 'lucide-react'
 import { getSupportContactLink } from './actions'
-import { useEffect, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 
 export default function Error({
     error,
@@ -12,17 +12,11 @@ export default function Error({
     error: Error & { digest?: string }
     reset: () => void
 }) {
-    const [supportContactLink, setSupportContactLink] = useState<string>()
-
-    useEffect(() => {
-
-        const fetchSupportContactLink = async () => {
-            const link = await getSupportContactLink()
-            setSupportContactLink(link)
-        }
-
-        if (!supportContactLink) fetchSupportContactLink()
-    }, [supportContactLink])
+    const { data: supportContactLink } = useQuery({
+        queryKey: ['supportContactLink'],
+        queryFn: async () => getSupportContactLink() ?? null,
+        staleTime: Infinity,
+    })
 
     return (
         <div className="min-h-screen flex flex-col justify-center items-center bg-gray-50">
