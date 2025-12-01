@@ -36,31 +36,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const { patient, practitioner } = useEnrollment()
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [prePopulated, setPrePopulated] = useState(false);
-  const [initialized, setInitialized] = useState(false)
-
-  const [, setPrevQuestionnaireResponse] = useState<QuestionnaireResponse>()
-
-  useEffect(() => {
-    const fetchQuestionnaireResponse = async () => {
-
-      if (!inputTask || !questionnaire || !launchContext || !cpsClient) return
-
-      const questionnaireResponse = await findQuestionnaireResponse(cpsClient, inputTask, questionnaire) as QuestionnaireResponse
-
-      if (questionnaireResponse) {
-        setPrevQuestionnaireResponse(questionnaireResponse)
-      }
-    }
-
-    if (questionnaire && !initialized) {
-
-      console.log(`Fetching QuestionnaireResponse for Task/${inputTask?.id}`)
-      fetchQuestionnaireResponse()
-
-      setInitialized(true)
-    }
-
-  }, [initialized, inputTask, questionnaire, launchContext, cpsClient])
 
   const submitQuestionnaireResponse = async (e: React.MouseEvent<HTMLButtonElement, MouseEvent>) => {
 
@@ -142,7 +117,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   }
 
   useEffect(() => {
-    if (!initialized || prePopulated || !patient || !practitioner) return
+    if (prePopulated || !patient || !practitioner) return
 
     const prePopulate = async () => {
       const { populateResult } = await populateQuestionnaire(questionnaire, patient, practitioner, {
@@ -151,7 +126,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       });
 
       if (populateResult && populateResult?.populated) {
-        setPrevQuestionnaireResponse(populateResult.populated)
         // updatableResponse = populateResult.populated
         useQuestionnaireResponseStore.setState({ updatableResponse: populateResult.populated })
       }
@@ -163,7 +137,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
       setPrePopulated(true)
     }
 
-  }, [initialized, patient, practitioner, questionnaire, prePopulated])
+  }, [patient, practitioner, questionnaire, prePopulated])
 
   const queryClient = useRendererQueryClient();
 

@@ -2,7 +2,7 @@
 import {findInBundle, getPatientIdentifier, constructTaskBundle} from '@/lib/fhirUtils'
 import useEnrollment from '@/app/hooks/enrollment-hook'
 import {Bundle, Coding, Condition, OperationOutcome, PractitionerRole} from 'fhir/r4'
-import React, {useEffect, useState} from 'react'
+import React, { useMemo, useState } from 'react'
 import {toast} from "sonner"
 import {useRouter} from 'next/navigation'
 import {ArrowRight} from 'lucide-react'
@@ -36,16 +36,12 @@ export default function EnrollInCpsButton({className}: Props) {
     const { launchContext } = useLaunchContext()
     const { cpsClient } = useClients()
 
-    const [disabled, setDisabled] = useState(false)
     const [submitted, setSubmitted] = useState(false)
+    const disabled = useMemo(() => submitted || !taskCondition || isLoading, [taskCondition, submitted, isLoading])
     const [error, setError] = useState<string | null>()
     const [validationErrors, setValidationErrors] = useState<Coding[]>()
 
     const router = useRouter()
-
-    useEffect(() => {
-        setDisabled(submitted || !taskCondition || isLoading)
-    }, [taskCondition, submitted, isLoading])
 
     const informCps = async () => {
         setSubmitted(true)

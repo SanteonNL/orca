@@ -4,6 +4,8 @@ import TaskOverviewTable from '@/app/enrollment/list/components/table';
 import useEnrollment from '@/app/hooks/enrollment-hook';
 import * as fhirUtils from '@/lib/fhirUtils';
 import {useRouter} from 'next/navigation';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useMemo } from 'react';
 
 jest.mock('@/app/hooks/enrollment-hook');
 jest.mock('@/lib/fhirUtils');
@@ -15,6 +17,15 @@ const mockPatient = {
         {system: 'http://fhir.nl/fhir/NamingSystem/bsn', value: '123456789'}
     ]
 };
+
+const wrapper = ({
+  children
+}: {
+  children: React.ReactNode
+}) => {
+  const client = useMemo(() => new QueryClient(), [])
+  return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+}
 
 beforeEach(() => {
     jest.resetAllMocks();
@@ -46,7 +57,7 @@ jest.mock('@/app/hooks/context-hook', () => ({
 describe('TaskOverviewTable', () => {
     it('renders table headers correctly', async () => {
         await act(async () => {
-            render(<TaskOverviewTable/>);
+            render(<TaskOverviewTable/>, { wrapper });
         });
         expect(screen.getByText('Uitvoerder')).toBeInTheDocument();
         expect(screen.getByText('Type')).toBeInTheDocument();
@@ -78,7 +89,7 @@ describe('TaskOverviewTable', () => {
             });
 
         await act(async () => {
-            render(<TaskOverviewTable/>);
+            render(<TaskOverviewTable/>, { wrapper });
         });
 
         // First call should be to find the patient
@@ -127,7 +138,7 @@ describe('TaskOverviewTable', () => {
         });
 
         await act(async () => {
-            render(<TaskOverviewTable/>);
+            render(<TaskOverviewTable/>, { wrapper });
         });
 
         expect(mockSearch).toHaveBeenNthCalledWith(1, {
@@ -147,7 +158,7 @@ describe('TaskOverviewTable', () => {
         mockSearch.mockResolvedValue([]);
 
         await act(async () => {
-            render(<TaskOverviewTable/>);
+            render(<TaskOverviewTable/>, { wrapper });
         });
 
         expect(mockSearch).not.toHaveBeenCalled();
