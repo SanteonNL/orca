@@ -16,6 +16,7 @@ import Error from "@/app/error";
 import {organizationNameShort} from "@/lib/fhirRender";
 import {requestTitle} from "@/app/enrollment/task/components/util";
 import {statusLabelLong} from "@/app/utils/mapping";
+import { useQuery } from '@tanstack/react-query'
 
 export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
@@ -36,7 +37,6 @@ export default function EnrollmentTaskPage() {
 
     const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
-    const [cpsServiceRequest, setCPSServiceRequest] = useState<ServiceRequest | undefined>(undefined);
 
     useEffect(() => {
         const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
@@ -57,19 +57,14 @@ export default function EnrollmentTaskPage() {
 
     // Load ServiceRequest from CPS as referred to by the Task.focus, in case the context doesn't specify the ServiceRequest
     // (e.g. when not launching for a specific Task using /list)
-    useEffect(() => {
-        if (!cpsClient || !task || !setCPSServiceRequest) {
-            return
-        }
-        if (!task.focus?.reference) {
-            return
-        }
-        cpsClient.read({resourceType: 'ServiceRequest', id: task.focus.reference.replace('ServiceRequest/', '')})
-            .then((sr) => {
-                setCPSServiceRequest(sr as ServiceRequest)
-            })
-    }, [setCPSServiceRequest, cpsClient, task]);
-
+    const serviceRequestId = task?.focus?.reference?.replace('ServiceRequest/', '')
+    const { data: cpsServiceRequest } = useQuery({
+        queryKey: ['cps-service-request', serviceRequestId],
+        queryFn: () => cpsClient!.read({resourceType: 'ServiceRequest', id: serviceRequestId!}) as Promise<ServiceRequest>,
+        staleTime: Infinity,
+        enabled: !!cpsClient && !!serviceRequestId,
+    })
+    
     useEffect(() => {
         if (!questionnaireMap) {
             return undefined
