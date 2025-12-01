@@ -32,7 +32,7 @@ export default function ConfirmDataPreEnrollment() {
     const { cpsClient } = useClients()
 
     const [submitted, setSubmitted] = useState(false)
-    const disabled = useMemo(() => submitted || !taskCondition || isLoading, [taskCondition, submitted, isLoading])
+    const disabled = submitted || !taskCondition || isLoading
     const [error, setError] = useState<string | null>()
     const [validationErrors, setValidationErrors] = useState<Coding[]>()
 
