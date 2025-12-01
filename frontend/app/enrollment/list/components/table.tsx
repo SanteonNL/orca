@@ -1,19 +1,19 @@
 "use client"
-import React, {useEffect, useState} from 'react'
+import React, { useEffect, useMemo } from 'react'
 import useEnrollment from '@/app/hooks/enrollment-hook'
 import type {Task, Patient, Bundle, Identifier} from "fhir/r4";
 import {getPatientIdentifier, identifierToToken} from "@/lib/fhirUtils";
 import { useClients } from '@/app/hooks/context-hook';
 import {taskStatusLabel} from "@/app/utils/mapping";
 import {useRouter} from "next/navigation";
+import { useQuery } from '@tanstack/react-query';
 
 export default function TaskOverviewTable() {
     const {patient} = useEnrollment()
     const { cpsClient } = useClients()
-    const [tasks, setTasks] = useState([] as Task[]);
 
-    useEffect(() => {
-        if (!patient || !cpsClient) {
+    const patientIdentifier = useMemo(() => {
+        if (!patient) {
             return
         }
         // List all Tasks for the patient. For that, we need the Patient FHIR resource from the CPS,
@@ -29,10 +29,15 @@ export default function TaskOverviewTable() {
         if (!patientIdentifier) {
             throw new Error("No identifier found for the patient");
         }
-        fetchTasksForPatient(patientIdentifier, cpsClient).then((tasks) => {
-            setTasks(tasks);
-        })
-    }, [cpsClient, setTasks, patient]);
+        return patientIdentifier;
+    }, [patient]);
+
+    const { data: tasks } = useQuery<Task[]>({
+        queryKey: ['tasks-for-patient', patientIdentifier],
+        queryFn: () => fetchTasksForPatient(patientIdentifier!, cpsClient),
+        staleTime: Infinity,
+        enabled: !!patientIdentifier && !!cpsClient,
+    });
 
     const router = useRouter()
     const openTask = (task: Task) => {
@@ -56,7 +61,7 @@ export default function TaskOverviewTable() {
             </tr>
             </thead>
             <tbody>
-            {tasks.map((task, idx) => (
+            {tasks?.map((task, idx) => (
                 <tr key={idx} className="border-t" onClick={() => openTask(task)} style={{cursor: 'pointer'}}>
                     <td className="px-4 py-2">{new Date(task.meta!.lastUpdated!).toLocaleString("nl-NL")}</td>
                     <td className="px-4 py-2">{task.focus?.display}</td>
