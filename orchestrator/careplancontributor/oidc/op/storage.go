@@ -26,6 +26,7 @@ const ScopePatient = "patient"
 const ClaimPatient = "patient"
 const ClaimRoles = "roles"
 const ClaimOrganizationIdentifier = "orgid"
+const ClaimCondition = "condition"
 const TokenLifetime = 5 * time.Minute
 const AuthRequestLifetime = 5 * time.Minute
 
@@ -250,6 +251,12 @@ func populateUserInfo(userInfo *oidc.UserInfo, scopes []string, user UserDetails
 				orgIdentifiers = append(orgIdentifiers, coolfhir.IdentifierToToken(identifier))
 			}
 			userInfo.Claims[ClaimOrganizationIdentifier] = orgIdentifiers
+
+			// Add first condition coding code as condition claim
+			if user.Condition.Code != nil && len(user.Condition.Code.Coding) > 0 {
+				userInfo.Claims[ClaimCondition] = *user.Condition.Code.Coding[0].Code
+			}
+
 		case oidc.ScopeOpenID:
 			userInfo.Subject = user.ID
 		case oidc.ScopeEmail:
@@ -323,6 +330,7 @@ type UserDetails struct {
 	Email        string
 	Roles        []string
 	Organization fhir.Organization
+	Condition    fhir.Condition
 
 	PatientIdentifiers []fhir.Identifier
 }

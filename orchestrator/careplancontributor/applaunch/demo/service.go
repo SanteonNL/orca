@@ -179,6 +179,12 @@ func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
 		return
 	}
 	sessionData.Set("Organization/magic-"+uuid.NewString(), organizations[0])
+
+	// Add Condition to session if available, not available when launching list view
+	if condition := s.getConditionFromServiceRequest(serviceRequest, ehrFHIRClient); condition != nil {
+		sessionData.Set("Condition/"+*condition.Id, *condition)
+	}
+
 	s.sessionManager.Create(response, sessionData)
 
 	var existingTask *fhir.Task
@@ -253,4 +259,27 @@ func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]
 	}
 
 	return proxies, fhirClients
+}
+
+// getConditionFromServiceRequest reads the ServiceRequest and Condition resources and returns the Condition if present.
+func (s *Service) getConditionFromServiceRequest(serviceRequest string, ehrFHIRClient fhirclient.Client) *fhir.Condition {
+	if serviceRequest == "" || ehrFHIRClient == nil {
+		return nil
+	}
+	serviceRequestResource := &fhir.ServiceRequest{}
+	if err := ehrFHIRClient.Read(serviceRequest, serviceRequestResource); err != nil {
+		return nil
+	}
+	if len(serviceRequestResource.ReasonReference) == 0 {
+		return nil
+	}
+	reasonRef := serviceRequestResource.ReasonReference[0]
+	if reasonRef.Reference == nil || *reasonRef.Reference == "" {
+		return nil
+	}
+	var condition fhir.Condition
+	if err := ehrFHIRClient.Read(*reasonRef.Reference, &condition); err != nil {
+		return nil
+	}
+	return &condition
 }
