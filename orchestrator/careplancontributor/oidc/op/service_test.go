@@ -60,6 +60,15 @@ func TestService_IntegrationTest(t *testing.T) {
 			},
 		},
 	})
+	sessionData.Set("Condition/123", fhir.Condition{
+		Code: &fhir.CodeableConcept{
+			Coding: []fhir.Coding{
+				{
+					Code: to.Ptr("SOME-CONDITION-CODE"),
+				},
+			},
+		},
+	})
 	sessionData.Set("Organization/1", fhir.Organization{
 		Identifier: []fhir.Identifier{
 			{
@@ -128,6 +137,7 @@ func TestService_IntegrationTest(t *testing.T) {
 	assert.Equal(t, "john@example.com", capturedIDTokenClaims.GetUserInfo().Email)
 	assert.Equal(t, []any{"nurse-level-4@example.com/CodeSystem"}, capturedIDTokenClaims.Claims["roles"])
 	assert.Equal(t, []any{"example.com/CodeSystem|SOME-PATIENT-IDENTIFIER"}, capturedIDTokenClaims.Claims["patient"])
+	assert.Equal(t, "SOME-CONDITION-CODE", capturedIDTokenClaims.Claims["condition"])
 	assert.NotContains(t, capturedIDTokenClaims.Claims, "amr")
 	assert.NotContains(t, capturedIDTokenClaims.Claims, "acr")
 }

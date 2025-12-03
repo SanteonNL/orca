@@ -684,18 +684,16 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	}
 	span.SetAttributes(attribute.String("patient.id", *patient.Id))
 
-	var reasonReference fhir.Reference
-
-	reason := fhir.Condition{
+	condition := fhir.Condition{
 		Id:   to.Ptr(uuid.NewString()),
 		Code: conditionCode,
 	}
 
-	ref := "Condition/magic-" + *reason.Id
-	reasonReference = fhir.Reference{
+	ref := "Condition/magic-" + *condition.Id
+	var conditionReference = fhir.Reference{
 		Type:      to.Ptr("Condition"),
 		Reference: to.Ptr(ref),
-		Display:   to.Ptr(*reason.Code.Text),
+		Display:   to.Ptr(*condition.Code.Text),
 	}
 	span.SetAttributes(attribute.String("condition.reference", ref))
 
@@ -750,7 +748,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 				},
 			},
 		},
-		ReasonReference: []fhir.Reference{reasonReference},
+		ReasonReference: []fhir.Reference{conditionReference},
 		Subject: fhir.Reference{
 			Type: to.Ptr("Patient"),
 			Identifier: &fhir.Identifier{
@@ -785,7 +783,7 @@ func (s *Service) defaultGetSessionData(ctx context.Context, accessToken string,
 	sessionData.Set("Practitioner/magic-"+uuid.NewString(), launchContext.Practitioner)
 	sessionData.Set("PractitionerRole/magic-"+uuid.NewString(), launchContext.PractitionerRole)
 	sessionData.Set("Organization/magic-"+uuid.NewString(), organization)
-	sessionData.Set(*reasonReference.Reference, reason)
+	sessionData.Set(*conditionReference.Reference, condition)
 	if existingTaskRef != nil {
 		sessionData.Set(*existingTaskRef, nil)
 	}
