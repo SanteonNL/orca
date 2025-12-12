@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1
+FROM node:25-alpine AS base
+
+WORKDIR /app
+
+ENV NEXT_PUBLIC_BASE_PATH /viewer
+ENV NODE_ENV development
+
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+
+EXPOSE 3000
+
+# Healthcheck on :3000/viewer with wget
+HEALTHCHECK --interval=10s --timeout=10s --start-period=1s \
+  CMD wget --spider http://localhost:3000/viewer || exit 1
+
+CMD ["npm", "run", "dev"]

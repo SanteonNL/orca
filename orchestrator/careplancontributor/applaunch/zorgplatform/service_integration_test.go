@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"net/http"
 	"os"
 	"testing"
@@ -49,7 +50,7 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 				},
 			},
 		},
-		zorgplatformCert: zorgplatformX509Cert,
+		zorgplatformSignCerts: []*x509.Certificate{zorgplatformX509Cert},
 		config: Config{
 			SAMLRequestTimeout: 10 * time.Second,
 			BaseUrl:            "https://zorgplatform.online",
@@ -79,10 +80,10 @@ func TestService_FetchContext_IntegrationTest(t *testing.T) {
 	require.NoError(t, err)
 	sessionData, err := service.getSessionData(context.Background(), accessToken, launchContext)
 	require.NoError(t, err)
-	require.NotNil(t, sessionData.OtherValues[sessionData.StringValues["serviceRequest"]])
-	require.NotNil(t, sessionData.OtherValues[sessionData.StringValues["patient"]])
-	require.NotNil(t, sessionData.OtherValues[sessionData.StringValues["practitioner"]])
-	require.NotNil(t, sessionData.OtherValues[sessionData.StringValues["organization"]])
+	require.NotNil(t, session.Get[fhir.ServiceRequest](sessionData))
+	require.NotNil(t, session.Get[fhir.Patient](sessionData))
+	require.NotNil(t, session.Get[fhir.Practitioner](sessionData))
+	require.NotNil(t, session.Get[fhir.Organization](sessionData))
 }
 
 func TestService_FetchApplicationToken_IntegrationTest(t *testing.T) {
@@ -116,7 +117,7 @@ func TestService_FetchApplicationToken_IntegrationTest(t *testing.T) {
 				},
 			},
 		},
-		zorgplatformCert: zorgplatformX509Cert,
+		zorgplatformSignCerts: []*x509.Certificate{zorgplatformX509Cert},
 		config: Config{
 			SAMLRequestTimeout: 10 * time.Second,
 			BaseUrl:            "https://zorgplatform.online",

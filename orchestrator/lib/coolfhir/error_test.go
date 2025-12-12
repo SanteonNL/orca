@@ -2,13 +2,15 @@ package coolfhir
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
+	"slices"
+	"testing"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http/httptest"
-	"slices"
-	"testing"
 )
 
 func TestWriteOperationOutcomeFromError(t *testing.T) {
@@ -38,7 +40,7 @@ func TestWriteOperationOutcomeFromError(t *testing.T) {
 				desc: "test",
 			},
 			expectedCode: 500,
-			expectedBody: `{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"test failed: oops"}]}`,
+			expectedBody: `{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"test failed: Internal Server Error"}]}`,
 		},
 		{
 			name: "OperationOutcomeError",
@@ -78,6 +80,29 @@ func TestWriteOperationOutcomeFromError(t *testing.T) {
 			},
 			expectedCode: 500,
 			expectedBody: `{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"conflict","diagnostics":"oops"}]}`,
+		},
+		{
+			name: "OperationOutcomeError, validation errors 400",
+			args: args{
+				err: &fhirclient.OperationOutcomeError{
+					OperationOutcome: fhir.OperationOutcome{
+						Issue: []fhir.OperationOutcomeIssue{{
+							Severity:    fhir.IssueSeverityError,
+							Code:        fhir.IssueTypeInvalid,
+							Diagnostics: to.Ptr("Validation 1 failed"),
+						},
+							{
+								Severity:    fhir.IssueSeverityError,
+								Code:        fhir.IssueTypeInvalid,
+								Diagnostics: to.Ptr("Validation 2 failed"),
+							}},
+					},
+					HttpStatusCode: http.StatusBadRequest,
+				},
+				desc: "test",
+			},
+			expectedCode: 400,
+			expectedBody: `{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"invalid","diagnostics":"Validation 1 failed"},{"severity":"error","code":"invalid","diagnostics":"Validation 2 failed"}]}`,
 		},
 	}
 	for _, tt := range tests {

@@ -1,48 +1,90 @@
 package demo
 
 import (
-	fhirclient "github.com/SanteonNL/go-fhir-client"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
-	"github.com/SanteonNL/orca/orchestrator/user"
-	"github.com/rs/zerolog/log"
-	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
+	"context"
+	"encoding/json"
+	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
+
+	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/must"
+	"github.com/SanteonNL/orca/orchestrator/user"
+	"github.com/google/uuid"
+	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
 const fhirLauncherKey = "demo"
-const demoTaskSystemSystem = "http://demo-launch/fhir/NamingSystem/task-identifier"
 
 func init() {
 	// Register FHIR client factory that can create FHIR clients when the Demo AppLaunch is used
 	clients.Factories[fhirLauncherKey] = func(properties map[string]string) clients.ClientProperties {
 		fhirServerURL, _ := url.Parse(properties["iss"])
+
+		fhirConfigJSON, ok := properties["fhir_config"]
+		if !ok {
+			return clients.ClientProperties{
+				BaseURL: fhirServerURL,
+				Client:  http.DefaultTransport,
+			}
+		}
+
+		var fhirConfig coolfhir.ClientConfig
+		err := json.Unmarshal([]byte(fhirConfigJSON), &fhirConfig)
+
+		if err != nil {
+			slog.ErrorContext(context.Background(), "Failed to unmarshal serialized FHIR config", slog.String(logging.FieldError, err.Error()))
+			return clients.ClientProperties{
+				BaseURL: fhirServerURL,
+				Client:  http.DefaultTransport,
+			}
+		}
+		transport, _, err := coolfhir.NewAuthRoundTripper(fhirConfig, coolfhir.Config())
+		if err != nil {
+			slog.Error("Failed to create authenticated FHIR transport", slog.String(logging.FieldError, err.Error()))
+			return clients.ClientProperties{
+				BaseURL: fhirServerURL,
+				Client:  http.DefaultTransport,
+			}
+		}
 		return clients.ClientProperties{
 			BaseURL: fhirServerURL,
-			Client:  http.DefaultTransport,
+			Client:  transport,
 		}
 	}
 }
 
-func New(sessionManager *user.SessionManager, config Config, frontendLandingUrl *url.URL) *Service {
+func New(sessionManager *user.SessionManager[session.Data], config Config, tenants tenants.Config, orcaPublicURL *url.URL, frontendLandingUrl *url.URL, profile profile.Provider) *Service {
 	return &Service{
 		sessionManager:     sessionManager,
 		config:             config,
+		orcaPublicURL:      orcaPublicURL,
 		frontendLandingUrl: frontendLandingUrl,
+		profile:            profile,
+		tenants:            tenants,
+		ehrFHIRClientFactory: func(config coolfhir.ClientConfig) (fhirclient.Client, error) {
+			_, client, err := coolfhir.NewAuthRoundTripper(config, coolfhir.Config())
+			return client, err
+		},
 	}
 }
 
 type Service struct {
-	sessionManager     *user.SessionManager
-	config             Config
-	baseURL            string
-	frontendLandingUrl *url.URL
-}
-
-func (s *Service) cpsFhirClient() fhirclient.Client {
-	return globals.CarePlanServiceFhirClient
+	sessionManager       *user.SessionManager[session.Data]
+	config               Config
+	tenants              tenants.Config
+	orcaPublicURL        *url.URL
+	frontendLandingUrl   *url.URL
+	ehrFHIRClientFactory func(config coolfhir.ClientConfig) (fhirclient.Client, error)
+	profile              profile.Provider
 }
 
 func (s *Service) RegisterHandlers(mux *http.ServeMux) {
@@ -50,46 +92,194 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 }
 
 func (s *Service) handle(response http.ResponseWriter, request *http.Request) {
-	log.Ctx(request.Context()).Debug().Msg("Handling demo app launch")
-	values, ok := getQueryParams(response, request, "patient", "serviceRequest", "practitioner", "iss", "taskIdentifier")
+	slog.DebugContext(request.Context(), "Handling demo app launch")
+	values, ok := getQueryParams(response, request, "patient", "practitioner", "tenant")
 	if !ok {
 		return
 	}
+	serviceRequest := request.URL.Query().Get("serviceRequest")
+	if serviceRequest != "" {
+		values["serviceRequest"] = serviceRequest
+	}
+	tenant, err := s.tenants.Get(values["tenant"])
+	if err != nil {
+		slog.ErrorContext(context.Background(), "Failed to get tenant", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, "Invalid tenant", http.StatusBadRequest)
+		return
+	}
+	if tenant.Demo.FHIR.BaseURL == "" {
+		slog.ErrorContext(request.Context(), "FHIR base URL is not configured for tenant", slog.String("tenantID", tenant.ID))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	// Serialize FHIR config to pass authentication settings to the factory
+	fhirConfigJSON, err := json.Marshal(tenant.Demo.FHIR)
+	if err != nil {
+		slog.ErrorContext(request.Context(), "Failed to serialize FHIR config", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	sessionData := session.Data{
+		FHIRLauncher: fhirLauncherKey,
+		TenantID:     tenant.ID,
+		LauncherProperties: map[string]string{
+			"iss":         tenant.Demo.FHIR.BaseURL,
+			"fhir_config": string(fhirConfigJSON),
+		},
+	}
+	sessionData.Set(values["serviceRequest"], nil)
+	// taskIdentifier is optional, only set if present
+	if taskIdentifiers := request.URL.Query()["taskIdentifier"]; len(taskIdentifiers) > 0 {
+		sessionData.TaskIdentifier = &taskIdentifiers[0]
+	}
 
 	//Destroy the previous session if found
-	session := s.sessionManager.Get(request)
-	if session != nil {
-		log.Ctx(request.Context()).Debug().Msg("Demo launch performed and previous session found - Destroying previous session")
+	existingSession := s.sessionManager.Get(request)
+	if existingSession != nil {
+		slog.DebugContext(request.Context(), "Demo launch performed and previous session found - Destroying previous session")
 		s.sessionManager.Destroy(response, request)
 	}
 
-	s.sessionManager.Create(response, user.SessionData{
-		FHIRLauncher: fhirLauncherKey,
-		StringValues: values,
-	})
+	// Create FHIR client using the factory
+	ehrFHIRClient, err := s.ehrFHIRClientFactory(tenant.Demo.FHIR)
+	if err != nil {
+		slog.ErrorContext(request.Context(), "Failed to create FHIR client", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	var practitioner fhir.Practitioner
+	if err := ehrFHIRClient.Read(values["practitioner"], &practitioner); err != nil {
+		slog.ErrorContext(request.Context(), "Failed to read practitioner resource", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	sessionData.Set("Practitioner/"+*practitioner.Id, practitioner)
+
+	var patient fhir.Patient
+	if err := ehrFHIRClient.Read(values["patient"], &patient); err != nil {
+		slog.ErrorContext(request.Context(), "Failed to read patient resource", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	sessionData.Set("Patient/"+*patient.Id, patient)
+
+	ctx := tenants.WithTenant(request.Context(), *tenant)
+
+	organizations, err := s.profile.Identities(ctx)
+	if err != nil {
+		slog.ErrorContext(request.Context(), "Failed to get active organization", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	if len(organizations) != 1 {
+		slog.ErrorContext(request.Context(), fmt.Sprintf("Expected 1 active organization, found %d", len(organizations)))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+	sessionData.Set("Organization/magic-"+uuid.NewString(), organizations[0])
+
+	// Add Condition to session if available, not available when launching list view
+	if condition := s.getConditionFromServiceRequest(serviceRequest, ehrFHIRClient); condition != nil {
+		sessionData.Set("Condition/"+*condition.Id, *condition)
+	}
+
+	s.sessionManager.Create(response, sessionData)
 
 	var existingTask *fhir.Task
-	if values["taskIdentifier"] != "" {
-		taskIdentifier, err := coolfhir.TokenToIdentifier(values["taskIdentifier"])
+	if sessionData.TaskIdentifier != nil {
+		taskIdentifier, err := coolfhir.TokenToIdentifier(*sessionData.TaskIdentifier)
 		if err != nil {
-			http.Error(response, "Failed to parse task identifier: "+err.Error(), http.StatusBadRequest)
+			slog.ErrorContext(ctx, "Failed to get task identifier", slog.String(logging.FieldError, err.Error()))
+			http.Error(response, "Invalid task identifier", http.StatusBadRequest)
 			return
 		}
-		existingTask, err = coolfhir.GetTaskByIdentifier(request.Context(), s.cpsFhirClient(), *taskIdentifier)
+		fhirClient, err := globals.CreateCPSFHIRClient(ctx)
 		if err != nil {
-			log.Ctx(request.Context()).Error().Err(err).Msg("Existing CPS Task check failed for task with identifier: " + coolfhir.ToString(taskIdentifier))
-			http.Error(response, "Failed to check for existing CPS Task resource", http.StatusInternalServerError)
+			slog.ErrorContext(ctx, "Failed to create FHIR client for existing Task check", slog.String(logging.FieldError, err.Error()))
+			http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+			return
+		}
+		existingTask, err = coolfhir.GetTaskByIdentifier(ctx, fhirClient, *taskIdentifier)
+		if err != nil {
+			slog.ErrorContext(
+				ctx,
+				"Existing CPS Task check failed for task",
+				slog.String(logging.FieldError, err.Error()),
+				slog.String(logging.FieldIdentifier, coolfhir.ToString(taskIdentifier)),
+			)
+			slog.ErrorContext(ctx, "Failed to get existing task", slog.String(logging.FieldError, err.Error()))
+			http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
 			return
 		}
 	}
 
 	if existingTask != nil {
-		log.Ctx(request.Context()).Debug().Msg("Existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
+		slog.DebugContext(request.Context(), "Existing CPS Task resource found for demo task", slog.String(logging.FieldIdentifier, values["taskIdentifier"]))
 		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("task", *existingTask.Id).String(), http.StatusFound)
 		return
 	}
 
 	// Redirect to landing page
-	log.Ctx(request.Context()).Debug().Msg("No existing CPS Task resource found for demo task with identifier: " + values["taskIdentifier"])
-	http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
+	if serviceRequest == "" {
+		// No ServiceRequest given from EHR, redirect to task overview
+		slog.DebugContext(request.Context(), "No ServiceRequest provided by EHR, redirecting to Task overview")
+		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("list").String(), http.StatusFound)
+	} else {
+		// ServiceRequest given, redirect to new enrollment landing page
+		slog.DebugContext(request.Context(), "No existing CPS Task resource found for demo task", slog.String(logging.FieldIdentifier, values["taskIdentifier"]))
+		http.Redirect(response, request, s.frontendLandingUrl.JoinPath("new").String(), http.StatusFound)
+	}
+}
+
+func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {
+	proxies := make(map[string]coolfhir.HttpProxy)
+	fhirClients := make(map[string]fhirclient.Client)
+
+	for _, tenant := range s.tenants {
+		if tenant.Demo.FHIR.BaseURL == "" {
+			continue
+		}
+		fhirBaseURL := must.ParseURL(tenant.Demo.FHIR.BaseURL)
+		transport, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.Demo.FHIR, coolfhir.Config())
+		if err != nil {
+			slog.Error(
+				"Failed to create FHIR client for tenant",
+				slog.String("tenant", tenant.ID),
+				slog.String("baseURL", fhirBaseURL.String()),
+				slog.String(logging.FieldError, err.Error()),
+			)
+			continue
+		}
+		tenantBasePath := "/cpc/" + tenant.ID + "/fhir"
+		proxy := coolfhir.NewProxy("App->EHR", fhirBaseURL, tenantBasePath, s.orcaPublicURL.JoinPath(tenantBasePath), transport, false, false)
+		proxies[tenant.ID] = proxy
+		fhirClients[tenant.ID] = fhirClient
+	}
+
+	return proxies, fhirClients
+}
+
+// getConditionFromServiceRequest reads the ServiceRequest and Condition resources and returns the Condition if present.
+func (s *Service) getConditionFromServiceRequest(serviceRequest string, ehrFHIRClient fhirclient.Client) *fhir.Condition {
+	if serviceRequest == "" || ehrFHIRClient == nil {
+		return nil
+	}
+	serviceRequestResource := &fhir.ServiceRequest{}
+	if err := ehrFHIRClient.Read(serviceRequest, serviceRequestResource); err != nil {
+		return nil
+	}
+	if len(serviceRequestResource.ReasonReference) == 0 {
+		return nil
+	}
+	reasonRef := serviceRequestResource.ReasonReference[0]
+	if reasonRef.Reference == nil || *reasonRef.Reference == "" {
+		return nil
+	}
+	var condition fhir.Condition
+	if err := ehrFHIRClient.Read(*reasonRef.Reference, &condition); err != nil {
+		return nil
+	}
+	return &condition
 }

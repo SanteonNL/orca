@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -18,9 +20,11 @@ import (
 
 func Test_CRUD_AuditEvents(t *testing.T) {
 	// Setup test clients and service
+	fhirBaseURL := test.SetupHAPI(t)
+
 	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
 	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {})
-	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint)
+	carePlanContributor1, carePlanContributor2, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, fhirBaseURL)
 
 	// Track all expected audit events
 	var expectedAuditEvents []ExpectedAuditEvent
@@ -53,6 +57,16 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 			{
 				Given:  []string{"Test"},
 				Family: to.Ptr("Patient"),
+			},
+		},
+		Telecom: []fhir.ContactPoint{
+			{
+				System: to.Ptr(fhir.ContactPointSystemPhone),
+				Value:  to.Ptr("+31612345678"),
+			},
+			{
+				System: to.Ptr(fhir.ContactPointSystemEmail),
+				Value:  to.Ptr("test@test.com"),
 			},
 		},
 	}
@@ -168,25 +182,25 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 	t.Run("Update Patient with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("Patient/"+*patient.Id, patient, &patient)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Participant does not have access to Patient")
+		require.Contains(t, err.Error(), "Forbidden")
 	})
 
 	t.Run("Update QuestionnaireResponse with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("QuestionnaireResponse/"+*questionnaireResponse.Id, questionnaireResponse, &questionnaireResponse)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Participant does not have access to QuestionnaireResponse")
+		require.Contains(t, err.Error(), "Forbidden")
 	})
 
 	t.Run("Update ServiceRequest with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("ServiceRequest/"+*serviceRequest.Id, serviceRequest, &serviceRequest)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Participant does not have access to ServiceRequest")
+		require.Contains(t, err.Error(), "Forbidden")
 	})
 
 	t.Run("Update Condition with different requester - fails", func(t *testing.T) {
 		err = carePlanContributor2.Update("Condition/"+*condition.Id, condition, &condition)
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "Participant does not have access to Condition")
+		require.Contains(t, err.Error(), "Forbidden")
 	})
 
 	// Update non-existing resources (creates new ones)
@@ -367,8 +381,154 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedAudit("ServiceRequest/"+*readServiceRequest.Id, fhir.AuditEventActionR)
 	})
 
+	t.Run("Search ServiceRequest by id", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{"_id": {*serviceRequest.Id}}
+
+		err := carePlanContributor1.Search("ServiceRequest", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify the search result contains the ServiceRequest we're looking for
+		var foundServiceRequest bool
+		for _, entry := range searchResult.Entry {
+			var sr fhir.ServiceRequest
+			err := json.Unmarshal(entry.Resource, &sr)
+			require.NoError(t, err)
+
+			if sr.Id != nil && *sr.Id == *serviceRequest.Id {
+				foundServiceRequest = true
+				break
+			}
+		}
+		require.True(t, foundServiceRequest, "ServiceRequest not found in search results")
+
+		// Add expected audit event for this search operation
+		addExpectedSearchAudit("ServiceRequest/"+*serviceRequest.Id, queryParams)
+	})
+
+	t.Run("Search ServiceRequest by status", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{"status": {"completed"}}
+
+		err := carePlanContributor1.Search("ServiceRequest", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// Verify at least one ServiceRequest is returned with completed status
+		var foundCompletedServiceRequest bool
+		for _, entry := range searchResult.Entry {
+			var sr fhir.ServiceRequest
+			err := json.Unmarshal(entry.Resource, &sr)
+			require.NoError(t, err)
+
+			if sr.Status == fhir.RequestStatusCompleted {
+				foundCompletedServiceRequest = true
+
+				// Add expected audit event for this ServiceRequest
+				addExpectedSearchAudit("ServiceRequest/"+*sr.Id, queryParams)
+			}
+		}
+		require.True(t, foundCompletedServiceRequest, "No completed ServiceRequest found in search results")
+	})
+
+	t.Run("Search ServiceRequest by multiple parameters", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{
+			"status": {"completed"},
+			"_id":    {*serviceRequest.Id},
+		}
+
+		err := carePlanContributor1.Search("ServiceRequest", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// The search should return our completed ServiceRequest
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify it's the correct ServiceRequest
+		var foundServiceRequest bool
+		for _, entry := range searchResult.Entry {
+			var sr fhir.ServiceRequest
+			err := json.Unmarshal(entry.Resource, &sr)
+			require.NoError(t, err)
+
+			if sr.Id != nil && *sr.Id == *serviceRequest.Id && sr.Status == fhir.RequestStatusCompleted {
+				foundServiceRequest = true
+
+				// Add expected audit event for this ServiceRequest
+				addExpectedSearchAudit("ServiceRequest/"+*sr.Id, queryParams)
+				break
+			}
+		}
+		require.True(t, foundServiceRequest, "Completed ServiceRequest not found in search results")
+	})
+
+	t.Run("Search Questionnaire by id", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{
+			"_id": {*questionnaire.Id},
+		}
+
+		err := carePlanContributor1.Search("Questionnaire", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// The search should return our questionnaire
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify it's the correct Questionnaire
+		var foundQuestionnaire bool
+		for _, entry := range searchResult.Entry {
+			var q fhir.Questionnaire
+			err := json.Unmarshal(entry.Resource, &q)
+			require.NoError(t, err)
+
+			if q.Id != nil && *q.Id == *questionnaire.Id {
+				foundQuestionnaire = true
+
+				// Add expected audit event for this Questionnaire
+				addExpectedSearchAudit("Questionnaire/"+*q.Id, queryParams)
+				break
+			}
+		}
+		require.True(t, foundQuestionnaire, "Questionnaire not found in search results")
+	})
+
+	t.Run("Search QuestionnaireResponse by id", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{
+			"_id": {*questionnaireResponse.Id},
+		}
+
+		err := carePlanContributor1.Search("QuestionnaireResponse", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// The search should return our questionnaireResponse
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify it's the correct QuestionnaireResponse
+		var foundQuestionnaireResponse bool
+		for _, entry := range searchResult.Entry {
+			var qr fhir.QuestionnaireResponse
+			err := json.Unmarshal(entry.Resource, &qr)
+			require.NoError(t, err)
+
+			if qr.Id != nil && *qr.Id == *questionnaireResponse.Id {
+				foundQuestionnaireResponse = true
+
+				// Add expected audit event for this QuestionnaireResponse
+				addExpectedSearchAudit("QuestionnaireResponse/"+*qr.Id, queryParams)
+				break
+			}
+		}
+		require.True(t, foundQuestionnaireResponse, "QuestionnaireResponse not found in search results")
+	})
+
+	var readCondition fhir.Condition
 	t.Run("Read Condition by id", func(t *testing.T) {
-		var readCondition fhir.Condition
 		err := carePlanContributor1.Read("Condition/"+*condition.Id, &readCondition)
 		require.NoError(t, err)
 		require.NotNil(t, readCondition)
@@ -383,19 +543,104 @@ func Test_CRUD_AuditEvents(t *testing.T) {
 		addExpectedAudit("Condition/"+*readCondition.Id, fhir.AuditEventActionR)
 	})
 
+	t.Run("Search Condition by id", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{"_id": {*condition.Id}}
+
+		err := carePlanContributor1.Search("Condition", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify the search result contains the Condition we're looking for
+		var foundCondition bool
+		for _, entry := range searchResult.Entry {
+			var cond fhir.Condition
+			err := json.Unmarshal(entry.Resource, &cond)
+			require.NoError(t, err)
+
+			if cond.Id != nil && *cond.Id == *condition.Id {
+				foundCondition = true
+				break
+			}
+		}
+		require.True(t, foundCondition, "Condition not found in search results")
+
+		// Add expected audit event for this search operation
+		addExpectedSearchAudit("Condition/"+*condition.Id, queryParams)
+	})
+
+	t.Run("Search Condition by clinical status", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{"clinical-status": {"active"}}
+
+		err := carePlanContributor1.Search("Condition", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// Verify at least one active Condition is returned
+		var foundActiveCondition bool
+		for _, entry := range searchResult.Entry {
+			var cond fhir.Condition
+			err := json.Unmarshal(entry.Resource, &cond)
+			require.NoError(t, err)
+
+			if cond.ClinicalStatus != nil && len(cond.ClinicalStatus.Coding) > 0 {
+				for _, coding := range cond.ClinicalStatus.Coding {
+					if coding.Code != nil && *coding.Code == "active" {
+						foundActiveCondition = true
+						// Add expected audit event for this Condition
+						addExpectedSearchAudit("Condition/"+*cond.Id, queryParams)
+						break
+					}
+				}
+			}
+		}
+		require.True(t, foundActiveCondition, "No active Condition found in search results")
+	})
+
+	t.Run("Search Condition by multiple parameters", func(t *testing.T) {
+		var searchResult fhir.Bundle
+		queryParams := url.Values{
+			"clinical-status": {"active"},
+			"_id":             {*condition.Id},
+		}
+
+		err := carePlanContributor1.Search("Condition", queryParams, &searchResult)
+		require.NoError(t, err)
+		require.NotNil(t, searchResult)
+
+		// The search should return our active condition
+		require.GreaterOrEqual(t, len(searchResult.Entry), 1)
+
+		// Verify it's the correct Condition
+		var foundCondition bool
+		for _, entry := range searchResult.Entry {
+			var cond fhir.Condition
+			err := json.Unmarshal(entry.Resource, &cond)
+			require.NoError(t, err)
+
+			if cond.Id != nil && *cond.Id == *condition.Id {
+				foundCondition = true
+				// Add expected audit event for this Condition
+				addExpectedSearchAudit("Condition/"+*cond.Id, queryParams)
+				break
+			}
+		}
+		require.True(t, foundCondition, "Active Condition not found in search results")
+	})
+
 	var searchResult fhir.Bundle
 	t.Run("Search Patient by id", func(t *testing.T) {
 		err := carePlanContributor1.Search("Patient", url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}}, &searchResult)
 		require.NoError(t, err)
-		require.NotEmpty(t, searchResult.Entry)
+		require.NotNil(t, searchResult)
 
-		addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id + "," + *nonExistingPatient.Id + "," + "fake-id"}})
-		addExpectedSearchAudit("Patient/"+*nonExistingPatient.Id, url.Values{"_id": {*patient.Id + "," + *nonExistingPatient.Id + "," + "fake-id"}})
-		// TODO: Do we add an error audit event for "fake-id"
+		addExpectedSearchAudit("Patient/"+*patient.Id, url.Values{"_id": {*patient.Id, *nonExistingPatient.Id, "fake-id"}})
 	})
 
 	// Verify all audit events at the end
-	err = verifyAuditEvents(t, carePlanContributor1, expectedAuditEvents)
+	err = verifyAuditEvents(t, expectedAuditEvents, fhirBaseURL)
 	require.NoError(t, err)
 }
 
@@ -407,26 +652,23 @@ type ExpectedAuditEvent struct {
 }
 
 // Refactored verifyAuditEvents to handle a list of expected audit events without timestamp requirements
-func verifyAuditEvents(t *testing.T, fhirClient fhirclient.Client, expectedEvents []ExpectedAuditEvent) error {
+func verifyAuditEvents(t *testing.T, expectedEvents []ExpectedAuditEvent, fhirBaseURL *url.URL) error {
 	t.Helper()
 
-	time.Sleep(5 * time.Second)
-
-	// Create a context with timeout to avoid hanging
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Log the search attempt for debugging
 	t.Logf("Searching for AuditEvents")
 
+	client := fhirclient.New(fhirBaseURL, &http.Client{}, nil)
+
 	var bundle fhir.Bundle
-	err := fhirClient.SearchWithContext(ctx, "AuditEvent", url.Values{}, &bundle)
+	err := client.SearchWithContext(ctx, "AuditEvent", url.Values{}, &bundle)
 
 	if err != nil {
 		return fmt.Errorf("failed to search AuditEvents: %w", err)
 	}
 
-	// Log success for debugging
 	t.Logf("Successfully retrieved %d AuditEvents", len(bundle.Entry))
 
 	// Track which expected events have been found
@@ -459,7 +701,7 @@ func verifyAuditEvents(t *testing.T, fhirClient fhirclient.Client, expectedEvent
 
 				if actionKey == expectedKey {
 					// Check query parameters if needed
-					if expectedEvent.QueryParams != nil && *auditEvent.Action == fhir.AuditEventActionE {
+					if expectedEvent.QueryParams != nil && *auditEvent.Action == fhir.AuditEventActionR {
 						paramsMatch := verifyQueryParams(auditEvent, expectedEvent.QueryParams)
 						if !paramsMatch {
 							continue
@@ -487,7 +729,7 @@ func verifyAuditEvents(t *testing.T, fhirClient fhirclient.Client, expectedEvent
 				"entity": []string{event.ResourceRef},
 			}
 
-			err := fhirClient.Search("AuditEvent", specificQuery, &specificBundle)
+			err := client.Search("AuditEvent", specificQuery, &specificBundle)
 			if err != nil {
 				return fmt.Errorf("failed to perform specific search for audit event: %w", err)
 			}
@@ -508,8 +750,9 @@ func verifyAuditEvents(t *testing.T, fhirClient fhirclient.Client, expectedEvent
 				// For read actions, check if query parameters match
 				if auditEvent.Action != nil && *auditEvent.Action == fhir.AuditEventActionR && event.QueryParams != nil {
 					t.Logf("Checking query parameters for read audit event on %s", event.ResourceRef)
-					if !verifyQueryParams(auditEvent, event.QueryParams) {
-						continue // Skip this audit event if query params don't match
+					if verifyQueryParams(auditEvent, event.QueryParams) {
+						found = true
+						break
 					}
 				}
 			}

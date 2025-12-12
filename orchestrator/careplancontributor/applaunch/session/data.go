@@ -1,0 +1,66 @@
+package session
+
+import (
+	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"strings"
+)
+
+type FHIRResource struct {
+	Path     string
+	Resource *any
+}
+
+type Data struct {
+	// TenantID identifies the tenant for which the user session was created.
+	TenantID string
+	// FHIRLauncher is the name of the FHIRLauncher (FHIR client factory) that should be used to create a FHIR client
+	// to interact with the EHR's FHIR API.
+	FHIRLauncher string
+	// TaskIdentifier is the FHIR logical identifier of the Task that is used to launch the app.
+	TaskIdentifier *string
+	// ContextResources contains FHIR resources that define the context of the app launch, e.g. the Patient and Practitioner resource.
+	ContextResources []FHIRResource
+	//Other              any
+	LauncherProperties map[string]string
+}
+
+func (d *Data) Set(path string, resource any) {
+	res := FHIRResource{
+		Path: path,
+	}
+	if resource != nil {
+		res.Resource = &resource
+	}
+	d.ContextResources = append(d.ContextResources, res)
+}
+
+func (d *Data) GetByPath(resourcePath string) *FHIRResource {
+	for _, resource := range d.ContextResources {
+		if resource.Path == resourcePath {
+			return &resource
+		}
+	}
+	return nil
+}
+
+func (d *Data) GetByType(resourceType string) *FHIRResource {
+	for _, resource := range d.ContextResources {
+		if strings.HasPrefix(resource.Path, resourceType+"/") {
+			return &resource
+		}
+	}
+	return nil
+}
+
+func Get[T any](data *Data) *T {
+	var zero T
+	resource := data.GetByType(coolfhir.ResourceType(zero))
+	if resource == nil {
+		return nil
+	}
+	result, ok := (*resource.Resource).(T)
+	if !ok {
+		return nil
+	}
+	return &result
+}

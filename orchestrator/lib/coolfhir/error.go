@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
+
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
-	"net/http"
 )
 
 // SanitizeOperationOutcome removes security-related information from an OperationOutcome, replacing it with a generic message,
@@ -92,7 +93,7 @@ func CreateOperationOutcomeBundleEntryFromError(err error, desc string) fhir.Bun
 // WriteOperationOutcomeFromError writes an OperationOutcome based on the given error as HTTP response.
 // when sent a WriteOperationOutcomeFromError, it will write the contained error code to the header, else it defaults to StatusBadRequest
 func WriteOperationOutcomeFromError(ctx context.Context, err error, desc string, httpResponse http.ResponseWriter) {
-	log.Ctx(ctx).Warn().Msgf("%s failed: %v", desc, err)
+	slog.ErrorContext(ctx, fmt.Sprintf("%s failed: %v", desc, err))
 
 	statusCode := http.StatusInternalServerError
 	var operationOutcome fhir.OperationOutcome
@@ -104,6 +105,9 @@ func WriteOperationOutcomeFromError(ctx context.Context, err error, desc string,
 			statusCode = operationOutcomeErr.HttpStatusCode
 		}
 		operationOutcome = operationOutcomeErr.OperationOutcome
+		if statusCode != http.StatusBadRequest {
+			operationOutcome = SanitizeOperationOutcome(operationOutcome)
+		}
 	} else {
 		// Error type: ErrorWithCode
 		var errorWithCode = new(ErrorWithCode)
@@ -113,12 +117,17 @@ func WriteOperationOutcomeFromError(ctx context.Context, err error, desc string,
 			}
 		}
 
+		diagnostics := http.StatusText(statusCode)
+		// Include error message for bad requests
+		if statusCode == http.StatusBadRequest {
+			diagnostics = err.Error()
+		}
 		operationOutcome = fhir.OperationOutcome{
 			Issue: []fhir.OperationOutcomeIssue{
 				{
 					Severity:    fhir.IssueSeverityError,
 					Code:        fhir.IssueTypeProcessing,
-					Diagnostics: to.Ptr(fmt.Sprintf("%s failed: %s", desc, err.Error())),
+					Diagnostics: to.Ptr(fmt.Sprintf("%s failed: %s", desc, diagnostics)),
 				},
 			},
 		}

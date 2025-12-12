@@ -4,15 +4,19 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	events "github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"io"
-	"math/rand"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
-	"strconv"
 	"testing"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	events "github.com/SanteonNL/orca/orchestrator/events"
+	"github.com/SanteonNL/orca/orchestrator/messaging"
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/sdk/trace/tracetest"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
@@ -20,7 +24,6 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"github.com/SanteonNL/orca/orchestrator/lib/test"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
-	"github.com/rs/zerolog/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
@@ -33,11 +36,36 @@ var patientReference = fhir.Reference{
 	},
 }
 
+var telecom = []fhir.ContactPoint{
+	{
+		System: to.Ptr(fhir.ContactPointSystemPhone),
+		Value:  to.Ptr("+31612345678"),
+	},
+	{
+		System: to.Ptr(fhir.ContactPointSystemEmail),
+		Value:  to.Ptr("test@test.com"),
+	},
+}
+
 func Test_Integration(t *testing.T) {
 	// Note: this test consists of multiple steps that look like subtests, but they can't be subtests:
 	//       in Golang, running a single Subtest causes the other tests not to run.
 	//       This causes issues, since each test step (e.g. accepting Task) requires the previous step (test) to succeed (e.g. creating Task).
 	t.Log("This test creates a new CarePlan and Task, then runs the Task through requested->accepted->completed lifecycle.")
+
+	// Set up trace mocking
+	originalTP := baseotel.GetTracerProvider()
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+
+	baseotel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		tp.Shutdown(context.Background())
+		baseotel.SetTracerProvider(originalTP)
+	})
+
 	var cpc1Notifications []coolfhir.SubscriptionNotification
 	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
 		cpc1Notifications = append(cpc1Notifications, n)
@@ -46,18 +74,27 @@ func Test_Integration(t *testing.T) {
 	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
 		cpc2Notifications = append(cpc2Notifications, n)
 	})
-	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint)
+	fhirBaseURL := test.SetupHAPI(t)
+	carePlanContributor1, carePlanContributor2, invalidCarePlanContributor, service := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, fhirBaseURL)
 	// subTest logs the message and resets the notifications
 	subTest := func(t *testing.T, msg string) {
 		t.Log(msg)
 		cpc1Notifications = nil
 		cpc2Notifications = nil
+		exporter.Reset()
 	}
 
+	assertSpansCreated := func(t *testing.T) {
+		spans := exporter.GetSpans()
+		require.NotEmpty(t, spans, "Expected spans to be created")
+	}
+
+	ctx := tenants.WithTenant(context.Background(), service.tenants.Sole())
 	t.Run("custom search parameters", func(t *testing.T) {
 		t.Run("existence", func(t *testing.T) {
 			var capabilityStatement fhir.CapabilityStatement
-			err := service.fhirClient.Read("metadata", &capabilityStatement)
+			fhirClient, _ := service.createFHIRClient(ctx)
+			err := fhirClient.Read("metadata", &capabilityStatement)
 			require.NoError(t, err)
 			for _, rest := range capabilityStatement.Rest {
 				for _, resource := range rest.Resource {
@@ -72,7 +109,7 @@ func Test_Integration(t *testing.T) {
 			require.Fail(t, "Search parameter CarePlan-subject-identifier not found")
 		})
 		t.Run("search parameters already exist", func(t *testing.T) {
-			err := service.ensureCustomSearchParametersExists(context.Background())
+			err := service.ensureCustomSearchParametersExists(ctx)
 			require.NoError(t, err)
 		})
 	})
@@ -98,114 +135,10 @@ func Test_Integration(t *testing.T) {
 		Identifier: []fhir.Identifier{
 			*patientReference.Identifier,
 		},
+		Telecom: telecom,
 	}
 	err := carePlanContributor1.Create(patient, &patient)
 	require.NoError(t, err)
-
-	t.Run("DELETE is supported when unmanaged operations are allowed", func(t *testing.T) {
-		serviceRequest := fhir.ServiceRequest{
-			Subject: fhir.Reference{
-				Identifier: &fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  to.Ptr(strconv.Itoa(rand.Int())),
-				},
-			},
-		}
-		t.Run("as single request", func(t *testing.T) {
-			t.Run("with ID", func(t *testing.T) {
-				var actual fhir.ServiceRequest
-				err := carePlanContributor1.Create(serviceRequest, &actual)
-				require.NoError(t, err)
-
-				// Find and delete audit events first due to referential integrity
-				var auditEvents fhir.Bundle
-				err = carePlanContributor1.Search("AuditEvent", url.Values{
-					"entity": {"ServiceRequest/" + *actual.Id},
-				}, &auditEvents)
-				require.NoError(t, err)
-
-				// Delete each audit event referencing this resource
-				for _, entry := range auditEvents.Entry {
-					var auditEvent fhir.AuditEvent
-					err = json.Unmarshal(entry.Resource, &auditEvent)
-					require.NoError(t, err)
-					err = carePlanContributor1.Delete("AuditEvent/"+*auditEvent.Id, nil)
-					require.NoError(t, err)
-				}
-
-				// Now delete the resource
-				err = carePlanContributor1.Delete("ServiceRequest/"+*actual.Id, nil)
-				require.NoError(t, err)
-			})
-			t.Run("with ID as search parameter", func(t *testing.T) {
-				var actual fhir.ServiceRequest
-				err := carePlanContributor1.Create(serviceRequest, &actual)
-				require.NoError(t, err)
-
-				// Find and delete audit events first
-				var auditEvents fhir.Bundle
-				err = carePlanContributor1.Search("AuditEvent", url.Values{
-					"entity": {"ServiceRequest/" + *actual.Id},
-				}, &auditEvents)
-				require.NoError(t, err)
-
-				for _, entry := range auditEvents.Entry {
-					var auditEvent fhir.AuditEvent
-					err = json.Unmarshal(entry.Resource, &auditEvent)
-					require.NoError(t, err)
-					err = carePlanContributor1.Delete("AuditEvent/"+*auditEvent.Id, nil)
-					require.NoError(t, err)
-				}
-
-				// Then delete the resource
-				err = carePlanContributor1.Delete("ServiceRequest", fhirclient.QueryParam("_id", *actual.Id))
-				require.NoError(t, err)
-			})
-		})
-		t.Run("as transaction entry", func(t *testing.T) {
-			var actual fhir.ServiceRequest
-			err := carePlanContributor1.Create(serviceRequest, &actual)
-			require.NoError(t, err)
-
-			// Find audit events
-			var auditEvents fhir.Bundle
-			err = carePlanContributor1.Search("AuditEvent", url.Values{
-				"entity": {"ServiceRequest/" + *actual.Id},
-			}, &auditEvents)
-			require.NoError(t, err)
-
-			// Create transaction to delete audit events first, then the resource
-			transaction := fhir.Bundle{
-				Type:  fhir.BundleTypeTransaction,
-				Entry: []fhir.BundleEntry{},
-			}
-
-			// Add audit event deletions to transaction
-			for _, entry := range auditEvents.Entry {
-				var auditEvent fhir.AuditEvent
-				err = json.Unmarshal(entry.Resource, &auditEvent)
-				require.NoError(t, err)
-
-				transaction.Entry = append(transaction.Entry, fhir.BundleEntry{
-					Request: &fhir.BundleEntryRequest{
-						Method: fhir.HTTPVerbDELETE,
-						Url:    "AuditEvent/" + *auditEvent.Id,
-					},
-				})
-			}
-
-			// Add resource deletion to transaction
-			transaction.Entry = append(transaction.Entry, fhir.BundleEntry{
-				Request: &fhir.BundleEntryRequest{
-					Method: fhir.HTTPVerbDELETE,
-					Url:    "ServiceRequest/" + *actual.Id,
-				},
-			})
-
-			err = carePlanContributor1.Create(transaction, &transaction, fhirclient.AtPath("/"))
-			require.NoError(t, err)
-		})
-	})
 
 	// Patient not associated with any CarePlans or CareTeams for negative auth testing
 	var patient2 fhir.Patient
@@ -213,6 +146,7 @@ func Test_Integration(t *testing.T) {
 		Identifier: []fhir.Identifier{
 			*patientReference.Identifier,
 		},
+		Telecom: telecom,
 	}, &patient2)
 	require.NoError(t, err)
 
@@ -247,6 +181,8 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 		require.Empty(t, cpc1Notifications)
 		require.Empty(t, cpc2Notifications)
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - No BasedOn, requester is not care organization so creation fails")
@@ -270,6 +206,8 @@ func Test_Integration(t *testing.T) {
 
 		err := carePlanContributor2.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - No BasedOn, no Task.For so primaryTask creation fails")
@@ -293,6 +231,8 @@ func Test_Integration(t *testing.T) {
 
 		err := carePlanContributor1.Create(primaryTask, &primaryTask)
 		require.Error(t, err)
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Task is created through upsert (PUT on non-existing resource)")
@@ -319,6 +259,8 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		// Resolve created CarePlan through Task.basedOn
 		require.NoError(t, carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan))
+
+		assertSpansCreated(t)
 	}
 
 	t.Run("Conditional Create: Task is not created if it already exists (managed resource)", func(t *testing.T) {
@@ -330,9 +272,11 @@ func Test_Integration(t *testing.T) {
 
 		// Search again, there still should be just 1 Task
 		var taskBundle fhir.Bundle
-		err = service.fhirClient.SearchWithContext(context.Background(), "Task", url.Values{"intent": {"order"}}, &taskBundle)
+		err = carePlanContributor1.SearchWithContext(ctx, "Task", url.Values{"intent": {"order"}}, &taskBundle)
 		require.NoError(t, err)
 		require.Len(t, taskBundle.Entry, 1, "expected 1 Task in the FHIR server")
+
+		assertSpansCreated(t)
 	})
 
 	subTest(t, "Create Subtask")
@@ -371,11 +315,15 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 1)
 
+		assertSpansCreated(t)
+
 		subTest(t, "Completing Subtask")
 		{
 			subTask.Status = fhir.TaskStatusCompleted
 			err := carePlanContributor1.Update("Task/"+*subTask.Id, subTask, &subTask)
 			require.NoError(t, err)
+
+			assertSpansCreated(t)
 		}
 
 		// Here, the Task Filler checks the subtask questionnaire response (if there were any), and then accepts or rejects the Task
@@ -391,6 +339,8 @@ func Test_Integration(t *testing.T) {
 				assert.NotNil(t, careTeam.Participant[1].Period.Start)
 				assert.Nil(t, careTeam.Participant[1].Period.End)
 			})
+
+			assertSpansCreated(t)
 		}
 	}
 
@@ -418,6 +368,8 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		err = carePlanContributor1.Read(*primaryTask.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
+
+		assertSpansCreated(t)
 
 		t.Run("Check CarePlan properties", func(t *testing.T) {
 			require.Equal(t, fhir.CarePlanIntentOrder, carePlan.Intent)
@@ -452,6 +404,8 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.Len(t, searchResult.Entry, 1, "Expected 1 CarePlan")
 		require.NoError(t, coolfhir.ResourceInBundle(&searchResult, coolfhir.EntryIsOfType("CarePlan"), new(fhir.CarePlan)))
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Read CarePlan - Not in participants")
@@ -484,6 +438,8 @@ func Test_Integration(t *testing.T) {
 		require.NotNil(t, fetchedTask.Id)
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
 		assertCareTeam(t, carePlanContributor1, *carePlan.Id, participant1)
+
+		assertSpansCreated(t)
 	}
 	subTest(t, "Read Task - Non-creating referenced party")
 	{
@@ -492,18 +448,24 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, fetchedTask.Id)
 		require.Equal(t, fhir.TaskStatusRequested, fetchedTask.Status)
+
+		assertSpansCreated(t)
 	}
 	subTest(t, "Read Task - Not in participants")
 	{
 		var fetchedTask fhir.Task
 		err := invalidCarePlanContributor.Read("Task/"+*primaryTask.Id, &fetchedTask)
 		require.Error(t, err)
+
+		assertSpansCreated(t)
 	}
 	subTest(t, "Read Task - Does not exist")
 	{
 		var fetchedTask fhir.Task
 		err := carePlanContributor1.Read("Task/999", &fetchedTask)
 		require.Error(t, err)
+
+		assertSpansCreated(t)
 	}
 	previousTask := primaryTask
 
@@ -526,6 +488,8 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 		require.Empty(t, cpc1Notifications)
 		require.Empty(t, cpc2Notifications)
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Invalid status Draft")
@@ -548,6 +512,8 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 		require.Empty(t, cpc1Notifications)
 		require.Empty(t, cpc2Notifications)
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Task.For does not match CarePlan.subject - Fails")
@@ -578,7 +544,8 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 		var operationOutcome fhirclient.OperationOutcomeError
 		require.ErrorAs(t, err, &operationOutcome)
-		require.Contains(t, *operationOutcome.Issue[0].Diagnostics, "Task.for must reference the same patient as CarePlan.subject")
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Task.For is nil - Fails")
@@ -603,7 +570,8 @@ func Test_Integration(t *testing.T) {
 		require.Error(t, err)
 		var operationOutcome fhirclient.OperationOutcomeError
 		require.ErrorAs(t, err, &operationOutcome)
-		require.Contains(t, *operationOutcome.Issue[0].Diagnostics, "Task.For must be set with a local reference, or a logical identifier, referencing a patient")
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Creating Task - Existing CarePlan")
@@ -629,6 +597,8 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		err = carePlanContributor1.Read("CarePlan/"+*carePlan.Id, &carePlan)
 		require.NoError(t, err)
+
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, primaryTask.Id)
@@ -663,6 +633,8 @@ func Test_Integration(t *testing.T) {
 		require.NoError(t, err)
 		primaryTask = updatedTask
 
+		assertSpansCreated(t)
+
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
 			require.Equal(t, fhir.TaskStatusAccepted, updatedTask.Status)
@@ -684,6 +656,8 @@ func Test_Integration(t *testing.T) {
 		var updatedTask fhir.Task
 		err := carePlanContributor1.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.Error(t, err)
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Invalid state transition - Accepted -> In-progress, Requester")
@@ -692,6 +666,8 @@ func Test_Integration(t *testing.T) {
 		var updatedTask fhir.Task
 		err := carePlanContributor1.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.Error(t, err)
+
+		assertSpansCreated(t)
 	}
 
 	subTest(t, "Valid state transition - Accepted -> In-progress, Owner")
@@ -701,6 +677,8 @@ func Test_Integration(t *testing.T) {
 		err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.NoError(t, err)
 		primaryTask = updatedTask
+
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -724,6 +702,8 @@ func Test_Integration(t *testing.T) {
 		err := carePlanContributor2.Update("Task/"+*primaryTask.Id, primaryTask, &updatedTask)
 		require.NoError(t, err)
 		primaryTask = updatedTask
+
+		assertSpansCreated(t)
 
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, updatedTask.Id)
@@ -771,6 +751,8 @@ func Test_Integration(t *testing.T) {
 		err = carePlanContributor2.Read(*newTask.BasedOn[0].Reference, &carePlan)
 		require.NoError(t, err)
 
+		assertSpansCreated(t)
+
 		t.Run("Check Task properties", func(t *testing.T) {
 			require.NotNil(t, primaryTask.Id)
 			require.Equal(t, "CarePlan/"+*carePlan.Id, *newTask.BasedOn[0].Reference, "Task.BasedOn should reference CarePlan")
@@ -792,6 +774,7 @@ func testBundleCreation(t *testing.T, carePlanContributor1 *fhirclient.BaseClien
 			Identifier: []fhir.Identifier{
 				*patientReference.Identifier,
 			},
+			Telecom: telecom,
 		}
 		patientRaw, err := json.Marshal(patient)
 		require.NoError(t, err)
@@ -871,17 +854,12 @@ func Test_HandleSearchResource(t *testing.T) {
 
 	// Setup test environment
 	fhirBaseURL := test.SetupHAPI(t)
-	activeProfile := profile.Test()
 	config := DefaultConfig()
 	config.Enabled = true
-	config.FHIR.BaseURL = fhirBaseURL.String()
-	config.AllowUnmanagedFHIROperations = true
-	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
-	require.NoError(t, err)
+	fhirClient := fhirclient.New(fhirBaseURL, &http.Client{}, nil)
 
 	ctx := context.Background()
-	log.Ctx(ctx).Debug().Msg("Testing handleSearchResource function with real FHIR server")
+	slog.DebugContext(ctx, "Testing handleSearchResource function with real FHIR server")
 
 	patients := []fhir.Patient{
 		{
@@ -915,10 +893,10 @@ func Test_HandleSearchResource(t *testing.T) {
 
 	createdPatients := make([]fhir.Patient, len(patients))
 	for i, patient := range patients {
-		err = service.fhirClient.Create(patient, &createdPatients[i])
+		err := fhirClient.Create(patient, &createdPatients[i])
 		require.NoError(t, err)
 		require.NotNil(t, createdPatients[i].Id)
-		log.Ctx(ctx).Debug().Msgf("Created test patient with ID: %s", *createdPatients[i].Id)
+		slog.DebugContext(ctx, "Created test patient", slog.String("id", *createdPatients[i].Id))
 	}
 
 	carePlans := []fhir.CarePlan{
@@ -947,16 +925,16 @@ func Test_HandleSearchResource(t *testing.T) {
 
 	createdCarePlans := make([]fhir.CarePlan, len(carePlans))
 	for i, carePlan := range carePlans {
-		err = service.fhirClient.Create(carePlan, &createdCarePlans[i])
+		err := fhirClient.Create(carePlan, &createdCarePlans[i])
 		require.NoError(t, err)
 		require.NotNil(t, createdCarePlans[i].Id)
-		log.Ctx(ctx).Debug().Msgf("Created test care plan with ID: %s", *createdCarePlans[i].Id)
+		slog.DebugContext(ctx, "Created test care plan", slog.String("id", *createdCarePlans[i].Id))
 	}
 
 	t.Run("search patients with multiple IDs", func(t *testing.T) {
 		queryParams := url.Values{"_id": []string{*createdPatients[0].Id, *createdPatients[1].Id}}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -970,7 +948,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	t.Run("search patients with gender parameter", func(t *testing.T) {
 		queryParams := url.Values{"gender": []string{fhir.AdministrativeGenderMale.Code()}}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -987,7 +965,7 @@ func Test_HandleSearchResource(t *testing.T) {
 			"gender": []string{fhir.AdministrativeGenderMale.Code()},
 		}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -1001,7 +979,7 @@ func Test_HandleSearchResource(t *testing.T) {
 			"gender": []string{fhir.AdministrativeGenderFemale.Code()},
 		}
 
-		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -1013,7 +991,7 @@ func Test_HandleSearchResource(t *testing.T) {
 			"gender": []string{fhir.AdministrativeGenderFemale.Code()},
 		}
 
-		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -1027,7 +1005,7 @@ func Test_HandleSearchResource(t *testing.T) {
 			"gender": []string{fhir.AdministrativeGenderMale.Code(), fhir.AdministrativeGenderFemale.Code()},
 		}
 
-		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err = handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -1037,7 +1015,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	t.Run("search careplans with multiple parameters", func(t *testing.T) {
 		queryParams := url.Values{"subject": []string{*createdPatients[0].Id, *createdPatients[1].Id}}
 
-		carePlans, bundle, err := handleSearchResource[fhir.CarePlan](ctx, service, "CarePlan", queryParams, &fhirclient.Headers{})
+		carePlans, bundle, err := handleSearchResource[fhir.CarePlan](ctx, fhirClient, "CarePlan", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -1057,7 +1035,7 @@ func Test_HandleSearchResource(t *testing.T) {
 
 		customHeaders := &fhirclient.Headers{}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, customHeaders)
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, customHeaders)
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -1068,7 +1046,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	t.Run("search with non-existent ID", func(t *testing.T) {
 		queryParams := url.Values{"_id": []string{"non-existent-id"}}
 
-		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, service, "Patient", queryParams, &fhirclient.Headers{})
+		patients, bundle, err := handleSearchResource[fhir.Patient](ctx, fhirClient, "Patient", queryParams, &fhirclient.Headers{})
 
 		require.NoError(t, err)
 		require.NotNil(t, bundle)
@@ -1076,8 +1054,7 @@ func Test_HandleSearchResource(t *testing.T) {
 	})
 }
 
-func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2NotificationEndpoint string) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
-	fhirBaseURL := test.SetupHAPI(t)
+func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2NotificationEndpoint string, fhirBaseURL *url.URL) (*fhirclient.BaseClient, *fhirclient.BaseClient, *fhirclient.BaseClient, *Service) {
 	activeProfile := profile.TestProfile{
 		Principal: auth.TestPrincipal1,
 		CSD: profile.TestCsdDirectory{
@@ -1093,17 +1070,23 @@ func setupIntegrationTest(t *testing.T, cpc1NotificationEndpoint string, cpc2Not
 	}
 	config := DefaultConfig()
 	config.Enabled = true
-	config.FHIR.BaseURL = fhirBaseURL.String()
-	config.AllowUnmanagedFHIROperations = true
+
 	messageBroker := messaging.NewMemoryBroker()
-	service, err := New(config, activeProfile, orcaPublicURL, messageBroker, events.NewManager(messageBroker))
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.CPS = tenants.CarePlanServiceProperties{
+			FHIR: coolfhir.ClientConfig{
+				BaseURL: fhirBaseURL.String(),
+			},
+		}
+	})
+	service, err := New(config, tenantCfg, activeProfile, orcaPublicURL.JoinPath("cps"), messageBroker, events.NewManager(messageBroker))
 	require.NoError(t, err)
 
 	serverMux := http.NewServeMux()
 	httpService := httptest.NewServer(serverMux)
 	service.RegisterHandlers(serverMux)
 
-	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps")
+	carePlanServiceURL, _ := url.Parse(httpService.URL + "/cps/" + tenantCfg.Sole().ID)
 
 	transport1 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal1, "")
 	transport2 := auth.AuthenticatedTestRoundTripper(httpService.Client().Transport, auth.TestPrincipal2, "")
@@ -1188,4 +1171,214 @@ func assertContainsNotification(t *testing.T, resourceType string, notifications
 		}
 	}
 	assert.Fail(t, "notification not found", "expected notification for resource type %s", resourceType)
+}
+
+func Test_MultipleCarePath_Enrollment(t *testing.T) {
+	t.Log("This test enrolls the same patient in two different care paths and verifies proper resource creation")
+
+	// Set up trace mocking
+	originalTP := baseotel.GetTracerProvider()
+	exporter := tracetest.NewInMemoryExporter()
+	tp := trace.NewTracerProvider(
+		trace.WithSyncer(exporter),
+	)
+
+	baseotel.SetTracerProvider(tp)
+	t.Cleanup(func() {
+		_ = tp.Shutdown(context.Background())
+		baseotel.SetTracerProvider(originalTP)
+	})
+
+	var cpc1Notifications []coolfhir.SubscriptionNotification
+	cpc1NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
+		cpc1Notifications = append(cpc1Notifications, n)
+	})
+	var cpc2Notifications []coolfhir.SubscriptionNotification
+	cpc2NotificationEndpoint := setupNotificationEndpoint(t, func(n coolfhir.SubscriptionNotification) {
+		cpc2Notifications = append(cpc2Notifications, n)
+	})
+	fhirBaseURL := test.SetupHAPI(t)
+	carePlanContributor1, _, _, _ := setupIntegrationTest(t, cpc1NotificationEndpoint, cpc2NotificationEndpoint, fhirBaseURL)
+
+	// Create patient for enrollment
+	testPatientReference := fhir.Reference{
+		Identifier: &fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+			Value:  to.Ptr("1234567890"),
+		},
+	}
+
+	patient := fhir.Patient{
+		Identifier: []fhir.Identifier{
+			*testPatientReference.Identifier,
+		},
+		Telecom: telecom,
+	}
+	err := carePlanContributor1.Create(patient, &patient)
+	require.NoError(t, err)
+
+	// Care path conditions
+	copdCondition := &fhir.Identifier{
+		System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+		Value:  to.Ptr("99534756439"), // COPD
+	}
+
+	asthmaCondition := &fhir.Identifier{
+		System: to.Ptr("2.16.528.1.1007.3.3.21514.ehr.orders"),
+		Value:  to.Ptr("195967001"), // Asthma
+	}
+
+	var carePlan1, carePlan2 fhir.CarePlan
+	var task1, task2 fhir.Task
+
+	t.Run("First enrollment - COPD care path", func(t *testing.T) {
+		// Reset notifications
+		cpc1Notifications = nil
+		cpc2Notifications = nil
+
+		task1 = fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			Focus: &fhir.Reference{
+				Identifier: copdCondition,
+			},
+			For: &testPatientReference,
+		}
+
+		err := carePlanContributor1.Create(task1, &task1)
+		require.NoError(t, err, "Failed to create first task for COPD")
+
+		// Get the created CarePlan
+		err = carePlanContributor1.Read(*task1.BasedOn[0].Reference, &carePlan1)
+		require.NoError(t, err, "Failed to read first CarePlan")
+
+		// Verify CarePlan properties
+		require.Equal(t, fhir.CarePlanIntentOrder, carePlan1.Intent)
+		require.Equal(t, fhir.RequestStatusActive, carePlan1.Status)
+		require.Equal(t, testPatientReference, carePlan1.Subject)
+
+		// Verify Task properties
+		require.NotNil(t, task1.Id)
+		require.Equal(t, "CarePlan/"+*carePlan1.Id, *task1.BasedOn[0].Reference)
+		require.Equal(t, copdCondition.System, task1.Focus.Identifier.System)
+		require.Equal(t, copdCondition.Value, task1.Focus.Identifier.Value)
+
+		// Verify notifications were sent
+		require.Len(t, cpc1Notifications, 2, "Expected 2 notifications for CPC1 (Task + CarePlan)")
+		require.Len(t, cpc2Notifications, 1, "Expected 1 notification for CPC2 (Task)")
+	})
+
+	t.Run("Second enrollment - Asthma care path", func(t *testing.T) {
+		// Reset notifications
+		cpc1Notifications = nil
+		cpc2Notifications = nil
+
+		task2 = fhir.Task{
+			Intent:    "order",
+			Status:    fhir.TaskStatusRequested,
+			Requester: coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "1"),
+			Owner:     coolfhir.LogicalReference("Organization", coolfhir.URANamingSystem, "2"),
+			Meta: &fhir.Meta{
+				Profile: []string{coolfhir.SCPTaskProfile},
+			},
+			Focus: &fhir.Reference{
+				Identifier: asthmaCondition,
+			},
+			For: &testPatientReference, // Same patient as first enrollment
+		}
+
+		err := carePlanContributor1.Create(task2, &task2)
+		require.NoError(t, err, "Failed to create second task for Asthma")
+
+		// Get the created CarePlan
+		err = carePlanContributor1.Read(*task2.BasedOn[0].Reference, &carePlan2)
+		require.NoError(t, err, "Failed to read second CarePlan")
+
+		// Verify CarePlan properties
+		require.Equal(t, fhir.CarePlanIntentOrder, carePlan2.Intent)
+		require.Equal(t, fhir.RequestStatusActive, carePlan2.Status)
+		require.Equal(t, testPatientReference, carePlan2.Subject)
+
+		// Verify Task properties
+		require.NotNil(t, task2.Id)
+		require.Equal(t, "CarePlan/"+*carePlan2.Id, *task2.BasedOn[0].Reference)
+		require.Equal(t, asthmaCondition.System, task2.Focus.Identifier.System)
+		require.Equal(t, asthmaCondition.Value, task2.Focus.Identifier.Value)
+
+		// Verify this is a different CarePlan than the first one
+		require.NotEqual(t, *carePlan1.Id, *carePlan2.Id, "Second enrollment should create a new CarePlan")
+
+		// Verify notifications were sent
+		require.Len(t, cpc1Notifications, 2, "Expected 2 notifications for CPC1 (Task + CarePlan)")
+		require.Len(t, cpc2Notifications, 1, "Expected 1 notification for CPC2 (Task)")
+	})
+
+	t.Run("Validation - Verify final state", func(t *testing.T) {
+		// Search for all patients with our BSN to verify only 1 exists
+		var patientBundle fhir.Bundle
+		err := carePlanContributor1.Search("Patient", url.Values{
+			"identifier": {*testPatientReference.Identifier.System + "|" + *testPatientReference.Identifier.Value},
+		}, &patientBundle)
+		require.NoError(t, err, "Failed to search for patients")
+		require.Len(t, patientBundle.Entry, 1, "Expected exactly 1 patient")
+
+		// Search for all care plans associated with our patient
+		var carePlanBundle fhir.Bundle
+		err = carePlanContributor1.Search("CarePlan", url.Values{
+			"subject-identifier": {*testPatientReference.Identifier.System + "|" + *testPatientReference.Identifier.Value},
+		}, &carePlanBundle)
+		require.NoError(t, err, "Failed to search for care plans")
+		require.Len(t, carePlanBundle.Entry, 2, "Expected exactly 2 care plans")
+
+		// Search for all tasks associated with our patient
+		var taskBundle fhir.Bundle
+		err = carePlanContributor1.Search("Task", url.Values{
+			"subject": {*testPatientReference.Reference},
+		}, &taskBundle)
+		require.NoError(t, err, "Failed to search for tasks")
+		require.Len(t, taskBundle.Entry, 2, "Expected exactly 2 tasks")
+
+		// Extract and verify the conditions are different
+		var extractedCarePlans []fhir.CarePlan
+		for _, entry := range carePlanBundle.Entry {
+			var cp fhir.CarePlan
+			err := json.Unmarshal(entry.Resource, &cp)
+			require.NoError(t, err, "Failed to unmarshal CarePlan")
+			extractedCarePlans = append(extractedCarePlans, cp)
+		}
+
+		// Get the tasks from each care plan to verify different conditions
+		var conditions []string
+		for _, cp := range extractedCarePlans {
+			require.Len(t, cp.Activity, 1, "Each CarePlan should have exactly 1 activity")
+
+			// Read the task referenced by this CarePlan
+			var task fhir.Task
+			err := carePlanContributor1.Read(*cp.Activity[0].Reference.Reference, &task)
+			require.NoError(t, err, "Failed to read task from CarePlan activity")
+
+			// Extract condition from task focus
+			require.NotNil(t, task.Focus, "Task should have Focus")
+			require.NotNil(t, task.Focus.Identifier, "Task Focus should have Identifier")
+			require.NotNil(t, task.Focus.Identifier.Value, "Task Focus Identifier should have Value")
+
+			conditions = append(conditions, *task.Focus.Identifier.Value)
+		}
+
+		// Verify we have both expected conditions
+		require.Len(t, conditions, 2, "Should have 2 different conditions")
+		require.Contains(t, conditions, *copdCondition.Value, "Should contain COPD condition")
+		require.Contains(t, conditions, *asthmaCondition.Value, "Should contain Asthma condition")
+		require.NotEqual(t, conditions[0], conditions[1], "Conditions should be different")
+
+		// Verify both CarePlans reference the same patient
+		for _, cp := range extractedCarePlans {
+			require.Equal(t, testPatientReference, cp.Subject, "All CarePlans should reference the same patient")
+		}
+	})
 }

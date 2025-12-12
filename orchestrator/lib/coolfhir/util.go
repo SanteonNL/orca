@@ -7,15 +7,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/url"
 	"path"
 	"slices"
 	"strconv"
 	"strings"
 
-	"github.com/rs/zerolog/log"
-
 	fhirclient "github.com/SanteonNL/go-fhir-client"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 
@@ -254,11 +254,15 @@ func HasIdentifier(needle fhir.Identifier, haystack ...fhir.Identifier) bool {
 func ToString(resource interface{}) string {
 	switch r := resource.(type) {
 	case *fhir.Identifier:
-		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
+		return IdentifierToToken(*r)
 	case fhir.Identifier:
-		return fmt.Sprintf("%s|%s", *r.System, *r.Value)
+		return IdentifierToToken(r)
 	}
 	return fmt.Sprintf("%T(%v)", resource, resource)
+}
+
+func IdentifierToToken(r fhir.Identifier) string {
+	return fmt.Sprintf("%s|%s", to.EmptyString(r.System), to.EmptyString(r.Value))
 }
 
 func HttpMethodToVerb(method string) fhir.HTTPVerb {
@@ -369,7 +373,7 @@ func ParseExternalLiteralReference(literal string, resourceType string) (*url.UR
 func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource interface{}, additionalHeaders ...map[string]string) {
 	data, err := json.MarshalIndent(resource, "", "  ")
 	if err != nil {
-		log.Err(err).Msg("Failed to marshal response")
+		slog.Error("Failed to marshal response", slog.String(logging.FieldError, err.Error()))
 		httpStatus = http.StatusInternalServerError
 		data = []byte(`{"resourceType":"OperationOutcome","issue":[{"severity":"error","code":"processing","diagnostics":"Failed to marshal response"}]}`)
 	}
@@ -383,7 +387,7 @@ func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource int
 	httpResponse.WriteHeader(httpStatus)
 	_, err = httpResponse.Write(data)
 	if err != nil {
-		log.Err(err).Msgf("Failed to write response: %s", string(data))
+		slog.Error("Failed to write response", slog.String(logging.FieldError, err.Error()), slog.String("data", string(data)))
 	}
 }
 
@@ -423,7 +427,7 @@ func GetTaskByIdentifier(ctx context.Context, fhirClient fhirclient.Client, iden
 		if err := ResourceInBundle(&existingTaskBundle, EntryIsOfType("Task"), &existingTask); err != nil {
 			return nil, fmt.Errorf("unable to get existing CPS Task resource from search bundle: %v", err)
 		}
-		log.Ctx(ctx).Debug().Msg("Found existing CPS Task resource for demo task")
+		slog.DebugContext(ctx, "Found existing CPS Task resource for demo task")
 		return &existingTask, nil
 	} else if len(existingTaskBundle.Entry) > 1 {
 		return nil, fmt.Errorf("found multiple existing CPS Tasks for identifier: %s", *identifier.System+"|"+*identifier.Value)

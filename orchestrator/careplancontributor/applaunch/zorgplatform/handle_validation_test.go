@@ -9,9 +9,11 @@ import (
 	"encoding/pem"
 	"errors"
 	"os"
-	"strings"
 	"testing"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/lib/crypto"
 
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/SanteonNL/orca/orchestrator/user"
@@ -23,7 +25,7 @@ import (
 
 // This test does not run the expiry checks as the Expires date in the assertion is in the past
 func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.T) {
-	sessionManager := user.NewSessionManager(time.Minute)
+	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 	s := &Service{
 		sessionManager: sessionManager,
 	}
@@ -47,6 +49,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 		expectedRoleCode       string
 		expectedRoleCodeSystem string
 		expectedError          error
+		currentTime            *time.Time
 	}{
 		{
 			name:                   "Happy flow",
@@ -81,6 +84,18 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 			expectedRoleCodeSystem: "http://snomed.info/sct",
 			expectedError:          errors.New("invalid iss. Found [urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8] but expected [invalid_issuer]"),
 		},
+		{
+			name:                   "Happy flow",
+			audience:               "https://partner-application.nl",
+			issuer:                 "urn:oid:2.16.840.1.113883.2.4.3.124.8.50.8",
+			expectedSubj:           "USER1@2.16.840.1.113883.2.4.3.124.8.50.8",
+			expectedBSN:            "999999205",
+			expectedWorkflowId:     "test123-workflow-id",
+			expectedRoleCode:       "223366009",
+			expectedRoleCodeSystem: "http://snomed.info/sct",
+			expectedError:          errors.New("current time 2025-01-01 01:01:00 +0000 UTC is not within the Conditions validity period [2019-04-19 12:55:23.023 +0000 UTC, 2019-04-19 13:07:23.023 +0000 UTC]"),
+			currentTime:            to.Ptr(time.Date(2025, 1, 1, 1, 1, 0, 0, time.UTC)),
+		},
 	}
 
 	for _, tt := range tests {
@@ -88,6 +103,20 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 
 			s.config.DecryptConfig.Audience = tt.audience
 			s.config.DecryptConfig.Issuer = tt.issuer
+
+			if tt.currentTime == nil {
+				now = func() time.Time {
+					// Date of test fixture
+					return time.Date(2019, 4, 19, 12, 57, 0, 0, time.UTC)
+				}
+			} else {
+				now = func() time.Time {
+					return *tt.currentTime
+				}
+			}
+			defer func() {
+				now = time.Now
+			}()
 
 			// Validate Audience
 			err := s.validateAudience(decryptedAssertion)
@@ -111,8 +140,8 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
 				require.NoError(t, err)
-				subjectNameId := *practitioner.Identifier[0].Value + "@" + *practitioner.Identifier[0].System
-				assert.Equal(t, tt.expectedSubj, subjectNameId)
+				assert.Equal(t, HIX_LOCALUSER_SYSTEM, *practitioner.Identifier[0].System)
+				assert.Equal(t, tt.expectedSubj, *practitioner.Identifier[0].Value)
 			}
 
 			// Extract Resource ID
@@ -142,21 +171,12 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 				assert.Equal(t, tt.expectedRoleCode, *practitionerRole.Code[0].Coding[0].Code)
 				assert.Equal(t, tt.expectedRoleCodeSystem, *practitionerRole.Code[0].Coding[0].System)
 
-				// Verify both identifiers are set
-				assert.Len(t, practitionerRole.Identifier, 2)
-				expectedParts := strings.Split(tt.expectedSubj, "@")
-				userIdentifier := fhir.Identifier{
-					System: to.Ptr(HIX_LOCALUSER_SYSTEM),
-					Value:  to.Ptr(expectedParts[0]),
-				}
-
-				orgIdentifier := fhir.Identifier{
-					System: to.Ptr(HIX_ORG_OID_SYSTEM),
-					Value:  to.Ptr(expectedParts[1]),
-				}
-
-				assert.Contains(t, practitionerRole.Identifier, userIdentifier)
-				assert.Contains(t, practitionerRole.Identifier, orgIdentifier)
+				assert.Equal(t, []fhir.Identifier{
+					{
+						System: to.Ptr(HIX_LOCALUSER_SYSTEM),
+						Value:  to.Ptr(tt.expectedSubj),
+					},
+				}, practitionerRole.Identifier)
 			}
 
 			//TODO: Add signature validation
@@ -166,7 +186,7 @@ func TestValidateAudienceIssuerAndExtractSubjectAndExtractResourceID(t *testing.
 }
 
 func TestValidateTokenExpiry(t *testing.T) {
-	sessionManager := user.NewSessionManager(time.Minute)
+	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 	s := &Service{
 		sessionManager: sessionManager,
 	}
@@ -176,6 +196,7 @@ func TestValidateTokenExpiry(t *testing.T) {
 		created       string
 		expires       string
 		expectedError error
+		currentTime   *time.Time
 	}{
 		{
 			name:          "Valid token",
@@ -185,15 +206,17 @@ func TestValidateTokenExpiry(t *testing.T) {
 		},
 		{
 			name:          "Token not yet valid",
-			created:       FormatXSDDateTime(time.Now().Add(5 * time.Minute)),
-			expires:       FormatXSDDateTime(time.Now().Add(10 * time.Minute)),
-			expectedError: errors.New("token is not valid at the current time"),
+			created:       "2024-01-01T00:00:00.000Z",
+			expires:       "2024-01-01T01:00:00.000Z",
+			expectedError: errors.New("SecurityTokenResponse is not valid at the current time: 2025-01-01 01:01:00 +0000 UTC, expected between [2024-01-01 00:00:00 +0000 UTC, 2024-01-01 01:00:00 +0000 UTC]"),
+			currentTime:   to.Ptr(time.Date(2025, 1, 1, 1, 1, 0, 0, time.UTC)), // Simulate a future time
 		},
 		{
 			name:          "Token expired",
-			created:       FormatXSDDateTime(time.Now().Add(-10 * time.Minute)),
-			expires:       FormatXSDDateTime(time.Now().Add(-5 * time.Minute)),
-			expectedError: errors.New("token is not valid at the current time"),
+			created:       "2024-01-01T00:00:00.000Z",
+			expires:       "2024-01-01T00:30:00.000Z",
+			expectedError: errors.New("SecurityTokenResponse is not valid at the current time: 2024-01-01 01:00:00 +0000 UTC, expected between [2024-01-01 00:00:00 +0000 UTC, 2024-01-01 00:30:00 +0000 UTC]"),
+			currentTime:   to.Ptr(time.Date(2024, 1, 1, 1, 0, 0, 0, time.UTC)), // Simulate a time after the token has expired
 		},
 		{
 			name:          "Invalid created time format",
@@ -211,16 +234,25 @@ func TestValidateTokenExpiry(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.currentTime != nil {
+				now = func() time.Time {
+					return *tt.currentTime
+				}
+			}
+			defer func() {
+				now = time.Now
+			}()
+
 			doc := etree.NewDocument()
-			ctx := context.Background()
-			root := doc.CreateElement("Assertion")
-			timestamp := root.CreateElement("u:Timestamp")
-			created := timestamp.CreateElement("u:Created")
+			root := doc.CreateElement("trust:RequestSecurityTokenResponseCollection")
+			response := root.CreateElement("trust:RequestSecurityTokenResponse")
+			lifetime := response.CreateElement("trust:Lifetime")
+			created := lifetime.CreateElement("u:Created")
 			created.SetText(tt.created)
-			expires := timestamp.CreateElement("u:Expires")
+			expires := lifetime.CreateElement("u:Expires")
 			expires.SetText(tt.expires)
 
-			err := s.validateAssertionExpiry(ctx, doc)
+			err := s.validateResponseExpiry(root)
 			if tt.expectedError != nil {
 				assert.EqualError(t, err, tt.expectedError.Error())
 			} else {
@@ -230,7 +262,7 @@ func TestValidateTokenExpiry(t *testing.T) {
 	}
 }
 func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
-	sessionManager := user.NewSessionManager(time.Minute)
+	sessionManager := user.NewSessionManager[session.Data](time.Minute)
 
 	zorgplatformCertData, err := os.ReadFile("zorgplatform.online.pem")
 	require.NoError(t, err)
@@ -252,16 +284,15 @@ func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
 				},
 			},
 		},
-		SubjectNameId:  "Subject",
 		WorkflowId:     "workflow-1234",
 		ServiceRequest: fhir.ServiceRequest{},
 	}
 
 	s := &Service{
 		sessionManager:        sessionManager,
-		zorgplatformCert:      zorgplatformX509Cert,                 // used to verify the signature
-		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey), // used by the forger to sign the assertion
-		signingCertificate:    keyPair.Certificate,                  // used by the forger to sign the assertion
+		zorgplatformSignCerts: []*x509.Certificate{zorgplatformX509Cert}, // used to verify the signature
+		signingCertificateKey: keyPair.PrivateKey.(*rsa.PrivateKey),      // used by the forger to sign the assertion
+		signingCertificate:    keyPair.Certificate,                       // used by the forger to sign the assertion
 	}
 
 	forgedAssertion, err := s.createSAMLAssertion(launchContext, hcpTokenType)
@@ -274,6 +305,42 @@ func TestValidateZorgplatformForgedSignatureSelfSigned(t *testing.T) {
 }
 
 func TestService_parseSamlResponse(t *testing.T) {
+	t.Run("ok", func(t *testing.T) {
+		certificate, err := tls.LoadX509KeyPair("test-certificate.pem", "test-key.pem")
+		require.NoError(t, err)
+		samlResponse := createSAMLResponse(t, certificate.Leaf)
+		now = func() time.Time {
+			return time.Date(2024, 11, 06, 15, 57, 0, 0, time.UTC)
+		}
+		defer func() {
+			now = time.Now
+		}()
+		s := &Service{
+			decryptCertificate: crypto.RsaSuite{
+				PrivateKey: certificate.PrivateKey.(*rsa.PrivateKey),
+				Cert:       certificate.Leaf,
+			},
+			zorgplatformSignCerts: []*x509.Certificate{certificate.Leaf},
+			config: Config{
+				DecryptConfig: DecryptConfig{
+					Audience: "https://partner-application.nl",
+					Issuer:   "unit-test",
+				},
+			},
+		}
+		ctx := context.Background()
+
+		actual, err := s.parseSamlResponse(ctx, samlResponse)
+
+		require.NoError(t, err)
+		assert.NotEmpty(t, actual)
+		assert.Equal(t, "999999151", actual.Bsn)
+		assert.Len(t, actual.Practitioner.Identifier, 1)
+		assert.Equal(t, HIX_LOCALUSER_SYSTEM, *actual.Practitioner.Identifier[0].System)
+		assert.Equal(t, "999999999@urn:oid:2.16.840.1.113883.4.1", *actual.Practitioner.Identifier[0].Value)
+		assert.Equal(t, "b526e773-e1a6-4533-bd00-1360c97e745f", actual.WorkflowId)
+
+	})
 	t.Run("<Error> response", func(t *testing.T) {
 		s := &Service{}
 		doc := etree.NewDocument()
@@ -286,6 +353,25 @@ func TestService_parseSamlResponse(t *testing.T) {
 		actual, err := s.parseSamlResponse(ctx, xmlBase64Encoded)
 
 		assert.Empty(t, actual)
-		require.EqualError(t, err, "SAMLResponse from server contains an error, see log for details")
+		require.EqualError(t, err, "received SAMLResponse contains an error tag and cannot be processed, check error log for details")
 	})
+}
+
+func TestService_parseAssertion(t *testing.T) {
+	assertionXML, err := os.ReadFile("saml_hix_sso_assertion.xml")
+	require.NoError(t, err)
+	doc := etree.NewDocument()
+	err = doc.ReadFromBytes(assertionXML)
+	require.NoError(t, err)
+
+	launchContext, err := (&Service{}).parseAssertion(context.Background(), doc.Root())
+
+	require.NoError(t, err)
+	assert.Equal(t, "999999102", launchContext.Bsn)
+	assert.Len(t, launchContext.Practitioner.Identifier, 1)
+	assert.Equal(t, HIX_LOCALUSER_SYSTEM, *launchContext.Practitioner.Identifier[0].System)
+	assert.Equal(t, "1234@1.2.3.4.5", *launchContext.Practitioner.Identifier[0].Value)
+	assert.Equal(t, "Arts", *launchContext.Practitioner.Name[0].Family)
+	assert.Equal(t, "H.", launchContext.Practitioner.Name[0].Given[0])
+	assert.Equal(t, "f8cab0af-901b-417e-8bb4-5198e2c47732", launchContext.WorkflowId)
 }

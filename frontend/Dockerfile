@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:23-alpine AS base
+FROM node:25-alpine AS base
 
 WORKDIR /app
 
@@ -16,7 +16,7 @@ RUN \
 COPY . .
 RUN yarn build
 
-FROM node:23-alpine AS production
+FROM node:25-alpine AS production
 WORKDIR /app
 ENV NODE_ENV production
 ENV NEXT_PUBLIC_BASE_PATH /frontend

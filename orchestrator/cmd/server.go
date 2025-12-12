@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	events "github.com/SanteonNL/orca/orchestrator/events"
-	"github.com/rs/zerolog/log"
+	"log/slog"
 	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
 	"sync"
@@ -15,16 +13,15 @@ import (
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
-	"github.com/SanteonNL/orca/orchestrator/careplancontributor/ehr"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice"
 	"github.com/SanteonNL/orca/orchestrator/careplanservice/subscriptions"
 	"github.com/SanteonNL/orca/orchestrator/cmd/profile/nuts"
+	"github.com/SanteonNL/orca/orchestrator/events"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/healthcheck"
-	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
+	"github.com/SanteonNL/orca/orchestrator/lib/logging"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
 )
@@ -34,15 +31,43 @@ func Start(ctx context.Context, config Config) error {
 	if config.Validate() != nil {
 		return fmt.Errorf("invalid configuration: %w", config.Validate())
 	}
+	// Initialize OpenTelemetry
+	slog.Info("Initializing OpenTelemetry",
+		slog.Bool("enabled", config.OpenTelemetry.Enabled),
+		slog.String("service_name", config.OpenTelemetry.ServiceName),
+		slog.String("exporter_type", config.OpenTelemetry.Exporter.Type),
+	)
+
+	tracerProvider, err := otel.Initialize(ctx, config.OpenTelemetry)
+	if err != nil {
+		return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
+	}
+
+	// Ensure proper cleanup of OpenTelemetry on shutdown
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
+			slog.Error("Failed to shutdown OpenTelemetry", slog.String(logging.FieldError, err.Error()))
+		} else {
+			slog.Debug("OpenTelemetry shutdown successfully")
+		}
+	}()
 
 	globals.StrictMode = config.StrictMode
 	if !globals.StrictMode {
-		log.Warn().Msg("Strict mode is disabled, do not use in production")
+		slog.Warn("Strict mode is disabled, do not use in production")
 	}
 
 	// Set up dependencies
 	httpHandler := http.NewServeMux()
-	sessionManager := user.NewSessionManager(config.CarePlanContributor.SessionTimeout)
+	sessionManager := user.NewSessionManager[session.Data](config.CarePlanContributor.SessionTimeout)
+
+	// Set up tenant config
+	for id, props := range config.Tenants {
+		props.ID = id
+		config.Tenants[id] = props
+	}
 
 	if err := config.Validate(); err != nil {
 		return err
@@ -52,11 +77,6 @@ func Start(ctx context.Context, config Config) error {
 	// Collect topics so the message broker implementation can do checks on start-up whether it can actually publish to them.
 	// Otherwise, things only break later at runtime.
 	var messagingEntities []messaging.Entity
-	if config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic != "" {
-		messagingEntities = append(messagingEntities, messaging.Entity{
-			Name: config.CarePlanContributor.TaskFiller.TaskAcceptedBundleTopic,
-		}, ehr.TaskAcceptedEvent{}.Entity())
-	}
 	if len(config.CarePlanService.Events.WebHooks) > 0 {
 		messagingEntities = append(messagingEntities, careplanservice.CarePlanCreatedEvent{}.Entity())
 	}
@@ -71,43 +91,23 @@ func Start(ctx context.Context, config Config) error {
 
 	// Register services
 	var services []Service
-
 	services = append(services, healthcheck.New())
 
-	activeProfile, err := nuts.New(config.Nuts)
+	activeProfile, err := nuts.New(config.Nuts, config.Tenants)
 	if err != nil {
 		return fmt.Errorf("failed to create profile: %w", err)
 	}
-	if config.CarePlanContributor.Enabled {
-		// App Launches
-		frontendUrl, _ := url.Parse(config.CarePlanContributor.FrontendConfig.URL)
-		services = append(services, smartonfhir.New(config.CarePlanContributor.AppLaunch.SmartOnFhir, sessionManager, frontendUrl))
 
-		var ehrFhirProxy coolfhir.HttpProxy //TODO: Rewrite to an array so we can support multiple login mechanisms and multiple EHR proxies
-		if config.CarePlanContributor.AppLaunch.Demo.Enabled {
-			services = append(services, demo.New(sessionManager, config.CarePlanContributor.AppLaunch.Demo, frontendUrl))
-		}
-		if config.CarePlanContributor.AppLaunch.ZorgPlatform.Enabled {
-			service, err := zorgplatform.New(sessionManager, config.CarePlanContributor.AppLaunch.ZorgPlatform, config.Public.URL, frontendUrl, activeProfile)
-			if err != nil {
-				return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
-			}
-			ehrFhirProxy = service.EhrFhirProxy()
-			services = append(services, service)
-		}
-		var cpsURL *url.URL
-		if config.CarePlanService.Enabled {
-			cpsURL = config.Public.ParseURL().JoinPath("cps")
-		}
+	orcaBaseURL := config.Public.ParseURL()
+	if config.CarePlanContributor.Enabled {
 		carePlanContributor, err := careplancontributor.New(
 			config.CarePlanContributor,
+			config.Tenants,
 			activeProfile,
-			config.Public.ParseURL(),
+			orcaBaseURL,
 			sessionManager,
-			messageBroker,
 			eventManager,
-			ehrFhirProxy,
-			cpsURL)
+			config.CarePlanService.Enabled, httpHandler)
 		if err != nil {
 			return err
 		}
@@ -122,7 +122,7 @@ func Start(ctx context.Context, config Config) error {
 		}()
 	}
 	if config.CarePlanService.Enabled {
-		carePlanService, err := careplanservice.New(config.CarePlanService, activeProfile, config.Public.ParseURL(), messageBroker, eventManager)
+		carePlanService, err := careplanservice.New(config.CarePlanService, config.Tenants, activeProfile, orcaBaseURL, messageBroker, eventManager)
 		if err != nil {
 			return fmt.Errorf("failed to create CarePlanService: %w", err)
 		}
@@ -159,7 +159,7 @@ func Start(ctx context.Context, config Config) error {
 		// Start context cancelled, need to shut down gracefully
 		break
 	}
-	log.Info().Msg("Shutting down...")
+	slog.Info("Shutting down...")
 	if err := httpServer.Shutdown(context.Background()); err != nil {
 		return fmt.Errorf("failed to shut down HTTP server: %w", err)
 	}

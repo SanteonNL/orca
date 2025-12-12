@@ -10,7 +10,6 @@ updates:
   - package-ecosystem: "gomod"
     directories:
       - "/orchestrator"
-      - "/smartonfhir_backend_adapter"
       - "/e2e-tests"
     schedule:
       interval: "daily"
@@ -19,10 +18,7 @@ updates:
   - package-ecosystem: "docker"
     directories:
       - "/orchestrator"
-      - "/smartonfhir_backend_adapter"
       - "/frontend"
-      - "/hospital_simulator"
-      - "/viewer_simulator"
     schedule:
       interval: "daily"
 
@@ -30,7 +26,5 @@ updates:
   - package-ecosystem: "npm"
     directories:
       - "/frontend"
-      - "/hospital_simulator"
-      - "/viewer_simulator"
     schedule:
       interval: "daily"

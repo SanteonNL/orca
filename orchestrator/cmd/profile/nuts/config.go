@@ -8,22 +8,18 @@ import (
 type Config struct {
 	API              APIConfig           `koanf:"api"`
 	Public           PublicConfig        `koanf:"public"`
-	OwnSubject       string              `koanf:"subject"`
 	DiscoveryService string              `koanf:"discoveryservice"`
 	AzureKeyVault    AzureKeyVaultConfig `koanf:"azurekv"`
 }
 
 type AzureKeyVaultConfig struct {
-	URL            string `koanf:"url"`
-	CredentialType string `koanf:"credentialtype"`
-	ClientCertName string `koanf:"clientcertname"`
+	URL            string   `koanf:"url"`
+	CredentialType string   `koanf:"credentialtype"`
+	ClientCertName []string `koanf:"clientcertname"`
 }
 
 func (c Config) Validate() error {
 	_, err := url.Parse(c.API.URL)
-	if c.OwnSubject == "" {
-		return errors.New("invalid/empty Nuts subject")
-	}
 	if err != nil || c.API.URL == "" {
 		return errors.New("invalid Nuts API URL")
 	}
@@ -33,9 +29,11 @@ func (c Config) Validate() error {
 	if c.DiscoveryService == "" {
 		return errors.New("invalid/empty Discovery Service ID")
 	}
-	if c.AzureKeyVault.ClientCertName != "" || c.AzureKeyVault.URL != "" {
-		if c.AzureKeyVault.ClientCertName == "" {
-			return errors.New("invalid/empty Azure Key Vault client certificate name")
+	if len(c.AzureKeyVault.ClientCertName) > 0 || c.AzureKeyVault.URL != "" {
+		for _, clientCertName := range c.AzureKeyVault.ClientCertName {
+			if clientCertName == "" {
+				return errors.New("invalid/empty Azure Key Vault client certificate name")
+			}
 		}
 		if c.AzureKeyVault.URL == "" {
 			return errors.New("invalid/empty Azure Key Vault URL")

@@ -11,7 +11,6 @@ export type Row = {
   bsn: string,
   category: string,
   carePlan: CarePlan,
-  careTeam?: CareTeam,
   status: string,
   lastUpdated: Date,
   careTeamMembers: string
@@ -24,7 +23,6 @@ interface Props {
 }
 
 export default function BgzTable({ name, rows, loading }: Props) {
-
     const columns: GridColDef[] = [
 
         { field: 'bsn', headerName: 'BSN', flex: 1 },
@@ -62,9 +60,9 @@ export default function BgzTable({ name, rows, loading }: Props) {
                 loading={loading}
                 rows={rows}
                 columns={columns}
-                components={{ Toolbar: GridToolbar }}
+                slots={{ toolbar: GridToolbar }}
                 autoHeight
-                componentsProps={{
+                slotProps={{
                     toolbar: {
                         showQuickFilter: true,
                     },
@@ -74,7 +72,9 @@ export default function BgzTable({ name, rows, loading }: Props) {
                         sortModel: [{ field: 'lastUpdated', sort: 'desc' }]
                     },
                     pagination: {
-                        pageSize: 10,
+                        paginationModel: {
+                            pageSize: 10,
+                        },
                     },
                 }}
             />

@@ -2,6 +2,8 @@ package zorgplatform
 
 import (
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 )
 
 func DefaultConfig() Config {
@@ -12,14 +14,15 @@ func DefaultConfig() Config {
 }
 
 type Config struct {
-	Enabled            bool          `koanf:"enabled"`
-	ApiUrl             string        `koanf:"apiurl"`             //The FHIR API URL
-	StsUrl             string        `koanf:"stsurl"`             //The SAML STS URL
-	BaseUrl            string        `koanf:"baseurl"`            //The base URL of zorgplatform, can be either their acc or prd URL
-	SAMLRequestTimeout time.Duration `koanf:"samlrequesttimeout"` //The timeout for the SAML request, e.g. 10s, 100ms etc
-	SigningConfig      SigningConfig `koanf:"sign"`
-	DecryptConfig      DecryptConfig `koanf:"decrypt"`
-	TaskPerformerUra   string        `koanf:"taskperformerura"`
+	Enabled            bool           `koanf:"enabled"`
+	ApiUrl             string         `koanf:"apiurl"`             //The FHIR API URL
+	StsUrl             string         `koanf:"stsurl"`             //The SAML STS URL
+	BaseUrl            string         `koanf:"baseurl"`            //The base URL of zorgplatform, can be either their acc or prd URL
+	SAMLRequestTimeout time.Duration  `koanf:"samlrequesttimeout"` //The timeout for the SAML request, e.g. 10s, 100ms etc
+	Tenants            tenants.Config `koanf:"tenants"`
+	SigningConfig      SigningConfig  `koanf:"sign"`
+	DecryptConfig      DecryptConfig  `koanf:"decrypt"`
+	TaskPerformerUra   string         `koanf:"taskperformerura"`
 
 	AzureConfig    AzureConfig    `koanf:"azure"`
 	X509FileConfig X509FileConfig `koanf:"x509"`

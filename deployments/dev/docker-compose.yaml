@@ -1,0 +1,269 @@
+services:
+  aspire-dashboard:
+    image: mcr.microsoft.com/dotnet/aspire-dashboard
+    ports:
+      - "18888:18888"  # Dashboard UI
+      - "18889:18889"  # OTLP gRPC endpoint
+    environment:
+      - DOTNET_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true
+    volumes:
+      - ./aspire-dashboard-data:/data
+    restart: unless-stopped
+    networks:
+      - orca-shared-services
+  nutsnode:
+    image: nutsfoundation/nuts-node:6.1.2
+    ports:
+      - "9081:8081" # port exposed for loading test data (create DIDs and VCs, requesting access token)
+    volumes:
+      - "${orca_dev_base}/nuts/policy/:/nuts/config/policy:ro"
+      - "${orca_dev_base}/nuts/discovery/homemonitoring.json:/nuts/discovery/homemonitoring.json:ro"
+    environment:
+      - NUTS_VERBOSITY=debug
+      - NUTS_STRICTMODE=false
+      - NUTS_HTTP_INTERNAL_ADDRESS=:8081
+      - NUTS_AUTH_CONTRACTVALIDATORS=dummy
+      - NUTS_URL=http://nutsnode:8080
+      - NUTS_DISCOVERY_DEFINITIONS_DIRECTORY=/nuts/discovery/
+      - NUTS_DISCOVERY_SERVER_IDS=dev:HomeMonitoring2024
+      - NUTS_DIDMETHODS=web
+    networks:
+      - orca-shared-services
+  nutsnode-init:
+    image: badouralix/curl-jq:alpine
+    volumes:
+      - "${orca_dev_base}/nuts/nutsnode-init.sh:/nutsnode-init.sh:ro"
+    depends_on:
+      nutsnode:
+        condition: service_healthy
+    entrypoint: [ "sh", "-c", "echo 'Waiting for Nuts Node to be ready...'; while ! curl -s -f http://nutsnode:8080/status > /dev/null; do echo 'Waiting for nutsnode to be ready...'; sleep 1; done; echo 'Nutsnode is up and running.' && sh /nutsnode-init.sh" ]
+    restart: "no"
+    networks:
+      - orca-shared-services
+  nutsadmin:
+    image: "nutsfoundation/nuts-admin:main"
+    environment:
+      - NUTS_NODE_ADDRESS=http://nutsnode:8081
+    ports:
+      - "1405:1305"
+    networks:
+      - orca-shared-services
+  hospital_proxy:
+    image: nginx:latest
+    depends_on:
+      nutsnode:
+        condition: service_started
+      hospital_ehr:
+        condition: service_started
+      hospital_orchestrator:
+        condition: service_started
+    ports:
+      - "8081:8080"
+    volumes:
+      - "${orca_dev_base}/hospital/config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
+    networks:
+      - orca-shared-services
+  hospital_frontend:
+    #image: ghcr.io/santeonnl/orca_frontend:main
+    build:
+      context: ${orca_dev_base}/../../frontend
+      dockerfile: Dockerfile-dev
+    volumes:
+      - ${orca_dev_base}/../../frontend:/app
+      - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
+    environment:
+      NEXT_PUBLIC_BASE_PATH: /frontend
+      SUPPORT_CONTACT_LINK: mailto:support@example.com #This link will be shown at the bottom of the error.tsx page if configured
+      PATIENT_VIEWER_URL: https://msc-viewer-url/ehr/patient # When set, this will add a link to the task details page to open the patient in the viewer
+      NEXT_ALLOWED_ORIGINS: localhost:8081
+    ports:
+      - "3003:3000"
+    networks:
+      - orca-shared-services
+  hospital_orchestrator:
+    #image: ghcr.io/santeonnl/orca_orchestrator:main
+    build:
+      context: ${orca_dev_base}/../../orchestrator
+      dockerfile: Dockerfile
+    ports:
+      - "8090:8080"
+    volumes:
+      - "${orca_dev_base}/hospital/config/test-decrypt-zorgplatform.private.pem:/keys/zorgplatform/test-decrypt-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
+      - "${orca_dev_base}/hospital/config/test-sign-zorgplatform.private.pem:/keys/zorgplatform/test-sign-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
+      - "${orca_dev_base}/hospital/config/test-tls-zorgplatform.private.pem:/keys/zorgplatform/test-tls-zorgplatform.private.pem:ro" # mounted if present - use to test zorgplatform
+    depends_on:
+      fhirstore-healthcheck:
+        condition: service_completed_successfully
+    env_file:
+      # Allow extra environment variables to be passed in. This is useful for local development, since extra.env isn't committed to the repository.
+      - path: ./extra.env
+        required: false
+    environment:
+      - ORCA_NUTS_API_URL=http://nutsnode:8081
+      - ORCA_NUTS_PUBLIC_URL=http://nutsnode:8080
+      - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
+      - ORCA_PUBLIC_URL=http://hospital_orchestrator:8080
+      - ORCA_STRICTMODE=false
+      - ORCA_CAREPLANSERVICE_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
+      - ORCA_CAREPLANCONTRIBUTOR_FRONTEND_URL=http://localhost:8081/frontend/enrollment
+      # To test Zorgplatform locally, set the option below to false
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_DEMO_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_0_URL=https://launch.smarthealthit.org/v/r4/fhir
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_0_CLIENTID=demo-client
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_SOF_ISSUER_0_TENANT=hospital
+      - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
+      - ORCA_TENANT_HOSPITAL_NUTS_SUBJECT=hospital
+      - ORCA_TENANT_HOSPITAL_DEMO_FHIR_URL=http://fhirstore:8080/fhir
+      - ORCA_TENANT_HOSPITAL_CPS_FHIR_URL=http://fhirstore:8080/fhir
+      - OTEL_SERVICE_NAME=hospital-orchestrator
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire-dashboard:18889
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_RESOURCE_ATTRIBUTES=service.instance.id=hospital-1
+      #   Uncomment and set the <...> values below to enable Zorgplatform integration - using zorgplatform production URLs as that is what their developer portal uses
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_ENABLED=true
+      # - ORCA_TENANT_HOSPITAL_CHIPSOFT_ORGANIZATIONID=2.16.840.1.113883.2.4.3.124.8.50.26.03
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_CPSFHIRENDPOINT_URL=http://fhirstore:8080/fhir
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_SIGN_ISS=<iss>
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_SIGN_AUD=https://zorgplatform.online/sts
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_DECRYPT_ISS=https://zorgplatform.online/sts
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_DECRYPT_AUD=<aud>
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_DECRYPT_SIGNCERTPEM=-----BEGIN CERTIFICATE-----\nMIIGpDCCBYygAwIBAgIIQi3sO82UPxQwDQYJKoZIhvcNAQELBQAwgbQxCzAJBgNV\nBAYTAlVTMRAwDgYDVQQIEwdBcml6b25hMRMwEQYDVQQHEwpTY290dHNkYWxlMRow\nGAYDVQQKExFHb0RhZGR5LmNvbSwgSW5jLjEtMCsGA1UECxMkaHR0cDovL2NlcnRz\nLmdvZGFkZHkuY29tL3JlcG9zaXRvcnkvMTMwMQYDVQQDEypHbyBEYWRkeSBTZWN1\ncmUgQ2VydGlmaWNhdGUgQXV0aG9yaXR5IC0gRzIwHhcNMjUwNzExMTIzNjExWhcN\nMjYwODEyMTIzNjExWjAgMR4wHAYDVQQDDBUqLnpvcmdwbGF0Zm9ybS5vbmxpbmUw\nggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDJTa7qXqcfKMtpCSpTaFLI\n6JYhMYK7uCfLlxc5dVTjRy3bwUXf81WIgL9vRJ5IKaX5WJPdzSG5nTskEsiXctMG\nsccRNDuAURtR4vNF2r3vKYFFGBtjUUyqveWpHgvX8WAEh7cGUnc3kWZ86TwSsbhq\n8rhuTqquXCvbpNUCcteftpN4U36g6oXHdwdWxyxNdszCVUqYIRwxNSQg/k2OKRcz\nRJYg92RIblJB3vOlUCQyuKvek/U2KZITQewNsfm9D83NPcjLMIgwfc37rPM668h9\nAOc3QO6Odmt6YvdEORV78FmZJvs3XAYKXdfC0CN9czIoDc+9aN90ELPyvcIjwpUV\nAgMBAAGjggNLMIIDRzAMBgNVHRMBAf8EAjAAMB0GA1UdJQQWMBQGCCsGAQUFBwMB\nBggrBgEFBQcDAjAOBgNVHQ8BAf8EBAMCBaAwOQYDVR0fBDIwMDAuoCygKoYoaHR0\ncDovL2NybC5nb2RhZGR5LmNvbS9nZGlnMnMxLTUzNzg0LmNybDBdBgNVHSAEVjBU\nMEgGC2CGSAGG/W0BBxcBMDkwNwYIKwYBBQUHAgEWK2h0dHA6Ly9jZXJ0aWZpY2F0\nZXMuZ29kYWRkeS5jb20vcmVwb3NpdG9yeS8wCAYGZ4EMAQIBMHYGCCsGAQUFBwEB\nBGowaDAkBggrBgEFBQcwAYYYaHR0cDovL29jc3AuZ29kYWRkeS5jb20vMEAGCCsG\nAQUFBzAChjRodHRwOi8vY2VydGlmaWNhdGVzLmdvZGFkZHkuY29tL3JlcG9zaXRv\ncnkvZ2RpZzIuY3J0MB8GA1UdIwQYMBaAFEDCvSeOzDSDMKIz1/tss/C0LIDOMDUG\nA1UdEQQuMCyCFSouem9yZ3BsYXRmb3JtLm9ubGluZYITem9yZ3BsYXRmb3JtLm9u\nbGluZTAdBgNVHQ4EFgQUxDJv8EH7WJZ9alS39HFpSX+pBT4wggF9BgorBgEEAdZ5\nAgQCBIIBbQSCAWkBZwB2ANgJVTuUT3r/yBYZb5RPhauw+Pxeh1UmDxXRLnK7RUsU\nAAABl/l8cvUAAAQDAEcwRQIhAKhL9p19HmpgUaa5xQ7PCVlPc1ei/PpcWtycN2Pc\nIpklAiBmiWtdITvGIn7b7iZlmg0TllfE6nW05PT9yZHDlsDltAB2AMs49xWJfISh\nRF9bwd37yW7ymlnNRwppBYWwyxTDFFjnAAABl/l8c5wAAAQDAEcwRQIgTLNztGOd\nrNJtDfxkTq4hRYV3OR8K990HhrDtSZigHZECIQCAvHtdvhLq51OQAGAo+Bh8oZvL\nbVkAGfeL35SaxXy3vAB1AHTbnVj31H6d/Xh6FiqZHBjPaY2nxymRjJoYsEUNukS8\nAAABl/l8dFYAAAQDAEYwRAIgRQoTKnvUodfRJK1WGWtjYVhEIj2xIm1lb1Yl7AnS\n+R8CIEpQ527APxP3rKdrbW9nzNmyA2PuIQUDEnPTCplKTXfqMA0GCSqGSIb3DQEB\nCwUAA4IBAQAsSfw03qlyFNrShMqSJNl2Sdyszv3hSLZoxwz9PCywiL8fMcbFdzO0\ncFDmU+kzGprd2kKyLZhsdJQaS3f86a8nXowXj1VC9AiyVALr1c1Tfw12Fsn7uswj\nLl6yf9+EUq3RPTohuUFH2N18WPxJsyBtmPGsv3ujtMvKDbjpZ0R82jRhGKUUjbsL\nkoutfBdMmDqt2VGXFw57n9Ne8k0ainQTyHWKUedJBfshx1zBAjyi0v5n5pIcnyml\nosfJPs4YoaW8jQApFbbu/m47mQR7uL80TVjVzQIldF7oC4H/4Ky6YdVJzigyHgHP\np8I0oKN9lbiMXco3Brtwtkf3NxnYLmQN\n-----END CERTIFICATE-----
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_BASEURL=https://zorgplatform.online
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_STSURL=https://zorgplatform.online/sts
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_TASKPERFORMERURA=1234
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_APIURL=https://api.zorgplatform.online/fhir/V1
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_AZURE_CREDENTIALTYPE=default
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_X509_SIGNCERTFILE=/keys/zorgplatform/test-sign-zorgplatform.private.pem
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_X509_SIGNKEYFILE=/keys/zorgplatform/test-sign-zorgplatform.private.pem
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_X509_DECRYPTCERTFILE=/keys/zorgplatform/test-decrypt-zorgplatform.private.pem
+      # - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_ZORGPLATFORM_X509_CLIENTCERTFILE=/keys/zorgplatform/test-tls-zorgplatform.private.pem
+    networks:
+      - orca-shared-services
+  fhirstore:
+    image: hapiproject/hapi:v7.2.0
+    ports:
+      - "9090:8080"
+    environment:
+      - hapi.fhir.fhir_version=R4
+      - hapi.fhir.allow_external_references=true
+      - hapi.fhir.server_address=http://fhirstore:8080/fhir
+    networks:
+      - orca-shared-services
+  # The HAPI image has no binaries such as curl, so we use the curl image to perform the health check
+  fhirstore-healthcheck:
+    image: curlimages/curl:7.87.0
+    depends_on:
+      - fhirstore
+    entrypoint: ["sh", "-c", "echo 'Starting fhirstore healthcheck...'; while ! curl -s -f http://fhirstore:8080/fhir/Task > /dev/null; do echo 'Waiting for fhirstore to be ready...'; sleep 5; done; echo 'fhirstore is up and running.'"]
+    # Ensure the container exits successfully after the check
+    restart: "no"
+    networks:
+      - orca-shared-services
+  hospital_ehr:
+    #image: ghcr.io/santeonnl/orca_hospitalsimulator:main
+    build:
+      context: ${orca_dev_base}/../../hospital_simulator
+      dockerfile: Dockerfile-dev
+    ports:
+      - "3001:3000"
+    depends_on:
+      - fhirstore
+    environment:
+      TENANT_ID: hospital
+      ORCA_BASE_URL: http://localhost:8081/orca
+      ORCA_LOCAL_ORGANIZATION_URA: 4567
+      ORCA_LOCAL_ORGANIZATION_NAME: Demo Hospital
+      ORCA_PERFORMER_ORGANIZATION_URA: 1234
+      ORCA_PERFORMER_ORGANIZATION_NAME: Demo Clinic
+      NEXT_ALLOWED_ORIGINS: localhost:8081
+      FHIR_BASE_URL: http://fhirstore:8080/fhir
+    networks:
+      - orca-shared-services
+    volumes:
+      - ${orca_dev_base}/../../hospital_simulator:/app
+      - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
+  clinic_proxy:
+    image: nginx:latest
+    depends_on:
+      - nutsnode
+      - clinic_orchestrator
+    ports:
+      - "8082:8080"
+    networks:
+      - orca-shared-services
+    volumes:
+      - "${orca_dev_base}/clinic/config/nginx-proxy.conf:/etc/nginx/conf.d/nginx-proxy.conf:ro"
+  clinic_orchestrator:
+    #image: ghcr.io/santeonnl/orca_orchestrator:main
+    build:
+      context: ${orca_dev_base}/../../orchestrator
+      dockerfile: Dockerfile
+    ports:
+      - "3030:8080"
+    env_file:
+      # Allow extra environment variables to be passed in. This is useful for local development, since extra.env isn't committed to the repository.
+      - path: ./extra.env
+        required: false
+    environment:
+      - ORCA_NUTS_API_URL=http://nutsnode:8081
+      - ORCA_NUTS_PUBLIC_URL=http://nutsnode:8080
+      - ORCA_TENANT_CLINIC_NUTS_SUBJECT=clinic
+      - ORCA_TENANT_CLINIC_TASKENGINE_ENABLED=true
+      - ORCA_NUTS_DISCOVERYSERVICE=dev:HomeMonitoring2024
+      - ORCA_PUBLIC_URL=http://clinic_orchestrator:8080
+      - ORCA_STRICTMODE=false
+      - ORCA_MESSAGING_HTTP_ENDPOINT=http://clinic_viewer:3000/viewer/api/delivery
+      - ORCA_MESSAGING_HTTP_TOPICFILTER=orca-enroll-patient
+      - ORCA_CAREPLANCONTRIBUTOR_STATICBEARERTOKEN=valid
+      - ORCA_CAREPLANCONTRIBUTOR_HEALTHDATAVIEWENDPOINTENABLED=true
+      - ORCA_CAREPLANCONTRIBUTOR_FHIR_URL=http://viewer:3000/viewer/api/fhir
+      - OTEL_SERVICE_NAME=clinic-orchestrator
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://aspire-dashboard:18889
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_RESOURCE_ATTRIBUTES=service.instance.id=clinic-1
+      # Register an example web application for discovery by other SCP participants.
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_NAME=Example Web Application
+      - ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_URL=https://example.com
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLEENDPOINT=http://host.docker.internal:5188/orca/v1/enroll
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS=https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-healthcareservices.json,https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-questionnaires.json
+      - ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTE_ACCEPTED=Work on the Task will start tomorrow.
+    networks:
+      - orca-shared-services
+    volumes:
+      # FHIR HealthcareService and Questionnaire resources that are loaded into the FHIR store on startup,
+      # used by the Task Filler Engine
+      - "${orca_dev_base}/../../orchestrator/careplancontributor/taskengine/testdata/healthcareservice-bundle.json:/config/fhir/healthcareservices.json:ro"
+      - "${orca_dev_base}/../../orchestrator/careplancontributor/taskengine/testdata/questionnaire-bundle.json:/config/fhir/questionnaires.json:ro"
+  clinic_viewer:
+    #image: ghcr.io/santeonnl/orca_viewersimulator:main
+    build:
+      context: ${orca_dev_base}/../../viewer_simulator
+      dockerfile: Dockerfile-dev
+    environment:
+      CLINIC_ORCA_URL: http://clinic_orchestrator:8080/
+      CLINIC_ORCA_BEARERTOKEN: valid
+      CLINIC_IDENTIFIER: http://fhir.nl/fhir/NamingSystem/ura|1234
+      CLINIC_CPS_URL: http://hospital_orchestrator:8080/cps
+      NEXT_ALLOWED_ORIGINS: localhost:8081
+    networks:
+      - orca-shared-services
+    volumes:
+      - ${orca_dev_base}/../../viewer_simulator:/app
+      - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
+  # Orchestrator's Task Engine posts to Viewer over HTTP, but the first call will time-out due to NextJS compilation.
+  # So, we use curl to force NextJS to make sure the receiving endpoint is compiled.
+  clinic_viewer-init:
+    image: curlimages/curl:7.87.0
+    networks:
+      - orca-shared-services
+    depends_on:
+      clinic_viewer:
+        condition: service_healthy
+    entrypoint: [ "sh", "-c", "curl -s -X POST -d '{}' http://clinic_viewer:3000/viewer/api/delivery/orca-enroll-patient" ]
+
+networks:
+  orca-shared-services:
+    driver: bridge

@@ -18,7 +18,9 @@ import {
     Procedure,
     ProcedureRequest,
 } from 'fhir/r3';
-import { CarePlan, CareTeam } from 'fhir/r4';
+import {CarePlan} from 'fhir/r4';
+import {careTeamFromCarePlan, identifierToToken} from "@/utils/fhirUtils";
+import {getORCABearerToken, getORCAExternalFHIRBaseURL, getOwnIdentifier} from "@/utils/config";
 
 export async function getBgzData(name: string, carePlan: CarePlan) {
     const [
@@ -95,18 +97,42 @@ async function fetchBgzData(
     query: string,
     carePlan: CarePlan,
 ) {
-    const requestUrl = `${process.env.FHIR_AGGREGATE_URL}/${resourceType}/_search`;
-    const xSCPContext = `${process.env[`${name}_CAREPLANSERVICE_URL`]}/CarePlan/${carePlan.id}`;
+    const careTeam = careTeamFromCarePlan(carePlan);
+    if (!careTeam) {
+        throw new Error("CarePlan doesn't contain a CareTeam");
+    }
+
+    // Filter out invalid identifiers, and our own identifier from the CareTeam participants
+    const remotePartyIdentifiers = careTeam.participant?.filter(
+        (participant) => participant.member?.identifier &&
+            (participant.member?.identifier?.system && participant.member?.identifier?.value) &&
+            (identifierToToken(participant.member?.identifier) !== identifierToToken(getOwnIdentifier(name)))
+    );
+    if (!remotePartyIdentifiers || remotePartyIdentifiers.length == 0) {
+        throw new Error(`CareTeam.participants doesn't contain any (remote) queryable parties.`);
+    }
+    if (remotePartyIdentifiers.length > 1) {
+        throw new Error(`CareTeam.participants contains multiple queryable parties, which is not supported.`);
+    }
+    const remotePartyIdentifier = remotePartyIdentifiers[0].member?.identifier!!;
+
+    const requestUrl = `${getORCAExternalFHIRBaseURL(name)}/${resourceType}/_search`;
+    if (!carePlan.meta?.source) {
+        throw new Error(`CarePlan doesn't contain a meta.source`);
+    }
+    const xSCPContext = carePlan.meta.source
+
     console.log(
-        `Sending request to ${requestUrl} with X-Scp-Context: ${xSCPContext}`,
+        `Sending request to ${requestUrl} (X-Scp-Context=${xSCPContext}, X-Scp-Entity-Identifier=${identifierToToken(remotePartyIdentifier)})`,
     );
 
     const response = await fetch(requestUrl, {
         method: 'POST',
         body: query,
         headers: {
-            Authorization: `Bearer ${process.env.FHIR_AUTHORIZATION_TOKEN}`,
+            Authorization: `Bearer ${getORCABearerToken(name)}`,
             'X-Scp-Context': xSCPContext,
+            'X-Scp-Entity-Identifier': identifierToToken(remotePartyIdentifier),
             'Content-Type': 'application/x-www-form-urlencoded',
         },
     });

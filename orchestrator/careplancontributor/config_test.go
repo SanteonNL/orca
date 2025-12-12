@@ -1,9 +1,10 @@
 package careplancontributor
 
 import (
+	"testing"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestConfig_Validate(t *testing.T) {
@@ -11,6 +12,16 @@ func TestConfig_Validate(t *testing.T) {
 		err := Config{}.Validate()
 		require.NoError(t, err)
 	})
+	// TODO: uncomment once JWT auth is implemented
+	//t.Run("static bearer token in strict mode", func(t *testing.T) {
+	//	globals.StrictMode = true
+	//	defer func() { globals.StrictMode = false }()
+	//	err := Config{
+	//		Enabled:           true,
+	//		StaticBearerToken: "some-token",
+	//	}.Validate()
+	//	require.EqualError(t, err, "staticbearertoken is not allowed in strict mode")
+	//})
 }
 
 func TestDefaultConfig(t *testing.T) {
