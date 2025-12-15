@@ -12,7 +12,6 @@ import TaskProgressHook from "@/app/hooks/task-progress-hook";
 import TaskHeading from "@/app/enrollment/components/task-heading";
 import {ChevronRight} from "lucide-react";
 import TaskBody from "@/app/enrollment/components/task-body";
-import Error from "@/app/error";
 import {organizationNameShort} from "@/lib/fhirRender";
 import {requestTitle} from "@/app/enrollment/task/components/util";
 import {statusLabelLong} from "@/app/utils/mapping";
@@ -22,18 +21,21 @@ export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
     const { scpClient, cpsClient } = useClients()
 
+    const {patient, serviceRequest} = useEnrollment()
     const {
         task,
         subTasks,
         questionnaireMap,
         isError,
-        isLoading
+        isLoading,
+        error
     } = TaskProgressHook({
         taskId: Array.isArray(taskId) ? taskId[0] : taskId!,
         cpsClient: cpsClient!,
         pollingInterval: 1000
     })
-    const {patient, serviceRequest} = useEnrollment()
+
+    if (isError) throw error;
 
     const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
@@ -76,12 +78,6 @@ export default function EnrollmentTaskPage() {
     }, [questionnaireMap, subTasks]);
 
     if (isLoading) return <Loading/>
-    if (isError) {
-        return <Error error={{
-            name: 'TaskError',
-            message: '"Er is een probleem opgetreden bij het ophalen van de taak"'
-        }} reset={() => isError}/>
-    }
     if (!task) {
         return <div className='w-[568px] flex flex-col gap-4'>Taak niet gevonden</div>
     }

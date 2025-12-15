@@ -73,7 +73,7 @@ services:
       - /app/node_modules # do not mount node_modules from host, as it will cause issues with the NextJS build
     environment:
       NEXT_PUBLIC_BASE_PATH: /frontend
-      SUPPORT_CONTACT_LINK: mailto:support@example.com #This link will be shown at the bottom of the error.tsx page if configured
+      SUPPORT_CONTACT_EMAIL: support@example.com #This email will be shown at the bottom of the error.tsx page if configured
       PATIENT_VIEWER_URL: https://msc-viewer-url/ehr/patient # When set, this will add a link to the task details page to open the patient in the viewer
       NEXT_ALLOWED_ORIGINS: localhost:8081
     ports:

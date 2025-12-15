@@ -1,7 +1,7 @@
 "use server"
 
-export async function getSupportContactLink() {
-    return process.env.SUPPORT_CONTACT_LINK
+export async function getSupportContactEmail() {
+    return process.env.SUPPORT_CONTACT_EMAIL ?? null
 }
 
 export async function getPatientViewerTestUrl() {
