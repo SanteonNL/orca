@@ -9,7 +9,7 @@
       "cwd": "${workspaceFolder}/frontend",
       "env": {
         "NEXT_PUBLIC_BASE_PATH": "/frontend",
-        "SUPPORT_CONTACT_LINK": "mailto:support@example.com",
+        "SUPPORT_CONTACT_EMAIL": "support@example.com",
         "PATIENT_VIEWER_URL": "https://msc-viewer-url/ehr/patient",
         "NEXT_ALLOWED_ORIGINS": "localhost:8081"
       },

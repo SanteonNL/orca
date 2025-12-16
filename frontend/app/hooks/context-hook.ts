@@ -2,6 +2,7 @@ import React from "react";
 import { useQuery } from "@tanstack/react-query";
 import { createCpsClient, createEhrClient, createScpClient } from "@/lib/fhirUtils";
 import Client from "fhir-kit-client";
+import { ErrorWithTitle } from "@/app/utils/error-with-title";
 
 export interface LaunchContext {
     patient: string
@@ -28,6 +29,9 @@ export interface ClientHookResult {
 
 const fetchLaunchContext = async (): Promise<LaunchContext> => {
   const launchContextRes = await fetch(`/orca/cpc/context`)
+  if (launchContextRes.status === 401) {
+    throw new Error('Unauthorized')
+  }
   if (!launchContextRes.ok) {
     throw new Error(`Failed to fetch context: ${launchContextRes.statusText}`)
   }
@@ -44,8 +48,17 @@ export function useLaunchContext(): LaunchContextHookResult {
     queryKey: ['launch-context'],
     queryFn: fetchLaunchContext,
     staleTime: 60 * 60 * 1000, // 1 hour - launch context rarely changes
-    retry: 3,
+    retry: (count, error) => {
+      if (error.message === 'Unauthorized') {
+        return false
+      }
+      return count < 3
+    }
   })
+
+  if (isError && error.message === 'Unauthorized') {
+    throw new ErrorWithTitle('Unauthorized', 'Je sessie is verlopen', 'Sluit dit scherm en open het opnieuw om verder te gaan.')
+  }
 
   return {
     launchContext,

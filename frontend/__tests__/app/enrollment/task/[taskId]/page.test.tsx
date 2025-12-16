@@ -422,16 +422,17 @@ describe("taskid page tests", () => {
     });
 
     it('handles hook error state', async () => {
+        const error = new Error('Er is een probleem opgetreden bij het ophalen van de taak');
         (TaskProgressHook as jest.Mock).mockReturnValue({
             task: null,
             isError: true,
-            isLoading: false
+            isLoading: false,
+            error
         });
 
-        await act(async () => {
+        expect(() => {
             render(<EnrollmentTaskPage/>);
-        });
-        expect(screen.getByTestId('error-component')).toBeInTheDocument();
+        }).toThrow(error);
     });
 
     it('displays questionnaire only when all conditions are met', async () => {
@@ -598,18 +599,17 @@ describe("taskid page tests", () => {
     });
 
     it('renders error component when hook returns error', async () => {
+        const error = new Error('Er is een probleem opgetreden bij het ophalen van de taak');
         (TaskProgressHook as jest.Mock).mockReturnValue({
             task: null,
             isError: true,
-            isLoading: false
+            isLoading: false,
+            error
         });
 
-        await act(async () => {
+        expect(() => {
             render(<EnrollmentTaskPage/>);
-        });
-
-        expect(screen.getByTestId('error-component')).toBeInTheDocument();
-        expect(screen.getByText('Error: "Er is een probleem opgetreden bij het ophalen van de taak"')).toBeInTheDocument();
+        }).toThrow(error);
     });
 
     it('correctly determines first step for requested status', async () => {

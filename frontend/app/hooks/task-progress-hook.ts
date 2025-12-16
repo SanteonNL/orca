@@ -15,12 +15,13 @@ type FetchAllResources = {
     subTasks: Task[]
     isLoading: boolean;
     isError: boolean;
+    error?: Error | null;
 }
 
 
 
 export default function TaskProgressHook({taskId, cpsClient, pollingInterval}: TaskProgressArgs): FetchAllResources {
-    const {data, isLoading, isError} = useQuery({
+    const {data, isLoading, isError, error} = useQuery({
         queryKey: ['task-progress', taskId],
         queryFn: () => fetchAllResources(taskId, cpsClient),
         enabled: !!taskId && !!cpsClient,
@@ -42,6 +43,7 @@ export default function TaskProgressHook({taskId, cpsClient, pollingInterval}: T
     return {
         isLoading,
         isError,
+        error,
         task: data?.task || defaultData.task,
         questionnaireMap: data?.questionnaireMap || defaultData.questionnaireMap,
         subTasks: data?.subTasks || defaultData.subTasks

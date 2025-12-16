@@ -1,12 +1,13 @@
 import '@testing-library/jest-dom'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import Error from '../../app/error'
-import { getSupportContactLink } from '../../app/actions'
+import { getSupportContactEmail } from '../../app/actions'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { useMemo } from 'react'
+import { ErrorWithTitle } from '@/app/utils/error-with-title'
 
 jest.mock('../../app/actions', () => ({
-  getSupportContactLink: jest.fn(),
+  getSupportContactEmail: jest.fn(),
 }))
 
 const wrapper = ({
@@ -20,10 +21,7 @@ const wrapper = ({
 
 describe('Error', () => {
   const mockReset = jest.fn()
-  const mockError = {
-    name: 'TestError',
-    message: 'Test error message'
-  }
+  const mockError = new ErrorWithTitle('Test Error', 'Test error message')
 
   beforeEach(() => {
     jest.clearAllMocks()
@@ -35,7 +33,7 @@ describe('Error', () => {
   })
 
   it('displays error message when provided', () => {
-    (getSupportContactLink as jest.Mock).mockResolvedValue(undefined)
+    (getSupportContactEmail as jest.Mock).mockResolvedValue(undefined)
 
     render(<Error error={mockError} reset={mockReset} />, { wrapper })
 
@@ -44,63 +42,25 @@ describe('Error', () => {
 
   it('displays default message when error message is not provided', () => {
     const errorWithoutMessage = { name: 'TestError', message: '' }
-    ;(getSupportContactLink as jest.Mock).mockResolvedValue(undefined)
+    ;(getSupportContactEmail as jest.Mock).mockResolvedValue(undefined)
 
     render(<Error error={errorWithoutMessage} reset={mockReset} />, { wrapper })
 
-    expect(screen.getByText('Er is een onverwachte fout opgetreden. Probeer het later opnieuw.')).toBeInTheDocument()
-  })
-
-  it('calls reset function when retry button is clicked', () => {
-    (getSupportContactLink as jest.Mock).mockResolvedValue(undefined)
-
-    render(<Error error={mockError} reset={mockReset} />, { wrapper })
-
-    const retryButton = screen.getByRole('button', { name: /opnieuw proberen/i })
-    fireEvent.click(retryButton)
-
-    expect(mockReset).toHaveBeenCalledTimes(1)
-  })
-
-  it('displays error digest when provided', () => {
-    const errorWithDigest = { ...mockError, digest: 'abc123def456' }
-    ;(getSupportContactLink as jest.Mock).mockResolvedValue(undefined)
-
-    render(<Error error={errorWithDigest} reset={mockReset} />, { wrapper })
-
-    expect(screen.getByText('abc123def456')).toBeInTheDocument()
-  })
-
-  it('displays default digest when not provided', () => {
-    (getSupportContactLink as jest.Mock).mockResolvedValue(undefined)
-
-    render(<Error error={mockError} reset={mockReset} />, { wrapper })
-
-    expect(screen.getByText('000000000')).toBeInTheDocument()
-  })
-
-  it('displays current timestamp in ISO format', () => {
-    (getSupportContactLink as jest.Mock).mockResolvedValue(undefined)
-
-    render(<Error error={mockError} reset={mockReset} />, { wrapper })
-
-    expect(screen.getByText('2025-07-24T10:30:00.000Z')).toBeInTheDocument()
+    expect(screen.getByText('We konden dit scherm niet laden. Probeer het alsjeblieft opnieuw.')).toBeInTheDocument()
   })
 
   it('shows support contact link when available', async () => {
-    (getSupportContactLink as jest.Mock).mockResolvedValue('https://support.example.com')
+    (getSupportContactEmail as jest.Mock).mockResolvedValue('https://support.example.com')
 
     render(<Error error={mockError} reset={mockReset} />, { wrapper })
 
     await waitFor(() => {
-      const contactLink = screen.getByRole('link', { name: /contact/i })
-      expect(contactLink).toBeInTheDocument()
-      expect(contactLink).toHaveAttribute('href', 'https://support.example.com')
+      expect(screen.getByText('https://support.example.com')).toBeInTheDocument()
     })
   })
 
   it('hides support contact section when link is not available', async () => {
-    (getSupportContactLink as jest.Mock).mockResolvedValue(undefined)
+    (getSupportContactEmail as jest.Mock).mockResolvedValue(undefined)
 
     render(<Error error={mockError} reset={mockReset} />, { wrapper })
 
@@ -110,7 +70,7 @@ describe('Error', () => {
   })
 
   it('hides support contact section when link is empty string', async () => {
-    (getSupportContactLink as jest.Mock).mockResolvedValue('')
+    (getSupportContactEmail as jest.Mock).mockResolvedValue('')
 
     render(<Error error={mockError} reset={mockReset} />, { wrapper })
 
@@ -120,12 +80,12 @@ describe('Error', () => {
   })
 
   it('fetches support contact link on component mount', async () => {
-    (getSupportContactLink as jest.Mock).mockResolvedValue('https://support.example.com')
+    (getSupportContactEmail as jest.Mock).mockResolvedValue('https://support.example.com')
 
     render(<Error error={mockError} reset={mockReset} />, { wrapper })
 
     await waitFor(() => {
-      expect(getSupportContactLink).toHaveBeenCalledTimes(1)
+      expect(getSupportContactEmail).toHaveBeenCalledTimes(1)
     })
   })
 })
