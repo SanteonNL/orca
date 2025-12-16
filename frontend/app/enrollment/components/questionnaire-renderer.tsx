@@ -1,6 +1,6 @@
 'use client'
 
-import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient, RendererConfig } from '@aehrc/smart-forms-renderer';
+import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient, RendererConfig, removeEmptyAnswersFromResponse } from '@aehrc/smart-forms-renderer';
 import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
 import { useEffect, useState } from 'react';
 
@@ -30,7 +30,6 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
   const { inputTask, questionnaire } = props;
   const updatableResponse = useQuestionnaireResponseStore.use.updatableResponse();
   const responseIsValid = useQuestionnaireResponseStore.use.responseIsValid();
-
   const { launchContext } = useLaunchContext()
   const { cpsClient } = useClients()
   const { patient, practitioner } = useEnrollment()
@@ -84,6 +83,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
 
     outputTask.status = "completed"
 
+    const response = removeEmptyAnswersFromResponse(questionnaire, updatableResponse)
     const bundle: FhirResource & { type: "transaction" } = {
       resourceType: 'Bundle',
       type: 'transaction',
@@ -100,7 +100,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
         },
         {
           fullUrl: questionnaireResponseRef,
-          resource: { ...updatableResponse, subject: { identifier: getPatientIdentifier(patient) } },
+          resource: { ...response, subject: { identifier: getPatientIdentifier(patient) } },
           request: {
             method: 'PUT',
             url: responseExists ? questionnaireResponseRef : `QuestionnaireResponse?identifier=${encodeURIComponent(`${scpSubTaskIdentifierSystem}|${newId}`)}`
