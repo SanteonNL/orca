@@ -70,6 +70,7 @@ jest.mock('@aehrc/smart-forms-renderer', () => ({
     useRendererQueryClient: jest.fn(() => ({mount: jest.fn()})),
     useBuildForm: jest.fn(() => false),
     BaseRenderer: () => <div data-testid="base-renderer"/>,
+    removeEmptyAnswersFromResponse: jest.fn((questionnaire: any, response: any) => response)
 }))
 
 jest.mock('sonner', () => ({toast: {error: jest.fn(), success: jest.fn(),}}))
