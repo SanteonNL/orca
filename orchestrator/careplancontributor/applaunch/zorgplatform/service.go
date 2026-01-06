@@ -817,48 +817,60 @@ func getConditionCodeFromWorkflowTask(task map[string]interface{}) (*fhir.Codeab
 	if !strings.HasPrefix(workflowReference, prefix) {
 		return nil, fmt.Errorf("Task.definitionReference.reference does is not in the form '%s/<id>': %s", prefix, workflowReference)
 	}
-	// Mapping defined by https://github.com/Zorgbijjou/oid-repository/blob/main/oid-repository.md
 	activityId := strings.TrimPrefix(workflowReference, prefix)
 	activityId = strings.TrimPrefix(activityId, "urn:oid:")
-	switch activityId {
-	case "1.0":
-		// Used by Zorgplatform Developer Portal, default to Hartfalen
-		fallthrough
-	case "2.16.840.1.113883.2.4.3.224.2.1":
-		return &fhir.CodeableConcept{
-			Coding: []fhir.Coding{
-				{
-					System:  to.Ptr("http://snomed.info/sct"),
-					Code:    to.Ptr("84114007"),
-					Display: to.Ptr("hartfalen"),
-				},
-			},
-			Text: to.Ptr("hartfalen"),
-		}, nil
-	case "2.16.840.1.113883.2.4.3.224.2.2":
-		return &fhir.CodeableConcept{
-			Coding: []fhir.Coding{
-				{
-					System:  to.Ptr("http://snomed.info/sct"),
-					Code:    to.Ptr("13645005"),
-					Display: to.Ptr("chronische obstructieve longaandoening"),
-				},
-			},
-			Text: to.Ptr("chronische obstructieve longaandoening"),
-		}, nil
-	case "2.16.840.1.113883.2.4.3.224.2.3":
-		return &fhir.CodeableConcept{
-			Coding: []fhir.Coding{
-				{
-					System:  to.Ptr("http://snomed.info/sct"),
-					Code:    to.Ptr("195967001"),
-					Display: to.Ptr("astma"),
-				},
-			},
-			Text: to.Ptr("astma"),
-		}, nil
+
+	conditionCode, ok := activityDefinitionToConditionCode[activityId]
+	if !ok {
+		return nil, fmt.Errorf("unsupported workflow definition: %s", workflowReference)
 	}
-	return nil, fmt.Errorf("unsupported workflow definition: %s", workflowReference)
+	return &conditionCode, nil
+}
+
+// activityDefinitionToConditionCode maps Zorgplatform workflow activity definition IDs to FHIR condition codes.
+// Mapping defined by https://github.com/Zorgbijjou/oid-repository/blob/main/oid-repository.md
+var activityDefinitionToConditionCode = map[string]fhir.CodeableConcept{
+	// Used by Zorgplatform Developer Portal, defaults to Hartfalen
+	"1.0": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("84114007"),
+				Display: to.Ptr("hartfalen"),
+			},
+		},
+		Text: to.Ptr("hartfalen"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.1": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("84114007"),
+				Display: to.Ptr("hartfalen"),
+			},
+		},
+		Text: to.Ptr("hartfalen"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.2": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("13645005"),
+				Display: to.Ptr("chronische obstructieve longaandoening"),
+			},
+		},
+		Text: to.Ptr("chronische obstructieve longaandoening"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.3": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("195967001"),
+				Display: to.Ptr("astma"),
+			},
+		},
+		Text: to.Ptr("astma"),
+	},
 }
 
 type authHeaderRoundTripper struct {
