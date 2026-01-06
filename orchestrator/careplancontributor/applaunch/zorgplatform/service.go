@@ -871,6 +871,46 @@ var activityDefinitionToConditionCode = map[string]fhir.CodeableConcept{
 		},
 		Text: to.Ptr("astma"),
 	},
+	"2.16.840.1.113883.2.4.3.224.2.4": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("230690007"),
+				Display: to.Ptr("cerebrovasculair accident"),
+			},
+		},
+		Text: to.Ptr("cerebrovasculair accident"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.5": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("11687002"),
+				Display: to.Ptr("zwangerschapsdiabetes"),
+			},
+		},
+		Text: to.Ptr("zwangerschapsdiabetes"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.6": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("49436004"),
+				Display: to.Ptr("atrium fibrilleren"),
+			},
+		},
+		Text: to.Ptr("atrium fibrilleren"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.7": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("85919009"),
+				Display: to.Ptr("post darm"),
+			},
+		},
+		Text: to.Ptr("post darm"),
+	},
 }
 
 type authHeaderRoundTripper struct {
