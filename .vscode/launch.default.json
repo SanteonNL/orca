@@ -92,7 +92,7 @@
         "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc",
         "OTEL_RESOURCE_ATTRIBUTES": "service.instance.id=clinic-1",
         "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_NAME": "Example Web Application",
-        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_URL": "https://example.com",
+        "ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_0_URL": "https://example.com?organization={organization}",
         "ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_TASKACCEPTEDBUNDLEENDPOINT": "http://localhost:5188/orca/v1/enroll",
         "ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_QUESTIONNAIRESYNCURLS": "https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-healthcareservices.json,https://raw.githubusercontent.com/Zorgbijjou/scp-homemonitoring/refs/heads/main/fsh-generated/resources/Bundle-zbj-bundle-questionnaires.json",
         "ORCA_CAREPLANCONTRIBUTOR_TASKFILLER_STATUSNOTE_ACCEPTED": "Work on the Task will start tomorrow."

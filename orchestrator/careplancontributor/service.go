@@ -508,11 +508,31 @@ func (s *Service) handleFHIRSearchEndpoints(httpResponse http.ResponseWriter, ht
 		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), coolfhir.BadRequest("search parameters are not supported on this endpoint"), fmt.Sprintf("CarePlanContributor/%s %s", httpRequest.Method, httpRequest.URL.Path), httpResponse)
 		return
 	}
+
+	// Get the requesting organization to replace placeholders in URLs
+	principal, err := auth.PrincipalFromContext(httpRequest.Context())
+	if err != nil {
+		coolfhir.WriteOperationOutcomeFromError(httpRequest.Context(), fmt.Errorf("failed to get requesting organization: %w", err), fmt.Sprintf("CarePlanContributor/%s %s", httpRequest.Method, httpRequest.URL.Path), httpResponse)
+		return
+	}
+
+	// Find the URA identifier
+	var organizationUra string
+	for _, identifier := range principal.Organization.Identifier {
+		if identifier.System != nil && *identifier.System == coolfhir.URANamingSystem && identifier.Value != nil {
+			organizationUra = *identifier.Value
+			break
+		}
+	}
+
 	bundle := coolfhir.BundleBuilder{}
 	bundle.Type = fhir.BundleTypeSearchset
 	endpoints := make(map[string]fhir.Endpoint)
 	endpointNames := make([]string, 0)
 	for _, appConfig := range s.config.AppLaunch.External {
+		// Replace {organization} placeholder with the actual organization identifier
+		address := strings.ReplaceAll(appConfig.URL, "{organization}", organizationUra)
+
 		endpoint := fhir.Endpoint{
 			Status: fhir.EndpointStatusActive,
 			ConnectionType: fhir.Coding{
@@ -530,7 +550,7 @@ func (s *Service) handleFHIRSearchEndpoints(httpResponse http.ResponseWriter, ht
 				},
 			},
 			Name:    to.Ptr(appConfig.Name),
-			Address: appConfig.URL,
+			Address: address,
 		}
 		endpoints[appConfig.Name] = endpoint
 		endpointNames = append(endpointNames, appConfig.Name)

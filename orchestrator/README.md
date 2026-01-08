@@ -182,10 +182,18 @@ See "Messaging configuration" for more information.
 #### External application discovery
 If you have web applications that you want other care organizations to discovery through ORCA, you can set the following options:
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_NAME`: Name of the external application.
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_URL`: URL of the external application.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_URL`: URL of the external application. The URL can contain the placeholder `{organization}` which will be replaced with the requesting organization's URA identifier.
 
 These configured applications are discovered by searching for FHIR Endpoints on the CPC's FHIR Endpoint.
 Note: this endpoint only supports searching using HTTP GET, without query parameters.
+
+Example:
+```
+ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_MYAPP_NAME=MyApplication
+ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_MYAPP_URL=https://example.com/app/{organization}
+```
+
+When a care organization with URA `12345678` requests the endpoints, the URL will be resolved to `https://example.com/app/12345678`.
 
 ### Messaging configuration
 Application event handling and FHIR Subscription notification sending uses a message broker.
