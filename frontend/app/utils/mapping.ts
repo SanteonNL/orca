@@ -54,6 +54,10 @@ const codingLabels = {
     "http://snomed.info/sct|84114007": "hartfalen",
     "http://snomed.info/sct|13645005": "COPD",
     "http://snomed.info/sct|195967001": "astma",
+    "http://snomed.info/sct|230690007": "CVA",
+    "http://snomed.info/sct|11687002": "zwangerschapsdiabetes",
+    "http://snomed.info/sct|49436004": "atrium fibrilleren",
+    "http://snomed.info/sct|85919009": "post darm",
 }
 
 type coding = {

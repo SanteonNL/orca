@@ -144,7 +144,27 @@ const supportedConditions: Array<Coding> = [
         "system": "http://snomed.info/sct",
         "code": "13645005",
         "display": "Chronic obstructive pulmonary disease (disorder)"
-    }
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "230690007",
+        "display": "Cerebrovascular accident (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "11687002",
+        "display": "Gestational diabetes mellitus (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "49436004",
+        "display": "Atrial fibrillation (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "85919009",
+        "display": "Disorder of intestine (disorder)"
+    },
 ]
 
 function createServiceRequestBundle(requestDetails: ServiceRequestDetails,
