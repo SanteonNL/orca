@@ -141,6 +141,23 @@ To register a client (application), set the following environment variables for 
   If using a hashed secret, it must be prefixed with `sha256|` and salted with the `client_id` (`<client_id>|<secret>`) to ensure uniqueness and security:
   `concat('sha256|', hex(sha256(<client_id>|<secret>)))`. Note that the hexadecimal function should yield a lowercase string.
 
+###### Identity Broker for External OIDC Providers
+ORCA's OIDC Provider can act as an **identity broker** for external OIDC providers (such as Azure AD B2C, Google, Okta, etc.).
+This allows users to authenticate via external identity providers while maintaining the ORCA OIDC interface for client applications.
+
+To configure external OIDC providers as identity brokers:
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_BROKERPROVIDERS_<providername>_ISSUERURL`: The OIDC issuer URL of the external provider (e.g., `https://login.microsoftonline.com/{tenant-id}/v2.0`)
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_BROKERPROVIDERS_<providername>_CLIENTID`: OAuth2 client ID registered with the external provider
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_BROKERPROVIDERS_<providername>_CLIENTSECRET`: OAuth2 client secret for authenticating with the external provider
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_BROKERPROVIDERS_<providername>_SCOPES`: Comma-separated list of OAuth2 scopes to request (defaults to `openid,profile,email`)
+- `ORCA_CAREPLANCONTRIBUTOR_OIDC_PROVIDER_BROKERPROVIDERS_<providername>_USERIDCLAIM`: Which claim to use as the user identifier (defaults to `sub`)
+
+When broker providers are configured, users can authenticate via:
+- Direct ORCA login (if session exists): `https://orca-host/login?authRequestID={id}`
+- External provider: `https://orca-host/broker/redirect?authRequestID={id}&provider={provider_id}`
+
+See [BROKER_README.md](careplancontributor/oidc/op/BROKER_README.md) for detailed documentation on the identity broker functionality.
+
 #### Care Plan Contributor Task Filler configuration
 The Task Filler engine determines what Tasks to accept and what information is needed to fulfill them through FHIR HealthcareService and Questionnaire resources.
 You can enable the Task Engine by setting the following environment variables:
@@ -182,10 +199,18 @@ See "Messaging configuration" for more information.
 #### External application discovery
 If you have web applications that you want other care organizations to discovery through ORCA, you can set the following options:
 - `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_NAME`: Name of the external application.
-- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_URL`: URL of the external application.
+- `ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_<KEY>_URL`: URL of the external application. The URL can contain the placeholder `{organization}` which will be replaced with the requesting organization's URA identifier.
 
 These configured applications are discovered by searching for FHIR Endpoints on the CPC's FHIR Endpoint.
 Note: this endpoint only supports searching using HTTP GET, without query parameters.
+
+Example:
+```
+ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_MYAPP_NAME=MyApplication
+ORCA_CAREPLANCONTRIBUTOR_APPLAUNCH_EXTERNAL_MYAPP_URL=https://example.com/app/{organization}
+```
+
+When a care organization with URA `12345678` requests the endpoints, the URL will be resolved to `https://example.com/app/12345678`.
 
 ### Messaging configuration
 Application event handling and FHIR Subscription notification sending uses a message broker.
