@@ -16,6 +16,7 @@ import {organizationNameShort} from "@/lib/fhirRender";
 import {requestTitle} from "@/app/enrollment/task/components/util";
 import {statusLabelLong} from "@/app/utils/mapping";
 import { useQuery } from '@tanstack/react-query'
+import { Button } from '@mui/material'
 
 export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
@@ -127,6 +128,18 @@ export default function EnrollmentTaskPage() {
                         <PatientDetails task={task} serviceRequest={serviceRequest || cpsServiceRequest} patient={patient}/>
                         {
                             textBottom ? <div className="w-[568px] font-[500]">{textBottom}</div> : <></>
+                        }
+                        {launchableApps && launchableApps.length > 0 &&
+                            <div className="w-[568px]">
+                            {launchableApps.map((app, index) => (
+                                <Button
+                                    key={index}
+                                    variant="contained"
+                                    className="mb-2"
+                                    onClick={launchApp(app.URL)}
+                                >{app.Name}</Button>
+                            ))}
+                            </div>
                         }
                     </div>
                 )}
