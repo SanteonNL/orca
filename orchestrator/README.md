@@ -67,6 +67,22 @@ All OTEL settings can be overridden using the `ORCA_*` prefix convention:
 - `ORCA_OTEL_EXPORTER_OTLP_HEADERS_<KEY>`: Additional headers for OTLP requests
 - `ORCA_OTEL_RESOURCE_ATTRIBUTES_<KEY>`: Additional resource attributes
 
+#### OpenTelemetry Logging Configuration
+ORCA now supports OpenTelemetry logging, which bridges Go's structured logging (slog) to OpenTelemetry logs.
+This allows you to collect application logs alongside traces and metrics in your observability platform.
+
+- `ORCA_OTEL_LOGGING_ENABLED`: Enable/disable OpenTelemetry logging (default: `true`)
+- `ORCA_OTEL_LOGGING_EXPORTER_TYPE`: Log exporter type: `otlp`, `stdout`, or `none` (default: `otlp`)
+- `ORCA_OTEL_LOGGING_PROTOCOL`: Protocol for log OTLP exporter: `grpc` (default: `grpc`)
+- `ORCA_OTEL_LOGGING_OTLP_ENDPOINT`: OTLP log endpoint override (defaults to main OTLP endpoint)
+- `ORCA_OTEL_LOGGING_OTLP_INSECURE`: Force insecure connection for logs (default: auto-detected)
+- `ORCA_OTEL_LOGGING_OTLP_TIMEOUT`: Request timeout for log export (default: `10s`)
+- `ORCA_OTEL_LOGGING_OTLP_HEADERS_<KEY>`: Additional headers for OTLP log requests
+
+**Note**: When OpenTelemetry logging is enabled, all application logs (using Go's slog package) are automatically 
+forwarded to the configured OpenTelemetry log exporter. This provides correlation with traces and enables 
+centralized log management in your observability platform.
+
 **Note**: Currently, only the gRPC protocol is supported for OTLP export. HTTP support requires additional dependencies.
 
 ### Care Plan Service configuration

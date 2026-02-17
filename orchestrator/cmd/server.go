@@ -24,6 +24,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
 )
 
 // Start starts the server with the given configuration. It blocks until the given context is cancelled.
@@ -42,6 +43,20 @@ func Start(ctx context.Context, config Config) error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
 	}
+
+	// Set up OpenTelemetry slog handler to bridge slog to OpenTelemetry logs
+	otelHandler := otelslog.NewHandler("orchestrator")
+	logger := slog.New(otelHandler)
+
+	// Set the logger as the default logger for the entire application
+	slog.SetDefault(logger)
+
+	// Log that OpenTelemetry has been successfully initialized
+	slog.Info("OpenTelemetry initialized successfully",
+		slog.Bool("tracing_enabled", config.OpenTelemetry.Enabled),
+		slog.Bool("logging_enabled", config.OpenTelemetry.Logging.Enabled),
+		slog.String("service_name", config.OpenTelemetry.ServiceName),
+	)
 
 	// Ensure proper cleanup of OpenTelemetry on shutdown
 	defer func() {

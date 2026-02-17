@@ -3,17 +3,22 @@ package otel
 import (
 	"context"
 	"fmt"
-	baseotel "go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"os"
 	"strings"
 	"time"
+
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/stdout/stdoutlog"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/log/global"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // Config holds the OpenTelemetry configuration
@@ -28,6 +33,8 @@ type Config struct {
 	ResourceAttributes map[string]string `koanf:"resource_attributes"`
 	// Exporter configuration
 	Exporter ExporterConfig `koanf:"exporter"`
+	// Logging configuration
+	Logging LoggingConfig `koanf:"logging"`
 }
 
 type ExporterConfig struct {
@@ -49,6 +56,28 @@ type OTLPConfig struct {
 	// Headers to send with OTLP requests
 	Headers map[string]string `koanf:"headers"`
 	// Timeout for OTLP requests
+	Timeout time.Duration `koanf:"timeout"`
+	// Insecure controls whether to use insecure gRPC connection
+	Insecure bool `koanf:"insecure"`
+}
+
+type LoggingConfig struct {
+	// Enabled controls whether OpenTelemetry logging is enabled
+	Enabled bool `koanf:"enabled"`
+	// Type of log exporter: "otlp", "stdout", or "none"
+	ExporterType string `koanf:"exporter_type"`
+	// Protocol for log OTLP exporter: "grpc" or "http"
+	Protocol string `koanf:"protocol"`
+	// OTLP configuration (when exporter_type is "otlp")
+	OTLP OTLPLogConfig `koanf:"otlp"`
+}
+
+type OTLPLogConfig struct {
+	// Endpoint for the OTLP log exporter
+	Endpoint string `koanf:"endpoint"`
+	// Headers to send with OTLP log requests
+	Headers map[string]string `koanf:"headers"`
+	// Timeout for OTLP log requests
 	Timeout time.Duration `koanf:"timeout"`
 	// Insecure controls whether to use insecure gRPC connection
 	Insecure bool `koanf:"insecure"`
@@ -123,6 +152,21 @@ func DefaultConfig() Config {
 				Timeout:         10 * time.Second,
 			},
 		},
+		Logging: LoggingConfig{
+			Enabled:      true,
+			ExporterType: "otlp",
+			Protocol:     protocol,
+			OTLP: OTLPLogConfig{
+				Endpoint: func() string {
+					if loggingEndpoint != "" {
+						return loggingEndpoint
+					}
+					return endpoint
+				}(),
+				Insecure: insecure,
+				Timeout:  10 * time.Second,
+			},
+		},
 	}
 }
 
@@ -150,21 +194,28 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// TracerProvider holds the global tracer provider and cleanup function
-type TracerProvider struct {
-	provider *trace.TracerProvider
-	cleanup  func(context.Context) error
+// OtelProvider holds the OpenTelemetry tracer and log providers with cleanup function
+type OtelProvider struct {
+	tracerProvider *trace.TracerProvider
+	logProvider    *log.LoggerProvider
+	cleanup        func(context.Context) error
 }
 
 // Initialize sets up OpenTelemetry based on the configuration
-func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
+func Initialize(ctx context.Context, config Config) (*OtelProvider, error) {
 	if !config.Enabled {
 		// Set up a no-op tracer provider
-		noopProvider := trace.NewTracerProvider()
-		baseotel.SetTracerProvider(noopProvider)
-		return &TracerProvider{
-			provider: noopProvider,
-			cleanup:  func(context.Context) error { return nil },
+		noopTracerProvider := trace.NewTracerProvider()
+		baseotel.SetTracerProvider(noopTracerProvider)
+
+		// Set up a no-op log provider
+		noopLogProvider := log.NewLoggerProvider()
+		global.SetLoggerProvider(noopLogProvider)
+
+		return &OtelProvider{
+			tracerProvider: noopTracerProvider,
+			logProvider:    noopLogProvider,
+			cleanup:        func(context.Context) error { return nil },
 		}, nil
 	}
 
@@ -191,6 +242,52 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
 
+	// Initialize trace provider
+	traceProvider, err := initializeTraceProvider(ctx, config, res)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize trace provider: %w", err)
+	}
+
+	// Initialize log provider
+	logProvider, err := initializeLogProvider(ctx, config, res)
+	if err != nil {
+		// Clean up trace provider if log provider fails
+		if shutdownErr := traceProvider.Shutdown(ctx); shutdownErr != nil {
+			return nil, fmt.Errorf("failed to initialize log provider: %w, and failed to cleanup trace provider: %w", err, shutdownErr)
+		}
+		return nil, fmt.Errorf("failed to initialize log provider: %w", err)
+	}
+
+	// Set global providers
+	baseotel.SetTracerProvider(traceProvider)
+	global.SetLoggerProvider(logProvider)
+
+	// Set global propagator to tracecontext (W3C Trace Context)
+	baseotel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+
+	return &OtelProvider{
+		tracerProvider: traceProvider,
+		logProvider:    logProvider,
+		cleanup: func(ctx context.Context) error {
+			var errs []error
+			if err := traceProvider.Shutdown(ctx); err != nil {
+				errs = append(errs, fmt.Errorf("trace provider shutdown: %w", err))
+			}
+			if err := logProvider.Shutdown(ctx); err != nil {
+				errs = append(errs, fmt.Errorf("log provider shutdown: %w", err))
+			}
+			if len(errs) > 0 {
+				return fmt.Errorf("shutdown errors: %v", errs)
+			}
+			return nil
+		},
+	}, nil
+}
+
+func initializeTraceProvider(ctx context.Context, config Config, res *resource.Resource) (*trace.TracerProvider, error) {
 	// Create exporter based on configuration
 	var exporter trace.SpanExporter
 	switch config.Exporter.Type {
@@ -213,9 +310,10 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 				opts = append(opts, otlptracegrpc.WithInsecure())
 			}
 
+			var err error
 			exporter, err = otlptracegrpc.New(ctx, opts...)
 			if err != nil {
-				return nil, fmt.Errorf("failed to create OTLP gRPC exporter: %w", err)
+				return nil, fmt.Errorf("failed to create OTLP gRPC trace exporter: %w", err)
 			}
 
 		default:
@@ -223,15 +321,16 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 		}
 
 	case "stdout":
+		var err error
 		exporter, err = stdouttrace.New(stdouttrace.WithPrettyPrint())
 		if err != nil {
-			return nil, fmt.Errorf("failed to create stdout exporter: %w", err)
+			return nil, fmt.Errorf("failed to create stdout trace exporter: %w", err)
 		}
 	case "none":
 		// No exporter, traces will be collected but not exported
 		exporter = nil
 	default:
-		return nil, fmt.Errorf("unsupported exporter type: %s", config.Exporter.Type)
+		return nil, fmt.Errorf("unsupported trace exporter type: %s", config.Exporter.Type)
 	}
 
 	// Create tracer provider
@@ -243,28 +342,76 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	}
 
 	tp := trace.NewTracerProvider(opts...)
-
-	// Set global tracer provider
-	baseotel.SetTracerProvider(tp)
-
-	// Set global propagator to tracecontext (W3C Trace Context)
-	baseotel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
-		propagation.TraceContext{},
-		propagation.Baggage{},
-	))
-
-	return &TracerProvider{
-		provider: tp,
-		cleanup: func(ctx context.Context) error {
-			return tp.Shutdown(ctx)
-		},
-	}, nil
+	return tp, nil
 }
 
-// Shutdown cleanly shuts down the tracer provider
-func (tp *TracerProvider) Shutdown(ctx context.Context) error {
-	if tp.cleanup != nil {
-		return tp.cleanup(ctx)
+func initializeLogProvider(ctx context.Context, config Config, res *resource.Resource) (*log.LoggerProvider, error) {
+	if !config.Logging.Enabled {
+		// Return no-op log provider if logging is disabled
+		return log.NewLoggerProvider(), nil
+	}
+
+	// Create log exporter based on configuration
+	var exporter log.Exporter
+	switch config.Logging.ExporterType {
+	case "otlp":
+		// Choose exporter based on protocol
+		switch config.Logging.Protocol {
+		case "grpc":
+			opts := []otlploggrpc.Option{
+				otlploggrpc.WithEndpoint(config.Logging.OTLP.Endpoint),
+				otlploggrpc.WithTimeout(config.Logging.OTLP.Timeout),
+			}
+
+			// Add headers if configured
+			if len(config.Logging.OTLP.Headers) > 0 {
+				opts = append(opts, otlploggrpc.WithHeaders(config.Logging.OTLP.Headers))
+			}
+
+			// Use insecure gRPC connection if configured
+			if config.Logging.OTLP.Insecure {
+				opts = append(opts, otlploggrpc.WithInsecure())
+			}
+
+			var err error
+			exporter, err = otlploggrpc.New(ctx, opts...)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create OTLP gRPC log exporter: %w", err)
+			}
+
+		default:
+			return nil, fmt.Errorf("unsupported OTLP log protocol: %s (supported: grpc)", config.Logging.Protocol)
+		}
+
+	case "stdout":
+		var err error
+		exporter, err = stdoutlog.New()
+		if err != nil {
+			return nil, fmt.Errorf("failed to create stdout log exporter: %w", err)
+		}
+	case "none":
+		// No exporter, logs will be collected but not exported
+		exporter = nil
+	default:
+		return nil, fmt.Errorf("unsupported log exporter type: %s", config.Logging.ExporterType)
+	}
+
+	// Create log provider
+	var opts []log.LoggerProviderOption
+	opts = append(opts, log.WithResource(res))
+
+	if exporter != nil {
+		opts = append(opts, log.WithProcessor(log.NewBatchProcessor(exporter)))
+	}
+
+	lp := log.NewLoggerProvider(opts...)
+	return lp, nil
+}
+
+// Shutdown cleanly shuts down the OpenTelemetry providers
+func (op *OtelProvider) Shutdown(ctx context.Context) error {
+	if op.cleanup != nil {
+		return op.cleanup(ctx)
 	}
 	return nil
 }
