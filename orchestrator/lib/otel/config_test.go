@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/sdk/log"
 	"go.opentelemetry.io/otel/sdk/trace"
 )
 
@@ -244,11 +245,12 @@ func TestInitialize_OTLPConfig(t *testing.T) {
 	// In integration tests, you would test the actual OTLP initialization
 }
 
-func TestTracerProvider_Shutdown(t *testing.T) {
-	// Test shutdown with nil cleanup function
-	provider := &TracerProvider{
-		provider: trace.NewTracerProvider(),
-		cleanup:  nil,
+func TestOtelProvider_Shutdown(t *testing.T) {
+	// Test shutdown with nil cleanup function and both providers
+	provider := &OtelProvider{
+		tracerProvider: trace.NewTracerProvider(),
+		logProvider:    log.NewLoggerProvider(),
+		cleanup:        nil,
 	}
 
 	err := provider.Shutdown(context.Background())
@@ -256,8 +258,9 @@ func TestTracerProvider_Shutdown(t *testing.T) {
 
 	// Test shutdown with cleanup function
 	shutdownCalled := false
-	provider = &TracerProvider{
-		provider: trace.NewTracerProvider(),
+	provider = &OtelProvider{
+		tracerProvider: trace.NewTracerProvider(),
+		logProvider:    log.NewLoggerProvider(),
 		cleanup: func(ctx context.Context) error {
 			shutdownCalled = true
 			return nil
@@ -267,6 +270,26 @@ func TestTracerProvider_Shutdown(t *testing.T) {
 	err = provider.Shutdown(context.Background())
 	assert.NoError(t, err)
 	assert.True(t, shutdownCalled)
+
+	// Test shutdown with nil log provider
+	provider = &OtelProvider{
+		tracerProvider: trace.NewTracerProvider(),
+		logProvider:    nil,
+		cleanup:        nil,
+	}
+
+	err = provider.Shutdown(context.Background())
+	assert.NoError(t, err)
+
+	// Test shutdown with nil tracer provider
+	provider = &OtelProvider{
+		tracerProvider: nil,
+		logProvider:    log.NewLoggerProvider(),
+		cleanup:        nil,
+	}
+
+	err = provider.Shutdown(context.Background())
+	assert.NoError(t, err)
 }
 
 func TestDefaultConfig_WithEnvironmentVariables(t *testing.T) {
