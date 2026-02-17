@@ -2,12 +2,6 @@ package cmd
 
 import (
 	"context"
-	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
-	"github.com/SanteonNL/orca/orchestrator/globals"
-	"github.com/SanteonNL/orca/orchestrator/lib/otel"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	baseotel "go.opentelemetry.io/otel"
 	"net"
 	"net/http"
 	"os"
@@ -15,6 +9,13 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
+	"github.com/SanteonNL/orca/orchestrator/globals"
+	"github.com/SanteonNL/orca/orchestrator/lib/otel"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	baseotel "go.opentelemetry.io/otel"
 )
 
 func TestStart(t *testing.T) {
@@ -316,7 +317,7 @@ func TestOpenTelemetryInitialization(t *testing.T) {
 		provider, err := otel.Initialize(ctx, config)
 		assert.Error(t, err)
 		assert.Nil(t, provider)
-		assert.Contains(t, err.Error(), "unsupported exporter type")
+		assert.Contains(t, err.Error(), "unsupported trace exporter type")
 	})
 }
 

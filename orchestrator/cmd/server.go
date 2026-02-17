@@ -60,7 +60,13 @@ func Start(ctx context.Context, config Config) error {
 
 	// Ensure proper cleanup of OpenTelemetry on shutdown
 	defer func() {
-		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		// If original context is cancelled, use a short timeout for faster shutdown
+		var shutdownTimeout time.Duration = 10 * time.Second
+		if ctx.Err() != nil {
+			// Context was cancelled, shutdown quickly
+			shutdownTimeout = 2 * time.Second
+		}
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
 		defer cancel()
 		if err := tracerProvider.Shutdown(shutdownCtx); err != nil {
 			slog.Error("Failed to shutdown OpenTelemetry", slog.String(logging.FieldError, err.Error()))
