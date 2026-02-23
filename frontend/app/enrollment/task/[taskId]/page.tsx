@@ -21,7 +21,7 @@ export default function EnrollmentTaskPage() {
     const {taskId} = useParams()
     const { scpClient, cpsClient } = useClients()
 
-    const {patient, serviceRequest} = useEnrollment()
+    const {patient, serviceRequest: launchContextServiceRequest} = useEnrollment()
     const {
         task,
         subTasks,
@@ -40,6 +40,18 @@ export default function EnrollmentTaskPage() {
     const [launchableApps, setLaunchableApps] = useState<LaunchableApp[] | undefined>(undefined)
     const [currentQuestionnaire, setCurrentQuestionnaire] = useState<Questionnaire | undefined>(undefined);
 
+    // Load ServiceRequest from CPS as referred to by the Task.focus, in case the context doesn't specify the ServiceRequest
+    // (e.g. when not launching for a specific Task using /list)
+    const serviceRequestId = task?.focus?.reference?.replace('ServiceRequest/', '')
+    const { data: cpsServiceRequest } = useQuery({
+        queryKey: ['cps-service-request', serviceRequestId],
+        queryFn: () => cpsClient!.read({resourceType: 'ServiceRequest', id: serviceRequestId!}) as Promise<ServiceRequest>,
+        staleTime: Infinity,
+        enabled: !!cpsClient && !!serviceRequestId,
+    })
+
+    const serviceRequest = launchContextServiceRequest || cpsServiceRequest
+    
     useEffect(() => {
         const primaryTaskPerformer = serviceRequest?.performer?.[0].identifier;
         if (!primaryTaskPerformer || !scpClient) {
@@ -57,16 +69,6 @@ export default function EnrollmentTaskPage() {
         }
     }, [task?.status, launchableApps])
 
-    // Load ServiceRequest from CPS as referred to by the Task.focus, in case the context doesn't specify the ServiceRequest
-    // (e.g. when not launching for a specific Task using /list)
-    const serviceRequestId = task?.focus?.reference?.replace('ServiceRequest/', '')
-    const { data: cpsServiceRequest } = useQuery({
-        queryKey: ['cps-service-request', serviceRequestId],
-        queryFn: () => cpsClient!.read({resourceType: 'ServiceRequest', id: serviceRequestId!}) as Promise<ServiceRequest>,
-        staleTime: Infinity,
-        enabled: !!cpsClient && !!serviceRequestId,
-    })
-    
     useEffect(() => {
         if (!questionnaireMap) {
             return undefined
@@ -88,7 +90,7 @@ export default function EnrollmentTaskPage() {
     const breadcrumb = isFirstStep
         ? <span className='font-medium'>Controleer patiëntgegevens</span>
         : <a href={`${process.env.NEXT_PUBLIC_BASE_PATH || ""}/enrollment/new`} className="text-primary font-medium">Controleer patiëntgegevens</a>
-    const serviceRequestTitle = requestTitle(serviceRequest || cpsServiceRequest)
+    const serviceRequestTitle = requestTitle(serviceRequest)
 
 
     // Auto-launch external app when the following conditions are met:
@@ -124,7 +126,7 @@ export default function EnrollmentTaskPage() {
                                     executionTextTop(serviceRequestTitle, task) ?? ''
                             }
                         </div>
-                        <PatientDetails task={task} serviceRequest={serviceRequest || cpsServiceRequest} patient={patient}/>
+                        <PatientDetails task={task} serviceRequest={serviceRequest} patient={patient}/>
                         {
                             textBottom ? <div className="w-[568px] font-[500]">{textBottom}</div> : <></>
                         }
