@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/logging"
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -241,11 +242,19 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			"SMART on FHIR app launched with ID token",
 			slog.String("token", string(idTokenJSON)),
 		)
-		patient, practitioner, encounter, organization, tenant, err := s.loadContext(httpRequest.Context(), issuer, tokens)
+		ctx := httpRequest.Context()
+		context, err := s.loadContext(ctx, issuer, tokens)
 		if err != nil {
 			s.SendError(request.Context(), issuer.key, fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
 			return
 		}
+		// destructure context
+		patient := context.Patient
+		practitioner := context.Practitioner
+		encounter := context.Encounter
+		existingTask := context.ExistingTask
+		organization := context.Organization
+		tenant := context.Properties
 
 		// Get bsn from patient identifier using system 2.16.840.1.113883.2.4.6.3 or http://fhir.nl/fhir/NamingSystem/bsn
 		var bsn string
@@ -318,7 +327,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 					},
 				},
 			},
-			ReasonReference: []fhir.Reference{fhir.Reference{
+			ReasonReference: []fhir.Reference{{
 				Type:      to.Ptr("Condition"),
 				Reference: to.Ptr("Condition/magic-" + *condition.Id),
 				Display:   to.Ptr(*condition.Code.Text),
@@ -344,41 +353,75 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			},
 			TenantID: tenant.ID,
 		}
+
 		sessionData.Set("Patient/"+*patient.Id, *patient)
 		sessionData.Set("Practitioner/"+*practitioner.Id, *practitioner)
 		sessionData.Set("ServiceRequest/magic-"+uuid.NewString(), *serviceRequest)
 		sessionData.Set("Organization/magic-"+uuid.NewString(), organization)
 		sessionData.Set("Condition/magic-"+*condition.Id, condition)
+		if existingTask != nil {
+			sessionData.Set(*to.Ptr("Task/" + *existingTask.Id), existingTask)
+		}
 		// TODO opt sessionData.Set("PractitionerRole/magic-"+uuid.NewString(), launchContext.PractitionerRole)
 
 		s.sessionManager.Create(httpResponse, sessionData)
 		slog.InfoContext(request.Context(), "SMART on FHIR app launch succeeded")
-		// Note: we don't support enrolment/task creation through SMART on FHIR yet, so we redirect to the task overview
-		http.Redirect(httpResponse, request, s.frontendBaseURL.JoinPath("list").String(), http.StatusFound)
+
+		var redirectURL *url.URL
+		if existingTask == nil {
+			redirectURL = s.frontendBaseURL.JoinPath("new")
+		} else {
+			// taskRef is in format Task/<id>, redirect URL is in task/<id> format
+			redirectURL = s.frontendBaseURL.JoinPath("task", *existingTask.Id)
+		}
+
+		http.Redirect(httpResponse, request, redirectURL.String(), http.StatusFound)
 	}, issuer.client, codeExchangeOpts...)(response, request)
 }
 
-func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens *oidc.Tokens[*oidc.IDTokenClaims]) (*fhir.Patient, *fhir.Practitioner, *fhir.Encounter, *fhir.Organization, *tenants.Properties, error) {
+// struct for return values of method below
+type contextData struct {
+	Patient      *fhir.Patient
+	Practitioner *fhir.Practitioner
+	Encounter    *fhir.Encounter
+	Organization *fhir.Organization
+	ExistingTask *fhir.Task
+	Properties   *tenants.Properties
+}
+
+func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens *oidc.Tokens[*oidc.IDTokenClaims]) (*contextData, error) {
+	// Select tenant
+	tenant, err := s.tenants.Get(issuer.tenantID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tenant %s: %w", issuer.tenantID, err)
+	}
+	ctx = tenants.WithTenant(ctx, *tenant)
+
 	patientID, hasPatientID := tokens.Extra("patient").(string)
 	if !hasPatientID || patientID == "" {
-		return nil, nil, nil, nil, nil, fmt.Errorf("no patient ID found in token response")
+		return nil, fmt.Errorf("no patient ID found in token response")
 	}
 
 	encounterID, hasEncounterID := tokens.Extra("encounter").(string)
 	if !hasEncounterID || encounterID == "" {
-		return nil, nil, nil, nil, nil, fmt.Errorf("no encounter ID found in token response")
+		return nil, fmt.Errorf("no encounter ID found in token response")
 	}
 
 	apiUrl, err := url.Parse(s.config.ApiUrl)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("could not parse API URL from config: %w", err)
+		return nil, fmt.Errorf("could not parse API URL from config: %w", err)
 	}
+
 	fhirClient := fhirclient.New(apiUrl, s.createSmartOnFhirApiClient(tokens.AccessToken), coolfhir.Config())
+	cpsFHIRClient, err := globals.CreateCPSFHIRClient(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create CPS FHIR client: %w", err)
+	}
 
 	practitionerId := tokens.IDTokenClaims.Subject
 	var practitioner fhir.Practitioner
 	if err = fhirClient.Read("Practitioner/"+practitionerId, &practitioner); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("unable to fetch Practitioner bundle: %w", err)
+		return nil, fmt.Errorf("unable to fetch Practitioner bundle: %w", err)
 	}
 
 	slog.DebugContext(
@@ -389,31 +432,38 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 
 	var patient fhir.Patient
 	if err = fhirClient.Read("Patient/"+patientID, &patient); err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("failed to read Patient resource: %w", err)
+		return nil, fmt.Errorf("failed to read Patient resource: %w", err)
 	}
 
 	encounter := fhir.Encounter{
 		Id: to.Ptr(encounterID),
 	}
 
-	// Select tenant
-	tenant, err := s.tenants.Get(issuer.tenantID)
+	existingTask, err := coolfhir.GetTaskByIdentifier(ctx, cpsFHIRClient, fhir.Identifier{
+		System: to.Ptr(encounterSystem),
+		Value:  to.Ptr(*encounter.Id),
+	})
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("failed to get tenant %s: %w", issuer.tenantID, err)
+		return nil, fmt.Errorf("failed to check for existing CPS Task resource:%w", err)
 	}
-	ctx = tenants.WithTenant(ctx, *tenant)
 
 	// Resolve identity of local care organization
 	identities, err := s.profile.Identities(ctx)
 	if err != nil {
-		return nil, nil, nil, nil, nil, fmt.Errorf("unable to fetch identities: %w", err)
 	}
 	if len(identities) != 1 {
-		return nil, nil, nil, nil, nil, fmt.Errorf("expected exactly one identity, got %d", len(identities))
+		return nil, fmt.Errorf("expected exactly one identity, got %d", len(identities))
 	}
 	organization := identities[0]
 
-	return &patient, &practitioner, &encounter, &organization, tenant, nil
+	return &contextData{
+		Patient:      &patient,
+		Practitioner: &practitioner,
+		Encounter:    &encounter,
+		ExistingTask: existingTask,
+		Organization: &organization,
+		Properties:   tenant,
+	}, nil
 }
 
 func (s *Service) getIssuerByKey(request *http.Request, issuerKey string) (rp.RelyingParty, error) {
