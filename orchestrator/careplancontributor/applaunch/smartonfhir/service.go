@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	mrand "math/rand"
 	"net/http"
 	"net/url"
 	"os"
@@ -255,8 +256,18 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			}
 		}
 		if bsn == "" {
-			s.SendError(request.Context(), issuer.key, fmt.Errorf("no BSN found for patient in SMART App Launch"), httpResponse, http.StatusBadRequest)
-			return
+			if !s.strictMode {
+				bsn = generateBSN()
+				// add bsn to patient struct for use in the app
+				patient.Identifier = append(patient.Identifier, fhir.Identifier{
+					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+					Value:  &bsn,
+				})
+				slog.WarnContext(ctx, "No BSN found for patient, generated fake BSN for use in SMART App Launch", slog.String("generated_bsn", bsn))
+			} else {
+				s.SendError(request.Context(), issuer.key, fmt.Errorf("no BSN found for patient in SMART App Launch"), httpResponse, http.StatusBadRequest)
+				return
+			}
 		}
 
 		// TODO don't hardcode this.
@@ -605,4 +616,12 @@ func (a smartOnFhirRoundTripper) RoundTrip(request *http.Request) (*http.Respons
 	request.Header.Add("Accept", "application/fhir+json")
 	request.Header.Add("Authorization", a.value)
 	return a.inner.RoundTrip(request)
+}
+
+func generateBSN() string {
+	// Generate a number between 0 and 9999
+	lastFour := mrand.Intn(10000)
+
+	// Format as 4 digits with leading zeroes
+	return fmt.Sprintf("00000%04d", lastFour)
 }
