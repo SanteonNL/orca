@@ -10,7 +10,6 @@ type Config struct {
 	Enabled          bool                    `koanf:"enabled"`
 	Issuer           map[string]IssuerConfig `koanf:"issuer"`
 	AzureKeyVault    AzureKeyVaultConfig     `koanf:"azurekv"`
-	ApiUrl           string                  `koanf:"apiurl"` //The FHIR API URL
 	TaskPerformerUra string                  `koanf:"taskperformerura"`
 }
 

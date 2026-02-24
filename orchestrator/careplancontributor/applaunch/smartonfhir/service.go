@@ -407,7 +407,7 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 		return nil, fmt.Errorf("no encounter ID found in token response")
 	}
 
-	apiUrl, err := url.Parse(s.config.ApiUrl)
+	apiUrl, err := url.Parse(issuer.issuerLaunchURL)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse API URL from config: %w", err)
 	}
