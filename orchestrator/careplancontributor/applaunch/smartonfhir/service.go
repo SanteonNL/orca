@@ -351,7 +351,8 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 				"access_token": tokens.AccessToken,
 				"iss":          issuer.issuerURL(),
 			},
-			TenantID: tenant.ID,
+			TenantID:       tenant.ID,
+			TaskIdentifier: to.Ptr(encounterSystem + "|" + *encounter.Id),
 		}
 
 		sessionData.Set("Patient/"+*patient.Id, *patient)
@@ -439,6 +440,7 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 		Id: to.Ptr(encounterID),
 	}
 
+	// TODO
 	existingTask, err := coolfhir.GetTaskByIdentifier(ctx, cpsFHIRClient, fhir.Identifier{
 		System: to.Ptr(encounterSystem),
 		Value:  to.Ptr(*encounter.Id),
