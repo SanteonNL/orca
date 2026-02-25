@@ -265,18 +265,8 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			}
 		}
 		if bsn == "" {
-			if !s.strictMode {
-				bsn = generateBSN()
-				// add bsn to patient struct for use in the app
-				patient.Identifier = append(patient.Identifier, fhir.Identifier{
-					System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
-					Value:  &bsn,
-				})
-				slog.WarnContext(ctx, "No BSN found for patient, generated fake BSN for use in SMART App Launch", slog.String("generated_bsn", bsn))
-			} else {
-				s.SendError(request.Context(), issuer.key, fmt.Errorf("no BSN found for patient in SMART App Launch"), httpResponse, http.StatusBadRequest)
-				return
-			}
+			s.SendError(request.Context(), issuer.key, fmt.Errorf("no BSN found for patient in SMART App Launch"), httpResponse, http.StatusBadRequest)
+			return
 		}
 
 		// TODO don't hardcode this.
@@ -358,10 +348,10 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 		sessionData.Set("Patient/"+*patient.Id, *patient)
 		sessionData.Set("Practitioner/"+*practitioner.Id, *practitioner)
 		sessionData.Set("ServiceRequest/magic-"+uuid.NewString(), *serviceRequest)
-		sessionData.Set("Organization/magic-"+uuid.NewString(), organization)
+		sessionData.Set("Organization/magic-"+uuid.NewString(), *organization)
 		sessionData.Set("Condition/magic-"+*condition.Id, condition)
 		if existingTask != nil {
-			sessionData.Set(*to.Ptr("Task/" + *existingTask.Id), existingTask)
+			sessionData.Set(*to.Ptr("Task/" + *existingTask.Id), *existingTask)
 		}
 		// TODO opt sessionData.Set("PractitionerRole/magic-"+uuid.NewString(), launchContext.PractitionerRole)
 
@@ -419,7 +409,12 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 		return nil, fmt.Errorf("unable to create CPS FHIR client: %w", err)
 	}
 
-	practitionerId := tokens.IDTokenClaims.Subject
+	fhirUserClaim, hasFhirUserClaim := tokens.IDTokenClaims.Claims["fhirUser"].(string)
+	if !hasFhirUserClaim || fhirUserClaim == "" {
+		return nil, fmt.Errorf("no fhirUser claim found in token response")
+	}
+	fhirUserClaimParts := strings.Split(fhirUserClaim, "/")
+	practitionerId := fhirUserClaimParts[len(fhirUserClaimParts)-1]
 	var practitioner fhir.Practitioner
 	if err = fhirClient.Read("Practitioner/"+practitionerId, &practitioner); err != nil {
 		return nil, fmt.Errorf("unable to fetch Practitioner bundle: %w", err)
@@ -458,6 +453,10 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 	}
 	organization := identities[0]
 
+	if !s.strictMode {
+		MakePatientCompatible(ctx, &patient)
+	}
+
 	return &contextData{
 		Patient:      &patient,
 		Practitioner: &practitioner,
@@ -467,7 +466,6 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 		Properties:   tenant,
 	}, nil
 }
-
 func (s *Service) getIssuerByKey(request *http.Request, issuerKey string) (rp.RelyingParty, error) {
 	iss, ok := s.issuersByKey[issuerKey]
 	if !ok {
@@ -670,10 +668,86 @@ func (a smartOnFhirRoundTripper) RoundTrip(request *http.Request) (*http.Respons
 	return a.inner.RoundTrip(request)
 }
 
-func generateBSN() string {
-	// Generate a number between 0 and 9999
-	lastFour := mrand.Intn(10000)
+func MakePatientCompatible(ctx context.Context, patient *fhir.Patient) {
+	hasBsn := false
+	for _, identifier := range patient.Identifier {
+		if identifier.System != nil && (strings.EqualFold(*identifier.System, "2.16.840.1.113883.2.4.6.3") || strings.EqualFold(*identifier.System, "http://fhir.nl/fhir/NamingSystem/bsn")) {
+			hasBsn = true
+			break
+		}
+	}
+	if !hasBsn {
+		bsn := generateValidBSN()
+		// add bsn to patient struct for use in the app
+		patient.Identifier = append(patient.Identifier, fhir.Identifier{
+			System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+			Value:  &bsn,
+		})
+		slog.WarnContext(ctx, "No BSN found for patient, generated valid fake BSN for use in SMART App Launch", slog.String("generated_bsn", bsn))
 
-	// Format as 4 digits with leading zeroes
-	return fmt.Sprintf("00000%04d", lastFour)
+	}
+
+	hasPhone := false
+	for _, telecom := range patient.Telecom {
+		if *telecom.System == fhir.ContactPointSystemPhone && telecom.Value != nil && strings.HasPrefix(*telecom.Value, "06") {
+			hasPhone = true
+			break
+		}
+	}
+	if !hasPhone {
+		fakePhone := "06" + fmt.Sprintf("%08d", mrand.Intn(100000000))
+		patient.Telecom = append(patient.Telecom, fhir.ContactPoint{
+			System: to.Ptr(fhir.ContactPointSystemPhone),
+			Value:  &fakePhone,
+		})
+		slog.WarnContext(ctx, "No mobile phone number found for patient, generated fake phone number for use in SMART App Launch", slog.String("generated_phone", fakePhone))
+	}
+
+	hasEmail := false
+	for _, telecom := range patient.Telecom {
+		if *telecom.System == fhir.ContactPointSystemEmail && telecom.Value != nil {
+			hasEmail = true
+			break
+		}
+	}
+	if !hasEmail {
+		fakeEmail := fmt.Sprintf("user%d@example.com", mrand.Intn(1000000))
+		patient.Telecom = append(patient.Telecom, fhir.ContactPoint{
+			System: to.Ptr(fhir.ContactPointSystemEmail),
+			Value:  &fakeEmail,
+		})
+		slog.WarnContext(ctx, "No email found for patient, generated fake email for use in SMART App Launch", slog.String("generated_email", fakeEmail))
+	}
+}
+
+// generateValidBSN generates a random valid Dutch BSN (Burger Service Nummer) using the 11-test (Elfproef)
+func generateValidBSN() string {
+	for {
+		// Generate a random 8-digit number (since the 9th digit is the check digit)
+		n := mrand.Intn(90000000) + 10000000 // ensures 8 digits, not starting with 0
+		digits := make([]int, 9)
+		for i := 7; i >= 0; i-- {
+			digits[i] = n % 10
+			n /= 10
+		}
+		// Calculate the check digit (Elfproef)
+		sum := 0
+		for i := 0; i < 8; i++ {
+			sum += digits[i] * (9 - i)
+		}
+		for check := 0; check < 10; check++ {
+			if (sum+(-1*check))%11 == 0 {
+				digits[8] = check
+				// Compose the BSN string
+				bsn := 0
+				for _, d := range digits {
+					bsn = bsn*10 + d
+				}
+				// BSN must be between 100000000 and 999999999
+				if bsn >= 100000000 && bsn <= 999999999 {
+					return fmt.Sprintf("%09d", bsn)
+				}
+			}
+		}
+	}
 }
