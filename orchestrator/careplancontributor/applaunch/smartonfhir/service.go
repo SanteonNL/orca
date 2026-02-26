@@ -299,40 +299,43 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			taskPerformer = *result
 		}
 
-		serviceRequest := &fhir.ServiceRequest{
-			Status: fhir.RequestStatusActive,
-			Identifier: []fhir.Identifier{
-				{
-					System: to.Ptr(encounterSystem),
-					Value:  to.Ptr(*encounter.Id),
-				},
-			},
-			Code: &fhir.CodeableConcept{
-				Coding: []fhir.Coding{
-					// Hardcoded, we only do Telemonitoring for now
+		var serviceRequest *fhir.ServiceRequest
+		if encounter != nil {
+			serviceRequest = &fhir.ServiceRequest{
+				Status: fhir.RequestStatusActive,
+				Identifier: []fhir.Identifier{
 					{
-						System:  to.Ptr("http://snomed.info/sct"),
-						Code:    to.Ptr("719858009"),
-						Display: to.Ptr("Thuismonitoring"),
+						System: to.Ptr(encounterSystem),
+						Value:  to.Ptr(*encounter.Id),
 					},
 				},
-			},
-			ReasonReference: []fhir.Reference{{
-				Type:      to.Ptr("Condition"),
-				Reference: to.Ptr("Condition/magic-" + *condition.Id),
-				Display:   to.Ptr(*condition.Code.Text),
-			}},
-			Subject: fhir.Reference{
-				Type: to.Ptr("Patient"),
-				Identifier: &fhir.Identifier{
-					System: to.Ptr(coolfhir.BSNNamingSystem),
-					Value:  &bsn,
+				Code: &fhir.CodeableConcept{
+					Coding: []fhir.Coding{
+						// Hardcoded, we only do Telemonitoring for now
+						{
+							System:  to.Ptr("http://snomed.info/sct"),
+							Code:    to.Ptr("719858009"),
+							Display: to.Ptr("Thuismonitoring"),
+						},
+					},
 				},
-			},
-			Performer: []fhir.Reference{taskPerformer},
-			Requester: &fhir.Reference{
-				Identifier: &organization.Identifier[0],
-			},
+				ReasonReference: []fhir.Reference{{
+					Type:      to.Ptr("Condition"),
+					Reference: to.Ptr("Condition/magic-" + *condition.Id),
+					Display:   to.Ptr(*condition.Code.Text),
+				}},
+				Subject: fhir.Reference{
+					Type: to.Ptr("Patient"),
+					Identifier: &fhir.Identifier{
+						System: to.Ptr(coolfhir.BSNNamingSystem),
+						Value:  &bsn,
+					},
+				},
+				Performer: []fhir.Reference{taskPerformer},
+				Requester: &fhir.Reference{
+					Identifier: &organization.Identifier[0],
+				},
+			}
 		}
 
 		sessionData := session.Data{
@@ -341,13 +344,17 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 				"access_token": tokens.AccessToken,
 				"iss":          issuer.issuerURL(),
 			},
-			TenantID:       tenant.ID,
-			TaskIdentifier: to.Ptr(encounterSystem + "|" + *encounter.Id),
+			TenantID: tenant.ID,
+		}
+		if encounter != nil {
+			sessionData.TaskIdentifier = to.Ptr(encounterSystem + "|" + *encounter.Id)
 		}
 
 		sessionData.Set("Patient/"+*patient.Id, *patient)
 		sessionData.Set("Practitioner/"+*practitioner.Id, *practitioner)
-		sessionData.Set("ServiceRequest/magic-"+uuid.NewString(), *serviceRequest)
+		if serviceRequest != nil {
+			sessionData.Set("ServiceRequest/magic-"+uuid.NewString(), *serviceRequest)
+		}
 		sessionData.Set("Organization/magic-"+uuid.NewString(), *organization)
 		sessionData.Set("Condition/magic-"+*condition.Id, condition)
 		if existingTask != nil {
@@ -359,10 +366,13 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 		slog.InfoContext(request.Context(), "SMART on FHIR app launch succeeded")
 
 		var redirectURL *url.URL
-		if existingTask == nil {
+
+		if encounter == nil {
+			// App launch without encounter context, redirect to list page.
+			redirectURL = s.frontendBaseURL.JoinPath("list")
+		} else if existingTask == nil {
 			redirectURL = s.frontendBaseURL.JoinPath("new")
 		} else {
-			// taskRef is in format Task/<id>, redirect URL is in task/<id> format
 			redirectURL = s.frontendBaseURL.JoinPath("task", *existingTask.Id)
 		}
 
@@ -395,7 +405,9 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 
 	encounterID, hasEncounterID := tokens.Extra("encounter").(string)
 	if !hasEncounterID || encounterID == "" {
-		return nil, fmt.Errorf("no encounter ID found in token response")
+		slog.InfoContext(
+			ctx,
+			"No encounter ID found in token response, proceeding without encounter context")
 	}
 
 	apiUrl, err := url.Parse(issuer.issuerLaunchURL)
@@ -431,17 +443,20 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 		return nil, fmt.Errorf("failed to read Patient resource: %w", err)
 	}
 
-	encounter := fhir.Encounter{
-		Id: to.Ptr(encounterID),
-	}
-
-	// TODO
-	existingTask, err := coolfhir.GetTaskByIdentifier(ctx, cpsFHIRClient, fhir.Identifier{
-		System: to.Ptr(encounterSystem),
-		Value:  to.Ptr(*encounter.Id),
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to check for existing CPS Task resource:%w", err)
+	var encounter *fhir.Encounter
+	var existingTask *fhir.Task
+	if hasEncounterID && encounterID != "" {
+		encounter = &fhir.Encounter{
+			Id: to.Ptr(encounterID),
+		}
+		var errTask error
+		existingTask, errTask = coolfhir.GetTaskByIdentifier(ctx, cpsFHIRClient, fhir.Identifier{
+			System: to.Ptr(encounterSystem),
+			Value:  to.Ptr(*encounter.Id),
+		})
+		if errTask != nil {
+			return nil, fmt.Errorf("failed to check for existing CPS Task resource:%w", errTask)
+		}
 	}
 
 	// Resolve identity of local care organization
@@ -460,7 +475,7 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 	return &contextData{
 		Patient:      &patient,
 		Practitioner: &practitioner,
-		Encounter:    &encounter,
+		Encounter:    encounter,
 		ExistingTask: existingTask,
 		Organization: &organization,
 		Properties:   tenant,
