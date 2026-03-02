@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -61,19 +62,18 @@ func init() {
 }
 
 type Service struct {
-	config                Config
-	tenants               tenants.Config
-	sessionManager        *user.SessionManager[session.Data]
-	frontendBaseURL       *url.URL
-	orcaBaseURL           *url.URL
-	issuersByURL          map[string]*trustedIssuer
-	issuersByKey          map[string]*trustedIssuer
-	strictMode            bool
-	cookieHandler         *zitadelHTTP.CookieHandler
-	jwtSigningKey         *jose.SigningKey
-	jwtSigingKeyJWKSet    *jose.JSONWebKeySet
-	smartOnFhirHttpClient *http.Client
-	profile               profile.Provider
+	config             Config
+	tenants            tenants.Config
+	sessionManager     *user.SessionManager[session.Data]
+	frontendBaseURL    *url.URL
+	orcaBaseURL        *url.URL
+	issuersByURL       map[string]*trustedIssuer
+	issuersByKey       map[string]*trustedIssuer
+	strictMode         bool
+	cookieHandler      *zitadelHTTP.CookieHandler
+	jwtSigningKey      *jose.SigningKey
+	jwtSigingKeyJWKSet *jose.JSONWebKeySet
+	profile            profile.Provider
 }
 
 func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {
@@ -82,13 +82,14 @@ func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]
 }
 
 type trustedIssuer struct {
-	issuerLaunchURL string
-	mux             *sync.RWMutex
-	client          rp.RelyingParty
-	key             string
-	clientID        string
-	realIssuerURL   string
-	tenantID        string
+	issuerLaunchURL       string
+	mux                   *sync.RWMutex
+	client                rp.RelyingParty
+	key                   string
+	clientID              string
+	realIssuerURL         string
+	tenantID              string
+	smartOnFhirHttpClient *http.Client
 }
 
 func (t trustedIssuer) issuerURL() string {
@@ -101,16 +102,61 @@ func (t trustedIssuer) issuerURL() string {
 }
 
 func New(config Config, tenants tenants.Config, sessionManager *user.SessionManager[session.Data], orcaBaseURL *url.URL, frontendBaseURL *url.URL, strictMode bool, profile profile.Provider) (*Service, error) {
+	keysClient, err := azkeyvault.NewKeysClient(config.AzureKeyVault.URL, config.AzureKeyVault.CredentialType, false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
+	}
+	certsClient, err := azkeyvault.NewCertificatesClient(config.AzureKeyVault.URL, config.AzureKeyVault.CredentialType, false)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create Azure Key Vault client: %w", err)
+	}
+
 	issuersByURL := make(map[string]*trustedIssuer)
 	issuersByKey := make(map[string]*trustedIssuer)
 	for key, curr := range config.Issuer {
+		var tlsClientCert *tls.Certificate = nil
+		if curr.ClientCertName != "" {
+			tlsClientCert, err = azkeyvault.GetTLSCertificate(context.Background(), certsClient, keysClient, curr.ClientCertName)
+			if err != nil {
+				return nil, fmt.Errorf("unable to get TLS client certificate from Azure Key Vault: %w", err)
+			}
+		} else if curr.ClientCertFile != "" {
+			certFileContents, err := os.ReadFile(curr.ClientCertFile)
+			if err != nil {
+				return nil, fmt.Errorf("unable to read TLS client certificate from file: %w", err)
+			}
+			tlsClientCertPtr, err := tls.X509KeyPair(certFileContents, certFileContents)
+			if err != nil {
+				return nil, fmt.Errorf("unable to create TLS client certificate: %w", err)
+			}
+			tlsClientCert = &tlsClientCertPtr
+		}
+
+		var httpClient *http.Client
+		if tlsClientCert != nil {
+			httpClient = &http.Client{
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{
+						Certificates:  []tls.Certificate{*tlsClientCert},
+						MinVersion:    tls.VersionTLS12,
+						Renegotiation: tls.RenegotiateOnceAsClient,
+					},
+				},
+			}
+		} else {
+			httpClient = &http.Client{
+				Transport: http.DefaultTransport,
+			}
+		}
+
 		issuer := &trustedIssuer{
-			mux:             &sync.RWMutex{},
-			key:             key,
-			issuerLaunchURL: curr.URL,
-			clientID:        curr.ClientID,
-			realIssuerURL:   curr.OAuth2URL,
-			tenantID:        curr.Tenant,
+			mux:                   &sync.RWMutex{},
+			key:                   key,
+			issuerLaunchURL:       curr.URL,
+			clientID:              curr.ClientID,
+			realIssuerURL:         curr.OAuth2URL,
+			tenantID:              curr.Tenant,
+			smartOnFhirHttpClient: httpClient,
 		}
 		issuersByURL[curr.URL] = issuer
 		issuersByKey[key] = issuer
@@ -140,11 +186,7 @@ func New(config Config, tenants tenants.Config, sessionManager *user.SessionMana
 		cookieHandler:   zitadelHTTP.NewCookieHandler(cookieHashKey, cookieEncryptKey, cookieHandlerOpts...),
 		sessionManager:  sessionManager,
 		tenants:         tenants,
-		// performing HTTP requests with Zorgplatform requires mutual TLS
-		smartOnFhirHttpClient: &http.Client{
-			Transport: http.DefaultTransport,
-		},
-		profile: profile,
+		profile:         profile,
 	}
 	if len(config.AzureKeyVault.SigningKeyName) > 0 {
 		var err error
@@ -415,7 +457,7 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 		return nil, fmt.Errorf("could not parse API URL from config: %w", err)
 	}
 
-	fhirClient := fhirclient.New(apiUrl, s.createSmartOnFhirApiClient(tokens.AccessToken), coolfhir.Config())
+	fhirClient := fhirclient.New(apiUrl, issuer.createSmartOnFhirApiClient(tokens.AccessToken), coolfhir.Config())
 	cpsFHIRClient, err := globals.CreateCPSFHIRClient(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("unable to create CPS FHIR client: %w", err)
@@ -663,7 +705,7 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 		}, nil
 }
 
-func (s *Service) createSmartOnFhirApiClient(accessToken string) *http.Client {
+func (s *trustedIssuer) createSmartOnFhirApiClient(accessToken string) *http.Client {
 	return &http.Client{
 		Transport: &smartOnFhirRoundTripper{
 			value: "Bearer " + accessToken,

@@ -14,10 +14,12 @@ type Config struct {
 }
 
 type IssuerConfig struct {
-	URL       string `koanf:"url"`
-	ClientID  string `koanf:"clientid"`
-	OAuth2URL string `koanf:"oauth2url"`
-	Tenant    string `koanf:"tenant"`
+	URL            string `koanf:"url"`
+	ClientID       string `koanf:"clientid"`
+	OAuth2URL      string `koanf:"oauth2url"`
+	Tenant         string `koanf:"tenant"`
+	ClientCertName string `koanf:"clientcertname"`
+	ClientCertFile string `koanf:"clientcertfile"`
 }
 
 func DefaultConfig() Config {
