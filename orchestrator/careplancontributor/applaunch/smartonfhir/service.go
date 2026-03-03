@@ -88,6 +88,7 @@ type trustedIssuer struct {
 	key                   string
 	clientID              string
 	realIssuerURL         string
+    fhirURL               string
 	tenantID              string
 	smartOnFhirHttpClient *http.Client
 }
@@ -155,6 +156,7 @@ func New(config Config, tenants tenants.Config, sessionManager *user.SessionMana
 			issuerLaunchURL:       curr.URL,
 			clientID:              curr.ClientID,
 			realIssuerURL:         curr.OAuth2URL,
+			fhirURL:               curr.FHIRURL,
 			tenantID:              curr.Tenant,
 			smartOnFhirHttpClient: httpClient,
 		}
@@ -452,7 +454,13 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 			"No encounter ID found in token response, proceeding without encounter context")
 	}
 
-	apiUrl, err := url.Parse(issuer.issuerLaunchURL)
+	var fhirUrl string
+	if issuer.fhirURL != "" {
+		fhirUrl = issuer.fhirURL
+	} else {
+		fhirUrl = issuer.issuerLaunchURL
+	}
+	apiUrl, err := url.Parse(fhirUrl)
 	if err != nil {
 		return nil, fmt.Errorf("could not parse API URL from config: %w", err)
 	}

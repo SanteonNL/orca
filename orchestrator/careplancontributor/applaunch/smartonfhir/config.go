@@ -20,6 +20,7 @@ type IssuerConfig struct {
 	Tenant         string `koanf:"tenant"`
 	ClientCertName string `koanf:"clientcertname"`
 	ClientCertFile string `koanf:"clientcertfile"`
+	FHIRURL        string `koanf:"fhirurl"`
 }
 
 func DefaultConfig() Config {
