@@ -22,6 +22,7 @@ import (
 func TestService_IntegrationTest(t *testing.T) {
 	sessionData := session.Data{}
 	sessionData.Set("Practitioner/12345", fhir.Practitioner{
+		Id: to.Ptr("some-practitioner-id"),
 		Identifier: []fhir.Identifier{
 			{
 				System: to.Ptr("example.com/identifier"),
