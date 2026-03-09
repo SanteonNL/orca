@@ -23,6 +23,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/clients"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
@@ -68,6 +69,7 @@ type Service struct {
 	cookieHandler      *zitadelHTTP.CookieHandler
 	jwtSigningKey      *jose.SigningKey
 	jwtSigingKeyJWKSet *jose.JSONWebKeySet
+	profile            profile.Provider
 }
 
 func (s *Service) CreateEHRProxies() (map[string]coolfhir.HttpProxy, map[string]fhirclient.Client) {
@@ -94,7 +96,7 @@ func (t trustedIssuer) issuerURL() string {
 	return t.issuerLaunchURL
 }
 
-func New(config Config, tenants tenants.Config, sessionManager *user.SessionManager[session.Data], orcaBaseURL *url.URL, frontendBaseURL *url.URL, strictMode bool) (*Service, error) {
+func New(config Config, tenants tenants.Config, sessionManager *user.SessionManager[session.Data], orcaBaseURL *url.URL, frontendBaseURL *url.URL, strictMode bool, profile profile.Provider) (*Service, error) {
 	issuersByURL := make(map[string]*trustedIssuer)
 	issuersByKey := make(map[string]*trustedIssuer)
 	for key, curr := range config.Issuer {
@@ -134,6 +136,7 @@ func New(config Config, tenants tenants.Config, sessionManager *user.SessionMana
 		cookieHandler:   zitadelHTTP.NewCookieHandler(cookieHashKey, cookieEncryptKey, cookieHandlerOpts...),
 		sessionManager:  sessionManager,
 		tenants:         tenants,
+		profile:         profile,
 	}
 	if len(config.AzureKeyVault.SigningKeyName) > 0 {
 		var err error
@@ -231,7 +234,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			"SMART on FHIR app launched with ID token",
 			slog.String("token", string(idTokenJSON)),
 		)
-		patient, practitioner, tenant, err := s.loadContext(httpRequest.Context(), issuer, tokens)
+		patient, practitioner, organization, tenant, err := s.loadContext(httpRequest.Context(), issuer, tokens)
 		if err != nil {
 			s.SendError(request.Context(), issuer.key, fmt.Errorf("failed to load context for SMART App Launch: %w", err), httpResponse, http.StatusInternalServerError)
 			return
@@ -246,6 +249,7 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 		}
 		sessionData.Set("Patient/"+*patient.Id, *patient)
 		sessionData.Set("Practitioner/"+*practitioner.Id, *practitioner)
+		sessionData.Set("Organization/magic-"+uuid.NewString(), *organization)
 		s.sessionManager.Create(httpResponse, sessionData)
 		slog.InfoContext(request.Context(), "SMART on FHIR app launch succeeded")
 		// Note: we don't support enrolment/task creation through SMART on FHIR yet, so we redirect to the task overview
@@ -253,19 +257,19 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 	}, issuer.client, codeExchangeOpts...)(response, request)
 }
 
-func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens *oidc.Tokens[*oidc.IDTokenClaims]) (*fhir.Patient, *fhir.Practitioner, *tenants.Properties, error) {
+func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens *oidc.Tokens[*oidc.IDTokenClaims]) (*fhir.Patient, *fhir.Practitioner, *fhir.Organization, *tenants.Properties, error) {
 	patientID, hasPatientID := tokens.Extra("patient").(string)
 	if !hasPatientID || patientID == "" {
-		return nil, nil, nil, fmt.Errorf("no patient ID found in token response")
+		return nil, nil, nil, nil, fmt.Errorf("no patient ID found in token response")
 	}
 
 	userFirstName, ok := tokens.Extra("userFirstName").(string)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("no userFirstName found in token response")
+		return nil, nil, nil, nil, fmt.Errorf("no userFirstName found in token response")
 	}
 	userLastName, ok := tokens.Extra("userLastName").(string)
 	if !ok {
-		return nil, nil, nil, fmt.Errorf("no userLastName found in token response")
+		return nil, nil, nil, nil, fmt.Errorf("no userLastName found in token response")
 	}
 	practitioner := fhir.Practitioner{
 		Id: to.Ptr(tokens.IDTokenClaims.Subject),
@@ -292,13 +296,13 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 	// Select tenant
 	tenant, err := s.tenants.Get(issuer.tenantID)
 	if err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to get tenant %s: %w", issuer.tenantID, err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to get tenant %s: %w", issuer.tenantID, err)
 	}
 	ctx = tenants.WithTenant(ctx, *tenant)
 
 	cpsFHIRClient, err := globals.CreateCPSFHIRClient(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	// Currently, the SMART on FHIR launch can't be used with a ServiceRequest to request new Tasks,
 	// but only to inspect existing Tasks.
@@ -306,9 +310,20 @@ func (s *Service) loadContext(ctx context.Context, issuer *trustedIssuer, tokens
 	// This should probably change in the future, since this relies on patient IDs copied from the EHR to CPS (which should rely on its own IDs instead).
 	var patient fhir.Patient
 	if err := cpsFHIRClient.Read(patientID, &patient); err != nil {
-		return nil, nil, nil, fmt.Errorf("failed to read patient resource: %w", err)
+		return nil, nil, nil, nil, fmt.Errorf("failed to read patient resource: %w", err)
 	}
-	return &patient, &practitioner, tenant, nil
+
+	// Resolve identity of local care organization
+	identities, err := s.profile.Identities(ctx)
+	if err != nil {
+		return nil, nil, nil, nil, fmt.Errorf("failed to get identities from profile: %w", err)
+	}
+	if len(identities) != 1 {
+		return nil, nil, nil, nil, fmt.Errorf("expected exactly one identity, got %d", len(identities))
+	}
+	organization := identities[0]
+
+	return &patient, &practitioner, &organization, tenant, nil
 }
 
 func (s *Service) getIssuerByKey(request *http.Request, issuerKey string) (rp.RelyingParty, error) {
