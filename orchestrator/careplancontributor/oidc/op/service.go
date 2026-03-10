@@ -121,10 +121,9 @@ func userFromSession(sessionData *session.Data) (*UserDetails, error) {
 		userDetails.Name = coolfhir.FormatHumanName(name)
 		break
 	}
-	if practitioner.Id == nil {
-		return nil, errors.New("no id found in practitioner resource")
+	if practitioner.Id != nil {
+		userDetails.ID = *practitioner.Id
 	}
-	userDetails.ID = *practitioner.Id
 	for _, identifier := range practitioner.Identifier {
 		userDetails.ID = *identifier.Value
 	}
