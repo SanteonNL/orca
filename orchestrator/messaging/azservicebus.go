@@ -147,6 +147,14 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 				continue
 			}
 			azMessage := messages[0]
+			if azMessage == nil {
+				slog.WarnContext(
+					c.ctx,
+					"AzureServiceBus: received nil message, skipping",
+					slog.String("source", fullName),
+				)
+				continue
+			}
 			message := Message{
 				Body:          azMessage.Body,
 				CorrelationID: azMessage.CorrelationID,
