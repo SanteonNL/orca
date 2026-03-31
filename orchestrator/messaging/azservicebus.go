@@ -127,7 +127,7 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 			messages, err := receiver.ReceiveMessages(c.ctx, 1, &azservicebus.ReceiveMessagesOptions{})
 			if err != nil || len(messages) == 0 {
 				const backoffTime = time.Minute
-				if !errors.Is(err, context.Canceled) {
+				if err != nil && !errors.Is(err, context.Canceled) {
 					slog.ErrorContext(
 						c.ctx,
 						"AzureServiceBus: receive message failed, backing off",
@@ -135,7 +135,15 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 						slog.String(logging.FieldError, err.Error()),
 						slog.Duration("backoff_time", backoffTime),
 					)
+				} else if len(messages) == 0 {
+					slog.WarnContext(
+						c.ctx,
+						"AzureServiceBus: no messages received, backing off",
+						slog.String("source", fullName),
+						slog.Duration("backoff_time", backoffTime),
+					)
 				}
+
 				// Sleep for a minute before retrying, to avoid spamming the logs.
 				// But, the server might be instructed to shut down in the meantime, and we don't want the sleep to block the shutdown.
 				// So, use a select to also listen for shutdown.
