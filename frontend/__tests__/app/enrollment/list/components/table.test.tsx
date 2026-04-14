@@ -1,4 +1,4 @@
-import {act, render, screen, waitFor} from '@testing-library/react';
+import {act, render, screen} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TaskOverviewTable from '@/app/enrollment/list/components/table';
 import useEnrollment from '@/app/hooks/enrollment-hook';
@@ -165,7 +165,7 @@ describe('TaskOverviewTable', () => {
         expect(mockSearch).not.toHaveBeenCalled();
     });
 
-    it('renders condition from reasonCode in Aandoening column', async () => {
+    it('renders table columns correctly', async () => {
         mockSearch
             .mockResolvedValueOnce({entry: [{resource: {id: 'patient-1', resourceType: 'Patient'}}]})
             .mockResolvedValueOnce({
@@ -211,8 +211,17 @@ describe('TaskOverviewTable', () => {
             render(<TaskOverviewTable/>, { wrapper });
         });
 
-        expect(await screen.findByText('Heart failure (disorder)')).toBeInTheDocument();
+        expect(await screen.findAllByText('Thuismonitoring')).toHaveLength(2);
+
+        expect(screen.getByText('1-1-2023, 01:00:00')).toBeInTheDocument();
+        expect(screen.getByText('Heart failure (disorder)')).toBeInTheDocument();
+        expect(screen.getByText('In behandeling')).toBeInTheDocument();
+        expect(screen.getByText('Test Owner')).toBeInTheDocument();
+
+        expect(screen.getByText('1-2-2023, 01:00:00')).toBeInTheDocument();
         expect(screen.getByText('Asthma (disorder)')).toBeInTheDocument();
+        expect(screen.getByText('Aanmelding gelukt')).toBeInTheDocument();
+        expect(screen.getByText('Test Owner 2')).toBeInTheDocument();
     });
 
     it('throws error when patient has no identifiers', () => {
