@@ -61,6 +61,7 @@ describe('TaskOverviewTable', () => {
         });
         expect(screen.getByText('Uitvoerder')).toBeInTheDocument();
         expect(screen.getByText('Type')).toBeInTheDocument();
+        expect(screen.getByText('Aandoening')).toBeInTheDocument();
         expect(screen.getByText('Status')).toBeInTheDocument();
         expect(screen.getByText('Datum')).toBeInTheDocument();
     });
