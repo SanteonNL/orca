@@ -4,7 +4,7 @@ import useEnrollment from '@/app/hooks/enrollment-hook'
 import type {Task, Patient, Bundle, Identifier} from "fhir/r4";
 import {getPatientIdentifier, identifierToToken} from "@/lib/fhirUtils";
 import { useClients } from '@/app/hooks/context-hook';
-import {taskStatusLabel} from "@/app/utils/mapping";
+import {codingLabel, taskStatusLabel} from "@/app/utils/mapping";
 import {useRouter} from "next/navigation";
 import { useQuery } from '@tanstack/react-query';
 
@@ -66,7 +66,7 @@ export default function TaskOverviewTable() {
                 <tr key={idx} className="border-t" onClick={() => openTask(task)} style={{cursor: 'pointer'}}>
                     <td className="px-4 py-2">{new Date(task.meta!.lastUpdated!).toLocaleString("nl-NL")}</td>
                     <td className="px-4 py-2">{task.focus?.display}</td>
-                    <td className="px-4 py-2">{task.reasonCode?.coding?.[0]?.display}</td>
+                    <td className="px-4 py-2">{task.reasonCode?.coding?.[0] ? codingLabel(task.reasonCode?.coding?.[0]) : ""}</td>
                     <td className="px-4 py-2">{taskStatusLabel(task.status)}</td>
                     <td className="px-4 py-2">{task.owner?.display ?? "(onbekend)"}</td>
                 </tr>

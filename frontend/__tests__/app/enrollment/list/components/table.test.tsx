@@ -1,4 +1,4 @@
-import {act, render, screen, waitFor} from '@testing-library/react';
+import {act, render, screen} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TaskOverviewTable from '@/app/enrollment/list/components/table';
 import useEnrollment from '@/app/hooks/enrollment-hook';
@@ -165,7 +165,7 @@ describe('TaskOverviewTable', () => {
         expect(mockSearch).not.toHaveBeenCalled();
     });
 
-    it('renders condition from reasonCode in Aandoening column', async () => {
+    it('renders table columns correctly', async () => {
         mockSearch
             .mockResolvedValueOnce({entry: [{resource: {id: 'patient-1', resourceType: 'Patient'}}]})
             .mockResolvedValueOnce({
@@ -175,9 +175,9 @@ describe('TaskOverviewTable', () => {
                             id: 'task-1',
                             resourceType: 'Task',
                             status: 'in-progress',
-                            meta: {lastUpdated: '2023-01-01T00:00:00Z'},
-                            focus: {display: 'Thuismonitoring'},
-                            owner: {display: 'Test Owner'},
+                            meta: { lastUpdated: '2023-01-01T00:00:00Z' },
+                            focus: { display: 'Thuismonitoring' },
+                            owner: { display: 'Test Owner' },
                             reasonCode: {
                                 coding: [{
                                     code: '84114007',
@@ -192,9 +192,9 @@ describe('TaskOverviewTable', () => {
                             id: 'task-2',
                             resourceType: 'Task',
                             status: 'accepted',
-                            meta: {lastUpdated: '2023-02-01T00:00:00Z'},
-                            focus: {display: 'Thuismonitoring'},
-                            owner: {display: 'Test Owner 2'},
+                            meta: { lastUpdated: '2023-02-01T00:00:00Z' },
+                            focus: { display: 'Thuismonitoring' },
+                            owner: { display: 'Test Owner 2' },
                             reasonCode: {
                                 coding: [{
                                     code: '195967001',
@@ -211,8 +211,15 @@ describe('TaskOverviewTable', () => {
             render(<TaskOverviewTable/>, { wrapper });
         });
 
-        expect(await screen.findByText('Heart failure (disorder)')).toBeInTheDocument();
-        expect(screen.getByText('Asthma (disorder)')).toBeInTheDocument();
+        expect(await screen.findAllByText('Thuismonitoring')).toHaveLength(2);
+        
+        expect(screen.getByText('hartfalen')).toBeInTheDocument();
+        expect(screen.getByText('In behandeling')).toBeInTheDocument();
+        expect(screen.getByText('Test Owner')).toBeInTheDocument();
+
+        expect(screen.getByText('astma')).toBeInTheDocument();
+        expect(screen.getByText('Aanmelding gelukt')).toBeInTheDocument();
+        expect(screen.getByText('Test Owner 2')).toBeInTheDocument();
     });
 
     it('throws error when patient has no identifiers', () => {
