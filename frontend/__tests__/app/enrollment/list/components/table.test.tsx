@@ -1,4 +1,4 @@
-import {act, render, screen} from '@testing-library/react';
+import {act, render, screen, waitFor} from '@testing-library/react';
 import '@testing-library/jest-dom';
 import TaskOverviewTable from '@/app/enrollment/list/components/table';
 import useEnrollment from '@/app/hooks/enrollment-hook';
@@ -163,6 +163,56 @@ describe('TaskOverviewTable', () => {
         });
 
         expect(mockSearch).not.toHaveBeenCalled();
+    });
+
+    it('renders condition from reasonCode in Aandoening column', async () => {
+        mockSearch
+            .mockResolvedValueOnce({entry: [{resource: {id: 'patient-1', resourceType: 'Patient'}}]})
+            .mockResolvedValueOnce({
+                entry: [
+                    {
+                        resource: {
+                            id: 'task-1',
+                            resourceType: 'Task',
+                            status: 'in-progress',
+                            meta: {lastUpdated: '2023-01-01T00:00:00Z'},
+                            focus: {display: 'Thuismonitoring'},
+                            owner: {display: 'Test Owner'},
+                            reasonCode: {
+                                coding: [{
+                                    code: '84114007',
+                                    display: 'Heart failure (disorder)',
+                                    system: 'http://snomed.info/sct'
+                                }]
+                            }
+                        }
+                    },
+                    {
+                        resource: {
+                            id: 'task-2',
+                            resourceType: 'Task',
+                            status: 'accepted',
+                            meta: {lastUpdated: '2023-02-01T00:00:00Z'},
+                            focus: {display: 'Thuismonitoring'},
+                            owner: {display: 'Test Owner 2'},
+                            reasonCode: {
+                                coding: [{
+                                    code: '195967001',
+                                    display: 'Asthma (disorder)',
+                                    system: 'http://snomed.info/sct'
+                                }]
+                            }
+                        }
+                    }
+                ]
+            });
+
+        await act(async () => {
+            render(<TaskOverviewTable/>, { wrapper });
+        });
+
+        expect(await screen.findByText('Heart failure (disorder)')).toBeInTheDocument();
+        expect(screen.getByText('Asthma (disorder)')).toBeInTheDocument();
     });
 
     it('throws error when patient has no identifiers', () => {
