@@ -3,7 +3,15 @@ name: Orchestrator Sonar Scan
 
 # Configures this workflow to run every time a change is pushed to the branch called `main`.
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - orchestrator/**
+      - .github/workflows/orchestrator_sonar.yaml
   push:
+    branches:
+      - main
     paths:
       - orchestrator/**
       - .github/workflows/orchestrator_sonar.yaml

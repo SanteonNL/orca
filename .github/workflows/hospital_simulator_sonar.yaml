@@ -3,7 +3,15 @@ name: Hospital Simulator Sonar Scan
 
 # Configures this workflow to run every time a change is pushed to the branch called `main`.
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - hospital_simulator/**
+      - .github/workflows/hospital_simulator_sonar.yaml
   push:
+    branches:
+      - main
     paths:
       - hospital_simulator/**
       - .github/workflows/hospital_simulator_sonar.yaml
