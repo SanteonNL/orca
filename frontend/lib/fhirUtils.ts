@@ -301,7 +301,7 @@ export type TaskProgress = {
     subTasks: Task[]
 }
 
-export const fetchTaskById = async (cpsClient: Client, taskId: string) => {
+const fetchTaskById = async (cpsClient: Client, taskId: string) => {
     return await cpsClient.read({resourceType: 'Task', id: taskId}) as Task;
 }
 
@@ -316,7 +316,7 @@ export const fetchAllResources = async (taskId: string, cpsClient: Client): Prom
 }
 
 
-export const fetchQuestionnaires = async (cpsClient: Client, subTasks: Task[]) => {
+const fetchQuestionnaires = async (cpsClient: Client, subTasks: Task[]) => {
     const questionnaireMap: Record<string, Questionnaire> = {};
     await Promise.all(subTasks.map(async (task: Task) => {
         if (task.input && task.input.length > 0) {
@@ -338,7 +338,7 @@ export const fetchQuestionnaires = async (cpsClient: Client, subTasks: Task[]) =
 }
 
 
-export const fetchSubTasks = async (cpsClient: Client, taskId: string) => {
+const fetchSubTasks = async (cpsClient: Client, taskId: string) => {
     try {
         const subTaskBundle = await cpsClient.search({
             resourceType: 'Task',

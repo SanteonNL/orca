@@ -39,7 +39,7 @@ import { isInputParameters, isOutputParameters, populate } from '@aehrc/sdc-popu
 import { fetchResourceCallback } from './populateCallback';
 import { createPopulateInputParameters } from './populateInputParams';
 
-export interface PopulateResult {
+interface PopulateResult {
   populated: QuestionnaireResponse;
   hasWarnings: boolean;
 }

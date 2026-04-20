@@ -2,7 +2,7 @@ import { useClients, useLaunchContext } from "@/app/hooks/context-hook";
 import {useQuery} from "@tanstack/react-query";
 import {Condition, Patient, Practitioner, PractitionerRole, ServiceRequest} from "fhir/r4";
 
-export type EnrollmentResources = {
+type EnrollmentResources = {
     patient: Patient;
     practitioner: Practitioner;
     practitionerRole?: PractitionerRole;
