@@ -2,8 +2,8 @@
  * @jest-environment node
  */
 
-import { Patient } from 'fhir/r4';
-import { patientName } from '@/lib/fhirRender';
+import { Patient, Reference } from 'fhir/r4';
+import { patientName, organizationName, organizationNameShort } from '@/lib/fhirRender';
 
 describe('patientName', () => {
 
@@ -328,6 +328,144 @@ describe('patientName', () => {
       };
 
       expect(patientName(patient)).toBe('John2 Doe3');
+    });
+  });
+});
+
+describe('organizationName', () => {
+  describe('when reference is undefined or null', () => {
+    it('should return "No Organization Reference found" when reference is undefined', () => {
+      expect(organizationName()).toBe('No Organization Reference found');
+    });
+  });
+
+  describe('when reference has display name', () => {
+    it('should return display name when no identifier', () => {
+      const reference: Reference = {
+        display: 'Test Hospital'
+      };
+      expect(organizationName(reference)).toBe('Test Hospital');
+    });
+
+    it('should return display name with URA identifier', () => {
+      const reference: Reference = {
+        display: 'Test Hospital',
+        identifier: {
+          system: 'http://fhir.nl/fhir/NamingSystem/ura',
+          value: '12345'
+        }
+      };
+      expect(organizationName(reference)).toBe('Test Hospital (URA 12345)');
+    });
+
+    it('should return display name with non-URA identifier', () => {
+      const reference: Reference = {
+        display: 'Test Clinic',
+        identifier: {
+          system: 'http://custom-system',
+          value: 'abc123'
+        }
+      };
+      expect(organizationName(reference)).toBe('Test Clinic (http://custom-system: abc123)');
+    });
+  });
+
+  describe('when reference has no display name', () => {
+    it('should return "unknown" when no identifier', () => {
+      const reference: Reference = {};
+      expect(organizationName(reference)).toBe('unknown');
+    });
+
+    it('should return URA identifier only', () => {
+      const reference: Reference = {
+        identifier: {
+          system: 'http://fhir.nl/fhir/NamingSystem/ura',
+          value: '67890'
+        }
+      };
+      expect(organizationName(reference)).toBe('URA 67890');
+    });
+
+    it('should return full identifier when system is not URA', () => {
+      const reference: Reference = {
+        identifier: {
+          system: 'http://other-system',
+          value: 'xyz789'
+        }
+      };
+      expect(organizationName(reference)).toBe('http://other-system: xyz789');
+    });
+  });
+
+  describe('edge cases with incomplete identifiers', () => {
+    it('should return display when identifier has no system', () => {
+      const reference: Reference = {
+        display: 'Hospital ABC',
+        identifier: {
+          value: '12345'
+        }
+      };
+      expect(organizationName(reference)).toBe('Hospital ABC');
+    });
+
+    it('should return display when identifier has no value', () => {
+      const reference: Reference = {
+        display: 'Hospital XYZ',
+        identifier: {
+          system: 'http://fhir.nl/fhir/NamingSystem/ura'
+        }
+      };
+      expect(organizationName(reference)).toBe('Hospital XYZ');
+    });
+
+    it('should return "unknown" when no display and incomplete identifier', () => {
+      const reference: Reference = {
+        identifier: {
+          system: 'http://system'
+        }
+      };
+      expect(organizationName(reference)).toBe('unknown');
+    });
+  });
+});
+
+describe('organizationNameShort', () => {
+  describe('when reference has display', () => {
+    it('should return display name', () => {
+      const reference: Reference = {
+        display: 'Short Name Hospital',
+        identifier: {
+          system: 'http://fhir.nl/fhir/NamingSystem/ura',
+          value: '12345'
+        }
+      };
+      expect(organizationNameShort(reference)).toBe('Short Name Hospital');
+    });
+  });
+
+  describe('when reference has no display', () => {
+    it('should return formatted identifier', () => {
+      const reference: Reference = {
+        identifier: {
+          system: 'http://custom-system',
+          value: 'abc123'
+        }
+      };
+      expect(organizationNameShort(reference)).toBe('(http://custom-system: abc123)');
+    });
+
+    it('should return "(unknown)" when no identifier value', () => {
+      const reference: Reference = {
+        identifier: {
+          system: 'http://system'
+        }
+      };
+      expect(organizationNameShort(reference)).toBe('(unknown)');
+    });
+
+    it('should return "(unknown)" when no identifier', () => {
+      const reference: Reference = {};
+      expect(organizationNameShort(reference)).toBe('(unknown)');
     });
   });
 });

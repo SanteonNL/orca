@@ -3,7 +3,15 @@ name: Viewer Simulator Sonar Scan
 
 # Configures this workflow to run every time a change is pushed to the branch called `main`.
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - viewer_simulator/**
+      - .github/workflows/viewer_simulator_sonar.yaml
   push:
+    branches:
+      - main
     paths:
       - viewer_simulator/**
       - .github/workflows/viewer_simulator_sonar.yaml
