@@ -70,6 +70,7 @@ func (m *SessionManager[TData]) Destroy(response http.ResponseWriter, request *h
 		Value:    "",
 		HttpOnly: true,
 		Expires:  time.Now().Add(-time.Minute),
+		Secure:   true,
 	}
 	http.SetCookie(response, &cookie)
 }
@@ -117,13 +118,13 @@ func (s *sessionStore[TData]) destroy(id string) {
 }
 
 func setSessionCookie(sessionID string, response http.ResponseWriter, lifetime time.Duration) {
-	// TODO: Maybe makes this a __Host or __Secure cookie?
 	cookie := http.Cookie{
 		Name:     "sid",
 		Value:    sessionID,
 		HttpOnly: true,
 		Expires:  time.Now().Add(lifetime),
 		Path:     "/",
+		Secure:   true,
 	}
 	http.SetCookie(response, &cookie)
 }
