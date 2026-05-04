@@ -61,6 +61,7 @@ describe('TaskOverviewTable', () => {
         });
         expect(screen.getByText('Uitvoerder')).toBeInTheDocument();
         expect(screen.getByText('Type')).toBeInTheDocument();
+        expect(screen.getByText('Aandoening')).toBeInTheDocument();
         expect(screen.getByText('Status')).toBeInTheDocument();
         expect(screen.getByText('Datum')).toBeInTheDocument();
     });
@@ -162,6 +163,63 @@ describe('TaskOverviewTable', () => {
         });
 
         expect(mockSearch).not.toHaveBeenCalled();
+    });
+
+    it('renders table columns correctly', async () => {
+        mockSearch
+            .mockResolvedValueOnce({entry: [{resource: {id: 'patient-1', resourceType: 'Patient'}}]})
+            .mockResolvedValueOnce({
+                entry: [
+                    {
+                        resource: {
+                            id: 'task-1',
+                            resourceType: 'Task',
+                            status: 'in-progress',
+                            meta: { lastUpdated: '2023-01-01T00:00:00Z' },
+                            focus: { display: 'Thuismonitoring' },
+                            owner: { display: 'Test Owner' },
+                            reasonCode: {
+                                coding: [{
+                                    code: '84114007',
+                                    display: 'Heart failure (disorder)',
+                                    system: 'http://snomed.info/sct'
+                                }]
+                            }
+                        }
+                    },
+                    {
+                        resource: {
+                            id: 'task-2',
+                            resourceType: 'Task',
+                            status: 'accepted',
+                            meta: { lastUpdated: '2023-02-01T00:00:00Z' },
+                            focus: { display: 'Thuismonitoring' },
+                            owner: { display: 'Test Owner 2' },
+                            reasonCode: {
+                                coding: [{
+                                    code: '195967001',
+                                    display: 'Asthma (disorder)',
+                                    system: 'http://snomed.info/sct'
+                                }]
+                            }
+                        }
+                    }
+                ]
+            });
+
+        await act(async () => {
+            render(<TaskOverviewTable/>, { wrapper });
+        });
+
+        expect(await screen.findAllByText('Thuismonitoring')).toHaveLength(2);
+        
+        expect(screen.getByText('hartfalen')).toBeInTheDocument();
+        expect(screen.getByText('In behandeling')).toBeInTheDocument();
+        expect(screen.getByText('Test Owner')).toBeInTheDocument();
+
+        expect(screen.getByText('astma')).toBeInTheDocument();
+        expect(screen.getByText('Aanmelding gelukt')).toBeInTheDocument();
+        expect(screen.getByText('Test Owner 2')).toBeInTheDocument();
     });
 
     it('throws error when patient has no identifiers', () => {

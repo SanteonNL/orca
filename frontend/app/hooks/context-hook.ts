@@ -4,7 +4,7 @@ import { createCpsClient, createEhrClient, createScpClient } from "@/lib/fhirUti
 import Client from "fhir-kit-client";
 import { ErrorWithTitle } from "@/app/utils/error-with-title";
 
-export interface LaunchContext {
+interface LaunchContext {
     patient: string
     practitioner: string
     practitionerRole: string
@@ -14,14 +14,14 @@ export interface LaunchContext {
     taskIdentifier?: string
 }
 
-export interface LaunchContextHookResult {
+interface LaunchContextHookResult {
   launchContext?: LaunchContext
   isLoading: boolean
   isError: boolean
   error?: Error | null
 }
 
-export interface ClientHookResult {
+interface ClientHookResult {
   ehrClient?: Client
   cpsClient?: Client
   scpClient?: Client

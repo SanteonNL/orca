@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
+	"github.com/SanteonNL/orca/orchestrator/cmd/profile"
 	"github.com/SanteonNL/orca/orchestrator/cmd/tenants"
 	"github.com/SanteonNL/orca/orchestrator/globals"
 	"github.com/SanteonNL/orca/orchestrator/lib/az/azkeyvault"
@@ -148,7 +149,7 @@ func TestService(t *testing.T) {
 			},
 		},
 		AzureKeyVault: AzureKeyVaultConfig{},
-	}, tenants.Test(), sessionManager, must.ParseURL(httpServer.URL), must.ParseURL(httpServer.URL).JoinPath("frontend"), false)
+	}, tenants.Test(), sessionManager, must.ParseURL(httpServer.URL), must.ParseURL(httpServer.URL).JoinPath("frontend"), false, profile.Test())
 	require.NoError(t, err)
 	service.RegisterHandlers(httpMux)
 

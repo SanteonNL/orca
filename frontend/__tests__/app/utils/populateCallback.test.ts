@@ -6,7 +6,7 @@ import { fetchResourceCallback } from '@/app/utils/populateCallback';
 import { FetchResourceRequestConfig } from '@aehrc/sdc-populate';
 
 // Mock fetch globally
-global.fetch = jest.fn();
+globalThis.fetch = jest.fn();
 
 describe('fetchResourceCallback', () => {
   const mockRequestConfig: FetchResourceRequestConfig = {
