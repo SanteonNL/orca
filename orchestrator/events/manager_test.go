@@ -37,6 +37,17 @@ func TestDefaultManager_HasSubscribers(t *testing.T) {
 	})
 }
 
+func TestDefaultManager_Subscribe_UnmarshalError(t *testing.T) {
+	manager := NewManager(messaging.NewMemoryBroker())
+	_ = manager.Subscribe(StringEvent{}, func(_ context.Context, _ Type) error { return nil })
+	// Send malformed JSON so the unmarshal inside the subscriber handler fails
+	err := manager.messageBroker.SendMessage(context.Background(), StringEvent{}.Entity(), &messaging.Message{Body: []byte("not-json")})
+	require.NoError(t, err) // broker swallows handler errors
+	stored := manager.messageBroker.(*messaging.MemoryBroker).LastHandlerError.Load()
+	require.NotNil(t, stored)
+	assert.Contains(t, (*stored).Error(), "unmarshal")
+}
+
 func TestInMemoryManager(t *testing.T) {
 	t.Run("multiple subscribers", func(t *testing.T) {
 		t.Run("both succeed", func(t *testing.T) {

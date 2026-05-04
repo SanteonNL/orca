@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestAppendCtx(t *testing.T) {
@@ -235,6 +237,26 @@ func TestAppendCtxEmptyKey(t *testing.T) {
 		assert.True(t, ok)
 		assert.Len(t, attrs, 1)
 		assert.Equal(t, "", attrs[0].Key)
+	})
+}
+
+func TestContextHandler_Handle_WithSpan(t *testing.T) {
+	t.Run("adds trace and span IDs when span is valid", func(t *testing.T) {
+		var buf bytes.Buffer
+		baseHandler := slog.NewTextHandler(&buf, nil)
+		handler := ContextHandler{baseHandler}
+
+		// Create a real span using the SDK so SpanContext().IsValid() returns true
+		tp := sdktrace.NewTracerProvider()
+		_, span := tp.Tracer("test").Start(context.Background(), "test-span")
+		ctx := trace.ContextWithSpan(context.Background(), span)
+		defer span.End()
+
+		record := slog.Record{Level: slog.LevelInfo, Message: "with span"}
+		err := handler.Handle(ctx, record)
+		assert.NoError(t, err)
+		assert.Contains(t, buf.String(), "trace_id")
+		assert.Contains(t, buf.String(), "span_id")
 	})
 }
 

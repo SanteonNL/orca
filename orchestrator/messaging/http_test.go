@@ -63,6 +63,34 @@ func TestHTTPBroker(t *testing.T) {
 		require.NoError(t, err)
 		require.Empty(t, capturedBody)
 	})
+	t.Run("ReceiveFromQueue forwards to underlying broker", func(t *testing.T) {
+		underlying := NewMemoryBroker()
+		broker := HTTPBroker{underlyingBroker: underlying, endpoint: testServer.URL}
+		called := false
+		err := broker.ReceiveFromQueue(Entity{Name: "q"}, func(_ context.Context, _ Message) error {
+			called = true
+			return nil
+		})
+		require.NoError(t, err)
+		_ = underlying.SendMessage(context.Background(), Entity{Name: "q"}, &Message{Body: []byte(`{}`)})
+		require.True(t, called)
+	})
+	t.Run("ReceiveFromQueue with nil underlying broker", func(t *testing.T) {
+		broker := HTTPBroker{}
+		err := broker.ReceiveFromQueue(Entity{Name: "q"}, func(_ context.Context, _ Message) error { return nil })
+		require.NoError(t, err)
+	})
+	t.Run("Close forwards to underlying broker", func(t *testing.T) {
+		underlying := NewMemoryBroker()
+		broker := HTTPBroker{underlyingBroker: underlying}
+		err := broker.Close(context.Background())
+		require.NoError(t, err)
+	})
+	t.Run("Close with nil underlying broker", func(t *testing.T) {
+		broker := HTTPBroker{}
+		err := broker.Close(context.Background())
+		require.NoError(t, err)
+	})
 	t.Run("no filter configured", func(t *testing.T) {
 		capturedBody = nil
 		broker := HTTPBroker{

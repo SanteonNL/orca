@@ -96,6 +96,17 @@ func TestCareTeamFromCarePlan(t *testing.T) {
 }
 
 func TestUpdateContainedResource(t *testing.T) {
+	t.Run("non-local reference returns error", func(t *testing.T) {
+		ref := &fhir.Reference{Reference: to.Ptr("Patient/123"), Type: to.Ptr("Patient")}
+		_, err := UpdateContainedResource(json.RawMessage(`[]`), ref, nil)
+		require.ErrorIs(t, err, ErrInvalidReference)
+	})
+	t.Run("contained resource not found returns error", func(t *testing.T) {
+		ref := &fhir.Reference{Reference: to.Ptr("#missing"), Type: to.Ptr("CareTeam")}
+		contained := marshalContained([]any{fhir.CareTeam{Id: to.Ptr("other")}})
+		_, err := UpdateContainedResource(contained, ref, fhir.CareTeam{})
+		require.EqualError(t, err, "contained resource not found")
+	})
 	t.Run("updating works", func(t *testing.T) {
 		id := fhir.Reference{
 			Reference: to.Ptr("#careteam"),
