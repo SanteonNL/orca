@@ -1072,3 +1072,177 @@ func TestReferenceValueEquals(t *testing.T) {
 		assert.False(t, ReferenceValueEquals(ref, other))
 	})
 }
+
+func TestFindMatchingParticipantInCareTeam(t *testing.T) {
+	id := fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("org1")}
+	careTeam := &fhir.CareTeam{
+		Participant: []fhir.CareTeamParticipant{
+			{Member: &fhir.Reference{Identifier: &id}},
+		},
+	}
+	t.Run("found", func(t *testing.T) {
+		p := FindMatchingParticipantInCareTeam(careTeam, []fhir.Identifier{id})
+		require.NotNil(t, p)
+	})
+	t.Run("not found", func(t *testing.T) {
+		other := fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("other")}
+		p := FindMatchingParticipantInCareTeam(careTeam, []fhir.Identifier{other})
+		require.Nil(t, p)
+	})
+}
+
+func TestParseTimestamp_UnsupportedFormat(t *testing.T) {
+	_, err := ValidateCareTeamParticipantPeriod(fhir.CareTeamParticipant{
+		Period: &fhir.Period{Start: to.Ptr("2024")},
+	}, time.Now())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unsupported timestamp format")
+}
+
+func TestParseLocalReference_NoType(t *testing.T) {
+	_, _, err := ParseLocalReference("/Patient")
+	require.EqualError(t, err, "local reference must contain a resource type")
+}
+
+func TestLogicalReference(t *testing.T) {
+	ref := LogicalReference("Patient", "http://example.com", "123")
+	require.NotNil(t, ref)
+	assert.Equal(t, "Patient", *ref.Type)
+	assert.Equal(t, "http://example.com", *ref.Identifier.System)
+	assert.Equal(t, "123", *ref.Identifier.Value)
+}
+
+func TestIsIdentifierTaskOwnerAndRequester(t *testing.T) {
+	orgID := fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("org1")}
+	otherID := fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("org2")}
+	ref := func(id fhir.Identifier) *fhir.Reference {
+		return &fhir.Reference{Identifier: &id}
+	}
+
+	t.Run("is owner and requester", func(t *testing.T) {
+		task := &fhir.Task{Owner: ref(orgID), Requester: ref(orgID)}
+		isOwner, isRequester := IsIdentifierTaskOwnerAndRequester(task, []fhir.Identifier{orgID})
+		assert.True(t, isOwner)
+		assert.True(t, isRequester)
+	})
+	t.Run("is owner only", func(t *testing.T) {
+		task := &fhir.Task{Owner: ref(orgID), Requester: ref(otherID)}
+		isOwner, isRequester := IsIdentifierTaskOwnerAndRequester(task, []fhir.Identifier{orgID})
+		assert.True(t, isOwner)
+		assert.False(t, isRequester)
+	})
+	t.Run("is requester only", func(t *testing.T) {
+		task := &fhir.Task{Owner: ref(otherID), Requester: ref(orgID)}
+		isOwner, isRequester := IsIdentifierTaskOwnerAndRequester(task, []fhir.Identifier{orgID})
+		assert.False(t, isOwner)
+		assert.True(t, isRequester)
+	})
+	t.Run("nil owner and requester", func(t *testing.T) {
+		task := &fhir.Task{}
+		isOwner, isRequester := IsIdentifierTaskOwnerAndRequester(task, []fhir.Identifier{orgID})
+		assert.False(t, isOwner)
+		assert.False(t, isRequester)
+	})
+}
+
+func TestIsLocalRelativeReference(t *testing.T) {
+	assert.True(t, IsLocalRelativeReference(&fhir.Reference{Reference: to.Ptr("#contained-1")}))
+	assert.False(t, IsLocalRelativeReference(&fhir.Reference{Reference: to.Ptr("Patient/123")}))
+	assert.False(t, IsLocalRelativeReference(nil))
+	assert.False(t, IsLocalRelativeReference(&fhir.Reference{}))
+}
+
+func TestIsLogicalReference(t *testing.T) {
+	assert.True(t, IsLogicalReference(&fhir.Reference{
+		Type:       to.Ptr("Patient"),
+		Identifier: &fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("123")},
+	}))
+	assert.False(t, IsLogicalReference(nil))
+	assert.False(t, IsLogicalReference(&fhir.Reference{}))
+}
+
+func TestIsLogicalIdentifier(t *testing.T) {
+	assert.True(t, IsLogicalIdentifier(&fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("123")}))
+	assert.False(t, IsLogicalIdentifier(nil))
+	assert.False(t, IsLogicalIdentifier(&fhir.Identifier{System: to.Ptr("http://example.com")}))
+}
+
+func TestLogicalReferenceEquals(t *testing.T) {
+	ref := fhir.Reference{Identifier: &fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("123")}}
+	same := fhir.Reference{Identifier: &fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("123")}}
+	diff := fhir.Reference{Identifier: &fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("456")}}
+
+	assert.True(t, LogicalReferenceEquals(ref, same))
+	assert.False(t, LogicalReferenceEquals(ref, diff))
+	assert.False(t, LogicalReferenceEquals(fhir.Reference{}, ref))
+}
+
+func TestHasIdentifier(t *testing.T) {
+	id := fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("123")}
+	other := fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("456")}
+
+	assert.True(t, HasIdentifier(id, id, other))
+	assert.False(t, HasIdentifier(id, other))
+}
+
+func TestToString(t *testing.T) {
+	id := fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("123")}
+	assert.Equal(t, "http://example.com|123", ToString(id))
+	assert.Equal(t, "http://example.com|123", ToString(&id))
+	assert.Contains(t, ToString(42), "42")
+}
+
+func TestIdentifierToToken(t *testing.T) {
+	id := fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("123")}
+	assert.Equal(t, "http://example.com|123", IdentifierToToken(id))
+}
+
+func TestHttpMethodToVerb(t *testing.T) {
+	assert.Equal(t, fhir.HTTPVerbPUT, HttpMethodToVerb("PUT"))
+	assert.Equal(t, fhir.HTTPVerbPOST, HttpMethodToVerb("POST"))
+	assert.Equal(t, fhir.HTTPVerbDELETE, HttpMethodToVerb("DELETE"))
+	assert.Equal(t, fhir.HTTPVerbPATCH, HttpMethodToVerb("PATCH"))
+	assert.Equal(t, fhir.HTTPVerbGET, HttpMethodToVerb("GET"))
+	assert.Equal(t, fhir.HTTPVerbHEAD, HttpMethodToVerb("HEAD"))
+	assert.Equal(t, fhir.HTTPVerb(0), HttpMethodToVerb("UNKNOWN"))
+}
+
+func TestIsScpTask(t *testing.T) {
+	t.Run("true when meta has SCP profile", func(t *testing.T) {
+		task := &fhir.Task{Meta: &fhir.Meta{Profile: []string{SCPTaskProfile}}}
+		assert.True(t, IsScpTask(task))
+	})
+	t.Run("false when meta is nil", func(t *testing.T) {
+		assert.False(t, IsScpTask(&fhir.Task{}))
+	})
+	t.Run("false when profile does not match", func(t *testing.T) {
+		task := &fhir.Task{Meta: &fhir.Meta{Profile: []string{"other-profile"}}}
+		assert.False(t, IsScpTask(task))
+	})
+}
+
+func TestConceptContainsCoding(t *testing.T) {
+	coding := fhir.Coding{System: to.Ptr("http://example.com"), Code: to.Ptr("code1")}
+	concept := fhir.CodeableConcept{Coding: []fhir.Coding{coding}}
+
+	assert.True(t, ConceptContainsCoding(coding, concept))
+	assert.False(t, ConceptContainsCoding(fhir.Coding{System: to.Ptr("http://example.com"), Code: to.Ptr("other")}, concept))
+}
+
+func TestContainsCoding(t *testing.T) {
+	coding := fhir.Coding{System: to.Ptr("http://example.com"), Code: to.Ptr("code1")}
+
+	assert.True(t, ContainsCoding(coding, coding))
+	assert.False(t, ContainsCoding(coding, fhir.Coding{System: to.Ptr("http://example.com"), Code: to.Ptr("other")}))
+	assert.False(t, ContainsCoding(fhir.Coding{}, coding))
+}
+
+func TestOrganizationIdentifiers(t *testing.T) {
+	org1 := fhir.Organization{Identifier: []fhir.Identifier{{System: to.Ptr("http://example.com"), Value: to.Ptr("org1")}}}
+	org2 := fhir.Organization{Identifier: []fhir.Identifier{{System: to.Ptr("http://example.com"), Value: to.Ptr("org2")}}}
+
+	result := OrganizationIdentifiers([]fhir.Organization{org1, org2})
+	require.Len(t, result, 2)
+	assert.Equal(t, "org1", *result[0].Value)
+	assert.Equal(t, "org2", *result[1].Value)
+}

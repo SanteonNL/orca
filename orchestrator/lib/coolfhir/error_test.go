@@ -2,6 +2,7 @@ package coolfhir
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -10,6 +11,7 @@ import (
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 )
 
@@ -113,6 +115,25 @@ func TestWriteOperationOutcomeFromError(t *testing.T) {
 			assert.JSONEq(t, tt.expectedBody, response.Body.String())
 		})
 	}
+}
+
+func TestBadRequest(t *testing.T) {
+	err := BadRequest("something went %s", "wrong")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "something went wrong")
+}
+
+func TestBadRequestError(t *testing.T) {
+	err := BadRequestError(errors.New("original error"))
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "original error")
+}
+
+func TestCreateOperationOutcomeBundleEntryFromError(t *testing.T) {
+	entry := CreateOperationOutcomeBundleEntryFromError(errors.New("something failed"), "test operation")
+	require.NotNil(t, entry.Resource)
+	assert.Contains(t, string(entry.Resource), "something failed")
+	assert.Contains(t, string(entry.Resource), "test operation")
 }
 
 func TestSanitizeOperationOutcome(t *testing.T) {

@@ -5,6 +5,25 @@ import (
 	"testing"
 )
 
+func TestEntity_FullName(t *testing.T) {
+	t.Run("with prefix", func(t *testing.T) {
+		e := Entity{Name: "my-topic", Prefix: true}
+		require.Equal(t, "env.my-topic", e.FullName("env."))
+	})
+	t.Run("without prefix", func(t *testing.T) {
+		e := Entity{Name: "my-topic", Prefix: false}
+		require.Equal(t, "my-topic", e.FullName("env."))
+	})
+}
+
+func TestNew_DefaultsToMemoryBroker(t *testing.T) {
+	broker, err := New(Config{}, nil)
+	require.NoError(t, err)
+	require.NotNil(t, broker)
+	_, ok := broker.(*MemoryBroker)
+	require.True(t, ok)
+}
+
 func TestConfig_Validate(t *testing.T) {
 	t.Run("strict mode with HTTP endpoint", func(t *testing.T) {
 		c := Config{
