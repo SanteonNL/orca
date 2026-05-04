@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"testing"
 )
@@ -22,6 +23,18 @@ func (s StringEvent) Entity() messaging.Entity {
 
 func (s StringEvent) Instance() Type {
 	return &StringEvent{}
+}
+
+func TestDefaultManager_HasSubscribers(t *testing.T) {
+	t.Run("returns false when no subscribers", func(t *testing.T) {
+		manager := NewManager(messaging.NewMemoryBroker())
+		assert.False(t, manager.HasSubscribers(StringEvent{}))
+	})
+	t.Run("returns true after subscribing", func(t *testing.T) {
+		manager := NewManager(messaging.NewMemoryBroker())
+		_ = manager.Subscribe(StringEvent{}, func(_ context.Context, _ Type) error { return nil })
+		assert.True(t, manager.HasSubscribers(StringEvent{}))
+	})
 }
 
 func TestInMemoryManager(t *testing.T) {
