@@ -15,11 +15,14 @@ import (
 
 func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	taskRequesterOrg fhir.Organization, taskPerformerOrg fhir.Organization, patientIdentifier fhir.Identifier, patient fhir.Patient,
-	externalIdentifier fhir.Identifier, encounterRef *fhir.Reference, serviceRequestCode fhir.Coding, conditionCode fhir.Coding, startDate time.Time) (*fhir.Bundle, error) {
+	externalIdentifier fhir.Identifier, encounterRef *fhir.Reference, patientFhirId *string, serviceRequestCode fhir.Coding, conditionCode fhir.Coding, startDate time.Time) (*fhir.Bundle, error) {
 	serviceRequestId := uuid.NewString()
 	carePlanId := uuid.NewString()
 	taskId := uuid.NewString()
 	patientId := uuid.NewString()
+	if patientFhirId != nil && *patientFhirId != "" {
+		patientId = *patientFhirId
+	}
 	requesterOrgRef := &fhir.Reference{
 		Type:       to.Ptr("Organization"),
 		Identifier: &taskRequesterOrg.Identifier[0],
