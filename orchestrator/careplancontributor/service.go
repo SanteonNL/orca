@@ -1266,9 +1266,9 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 
 	// Read patient information from EHR or Zorgplatform
 	var patient fhir.Patient
-	var patientBundle fhir.Bundle
 	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
 	var externalIdentifier fhir.Identifier
+	var encounterRef *fhir.Reference
 	switch {
 	case workflowID != nil:
 		// Zorgplatform / HiX
@@ -1277,35 +1277,38 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 			"X-Scp-WorkflowID": {*workflowID.Value},
 		})
 		// Fetch patient from EHR according to BgZ (the general-practitioner is not needed, but added for conformance).
+		var patientBundle fhir.Bundle
 		if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"_include": []string{"Patient:general-practitioner"}}, &patientBundle, reqHeadersOpts); err != nil {
 			return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
 		}
+		if err := coolfhir.ResourceInBundle(&patientBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
+			return nil, otel.Error(span, fmt.Errorf("unable to find Patient resource in Bundle: %w", err))
+		}
 		externalIdentifier = *workflowID
 	case encounter != nil:
-		// Epic — patient lookup via identifier search (Epic FHIR supports Patient?identifier=...)
+		// Epic / SMART on FHIR — we cannot call the EHR, construct a minimal Patient
+		// from the supplied identifier (BSN). The importer assigns the Patient.Id.
+		patient = fhir.Patient{
+			Identifier: []fhir.Identifier{*patientIdentifier},
+		}
+		externalIdentifier = *encounter
+		encounterRef = &fhir.Reference{
+			Type:       to.Ptr("Encounter"),
+			Identifier: encounter,
+		}
+	default:
+		// Demo EHR / Faux Care
+		var patientBundle fhir.Bundle
 		if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"identifier": []string{coolfhir.IdentifierToToken(*patientIdentifier)}}, &patientBundle); err != nil {
 			return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
 		}
-		externalIdentifier = *encounter
-	default:
-		// Demo EHR / Faux Care
-		if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"identifier": []string{coolfhir.IdentifierToToken(*patientIdentifier)}}, &patientBundle); err != nil {
-			return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
+		if err := coolfhir.ResourceInBundle(&patientBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
+			return nil, otel.Error(span, fmt.Errorf("unable to find Patient resource in Bundle: %w", err))
 		}
 		externalIdentifier = fhir.Identifier{
 			System: to.Ptr("urn:ietf:rfc:4122"),
 			Value:  to.Ptr(uuid.New().String()),
 		}
-	}
-	var encounterRef *fhir.Reference
-	if encounter != nil {
-		encounterRef = &fhir.Reference{
-			Type:       to.Ptr("Encounter"),
-			Identifier: encounter,
-		}
-	}
-	if err := coolfhir.ResourceInBundle(&patientBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
-		return nil, otel.Error(span, fmt.Errorf("unable to find Patient resource in Bundle: %w", err))
 	}
 
 	taskRequesterCandidates, err := s.profile.Identities(ctx)
