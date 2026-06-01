@@ -19,9 +19,18 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	serviceRequestId := uuid.NewString()
 	carePlanId := uuid.NewString()
 	taskId := uuid.NewString()
-	patientId := uuid.NewString()
-	if patientFhirId != nil && *patientFhirId != "" {
+	// When a patientFhirId is supplied, use it as the Patient resource id and PUT
+	// to Patient/<id> so the downstream FHIR server honors it (POST would let the
+	// server assign a new id).
+	patientUsesProvidedId := patientFhirId != nil && *patientFhirId != ""
+	var patientId string
+	var patientFullUrl string
+	if patientUsesProvidedId {
 		patientId = *patientFhirId
+		patientFullUrl = "Patient/" + patientId
+	} else {
+		patientId = uuid.NewString()
+		patientFullUrl = "urn:uuid:" + patientId
 	}
 	requesterOrgRef := &fhir.Reference{
 		Type:       to.Ptr("Organization"),
@@ -36,7 +45,7 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	patientRef := fhir.Reference{
 		Type:       to.Ptr("Patient"),
 		Identifier: &patientIdentifier,
-		Reference:  to.Ptr("urn:uuid:" + patientId),
+		Reference:  to.Ptr(patientFullUrl),
 	}
 
 	tx := coolfhir.Transaction()
@@ -158,7 +167,11 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	cleanPatient(&patient)
 	patient.Id = to.Ptr(patientId)
 	careplanservice.SetCreatorExtensionOnResource(&patient, requesterOrgRef.Identifier)
-	tx = tx.Create(patient, coolfhir.WithFullUrl("urn:uuid:"+patientId))
+	if patientUsesProvidedId {
+		tx = tx.Update(patient, "Patient/"+patientId, coolfhir.WithFullUrl(patientFullUrl))
+	} else {
+		tx = tx.Create(patient, coolfhir.WithFullUrl(patientFullUrl))
+	}
 
 	// Perform
 	var result fhir.Bundle

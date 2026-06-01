@@ -1390,6 +1390,20 @@ func TestService_Import(t *testing.T) {
 		require.Len(t, patients, 1)
 		require.NotNil(t, patients[0].Id)
 		assert.Equal(t, patientFhirId, *patients[0].Id)
+
+		// The Patient entry must be a PUT to Patient/<id> so the downstream FHIR server honors the id.
+		var patientEntry *fhir.BundleEntry
+		isPatient := coolfhir.EntryIsOfType("Patient")
+		for i := range capturedBundle.Entry {
+			if isPatient(capturedBundle.Entry[i]) {
+				patientEntry = &capturedBundle.Entry[i]
+				break
+			}
+		}
+		require.NotNil(t, patientEntry)
+		require.NotNil(t, patientEntry.Request)
+		assert.Equal(t, fhir.HTTPVerbPUT, patientEntry.Request.Method)
+		assert.Equal(t, "Patient/"+patientFhirId, patientEntry.Request.Url)
 	})
 	t.Run("$import operation not enabled for this tenant", func(t *testing.T) {
 		httpResponse, err := httpClient.PostForm(httpServer.URL+"/cpc/other_tenant/fhir/$import", url.Values{
