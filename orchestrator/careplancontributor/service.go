@@ -1238,6 +1238,10 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	if err != nil && !strings.HasPrefix(err.Error(), "missing parameter") {
 		return nil, otel.Error(span, err)
 	}
+	encounter, err := getIdentifierParameter(params, "epic_encounterid")
+	if err != nil && !strings.HasPrefix(err.Error(), "missing parameter") {
+		return nil, otel.Error(span, err)
+	}
 	serviceRequest, err := getCodingParameter(params, "servicerequest")
 	if err != nil {
 		return nil, otel.Error(span, err)
@@ -1265,8 +1269,9 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	var patientBundle fhir.Bundle
 	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
 	var externalIdentifier fhir.Identifier
-	if workflowID != nil {
-		// Zorgplatform
+	switch {
+	case workflowID != nil:
+		// Zorgplatform / HiX
 		reqHeadersOpts := fhirclient.RequestHeaders(map[string][]string{
 			"X-Scp-PatientID":  {*patientIdentifier.Value},
 			"X-Scp-WorkflowID": {*workflowID.Value},
@@ -1276,14 +1281,27 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 			return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
 		}
 		externalIdentifier = *workflowID
-	} else {
-		// Demo EHR
+	case encounter != nil:
+		// Epic — patient lookup via identifier search (Epic FHIR supports Patient?identifier=...)
+		if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"identifier": []string{coolfhir.IdentifierToToken(*patientIdentifier)}}, &patientBundle); err != nil {
+			return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
+		}
+		externalIdentifier = *encounter
+	default:
+		// Demo EHR / Faux Care
 		if err = ehrFHIRClient.SearchWithContext(ctx, "Patient", url.Values{"identifier": []string{coolfhir.IdentifierToToken(*patientIdentifier)}}, &patientBundle); err != nil {
 			return nil, otel.Error(span, fmt.Errorf("unable to fetch Patient and Practitioner bundle: %w", err))
 		}
 		externalIdentifier = fhir.Identifier{
 			System: to.Ptr("urn:ietf:rfc:4122"),
 			Value:  to.Ptr(uuid.New().String()),
+		}
+	}
+	var encounterRef *fhir.Reference
+	if encounter != nil {
+		encounterRef = &fhir.Reference{
+			Type:       to.Ptr("Encounter"),
+			Identifier: encounter,
 		}
 	}
 	if err := coolfhir.ResourceInBundle(&patientBundle, coolfhir.EntryIsOfType("Patient"), &patient); err != nil {
@@ -1304,7 +1322,7 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 		"Invoking CPS $import operation",
 	)
 	cpsFHIRClient := fhirclient.New(tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL), s.httpClientForLocalCPS(tenant), coolfhir.Config())
-	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, *patientIdentifier, patient, externalIdentifier, *serviceRequest, *condition, *startDate)
+	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, *patientIdentifier, patient, externalIdentifier, encounterRef, *serviceRequest, *condition, *startDate)
 	if err != nil {
 		return nil, otel.Error(span, fmt.Errorf("import failed: %w", err))
 	}
