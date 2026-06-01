@@ -1268,6 +1268,7 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	var patient fhir.Patient
 	ehrFHIRClient := s.ehrFHIRClientByTenant[tenant.ID]
 	var externalIdentifier fhir.Identifier
+	var encounterRef *fhir.Reference
 	switch {
 	case workflowID != nil:
 		// Zorgplatform / HiX
@@ -1291,6 +1292,10 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 			Identifier: []fhir.Identifier{*patientIdentifier},
 		}
 		externalIdentifier = *encounter
+		encounterRef = &fhir.Reference{
+			Type:       to.Ptr("Encounter"),
+			Identifier: encounter,
+		}
 	default:
 		// Demo EHR / Faux Care
 		var patientBundle fhir.Bundle
@@ -1303,13 +1308,6 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 		externalIdentifier = fhir.Identifier{
 			System: to.Ptr("urn:ietf:rfc:4122"),
 			Value:  to.Ptr(uuid.New().String()),
-		}
-	}
-	var encounterRef *fhir.Reference
-	if encounter != nil {
-		encounterRef = &fhir.Reference{
-			Type:       to.Ptr("Encounter"),
-			Identifier: encounter,
 		}
 	}
 
