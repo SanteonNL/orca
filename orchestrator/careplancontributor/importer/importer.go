@@ -15,7 +15,7 @@ import (
 
 func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 	taskRequesterOrg fhir.Organization, taskPerformerOrg fhir.Organization, patientIdentifier fhir.Identifier, patient fhir.Patient,
-	externalIdentifier fhir.Identifier, serviceRequestCode fhir.Coding, conditionCode fhir.Coding, startDate time.Time) (*fhir.Bundle, error) {
+	externalIdentifier fhir.Identifier, encounterRef *fhir.Reference, serviceRequestCode fhir.Coding, conditionCode fhir.Coding, startDate time.Time) (*fhir.Bundle, error) {
 	serviceRequestId := uuid.NewString()
 	carePlanId := uuid.NewString()
 	taskId := uuid.NewString()
@@ -107,6 +107,7 @@ func Import(ctx context.Context, cpsFHIRClient fhirclient.Client,
 		Performer:  []fhir.Reference{performerOrgRef},
 		Requester:  requesterOrgRef,
 		Subject:    patientRef,
+		Encounter:  encounterRef,
 		ReasonCode: []fhir.CodeableConcept{
 			{
 				Coding: []fhir.Coding{conditionCode},

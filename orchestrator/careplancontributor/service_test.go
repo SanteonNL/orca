@@ -1253,6 +1253,83 @@ func TestService_Import(t *testing.T) {
 			})
 		})
 	})
+	t.Run("ok - Epic", func(t *testing.T) {
+		t.Log("In this test, test org 2 imports data into org 1's CPS with an Epic encounter ID")
+		cpsFHIRClient := &test.StubFHIRClient{}
+		globals.RegisterCPSFHIRClient(tenant.ID, cpsFHIRClient)
+
+		const encounterSystem = "urn:oid:1.2.840.114350.1.13.487.3.7.3.698084.8"
+		const encounterValue = "72264970"
+
+		start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+		requestBody := fhir.Parameters{
+			Parameter: []fhir.ParametersParameter{
+				{
+					Name: "patient",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("123456789"),
+					},
+				},
+				{
+					Name: "servicerequest",
+					ValueCoding: &fhir.Coding{
+						System:  to.Ptr("http://example.com/servicerequest"),
+						Code:    to.Ptr("sr1"),
+						Display: to.Ptr("ServiceRequestDisplay"),
+					},
+				},
+				{
+					Name: "condition",
+					ValueCoding: &fhir.Coding{
+						System:  to.Ptr("http://example.com/condition"),
+						Code:    to.Ptr("c1"),
+						Display: to.Ptr("ConditionDisplay"),
+					},
+				},
+				{
+					Name: "epic_encounterid",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr(encounterSystem),
+						Value:  to.Ptr(encounterValue),
+					},
+				},
+				{
+					Name:          "start",
+					ValueDateTime: to.Ptr(start.Format(time.RFC3339)),
+				},
+			},
+		}
+		requestBodyJSON := must.MarshalJSON(requestBody)
+		httpRequest, _ := http.NewRequest("POST", httpServer.URL+"/cpc/test/fhir/$import", bytes.NewReader(requestBodyJSON))
+		httpRequest.Header.Set("Content-Type", "application/fhir+json")
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+
+		// Assert ServiceRequest carries the encounter and the encounter identifier on its Identifier list
+		var serviceRequests []fhir.ServiceRequest
+		err = coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("ServiceRequest"), &serviceRequests)
+		require.NoError(t, err)
+		require.Len(t, serviceRequests, 1)
+		sr := serviceRequests[0]
+		require.NotNil(t, sr.Encounter)
+		require.NotNil(t, sr.Encounter.Identifier)
+		assert.Equal(t, encounterSystem, *sr.Encounter.Identifier.System)
+		assert.Equal(t, encounterValue, *sr.Encounter.Identifier.Value)
+		require.NotNil(t, sr.Encounter.Type)
+		assert.Equal(t, "Encounter", *sr.Encounter.Type)
+		require.Len(t, sr.Identifier, 1)
+		assert.Equal(t, encounterSystem+"|"+encounterValue, coolfhir.IdentifierToToken(sr.Identifier[0]))
+
+		// Assert Task identifier mirrors the encounter identifier
+		var tasks []fhir.Task
+		err = coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("Task"), &tasks)
+		require.NoError(t, err)
+		require.Len(t, tasks, 1)
+		require.Len(t, tasks[0].Identifier, 1)
+		assert.Equal(t, encounterSystem+"|"+encounterValue, coolfhir.IdentifierToToken(tasks[0].Identifier[0]))
+	})
 	t.Run("$import operation not enabled for this tenant", func(t *testing.T) {
 		httpResponse, err := httpClient.PostForm(httpServer.URL+"/cpc/other_tenant/fhir/$import", url.Values{
 			"patient_identifier": []string{"123456789"},
