@@ -1649,10 +1649,10 @@ func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) 
 	if err := s.readRequest(httpRequest, span, &transaction); err != nil {
 		return nil, otel.Error(span, coolfhir.BadRequest("invalid Bundle: %w", err))
 	}
-	// Validate import TX: only allow POST operations
+	// Validate import TX: only allow POST and PUT operations
 	for _, txEntry := range transaction.Entry {
-		if txEntry.Request == nil || txEntry.Request.Method != fhir.HTTPVerbPOST {
-			return nil, otel.Error(span, coolfhir.BadRequest("only POST operations are supported in import Bundle"))
+		if txEntry.Request == nil || (txEntry.Request.Method != fhir.HTTPVerbPOST && txEntry.Request.Method != fhir.HTTPVerbPUT) {
+			return nil, otel.Error(span, coolfhir.BadRequest("only POST and PUT operations are supported in import Bundle"))
 		}
 	}
 	var transactionResult fhir.Bundle

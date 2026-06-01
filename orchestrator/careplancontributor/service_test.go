@@ -1330,6 +1330,81 @@ func TestService_Import(t *testing.T) {
 		require.Len(t, tasks[0].Identifier, 1)
 		assert.Equal(t, encounterSystem+"|"+encounterValue, coolfhir.IdentifierToToken(tasks[0].Identifier[0]))
 	})
+	t.Run("ok - patient_fhir_id overrides the generated Patient.Id", func(t *testing.T) {
+		cpsFHIRClient := &test.StubFHIRClient{}
+		globals.RegisterCPSFHIRClient(tenant.ID, cpsFHIRClient)
+
+		const patientFhirId = "fixed-patient-id-1"
+
+		start := time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)
+		requestBody := fhir.Parameters{
+			Parameter: []fhir.ParametersParameter{
+				{
+					Name: "patient",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"),
+						Value:  to.Ptr("123456789"),
+					},
+				},
+				{
+					Name: "servicerequest",
+					ValueCoding: &fhir.Coding{
+						System: to.Ptr("http://example.com/servicerequest"),
+						Code:   to.Ptr("sr1"),
+					},
+				},
+				{
+					Name: "condition",
+					ValueCoding: &fhir.Coding{
+						System: to.Ptr("http://example.com/condition"),
+						Code:   to.Ptr("c1"),
+					},
+				},
+				{
+					Name: "epic_encounterid",
+					ValueIdentifier: &fhir.Identifier{
+						System: to.Ptr("urn:oid:1.2.840.114350.1.13.487.3.7.3.698084.8"),
+						Value:  to.Ptr("72264970"),
+					},
+				},
+				{
+					Name:    "patient_fhir_id",
+					ValueId: to.Ptr(patientFhirId),
+				},
+				{
+					Name:          "start",
+					ValueDateTime: to.Ptr(start.Format(time.RFC3339)),
+				},
+			},
+		}
+		requestBodyJSON := must.MarshalJSON(requestBody)
+		httpRequest, _ := http.NewRequest("POST", httpServer.URL+"/cpc/test/fhir/$import", bytes.NewReader(requestBodyJSON))
+		httpRequest.Header.Set("Content-Type", "application/fhir+json")
+		httpResponse, err := httpClient.Do(httpRequest)
+		require.NoError(t, err)
+		require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+
+		var patients []fhir.Patient
+		err = coolfhir.ResourcesInBundle(&capturedBundle, coolfhir.EntryIsOfType("Patient"), &patients)
+		require.NoError(t, err)
+		require.Len(t, patients, 1)
+		require.NotNil(t, patients[0].Id)
+		assert.Equal(t, patientFhirId, *patients[0].Id)
+
+		// The Patient entry must be a PUT to Patient/<id> so the downstream FHIR server honors the id.
+		var patientEntry *fhir.BundleEntry
+		isPatient := coolfhir.EntryIsOfType("Patient")
+		for i := range capturedBundle.Entry {
+			if isPatient(capturedBundle.Entry[i]) {
+				patientEntry = &capturedBundle.Entry[i]
+				break
+			}
+		}
+		require.NotNil(t, patientEntry)
+		require.NotNil(t, patientEntry.Request)
+		assert.Equal(t, fhir.HTTPVerbPUT, patientEntry.Request.Method)
+		assert.Equal(t, "Patient/"+patientFhirId, patientEntry.Request.Url)
+	})
 	t.Run("$import operation not enabled for this tenant", func(t *testing.T) {
 		httpResponse, err := httpClient.PostForm(httpServer.URL+"/cpc/other_tenant/fhir/$import", url.Values{
 			"patient_identifier": []string{"123456789"},

@@ -1242,6 +1242,10 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 	if err != nil && !strings.HasPrefix(err.Error(), "missing parameter") {
 		return nil, otel.Error(span, err)
 	}
+	patientFhirId, err := getIdParameter(params, "patient_fhir_id")
+	if err != nil && !strings.HasPrefix(err.Error(), "missing parameter") {
+		return nil, otel.Error(span, err)
+	}
 	serviceRequest, err := getCodingParameter(params, "servicerequest")
 	if err != nil {
 		return nil, otel.Error(span, err)
@@ -1325,7 +1329,7 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 		"Invoking CPS $import operation",
 	)
 	cpsFHIRClient := fhirclient.New(tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL), s.httpClientForLocalCPS(tenant), coolfhir.Config())
-	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, *patientIdentifier, patient, externalIdentifier, encounterRef, *serviceRequest, *condition, *startDate)
+	result, err := importer.Import(ctx, cpsFHIRClient, taskRequester, principal.Organization, *patientIdentifier, patient, externalIdentifier, encounterRef, patientFhirId, *serviceRequest, *condition, *startDate)
 	if err != nil {
 		return nil, otel.Error(span, fmt.Errorf("import failed: %w", err))
 	}
@@ -1346,6 +1350,12 @@ func (s *Service) handleLogout(httpResponse http.ResponseWriter, httpRequest *ht
 func getIdentifierParameter(params fhir.Parameters, name string) (*fhir.Identifier, error) {
 	return getParameter[fhir.Identifier](params, name, func(parameter fhir.ParametersParameter) *fhir.Identifier {
 		return parameter.ValueIdentifier
+	})
+}
+
+func getIdParameter(params fhir.Parameters, name string) (*string, error) {
+	return getParameter[string](params, name, func(parameter fhir.ParametersParameter) *string {
+		return parameter.ValueId
 	})
 }
 

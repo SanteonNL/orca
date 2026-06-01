@@ -72,6 +72,7 @@ func TestImportWithValidData(t *testing.T) {
 		patient,
 		externalIdentifier,
 		nil,
+		nil,
 		serviceRequestCode,
 		conditionCode,
 		time.Now(),
@@ -138,6 +139,7 @@ func TestImportHandlesClientError(t *testing.T) {
 		patientIdentifier,
 		patient,
 		externalIdentifier,
+		nil,
 		nil,
 		serviceRequestCode,
 		conditionCode,
@@ -306,6 +308,7 @@ func TestImportWithCompletePatientData(t *testing.T) {
 				Value:  to.Ptr("ext-1"),
 			},
 			nil,
+			nil,
 			fhir.Coding{
 				System: to.Ptr("http://snomed.info/sct"),
 				Code:   to.Ptr("1"),
@@ -367,7 +370,7 @@ func TestImportWithContextCancellation(t *testing.T) {
 			CreatedResources: make(map[string][]any),
 		}
 
-		_, err := Import(ctx, mockClient, requesterOrg, performerOrg, patientId, patient, extId, nil, srCode, condCode, time.Now())
+		_, err := Import(ctx, mockClient, requesterOrg, performerOrg, patientId, patient, extId, nil, nil, srCode, condCode, time.Now())
 
 		// May or may not error depending on the client implementation
 		// Just verify the function handles it without panicking
@@ -403,6 +406,7 @@ func TestImportResourceGeneration(t *testing.T) {
 			fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("pat-1")},
 			fhir.Patient{Name: []fhir.HumanName{{Family: to.Ptr("Doe")}}},
 			fhir.Identifier{System: to.Ptr("http://example.com"), Value: to.Ptr("ext-1")},
+			nil,
 			nil,
 			fhir.Coding{System: to.Ptr("http://snomed.info/sct"), Code: to.Ptr("1")},
 			fhir.Coding{System: to.Ptr("http://snomed.info/sct"), Code: to.Ptr("2")},
@@ -463,6 +467,7 @@ func TestImportWithMinimalData(t *testing.T) {
 			fhir.Identifier{System: to.Ptr("s"), Value: to.Ptr("v")},
 			fhir.Patient{},
 			fhir.Identifier{System: to.Ptr("s"), Value: to.Ptr("v")},
+			nil,
 			nil,
 			fhir.Coding{Code: to.Ptr("c1")},
 			fhir.Coding{Code: to.Ptr("c2")},
