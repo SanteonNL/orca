@@ -42,7 +42,7 @@ func GetCertificate(ctx context.Context, certClient CertificatesClient, keysClie
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to parse certificate: %w", err)
 	}
-	key, err := GetKey(keysClient, certificateName)
+	key, err := GetKey(keysClient, certificateName, "")
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get certificate private key: %w", err)
 	}
@@ -71,7 +71,7 @@ func GetCertificateChain(ctx context.Context, certClient CertificatesClient, key
 	}
 
 	// Retrieve the private key
-	key, err := GetKey(keysClient, certificateName)
+	key, err := GetKey(keysClient, certificateName, "")
 	if err != nil {
 		return nil, nil, fmt.Errorf("unable to get certificate private key: %w", err)
 	}

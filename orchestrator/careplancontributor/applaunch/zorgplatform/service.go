@@ -129,7 +129,7 @@ func newWithClients(ctx context.Context, sessionManager *user.SessionManager[ses
 		decryptCert = crypto.RsaSuite{PrivateKey: rsaPrivateKey.(*rsa.PrivateKey)}
 	} else {
 		var err error
-		decryptCert, err = azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName)
+		decryptCert, err = azkeyvault.GetKey(keysClient, config.AzureConfig.KeyVaultConfig.DecryptCertName, "da1b9cffc4ae438f8d12e410b2ab6ec0")
 		if err != nil {
 			return nil, fmt.Errorf("unable to get decryption certificate from Azure Key Vault: %w", err)
 		}

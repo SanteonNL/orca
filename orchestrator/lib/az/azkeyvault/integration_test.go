@@ -25,7 +25,7 @@ func Test_Suite_DecryptRsaOaep(t *testing.T) {
 	plainText := []byte("Hello, World!")
 	client, err := NewKeysClient(vaultUrl, credentialType, false)
 	require.NoError(t, err)
-	suite, err := GetKey(client, keyName)
+	suite, err := GetKey(client, keyName, "")
 	require.NoError(t, err)
 	publicKey := suite.SigningKey().Public().(*rsa.PublicKey)
 

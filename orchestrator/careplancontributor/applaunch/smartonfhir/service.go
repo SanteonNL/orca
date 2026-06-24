@@ -476,7 +476,7 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 	if err != nil {
 		return nil, nil, err
 	}
-	key, err := azkeyvault.GetKey(keysClient, config.SigningKeyName)
+	key, err := azkeyvault.GetKey(keysClient, config.SigningKeyName, "")
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get key (name: %s): %w", config.SigningKeyName, err)
 	}
