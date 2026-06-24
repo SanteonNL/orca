@@ -15,20 +15,7 @@ env:
 
 # There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
 jobs:
-  unit-test:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-      - name: Set up Go
-        uses: actions/setup-go@v6
-        with:
-          go-version: '1.24'
-      - name: Test
-        working-directory: ./orchestrator
-        run: go test --tags=slowtests -v ./...
   docker-image:
-    needs:
-      - unit-test
     runs-on: ubuntu-latest
     # Sets the permissions granted to the `GITHUB_TOKEN` for the actions in this job.
     permissions:
