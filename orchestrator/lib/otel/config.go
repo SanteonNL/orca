@@ -3,17 +3,21 @@ package otel
 import (
 	"context"
 	"fmt"
-	baseotel "go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
-	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
-	"go.opentelemetry.io/otel/propagation"
-	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"os"
 	"strings"
 	"time"
+
+	baseotel "go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
+	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/log/global"
+	"go.opentelemetry.io/otel/propagation"
+	sdklog "go.opentelemetry.io/otel/sdk/log"
+	"go.opentelemetry.io/otel/sdk/resource"
+	"go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // Config holds the OpenTelemetry configuration
@@ -150,10 +154,19 @@ func (c Config) Validate() error {
 	return nil
 }
 
-// TracerProvider holds the global tracer provider and cleanup function
+// TracerProvider holds the global tracer/logger providers and their cleanup function.
+// Despite the name (kept for backward compatibility) it also owns the OpenTelemetry
+// LoggerProvider so a single Shutdown call flushes both traces and logs.
 type TracerProvider struct {
-	provider *trace.TracerProvider
-	cleanup  func(context.Context) error
+	provider       *trace.TracerProvider
+	loggerProvider *sdklog.LoggerProvider
+	cleanup        func(context.Context) error
+}
+
+// LoggerProvider returns the OpenTelemetry LoggerProvider, which callers can use to
+// obtain loggers or bridge slog output to OTLP. Returns nil when OpenTelemetry is disabled.
+func (tp *TracerProvider) LoggerProvider() *sdklog.LoggerProvider {
+	return tp.loggerProvider
 }
 
 // Initialize sets up OpenTelemetry based on the configuration
@@ -167,26 +180,17 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 			cleanup:  func(context.Context) error { return nil },
 		}, nil
 	}
-
-	// Create resource attributes slice
-	resourceOpts := []resource.Option{
-		resource.WithAttributes(
-			semconv.ServiceNameKey.String(config.ServiceName),
-			semconv.ServiceVersionKey.String(config.ServiceVersion),
-		),
+	// Build the logger provider up front so we can chain its shutdown with the tracer's.
+	loggerProvider, err := initializeLoggerProvider(ctx, config)
+	if err != nil {
+		return nil, err
+	}
+	if loggerProvider != nil {
+		global.SetLoggerProvider(loggerProvider)
 	}
 
-	// Add additional resource attributes from environment
-	if len(config.ResourceAttributes) > 0 {
-		var attrs []attribute.KeyValue
-		for key, value := range config.ResourceAttributes {
-			attrs = append(attrs, attribute.String(key, value))
-		}
-		resourceOpts = append(resourceOpts, resource.WithAttributes(attrs...))
-	}
-
-	// Create resource with service information
-	res, err := resource.New(ctx, resourceOpts...)
+	// Create resource with service information (also reused for the logger provider)
+	res, err := buildResource(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
@@ -254,11 +258,81 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	))
 
 	return &TracerProvider{
-		provider: tp,
+		provider:       tp,
+		loggerProvider: loggerProvider,
 		cleanup: func(ctx context.Context) error {
-			return tp.Shutdown(ctx)
+			traceErr := tp.Shutdown(ctx)
+			if loggerProvider == nil {
+				return traceErr
+			}
+			logErr := loggerProvider.Shutdown(ctx)
+			if traceErr != nil {
+				return traceErr
+			}
+			return logErr
 		},
 	}, nil
+}
+
+// initializeLoggerProvider builds an OTLP-based LoggerProvider for the configured exporter.
+// Returns (nil, nil) when logging export is not applicable (exporter disabled, no logs
+// endpoint, or non-OTLP exporter), so callers can skip global registration.
+func initializeLoggerProvider(ctx context.Context, config Config) (*sdklog.LoggerProvider, error) {
+	// Only OTLP gRPC log export is supported (matches trace exporter). Stdout/none skip logs.
+	if config.Exporter.Type != "otlp" || config.Exporter.Protocol != "grpc" {
+		return nil, nil
+	}
+
+	endpoint := config.Exporter.OTLP.LoggingEndpoint
+	if endpoint == "" {
+		endpoint = config.Exporter.OTLP.Endpoint
+	}
+	if endpoint == "" {
+		return nil, nil
+	}
+
+	res, err := buildResource(ctx, config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create resource: %w", err)
+	}
+
+	opts := []otlploggrpc.Option{
+		otlploggrpc.WithEndpoint(endpoint),
+		otlploggrpc.WithTimeout(config.Exporter.OTLP.Timeout),
+	}
+	if len(config.Exporter.OTLP.Headers) > 0 {
+		opts = append(opts, otlploggrpc.WithHeaders(config.Exporter.OTLP.Headers))
+	}
+	if config.Exporter.OTLP.Insecure {
+		opts = append(opts, otlploggrpc.WithInsecure())
+	}
+
+	exporter, err := otlploggrpc.New(ctx, opts...)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OTLP gRPC log exporter: %w", err)
+	}
+
+	return sdklog.NewLoggerProvider(
+		sdklog.WithResource(res),
+		sdklog.WithProcessor(sdklog.NewBatchProcessor(exporter)),
+	), nil
+}
+
+func buildResource(ctx context.Context, config Config) (*resource.Resource, error) {
+	resourceOpts := []resource.Option{
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(config.ServiceName),
+			semconv.ServiceVersionKey.String(config.ServiceVersion),
+		),
+	}
+	if len(config.ResourceAttributes) > 0 {
+		attrs := make([]attribute.KeyValue, 0, len(config.ResourceAttributes))
+		for key, value := range config.ResourceAttributes {
+			attrs = append(attrs, attribute.String(key, value))
+		}
+		resourceOpts = append(resourceOpts, resource.WithAttributes(attrs...))
+	}
+	return resource.New(ctx, resourceOpts...)
 }
 
 // Shutdown cleanly shuts down the tracer provider

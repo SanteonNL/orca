@@ -24,6 +24,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	"github.com/SanteonNL/orca/orchestrator/messaging"
 	"github.com/SanteonNL/orca/orchestrator/user"
+	"go.opentelemetry.io/contrib/bridges/otelslog"
 )
 
 // Start starts the server with the given configuration. It blocks until the given context is cancelled.
@@ -41,6 +42,19 @@ func Start(ctx context.Context, config Config) error {
 	tracerProvider, err := otel.Initialize(ctx, config.OpenTelemetry)
 	if err != nil {
 		return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
+	}
+
+	// Once the LoggerProvider is available, fan slog out to both stdout JSON (existing)
+	// and the OpenTelemetry log bridge so records reach Application Insights via OTLP.
+	if lp := tracerProvider.LoggerProvider(); lp != nil {
+		bridge := otelslog.NewHandler(config.OpenTelemetry.ServiceName, otelslog.WithLoggerProvider(lp))
+		stdoutHandler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+			Level:     config.LogLevel,
+			AddSource: true,
+		})
+		slog.SetDefault(slog.New(&logging.ContextHandler{
+			Handler: logging.FanoutHandler{Handlers: []slog.Handler{stdoutHandler, bridge}},
+		}))
 	}
 
 	// Ensure proper cleanup of OpenTelemetry on shutdown

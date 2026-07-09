@@ -25,7 +25,8 @@ Note: the tenant ID is converted to lower case, even if it's in upper case in th
 - `ORCA_NUTS_AZUREKV_CREDENTIALTYPE`: Type of the credential for the Azure Key Vault, options: `managed_identity`, `cli`, `default` (default: `managed_identity`).
 
 ### OpenTelemetry (OTEL) Configuration
-ORCA supports OpenTelemetry for distributed tracing, which helps with monitoring and debugging across services.
+ORCA supports OpenTelemetry for distributed tracing **and log export**, which helps with monitoring and debugging across services.
+Logs written via `slog` (the orchestrator's standard logger) are forwarded to the configured OTLP endpoint in addition to being written to stdout as JSON. When the OTLP endpoint targets Azure Container Apps' built-in OpenTelemetry collector, the logs end up in Application Insights.
 
 #### Default Configuration
 By default, OTEL is enabled with the following settings:
@@ -46,10 +47,12 @@ ORCA reads the following standard OpenTelemetry environment variables:
 - `OTEL_RESOURCE_ATTRIBUTES`: Comma-separated key=value pairs for additional resource attributes
   - Example: `service.namespace=production,service.instance.id=abc123,environment=staging`
 
-#### Azure Container Apps Integration
-For Azure Container Apps environments, ORCA also supports:
-- `CONTAINERAPP_OTEL_METRIC_GRPC_ENDPOINT`: Azure-specific metric endpoint
-- `CONTAINERAPP_OTEL_LOGGING_GRPC_ENDPOINT`: Azure-specific logging endpoint
+#### Azure Container Apps / Application Insights integration
+When ORCA runs in an Azure Container Apps environment that is bound to an Application Insights workspace, ACA injects the following endpoints and ORCA reads them automatically:
+- `CONTAINERAPP_OTEL_METRIC_GRPC_ENDPOINT`: Azure-specific metric endpoint.
+- `CONTAINERAPP_OTEL_LOGGING_GRPC_ENDPOINT`: Azure-specific logging endpoint. If set, `slog` records are exported to it (and from there to Application Insights). If unset, ORCA falls back to `OTEL_EXPORTER_OTLP_ENDPOINT` for logs.
+
+Outside of Container Apps (e.g., AKS with a sidecar or DaemonSet collector), point `ORCA_OTEL_EXPORTER_OTLP_LOGGING_ENDPOINT` (or `OTEL_EXPORTER_OTLP_ENDPOINT`) at your OpenTelemetry Collector; configure the collector to forward to Application Insights (`azuremonitor` exporter). Only OTLP gRPC log export is supported today — matching the trace exporter.
 
 #### ORCA-Specific Overrides
 All OTEL settings can be overridden using the `ORCA_*` prefix convention:
