@@ -20,6 +20,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -116,6 +117,7 @@ func TaskNotificationBundleSet(ctx context.Context, cpsClient fhirclient.Client,
 		attribute.String(otel.FHIRBundleSetId, bundles.Id),
 	)
 
+	span.SetStatus(codes.Ok, "")
 	return &bundles, nil
 }
 
@@ -154,6 +156,7 @@ func fetchTasks(ctx context.Context, cpsClient fhirclient.Client, taskId string)
 		attribute.Int(otel.FHIRBundleEntryCount, len(taskBundle.Entry)),
 	)
 
+	span.SetStatus(codes.Ok, "")
 	return &taskBundle, tasks, nil
 }
 
@@ -204,6 +207,7 @@ func fetchCarePlan(ctx context.Context, cpsClient fhirclient.Client, tasks []fhi
 		return nil, nil, fmt.Errorf("could not find patient reference in CarePlan")
 	}
 
+	span.SetStatus(codes.Ok, "")
 	return carePlanBundle, &carePlan, nil
 }
 
@@ -220,6 +224,7 @@ func fetchPatient(ctx context.Context, cpsClient fhirclient.Client, carePlan *fh
 	if err != nil {
 		return nil, err
 	}
+	span.SetStatus(codes.Ok, "")
 	return patientBundle, nil
 }
 
@@ -257,6 +262,7 @@ func fetchServiceRequest(ctx context.Context, cpsClient fhirclient.Client, tasks
 	if err != nil {
 		return nil, err
 	}
+	span.SetStatus(codes.Ok, "")
 	return serviceRequestBundle, nil
 }
 
@@ -285,6 +291,7 @@ func fetchQuestionnaires(ctx context.Context, cpsClient fhirclient.Client, tasks
 	if err != nil {
 		return nil, err
 	}
+	span.SetStatus(codes.Ok, "")
 	return questionnaireBundle, nil
 }
 
@@ -313,6 +320,7 @@ func fetchQuestionnaireResponses(ctx context.Context, cpsClient fhirclient.Clien
 	if err != nil {
 		return nil, err
 	}
+	span.SetStatus(codes.Ok, "")
 	return questionnaireResponseBundle, nil
 }
 
@@ -360,6 +368,7 @@ func fetchRefs(ctx context.Context, cpsClient fhirclient.Client, refs []string) 
 		}
 	}
 
+	span.SetStatus(codes.Ok, "")
 	return &bundles, nil
 }
 
@@ -398,6 +407,7 @@ func fetchRef(ctx context.Context, cpsClient fhirclient.Client, ref string) (*fh
 		return nil, fmt.Errorf("failed to fetch all references of type %s, expected %d bundle entries, got %d", refType, expectedResourceCount, len(bundle.Entry))
 	}
 
+	span.SetStatus(codes.Ok, "")
 	return &bundle, nil
 }
 

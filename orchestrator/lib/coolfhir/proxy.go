@@ -16,6 +16,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -231,6 +232,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		// Note: only for read operations
 		pipe = pipe.AppendResponseTransformer(pipeline.MetaSourceSetter{URI: outRequestUrl.String()})
 	}
+	span.SetStatus(codes.Ok, "")
 	pipe.DoAndWrite(ctx, tracer, httpResponseWriter, responseResource, responseStatusCode)
 }
 
@@ -360,6 +362,9 @@ func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 			slog.String("body", string(responseBody)),
 		)
 		response.Body = io.NopCloser(bytes.NewReader(responseBody))
+	}
+	if err == nil {
+		span.SetStatus(codes.Ok, "")
 	}
 	return response, err
 }

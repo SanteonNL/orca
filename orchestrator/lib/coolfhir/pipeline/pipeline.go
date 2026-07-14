@@ -90,7 +90,7 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 	}
 	span.SetAttributes(attribute.Int(otel.HTTPStatusCode, httpResponse.StatusCode))
 
-	span.AddEvent("response_body.write")
+	span.SetAttributes(attribute.Bool(otel.ResponseBodyWrite, true))
 	httpResponseWriter.WriteHeader(httpResponse.StatusCode)
 	if responseBody != nil {
 		_, err = httpResponseWriter.Write(responseBody)
@@ -102,7 +102,7 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 				slog.String("body", string(responseBody)),
 			)
 		}
-		span.AddEvent("response_body.write.complete")
+		span.SetAttributes(attribute.Bool(otel.ResponseBodyWriteComplete, true))
 	}
 }
 

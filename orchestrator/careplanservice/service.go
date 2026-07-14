@@ -72,12 +72,12 @@ func TracedHandlerWrapper(operationName string, handler func(context.Context, FH
 			span.SetAttributes(attribute.String(otel.TenantID, request.Tenant.ID))
 		}
 
-		span.AddEvent("handler.invoke")
+		span.SetAttributes(attribute.Bool(otel.HandlerInvoke, true))
 		result, err := handler(ctx, request, tx)
 		if err != nil {
 			return nil, otel.Error(span, err)
 		}
-		span.AddEvent("handler.invoke.complete")
+		span.SetAttributes(attribute.Bool(otel.HandlerInvokeComplete, true))
 
 		span.SetStatus(codes.Ok, "")
 		return result, nil
@@ -379,7 +379,7 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		)
 	}
 
-	span.AddEvent(otel.FHIRTransactionExecute)
+	span.SetAttributes(attribute.Bool(otel.FHIRTransactionExecute, true))
 	var txResult fhir.Bundle
 	if err := fhirClient.CreateWithContext(ctx, tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		otel.Error(span, err, "failed to execute FHIR transaction")
@@ -401,7 +401,7 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		}
 	}
 
-	span.AddEvent(otel.FHIRTransactionProcessingResults)
+	span.SetAttributes(attribute.Bool(otel.FHIRTransactionProcessingResults, true))
 
 	resultBundle := fhir.Bundle{
 		Type: fhir.BundleTypeTransactionResponse,
@@ -431,7 +431,7 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		s.notifySubscribers(ctx, notificationResource)
 	}
 
-	span.AddEvent(otel.FHIRTransactionComplete)
+	span.SetAttributes(attribute.Bool(otel.FHIRTransactionComplete, true))
 	span.SetStatus(codes.Ok, "")
 	span.SetAttributes(
 		attribute.Int(otel.FHIRTransactionResultEntries, len(resultBundle.Entry)),
@@ -1132,7 +1132,7 @@ func (s *Service) handleBundle(httpResponse http.ResponseWriter, httpRequest *ht
 		return
 	}
 
-	span.AddEvent(otel.FHIRTransactionPrepare)
+	span.SetAttributes(attribute.Bool(otel.FHIRTransactionPrepare, true))
 	// Perform each individual operation. Note this doesn't actually create/update resources at the backing FHIR server,
 	// but only prepares the transaction.
 	tx := coolfhir.Transaction()
@@ -1193,14 +1193,14 @@ func (s *Service) handleBundle(httpResponse http.ResponseWriter, httpRequest *ht
 
 	span.SetAttributes(attribute.Int("result_handlers.count", len(resultHandlers)))
 
-	span.AddEvent(otel.FHIRTransactionExecute)
+	span.SetAttributes(attribute.Bool(otel.FHIRTransactionExecute, true))
 	// Execute the transaction and collect the responses
 	resultBundle, err := s.commitTransaction(s.fhirClientByTenant[tenant.ID], httpRequest.WithContext(ctx), tx, resultHandlers)
 	if err != nil {
 		coolfhir.WriteOperationOutcomeFromError(ctx, otel.Error(span, err), "Bundle", httpResponse)
 		return
 	}
-	span.AddEvent(otel.FHIRTransactionComplete)
+	span.SetAttributes(attribute.Bool(otel.FHIRTransactionComplete, true))
 	span.SetAttributes(
 		attribute.Int(otel.FHIRBundleResultEntries, len(resultBundle.Entry)),
 		attribute.String(otel.TenantID, tenant.ID),
