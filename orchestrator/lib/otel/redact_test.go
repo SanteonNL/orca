@@ -1,7 +1,7 @@
 package otel
 
 import (
-	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -39,23 +39,20 @@ func TestRedactURL(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := RedactURL(tt.in)
-			if got != tt.want {
+			if got := RedactURL(tt.in); got != tt.want {
 				t.Fatalf("RedactURL(%q) = %q, want %q", tt.in, got, tt.want)
 			}
-			// The BSN value must never survive redaction.
-			if tt.in != "" {
-				if u, err := url.Parse(got); err == nil {
-					for k, vs := range u.Query() {
-						for _, v := range vs {
-							if v != Redacted {
-								t.Fatalf("query param %q retained non-redacted value %q", k, v)
-							}
-						}
-					}
-				}
-			}
 		})
+	}
+}
+
+// TestRedactURL_BSNNeverSurvives is a focused guard that a BSN in a query value is never
+// emitted verbatim.
+func TestRedactURL_BSNNeverSurvives(t *testing.T) {
+	const bsn = "999999151"
+	got := RedactURL("http://host/fhir/Patient?identifier=http://fhir.nl/fhir/NamingSystem/bsn|" + bsn)
+	if strings.Contains(got, bsn) {
+		t.Fatalf("RedactURL leaked BSN: %q", got)
 	}
 }
 

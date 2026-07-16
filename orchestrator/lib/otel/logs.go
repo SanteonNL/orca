@@ -4,12 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	otellogglobal "go.opentelemetry.io/otel/log/global"
 	sdklog "go.opentelemetry.io/otel/sdk/log"
-	"go.opentelemetry.io/otel/sdk/resource"
-	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 )
 
 // LoggerProvider holds the global OTEL logger provider and its cleanup function.
@@ -33,20 +30,7 @@ func InitializeLogs(ctx context.Context, config Config) (*LoggerProvider, error)
 	}
 
 	// Build the same resource as the trace pipeline (service name/version + extra attrs).
-	resourceOpts := []resource.Option{
-		resource.WithAttributes(
-			semconv.ServiceNameKey.String(config.ServiceName),
-			semconv.ServiceVersionKey.String(config.ServiceVersion),
-		),
-	}
-	if len(config.ResourceAttributes) > 0 {
-		var attrs []attribute.KeyValue
-		for key, value := range config.ResourceAttributes {
-			attrs = append(attrs, attribute.String(key, value))
-		}
-		resourceOpts = append(resourceOpts, resource.WithAttributes(attrs...))
-	}
-	res, err := resource.New(ctx, resourceOpts...)
+	res, err := newTelemetryResource(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource for logs: %w", err)
 	}
