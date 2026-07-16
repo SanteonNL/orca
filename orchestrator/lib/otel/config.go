@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,6 +27,10 @@ type Config struct {
 	ServiceVersion string `koanf:"service_version"`
 	// ResourceAttributes additional resource attributes
 	ResourceAttributes map[string]string `koanf:"resource_attributes"`
+	// SamplingRatio is the head-sampling ratio for root spans (0.0-1.0). It is applied via a
+	// ParentBased sampler, so already-sampled upstream traces are always kept (preserving
+	// cross-system correlation). A value <= 0 is treated as 1.0 (always sample).
+	SamplingRatio float64 `koanf:"sampling_ratio"`
 	// Exporter configuration
 	Exporter ExporterConfig `koanf:"exporter"`
 }
@@ -54,6 +59,17 @@ type OTLPConfig struct {
 	Insecure bool `koanf:"insecure"`
 }
 
+// samplingRatioFromEnv reads the head-sampling ratio from the standard OTEL_TRACES_SAMPLER_ARG
+// environment variable, defaulting to 1.0 (always sample) when unset or unparseable.
+func samplingRatioFromEnv() float64 {
+	if envRatio := os.Getenv("OTEL_TRACES_SAMPLER_ARG"); envRatio != "" {
+		if r, err := strconv.ParseFloat(envRatio, 64); err == nil {
+			return r
+		}
+	}
+	return 1.0
+}
+
 // DefaultConfig returns a default OTEL configuration
 func DefaultConfig() Config {
 	// Default values
@@ -63,6 +79,7 @@ func DefaultConfig() Config {
 	serviceName := "orca-orchestrator"
 	var metricEndpoint, loggingEndpoint string
 	resourceAttributes := make(map[string]string)
+	samplingRatio := samplingRatioFromEnv()
 
 	// Read OTEL_SERVICE_NAME
 	if envServiceName := os.Getenv("OTEL_SERVICE_NAME"); envServiceName != "" {
@@ -112,6 +129,7 @@ func DefaultConfig() Config {
 		ServiceName:        serviceName,
 		ServiceVersion:     "1.0.0",
 		ResourceAttributes: resourceAttributes,
+		SamplingRatio:      samplingRatio,
 		Exporter: ExporterConfig{
 			Type:     "otlp",
 			Protocol: protocol,
@@ -150,6 +168,26 @@ func (c Config) Validate() error {
 	return nil
 }
 
+// newTelemetryResource builds the OpenTelemetry resource (service name/version plus any
+// configured resource attributes). It is shared by the trace and logs pipelines so both
+// signals carry identical resource metadata.
+func newTelemetryResource(ctx context.Context, config Config) (*resource.Resource, error) {
+	resourceOpts := []resource.Option{
+		resource.WithAttributes(
+			semconv.ServiceNameKey.String(config.ServiceName),
+			semconv.ServiceVersionKey.String(config.ServiceVersion),
+		),
+	}
+	if len(config.ResourceAttributes) > 0 {
+		var attrs []attribute.KeyValue
+		for key, value := range config.ResourceAttributes {
+			attrs = append(attrs, attribute.String(key, value))
+		}
+		resourceOpts = append(resourceOpts, resource.WithAttributes(attrs...))
+	}
+	return resource.New(ctx, resourceOpts...)
+}
+
 // TracerProvider holds the global tracer provider and cleanup function
 type TracerProvider struct {
 	provider *trace.TracerProvider
@@ -168,25 +206,8 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 		}, nil
 	}
 
-	// Create resource attributes slice
-	resourceOpts := []resource.Option{
-		resource.WithAttributes(
-			semconv.ServiceNameKey.String(config.ServiceName),
-			semconv.ServiceVersionKey.String(config.ServiceVersion),
-		),
-	}
-
-	// Add additional resource attributes from environment
-	if len(config.ResourceAttributes) > 0 {
-		var attrs []attribute.KeyValue
-		for key, value := range config.ResourceAttributes {
-			attrs = append(attrs, attribute.String(key, value))
-		}
-		resourceOpts = append(resourceOpts, resource.WithAttributes(attrs...))
-	}
-
-	// Create resource with service information
-	res, err := resource.New(ctx, resourceOpts...)
+	// Create resource with service information (shared with the logs pipeline).
+	res, err := newTelemetryResource(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create resource: %w", err)
 	}
@@ -237,6 +258,14 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	// Create tracer provider
 	var opts []trace.TracerProviderOption
 	opts = append(opts, trace.WithResource(res))
+
+	// Head sampling. ParentBased ensures already-sampled upstream traces are always kept,
+	// preserving cross-system (e.g. Datahub) correlation. A ratio <= 0 means always sample.
+	samplingRatio := config.SamplingRatio
+	if samplingRatio <= 0 {
+		samplingRatio = 1.0
+	}
+	opts = append(opts, trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(samplingRatio))))
 
 	if exporter != nil {
 		opts = append(opts, trace.WithBatcher(exporter))

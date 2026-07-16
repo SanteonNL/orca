@@ -21,9 +21,13 @@ require (
 	github.com/testcontainers/testcontainers-go v0.40.0
 	github.com/zitadel/oidc/v3 v3.45.1
 	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250508174153-3ca2640a22ea
+	go.opentelemetry.io/contrib/bridges/otelslog v0.13.0
+	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.14.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.38.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.38.0
+	go.opentelemetry.io/otel/log v0.14.0
 	go.opentelemetry.io/otel/sdk v1.38.0
+	go.opentelemetry.io/otel/sdk/log v0.14.0
 	go.uber.org/mock v0.6.0
 	golang.org/x/oauth2 v0.33.0
 )

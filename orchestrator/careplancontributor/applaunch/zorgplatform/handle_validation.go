@@ -16,6 +16,7 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/beevik/etree"
@@ -61,13 +62,11 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	}
 
 	if doc.Root().Tag == "Error" {
-		slog.ErrorContext(
-			ctx,
-			"SAMLResponse contains error tag and can not be processed",
-			slog.String("saml_response", string(decodedResponse)),
-		)
-		span.SetAttributes(attribute.String("saml_response", string(decodedResponse)))
-		return LaunchContext{}, otel.Error(span, errors.New("received SAMLResponse contains an error tag and cannot be processed, check error log for details"))
+		slog.ErrorContext(ctx, "SAMLResponse contains error tag and can not be processed")
+		// The raw response may contain patient/practitioner data, so keep it at Debug
+		// (stdout only) rather than on the span or an exported Error log.
+		slog.DebugContext(ctx, "SAMLResponse error payload", slog.String("saml_response", string(decodedResponse)))
+		return LaunchContext{}, otel.Error(span, errors.New("received SAMLResponse contains an error tag and cannot be processed, check debug log for details"))
 	}
 
 	// Note: for some reason, this fails on the Zorgplatform SAML response, so we skip it for now.
@@ -79,7 +78,7 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	if err != nil {
 		return LaunchContext{}, otel.Error(span, fmt.Errorf("unable to decrypt assertion: %w", err))
 	}
-	span.AddEvent("decrypted assertion")
+	span.SetAttributes(attribute.Bool(otel.DecryptedAssertion, true))
 
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		debugDoc := etree.NewDocument()
@@ -92,18 +91,19 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	if err := s.validateZorgplatformSignature(assertion); err != nil {
 		return LaunchContext{}, otel.Error(span, fmt.Errorf("invalid assertion signature: %w", err))
 	}
-	span.AddEvent("validated assertion signature")
+	span.SetAttributes(attribute.Bool(otel.ValidatedAssertionSignature, true))
 
 	if err := s.validateAudience(assertion); err != nil {
 		return LaunchContext{}, otel.Error(span, fmt.Errorf("invalid audience: %w", err))
 	}
-	span.AddEvent("validated assertion audience")
+	span.SetAttributes(attribute.Bool(otel.ValidatedAssertionAudience, true))
 
 	if err := s.validateIssuer(assertion); err != nil {
 		return LaunchContext{}, otel.Error(span, fmt.Errorf("invalid issuer: %w", err))
 	}
-	span.AddEvent("validated assertion issuer")
+	span.SetAttributes(attribute.Bool(otel.ValidatedAssertionIssuer, true))
 
+	span.SetStatus(codes.Ok, "")
 	return s.parseAssertion(ctx, assertion)
 }
 
@@ -150,8 +150,9 @@ func (s *Service) parseAssertion(ctx context.Context, assertion *etree.Element) 
 	// 	return fmt.Errorf("unable to process additional attributes: %w", err)
 	// }
 
-	span.AddEvent("SAML Assertion parsed successfully")
+	span.SetAttributes(attribute.Bool(otel.SAMLAssertionParsedSuccess, true))
 
+	span.SetStatus(codes.Ok, "")
 	return LaunchContext{
 		Bsn:                    resourceID,
 		Practitioner:           *practitioner,

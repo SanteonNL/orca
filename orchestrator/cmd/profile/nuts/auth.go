@@ -20,6 +20,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -99,6 +100,7 @@ func (d DutchNutsProfile) Authenticator(fn http.HandlerFunc) http.HandlerFunc {
 					slog.String("route", request.URL.Path),
 				)
 				span.SetAttributes(attribute.String(otel.AuthNOutcome, otel.AuthNOutcomeOK))
+				span.SetStatus(codes.Ok, "")
 				fn(response, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 			})(writer, request)
 		} else {
@@ -109,6 +111,7 @@ func (d DutchNutsProfile) Authenticator(fn http.HandlerFunc) http.HandlerFunc {
 				slog.Any("principal", principal),
 				slog.String("route", request.URL.Path),
 			)
+			span.SetStatus(codes.Ok, "")
 			fn(writer, request.WithContext(auth.WithPrincipal(request.Context(), principal)))
 		}
 	}

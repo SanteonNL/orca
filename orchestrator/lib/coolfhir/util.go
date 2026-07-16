@@ -387,7 +387,7 @@ func SendResponse(httpResponse http.ResponseWriter, httpStatus int, resource int
 	httpResponse.WriteHeader(httpStatus)
 	_, err = httpResponse.Write(data)
 	if err != nil {
-		slog.Error("Failed to write response", slog.String(logging.FieldError, err.Error()), slog.String("data", string(data)))
+		slog.Error("Failed to write response", slog.String(logging.FieldError, err.Error()))
 	}
 }
 

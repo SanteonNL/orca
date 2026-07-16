@@ -39,7 +39,7 @@ func HandlerWithTracing(tracer trace.Tracer, operationName string) func(http.Han
 				trace.WithSpanKind(trace.SpanKindServer),
 				trace.WithAttributes(
 					semconv.HTTPMethodKey.String(r.Method),
-					semconv.HTTPURLKey.String(r.URL.String()),
+					semconv.HTTPURLKey.String(RedactURL(r.URL.String())),
 					semconv.HostNameKey.String(r.Host),
 				),
 			)

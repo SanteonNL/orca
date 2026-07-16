@@ -16,6 +16,7 @@ import (
 	"github.com/zorgbijjou/golang-fhir-models/fhir-models/fhir"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -42,12 +43,13 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 	defer span.End()
 
 	if len(updateTriggerTask.PartOf) > 0 {
-		span.AddEvent("skipping_subtask")
+		span.SetAttributes(attribute.Bool(otel.SkippingSubtask, true))
+		span.SetStatus(codes.Ok, "")
 		return false, nil
 	}
 
 	bundle := new(fhir.Bundle)
-	span.AddEvent("fetching_careplan_and_activities")
+	span.SetAttributes(attribute.Bool(otel.FetchingCarePlanAndActivities, true))
 	if err := client.Read("CarePlan",
 		bundle,
 		fhirclient.QueryParam("_id", carePlanId),
@@ -90,7 +92,7 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 	span.SetAttributes(attribute.Bool("careteam_changed", changed))
 
 	if changed {
-		span.AddEvent("updating_careteam")
+		span.SetAttributes(attribute.Bool(otel.UpdatingCareTeam, true))
 		sortParticipants(careTeam.Participant)
 
 		contained, err := coolfhir.UpdateContainedResource(carePlan.Contained, &carePlan.CareTeam[0], careTeam)
@@ -105,9 +107,11 @@ func Update(ctx context.Context, client fhirclient.Client, carePlanId string, up
 			Action:      fhir.AuditEventActionU,
 		}))
 
+		span.SetStatus(codes.Ok, "")
 		return true, nil
 	}
 
+	span.SetStatus(codes.Ok, "")
 	return false, nil
 }
 
@@ -121,6 +125,7 @@ func updateCareTeam(ctx context.Context, careTeam *fhir.CareTeam, otherActivitie
 		),
 	)
 	defer span.End()
+	span.SetStatus(codes.Ok, "")
 
 	if updatedActivity.Status == fhir.TaskStatusAccepted {
 		return ActivateMembership(ctx, careTeam, updatedActivity.Owner)
@@ -142,17 +147,18 @@ func ActivateMembership(ctx context.Context, careTeam *fhir.CareTeam, party *fhi
 		),
 	)
 	defer span.End()
+	span.SetStatus(codes.Ok, "")
 
-	span.AddEvent("activating_membership")
+	span.SetAttributes(attribute.Bool(otel.ActivatingMembership, true))
 
 	for _, participant := range careTeam.Participant {
 		if coolfhir.IdentifierEquals(participant.Member.Identifier, party.Identifier) {
-			span.AddEvent("member_already_in_careteam")
+			span.SetAttributes(attribute.Bool(otel.MemberAlreadyInCareTeam, true))
 			return false
 		}
 	}
 
-	span.AddEvent("adding_member_to_careteam")
+	span.SetAttributes(attribute.Bool(otel.AddingMemberToCareTeam, true))
 	careTeam.Participant = append(careTeam.Participant, fhir.CareTeamParticipant{
 		Member: party,
 		Period: &fhir.Period{
@@ -172,13 +178,14 @@ func deactivateMembership(ctx context.Context, careTeam *fhir.CareTeam, party *f
 		),
 	)
 	defer span.End()
+	span.SetStatus(codes.Ok, "")
 
-	span.AddEvent("deactivating_membership")
+	span.SetAttributes(attribute.Bool(otel.DeactivatingMembership, true))
 
 	// If the party has another Task that gives active membership, don't deactivate
 	for _, activity := range otherActivities {
 		if coolfhir.IdentifierEquals(activity.Owner.Identifier, party.Identifier) {
-			span.AddEvent("member_still_active_in_other_tasks")
+			span.SetAttributes(attribute.Bool(otel.MemberStillActiveInOtherTasks, true))
 			return false
 		}
 	}
@@ -190,7 +197,7 @@ func deactivateMembership(ctx context.Context, careTeam *fhir.CareTeam, party *f
 		}
 		if coolfhir.IdentifierEquals(participant.Member.Identifier, party.Identifier) {
 			if participant.Period.End == nil {
-				span.AddEvent("setting_end_date_for_member")
+				span.SetAttributes(attribute.Bool(otel.SettingEndDateForMember, true))
 				careTeam.Participant[i].Period.End = to.Ptr(now())
 				result = true
 			}
@@ -232,6 +239,7 @@ func resolveActivities(ctx context.Context, bundle *fhir.Bundle, carePlan *fhir.
 	}
 
 	span.SetAttributes(attribute.Int("resolved_tasks_count", len(tasks)))
+	span.SetStatus(codes.Ok, "")
 	return tasks, nil
 }
 

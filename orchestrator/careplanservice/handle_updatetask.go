@@ -71,7 +71,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	fhirClient := s.fhirClientByTenant[request.Tenant.ID]
 	if request.ResourceId == "" {
 		// No ID, should be query parameters leading to the Task to update
-		span.AddEvent("lookup_task_by_query_parameters")
+		span.SetAttributes(attribute.Bool(otel.LookupTaskByQueryParameters, true))
 		span.SetAttributes(attribute.String("fhir.task.lookup_method", "query"))
 
 		if len(request.RequestUrl.Query()) == 0 {
@@ -99,7 +99,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 		}
 	} else {
 		// Direct ID lookup
-		span.AddEvent("lookup_task_by_id")
+		span.SetAttributes(attribute.Bool(otel.LookupTaskByID, true))
 		span.SetAttributes(
 			attribute.String("fhir.task.lookup_method", "id"),
 			attribute.String(otel.FHIRTaskID, request.ResourceId),
@@ -116,12 +116,12 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 	if !exists {
 		// Doesn't exist, create it (upsert)
-		span.AddEvent("upsert_task_creation")
+		span.SetAttributes(attribute.Bool(otel.UpsertTaskCreation, true))
 		span.SetAttributes(attribute.String("fhir.task.operation_mode", "upsert_create"))
 		return s.handleCreateTask(ctx, request, tx)
 	}
 
-	span.AddEvent("update_existing_task")
+	span.SetAttributes(attribute.Bool(otel.UpdateExistingTask, true))
 	span.SetAttributes(attribute.String("fhir.task.operation_mode", "update"))
 
 	// Add existing task status for comparison
@@ -131,7 +131,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 
 	if task.Status != taskExisting.Status {
 		// If the status is changing, validate the transition
-		span.AddEvent("validating_status_transition")
+		span.SetAttributes(attribute.Bool(otel.ValidatingStatusTransition, true))
 		span.SetAttributes(attribute.Bool("fhir.task.status_changing", true))
 
 		isOwner, isRequester := coolfhir.IsIdentifierTaskOwnerAndRequester(&taskExisting, request.Principal.Organization.Identifier)
@@ -173,7 +173,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}
 
 	// Resolve the CarePlan
-	span.AddEvent("resolving_careplan_reference")
+	span.SetAttributes(attribute.Bool(otel.ResolvingCarePlanReference, true))
 	carePlanRef, err := basedOn(task)
 	if err != nil {
 		return nil, otel.Error(span, fmt.Errorf("invalid Task.basedOn: %w", err), "invalid task.basedOn")
@@ -181,7 +181,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	carePlanId := strings.TrimPrefix(*carePlanRef, "CarePlan/")
 	span.SetAttributes(attribute.String("fhir.careplan.id", carePlanId))
 
-	span.AddEvent("adding_task_update_to_transaction")
+	span.SetAttributes(attribute.Bool(otel.AddingTaskUpdateToTx, true))
 	idx := len(tx.Entry)
 	taskBundleEntry := request.bundleEntryWithResource(task)
 	tx = tx.AppendEntry(taskBundleEntry, coolfhir.WithAuditEvent(ctx, tx, coolfhir.AuditEventInfo{
@@ -194,7 +194,7 @@ func (s *Service) handleUpdateTask(ctx context.Context, request FHIRHandlerReque
 	}))
 
 	// Update care team
-	span.AddEvent("updating_careteam")
+	span.SetAttributes(attribute.Bool(otel.UpdatingCareTeam, true))
 	_, err = careteamservice.Update(ctx, fhirClient, carePlanId, task, request.LocalIdentity, tx)
 	if err != nil {
 		return nil, otel.Error(span, fmt.Errorf("update CareTeam: %w", err), "failed to update care team")

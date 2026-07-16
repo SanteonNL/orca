@@ -16,6 +16,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/lib/otel"
 	baseotel "go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
@@ -54,7 +55,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, request.Method),
-			attribute.String(otel.HTTPURL, request.URL.String()),
+			attribute.String(otel.HTTPURL, otel.RedactURL(request.URL.String())),
 			attribute.String("proxy.base_path", f.proxyBasePath),
 		),
 	)
@@ -231,6 +232,7 @@ func (f *FHIRClientProxy) ServeHTTP(httpResponseWriter http.ResponseWriter, requ
 		// Note: only for read operations
 		pipe = pipe.AppendResponseTransformer(pipeline.MetaSourceSetter{URI: outRequestUrl.String()})
 	}
+	span.SetStatus(codes.Ok, "")
 	pipe.DoAndWrite(ctx, tracer, httpResponseWriter, responseResource, responseStatusCode)
 }
 
@@ -301,21 +303,14 @@ type LoggingRoundTripper struct {
 }
 
 func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, error) {
-	ctx, span := tracer.Start(
-		request.Context(),
-		debug.GetFullCallerName(),
-		trace.WithSpanKind(trace.SpanKindServer),
-		trace.WithAttributes(
-			attribute.String(otel.HTTPMethod, request.Method),
-			attribute.String(otel.HTTPURL, request.URL.String()),
-		),
-	)
-	defer span.End()
+	// No span is started here: the underlying transport (otelhttp / TracedHTTPTransport)
+	// already creates a client span and injects trace context. This round-tripper only logs.
+	ctx := request.Context()
 
 	slog.DebugContext(ctx, "RoundTrip Request",
 		slog.String("name", l.Name),
 		slog.String("method", request.Method),
-		slog.String(logging.FieldUrl, request.URL.String()),
+		slog.String(logging.FieldUrl, otel.RedactURL(request.URL.String())),
 	)
 	if slog.Default().Enabled(ctx, slog.LevelDebug) {
 		var headers []string
@@ -341,7 +336,7 @@ func (l LoggingRoundTripper) RoundTrip(request *http.Request) (*http.Response, e
 	if err != nil {
 		slog.WarnContext(ctx, "RoundTrip Request failed",
 			slog.String("name", l.Name),
-			slog.String(logging.FieldUrl, request.URL.String()),
+			slog.String(logging.FieldUrl, otel.RedactURL(request.URL.String())),
 			slog.String(logging.FieldError, err.Error()),
 		)
 	} else if slog.Default().Enabled(ctx, slog.LevelDebug) {
