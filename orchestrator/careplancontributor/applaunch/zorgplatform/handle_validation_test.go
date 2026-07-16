@@ -353,7 +353,7 @@ func TestService_parseSamlResponse(t *testing.T) {
 		actual, err := s.parseSamlResponse(ctx, xmlBase64Encoded)
 
 		assert.Empty(t, actual)
-		require.EqualError(t, err, "received SAMLResponse contains an error tag and cannot be processed, check error log for details")
+		require.EqualError(t, err, "received SAMLResponse contains an error tag and cannot be processed, check debug log for details")
 	})
 }
 
