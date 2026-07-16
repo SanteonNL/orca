@@ -1,5 +1,5 @@
 ## Configuration
-This section describes how to configure the service.
+This section describes how to configure the orchestration service.
 
 ### Multi-tenancy
 ORCA is multi-tenant, which means it can handle multiple care organizations (tenants) in a single instance.
