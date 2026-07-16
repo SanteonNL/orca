@@ -43,6 +43,12 @@ func Start(ctx context.Context, config Config) error {
 		return fmt.Errorf("failed to initialize OpenTelemetry: %w", err)
 	}
 
+	// Initialize the OTEL logs pipeline so functional slog records reach Application Insights.
+	loggerProvider, err := otel.InitializeLogs(ctx, config.OpenTelemetry)
+	if err != nil {
+		return fmt.Errorf("failed to initialize OpenTelemetry logs: %w", err)
+	}
+
 	// Ensure proper cleanup of OpenTelemetry on shutdown
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -51,6 +57,9 @@ func Start(ctx context.Context, config Config) error {
 			slog.Error("Failed to shutdown OpenTelemetry", slog.String(logging.FieldError, err.Error()))
 		} else {
 			slog.Debug("OpenTelemetry shutdown successfully")
+		}
+		if err := loggerProvider.Shutdown(shutdownCtx); err != nil {
+			slog.Error("Failed to shutdown OpenTelemetry logs", slog.String(logging.FieldError, err.Error()))
 		}
 	}()
 

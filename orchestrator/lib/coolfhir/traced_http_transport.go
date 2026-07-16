@@ -33,7 +33,7 @@ func (t *TracedHTTPTransport) RoundTrip(req *http.Request) (*http.Response, erro
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, req.Method),
-			attribute.String(otel.HTTPURL, req.URL.String()),
+			attribute.String(otel.HTTPURL, otel.RedactURL(req.URL.String())),
 			attribute.String("http.scheme", req.URL.Scheme),
 			attribute.String("http.host", req.URL.Host),
 			attribute.String("http.target", req.URL.Path),

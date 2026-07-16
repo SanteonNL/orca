@@ -294,7 +294,7 @@ func (s *stsAccessTokenRoundTripper) RoundTrip(httpRequest *http.Request) (*http
 		trace.WithSpanKind(trace.SpanKindClient),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, httpRequest.Method),
-			attribute.String(otel.HTTPURL, httpRequest.URL.String()),
+			attribute.String(otel.HTTPURL, otel.RedactURL(httpRequest.URL.String())),
 		),
 	)
 	defer span.End()
@@ -363,7 +363,7 @@ func (s *stsAccessTokenRoundTripper) refreshAccessToken(ctx context.Context, car
 			ctx,
 			"(cache miss) Getting Zorgplatform access token",
 			slog.String("workflow_id", workflowId),
-			slog.String("patient_id", patientID),
+			slog.String("patient_id", otel.MaskBSN(patientID)),
 		)
 		workflowCtx = &workflowContext{
 			workflowId: workflowId,
@@ -378,7 +378,7 @@ func (s *stsAccessTokenRoundTripper) refreshAccessToken(ctx context.Context, car
 	//TODO: Below is to solve a bug in zorgplatform. The SAML attribute contains bsn "999911120", but the actual patient has bsn "999999151" in the resource/workflow context
 	if !globals.StrictMode {
 		if workflowCtx.patientBsn == "999911120" {
-			slog.WarnContext(ctx, "Applying workaround for Zorgplatform BSN testdata bug (changing BSN 999911120 to 999999151)")
+			slog.WarnContext(ctx, "Applying workaround for Zorgplatform BSN testdata bug (replacing known test BSN)")
 			workflowCtx.patientBsn = "999999151"
 		}
 	}
@@ -405,7 +405,7 @@ func (s *Service) handleLaunch(response http.ResponseWriter, request *http.Reque
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, request.Method),
-			attribute.String(otel.HTTPURL, request.URL.String()),
+			attribute.String(otel.HTTPURL, otel.RedactURL(request.URL.String())),
 		),
 	)
 	defer span.End()

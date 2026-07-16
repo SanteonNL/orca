@@ -12,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -26,6 +27,10 @@ type Config struct {
 	ServiceVersion string `koanf:"service_version"`
 	// ResourceAttributes additional resource attributes
 	ResourceAttributes map[string]string `koanf:"resource_attributes"`
+	// SamplingRatio is the head-sampling ratio for root spans (0.0-1.0). It is applied via a
+	// ParentBased sampler, so already-sampled upstream traces are always kept (preserving
+	// cross-system correlation). A value <= 0 is treated as 1.0 (always sample).
+	SamplingRatio float64 `koanf:"sampling_ratio"`
 	// Exporter configuration
 	Exporter ExporterConfig `koanf:"exporter"`
 }
@@ -63,6 +68,14 @@ func DefaultConfig() Config {
 	serviceName := "orca-orchestrator"
 	var metricEndpoint, loggingEndpoint string
 	resourceAttributes := make(map[string]string)
+	samplingRatio := 1.0
+
+	// Read OTEL_TRACES_SAMPLER_ARG (standard OTEL env var) as the head-sampling ratio.
+	if envRatio := os.Getenv("OTEL_TRACES_SAMPLER_ARG"); envRatio != "" {
+		if r, err := strconv.ParseFloat(envRatio, 64); err == nil {
+			samplingRatio = r
+		}
+	}
 
 	// Read OTEL_SERVICE_NAME
 	if envServiceName := os.Getenv("OTEL_SERVICE_NAME"); envServiceName != "" {
@@ -112,6 +125,7 @@ func DefaultConfig() Config {
 		ServiceName:        serviceName,
 		ServiceVersion:     "1.0.0",
 		ResourceAttributes: resourceAttributes,
+		SamplingRatio:      samplingRatio,
 		Exporter: ExporterConfig{
 			Type:     "otlp",
 			Protocol: protocol,
@@ -237,6 +251,14 @@ func Initialize(ctx context.Context, config Config) (*TracerProvider, error) {
 	// Create tracer provider
 	var opts []trace.TracerProviderOption
 	opts = append(opts, trace.WithResource(res))
+
+	// Head sampling. ParentBased ensures already-sampled upstream traces are always kept,
+	// preserving cross-system (e.g. Datahub) correlation. A ratio <= 0 means always sample.
+	samplingRatio := config.SamplingRatio
+	if samplingRatio <= 0 {
+		samplingRatio = 1.0
+	}
+	opts = append(opts, trace.WithSampler(trace.ParentBased(trace.TraceIDRatioBased(samplingRatio))))
 
 	if exporter != nil {
 		opts = append(opts, trace.WithBatcher(exporter))

@@ -99,15 +99,13 @@ func New(config Config, tenantCfg tenants.Config, profile profile.Provider, orca
 	fhirClientConfig := coolfhir.Config()
 
 	// Initialize connections to per-tenant CPS FHIR servers.
-	transportByTenant := make(map[string]http.RoundTripper)
 	fhirClientByTenant := make(map[string]fhirclient.Client)
 	for _, tenant := range tenantCfg {
-		transport, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.CPS.FHIR, fhirClientConfig)
+		_, fhirClient, err := coolfhir.NewAuthRoundTripper(tenant.CPS.FHIR, fhirClientConfig)
 		if err != nil {
 			return nil, err
 		}
 
-		transportByTenant[tenant.ID] = coolfhir.NewTracedHTTPTransport(transport, tracer)
 		fhirClientByTenant[tenant.ID] = coolfhir.NewTracedFHIRClient(fhirClient, tracer)
 		globals.RegisterCPSFHIRClient(tenant.ID, fhirClient)
 	}
@@ -123,7 +121,6 @@ func New(config Config, tenantCfg tenants.Config, profile profile.Provider, orca
 		tenants:             tenantCfg,
 		profile:             profile,
 		orcaPublicURL:       orcaPublicURL,
-		transportByTenant:   transportByTenant,
 		fhirClientByTenant:  fhirClientByTenant,
 		subscriptionManager: subscriptionMgr,
 		eventManager:        eventManager,
@@ -170,7 +167,6 @@ func New(config Config, tenantCfg tenants.Config, profile profile.Provider, orca
 type Service struct {
 	tenants             tenants.Config
 	orcaPublicURL       *url.URL
-	transportByTenant   map[string]http.RoundTripper
 	fhirClientByTenant  map[string]fhirclient.Client
 	pipelineByTenant    map[string]pipeline.Instance
 	profile             profile.Provider
@@ -388,10 +384,11 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		slog.ErrorContext(
 			ctx,
 			"Failed to execute transaction",
-			slog.String(logging.FieldUrl, request.URL.String()),
-			slog.String("request", string(txResultJson)),
+			slog.String(logging.FieldUrl, otel.RedactURL(request.URL.String())),
 			slog.String(logging.FieldError, err.Error()),
 		)
+		// The transaction bundle can contain patient data, so keep it at Debug (stdout only).
+		slog.DebugContext(ctx, "Failed transaction request bundle", slog.String("request", string(txResultJson)))
 		var operationOutcomeErr fhirclient.OperationOutcomeError
 		if errors.As(err, &operationOutcomeErr) {
 			operationOutcomeErr.OperationOutcome = coolfhir.SanitizeOperationOutcome(operationOutcomeErr.OperationOutcome)
@@ -1259,7 +1256,7 @@ func (s Service) notifySubscribers(ctx context.Context, resource interface{}) {
 			slog.ErrorContext(
 				ctx,
 				"Failed to notify subscribers",
-				slog.Any("resource", resource),
+				slog.String("resource_type", fmt.Sprintf("%T", resource)),
 				slog.String(logging.FieldError, err.Error()))
 		} else {
 			span.SetAttributes(

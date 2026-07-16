@@ -28,9 +28,14 @@ type Instance struct {
 
 // Do executes the pipeline, returning an error if marshalling fails.
 func (p Instance) Do(ctx context.Context, tracer trace.Tracer, httpResponse *http.Response, resource any) error {
-	ctx, span := tracer.Start(ctx, debug.GetFullCallerName(), trace.WithSpanKind(trace.SpanKindServer))
+	_, span := tracer.Start(ctx, debug.GetFullCallerName(), trace.WithSpanKind(trace.SpanKindServer))
 	defer span.End()
+	return p.do(span, httpResponse, resource)
+}
 
+// do runs the pipeline transforms and populates httpResponse. It does not start its own
+// span so it can be shared by Do and DoAndWrite without producing a redundant nested span.
+func (p Instance) do(span trace.Span, httpResponse *http.Response, resource any) error {
 	var responseBody []byte
 	if resource != nil {
 		var err error
@@ -74,7 +79,7 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 		StatusCode: responseStatusCode,
 	}
 
-	err := p.Do(ctx, tracer, httpResponse, resource)
+	err := p.do(span, httpResponse, resource)
 	var responseBody []byte
 	if err == nil && httpResponse.Body != nil {
 		responseBody, err = io.ReadAll(httpResponse.Body)
@@ -99,8 +104,9 @@ func (p Instance) DoAndWrite(ctx context.Context, tracer trace.Tracer, httpRespo
 				ctx,
 				"Failed to write response",
 				slog.String(logging.FieldError, otel.Error(span, err).Error()),
-				slog.String("body", string(responseBody)),
 			)
+			// The response body can contain patient data, so keep it at Debug (stdout only).
+			slog.DebugContext(ctx, "Failed response body", slog.String("body", string(responseBody)))
 		}
 		span.SetAttributes(attribute.Bool(otel.ResponseBodyWriteComplete, true))
 	}

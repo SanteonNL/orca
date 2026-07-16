@@ -35,7 +35,7 @@ func (s *Service) handleFHIRBatchBundle(httpRequest *http.Request, requestBundle
 		trace.WithSpanKind(trace.SpanKindServer),
 		trace.WithAttributes(
 			attribute.String(otel.HTTPMethod, httpRequest.Method),
-			attribute.String(otel.HTTPURL, httpRequest.URL.String()),
+			attribute.String(otel.HTTPURL, otel.RedactURL(httpRequest.URL.String())),
 			attribute.String(otel.FHIRBundleType, requestBundle.Type.String()),
 			attribute.Int(otel.FHIRBundleEntryCount, len(requestBundle.Entry)),
 		),

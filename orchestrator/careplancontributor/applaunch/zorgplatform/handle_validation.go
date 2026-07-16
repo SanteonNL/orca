@@ -62,13 +62,11 @@ func (s *Service) parseSamlResponse(ctx context.Context, samlResponse string) (L
 	}
 
 	if doc.Root().Tag == "Error" {
-		slog.ErrorContext(
-			ctx,
-			"SAMLResponse contains error tag and can not be processed",
-			slog.String("saml_response", string(decodedResponse)),
-		)
-		span.SetAttributes(attribute.String("saml_response", string(decodedResponse)))
-		return LaunchContext{}, otel.Error(span, errors.New("received SAMLResponse contains an error tag and cannot be processed, check error log for details"))
+		slog.ErrorContext(ctx, "SAMLResponse contains error tag and can not be processed")
+		// The raw response may contain patient/practitioner data, so keep it at Debug
+		// (stdout only) rather than on the span or an exported Error log.
+		slog.DebugContext(ctx, "SAMLResponse error payload", slog.String("saml_response", string(decodedResponse)))
+		return LaunchContext{}, otel.Error(span, errors.New("received SAMLResponse contains an error tag and cannot be processed, check debug log for details"))
 	}
 
 	// Note: for some reason, this fails on the Zorgplatform SAML response, so we skip it for now.
