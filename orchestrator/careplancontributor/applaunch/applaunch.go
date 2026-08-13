@@ -5,6 +5,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/external"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/verification"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
 	"github.com/SanteonNL/orca/orchestrator/lib/coolfhir"
 	"net/http"
@@ -20,9 +21,13 @@ type Config struct {
 	Demo         demo.Config                `koanf:"demo"`
 	ZorgPlatform zorgplatform.Config        `koanf:"zorgplatform"`
 	External     map[string]external.Config `koanf:"external"`
+	Verification verification.Config        `koanf:"verification"`
 }
 
 func (c Config) Validate() error {
+	if err := c.Verification.Validate(); err != nil {
+		return err
+	}
 	return c.SmartOnFhir.Validate()
 }
 
