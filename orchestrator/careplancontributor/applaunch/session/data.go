@@ -34,6 +34,22 @@ func (d *Data) Set(path string, resource any) {
 	d.ContextResources = append(d.ContextResources, res)
 }
 
+// Replace drops any resource of the same type before setting the new one. Set appends and GetByType
+// returns the first match, so without this a second resource of a type would be shadowed by the first.
+func (d *Data) Replace(path string, resource any) {
+	resourceType, _, _ := strings.Cut(path, "/")
+
+	var remaining []FHIRResource
+	for _, existing := range d.ContextResources {
+		if !strings.HasPrefix(existing.Path, resourceType+"/") {
+			remaining = append(remaining, existing)
+		}
+	}
+	d.ContextResources = remaining
+
+	d.Set(path, resource)
+}
+
 func (d *Data) GetByPath(resourcePath string) *FHIRResource {
 	for _, resource := range d.ContextResources {
 		if resource.Path == resourcePath {

@@ -4,7 +4,7 @@ import {useParams} from 'next/navigation'
 import Loading from '@/app/enrollment/loading'
 import QuestionnaireRenderer from '../../components/questionnaire-renderer'
 import useEnrollment from "@/app/hooks/enrollment-hook";
-import {getLaunchableApps, LaunchableApp} from "@/app/applaunch";
+import {getLaunchableApps, LaunchableApp, setTaskLaunchContext} from "@/app/applaunch";
 import {Questionnaire, ServiceRequest, Task} from "fhir/r4";
 import { useClients } from '@/app/hooks/context-hook'
 import PatientDetails from "@/app/enrollment/task/components/patient-details";
@@ -97,7 +97,13 @@ export default function EnrollmentTaskPage() {
     // - Task.status is "in-progress"
     // - There is exactly one launchable app
     // - Auto-launch is enabled
-    const launchApp = (URL: string) => () => {
+    const launchApp = (URL: string) => async () => {
+        try {
+            await setTaskLaunchContext(task.id!);
+        } catch (error) {
+            // Best effort: the app still opens, it just falls back to its own care path selection.
+            console.error("Failed to set launch context for task", task.id, error);
+        }
         window.open(URL, "_self");
     }
 

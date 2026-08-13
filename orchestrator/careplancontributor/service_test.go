@@ -1615,3 +1615,177 @@ func TestService_HealthCheck(t *testing.T) {
 		require.Equal(t, http.StatusUnauthorized, httpResponse.StatusCode)
 	})
 }
+
+func TestTaskIsForSessionPatient(t *testing.T) {
+	bsn := fhir.Identifier{System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"), Value: to.Ptr("123456782")}
+
+	sessionWithPatient := func(patient fhir.Patient) *session.Data {
+		data := session.Data{}
+		data.Set("Patient/"+*patient.Id, patient)
+		return &data
+	}
+
+	t.Run("matches on the patient reference", func(t *testing.T) {
+		data := sessionWithPatient(fhir.Patient{Id: to.Ptr("epic-123")})
+		task := fhir.Task{For: &fhir.Reference{Reference: to.Ptr("Patient/epic-123")}}
+
+		assert.True(t, taskIsForSessionPatient(task, data))
+	})
+
+	t.Run("matches on a shared business identifier when the reference differs", func(t *testing.T) {
+		data := sessionWithPatient(fhir.Patient{Id: to.Ptr("locally-minted"), Identifier: []fhir.Identifier{bsn}})
+		task := fhir.Task{For: &fhir.Reference{Reference: to.Ptr("Patient/some-other-id"), Identifier: &bsn}}
+
+		assert.True(t, taskIsForSessionPatient(task, data))
+	})
+
+	t.Run("rejects a Task for another patient", func(t *testing.T) {
+		data := sessionWithPatient(fhir.Patient{Id: to.Ptr("epic-123"), Identifier: []fhir.Identifier{bsn}})
+		otherBsn := fhir.Identifier{System: bsn.System, Value: to.Ptr("987654321")}
+		task := fhir.Task{For: &fhir.Reference{Reference: to.Ptr("Patient/epic-999"), Identifier: &otherBsn}}
+
+		assert.False(t, taskIsForSessionPatient(task, data))
+	})
+
+	t.Run("rejects when the session holds no patient", func(t *testing.T) {
+		task := fhir.Task{For: &fhir.Reference{Reference: to.Ptr("Patient/epic-123")}}
+
+		assert.False(t, taskIsForSessionPatient(task, &session.Data{}))
+	})
+
+	t.Run("rejects a Task without a subject", func(t *testing.T) {
+		data := sessionWithPatient(fhir.Patient{Id: to.Ptr("epic-123")})
+
+		assert.False(t, taskIsForSessionPatient(fhir.Task{}, data))
+	})
+}
+
+func TestConditionFromTask(t *testing.T) {
+	t.Run("takes the code from Task.reasonCode", func(t *testing.T) {
+		task := fhir.Task{ReasonCode: &fhir.CodeableConcept{
+			Coding: []fhir.Coding{{System: to.Ptr("http://snomed.info/sct"), Code: to.Ptr("13645005")}},
+		}}
+
+		condition := conditionFromTask(task)
+
+		require.NotNil(t, condition)
+		require.Len(t, condition.Code.Coding, 1)
+		assert.Equal(t, "13645005", *condition.Code.Coding[0].Code)
+	})
+
+	t.Run("nil when the Task carries no reason", func(t *testing.T) {
+		assert.Nil(t, conditionFromTask(fhir.Task{}))
+		assert.Nil(t, conditionFromTask(fhir.Task{ReasonCode: &fhir.CodeableConcept{}}))
+	})
+}
+
+func TestSetTaskContext(t *testing.T) {
+	bsn := fhir.Identifier{System: to.Ptr("http://fhir.nl/fhir/NamingSystem/bsn"), Value: to.Ptr("123456782")}
+	copd := fhir.CodeableConcept{Coding: []fhir.Coding{{System: to.Ptr("http://snomed.info/sct"), Code: to.Ptr("13645005")}}}
+
+	sessionForPatient := func() *session.Data {
+		data := session.Data{}
+		data.Set("Patient/epic-123", fhir.Patient{Id: to.Ptr("epic-123"), Identifier: []fhir.Identifier{bsn}})
+		return &data
+	}
+
+	returnTask := func(client *mock.MockClient, task fhir.Task) {
+		client.EXPECT().ReadWithContext(gomock.Any(), "Task/task-1", gomock.Any(), gomock.Any()).
+			DoAndReturn(func(_ context.Context, _ string, target any, _ ...fhirclient.Option) error {
+				*(target.(*fhir.Task)) = task
+				return nil
+			})
+	}
+
+	t.Run("records the Task's condition on the session", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock.NewMockClient(ctrl)
+		returnTask(client, fhir.Task{
+			For:        &fhir.Reference{Reference: to.Ptr("Patient/epic-123")},
+			ReasonCode: &copd,
+		})
+		sessionData := sessionForPatient()
+
+		status := setTaskContext(context.Background(), client, "task-1", sessionData)
+
+		assert.Equal(t, http.StatusNoContent, status)
+		condition := session.Get[fhir.Condition](sessionData)
+		require.NotNil(t, condition)
+		assert.Equal(t, "13645005", *condition.Code.Coding[0].Code)
+	})
+
+	t.Run("replaces a condition already on the session", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock.NewMockClient(ctrl)
+		returnTask(client, fhir.Task{
+			For:        &fhir.Reference{Reference: to.Ptr("Patient/epic-123")},
+			ReasonCode: &copd,
+		})
+		sessionData := sessionForPatient()
+		sessionData.Set("Condition/stale", fhir.Condition{
+			Code: &fhir.CodeableConcept{Coding: []fhir.Coding{{Code: to.Ptr("84114007")}}},
+		})
+
+		status := setTaskContext(context.Background(), client, "task-1", sessionData)
+
+		assert.Equal(t, http.StatusNoContent, status)
+		condition := session.Get[fhir.Condition](sessionData)
+		require.NotNil(t, condition)
+		assert.Equal(t, "13645005", *condition.Code.Coding[0].Code)
+	})
+
+	t.Run("404 when the Task cannot be read", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock.NewMockClient(ctrl)
+		client.EXPECT().ReadWithContext(gomock.Any(), "Task/task-1", gomock.Any(), gomock.Any()).
+			Return(assert.AnError)
+
+		status := setTaskContext(context.Background(), client, "task-1", sessionForPatient())
+
+		assert.Equal(t, http.StatusNotFound, status)
+	})
+
+	t.Run("403 when the Task is for another patient", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock.NewMockClient(ctrl)
+		returnTask(client, fhir.Task{
+			For:        &fhir.Reference{Reference: to.Ptr("Patient/someone-else")},
+			ReasonCode: &copd,
+		})
+		sessionData := sessionForPatient()
+
+		status := setTaskContext(context.Background(), client, "task-1", sessionData)
+
+		assert.Equal(t, http.StatusForbidden, status)
+		assert.Nil(t, session.Get[fhir.Condition](sessionData))
+	})
+
+	t.Run("leaves the session alone when the Task has no reasonCode", func(t *testing.T) {
+		ctrl := gomock.NewController(t)
+		defer ctrl.Finish()
+		client := mock.NewMockClient(ctrl)
+		returnTask(client, fhir.Task{For: &fhir.Reference{Reference: to.Ptr("Patient/epic-123")}})
+		sessionData := sessionForPatient()
+
+		status := setTaskContext(context.Background(), client, "task-1", sessionData)
+
+		assert.Equal(t, http.StatusNoContent, status)
+		assert.Nil(t, session.Get[fhir.Condition](sessionData))
+	})
+}
+
+func TestService_handleSetTaskContext_UnknownTenant(t *testing.T) {
+	service := Service{tenants: tenants.Test()}
+	httpResponse := httptest.NewRecorder()
+	httpRequest := httptest.NewRequest(http.MethodPost, "/cpc/context/task/task-1", nil)
+	sessionData := session.Data{TenantID: "no-such-tenant"}
+
+	service.handleSetTaskContext(httpResponse, httpRequest, &sessionData)
+
+	assert.Equal(t, http.StatusInternalServerError, httpResponse.Code)
+	assert.Nil(t, session.Get[fhir.Condition](&sessionData))
+}

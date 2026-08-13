@@ -1,7 +1,7 @@
 /**
  * @jest-environment node
  */
-import {getLaunchableApps} from '@/app/applaunch';
+import {getLaunchableApps, setTaskLaunchContext} from '@/app/applaunch';
 import type {Identifier, Bundle, Endpoint} from 'fhir/r4';
 
 
@@ -303,5 +303,36 @@ describe('getLaunchableApps', () => {
                 'X-Scp-Entity-Identifier': 'https://example.com/orgs|org-with-special@chars#123'
             }
         });
+    });
+});
+
+describe('setTaskLaunchContext', () => {
+    const mockFetch = jest.fn();
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        global.fetch = mockFetch as any;
+    });
+
+    it('posts the selected task to the orchestrator', async () => {
+        mockFetch.mockResolvedValue({ok: true});
+
+        await setTaskLaunchContext('task-123');
+
+        expect(mockFetch).toHaveBeenCalledWith('/orca/cpc/context/task/task-123', {method: 'POST'});
+    });
+
+    it('encodes the task id', async () => {
+        mockFetch.mockResolvedValue({ok: true});
+
+        await setTaskLaunchContext('task/../other');
+
+        expect(mockFetch).toHaveBeenCalledWith('/orca/cpc/context/task/task%2F..%2Fother', {method: 'POST'});
+    });
+
+    it('throws when the orchestrator rejects the request, so the caller can fall back', async () => {
+        mockFetch.mockResolvedValue({ok: false, statusText: 'Forbidden'});
+
+        await expect(setTaskLaunchContext('task-123')).rejects.toThrow('Failed to set launch context: Forbidden');
     });
 });

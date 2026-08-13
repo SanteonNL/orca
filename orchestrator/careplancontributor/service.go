@@ -345,6 +345,15 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 			),
 		},
 		{
+			Method:  "POST",
+			Path:    basePath + "/context/task/{id}",
+			Handler: s.withSession(s.handleSetTaskContext),
+			Middleware: httpserv.Chain(
+				otel.HandlerWithTracing(tracer, "SetTaskContext"),
+				s.withUserAuth,
+			),
+		},
+		{
 			Method:  "GET",
 			Path:    basePathWithTenant + "/ehr/fhir/{rest...}",
 			Handler: s.withSession(s.handleProxyAppRequestToEHR),
@@ -767,6 +776,86 @@ func (s Service) handleGetContext(response http.ResponseWriter, _ *http.Request,
 	response.Header().Add("Content-Type", "application/json")
 	response.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(response).Encode(contextData)
+}
+
+// handleSetTaskContext records the enrollment Task the user opened, so apps launched from it are told
+// which care path they were opened for. Zorgplatform resolves a Condition at launch, but a SMART on FHIR
+// launch has no such context — the user only picks an enrollment afterwards — which leaves apps guessing
+// for patients enrolled on more than one care path.
+func (s Service) handleSetTaskContext(response http.ResponseWriter, request *http.Request, sessionData *session.Data) {
+	ctx := request.Context()
+
+	tenant, err := s.tenants.Get(sessionData.TenantID)
+	if err != nil {
+		slog.ErrorContext(ctx, "Failed to resolve tenant for launch context", slog.String(logging.FieldError, err.Error()))
+		http.Error(response, http.StatusText(http.StatusInternalServerError), http.StatusInternalServerError)
+		return
+	}
+
+	cpsFHIRClient := fhirclient.New(tenant.URL(s.orcaPublicURL, careplanservice.FHIRBaseURL), s.httpClientForLocalCPS(*tenant), coolfhir.Config())
+
+	status := setTaskContext(ctx, cpsFHIRClient, request.PathValue("id"), sessionData)
+	if status != http.StatusNoContent {
+		http.Error(response, http.StatusText(status), status)
+		return
+	}
+	response.WriteHeader(http.StatusNoContent)
+}
+
+// setTaskContext reads the enrollment Task and records its condition on the session, returning the HTTP
+// status the caller should report.
+func setTaskContext(ctx context.Context, cpsFHIRClient fhirclient.Client, taskID string, sessionData *session.Data) int {
+	var task fhir.Task
+	if err := cpsFHIRClient.ReadWithContext(ctx, "Task/"+taskID, &task); err != nil {
+		slog.ErrorContext(ctx, "Failed to read Task for launch context", slog.String(logging.FieldError, err.Error()))
+		return http.StatusNotFound
+	}
+
+	// Never let a crafted request point the session at an unrelated patient's enrollment.
+	if !taskIsForSessionPatient(task, sessionData) {
+		slog.WarnContext(ctx, "Refusing launch context for a Task belonging to another patient")
+		return http.StatusForbidden
+	}
+
+	condition := conditionFromTask(task)
+	if condition == nil {
+		// Nothing to narrow the launch to; leave the session as-is rather than clearing what it has.
+		slog.InfoContext(ctx, "Task carries no reasonCode, launch context unchanged")
+		return http.StatusNoContent
+	}
+
+	sessionData.Replace("Condition/magic-"+uuid.NewString(), *condition)
+	return http.StatusNoContent
+}
+
+func taskIsForSessionPatient(task fhir.Task, sessionData *session.Data) bool {
+	patient := session.Get[fhir.Patient](sessionData)
+	if patient == nil || task.For == nil {
+		return false
+	}
+
+	if patient.Id != nil && task.For.Reference != nil && *task.For.Reference == "Patient/"+*patient.Id {
+		return true
+	}
+
+	// Zorgplatform-style sessions hold a patient minted by the launch, whose id the CPS does not know;
+	// those still match on a shared business identifier.
+	if task.For.Identifier == nil {
+		return false
+	}
+	return slices.ContainsFunc(patient.Identifier, func(identifier fhir.Identifier) bool {
+		return coolfhir.IdentifierEquals(&identifier, task.For.Identifier)
+	})
+}
+
+func conditionFromTask(task fhir.Task) *fhir.Condition {
+	if task.ReasonCode == nil || len(task.ReasonCode.Coding) == 0 {
+		return nil
+	}
+	return &fhir.Condition{
+		Id:   to.Ptr(uuid.NewString()),
+		Code: task.ReasonCode,
+	}
 }
 
 func (s Service) getAndValidateUserSession(request *http.Request) (*session.Data, error) {

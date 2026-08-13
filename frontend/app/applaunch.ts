@@ -7,6 +7,16 @@ export interface LaunchableApp {
     URL: string;
 }
 
+// Records which enrollment the app is launched from, so the launched app knows the care path. A SMART on
+// FHIR launch carries no condition context of its own — the user only picks an enrollment here — which
+// leaves apps guessing for patients enrolled on more than one care path.
+export async function setTaskLaunchContext(taskId: string): Promise<void> {
+    const response = await fetch(`/orca/cpc/context/task/${encodeURIComponent(taskId)}`, {method: "POST"});
+    if (!response.ok) {
+        throw new Error(`Failed to set launch context: ${response.statusText}`);
+    }
+}
+
 export async function getLaunchableApps(scpClient: Client, organization: Identifier) : Promise<LaunchableApp[]> {
     const testAppURL = await getPatientViewerTestUrl();
     if (testAppURL) {
