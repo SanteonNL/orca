@@ -167,6 +167,12 @@ func TestSanitizeOperationOutcome(t *testing.T) {
 			assert.Equal(t, "upstream FHIR server error", *sanitized.Issue[0].Diagnostics)
 		})
 	}
+	t.Run("empty issue list gets a default issue (issue is 1..*, nil marshals as null)", func(t *testing.T) {
+		sanitized := SanitizeOperationOutcome(fhir.OperationOutcome{})
+		assert.Len(t, sanitized.Issue, 1)
+		assert.Equal(t, fhir.IssueTypeProcessing, sanitized.Issue[0].Code)
+		assert.Equal(t, "upstream FHIR server error", *sanitized.Issue[0].Diagnostics)
+	})
 	for _, code := range nonSanitizedCodes {
 		t.Run(code.String()+" should not be sanitized", func(t *testing.T) {
 			issue := fhir.OperationOutcomeIssue{
