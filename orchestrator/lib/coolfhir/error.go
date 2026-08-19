@@ -41,6 +41,18 @@ func SanitizeOperationOutcome(in fhir.OperationOutcome) fhir.OperationOutcome {
 			result.Issue = append(result.Issue, issue)
 		}
 	}
+	// OperationOutcome.issue is 1..*; upstream servers (e.g. Azure FHIR on 410 Gone) may return an
+	// OperationOutcome without issues, and a nil slice marshals as "issue": null, which strict FHIR
+	// parsers reject.
+	if len(result.Issue) == 0 {
+		result.Issue = []fhir.OperationOutcomeIssue{
+			{
+				Severity:    fhir.IssueSeverityError,
+				Code:        fhir.IssueTypeProcessing,
+				Diagnostics: to.Ptr("upstream FHIR server error"),
+			},
+		}
+	}
 	return result
 }
 
@@ -95,42 +107,52 @@ func CreateOperationOutcomeBundleEntryFromError(err error, desc string) fhir.Bun
 func WriteOperationOutcomeFromError(ctx context.Context, err error, desc string, httpResponse http.ResponseWriter) {
 	slog.ErrorContext(ctx, fmt.Sprintf("%s failed: %v", desc, err))
 
-	statusCode := http.StatusInternalServerError
-	var operationOutcome fhir.OperationOutcome
+	statusCode, operationOutcome := operationOutcomeFromError(err, desc)
+	SendResponse(httpResponse, statusCode, operationOutcome)
+}
 
+func operationOutcomeFromError(err error, desc string) (int, fhir.OperationOutcome) {
 	// Error type: fhirclient.OperationOutcomeError
 	var operationOutcomeErr = new(fhirclient.OperationOutcomeError)
-	if errors.As(err, operationOutcomeErr) || errors.As(err, &operationOutcomeErr) {
-		if operationOutcomeErr.HttpStatusCode > 0 {
-			statusCode = operationOutcomeErr.HttpStatusCode
-		}
-		operationOutcome = operationOutcomeErr.OperationOutcome
-		if statusCode != http.StatusBadRequest {
-			operationOutcome = SanitizeOperationOutcome(operationOutcome)
-		}
-	} else {
-		// Error type: ErrorWithCode
-		var errorWithCode = new(ErrorWithCode)
-		if errors.As(err, errorWithCode) || errors.As(err, &errorWithCode) {
-			if errorWithCode.StatusCode > 0 {
-				statusCode = errorWithCode.StatusCode
-			}
-		}
+	if !errors.As(err, operationOutcomeErr) && !errors.As(err, &operationOutcomeErr) {
+		return operationOutcomeFromGenericError(err, desc)
+	}
 
-		diagnostics := http.StatusText(statusCode)
-		// Include error message for bad requests
-		if statusCode == http.StatusBadRequest {
-			diagnostics = err.Error()
-		}
-		operationOutcome = fhir.OperationOutcome{
-			Issue: []fhir.OperationOutcomeIssue{
-				{
-					Severity:    fhir.IssueSeverityError,
-					Code:        fhir.IssueTypeProcessing,
-					Diagnostics: to.Ptr(fmt.Sprintf("%s failed: %s", desc, diagnostics)),
-				},
-			},
+	statusCode := http.StatusInternalServerError
+	if operationOutcomeErr.HttpStatusCode > 0 {
+		statusCode = operationOutcomeErr.HttpStatusCode
+	}
+	operationOutcome := operationOutcomeErr.OperationOutcome
+	// Bad requests pass their validation detail through; anything else is sanitized, as is an
+	// outcome that carries no issues at all.
+	if statusCode != http.StatusBadRequest || len(operationOutcome.Issue) == 0 {
+		operationOutcome = SanitizeOperationOutcome(operationOutcome)
+	}
+	return statusCode, operationOutcome
+}
+
+func operationOutcomeFromGenericError(err error, desc string) (int, fhir.OperationOutcome) {
+	statusCode := http.StatusInternalServerError
+	// Error type: ErrorWithCode
+	var errorWithCode = new(ErrorWithCode)
+	if errors.As(err, errorWithCode) || errors.As(err, &errorWithCode) {
+		if errorWithCode.StatusCode > 0 {
+			statusCode = errorWithCode.StatusCode
 		}
 	}
-	SendResponse(httpResponse, statusCode, operationOutcome)
+
+	diagnostics := http.StatusText(statusCode)
+	// Include error message for bad requests
+	if statusCode == http.StatusBadRequest {
+		diagnostics = err.Error()
+	}
+	return statusCode, fhir.OperationOutcome{
+		Issue: []fhir.OperationOutcomeIssue{
+			{
+				Severity:    fhir.IssueSeverityError,
+				Code:        fhir.IssueTypeProcessing,
+				Diagnostics: to.Ptr(fmt.Sprintf("%s failed: %s", desc, diagnostics)),
+			},
+		},
+	}
 }
