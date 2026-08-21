@@ -416,7 +416,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 			expectedErr: nil,
 		},
 		{
-			name: "rejects invalid Belgian number (wrong prefix)",
+			name: "rejects national-format Belgian number",
 			patient: &fhir.Patient{
 				Telecom: []fhir.ContactPoint{
 					{
@@ -432,7 +432,7 @@ func TestPatientValidator_Validate(t *testing.T) {
 			expectedErr: []string{InvalidPhone},
 		},
 		{
-			name: "rejects invalid German number (wrong prefix)",
+			name: "rejects national-format German number",
 			patient: &fhir.Patient{
 				Telecom: []fhir.ContactPoint{
 					{
@@ -470,6 +470,166 @@ func TestPatientValidator_Validate(t *testing.T) {
 				},
 			},
 			expectedErr: nil,
+		},
+		{
+			name: "accepts dutch mobile with 0031 prefix",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("0031 6 12345678"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts French mobile",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+33 6 12 34 56 78"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts Turkish mobile",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+90 532 123 45 67"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts Moroccan number with 00 prefix",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("00212 612 345 678"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts Swiss number with 00 prefix",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("0041 79 123 45 67"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts UK number",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+44 7700 900123"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts US number",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+1 650 555 1234"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "accepts German landline",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+49 30 12345678"),
+					},
+				},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "rejects dutch landline",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+31 20 1234567"),
+					},
+				},
+			},
+			expectedErr: []string{InvalidPhone},
+		},
+		{
+			name: "rejects international number that is too short",
+			patient: &fhir.Patient{
+				Telecom: []fhir.ContactPoint{
+					{
+						System: &emailSystem,
+						Value:  to.Ptr("test@example.com"),
+					},
+					{
+						System: &phoneSystem,
+						Value:  to.Ptr("+33 6 12"),
+					},
+				},
+			},
+			expectedErr: []string{InvalidPhone},
 		},
 	}
 
