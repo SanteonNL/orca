@@ -76,30 +76,46 @@ func validateEmail(email *string) *validation.Error {
 	return nil
 }
 
+var (
+	nonPhoneCharacters = regexp.MustCompile("[^0-9+]")
+	e164               = regexp.MustCompile(`^\+[1-9]\d{7,14}$`)
+)
+
 func validatePhone(phone *string) *validation.Error {
 	if phone == nil || *phone == "" {
 		return &validation.Error{Code: PhoneRequired}
 	}
 
-	normalised := regexp.MustCompile("[^0-9+]").ReplaceAllString(*phone, "")
+	normalised := normalisePhone(*phone)
 
-	// Dutch mobile: 06xxxxxxxx (10 digits) or +316xxxxxxxx (12 digits)
-	if (len(normalised) == 10 && strings.HasPrefix(normalised, "06")) ||
-		(len(normalised) == 12 && strings.HasPrefix(normalised, "+316")) {
-		return nil
+	// Dutch numbers still have to be mobile — we reach the patient by SMS.
+	if strings.HasPrefix(normalised, "+31") && !isDutchMobile(normalised) {
+		return &validation.Error{Code: InvalidPhone}
 	}
 
-	// Belgian mobile: +324xxxxxxxx (12 digits)
-	if len(normalised) == 12 && strings.HasPrefix(normalised, "+324") {
-		return nil
+	if !e164.MatchString(normalised) {
+		return &validation.Error{Code: InvalidPhone}
 	}
 
-	// German mobile: +4915x/+4916x/+4917x (13-14 digits)
-	if (len(normalised) == 13 || len(normalised) == 14) && (strings.HasPrefix(normalised, "+4915") || strings.HasPrefix(normalised, "+4916") || strings.HasPrefix(normalised, "+4917")) {
-		return nil
-	}
+	return nil
+}
 
-	return &validation.Error{Code: InvalidPhone}
+// normalisePhone strips formatting and rewrites the two national prefixes we see in EHR data to E.164.
+func normalisePhone(phone string) string {
+	cleaned := nonPhoneCharacters.ReplaceAllString(phone, "")
+
+	switch {
+	case strings.HasPrefix(cleaned, "00"):
+		return "+" + cleaned[2:]
+	case strings.HasPrefix(cleaned, "06"):
+		return "+31" + cleaned[1:]
+	default:
+		return cleaned
+	}
+}
+
+func isDutchMobile(normalised string) bool {
+	return strings.HasPrefix(normalised, "+316") && len(normalised) == 12
 }
 
 const (

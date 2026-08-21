@@ -238,7 +238,7 @@ describe("enrollment validation test", () => {
       await waitFor(() => {
           expect(screen.getByText('Er gaat iets mis')).toBeInTheDocument();
           expect(screen.getByText(/Er is geen e-mailadres/)).toBeInTheDocument();
-          expect(screen.getByText(/Ongeldig telefoonnummer. Voor de aanmelding is minstens één mobiel nummer uit Nederland, België of Duitsland nodig. Controleer de telefoonnummers in het EPD en probeer het opnieuw./)).toBeInTheDocument();
+          expect(screen.getByText(/Ongeldig telefoonnummer. Voor de aanmelding is minstens één Nederlands mobiel nummer of een geldig internationaal nummer nodig. Controleer de telefoonnummers in het EPD en probeer het opnieuw./)).toBeInTheDocument();
       });
   });
 
