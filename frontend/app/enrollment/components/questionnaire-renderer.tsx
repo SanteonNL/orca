@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient, RendererConfig, removeEmptyAnswersFromResponse } from '@aehrc/smart-forms-renderer';
-import type { FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
+import type { Bundle, FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
 import { useEffect, useState } from 'react';
 
 import { toast } from 'sonner';
@@ -84,7 +84,7 @@ function QuestionnaireRenderer(props: QuestionnaireRendererPageProps) {
     outputTask.status = "completed"
 
     const response = removeEmptyAnswersFromResponse(questionnaire, updatableResponse)
-    const bundle: FhirResource & { type: "transaction" } = {
+    const bundle: Bundle<FhirResource> & { type: "transaction" } = {
       resourceType: 'Bundle',
       type: 'transaction',
       entry: [
