@@ -282,6 +282,26 @@ func (mr *MockClientWithResponsesInterfaceMockRecorder) RevokeVCWithResponse(ctx
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RevokeVCWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).RevokeVCWithResponse), varargs...)
 }
 
+// SearchCredentialsInWalletWithResponse mocks base method.
+func (m *MockClientWithResponsesInterface) SearchCredentialsInWalletWithResponse(ctx context.Context, subjectID string, reqEditors ...vcr.RequestEditorFn) (*vcr.SearchCredentialsInWalletResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []any{ctx, subjectID}
+	for _, a := range reqEditors {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SearchCredentialsInWalletWithResponse", varargs...)
+	ret0, _ := ret[0].(*vcr.SearchCredentialsInWalletResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchCredentialsInWalletWithResponse indicates an expected call of SearchCredentialsInWalletWithResponse.
+func (mr *MockClientWithResponsesInterfaceMockRecorder) SearchCredentialsInWalletWithResponse(ctx, subjectID any, reqEditors ...any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]any{ctx, subjectID}, reqEditors...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchCredentialsInWalletWithResponse", reflect.TypeOf((*MockClientWithResponsesInterface)(nil).SearchCredentialsInWalletWithResponse), varargs...)
+}
+
 // SearchIssuedVCsWithResponse mocks base method.
 func (m *MockClientWithResponsesInterface) SearchIssuedVCsWithResponse(ctx context.Context, params *vcr.SearchIssuedVCsParams, reqEditors ...vcr.RequestEditorFn) (*vcr.SearchIssuedVCsResponse, error) {
 	m.ctrl.T.Helper()
