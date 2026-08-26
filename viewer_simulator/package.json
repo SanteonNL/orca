@@ -28,7 +28,7 @@
     "fhir-kit-client": "^1.9.2",
     "jsonpath-plus": "^10.3.0",
     "lodash": "^4.18.1",
-    "lucide-react": "^0.482.0",
+    "lucide-react": "^1.33.0",
     "next": "^16.3.2",
     "react": "^18.3.1",
     "react-apexcharts": "1.7.0",
