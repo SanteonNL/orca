@@ -1,0 +1,43 @@
+# fhirclient (pulled in by @aehrc/smart-forms-renderer and @aehrc/sdc-populate) depends on
+# isomorphic-webcrypto, whose OPTIONAL deps exist purely for its React Native entrypoint
+# (src/react-native.js, reached only via Metro's .android/.ios platform resolution).
+# Next.js resolves the "browser"/"main" entrypoints instead, so this whole Expo + React
+# Native + Metro subtree is never bundled or executed - it only produced Dependabot alerts.
+ignoredOptionalDependencies:
+  - expo
+  - expo-random
+  - react-native
+  - react-native-securerandom
+  - '@unimodules/core'
+  - '@unimodules/react-native-adapter'
+  # optional peer of fhirclient; a types package that drags in runtime joi
+  - '@types/hapi'
+
+# Patched floors for vulnerable transitives that survive the prune above. These reach the tree
+# through eslint, jest, next (styled-jsx > babel-plugin-macros > cosmiconfig), @mui
+# (@emotion/babel-plugin) and fhirpath, so they are genuinely used and cannot be pruned.
+# Keep these pinned: pnpm prefers versions already in the lockfile, so without them an
+# incremental install silently retains the vulnerable versions.
+overrides:
+  brace-expansion@2: ^2.1.4
+  minimatch@9: ^9.0.7
+  js-yaml@3: ^3.15.1
+  yaml@1: ^1.10.3
+  browserslist: ^4.28.7
+
+# Dependencies whose install scripts we deliberately do NOT run. pnpm 10+ blocks these by
+# default and fails the install until each one is classified, which is why this list is
+# explicit rather than a blanket --ignore-scripts: adding a dependency that wants to run
+# install scripts will fail CI until someone consciously reviews it.
+#   @parcel/watcher - builds a native binary for dev-mode file watching; unused by build/test
+#   core-js         - postinstall only prints a funding message
+#   fhirpath        - preinstall installs its demo app, and the demo dir is excluded from the
+#                     published package, so the script is a no-op here
+#   unrs-resolver   - napi binding prep for eslint-import-resolver-typescript; the resolver
+#                     loads fine without it
+allowBuilds:
+  '@parcel/watcher': false
+  core-js: false
+  fhirpath: false
+  unrs-resolver: false
+
