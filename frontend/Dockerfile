@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-FROM node:25-alpine AS base
+FROM node:26-alpine AS base
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ RUN npm install --global pnpm@11.0.9 && pnpm i --frozen-lockfile --ignore-script
 COPY . .
 RUN pnpm build
 
-FROM node:25-alpine AS production
+FROM node:26-alpine AS production
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_PUBLIC_BASE_PATH=/frontend
