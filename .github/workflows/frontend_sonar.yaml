@@ -28,13 +28,17 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: 23
+      # Reads the version from frontend/package.json "packageManager". pnpm 8 cannot read a
+      # lockfileVersion 9 lockfile and would silently re-resolve the whole tree.
       - name: Install pnpm as prerequisite for caching setup.
-        run: npm install --global pnpm@8
+        uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
       - name: Install dependencies
         working-directory: ./frontend
         run: |
           pnpm -v
-          pnpm install
+          pnpm install --frozen-lockfile
       - name: run frontend tests
         working-directory: ./frontend
         run: |

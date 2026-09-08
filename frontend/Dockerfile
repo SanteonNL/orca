@@ -5,11 +5,15 @@ WORKDIR /app
 
 ENV NEXT_PUBLIC_BASE_PATH=/frontend
 
-COPY package.json pnpm-lock.yaml ./
-RUN yarn global add pnpm && pnpm i --frozen-lockfile --ignore-scripts
+# pnpm-workspace.yaml carries the overrides / ignoredOptionalDependencies that the lockfile was
+# resolved with; without it --frozen-lockfile fails with ERR_PNPM_LOCKFILE_CONFIG_MISMATCH.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+# Installed with npm, not yarn: yarn 1.x refuses to run once package.json declares
+# "packageManager": "pnpm@...". The version here tracks that field.
+RUN npm install --global pnpm@11.0.9 && pnpm i --frozen-lockfile --ignore-scripts
 
 COPY . .
-RUN yarn build
+RUN pnpm build
 
 FROM node:25-alpine AS production
 WORKDIR /app
