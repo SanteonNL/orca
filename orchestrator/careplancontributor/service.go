@@ -18,6 +18,7 @@ import (
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/demo"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/session"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/smartonfhir"
+	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/verification"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/applaunch/zorgplatform"
 	importer "github.com/SanteonNL/orca/orchestrator/careplancontributor/importer"
 	"github.com/SanteonNL/orca/orchestrator/careplancontributor/oidc/op"
@@ -390,6 +391,13 @@ func (s *Service) initializeAppLaunches(sessionManager *user.SessionManager[sess
 		service, err := zorgplatform.New(sessionManager, s.config.AppLaunch.ZorgPlatform, s.tenants, s.orcaPublicURL.String(), frontendUrl, s.profile)
 		if err != nil {
 			return fmt.Errorf("failed to create Zorgplatform AppLaunch service: %w", err)
+		}
+		s.appLaunches = append(s.appLaunches, service)
+	}
+	if s.config.AppLaunch.Verification.Enabled {
+		service, err := verification.New(context.Background(), s.config.AppLaunch.Verification, sessionManager, s.tenants, s.orcaPublicURL, frontendUrl, s.profile)
+		if err != nil {
+			return fmt.Errorf("failed to create Verification AppLaunch service: %w", err)
 		}
 		s.appLaunches = append(s.appLaunches, service)
 	}
