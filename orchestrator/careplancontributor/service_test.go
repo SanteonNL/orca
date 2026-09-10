@@ -735,8 +735,9 @@ func TestService_Proxy_ProxyToEHR_WithLogout(t *testing.T) {
 		Value: sessionID,
 	})
 	httpResponse, err = frontServer.Client().Do(httpRequest)
+	// The test client blindly follows 302s, so it goes and does a GET on '/', which is not registered -> 404 is expected.
 	require.NoError(t, err)
-	require.Equal(t, http.StatusOK, httpResponse.StatusCode)
+	require.Equal(t, http.StatusNotFound, httpResponse.StatusCode)
 
 	httpRequest, _ = http.NewRequest("GET", frontServer.URL+"/cpc/test/ehr/fhir/Patient/1", nil)
 	httpRequest.AddCookie(&http.Cookie{
