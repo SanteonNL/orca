@@ -536,14 +536,15 @@ func (s *Service) handleFHIRSearchEndpoints(httpResponse http.ResponseWriter, ht
 		endpoint := fhir.Endpoint{
 			Status: fhir.EndpointStatusActive,
 			ConnectionType: fhir.Coding{
-				System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"),
+				//@supre
+				System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"), //NOSONAR This is a URI, they are not web resources
 				Code:   to.Ptr("web-oauth2"),
 			},
 			PayloadType: []fhir.CodeableConcept{
 				{
 					Coding: []fhir.Coding{
 						{
-							System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-payload-type"),
+							System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-payload-type"), //NOSONAR This is a URI, they are not web resources
 							Code:   to.Ptr("web-application"),
 						},
 					},
