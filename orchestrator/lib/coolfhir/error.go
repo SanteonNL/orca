@@ -105,10 +105,29 @@ func CreateOperationOutcomeBundleEntryFromError(err error, desc string) fhir.Bun
 // WriteOperationOutcomeFromError writes an OperationOutcome based on the given error as HTTP response.
 // when sent a WriteOperationOutcomeFromError, it will write the contained error code to the header, else it defaults to StatusBadRequest
 func WriteOperationOutcomeFromError(ctx context.Context, err error, desc string, httpResponse http.ResponseWriter) {
+	// A caller that hung up is not a failure of ours, and nobody is left to read the status. Logging it
+	// at ERROR reads as an outage in whatever we happened to be calling at the time.
+	if ClientClosedRequest(ctx, err) {
+		slog.DebugContext(ctx, fmt.Sprintf("%s abandoned by the client: %v", desc, err))
+		SendResponse(httpResponse, StatusClientClosedRequest, SanitizeOperationOutcome(fhir.OperationOutcome{}))
+		return
+	}
+
 	slog.ErrorContext(ctx, fmt.Sprintf("%s failed: %v", desc, err))
 
 	statusCode, operationOutcome := operationOutcomeFromError(err, desc)
 	SendResponse(httpResponse, statusCode, operationOutcome)
+}
+
+// StatusClientClosedRequest is nginx's 499. Go has no constant for it, and no standard code says "this
+// never became a server-side failure".
+const StatusClientClosedRequest = 499
+
+// ClientClosedRequest reports whether err is the request context being cancelled rather than anything
+// the thing we called did wrong. A deadline is deliberately excluded: that is our own timeout expiring,
+// which is a server-side failure and keeps its own status.
+func ClientClosedRequest(ctx context.Context, err error) bool {
+	return errors.Is(err, context.Canceled) && ctx.Err() != nil
 }
 
 func operationOutcomeFromError(err error, desc string) (int, fhir.OperationOutcome) {

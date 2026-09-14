@@ -352,6 +352,12 @@ func (s *Service) RegisterHandlers(mux *http.ServeMux) {
 	httpserv.RegisterRoutes(mux, routes...)
 }
 
+// transactionTimeout bounds a transaction that no longer answers to the caller's context.
+const transactionTimeout = 30 * time.Second
+
+// importTimeout is the same bound for $import, which moves whole Bundles and is expected to be slower.
+const importTimeout = 5 * time.Minute
+
 // commitTransaction sends the given transaction Bundle to the FHIR server, and processes the result with the given resultHandlers.
 // It returns the result Bundle that should be returned to the client, or an error if the transaction failed.
 func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.Request, tx *coolfhir.BundleBuilder, resultHandlers []FHIRHandlerResult) (*fhir.Bundle, error) {
@@ -375,9 +381,17 @@ func (s *Service) commitTransaction(fhirClient fhirclient.Client, request *http.
 		)
 	}
 
+	// Detached from the caller: the transaction carries the AuditEvent for what has already been read or
+	// written, so letting the client abort it would leave the FHIR server's state and its audit trail
+	// disagreeing — and cancelling an in-flight POST never un-applies it server-side anyway. Values are
+	// kept, so the trace and tenant still follow. The timeout is ours rather than the caller's, so a
+	// hung FHIR server cannot pin the goroutine open.
+	txCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), transactionTimeout)
+	defer cancel()
+
 	span.SetAttributes(attribute.Bool(otel.FHIRTransactionExecute, true))
 	var txResult fhir.Bundle
-	if err := fhirClient.CreateWithContext(ctx, tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
+	if err := fhirClient.CreateWithContext(txCtx, tx.Bundle(), &txResult, fhirclient.AtPath("/")); err != nil {
 		otel.Error(span, err, "failed to execute FHIR transaction")
 		// If the error is a FHIR OperationOutcome, we should sanitize it before returning it
 		txResultJson, _ := json.Marshal(tx.Bundle())
@@ -1652,8 +1666,14 @@ func (s *Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) 
 			return nil, otel.Error(span, coolfhir.BadRequest("only POST and PUT operations are supported in import Bundle"))
 		}
 	}
+	// Detached for the same reason as commitTransaction, and more so: this is a bulk write, so letting
+	// the caller abort it halfway leaves an unknown part of the Bundle applied with nothing recording
+	// which part. Its own timeout is longer, because an import is expected to be slow.
+	importCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), importTimeout)
+	defer cancel()
+
 	var transactionResult fhir.Bundle
-	if err = s.fhirClientByTenant[tenant.ID].CreateWithContext(ctx, transaction, &transactionResult, fhirclient.AtPath("/")); err != nil {
+	if err = s.fhirClientByTenant[tenant.ID].CreateWithContext(importCtx, transaction, &transactionResult, fhirclient.AtPath("/")); err != nil {
 		return nil, otel.Error(span, fmt.Errorf("failed to import Bundle: %w", err))
 	}
 	return &transactionResult, nil

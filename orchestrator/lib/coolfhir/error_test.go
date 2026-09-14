@@ -3,10 +3,12 @@ package coolfhir
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"slices"
 	"testing"
+	"time"
 
 	fhirclient "github.com/SanteonNL/go-fhir-client"
 	"github.com/SanteonNL/orca/orchestrator/lib/to"
@@ -115,6 +117,41 @@ func TestWriteOperationOutcomeFromError(t *testing.T) {
 			assert.JSONEq(t, tt.expectedBody, response.Body.String())
 		})
 	}
+}
+
+func TestWriteOperationOutcomeFromError_clientClosedRequest(t *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	t.Run("client hung up", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		WriteOperationOutcomeFromError(cancelled, fmt.Errorf("FHIR request failed: %w", context.Canceled), "read", response)
+
+		assert.Equal(t, StatusClientClosedRequest, response.Code)
+	})
+
+	// The thing we called really did fail, so it must keep saying so.
+	t.Run("upstream failure while the client is still there", func(t *testing.T) {
+		response := httptest.NewRecorder()
+		WriteOperationOutcomeFromError(context.Background(), NewErrorWithCode("upstream FHIR server error", 502), "read", response)
+
+		assert.Equal(t, 502, response.Code)
+	})
+}
+
+func TestClientClosedRequest(t *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	expired, cancelExpired := context.WithDeadline(context.Background(), time.Now().Add(-time.Second))
+	defer cancelExpired()
+
+	assert.True(t, ClientClosedRequest(cancelled, fmt.Errorf("wrapped: %w", context.Canceled)))
+	// Our own timeout expiring is a server-side failure, not the client leaving.
+	assert.False(t, ClientClosedRequest(expired, fmt.Errorf("wrapped: %w", context.DeadlineExceeded)))
+	// A cancelled error on a live context is a bug elsewhere, and stays loud.
+	assert.False(t, ClientClosedRequest(context.Background(), context.Canceled))
+	assert.False(t, ClientClosedRequest(cancelled, errors.New("upstream exploded")))
 }
 
 func TestBadRequest(t *testing.T) {
