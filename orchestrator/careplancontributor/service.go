@@ -536,14 +536,15 @@ func (s *Service) handleFHIRSearchEndpoints(httpResponse http.ResponseWriter, ht
 		endpoint := fhir.Endpoint{
 			Status: fhir.EndpointStatusActive,
 			ConnectionType: fhir.Coding{
-				System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"),
+				//@supre
+				System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-connection-type"), //NOSONAR This is a URI, they are not web resources
 				Code:   to.Ptr("web-oauth2"),
 			},
 			PayloadType: []fhir.CodeableConcept{
 				{
 					Coding: []fhir.Coding{
 						{
-							System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-payload-type"),
+							System: to.Ptr("http://santeonnl.github.io/shared-care-planning/endpoint-payload-type"), //NOSONAR This is a URI, they are not web resources
 							Code:   to.Ptr("web-application"),
 						},
 					},
@@ -1338,13 +1339,7 @@ func (s Service) handleImport(httpRequest *http.Request) (*fhir.Bundle, error) {
 
 func (s *Service) handleLogout(httpResponse http.ResponseWriter, httpRequest *http.Request) {
 	s.SessionManager.Destroy(httpResponse, httpRequest)
-	// If there is a 'Referer' value in the header, redirect to that URL
-	if referer := httpRequest.Header.Get("Referer"); referer != "" {
-		http.Redirect(httpResponse, httpRequest, referer, http.StatusFound)
-	} else {
-		// This redirection will be handled by middleware in the frontend
-		http.Redirect(httpResponse, httpRequest, s.config.FrontendConfig.URL, http.StatusOK)
-	}
+	http.Redirect(httpResponse, httpRequest, s.config.FrontendConfig.URL, http.StatusFound)
 }
 
 func getIdentifierParameter(params fhir.Parameters, name string) (*fhir.Identifier, error) {
