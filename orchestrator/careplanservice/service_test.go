@@ -1095,3 +1095,65 @@ func TestService_notifySubscribers(t *testing.T) {
 		s.notifySubscribers(context.Background(), &fhir.ActivityDefinition{})
 	})
 }
+
+// contextRespectingFHIRClient fails the call when its context is already cancelled, which the shared
+// stub does not — that is the whole point of this test.
+type contextRespectingFHIRClient struct {
+	*test.StubFHIRClient
+	called bool
+	ctxErr error
+}
+
+func (c *contextRespectingFHIRClient) CreateWithContext(ctx context.Context, _ any, _ any, _ ...fhirclient.Option) error {
+	c.called = true
+	c.ctxErr = ctx.Err()
+	return c.ctxErr
+}
+
+// The transaction carries the AuditEvent for what has already been read or written, so a caller that
+// hangs up must not be able to abort it — and cancelling an in-flight POST never un-applies it anyway.
+func TestService_commitTransaction_survivesClientCancellation(t *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	request := httptest.NewRequest(http.MethodGet, "/ServiceRequest/1", nil).WithContext(cancelled)
+	fhirClient := &contextRespectingFHIRClient{StubFHIRClient: &test.StubFHIRClient{}}
+
+	result, err := (&Service{}).commitTransaction(fhirClient, request, coolfhir.Transaction(), nil)
+
+	require.NoError(t, err)
+	require.NotNil(t, result)
+	require.True(t, fhirClient.called, "the transaction never reached the FHIR server")
+	require.NoError(t, fhirClient.ctxErr, "the transaction ran on the caller's cancelled context")
+}
+
+// $import moves a whole Bundle, so a caller aborting halfway would leave an unknown part of it applied.
+func TestService_handleImport_survivesClientCancellation(t *testing.T) {
+	cancelled, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	fhirClient := &contextRespectingFHIRClient{StubFHIRClient: &test.StubFHIRClient{}}
+	tenantCfg := tenants.Test(func(properties *tenants.Properties) {
+		properties.EnableImport = true
+	})
+	tenant := tenantCfg.Sole()
+
+	service := &Service{
+		tenants:            tenantCfg,
+		profile:            profile.Test(),
+		fhirClientByTenant: map[string]fhirclient.Client{tenant.ID: fhirClient},
+		maxReadBodySize:    1024 * 1024,
+	}
+
+	body := `{"resourceType":"Bundle","type":"transaction","entry":[{"request":{"method":"POST","url":"Patient"}}]}`
+	httpRequest := httptest.NewRequest(http.MethodPost, "/$import", strings.NewReader(body))
+	httpRequest.Header.Set("Content-Type", "application/fhir+json")
+	httpRequest = httpRequest.WithContext(
+		auth.WithPrincipal(tenants.WithTenant(cancelled, tenant), *auth.TestPrincipal1))
+
+	_, err := service.handleImport(httpRequest)
+
+	require.NoError(t, err)
+	require.True(t, fhirClient.called, "the import never reached the FHIR server")
+	require.NoError(t, fhirClient.ctxErr, "the import ran on the caller's cancelled context")
+}
