@@ -32,3 +32,11 @@ updates:
       - "/viewer_simulator"
     schedule:
       interval: "daily"
+    # eslint 10 removed context.getFilename(); eslint-plugin-react (pinned by
+    # eslint-config-next) still calls it and crashes the lint run. Unpin when
+    # eslint-plugin-react ships eslint 10 support.
+    ignore:
+      - dependency-name: "eslint"
+        versions: ["10.x"]
+      - dependency-name: "@eslint/js"
+        versions: ["10.x"]

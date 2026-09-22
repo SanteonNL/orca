@@ -40,9 +40,9 @@
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.3.3",
-    "@eslint/js": "^10.0.1",
+    "@eslint/js": "^9.39.5",
     "@types/lodash": "4.17.13",
-    "eslint": "^10.11.0",
+    "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.2"
   }
 }
