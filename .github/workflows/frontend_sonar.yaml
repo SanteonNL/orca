@@ -31,7 +31,7 @@ jobs:
       # Reads the version from frontend/package.json "packageManager". pnpm 8 cannot read a
       # lockfileVersion 9 lockfile and would silently re-resolve the whole tree.
       - name: Install pnpm as prerequisite for caching setup.
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           package_json_file: frontend/package.json
       - name: Install dependencies
