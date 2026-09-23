@@ -1,6 +1,6 @@
 module e2e-tests
 
-go 1.25.0
+go 1.27.1
 
 require (
 	github.com/SanteonNL/go-fhir-client v0.6.2
