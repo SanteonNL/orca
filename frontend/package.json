@@ -16,7 +16,7 @@
     "@aehrc/sdc-populate": "^4.7.1",
     "@aehrc/smart-forms-renderer": "^1.4.0",
     "@mui/material": "^7.3.11",
-    "@tanstack/react-query": "^5.102.2",
+    "@tanstack/react-query": "^5.103.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "fhir-kit-client": "^1.9.2",
