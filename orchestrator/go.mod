@@ -3,7 +3,7 @@ module github.com/SanteonNL/orca/orchestrator
 go 1.27.1
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.23.1
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
 	github.com/Azure/azure-sdk-for-go/sdk/messaging/azservicebus v1.10.0
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azcertificates v1.5.0
