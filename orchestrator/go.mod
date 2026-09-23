@@ -20,7 +20,7 @@ require (
 	github.com/knadh/koanf/v2 v2.3.6
 	github.com/lestrrat-go/jwx/v2 v2.1.7
 	github.com/nuts-foundation/go-did v0.22.0
-	github.com/nuts-foundation/go-nuts-client v0.3.1
+	github.com/nuts-foundation/go-nuts-client v0.3.2
 	github.com/pkg/errors v0.9.1
 	github.com/russellhaering/goxmldsig v1.6.1
 	github.com/segmentio/asm v1.2.1
