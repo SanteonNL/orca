@@ -13,7 +13,7 @@
     "test:coverage": "jest --coverage"
   },
   "dependencies": {
-    "@aehrc/sdc-populate": "^4.7.1",
+    "@aehrc/sdc-populate": "^4.7.2",
     "@aehrc/smart-forms-renderer": "^1.4.0",
     "@mui/material": "^7.3.11",
     "@tanstack/react-query": "^5.102.2",
