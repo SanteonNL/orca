@@ -19,7 +19,7 @@ require (
 	github.com/knadh/koanf/providers/env v1.1.0
 	github.com/knadh/koanf/v2 v2.3.6
 	github.com/lestrrat-go/jwx/v2 v2.1.7
-	github.com/nuts-foundation/go-did v0.22.0
+	github.com/nuts-foundation/go-did v0.22.2
 	github.com/nuts-foundation/go-nuts-client v0.3.1
 	github.com/pkg/errors v0.9.1
 	github.com/russellhaering/goxmldsig v1.6.1
@@ -90,7 +90,7 @@ require (
 	github.com/lestrrat-go/httprc v1.0.6 // indirect
 	github.com/lestrrat-go/httprc/v3 v3.0.6 // indirect
 	github.com/lestrrat-go/iter v1.0.2 // indirect
-	github.com/lestrrat-go/jwx/v3 v3.2.0 // indirect
+	github.com/lestrrat-go/jwx/v3 v3.3.0 // indirect
 	github.com/lestrrat-go/option v1.0.1 // indirect
 	github.com/lestrrat-go/option/v2 v2.0.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
