@@ -956,10 +956,10 @@ var activityDefinitionToConditionCode = map[string]fhir.CodeableConcept{
 			{
 				System:  to.Ptr("http://snomed.info/sct"),
 				Code:    to.Ptr("24526004"),
-				Display: to.Ptr("ibd"),
+				Display: to.Ptr("chronische darmontsteking (IBD)"),
 			},
 		},
-		Text: to.Ptr("ibd"),
+		Text: to.Ptr("chronische darmontsteking (IBD)"),
 	},
 	"2.16.840.1.113883.2.4.3.224.2.13": {
 		Coding: []fhir.Coding{
