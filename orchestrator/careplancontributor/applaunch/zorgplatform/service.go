@@ -911,6 +911,76 @@ var activityDefinitionToConditionCode = map[string]fhir.CodeableConcept{
 		},
 		Text: to.Ptr("post darm"),
 	},
+	"2.16.840.1.113883.2.4.3.224.2.8": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("29630005"),
+				Display: to.Ptr("alvleesklier- en leveroperatie"),
+			},
+		},
+		Text: to.Ptr("alvleesklier- en leveroperatie"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.9": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("69896004"),
+				Display: to.Ptr("reuma"),
+			},
+		},
+		Text: to.Ptr("reuma"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.10": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("38341003"),
+				Display: to.Ptr("hypertensie"),
+			},
+		},
+		Text: to.Ptr("hypertensie"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.11": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("49049000"),
+				Display: to.Ptr("parkinson"),
+			},
+		},
+		Text: to.Ptr("parkinson"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.12": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("24526004"),
+				Display: to.Ptr("chronische darmontsteking (IBD)"),
+			},
+		},
+		Text: to.Ptr("chronische darmontsteking (IBD)"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.13": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("129103003"),
+				Display: to.Ptr("endometriose"),
+			},
+		},
+		Text: to.Ptr("endometriose"),
+	},
+	"2.16.840.1.113883.2.4.3.224.2.14": {
+		Coding: []fhir.Coding{
+			{
+				System:  to.Ptr("http://snomed.info/sct"),
+				Code:    to.Ptr("42399005"),
+				Display: to.Ptr("nierschade"),
+			},
+		},
+		Text: to.Ptr("nierschade"),
+	},
 }
 
 type authHeaderRoundTripper struct {

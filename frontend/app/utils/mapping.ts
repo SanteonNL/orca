@@ -58,6 +58,13 @@ const codingLabels = {
     "http://snomed.info/sct|11687002": "zwangerschapsdiabetes",
     "http://snomed.info/sct|49436004": "atrium fibrilleren",
     "http://snomed.info/sct|85919009": "post darm",
+    "http://snomed.info/sct|29630005": "alvleesklier- en leveroperatie",
+    "http://snomed.info/sct|69896004": "reuma",
+    "http://snomed.info/sct|38341003": "hypertensie",
+    "http://snomed.info/sct|49049000": "parkinson",
+    "http://snomed.info/sct|24526004": "chronische darmontsteking (IBD)",
+    "http://snomed.info/sct|129103003": "endometriose",
+    "http://snomed.info/sct|42399005": "nierschade",
 }
 
 type coding = {

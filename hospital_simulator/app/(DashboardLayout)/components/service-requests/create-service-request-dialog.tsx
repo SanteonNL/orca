@@ -165,6 +165,41 @@ const supportedConditions: Array<Coding> = [
         "code": "85919009",
         "display": "Disorder of intestine (disorder)"
     },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "29630005",
+        "display": "Operation on pancreas (procedure)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "69896004",
+        "display": "Rheumatoid arthritis (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "38341003",
+        "display": "Hypertensive disorder, systemic arterial (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "49049000",
+        "display": "Parkinson's disease (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "24526004",
+        "display": "Inflammatory bowel disease (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "129103003",
+        "display": "Endometriosis (disorder)"
+    },
+    {
+        "system": "http://snomed.info/sct",
+        "code": "42399005",
+        "display": "Renal failure syndrome (disorder)"
+    },
 ]
 
 function createServiceRequestBundle(requestDetails: ServiceRequestDetails,
