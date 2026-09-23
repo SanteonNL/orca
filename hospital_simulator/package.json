@@ -39,6 +39,6 @@
     "@eslint/js": "^9.39.5",
     "@types/lodash": "4.17.13",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.3.2"
+    "eslint-config-next": "^16.3.5"
   }
 }
