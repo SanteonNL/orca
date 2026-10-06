@@ -1,7 +1,7 @@
 'use client'
 
 import { useQuestionnaireResponseStore, BaseRenderer, useBuildForm, useRendererQueryClient, RendererConfig, removeEmptyAnswersFromResponse } from '@aehrc/smart-forms-renderer';
-import type { Bundle, FhirResource, Questionnaire, QuestionnaireResponse, Task } from 'fhir/r4';
+import type { Bundle, FhirResource, Questionnaire, Task } from 'fhir/r4';
 import { useEffect, useState } from 'react';
 
 import { toast } from 'sonner';
@@ -21,7 +21,8 @@ interface QuestionnaireRendererPageProps {
 }
 
 const rendererConfigOptions : RendererConfig = {
-  hideClearButton: true
+  hideClearButton: true,
+  hideQuestionnaireTitle: true
 }
 
 const scpSubTaskIdentifierSystem = "http://santeonnl.github.io/shared-care-planning/scp-identifier"

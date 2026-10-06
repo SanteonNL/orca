@@ -4,7 +4,7 @@ import QuestionnaireRenderer from '@/app/enrollment/components/questionnaire-ren
 import useEnrollment from '@/app/hooks/enrollment-hook'
 import * as fhirUtils from '@/lib/fhirUtils'
 import * as populateUtils from '../../../../app/utils/populate'
-import {useQuestionnaireResponseStore} from "@aehrc/smart-forms-renderer";
+import {useBuildForm, useQuestionnaireResponseStore} from "@aehrc/smart-forms-renderer";
 import {toast} from 'sonner'
 
 
@@ -118,6 +118,13 @@ describe("QuestionnaireRenderer", () => {
         expect(loadingElement).toBeInTheDocument()
     })
 
+
+    it('configures the renderer to hide the questionnaire title', () => {
+        render(<QuestionnaireRenderer questionnaire={{...mockQuestionnaire, title: 'Questionnaire title'}} inputTask={mockTask}/>)
+        expect(useBuildForm).toHaveBeenCalledWith(expect.objectContaining({
+            rendererConfigOptions: expect.objectContaining({hideQuestionnaireTitle: true})
+        }))
+    })
 
     it('renders and submits questionnaire response successfully', async () => {
         render(<QuestionnaireRenderer questionnaire={mockQuestionnaire} inputTask={mockTask}/>)
