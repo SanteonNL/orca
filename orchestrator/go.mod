@@ -17,7 +17,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/knadh/koanf/maps v0.1.3
 	github.com/knadh/koanf/providers/env v1.1.0
-	github.com/knadh/koanf/v2 v2.3.6
+	github.com/knadh/koanf/v2 v2.3.7
 	github.com/lestrrat-go/jwx/v2 v2.1.7
 	github.com/nuts-foundation/go-did v0.22.2
 	github.com/nuts-foundation/go-nuts-client v0.3.2
