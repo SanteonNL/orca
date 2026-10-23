@@ -22,7 +22,7 @@ func setupNutsNode(t *testing.T, dockerNetworkName string) (string, string) {
 	println("Starting Nuts node...")
 	ctx := context.Background()
 	req := testcontainers.ContainerRequest{
-		Image:        "nutsfoundation/nuts-node:6.1.2",
+		Image:        "nutsfoundation/nuts-node:6.2.17",
 		Name:         "nutsnode",
 		ExposedPorts: []string{"8080/tcp", "8081/tcp"},
 		Networks:     []string{dockerNetworkName},

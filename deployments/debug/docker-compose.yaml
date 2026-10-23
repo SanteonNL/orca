@@ -13,7 +13,7 @@ services:
     networks:
       - orca-shared-services
   nutsnode:
-    image: nutsfoundation/nuts-node:6.1.2
+    image: nutsfoundation/nuts-node:6.2.17
     ports:
       - '9081:8081' # port exposed for loading test data (create DIDs and VCs, requesting access token)
     volumes:
