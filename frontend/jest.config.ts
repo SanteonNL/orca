@@ -12,9 +12,10 @@ const config: Config = {
   testEnvironment: 'jsdom',
   clearMocks: true,
   moduleNameMapper: {
-    '^@/(.*)$': '<rootDir>/$1'
+    '^@/(.*)$': '<rootDir>/$1',
+    // fhir-kit-client v2 is ESM-only and only exposes an "import" export condition, which Jest (CJS) can't resolve
+    '^fhir-kit-client$': '<rootDir>/node_modules/fhir-kit-client/dist/index.js',
   },
-  transformIgnorePatterns: ["node_modules/(?!@aehrc/smart-forms-renderer)"],
   // Add more setup options before each test is run
   // setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
 }
