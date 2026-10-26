@@ -1,4 +1,4 @@
-import Client from 'fhir-kit-client';
+import { Client } from 'fhir-kit-client';
 import {
     Bundle, Coding,
     Condition,

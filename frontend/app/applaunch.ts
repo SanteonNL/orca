@@ -1,6 +1,6 @@
 import {Endpoint, Bundle, Identifier} from 'fhir/r4';
 import {getPatientViewerTestUrl} from "@/app/actions";
-import Client from "fhir-kit-client";
+import type { Client } from "fhir-kit-client";
 
 export interface LaunchableApp {
     Name: string;
