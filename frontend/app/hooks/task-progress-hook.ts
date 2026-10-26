@@ -1,7 +1,7 @@
 import {useQuery} from "@tanstack/react-query";
 import {Questionnaire, Task} from "fhir/r4";
 import {fetchAllResources, TaskProgress} from "@/lib/fhirUtils";
-import Client from "fhir-kit-client";
+import type { Client } from "fhir-kit-client";
 
 type TaskProgressArgs = {
     taskId: string;
@@ -49,4 +49,3 @@ export default function TaskProgressHook({taskId, cpsClient, pollingInterval}: T
         subTasks: data?.subTasks || defaultData.subTasks
     };
 }
-

@@ -1,4 +1,4 @@
-import Client from 'fhir-kit-client';
+import { Client } from 'fhir-kit-client';
 import {
     Bundle, Coding,
     Condition,
@@ -343,9 +343,11 @@ const fetchSubTasks = async (cpsClient: Client, taskId: string) => {
         const subTaskBundle = await cpsClient.search({
             resourceType: 'Task',
             searchParams: {"part-of": `Task/${taskId}`},
-            headers: {"Cache-Control": "no-cache"},
             // @ts-ignore
-            options: {postSearch: true}
+            options: {
+                postSearch: true,
+                headers: {"Cache-Control": "no-cache"}
+            }
         }) as Bundle<Task>;
         const subTasks = await fetchAllBundlePages(cpsClient, subTaskBundle);
         if (Array.isArray(subTasks) && subTasks.length > 0) {
