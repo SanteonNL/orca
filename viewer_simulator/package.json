@@ -43,7 +43,7 @@
     "@eslint/js": "^9.39.5",
     "@types/lodash": "4.17.13",
     "eslint": "^9.39.5",
-    "eslint-config-next": "^16.4.2"
+    "eslint-config-next": "^16.4.3"
   },
   "overrides": {
     "@lhncbc/ucum-lhc": {
