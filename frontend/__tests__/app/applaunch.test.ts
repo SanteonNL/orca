@@ -40,9 +40,11 @@ describe('getLaunchableApps', () => {
 
         expect(mockSearchFn).toHaveBeenCalledWith({
             resourceType: 'Endpoint',
-            headers: {
-                'Cache-Control': 'no-cache',
-                'X-Scp-Entity-Identifier': 'https://example.com/organizations|org-123'
+            options: {
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'X-Scp-Entity-Identifier': 'https://example.com/organizations|org-123'
+                }
             }
         });
         expect(result).toEqual([]);
@@ -298,9 +300,11 @@ describe('getLaunchableApps', () => {
 
         expect(mockSearchFn).toHaveBeenCalledWith({
             resourceType: 'Endpoint',
-            headers: {
-                'Cache-Control': 'no-cache',
-                'X-Scp-Entity-Identifier': 'https://example.com/orgs|org-with-special@chars#123'
+            options: {
+                headers: {
+                    'Cache-Control': 'no-cache',
+                    'X-Scp-Entity-Identifier': 'https://example.com/orgs|org-with-special@chars#123'
+                }
             }
         });
     });

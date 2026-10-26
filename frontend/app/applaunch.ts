@@ -17,9 +17,11 @@ export async function getLaunchableApps(scpClient: Client, organization: Identif
     }
     let endpoints = await scpClient.search({
         resourceType: "Endpoint",
-        headers: {
-            "Cache-Control": "no-cache",
-            "X-Scp-Entity-Identifier": `${organization.system}|${organization.value}`,
+        options: {
+            headers: {
+                "Cache-Control": "no-cache",
+                "X-Scp-Entity-Identifier": `${organization.system}|${organization.value}`,
+            }
         }
     }) as Bundle<Endpoint>;
     // filter endpoints, only show endpoints that:
