@@ -82,9 +82,11 @@ async function fetchTasksForPatient(patientId: Identifier, cpsClient: any): Prom
         searchParams: {
             'identifier': identifierToToken(patientId) || ''
         },
-        options: {postSearch: true},
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+        options: {
+           postSearch: true,
+           headers: {
+               'Content-Type': 'application/x-www-form-urlencoded'
+           }
         }
     });
     const patients = (patientBundle as Bundle).entry?.map((entry => entry.resource as Patient)) ?? [];
@@ -95,9 +97,11 @@ async function fetchTasksForPatient(patientId: Identifier, cpsClient: any): Prom
             'patient': patients.map(p => `Patient/${p.id}`).join(","),
             '_sort': '-_lastUpdated',
         },
-        options: {postSearch: true},
-        headers: {
-            'Content-Type': 'application/x-www-form-urlencoded'
+        options: {
+           postSearch: true,
+           headers: {
+               'Content-Type': 'application/x-www-form-urlencoded'
+           }
         }
     });
     const allTasks = (taskBundle as Bundle).entry?.map((entry => entry.resource as Task)) ?? [];

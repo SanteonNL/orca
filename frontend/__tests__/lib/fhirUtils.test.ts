@@ -13,9 +13,10 @@ import {
     createScpClient,
     createEhrClient,
     createCpsClient,
-    constructBundleTask
+    constructBundleTask,
+    fetchAllResources
 } from '@/lib/fhirUtils';
-import { Patient, Bundle, Task, Identifier, ServiceRequest, Condition, Reference, PractitionerRole } from 'fhir/r4';
+import { Patient, Bundle, Task, Identifier, ServiceRequest, Condition, Reference, PractitionerRole, Questionnaire } from 'fhir/r4';
 
 describe('codingToMessage', () => {
 
@@ -352,5 +353,82 @@ describe('constructBundleTask', () => {
         expect(task.identifier).toHaveLength(1);
         expect(task.identifier?.[0].system).toBe('http://task-system');
         expect(task.identifier?.[0].value).toBe('task-123');
+    });
+});
+
+
+describe('fetchAllResources', () => {
+    const task: Task = {resourceType: 'Task', id: 'task-1', status: 'requested', intent: 'order'};
+    const subTask: Task = {
+        resourceType: 'Task',
+        id: 'subtask-1',
+        status: 'requested',
+        intent: 'order',
+        input: [{type: {}, valueReference: {reference: 'Questionnaire/questionnaire-1'}}]
+    };
+    const questionnaire: Questionnaire = {resourceType: 'Questionnaire', id: 'questionnaire-1', status: 'active'};
+
+    const createMockClient = (subTaskBundle: Bundle<Task>) => ({
+        read: jest.fn(({resourceType}) => Promise.resolve(resourceType === 'Task' ? task : questionnaire)),
+        search: jest.fn().mockResolvedValue(subTaskBundle),
+        nextPage: jest.fn()
+    } as any);
+
+    it('fetches the task, its sub-tasks and their questionnaires', async () => {
+        const mockClient = createMockClient({resourceType: 'Bundle', type: 'searchset', entry: [{resource: subTask}]});
+
+        const result = await fetchAllResources('task-1', mockClient);
+
+        expect(result).toEqual({task, subTasks: [subTask], questionnaireMap: {'subtask-1': questionnaire}});
+        expect(mockClient.read).toHaveBeenCalledWith({resourceType: 'Task', id: 'task-1'});
+        expect(mockClient.read).toHaveBeenCalledWith({resourceType: 'Questionnaire', id: 'questionnaire-1'});
+    });
+
+    it('searches sub-tasks with POST and a no-cache header in the request options', async () => {
+        const mockClient = createMockClient({resourceType: 'Bundle', type: 'searchset', entry: [{resource: subTask}]});
+
+        await fetchAllResources('task-1', mockClient);
+
+        expect(mockClient.search).toHaveBeenCalledWith({
+            resourceType: 'Task',
+            searchParams: {'part-of': 'Task/task-1'},
+            options: {
+                postSearch: true,
+                headers: {'Cache-Control': 'no-cache'}
+            }
+        });
+    });
+
+    it('returns no sub-tasks or questionnaires when the search is empty', async () => {
+        const mockClient = createMockClient({resourceType: 'Bundle', type: 'searchset'});
+
+        const result = await fetchAllResources('task-1', mockClient);
+
+        expect(result).toEqual({task, subTasks: [], questionnaireMap: {}});
+    });
+
+    it('skips sub-tasks without a questionnaire input', async () => {
+        const subTaskWithoutQuestionnaire: Task = {...subTask, input: [{type: {}, valueString: 'no questionnaire'}]};
+        const mockClient = createMockClient({resourceType: 'Bundle', type: 'searchset', entry: [{resource: subTaskWithoutQuestionnaire}]});
+
+        const result = await fetchAllResources('task-1', mockClient);
+
+        expect(result.questionnaireMap).toEqual({});
+        expect(mockClient.read).toHaveBeenCalledTimes(1);
+    });
+
+    it('throws when the sub-task search fails', async () => {
+        const mockClient = createMockClient({resourceType: 'Bundle', type: 'searchset'});
+        mockClient.search.mockRejectedValue(new Error('search failed'));
+
+        await expect(fetchAllResources('task-1', mockClient)).rejects.toThrow('Failed to fetch sub-tasks: Error: search failed');
+    });
+
+    it('throws when a questionnaire cannot be fetched', async () => {
+        const mockClient = createMockClient({resourceType: 'Bundle', type: 'searchset', entry: [{resource: subTask}]});
+        mockClient.read.mockImplementation(({resourceType}: {resourceType: string}) =>
+            resourceType === 'Task' ? Promise.resolve(task) : Promise.reject(new Error('not found')));
+
+        await expect(fetchAllResources('task-1', mockClient)).rejects.toThrow('Failed to fetch questionnaire: Error: not found');
     });
 });
