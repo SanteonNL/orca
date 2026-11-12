@@ -27,7 +27,7 @@ require (
 	github.com/stretchr/testify v1.12.1
 	github.com/testcontainers/testcontainers-go v0.44.0
 	github.com/zitadel/oidc/v3 v3.51.10
-	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250901091002-777673f2b656
+	github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20261112135617-b3ce5d065cee
 	go.opentelemetry.io/contrib/bridges/otelslog v0.20.0
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.71.0
 	go.opentelemetry.io/otel v1.46.0

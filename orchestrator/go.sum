@@ -328,8 +328,8 @@ github.com/zitadel/oidc/v3 v3.51.10 h1:T25zVbBFJwhMIv9eH6aWJW54rUUrdE1iQl8Z9ByTw
 github.com/zitadel/oidc/v3 v3.51.10/go.mod h1:yqb3jGISsGVoZ9rU3AjG3CwtJ2WewSptbisqQuA8Shc=
 github.com/zitadel/schema v1.3.2 h1:gfJvt7dOMfTmxzhscZ9KkapKo3Nei3B6cAxjav+lyjI=
 github.com/zitadel/schema v1.3.2/go.mod h1:IZmdfF9Wu62Zu6tJJTH3UsArevs3Y4smfJIj3L8fzxw=
-github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250901091002-777673f2b656 h1:09yvUG05Gq/jczg6AKfd/9rC7oA9RvMH7C9VlrbpV/k=
-github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20250901091002-777673f2b656/go.mod h1:HaPwolHwUUf/6El6rie/+Rr9hRKVq4P3wDdQJv7QDMo=
+github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20261112135617-b3ce5d065cee h1:2CjszWYujnSFBFMUd4GzIq3FB4AajMcdutYw91CbRgg=
+github.com/zorgbijjou/golang-fhir-models/fhir-models v0.0.0-20261112135617-b3ce5d065cee/go.mod h1:HaPwolHwUUf/6El6rie/+Rr9hRKVq4P3wDdQJv7QDMo=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
 go.opentelemetry.io/contrib/bridges/otelslog v0.20.0 h1:oEl2Pw/i4OQwhAuda2pAHFAcOMivA+Xa+iTccBfab/g=
