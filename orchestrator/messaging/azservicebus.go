@@ -171,9 +171,11 @@ func (c *AzureServiceBusBroker) receive(receiver *azservicebus.Receiver, fullNam
 				message.ContentType = *azMessage.ContentType
 			}
 			if err := handler(c.ctx, message); err != nil {
-				slog.ErrorContext(
+				// Warn, not Error: abandoning is the expected retry path. Only the actual
+				// delivery failures below (abandon/complete itself failing) are alert-worthy.
+				slog.WarnContext(
 					c.ctx,
-					"AzureServiceBus: message handler failed, message will be sent to DLQ",
+					"AzureServiceBus: message handler failed, abandoning for redelivery",
 					slog.String("source", fullName),
 					slog.String(logging.FieldError, err.Error()),
 				)
