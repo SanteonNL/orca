@@ -195,6 +195,7 @@ func TestFhirApiWorkflowProvider_Provide(t *testing.T) {
 	conditionCode := fhir.Coding{System: to.Ptr("http://snomed.info/sct"), Code: to.Ptr("84114007")}
 	healthcareServiceBundle := `{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"HealthcareService","id":"1"}}]}`
 	twoHealthcareServicesBundle := `{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"HealthcareService","id":"1"}},{"resource":{"resourceType":"HealthcareService","id":"2"}}]}`
+	threeHealthcareServicesBundle := `{"resourceType":"Bundle","type":"searchset","entry":[{"resource":{"resourceType":"HealthcareService","id":"1"}},{"resource":{"resourceType":"HealthcareService","id":"2"}},{"resource":{"resourceType":"HealthcareService","id":"3"}}]}`
 	questionnaireBundle := `{"resourceType":"Bundle","type":"searchset","entry":[{"fullUrl":"Questionnaire/1","resource":{"resourceType":"Questionnaire","id":"1","status":"active"}}]}`
 	twoQuestionnairesBundle := `{"resourceType":"Bundle","type":"searchset","entry":[{"fullUrl":"Questionnaire/1","resource":{"resourceType":"Questionnaire","id":"1","status":"active"}},{"fullUrl":"Questionnaire/2","resource":{"resourceType":"Questionnaire","id":"2","status":"active"}}]}`
 
@@ -218,9 +219,15 @@ func TestFhirApiWorkflowProvider_Provide(t *testing.T) {
 		require.ErrorIs(t, err, ErrWorkflowNotFound)
 		requireWorkflowNotFoundTraced(t, spans())
 	})
-	t.Run("multiple healthcare services found", func(t *testing.T) {
-		ctx, spans := traceTest(t)
+	t.Run("2 healthcare services found, resolves through single questionnaire", func(t *testing.T) {
 		provider := newProvider(t, twoHealthcareServicesBundle, questionnaireBundle)
+		workflow, err := provider.Provide(context.Background(), serviceCode, conditionCode)
+		require.NoError(t, err)
+		require.Equal(t, "Questionnaire/1", workflow.Start().QuestionnaireUrl)
+	})
+	t.Run("more than 2 healthcare services found", func(t *testing.T) {
+		ctx, spans := traceTest(t)
+		provider := newProvider(t, threeHealthcareServicesBundle, questionnaireBundle)
 		_, err := provider.Provide(ctx, serviceCode, conditionCode)
 		require.ErrorIs(t, err, ErrMultipleWorkflows)
 		require.NotErrorIs(t, err, ErrWorkflowNotFound)

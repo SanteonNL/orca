@@ -145,8 +145,8 @@ func (f FhirApiWorkflowProvider) searchHealthcareService(ctx context.Context, se
 	if len(results.Entry) == 0 {
 		return workflowNotFound(span, fmt.Errorf("%w: no healthcare services found", ErrWorkflowNotFound))
 	}
-	if len(results.Entry) > 1 {
-		err := fmt.Errorf("%w: expected 1 healthcare service, got %d", ErrMultipleWorkflows, len(results.Entry))
+	if len(results.Entry) > 2 {
+		err := fmt.Errorf("%w: %d healthcare services found", ErrMultipleWorkflows, len(results.Entry))
 		return otel.Error(span, err)
 	}
 

@@ -34,7 +34,7 @@ func TestService_selectWorkflow(t *testing.T) {
 		return nil, fmt.Errorf("%w: no healthcare services found", taskengine.ErrWorkflowNotFound)
 	}
 	ambiguous := func() (*taskengine.Workflow, error) {
-		return nil, fmt.Errorf("%w: expected 1 healthcare service, got 2", taskengine.ErrMultipleWorkflows)
+		return nil, fmt.Errorf("%w: expected 1 questionnaire, got 2", taskengine.ErrMultipleWorkflows)
 	}
 	// Task with 2 condition codings (like Epic sends), for 1 service coding.
 	task := &fhir.Task{
