@@ -21,6 +21,15 @@ import (
 
 var ErrWorkflowNotFound = errors.New("workflow not found")
 
+// workflowNotFound records on the span that no workflow matched the given service/condition codes, without marking the span as failed.
+// Callers typically try multiple service/condition combinations (e.g. an EHR sending multiple codings for the same concept),
+// so a single miss is expected. It's up to the caller to treat it as an error when none of the combinations resolve to a workflow.
+func workflowNotFound(span trace.Span, reason string) error {
+	span.AddEvent("workflow not found", trace.WithAttributes(attribute.String("reason", reason)))
+	span.SetAttributes(attribute.Bool("workflow.found", false))
+	return fmt.Errorf("%w: %s", ErrWorkflowNotFound, reason)
+}
+
 var tracer = baseotel.Tracer("careplancontributor")
 
 // WorkflowProvider provides workflows (a set of questionnaires required for accepting a Task) to the Task Filler.
@@ -61,7 +70,10 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 		return nil, otel.Error(span, err)
 	}
 
-	if err := f.searchHealthcareService(ctx, serviceCode, conditionCode); err != nil {
+	if err := f.searchHealthcareService(ctx, serviceCode, conditionCode); errors.Is(err, ErrWorkflowNotFound) {
+		span.SetAttributes(attribute.Bool("workflow.found", false))
+		return nil, err
+	} else if err != nil {
 		return nil, otel.Error(span, err)
 	}
 
@@ -73,6 +85,9 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 		return nil, otel.Error(span, err)
 	}
 	// TODO: Might want to support multiple questionnaires in future
+	if len(questionnaireBundle.Entry) == 0 {
+		return nil, workflowNotFound(span, "no matching questionnaire found")
+	}
 	if len(questionnaireBundle.Entry) != 1 {
 		err := errors.Join(ErrWorkflowNotFound, fmt.Errorf("expected 1 questionnaire, got %d", len(questionnaireBundle.Entry)))
 		return nil, otel.Error(span, err)
@@ -123,7 +138,7 @@ func (f FhirApiWorkflowProvider) searchHealthcareService(ctx context.Context, se
 	)
 
 	if len(results.Entry) == 0 {
-		return otel.Error(span, ErrWorkflowNotFound, "no healthcare services found")
+		return workflowNotFound(span, "no healthcare services found")
 	}
 	if len(results.Entry) > 2 {
 		err := errors.Join(ErrWorkflowNotFound, errors.New("multiple workflows found"))
@@ -229,7 +244,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 	)
 
 	if !supported {
-		return nil, otel.Error(span, ErrWorkflowNotFound, "Workflow not supported by any healthcare service")
+		return nil, workflowNotFound(span, "workflow not supported by any healthcare service")
 	}
 
 	for _, questionnaire := range e.questionnaires {
@@ -269,7 +284,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 	span.SetAttributes(
 		attribute.Int("questionnaires.total", len(e.questionnaires)),
 	)
-	return nil, otel.Error(span, ErrWorkflowNotFound, "No matching questionnaire found")
+	return nil, workflowNotFound(span, "no matching questionnaire found")
 }
 
 func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl string) (*fhir.Questionnaire, error) {
