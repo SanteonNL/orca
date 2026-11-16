@@ -625,6 +625,7 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 
 	var matchedWorkflows []*taskengine.Workflow
 	workflowLookups := 0
+	ambiguousLookups := 0
 	for _, serviceCoding := range serviceRequest.Code.Coding {
 		if serviceCoding.System == nil || serviceCoding.Code == nil {
 			continue
@@ -634,6 +635,18 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 			workflow, err := s.workflows.Provide(ctx, serviceCoding, reasonCoding)
 			if errors.Is(err, taskengine.ErrWorkflowNotFound) {
 				slog.DebugContext(ctx, "No workflow found",
+					slog.String(logging.FieldError, err.Error()),
+					slog.String("service", fmt.Sprintf("%s|%s", *serviceCoding.System, *serviceCoding.Code)),
+					slog.String("condition", fmt.Sprintf("%s|%s", *reasonCoding.System, *reasonCoding.Code)),
+					slog.String(logging.FieldResourceID, *task.Id),
+					slog.String(logging.FieldResourceType, fhir.ResourceTypeTask.String()),
+				)
+				continue
+			} else if errors.Is(err, taskengine.ErrMultipleWorkflows) {
+				// Configuration problem (e.g. duplicate HealthcareServices/Questionnaires) for this combination.
+				// Another service/condition combination might still resolve to a single workflow, so don't fail yet.
+				ambiguousLookups++
+				slog.WarnContext(ctx, "Multiple workflows found for service/condition combination, check workflow configuration",
 					slog.String(logging.FieldError, err.Error()),
 					slog.String("service", fmt.Sprintf("%s|%s", *serviceCoding.System, *serviceCoding.Code)),
 					slog.String("condition", fmt.Sprintf("%s|%s", *reasonCoding.System, *reasonCoding.Code)),
@@ -652,9 +665,12 @@ func (s *Service) selectWorkflow(ctx context.Context, cpsClient fhirclient.Clien
 	span.SetAttributes(
 		attribute.Int("workflow.lookups_performed", workflowLookups),
 		attribute.Int("workflow.matches_found", len(matchedWorkflows)),
+		attribute.Int("workflow.ambiguous_lookups", ambiguousLookups),
 	)
 
-	if len(matchedWorkflows) == 0 {
+	if len(matchedWorkflows) == 0 && ambiguousLookups > 0 {
+		return nil, otel.Error(span, fmt.Errorf("ServiceRequest.code and Task.reason.code does not match any workflows, %d combination(s) matched multiple workflows (task=%s)", ambiguousLookups, *task.Id), "ambiguous workflow configuration")
+	} else if len(matchedWorkflows) == 0 {
 		return nil, otel.Error(span, fmt.Errorf("ServiceRequest.code and Task.reason.code does not match any workflows (task=%s)", *task.Id), "no matching workflows found")
 	} else if len(matchedWorkflows) > 1 {
 		return nil, otel.Error(span, fmt.Errorf("ServiceRequest.code and Task.reason.code matches multiple workflows, need to choose one (task=%s)", *task.Id), "multiple workflows matched")
