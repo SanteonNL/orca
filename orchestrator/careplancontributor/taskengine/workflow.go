@@ -19,7 +19,22 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
+// ErrWorkflowNotFound is returned when no workflow matches the given service/condition codes.
 var ErrWorkflowNotFound = errors.New("workflow not found")
+
+// ErrMultipleWorkflows is returned when the given service/condition codes match more than one workflow,
+// which indicates a configuration problem (e.g. duplicate HealthcareServices or Questionnaires).
+var ErrMultipleWorkflows = errors.New("multiple workflows found")
+
+// workflowNotFound records on the span that no workflow matched the given service/condition codes, without marking the span as failed,
+// and returns err (which should wrap ErrWorkflowNotFound).
+// Callers typically try multiple service/condition combinations (e.g. an EHR sending multiple codings for the same concept),
+// so a single miss is expected. It's up to the caller to treat it as an error when none of the combinations resolve to a workflow.
+func workflowNotFound(span trace.Span, err error) error {
+	span.AddEvent("workflow not found", trace.WithAttributes(attribute.String("reason", err.Error())))
+	span.SetAttributes(attribute.Bool("workflow.found", false))
+	return err
+}
 
 var tracer = baseotel.Tracer("careplancontributor")
 
@@ -61,20 +76,25 @@ func (f FhirApiWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 		return nil, otel.Error(span, err)
 	}
 
-	if err := f.searchHealthcareService(ctx, serviceCode, conditionCode); err != nil {
+	if err := f.searchHealthcareService(ctx, serviceCode, conditionCode); errors.Is(err, ErrWorkflowNotFound) {
+		return nil, workflowNotFound(span, err)
+	} else if err != nil {
 		return nil, otel.Error(span, err)
 	}
 
 	var questionnaireBundle fhir.Bundle
-	if err := f.Client.Read("Questionnaire", &questionnaireBundle,
+	if err := f.Client.ReadWithContext(ctx, "Questionnaire", &questionnaireBundle,
 		fhirclient.QueryParam("context-type-value", *serviceCode.System+"|"+*serviceCode.Code),
 		fhirclient.QueryParam("context-type-value", *conditionCode.System+"|"+*conditionCode.Code),
 	); err != nil {
 		return nil, otel.Error(span, err)
 	}
 	// TODO: Might want to support multiple questionnaires in future
-	if len(questionnaireBundle.Entry) != 1 {
-		err := errors.Join(ErrWorkflowNotFound, fmt.Errorf("expected 1 questionnaire, got %d", len(questionnaireBundle.Entry)))
+	if len(questionnaireBundle.Entry) == 0 {
+		return nil, workflowNotFound(span, fmt.Errorf("%w: no matching questionnaire found", ErrWorkflowNotFound))
+	}
+	if len(questionnaireBundle.Entry) > 1 {
+		err := fmt.Errorf("%w: expected 1 questionnaire, got %d", ErrMultipleWorkflows, len(questionnaireBundle.Entry))
 		return nil, otel.Error(span, err)
 	}
 
@@ -123,10 +143,10 @@ func (f FhirApiWorkflowProvider) searchHealthcareService(ctx context.Context, se
 	)
 
 	if len(results.Entry) == 0 {
-		return otel.Error(span, ErrWorkflowNotFound, "no healthcare services found")
+		return workflowNotFound(span, fmt.Errorf("%w: no healthcare services found", ErrWorkflowNotFound))
 	}
 	if len(results.Entry) > 2 {
-		err := errors.Join(ErrWorkflowNotFound, errors.New("multiple workflows found"))
+		err := fmt.Errorf("%w: %d healthcare services found", ErrMultipleWorkflows, len(results.Entry))
 		return otel.Error(span, err)
 	}
 
@@ -229,7 +249,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 	)
 
 	if !supported {
-		return nil, otel.Error(span, ErrWorkflowNotFound, "Workflow not supported by any healthcare service")
+		return nil, workflowNotFound(span, fmt.Errorf("%w: workflow not supported by any healthcare service", ErrWorkflowNotFound))
 	}
 
 	for _, questionnaire := range e.questionnaires {
@@ -269,7 +289,7 @@ func (e *MemoryWorkflowProvider) Provide(ctx context.Context, serviceCode fhir.C
 	span.SetAttributes(
 		attribute.Int("questionnaires.total", len(e.questionnaires)),
 	)
-	return nil, otel.Error(span, ErrWorkflowNotFound, "No matching questionnaire found")
+	return nil, workflowNotFound(span, fmt.Errorf("%w: no matching questionnaire found", ErrWorkflowNotFound))
 }
 
 func (e *MemoryWorkflowProvider) Load(ctx context.Context, questionnaireUrl string) (*fhir.Questionnaire, error) {
