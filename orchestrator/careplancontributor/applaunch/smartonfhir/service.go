@@ -108,7 +108,7 @@ func New(config Config, tenants tenants.Config, sessionManager *user.SessionMana
 			realIssuerURL:   curr.OAuth2URL,
 			tenantID:        curr.Tenant,
 		}
-		issuersByURL[curr.URL] = issuer
+		issuersByURL[normalizeIssuerURL(curr.URL)] = issuer
 		issuersByKey[key] = issuer
 	}
 	cookieHashKey := make([]byte, 32)
@@ -190,9 +190,11 @@ func (s *Service) handleAppLaunch(response http.ResponseWriter, request *http.Re
 	if launch != "" {
 		urlOptions = append(urlOptions, rp.WithURLParam("launch", launch))
 	}
-	// Epic on FHIR requirement: aud claim in the authorization request
-	urlOptions = append(urlOptions, rp.WithURLParam("aud", provider.Issuer()))
-	var stateParams url.Values
+	// SMART on FHIR (and Epic on FHIR) requirement: the 'aud' parameter in the authorization request must be the
+	// FHIR server base URL, which is the 'iss' parameter from the launch. Note that this can differ from the OAuth2 issuer
+	// (provider.Issuer()), e.g. when OAuth2URL is configured.
+	urlOptions = append(urlOptions, rp.WithURLParam("aud", issuer))
+	stateParams := url.Values{}
 	for key, value := range request.URL.Query() {
 		switch key {
 		case "iss", "launch":
@@ -243,7 +245,8 @@ func (s *Service) handleCallback(response http.ResponseWriter, request *http.Req
 			FHIRLauncher: fhirLauncherKey,
 			LauncherProperties: map[string]string{
 				"access_token": tokens.AccessToken,
-				"iss":          issuer.issuerURL(),
+				// Used as FHIR base URL by the FHIR client factory, so it must be the FHIR server URL, not the OAuth2 issuer URL.
+				"iss": issuer.issuerLaunchURL,
 			},
 			TenantID: tenant.ID,
 		}
@@ -335,11 +338,23 @@ func (s *Service) getIssuerByKey(request *http.Request, issuerKey string) (rp.Re
 }
 
 func (s *Service) getIssuerByURL(request *http.Request, issuer string) (rp.RelyingParty, error) {
-	iss, ok := s.issuersByURL[issuer]
+	iss, ok := s.issuersByURL[normalizeIssuerURL(issuer)]
 	if !ok {
 		return nil, errors.New("unknown SMART on FHIR issuer")
 	}
 	return s.initializeIssuer(request.Context(), iss)
+}
+
+func normalizeIssuerURL(issuerURL string) string {
+	parsed, err := url.Parse(issuerURL)
+	if err != nil {
+		return issuerURL
+	}
+	parsed.Scheme = strings.ToLower(parsed.Scheme)
+	parsed.Host = strings.ToLower(parsed.Host)
+	parsed.Path = strings.TrimSuffix(parsed.Path, "/")
+	parsed.RawPath = strings.TrimSuffix(parsed.RawPath, "/")
+	return parsed.String()
 }
 
 func (s *Service) initializeIssuer(ctx context.Context, issuer *trustedIssuer) (rp.RelyingParty, error) {
@@ -494,16 +509,16 @@ func loadJWTSigningKeyFromAzureKeyVault(config AzureKeyVaultConfig, strictMode b
 	)
 
 	return &jose.SigningKey{
-			Algorithm: jose.SignatureAlgorithm(key.SigningAlgorithm()),
-			Key:       cryptosigner.Opaque(key),
-		}, &jose.JSONWebKeySet{
-			Keys: []jose.JSONWebKey{
-				{
-					Key:       key.Public(),
-					KeyID:     keyID,
-					Use:       "sig",
-					Algorithm: key.SigningAlgorithm(),
-				},
+		Algorithm: jose.SignatureAlgorithm(key.SigningAlgorithm()),
+		Key:       cryptosigner.Opaque(key),
+	}, &jose.JSONWebKeySet{
+		Keys: []jose.JSONWebKey{
+			{
+				Key:       key.Public(),
+				KeyID:     keyID,
+				Use:       "sig",
+				Algorithm: key.SigningAlgorithm(),
 			},
-		}, nil
+		},
+	}, nil
 }

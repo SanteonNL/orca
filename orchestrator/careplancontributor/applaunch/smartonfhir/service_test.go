@@ -139,6 +139,10 @@ func TestService(t *testing.T) {
 		}`))
 	})
 
+	// Epic-like issuer: the FHIR base URL (launch 'iss') differs from the OAuth2 issuer in the OpenID configuration.
+	// Use 'localhost' instead of '127.0.0.1' so it differs from the OAuth2 issuer URL, while pointing to the same server.
+	epicFHIRBaseURL := strings.Replace(httpServer.URL, "127.0.0.1", "localhost", 1) + "/epic/api/FHIR/R4"
+
 	service, err := New(Config{
 		Enabled: true,
 		Issuer: map[string]IssuerConfig{
@@ -146,6 +150,12 @@ func TestService(t *testing.T) {
 				URL:      issuerURL,
 				ClientID: clientID,
 				Tenant:   tenants.Test().Sole().ID,
+			},
+			"epic": {
+				URL:       epicFHIRBaseURL,
+				ClientID:  clientID,
+				OAuth2URL: issuerURL,
+				Tenant:    tenants.Test().Sole().ID,
 			},
 		},
 		AzureKeyVault: AzureKeyVaultConfig{},
@@ -237,6 +247,66 @@ func TestService(t *testing.T) {
 			// Assert the "browser" was redirected to the frontend
 			require.True(t, frontendCalled)
 		})
+		t.Run("Epic: OAuth2 issuer differs from FHIR base URL, iss with different host casing and extra query parameters", func(t *testing.T) {
+			defer func() {
+				frontendCalled = false
+			}()
+			cookieJar, _ := cookiejar.New(nil)
+			httpClient := http.Client{
+				Jar: cookieJar,
+				Transport: &loggingRoundTripper{
+					t: t,
+				},
+			}
+
+			launchIssuer := strings.Replace(epicFHIRBaseURL, "localhost", "LocalHost", 1)
+			httpRequestQuery := url.Values{
+				"iss":    []string{launchIssuer},
+				"launch": []string{"test-launch"},
+				"extra":  []string{"value"},
+			}
+			httpResponse, err := httpClient.Get(clientURL.String() + "?" + httpRequestQuery.Encode())
+			require.NoError(t, err)
+			responseData, _ := io.ReadAll(httpResponse.Body)
+			require.Equal(t, http.StatusOK, httpResponse.StatusCode, string(responseData))
+			// aud must be the FHIR base URL (launch 'iss'), not the OAuth2 issuer
+			require.Equal(t, []string{launchIssuer}, capturedAudience)
+			require.Equal(t, []string{clientID}, capturedClientID)
+			require.Equal(t, []string{"test-launch"}, capturedLaunchParam)
+			require.True(t, frontendCalled)
+		})
+		t.Run("unknown issuer", func(t *testing.T) {
+			httpResponse, err := httpServer.Client().Get(clientURL.String() + "?" + url.Values{"iss": []string{"https://unknown.example.com/fhir"}}.Encode())
+			require.NoError(t, err)
+			defer httpResponse.Body.Close()
+			require.Equal(t, http.StatusInternalServerError, httpResponse.StatusCode)
+		})
+	})
+}
+
+func Test_normalizeIssuerURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{"already normalized", "https://example.com/fhir/R4", "https://example.com/fhir/R4"},
+		{"host is lowercased", "https://Tstepic-ic.Example.com/interconnect-fhir-poc/api/FHIR/R4", "https://tstepic-ic.example.com/interconnect-fhir-poc/api/FHIR/R4"},
+		{"scheme is lowercased", "HTTPS://example.com/fhir", "https://example.com/fhir"},
+		{"path casing is preserved", "https://example.com/FHIR/r4", "https://example.com/FHIR/r4"},
+		{"trailing slash is removed", "https://example.com/fhir/", "https://example.com/fhir"},
+		{"port is preserved", "https://Example.com:8443/fhir", "https://example.com:8443/fhir"},
+		{"unparseable URL is returned as-is", "://bad url", "://bad url"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.expected, normalizeIssuerURL(tt.input))
+		})
+	}
+	t.Run("different casing yields same key", func(t *testing.T) {
+		require.Equal(t,
+			normalizeIssuerURL("https://tstepic-ic.olvg.nl/interconnect-fhir-poc/api/FHIR/R4"),
+			normalizeIssuerURL("https://Tstepic-ic.olvg.nl/interconnect-fhir-poc/api/FHIR/R4"))
 	})
 }
 
