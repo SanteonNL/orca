@@ -12,7 +12,7 @@ require (
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.1.0
 	github.com/beevik/etree v1.7.1
 	github.com/braineet/saml v0.4.15
-	github.com/go-jose/go-jose/v4 v4.1.4
+	github.com/go-jose/go-jose/v4 v4.1.6
 	github.com/google/uuid v1.6.0
 	github.com/jellydator/ttlcache/v3 v3.4.1
 	github.com/knadh/koanf/maps v0.1.3
