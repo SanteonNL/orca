@@ -99,9 +99,11 @@ describe('TaskOverviewTable', () => {
             searchParams: {
                 'identifier': 'http://fhir.nl/fhir/NamingSystem/bsn|123456789'
             },
-            options: {postSearch: true},
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+            options: {
+                postSearch: true,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
             }
         });
 
@@ -112,9 +114,11 @@ describe('TaskOverviewTable', () => {
                 'patient': 'Patient/patient-1',
                 '_sort': '-_lastUpdated'
             },
-            options: {postSearch: true},
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+            options: {
+                postSearch: true,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
             }
         });
     });
@@ -147,9 +151,11 @@ describe('TaskOverviewTable', () => {
             searchParams: {
                 'identifier': 'http://example.com/mrn|MRN123'
             },
-            options: {postSearch: true},
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
+            options: {
+                postSearch: true,
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                }
             }
         });
     });

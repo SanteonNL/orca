@@ -5,6 +5,8 @@ if (process.env.NEXT_ALLOWED_ORIGINS) {
 }
 const nextConfig = {
     output: "standalone",
+    // fhir-kit-client v2 is ESM-only; also makes next/jest transform it in tests
+    transpilePackages: ["fhir-kit-client"],
     basePath: process.env.NEXT_PUBLIC_BASE_PATH || "",
     experimental: {
         serverActions: {
