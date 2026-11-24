@@ -10,7 +10,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/security/keyvault/azkeys v1.5.0
 	github.com/SanteonNL/go-fhir-client v0.6.2
 	github.com/SanteonNL/nuts-policy-enforcement-point v0.1.0
-	github.com/beevik/etree v1.7.1
+	github.com/beevik/etree v1.8.1
 	github.com/braineet/saml v0.4.15
 	github.com/go-jose/go-jose/v4 v4.1.4
 	github.com/google/uuid v1.6.0
